@@ -15,7 +15,7 @@ export default function CartPanel({
     triggerHaptic,
 }) {
     return (
-        <div className="flex-1 overflow-hidden flex flex-col bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm mb-20 sm:mb-0">
+        <div className="flex-1 overflow-hidden flex flex-col bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
 
             {/* Header Lista */}
             <div className="px-4 pb-2 pt-3 sm:py-3 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950/50 rounded-t-2xl sm:rounded-t-3xl shrink-0">
@@ -30,7 +30,7 @@ export default function CartPanel({
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto scrollbar-hide p-2 sm:p-3 relative pb-28 sm:pb-3 cart-scroll-shadow">
+            <div className="flex-1 overflow-y-auto scrollbar-hide p-2 sm:p-3 relative pb-24 sm:pb-3 cart-scroll-shadow">
                 {cart.length === 0 ? (
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-300 dark:text-slate-700 p-6 text-center">
                         <ShoppingCart size={48} className="mb-4 opacity-50 sm:w-[72px] sm:h-[72px]" strokeWidth={1} />

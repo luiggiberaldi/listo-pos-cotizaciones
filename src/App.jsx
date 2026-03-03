@@ -215,7 +215,7 @@ export default function App() {
         <div className={`flex-1 flex flex-col ${activeTab === 'ventas' ? 'animate-view-enter' : 'hidden'}`}>
           <ErrorBoundary>
             <PremiumGuard featureName="Punto de Venta" isShop={true}>
-              <SalesView rates={rates} triggerHaptic={triggerHaptic} />
+              <SalesView rates={rates} triggerHaptic={triggerHaptic} onNavigate={setActiveTab} />
             </PremiumGuard>
           </ErrorBoundary>
         </div>
@@ -255,8 +255,8 @@ export default function App() {
         </Suspense>
       </main>
 
-      {/* Bottom Nav */}
-      {!isKeyboardOpen && (
+      {/* Bottom Nav — hidden in POS mode for full-screen selling */}
+      {!isKeyboardOpen && activeTab !== 'ventas' && (
         <div className="fixed bottom-0 left-0 right-0 px-6 pb-[env(safe-area-inset-bottom)] pt-0 mb-6 max-w-md md:max-w-lg mx-auto z-30 pointer-events-none animate-in slide-in-from-bottom-4 duration-300">
           <div className="bg-slate-900/95 dark:bg-slate-950/95 backdrop-blur-xl rounded-3xl p-1.5 flex justify-between items-center shadow-2xl shadow-slate-900/30 border border-white/10 ring-1 ring-black/5 pointer-events-auto">
             {TABS.map(tab => (

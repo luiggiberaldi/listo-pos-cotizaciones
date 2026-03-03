@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { RefreshCw, Search, ShoppingCart, Mic, Package, X } from 'lucide-react';
+import { RefreshCw, Search, ShoppingCart, Mic, Package, X, Home, LayoutGrid, Users, BarChart3 } from 'lucide-react';
 import { storageService } from '../utils/storageService';
 import { showToast } from '../components/Toast';
 import { formatBs, formatVzlaPhone } from '../utils/calculatorUtils';
@@ -16,7 +16,7 @@ import Confetti from '../components/Confetti';
 
 const SALES_KEY = 'bodega_sales_v1';
 
-export default function SalesView({ rates, triggerHaptic }) {
+export default function SalesView({ rates, triggerHaptic, onNavigate }) {
     const { playAdd, playRemove, playCheckout, playError } = useSounds();
     const { notifySaleComplete, notifyLowStock } = useNotifications();
     const [products, setProducts] = useState([]);
@@ -861,6 +861,27 @@ export default function SalesView({ rates, triggerHaptic }) {
 
             {/* 🎉 Confetti post-venta */}
             {showConfetti && <Confetti onDone={() => setShowConfetti(false)} />}
+
+            {/* Mini Nav — replaces hidden bottom tab bar in POS mode */}
+            {onNavigate && (
+                <div className="shrink-0 flex items-center justify-center gap-1 py-1.5 bg-slate-100/80 dark:bg-slate-900/80 border-t border-slate-200 dark:border-slate-800 sm:hidden">
+                    {[
+                        { id: 'inicio', icon: Home, label: 'Inicio' },
+                        { id: 'catalogo', icon: LayoutGrid, label: 'Catálogo' },
+                        { id: 'clientes', icon: Users, label: 'Clientes' },
+                        { id: 'reportes', icon: BarChart3, label: 'Reportes' },
+                    ].map(nav => (
+                        <button
+                            key={nav.id}
+                            onClick={() => { triggerHaptic?.(); onNavigate(nav.id); }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 active:scale-95 transition-all"
+                        >
+                            <nav.icon size={14} />
+                            {nav.label}
+                        </button>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
