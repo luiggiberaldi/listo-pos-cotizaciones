@@ -28,7 +28,6 @@ export function useRates() {
     const [loading, setLoading] = useState(false);
     const [isOffline, setIsOffline] = useState(false);
     const [logs, setLogs] = useState([]);
-    const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
     // [PERFORMANCE] useRef impides re-renders inside updateData dependencies
     const ratesRef = useRef(rates);
@@ -36,31 +35,12 @@ export function useRates() {
     useEffect(() => {
         ratesRef.current = rates;
         if (rates) localStorage.setItem('monitor_rates_v12', JSON.stringify(rates));
-        if ('Notification' in window && Notification.permission === 'granted') {
-            setNotificationsEnabled(true);
-        }
     }, [rates]);
 
     const addLog = useCallback((msg, type = 'info') => {
         const time = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
         setLogs(prev => [...prev.slice(-49), { time, msg, type }]);
     }, []);
-
-    const enableNotifications = async () => {
-        if (!('Notification' in window)) {
-            console.warn("Este navegador no soporta notificaciones.");
-            return;
-        }
-        const permission = await Notification.requestPermission();
-        if (permission === 'granted') {
-            setNotificationsEnabled(true);
-            new Notification("🔔 Notificaciones Activadas", {
-                body: "Te avisaremos cuando cambie la tasa del BCV (Dólar y Euro).",
-                icon: '/logodark.png'
-            });
-            addLog("Permiso de notificaciones concedido", "success");
-        }
-    };
 
     const parseSafeFloat = (val) => {
         if (!val) return 0;
@@ -78,14 +58,6 @@ export function useRates() {
             return parseFloat(`${integer}.${decimals}`) || 0;
         }
         return 0;
-    };
-
-    const sendRateNotification = (title, body) => {
-        if (Notification.permission === 'granted') {
-            try {
-                new Notification(title, { body, icon: '/logodark.png', vibrate: [200, 100, 200] });
-            } catch (e) { console.error("Error notificando", e); }
-        }
     };
 
     const updateData = useCallback(async (isAutoUpdate = false) => {
@@ -253,25 +225,7 @@ export function useRates() {
                 }
             }
 
-            // Notificaciones
-            // Access ratesRef.current to compare with LATEST known confirmed rates, 
-            // but for notifications usually we compare 'rates' state vs 'newRates'. 
-            // Since we are inside updateData, ratesRef.current holds the state from before this update cycle.
-            if (notificationsEnabled) {
-                const oldBcv = ratesRef.current?.bcv?.price || 0;
-                const currentBcv = newRates.bcv.price;
-                if (currentBcv > 0 && oldBcv > 0 && currentBcv !== oldBcv) {
-                    const emoji = currentBcv > oldBcv ? "📈" : "📉";
-                    sendRateNotification(`${emoji} Cambio Tasa BCV`, `La tasa oficial cambió a ${currentBcv.toFixed(2)} Bs.`);
-                }
 
-                const oldEuro = ratesRef.current?.euro?.price || 0;
-                const currentEuro = newRates.euro.price;
-                if (currentEuro > 0 && oldEuro > 0 && currentEuro !== oldEuro) {
-                    const emoji = currentEuro > oldEuro ? "📈" : "📉";
-                    sendRateNotification(`${emoji} Cambio Tasa EURO`, `La tasa oficial del Euro cambió a ${currentEuro.toFixed(2)} Bs.`);
-                }
-            }
 
             newRates.lastUpdate = new Date();
             setRates(newRates);
@@ -284,7 +238,7 @@ export function useRates() {
         } finally {
             setLoading(false);
         }
-    }, [addLog, notificationsEnabled]); // ratesRef is stable, no need to include
+    }, [addLog]);
 
     useEffect(() => {
         // Initial load
@@ -295,5 +249,5 @@ export function useRates() {
     }, [updateData]);
 
     const currentRates = rates || DEFAULT_RATES;
-    return { rates: currentRates, loading, isOffline, logs, updateData, enableNotifications, notificationsEnabled };
+    return { rates: currentRates, loading, isOffline, logs, updateData };
 }

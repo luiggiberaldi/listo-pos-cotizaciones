@@ -1,11 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Home, ShoppingCart, Store, Users, Download, FlaskConical, Key, Moon, Sun } from 'lucide-react';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
+import { Home, ShoppingCart, Store, Users, Download, FlaskConical, Key, Moon, Sun, BarChart3, WifiOff } from 'lucide-react';
 
 import SalesView from './views/SalesView';
 import DashboardView from './views/DashboardView';
 import { ProductsView } from './views/ProductsView';
-import CustomersView from './views/CustomersView';
-import { TesterView } from './views/TesterView';
+
+// Lazy-loaded views (no se usan al inicio)
+const CustomersView = lazy(() => import('./views/CustomersView'));
+const ReportsView = lazy(() => import('./views/ReportsView'));
+const TesterView = lazy(() => import('./views/TesterView').then(m => ({ default: m.TesterView })));
 
 import { useRates } from './hooks/useRates';
 import { useSecurity } from './hooks/useSecurity';
@@ -13,6 +16,7 @@ import PremiumGuard from './components/security/PremiumGuard';
 import TermsOverlay from './components/TermsOverlay';
 import OnboardingOverlay from './components/OnboardingOverlay';
 import ErrorBoundary from './components/ErrorBoundary';
+import { useOfflineQueue } from './hooks/useOfflineQueue';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('inicio');
@@ -27,6 +31,10 @@ export default function App() {
 
   const { rates, loading, isOffline, updateData } = useRates();
   const { generateCodeForClient, isPremium, isDemo, demoTimeLeft, demoExpiredMsg, dismissExpiredMsg } = useSecurity();
+  const { isOnline, cacheRates } = useOfflineQueue();
+
+  // Cache rates whenever they update
+  useEffect(() => { if (rates) cacheRates(rates); }, [rates, cacheRates]);
 
   useEffect(() => {
     const handler = (e) => { e.preventDefault(); setInstallPrompt(e); };
@@ -122,6 +130,7 @@ export default function App() {
     { id: 'ventas', label: 'Vender', icon: ShoppingCart },
     { id: 'catalogo', label: 'Inventario', icon: Store },
     { id: 'clientes', label: 'Clientes', icon: Users },
+    { id: 'reportes', label: 'Reportes', icon: BarChart3 },
   ];
 
   return (
@@ -132,6 +141,17 @@ export default function App() {
 
       {/* Tutorial Onboarding (First Use, after Terms) */}
       <OnboardingOverlay isPremium={isPremium} />
+
+      {/* Offline Banner */}
+      {!isOnline && (
+        <div className="fixed top-0 left-0 right-0 z-[200] flex justify-center pt-[env(safe-area-inset-top)]">
+          <div className="mt-2 px-4 py-2 bg-slate-900/95 backdrop-blur-md rounded-full border border-red-500/30 shadow-xl flex items-center gap-2 animate-in slide-in-from-top-4">
+            <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+            <WifiOff size={14} className="text-red-400" />
+            <span className="text-xs font-bold text-white">Sin conexión · Modo offline</span>
+          </div>
+        </div>
+      )}
 
       {/* Demo Banner (discreto — bottom, above nav) */}
       {isDemo && demoTimeLeft && (
@@ -191,38 +211,49 @@ export default function App() {
           title="Ssshh..."
         ></div>
 
-        {activeTab === 'ventas' && (
-          <ErrorBoundary>
-            <PremiumGuard featureName="Punto de Venta" isShop={true}>
-              <SalesView rates={rates} triggerHaptic={triggerHaptic} />
-            </PremiumGuard>
-          </ErrorBoundary>
-        )}
+        <div key={activeTab} className="flex-1 flex flex-col animate-view-enter">
+          {activeTab === 'ventas' && (
+            <ErrorBoundary>
+              <PremiumGuard featureName="Punto de Venta" isShop={true}>
+                <SalesView rates={rates} triggerHaptic={triggerHaptic} />
+              </PremiumGuard>
+            </ErrorBoundary>
+          )}
 
-        {activeTab === 'catalogo' && (
-          <ErrorBoundary>
-            <ProductsView rates={rates} triggerHaptic={triggerHaptic} />
-          </ErrorBoundary>
-        )}
+          {activeTab === 'catalogo' && (
+            <ErrorBoundary>
+              <ProductsView rates={rates} triggerHaptic={triggerHaptic} />
+            </ErrorBoundary>
+          )}
 
-        {activeTab === 'inicio' && (
-          <ErrorBoundary>
-            <DashboardView rates={rates} triggerHaptic={triggerHaptic} onNavigate={setActiveTab} theme={theme} toggleTheme={toggleTheme} />
-          </ErrorBoundary>
-        )}
+          {activeTab === 'inicio' && (
+            <ErrorBoundary>
+              <DashboardView rates={rates} triggerHaptic={triggerHaptic} onNavigate={setActiveTab} theme={theme} toggleTheme={toggleTheme} />
+            </ErrorBoundary>
+          )}
 
-        {activeTab === 'clientes' && (
-          <ErrorBoundary>
-            <PremiumGuard featureName="Gestión de Clientes">
-              <CustomersView triggerHaptic={triggerHaptic} />
-            </PremiumGuard>
-          </ErrorBoundary>
-        )}
+          <Suspense fallback={<div className="flex-1 p-4 space-y-4"><div className="skeleton h-10 w-40" /><div className="skeleton h-32" /><div className="skeleton h-48" /></div>}>
+            {activeTab === 'clientes' && (
+              <ErrorBoundary>
+                <PremiumGuard featureName="Gestión de Clientes">
+                  <CustomersView triggerHaptic={triggerHaptic} />
+                </PremiumGuard>
+              </ErrorBoundary>
+            )}
+            {activeTab === 'reportes' && (
+              <ErrorBoundary>
+                <PremiumGuard featureName="Reportes Históricos">
+                  <ReportsView rates={rates} triggerHaptic={triggerHaptic} />
+                </PremiumGuard>
+              </ErrorBoundary>
+            )}
+          </Suspense>
+        </div>
       </main>
 
       {/* Bottom Nav */}
       {!isKeyboardOpen && (
-        <div className="fixed bottom-0 left-0 right-0 px-6 pb-[env(safe-area-inset-bottom)] pt-0 mb-6 max-w-md mx-auto z-30 pointer-events-none animate-in slide-in-from-bottom-4 duration-300">
+        <div className="fixed bottom-0 left-0 right-0 px-6 pb-[env(safe-area-inset-bottom)] pt-0 mb-6 max-w-md md:max-w-lg mx-auto z-30 pointer-events-none animate-in slide-in-from-bottom-4 duration-300">
           <div className="bg-slate-900/95 dark:bg-slate-950/95 backdrop-blur-xl rounded-3xl p-1.5 flex justify-between items-center shadow-2xl shadow-slate-900/30 border border-white/10 ring-1 ring-black/5 pointer-events-auto">
             {TABS.map(tab => (
               <TabButton

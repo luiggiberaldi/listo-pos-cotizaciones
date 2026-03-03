@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lock, Copy, Check, Star, Sparkles, Send, Bot, Store, MessageCircle, Database, Crown, CreditCard, Gift } from 'lucide-react';
+import { Lock, Copy, Check, Star, Sparkles, Send, Bot, Store, MessageCircle, Database, Crown, CreditCard, Gift, BarChart3, Bell, Volume2, Search } from 'lucide-react';
 import { useSecurity } from '../../hooks/useSecurity';
 import { Modal } from '../Modal';
 
@@ -75,10 +75,12 @@ export default function PremiumGuard({ children, featureName = "Esta función", 
         iconColor = "text-indigo-600 dark:text-indigo-400 animate-pulse";
         benefits = (
             <>
-                <BenefitItem icon={<Store size={15} className="text-indigo-500" />} text="Inventario ilimitado de productos." />
-                <BenefitItem icon={<CreditCard size={15} className="text-blue-500" />} text="Sistema de Ventas y POS completo." />
-                <BenefitItem icon={<MessageCircle size={15} className="text-green-500" />} text="Dashboard con reportes de ventas." />
-                <BenefitItem icon={<Database size={15} className="text-amber-500" />} text="Compartir catálogo con código." />
+                <BenefitItem icon={<Store size={15} className="text-indigo-500" />} text="Inventario ilimitado de productos" />
+                <BenefitItem icon={<CreditCard size={15} className="text-blue-500" />} text="Sistema de Ventas y POS completo" />
+                <BenefitItem icon={<BarChart3 size={15} className="text-purple-500" />} text="Reportes históricos con PDF" />
+                <BenefitItem icon={<Bell size={15} className="text-amber-500" />} text="Notificaciones inteligentes" />
+                <BenefitItem icon={<Search size={15} className="text-emerald-500" />} text="Categorías y búsqueda por voz" />
+                <BenefitItem icon={<Volume2 size={15} className="text-rose-500" />} text="Sonidos inmersivos" />
             </>
         );
     } else {
@@ -90,6 +92,8 @@ export default function PremiumGuard({ children, featureName = "Esta función", 
             <>
                 <BenefitItem icon={<Sparkles size={15} className="text-purple-600 dark:text-purple-400" />} text="Gestión completa de inventario" />
                 <BenefitItem icon={<Star size={15} className="text-amber-500" />} text="Punto de Venta integrado" />
+                <BenefitItem icon={<BarChart3 size={15} className="text-indigo-500" />} text="Reportes con descarga PDF" />
+                <BenefitItem icon={<Bell size={15} className="text-rose-500" />} text="Alertas de stock y cierre de caja" />
                 <BenefitItem icon={<Check size={15} className="text-green-600 dark:text-green-500" />} text="Soporte Prioritario" />
             </>
         );

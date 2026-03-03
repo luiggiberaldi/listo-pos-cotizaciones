@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Clock, Send, Ban, ChevronDown, ChevronUp, Trash2, Shuffle } from 'lucide-react';
+import { Clock, Send, Ban, ChevronDown, ChevronUp, Trash2, Shuffle, Recycle } from 'lucide-react';
 import { formatBs } from '../../utils/calculatorUtils';
 import { getPaymentLabel, getPaymentMethod, PAYMENT_ICONS } from '../../config/paymentMethods';
 
@@ -11,7 +11,9 @@ export default function SalesHistory({
     onVoidSale,
     onShareWhatsApp,
     onDownloadPDF,
-    onOpenDeleteModal
+    onOpenDeleteModal,
+    onRequestClientForTicket,
+    onRecycleSale
 }) {
     const [expandedSaleId, setExpandedSaleId] = useState(null);
 
@@ -108,12 +110,15 @@ export default function SalesHistory({
 
                                     <div className="flex items-center justify-between gap-2 mt-2">
                                         <button
-                                            onClick={(e) => { e.stopPropagation(); onShareWhatsApp(s); }}
-                                            disabled={!s.customerName || s.customerName === 'Consumidor Final'}
-                                            className={`flex-1 py-2 font-bold rounded-lg transition-colors flex justify-center items-center gap-1.5 text-xs shadow-sm ${!s.customerName || s.customerName === 'Consumidor Final'
-                                                ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
-                                                : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 hover:dark:bg-emerald-900/50'
-                                                }`}>
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (!s.customerName || s.customerName === 'Consumidor Final') {
+                                                    onRequestClientForTicket(s);
+                                                } else {
+                                                    onShareWhatsApp(s);
+                                                }
+                                            }}
+                                            className="flex-1 py-2 font-bold rounded-lg transition-colors flex justify-center items-center gap-1.5 text-xs shadow-sm bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 hover:dark:bg-emerald-900/50 active:scale-95">
                                             <Send size={14} /> Enviar Ticket
                                         </button>
                                         {onDownloadPDF && (
@@ -127,10 +132,15 @@ export default function SalesHistory({
                                         {!isCanceled && (
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); onVoidSale(s); }}
-                                                className="flex-1 py-2 bg-slate-100 dark:bg-slate-900 text-red-600 dark:text-red-400 hover:bg-red-50 hover:dark:bg-red-900/30 font-bold rounded-lg transition-colors flex justify-center items-center gap-1.5 text-xs border border-slate-200 dark:border-slate-800 shadow-sm">
-                                                <Ban size={14} /> Anular Venta
+                                                className="py-2 px-3 bg-slate-100 dark:bg-slate-900 text-red-600 dark:text-red-400 hover:bg-red-50 hover:dark:bg-red-900/30 font-bold rounded-lg transition-colors flex justify-center items-center gap-1.5 text-xs border border-slate-200 dark:border-slate-800 shadow-sm active:scale-95">
+                                                <Ban size={14} /> Anular
                                             </button>
                                         )}
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); onRecycleSale(s); }}
+                                            className="py-2 px-3 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-200 hover:dark:bg-indigo-900/50 font-bold rounded-lg transition-colors flex justify-center items-center gap-1.5 text-xs shadow-sm active:scale-95">
+                                            <Recycle size={14} />
+                                        </button>
                                     </div>
                                 </div>
                             )}

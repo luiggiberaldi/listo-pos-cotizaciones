@@ -1,10 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { showToast } from '../components/Toast';
-import { RefreshCw, TrendingUp, TrendingDown, WifiOff, Clock, Bell, BellRing, Maximize, Minimize, Camera, Loader2, AlertTriangle, Sun, Moon } from 'lucide-react';
+import { RefreshCw, TrendingUp, TrendingDown, WifiOff, Clock, Maximize, Minimize, Camera, Loader2, AlertTriangle, Sun, Moon } from 'lucide-react';
 // ✅ Asegúrate de tener instalado: npm i html2canvas
 import html2canvas from 'html2canvas';
 
-export default function MonitorView({ rates, loading, isOffline, onRefresh, toggleTheme, theme, copyLogs, enableNotifications, notificationsEnabled, addLog, triggerHaptic }) {
+export default function MonitorView({ rates, loading, isOffline, onRefresh, toggleTheme, theme, copyLogs, addLog, triggerHaptic }) {
 
     const [secretCount, setSecretCount] = useState(0);
     const [kioskMode, setKioskMode] = useState(false);
@@ -222,9 +222,6 @@ export default function MonitorView({ rates, loading, isOffline, onRefresh, togg
                         <Maximize size={18} strokeWidth={2} />
                     </button>
 
-                    <button onClick={() => { triggerHaptic && triggerHaptic(); enableNotifications(); }} disabled={notificationsEnabled} className={`p-2 sm:p-2.5 rounded-2xl border transition-all active:scale-95 shadow-sm ${notificationsEnabled ? 'bg-emerald-50 border-emerald-100 text-emerald-600 dark:bg-emerald-900/20 dark:border-emerald-900/30 dark:text-emerald-400' : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 text-slate-400 dark:text-slate-400'}`}>
-                        {notificationsEnabled ? <BellRing size={18} /> : <Bell size={18} />}
-                    </button>
                     <button onClick={() => { triggerHaptic && triggerHaptic(); onRefresh(); }} disabled={loading} className={`p-2 sm:p-2.5 rounded-2xl text-slate-900 shadow-lg shadow-brand/10 border border-transparent transition-all active:scale-95 ${loading ? 'bg-slate-100 dark:bg-slate-800 text-slate-300 cursor-not-allowed' : 'bg-brand hover:bg-brand-light'}`}>
                         <RefreshCw size={18} className={loading ? 'animate-spin' : ''} strokeWidth={2.5} />
                     </button>

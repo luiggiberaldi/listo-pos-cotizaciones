@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { RefreshCw, Search, ShoppingCart, Mic, Package, X } from 'lucide-react';
 import { storageService } from '../utils/storageService';
 import { showToast } from '../components/Toast';
@@ -6,19 +6,30 @@ import { formatBs, formatVzlaPhone } from '../utils/calculatorUtils';
 import { getActivePaymentMethods } from '../config/paymentMethods';
 import { BODEGA_CATEGORIES, CATEGORY_ICONS, CATEGORY_COLORS } from '../config/categories';
 import { useVoiceSearch } from '../hooks/useVoiceSearch';
+import { useSounds } from '../hooks/useSounds';
+import { useNotifications } from '../hooks/useNotifications';
 import CartPanel from '../components/Sales/CartPanel';
 import ConfirmModal from '../components/ConfirmModal';
 import ReceiptModal from '../components/Sales/ReceiptModal';
 import CheckoutModal from '../components/Sales/CheckoutModal';
+import Confetti from '../components/Confetti';
 
 const SALES_KEY = 'bodega_sales_v1';
 
 export default function SalesView({ rates, triggerHaptic }) {
+    const { playAdd, playRemove, playCheckout, playError } = useSounds();
+    const { notifySaleComplete, notifyLowStock } = useNotifications();
     const [products, setProducts] = useState([]);
     const [showClearCartConfirm, setShowClearCartConfirm] = useState(false);
+    const [showConfetti, setShowConfetti] = useState(false);
     const [customers, setCustomers] = useState([]);
     const [selectedCustomerId, setSelectedCustomerId] = useState('');
-    const [cart, setCart] = useState([]);
+    const [cart, setCart] = useState(() => {
+        try {
+            const saved = localStorage.getItem('pending_cart');
+            return saved ? JSON.parse(saved) : [];
+        } catch { return []; }
+    });
     const [searchTerm, setSearchTerm] = useState('');
     const [showCheckout, setShowCheckout] = useState(false);
     const [showReceipt, setShowReceipt] = useState(null);
@@ -27,6 +38,7 @@ export default function SalesView({ rates, triggerHaptic }) {
     const [hierarchyPending, setHierarchyPending] = useState(null);
     const [weightPending, setWeightPending] = useState(null);
     const [paymentMethods, setPaymentMethods] = useState([]);
+    const [selectedCategory, setSelectedCategory] = useState('todos');
 
     // Búsqueda y Navegación
     const searchInputRef = useRef(null);
@@ -62,6 +74,15 @@ export default function SalesView({ rates, triggerHaptic }) {
         localStorage.setItem('bodega_custom_rate', customRate.toString());
     }, [useAutoRate, customRate]);
 
+    // Persist cart to localStorage
+    useEffect(() => {
+        if (cart.length > 0) {
+            localStorage.setItem('pending_cart', JSON.stringify(cart));
+        } else {
+            localStorage.removeItem('pending_cart');
+        }
+    }, [cart]);
+
     // Load products and customers from IndexedDB
     useEffect(() => {
         let mounted = true;
@@ -76,6 +97,25 @@ export default function SalesView({ rates, triggerHaptic }) {
                 setCustomers(savedCustomers);
                 setPaymentMethods(methods);
                 setIsLoading(false);
+
+                // Comprobar si hay una venta reciclada esperando
+                const recycled = localStorage.getItem('recycled_cart');
+                if (recycled) {
+                    try {
+                        const items = JSON.parse(recycled);
+                        if (Array.isArray(items) && items.length > 0) {
+                            setCart(items.map(item => ({
+                                id: item.id,
+                                name: item.name,
+                                qty: item.qty,
+                                priceUsd: item.priceUsd,
+                                costBs: item.costBs || 0,
+                                isWeight: item.isWeight || false,
+                            })));
+                        }
+                    } catch (_) { /* ignore parse errors */ }
+                    localStorage.removeItem('recycled_cart');
+                }
             }
         };
         load();
@@ -101,10 +141,19 @@ export default function SalesView({ rates, triggerHaptic }) {
 
 
 
-    // Search results (permite buscar por código de barra también)
-    const searchResults = searchTerm.length >= 1
+    // Search results (memoized)
+    const searchResults = useMemo(() => searchTerm.length >= 1
         ? products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.barcode?.includes(searchTerm)).slice(0, 6)
-        : [];
+        : [],
+        [searchTerm, products]
+    );
+
+    // Productos filtrados por categoría (memoized)
+    const filteredByCategory = useMemo(() => selectedCategory === 'todos'
+        ? products
+        : products.filter(p => p.category === selectedCategory),
+        [selectedCategory, products]
+    );
 
     // Cart calculations — Todo en $ BCV y Bs
     const cartTotalUsd = cart.reduce((sum, item) => sum + (item.priceUsd * item.qty), 0);
@@ -114,6 +163,7 @@ export default function SalesView({ rates, triggerHaptic }) {
     // Add to cart — Convierte priceUsdt a $ BCV para uniformidad
     const addToCart = useCallback((product, qtyOverride = null, forceMode = null) => {
         triggerHaptic && triggerHaptic();
+        playAdd();
 
         // Si el producto tiene jerarquía y no se ha elegido modo, mostrar popup
         if (product.sellByUnit && product.unitPriceUsd && !forceMode && !qtyOverride) {
@@ -213,6 +263,7 @@ export default function SalesView({ rates, triggerHaptic }) {
 
     const updateQty = (id, delta) => {
         triggerHaptic && triggerHaptic();
+        if (delta < 0) playRemove();
         setCart(prev => prev.map(i => {
             if (i.id !== id) return i;
             // Permitir decimales en el cambio de cantidad si isWeight es true? 
@@ -227,6 +278,7 @@ export default function SalesView({ rates, triggerHaptic }) {
 
     const removeFromCart = (id) => {
         triggerHaptic && triggerHaptic();
+        playRemove();
         setCart(prev => prev.filter(i => i.id !== id));
         searchInputRef.current?.focus();
     };
@@ -286,6 +338,7 @@ export default function SalesView({ rates, triggerHaptic }) {
         if (isNaN(cartTotalUsd) || cartTotalUsd < 0 || isNaN(totalPaidUsd) || totalPaidUsd < 0) {
             console.error('Abortando venta. Integridad matemática comprometida.');
             showToast('Error de integridad de datos. Revisa los montos.', 'error');
+            playError();
             return;
         }
 
@@ -341,6 +394,10 @@ export default function SalesView({ rates, triggerHaptic }) {
         }
 
         setShowReceipt(sale);
+        playCheckout();
+        setShowConfetti(true);
+        notifySaleComplete(sale.saleNumber, sale.totalUsd, sale.totalBs);
+        notifyLowStock(updatedProducts);
         setCart([]);
         setShowCheckout(false);
         setSelectedCustomerId('');
@@ -611,6 +668,69 @@ export default function SalesView({ rates, triggerHaptic }) {
                 </div>
             </div>
 
+            {/* Category Chips + Product Grid (browse mode) */}
+            {!showCheckout && !showReceipt && (
+                <div className={`${selectedCategory !== 'todos' && searchTerm.length === 0 ? 'flex-1 overflow-hidden flex flex-col min-h-0' : ''}`}>
+                    {/* Category Chips */}
+                    <div className="shrink-0 flex gap-1.5 overflow-x-auto pb-2 pt-1 px-1 scrollbar-hide">
+                        {BODEGA_CATEGORIES.map(cat => {
+                            const isActive = selectedCategory === cat.id;
+                            const CatIcon = CATEGORY_ICONS[cat.id];
+                            return (
+                                <button
+                                    key={cat.id}
+                                    onClick={() => { triggerHaptic && triggerHaptic(); setSelectedCategory(isActive && cat.id !== 'todos' ? 'todos' : cat.id); }}
+                                    className={`shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all active:scale-95 ${isActive
+                                        ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20'
+                                        : 'bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-800 hover:border-emerald-300'
+                                        }`}
+                                >
+                                    {CatIcon && <CatIcon size={12} />}
+                                    {cat.label}
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    {/* Product Grid — solo cuando se filtra por categoría específica */}
+                    {selectedCategory !== 'todos' && searchTerm.length === 0 && (
+                        <div className="flex-1 overflow-y-auto min-h-0 pb-2">
+                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+                                {filteredByCategory.map(p => {
+                                    const isOut = (p.stock ?? 0) === 0;
+                                    const CatIcon = CATEGORY_ICONS[p.category] || Package;
+                                    return (
+                                        <button
+                                            key={p.id}
+                                            onClick={() => addToCart(p)}
+                                            disabled={isOut}
+                                            className={`bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-2 flex flex-col items-center text-center transition-all active:scale-95 hover:border-emerald-300 hover:shadow-sm ${isOut ? 'opacity-40 cursor-not-allowed' : ''
+                                                }`}
+                                        >
+                                            <div className="w-10 h-10 rounded-lg bg-slate-50 dark:bg-slate-800 flex items-center justify-center mb-1.5 overflow-hidden">
+                                                {p.image
+                                                    ? <img src={p.image} className="w-full h-full object-contain" alt={p.name} />
+                                                    : <CatIcon size={18} className="text-slate-400" />
+                                                }
+                                            </div>
+                                            <p className="text-[11px] font-bold text-slate-700 dark:text-slate-200 leading-tight line-clamp-2 mb-1">{p.name}</p>
+                                            <p className="text-[11px] font-black text-emerald-600 dark:text-emerald-400">${p.priceUsdt?.toFixed(2)}</p>
+                                            <p className="text-[9px] text-slate-400 font-medium">{isOut ? 'Agotado' : `${p.stock ?? 0} disp.`}</p>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            {filteredByCategory.length === 0 && (
+                                <div className="text-center py-10">
+                                    <Package size={32} className="mx-auto text-slate-300 dark:text-slate-700 mb-2" />
+                                    <p className="text-xs text-slate-400 font-medium">Sin productos en esta categoría</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
+
             {/* Cart Container */}
             <CartPanel
                 cart={cart}
@@ -738,6 +858,9 @@ export default function SalesView({ rates, triggerHaptic }) {
                 confirmText="Sí, vaciar"
                 variant="cart"
             />
+
+            {/* 🎉 Confetti post-venta */}
+            {showConfetti && <Confetti onDone={() => setShowConfetti(false)} />}
         </div>
     );
 }

@@ -1,16 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { storageService } from '../utils/storageService';
 import { showToast } from '../components/Toast';
-import { BarChart3, TrendingUp, Package, AlertTriangle, DollarSign, ShoppingBag, Clock, ArrowUpRight, Trash2, ShoppingCart, Store, Users, Send, Ban, ChevronDown, ChevronUp, Moon, Sun, RotateCcw } from 'lucide-react';
+import { BarChart3, TrendingUp, Package, AlertTriangle, DollarSign, ShoppingBag, Clock, ArrowUpRight, Trash2, ShoppingCart, Store, Users, Send, Ban, ChevronDown, ChevronUp, Moon, Sun, UserPlus, Phone, FileText, Recycle } from 'lucide-react';
 import { formatBs, formatVzlaPhone } from '../utils/calculatorUtils';
 import { getPaymentLabel, getPaymentMethod, PAYMENT_ICONS } from '../config/paymentMethods';
 import SalesHistory from '../components/Dashboard/SalesHistory';
+import SalesChart from '../components/Dashboard/SalesChart';
 import ConfirmModal from '../components/ConfirmModal';
 import { generateTicketPDF } from '../utils/ticketGenerator';
+import { generateDailyClosePDF } from '../utils/dailyCloseGenerator';
+import { useNotifications } from '../hooks/useNotifications';
+import AnimatedCounter from '../components/AnimatedCounter';
 
 const SALES_KEY = 'bodega_sales_v1';
 
 export default function DashboardView({ rates, triggerHaptic, onNavigate, theme, toggleTheme }) {
+    const { notifyCierrePendiente, requestPermission } = useNotifications();
     const [sales, setSales] = useState([]);
     const [products, setProducts] = useState([]);
     const [customers, setCustomers] = useState([]);
@@ -19,6 +24,14 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
     const [deleteConfirmText, setDeleteConfirmText] = useState('');
     const [voidSaleTarget, setVoidSaleTarget] = useState(null);
     const [isResetTodayOpen, setIsResetTodayOpen] = useState(false);
+    const [ticketPendingSale, setTicketPendingSale] = useState(null);
+    const [ticketClientName, setTicketClientName] = useState('');
+    const [ticketClientPhone, setTicketClientPhone] = useState('');
+    const [recycleOffer, setRecycleOffer] = useState(null);
+    const [pullDistance, setPullDistance] = useState(0);
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const touchStartY = useRef(0);
+    const scrollRef = useRef(null);
 
     const bcvRate = rates.bcv?.price || 0;
 
@@ -38,6 +51,8 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
             }
         };
         load();
+        // Solicitar permiso de notificaciones al primer uso
+        requestPermission();
         return () => { mounted = false; };
     }, []);
 
@@ -101,21 +116,16 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
             setProducts(updatedProducts); // actualizar kpi
 
             // Opcional: triggerHaptic()
-            showToast('Venta anulada con éxito y el stock/saldo ha sido restaurado', 'success');
+            showToast('Venta anulada con éxito', 'success');
+
+            // Ofrecer reciclar la venta
+            setRecycleOffer(sale);
         } catch (error) {
             console.error('Error anulando venta:', error);
             showToast('Hubo un problema anulando la venta', 'error');
         }
     };
 
-    const handleResetToday = async () => {
-        const today = new Date().toISOString().split('T')[0];
-        const remaining = sales.filter(s => !s.timestamp?.startsWith(today));
-        await storageService.setItem(SALES_KEY, remaining);
-        setSales(remaining);
-        setIsResetTodayOpen(false);
-        showToast('Datos del día reiniciados', 'success');
-    };
 
     const handleShareWhatsApp = (sale) => {
         let text = `*COMPROBANTE DE VENTA | PRECIOS AL DÍA*\n`;
@@ -161,74 +171,229 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
         generateTicketPDF(sale, bcvRate);
     };
 
-    // ── Métricas del Día ──
+    // ── Registrar cliente para ticket ──
+    const handleRegisterClientForTicket = async () => {
+        if (!ticketClientName.trim() || !ticketPendingSale) return;
+
+        // 1. Crear nuevo cliente
+        const newCustomer = {
+            id: crypto.randomUUID(),
+            name: ticketClientName.trim(),
+            phone: ticketClientPhone.trim() || '',
+            deuda: 0,
+            favor: 0,
+            createdAt: new Date().toISOString(),
+        };
+
+        // 2. Guardar cliente en storage
+        const updatedCustomers = [...customers, newCustomer];
+        setCustomers(updatedCustomers);
+        await storageService.setItem('my_customers_v1', updatedCustomers);
+
+        // 3. Actualizar la venta con el cliente nuevo
+        const updatedSale = {
+            ...ticketPendingSale,
+            customerId: newCustomer.id,
+            customerName: newCustomer.name,
+            customerPhone: newCustomer.phone,
+        };
+        const updatedSales = sales.map(s => s.id === updatedSale.id ? updatedSale : s);
+        setSales(updatedSales);
+        await storageService.setItem(SALES_KEY, updatedSales);
+
+        // 4. Cerrar modal y limpiar
+        setTicketPendingSale(null);
+        setTicketClientName('');
+        setTicketClientPhone('');
+
+        // 5. Enviar ticket por WhatsApp automáticamente
+        handleShareWhatsApp(updatedSale);
+    };
+
+    // ── Métricas del Día (memoized) ──
     const today = new Date().toISOString().split('T')[0];
 
-    // --- 🛡️ AUDITORÍA DASHBOARD (Anti-Duplicados) ---
-    // Solo contamos transacciones de tipo 'VENTA' o 'VENTA_FIADA' que no estén anuladas
-    const todaySales = sales.filter(s => s.timestamp?.startsWith(today) && s.tipo !== 'COBRO_DEUDA' && s.status !== 'ANULADA');
-    const todayTotalBs = todaySales.reduce((sum, s) => sum + (s.totalBs || 0), 0);
-    const todayTotalUsd = todaySales.reduce((sum, s) => sum + (s.totalUsd || 0), 0);
-    const todayItemsSold = todaySales.reduce((sum, s) => sum + s.items.reduce((is, i) => is + i.qty, 0), 0);
+    const todaySales = useMemo(() =>
+        sales.filter(s => s.timestamp?.startsWith(today) && s.tipo !== 'COBRO_DEUDA' && s.status !== 'ANULADA'),
+        [sales, today]
+    );
+    const todayTotalBs = useMemo(() => todaySales.reduce((sum, s) => sum + (s.totalBs || 0), 0), [todaySales]);
+    const todayTotalUsd = useMemo(() => todaySales.reduce((sum, s) => sum + (s.totalUsd || 0), 0), [todaySales]);
+    const todayItemsSold = useMemo(() => todaySales.reduce((sum, s) => sum + s.items.reduce((is, i) => is + i.qty, 0), 0), [todaySales]);
 
-    // --- 🛡️ AUDITORÍA HISTÓRICA DE TASA ---
-    // Ganancia estimada del día (venta - costo)
-    // GOLDEN RULE: Siempre usar s.rate (Tasa de la transacción original) para calcular Revenue, nunca la Tasa Actual.
-    const todayProfit = todaySales.reduce((sum, s) => {
-        return sum + s.items.reduce((is, item) => {
+    // Notificar cierre de caja pendiente (>7pm con ventas sin cerrar)
+    useEffect(() => {
+        if (todaySales.length > 0) notifyCierrePendiente(todaySales.length);
+    }, [todaySales.length, notifyCierrePendiente]);
+
+    const todayProfit = useMemo(() =>
+        todaySales.reduce((sum, s) => sum + s.items.reduce((is, item) => {
             const costBs = item.costBs || 0;
             const saleBs = item.priceUsd * item.qty * (s.rate || bcvRate);
             return is + (saleBs - (costBs * item.qty));
-        }, 0);
-    }, 0);
+        }, 0), 0),
+        [todaySales, bcvRate]
+    );
 
     // Últimas 7 ventas
-    const recentSales = sales.slice(0, 7);
+    const recentSales = useMemo(() => sales.slice(0, 7), [sales]);
+
+    // Datos últimos 7 días (para gráfica)
+    const weekData = useMemo(() => Array.from({ length: 7 }, (_, i) => {
+        const d = new Date();
+        d.setDate(d.getDate() - (6 - i));
+        const dateStr = d.toISOString().split('T')[0];
+        const daySales = sales.filter(s => s.timestamp?.startsWith(dateStr) && s.tipo !== 'COBRO_DEUDA' && s.status !== 'ANULADA');
+        return { date: dateStr, total: daySales.reduce((sum, s) => sum + (s.totalUsd || 0), 0), count: daySales.length };
+    }), [sales]);
 
     // Productos bajo stock
-    const lowStockProducts = products
-        .filter(p => (p.stock ?? 0) <= (p.lowStockAlert ?? 5))
-        .sort((a, b) => (a.stock ?? 0) - (b.stock ?? 0))
-        .slice(0, 6);
+    const lowStockProducts = useMemo(() =>
+        products.filter(p => (p.stock ?? 0) <= (p.lowStockAlert ?? 5))
+            .sort((a, b) => (a.stock ?? 0) - (b.stock ?? 0)).slice(0, 6),
+        [products]
+    );
 
-    // Top productos vendidos (de todas las ventas netas)
-    const productSalesMap = {};
-    sales.filter(s => s.tipo !== 'COBRO_DEUDA' && s.status !== 'ANULADA').forEach(s => {
-        s.items.forEach(item => {
-            if (!productSalesMap[item.name]) productSalesMap[item.name] = { name: item.name, qty: 0, revenue: 0 };
-            productSalesMap[item.name].qty += item.qty;
-            productSalesMap[item.name].revenue += item.priceUsd * item.qty * (s.rate || bcvRate);
-        });
-    });
-    const topProducts = Object.values(productSalesMap).sort((a, b) => b.qty - a.qty).slice(0, 5);
-
-    // Payment method breakdown (today) - Muestra TODO lo que ingresó a caja, incluyendo cobro de deuda
-    const allTodayTransactions = sales.filter(s => s.timestamp?.startsWith(today) && s.status !== 'ANULADA');
-    const paymentBreakdown = allTodayTransactions.reduce((acc, s) => {
-        if (s.payments && s.payments.length > 0) {
-            s.payments.forEach(p => {
-                if (!acc[p.methodId]) acc[p.methodId] = { total: 0, currency: p.currency || 'BS' };
-                // Store in native currency
-                acc[p.methodId].total += (p.currency === 'USD' ? p.amountUsd : p.amountBs) || 0;
+    // Top productos vendidos (todas las ventas netas)
+    const topProducts = useMemo(() => {
+        const productSalesMap = {};
+        sales.filter(s => s.tipo !== 'COBRO_DEUDA' && s.status !== 'ANULADA').forEach(s => {
+            s.items.forEach(item => {
+                if (!productSalesMap[item.name]) productSalesMap[item.name] = { name: item.name, qty: 0, revenue: 0 };
+                productSalesMap[item.name].qty += item.qty;
+                productSalesMap[item.name].revenue += item.priceUsd * item.qty * (s.rate || bcvRate);
             });
-        } else {
-            const method = s.paymentMethod || 'efectivo_bs';
-            if (!acc[method]) acc[method] = { total: 0, currency: 'BS' };
-            acc[method].total += (s.totalBs || 0);
+        });
+        return Object.values(productSalesMap).sort((a, b) => b.qty - a.qty).slice(0, 5);
+    }, [sales, bcvRate]);
+
+    // Payment method breakdown (today)
+    const paymentBreakdown = useMemo(() => {
+        const allTodayTransactions = sales.filter(s => s.timestamp?.startsWith(today) && s.status !== 'ANULADA');
+        return allTodayTransactions.reduce((acc, s) => {
+            if (s.payments && s.payments.length > 0) {
+                s.payments.forEach(p => {
+                    if (!acc[p.methodId]) acc[p.methodId] = { total: 0, currency: p.currency || 'BS' };
+                    acc[p.methodId].total += (p.currency === 'USD' ? p.amountUsd : p.amountBs) || 0;
+                });
+            } else {
+                const method = s.paymentMethod || 'efectivo_bs';
+                if (!acc[method]) acc[method] = { total: 0, currency: 'BS' };
+                acc[method].total += (s.totalBs || 0);
+            }
+            return acc;
+        }, {});
+    }, [sales, today]);
+
+    // Top productos vendidos HOY (para cierre del día)
+    const todayTopProducts = useMemo(() => {
+        const todayProductMap = {};
+        todaySales.forEach(s => {
+            s.items.forEach(item => {
+                if (!todayProductMap[item.name]) todayProductMap[item.name] = { name: item.name, qty: 0, revenue: 0 };
+                todayProductMap[item.name].qty += item.qty;
+                todayProductMap[item.name].revenue += item.priceUsd * item.qty * (s.rate || bcvRate);
+            });
+        });
+        return Object.values(todayProductMap).sort((a, b) => b.qty - a.qty).slice(0, 10);
+    }, [todaySales, bcvRate]);
+
+    // Handler: Cierre de Caja (abre modal de confirmación)
+    const handleDailyClose = () => {
+        triggerHaptic && triggerHaptic();
+        if (todaySales.length === 0) {
+            showToast('No hay ventas hoy para cerrar caja', 'error');
+            return;
         }
-        return acc;
-    }, {});
+        setIsResetTodayOpen(true);
+    };
+
+    const handleResetToday = async () => {
+        // 1. Generar PDF del cierre ANTES de borrar
+        if (todaySales.length > 0) {
+            const allTodayForReport = sales.filter(s => s.timestamp?.startsWith(today));
+            await generateDailyClosePDF({
+                sales: todaySales,
+                allSales: allTodayForReport,
+                bcvRate,
+                paymentBreakdown,
+                topProducts: todayTopProducts,
+                todayTotalUsd,
+                todayTotalBs,
+                todayProfit,
+                todayItemsSold,
+            });
+        }
+        // 2. Resetear ventas del día
+        const remaining = sales.filter(s => !s.timestamp?.startsWith(today));
+        await storageService.setItem(SALES_KEY, remaining);
+        setSales(remaining);
+        setIsResetTodayOpen(false);
+        showToast('Cierre de caja completado', 'success');
+    };
 
     if (isLoading) {
         return (
-            <div className="flex-1 flex flex-col items-center justify-center">
-                <div className="w-8 h-8 rounded-full border-4 border-slate-200 dark:border-slate-800 border-t-emerald-500 animate-spin" />
+            <div className="flex-1 p-3 sm:p-6 space-y-4">
+                <div className="skeleton h-14 w-40" />
+                <div className="grid grid-cols-3 gap-3">
+                    <div className="skeleton h-20" />
+                    <div className="skeleton h-20" />
+                    <div className="skeleton h-20" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                    <div className="skeleton h-32" />
+                    <div className="skeleton h-32" />
+                </div>
+                <div className="skeleton h-48" />
+                <div className="skeleton h-24" />
             </div>
         );
     }
 
+    // Pull-to-refresh handlers
+    const handleTouchStart = (e) => {
+        if (scrollRef.current?.scrollTop === 0) {
+            touchStartY.current = e.touches[0].clientY;
+        }
+    };
+    const handleTouchMove = (e) => {
+        if (scrollRef.current?.scrollTop > 0) return;
+        const diff = e.touches[0].clientY - touchStartY.current;
+        if (diff > 0) setPullDistance(Math.min(diff * 0.4, 80));
+    };
+    const handleTouchEnd = async () => {
+        if (pullDistance > 60) {
+            setIsRefreshing(true);
+            const [savedSales, savedProducts, savedCustomers] = await Promise.all([
+                storageService.getItem(SALES_KEY, []),
+                storageService.getItem('my_products_v1', []),
+                storageService.getItem('bodega_customers_v1', []),
+            ]);
+            setSales(savedSales);
+            setProducts(savedProducts);
+            setCustomers(savedCustomers);
+            setIsRefreshing(false);
+        }
+        setPullDistance(0);
+    };
+
     return (
-        <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-3 sm:p-6 overflow-y-auto scrollbar-hide">
+        <div
+            ref={scrollRef}
+            className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-3 sm:p-6 overflow-y-auto scrollbar-hide"
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+        >
+            {/* Pull-to-refresh indicator */}
+            {(pullDistance > 0 || isRefreshing) && (
+                <div className="flex justify-center pb-3 transition-all" style={{ height: pullDistance > 0 ? pullDistance : 40 }}>
+                    <div className={`w-6 h-6 rounded-full border-2 border-slate-300 dark:border-slate-700 border-t-emerald-500 ${isRefreshing || pullDistance > 60 ? 'animate-spin-slow' : ''}`}
+                        style={{ opacity: Math.min(pullDistance / 60, 1), transform: `rotate(${pullDistance * 4}deg)` }}
+                    />
+                </div>
+            )}
 
             {/* Header */}
             <div className="flex items-center justify-between mb-6 pt-2">
@@ -273,17 +438,17 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                         <div className="flex items-center gap-2 relative z-10">
                             <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-1 rounded-lg tracking-wider">HOY</span>
                             <button
-                                onClick={() => { triggerHaptic && triggerHaptic(); setIsResetTodayOpen(true); }}
-                                className="p-1 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                                title="Reiniciar día"
+                                onClick={handleDailyClose}
+                                className="p-1 rounded-lg text-slate-300 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
+                                title="Cierre de caja"
                             >
-                                <RotateCcw size={13} />
+                                <FileText size={13} />
                             </button>
                         </div>
                     </div>
                     <div className="relative z-10">
                         <div className="flex items-baseline gap-1">
-                            <span className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">${todayTotalUsd.toFixed(2)}</span>
+                            <span className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">$<AnimatedCounter value={todayTotalUsd} /></span>
                         </div>
                         <p className="text-sm font-bold text-slate-400 dark:text-slate-500 mt-0.5">{formatBs(todayTotalBs)} Bs</p>
                         <p className="text-[11px] font-medium text-slate-400 mt-1">Ingresos brutos</p>
@@ -297,8 +462,8 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                             <ShoppingBag size={18} className="text-indigo-500" />
                         </div>
                     </div>
-                    <p className="text-xl font-black text-slate-800 dark:text-white leading-none">{todaySales.length} <span className="text-xs font-bold text-slate-400">ventas</span></p>
-                    <p className="text-[11px] text-slate-400 mt-1">{todayItemsSold} artículos vendidos</p>
+                    <p className="text-xl font-black text-slate-800 dark:text-white leading-none"><AnimatedCounter value={todaySales.length} /> <span className="text-xs font-bold text-slate-400">ventas</span></p>
+                    <p className="text-[11px] text-slate-400 mt-1"><AnimatedCounter value={todayItemsSold} /> artículos vendidos</p>
                 </div>
 
                 {/* Ganancia Estimada */}
@@ -363,6 +528,9 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                 </div>
             )}
 
+            {/* Gráfica semanal */}
+            <SalesChart weekData={weekData} />
+
             {/* Bajo Stock */}
             {lowStockProducts.length > 0 && (
                 <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-amber-200 dark:border-amber-800/30 shadow-sm mb-5">
@@ -420,6 +588,15 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                 onShareWhatsApp={handleShareWhatsApp}
                 onDownloadPDF={handleDownloadPDF}
                 onOpenDeleteModal={() => setIsDeleteModalOpen(true)}
+                onRequestClientForTicket={(sale) => {
+                    triggerHaptic && triggerHaptic();
+                    setTicketPendingSale(sale);
+                }}
+                onRecycleSale={(sale) => {
+                    triggerHaptic && triggerHaptic();
+                    localStorage.setItem('recycled_cart', JSON.stringify(sale.items));
+                    if (onNavigate) onNavigate('ventas');
+                }}
             />
 
             {/* Empty state */}
@@ -428,6 +605,74 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                     <BarChart3 size={64} strokeWidth={1} />
                     <p className="text-sm font-medium">Sin datos aún</p>
                     <p className="text-xs text-slate-400">Las estadísticas aparecerán cuando hagas tu primera venta</p>
+                </div>
+            )}
+
+            {/* Modal Registrar Cliente para Ticket */}
+            {ticketPendingSale && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200"
+                    onClick={() => { setTicketPendingSale(null); setTicketClientName(''); setTicketClientPhone(''); }}
+                >
+                    <div
+                        className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-2xl shadow-xl border border-slate-100 dark:border-slate-800 overflow-hidden animate-in zoom-in-95 duration-200"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="p-5">
+                            <div className="flex justify-center mb-4">
+                                <div className="w-14 h-14 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-500 rounded-full flex items-center justify-center">
+                                    <UserPlus size={28} />
+                                </div>
+                            </div>
+                            <h3 className="text-lg font-black text-center text-slate-900 dark:text-white mb-1">
+                                Registrar Cliente
+                            </h3>
+                            <p className="text-xs text-center text-slate-400 mb-5">
+                                Para enviar el ticket, registra los datos del cliente.
+                            </p>
+
+                            <div className="space-y-3">
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">Nombre del Cliente *</label>
+                                    <input
+                                        type="text"
+                                        value={ticketClientName}
+                                        onChange={(e) => setTicketClientName(e.target.value)}
+                                        placeholder="Ej: María García"
+                                        autoFocus
+                                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-medium text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 flex items-center gap-1">
+                                        <Phone size={10} /> Teléfono / WhatsApp
+                                    </label>
+                                    <input
+                                        type="tel"
+                                        value={ticketClientPhone}
+                                        onChange={(e) => setTicketClientPhone(e.target.value)}
+                                        placeholder="Ej: 0414-1234567"
+                                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-medium text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                        <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex gap-3">
+                            <button
+                                onClick={() => { setTicketPendingSale(null); setTicketClientName(''); setTicketClientPhone(''); }}
+                                className="flex-1 py-3 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-white font-bold rounded-xl active:scale-[0.98] transition-all"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleRegisterClientForTicket}
+                                disabled={!ticketClientName.trim()}
+                                className="flex-1 py-3 bg-emerald-500 disabled:bg-slate-300 dark:disabled:bg-slate-700 hover:bg-emerald-600 text-white font-bold rounded-xl active:scale-[0.98] transition-all flex justify-center items-center gap-2 shadow-md shadow-emerald-500/20"
+                            >
+                                <Send size={16} /> Registrar y Enviar
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
 
@@ -479,6 +724,63 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                     </div>
                 </div>
             )}
+            {/* Modal: ¿Reciclar Venta? */}
+            {recycleOffer && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200"
+                    onClick={() => setRecycleOffer(null)}
+                >
+                    <div
+                        className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-2xl shadow-xl border border-slate-100 dark:border-slate-800 overflow-hidden animate-in zoom-in-95 duration-200"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="p-5 text-center">
+                            <div className="flex justify-center mb-4">
+                                <div className="w-14 h-14 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-500 rounded-full flex items-center justify-center">
+                                    <Recycle size={28} />
+                                </div>
+                            </div>
+                            <h3 className="text-lg font-black text-slate-900 dark:text-white mb-1">
+                                Venta Anulada
+                            </h3>
+                            <p className="text-xs text-slate-400 mb-2">
+                                ¿Quieres reciclar los productos de esta venta y enviarlos a la caja?
+                            </p>
+                            <div className="text-left bg-slate-50 dark:bg-slate-800 rounded-xl p-3 mt-3 space-y-1">
+                                {recycleOffer.items?.slice(0, 5).map((item, i) => (
+                                    <div key={i} className="flex justify-between text-xs">
+                                        <span className="text-slate-600 dark:text-slate-300 font-medium">{item.qty}{item.isWeight ? 'kg' : 'u'} {item.name.length > 20 ? item.name.substring(0, 20) + '…' : item.name}</span>
+                                        <span className="text-slate-400 font-bold">${(item.priceUsd * item.qty).toFixed(2)}</span>
+                                    </div>
+                                ))}
+                                {recycleOffer.items?.length > 5 && (
+                                    <p className="text-[10px] text-slate-400 text-center">+{recycleOffer.items.length - 5} más...</p>
+                                )}
+                            </div>
+                        </div>
+                        <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex gap-3">
+                            <button
+                                onClick={() => setRecycleOffer(null)}
+                                className="flex-1 py-3 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-white font-bold rounded-xl active:scale-[0.98] transition-all"
+                            >
+                                No, gracias
+                            </button>
+                            <button
+                                onClick={() => {
+                                    // Guardar items reciclados en localStorage como señal
+                                    localStorage.setItem('recycled_cart', JSON.stringify(recycleOffer.items));
+                                    setRecycleOffer(null);
+                                    if (onNavigate) onNavigate('ventas');
+                                }}
+                                className="flex-1 py-3 bg-indigo-500 hover:bg-indigo-600 text-white font-bold rounded-xl active:scale-[0.98] transition-all flex justify-center items-center gap-2 shadow-md shadow-indigo-500/20"
+                            >
+                                <Recycle size={16} /> Reciclar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Modal Confirmación: Anular Venta */}
             <ConfirmModal
                 isOpen={!!voidSaleTarget}
@@ -493,10 +795,10 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                 isOpen={isResetTodayOpen}
                 onClose={() => setIsResetTodayOpen(false)}
                 onConfirm={handleResetToday}
-                title="Reiniciar datos del día"
-                message="¿Borrar todas las ventas de hoy? Esta acción no se puede deshacer."
-                confirmText="Sí, reiniciar"
-                confirmClassName="bg-red-500 hover:bg-red-600 text-white"
+                title="Cierre de Caja"
+                message="Se generará un PDF con el reporte del día y se borrarán las ventas de hoy.\n\nEsta acción no se puede deshacer."
+                confirmText="Cerrar Caja"
+                confirmClassName="bg-indigo-500 hover:bg-indigo-600 text-white"
             />
         </div>
     );
