@@ -328,7 +328,7 @@ export default function SalesView({ rates, triggerHaptic, onNavigate }) {
 
     // ── Render ─────────────────────────────────────
     return (
-        <div className="flex-1 min-h-0 flex flex-col bg-slate-50 dark:bg-slate-950 p-2 sm:p-4 pb-14 sm:pb-4 overflow-hidden relative">
+        <div className="flex-1 min-h-0 flex flex-col dark:bg-slate-950 p-2 sm:p-4 sm:pb-4 overflow-hidden relative">
 
             {/* Header + Rate Config */}
             <SalesHeader
