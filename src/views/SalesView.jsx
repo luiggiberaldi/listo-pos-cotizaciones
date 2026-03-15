@@ -290,14 +290,14 @@ export default function SalesView({ rates, triggerHaptic, onNavigate, isActive }
             if (existing && qtyOverride) return prev.map(i => i.id === cartId ? { ...i, qty: i.qty + qtyOverride } : i);
 
             const itemCostBs = product.costBs || (product.costUsd ? product.costUsd * effectiveRate : 0);
-            return [...prev, {
+            return [{
                 ...product, id: cartId, name: cartName, priceUsd: priceToUse,
                 exactBs: product.exactBs || null, // Guardar el valor exacto de Bs si existe (para montos libres)
                 costBs: forceMode === 'unit' ? itemCostBs / (product.unitsPerPackage || 1) : itemCostBs,
                 costUsd: forceMode === 'unit' ? (product.costUsd || 0) / (product.unitsPerPackage || 1) : (product.costUsd || 0),
                 qty: qtyToAdd, isWeight: !!qtyOverride,
                 _originalId: product.id, _mode: forceMode || 'package', _unitsPerPackage: product.unitsPerPackage || 1,
-            }];
+            }, ...prev];
         });
         handleSetSearchTerm('');
         setHierarchyPending(null);
