@@ -387,8 +387,21 @@ export default function SalesView({ rates, triggerHaptic, onNavigate, isActive }
 
         // Deduct stock
         const updatedProducts = products.map(p => {
-            const cartItem = cart.find(i => i.id === p.id);
-            return cartItem ? { ...p, stock: Math.max(0, (p.stock ?? 0) - cartItem.qty) } : p;
+            // Un producto puede estar varias veces en el carrito (ej: por paquete y por unidad)
+            // Necesitamos sumar todas las deducciones para este producto original
+            const cartItemsForThisProduct = cart.filter(i => (i._originalId || i.id) === p.id);
+            if (cartItemsForThisProduct.length > 0) {
+                // Sumamos cuánto se deduce en total.
+                // Si se vendió por unidad, se resta la fracción correspondiente del paquete.
+                const totalDeducted = cartItemsForThisProduct.reduce((sum, item) => {
+                    if (item.isWeight) return sum + item.qty; // Peso en kg
+                    if (item._mode === 'unit') return sum + (item.qty / (item._unitsPerPackage || 1)); // Fracción de paquete
+                    return sum + item.qty; // Paquetes enteros
+                }, 0);
+                
+                return { ...p, stock: Math.max(0, (p.stock ?? 0) - totalDeducted) };
+            }
+            return p;
         });
         setProducts(updatedProducts);
         await storageService.setItem('bodega_products_v1', updatedProducts);
