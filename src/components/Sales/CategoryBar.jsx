@@ -1,5 +1,8 @@
-import { Package, Calculator } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Package, Calculator, ChevronDown } from 'lucide-react';
 import { BODEGA_CATEGORIES, CATEGORY_ICONS } from '../../config/categories';
+
+const PAGE_SIZE = 30;
 
 export default function CategoryBar({
     selectedCategory,
@@ -10,8 +13,18 @@ export default function CategoryBar({
     searchTerm = '',
     onOpenCustomAmount
 }) {
+    const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
+    // Reset pagination when category changes
+    useEffect(() => {
+        setVisibleCount(PAGE_SIZE);
+    }, [selectedCategory]);
+
+    const visibleProducts = filteredByCategory.slice(0, visibleCount);
+    const hasMore = filteredByCategory.length > visibleCount;
+
     return (
-        <div className={`relative ${selectedCategory !== 'todos' && searchTerm.length === 0 ? 'lg:flex-1 lg:overflow-hidden lg:flex lg:flex-col lg:min-h-0' : ''}`}>
+        <div className={`relative ${searchTerm.length === 0 ? 'lg:flex-1 lg:overflow-hidden lg:flex lg:flex-col lg:min-h-0' : ''}`}>
             {/* Category Chips Container with Mask */}
             <div className="relative horizontal-scroll-mask">
                 <div className="shrink-0 flex gap-1.5 overflow-x-auto pb-2 pt-1 pl-1 pr-12 scrollbar-hide">
@@ -47,11 +60,11 @@ export default function CategoryBar({
                 </div>
             </div>
 
-            {/* Product Grid — solo cuando se filtra por categoría específica */}
-            {selectedCategory !== 'todos' && searchTerm.length === 0 && (
+            {/* Product Grid */}
+            {searchTerm.length === 0 && (
                 <div className="flex-1 overflow-y-auto min-h-0 pb-2">
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
-                        {filteredByCategory.map(p => {
+                        {visibleProducts.map(p => {
                             const isOut = (p.stock ?? 0) === 0;
                             const CatIcon = CATEGORY_ICONS[p.category] || Package;
                             return (
@@ -75,10 +88,24 @@ export default function CategoryBar({
                             );
                         })}
                     </div>
+
+                    {/* Load More button */}
+                    {hasMore && (
+                        <div className="flex justify-center mt-3">
+                            <button
+                                onClick={() => { triggerHaptic && triggerHaptic(); setVisibleCount(prev => prev + PAGE_SIZE); }}
+                                className="flex items-center gap-1.5 px-5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 hover:border-emerald-400 hover:text-emerald-600 transition-all active:scale-95 shadow-sm"
+                            >
+                                <ChevronDown size={14} />
+                                Cargar Mas ({filteredByCategory.length - visibleCount} restantes)
+                            </button>
+                        </div>
+                    )}
+
                     {filteredByCategory.length === 0 && (
                         <div className="text-center py-10">
                             <Package size={32} className="mx-auto text-slate-300 dark:text-slate-700 mb-2" />
-                            <p className="text-xs text-slate-400 font-medium">Sin productos en esta categoría</p>
+                            <p className="text-xs text-slate-400 font-medium">Sin productos en esta categoria</p>
                         </div>
                     )}
                 </div>
