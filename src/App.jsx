@@ -220,7 +220,7 @@ export default function App() {
       )}
 
       <ProductProvider rates={rates}>
-        <main className={`flex-1 min-h-0 w-full max-w-md md:max-w-3xl lg:max-w-7xl mx-auto relative ${isKeyboardOpen ? 'pb-4' : 'pb-24'} flex flex-col overflow-y-auto`}>
+        <main className={`flex-1 min-h-0 w-full max-w-md md:max-w-3xl lg:max-w-none lg:px-6 mx-auto relative ${isKeyboardOpen ? 'pb-4' : 'pb-24'} flex flex-col overflow-y-auto`}>
 
           {/* Hidden Admin Trigger Area */}
         <div
