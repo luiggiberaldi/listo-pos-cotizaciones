@@ -320,14 +320,14 @@ export default function CustomersView({ triggerHaptic, rates }) {
                                 <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
                                     <button
                                         type="button"
-                                        onClick={() => { setCurrencyMode('BS'); setTransactionAmount(''); }}
+                                        onClick={() => { setCurrencyMode('BS'); setTransactionAmount(''); setPaymentMethod('efectivo_bs'); }}
                                         className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${currencyMode === 'BS' ? 'bg-white dark:bg-slate-900 shadow-sm text-blue-500' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                                     >
                                         Bolivares (Bs)
                                     </button>
                                     <button
                                         type="button"
-                                        onClick={() => { setCurrencyMode('USD'); setTransactionAmount(''); }}
+                                        onClick={() => { setCurrencyMode('USD'); setTransactionAmount(''); setPaymentMethod('efectivo_usd'); }}
                                         className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${currencyMode === 'USD' ? 'bg-white dark:bg-slate-900 shadow-sm text-emerald-500' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                                     >
                                         Dolares ($)
@@ -393,22 +393,25 @@ export default function CustomersView({ triggerHaptic, rates }) {
                                 </div>
 
                                 {/* Metodo de pago (solo para abonos) */}
-                                {transactionModal.type === 'ABONO' && (
+                                {transactionModal.type === 'ABONO' && (() => {
+                                    const filteredMethods = DEFAULT_PAYMENT_METHODS.filter(m => m.currency === currencyMode);
+                                    return (
                                     <div>
                                         <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Metodo de Pago</label>
                                         <select
-                                            value={paymentMethod}
+                                            value={filteredMethods.some(m => m.id === paymentMethod) ? paymentMethod : (filteredMethods[0]?.id || '')}
                                             onChange={(e) => setPaymentMethod(e.target.value)}
                                             className="w-full form-select bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500/50 transition-all"
                                         >
-                                            {DEFAULT_PAYMENT_METHODS.map(method => (
+                                            {filteredMethods.map(method => (
                                                 <option key={method.id} value={method.id}>
                                                     {method.icon} {method.label}
                                                 </option>
                                             ))}
                                         </select>
                                     </div>
-                                )}
+                                    );
+                                })()}
 
                                 {/* PREVIEW del saldo resultante */}
                                 {rawAmt > 0 && previewCustomer && (
