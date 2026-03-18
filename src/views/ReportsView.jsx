@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { BarChart3, Calendar, Download, TrendingUp, ShoppingBag, DollarSign, Package, ChevronDown } from 'lucide-react';
 import { storageService } from '../utils/storageService';
 import { formatBs } from '../utils/calculatorUtils';
-import { getPaymentLabel, PAYMENT_ICONS, toTitleCase } from '../config/paymentMethods';
+import { getPaymentLabel, PAYMENT_ICONS, toTitleCase, getPaymentIcon } from '../config/paymentMethods';
 import { useProductContext } from '../context/ProductContext';
 import EmptyState from '../components/EmptyState';
 
@@ -285,7 +285,7 @@ export default function ReportsView({ rates, triggerHaptic }) {
                     <div className="space-y-3">
                         {Object.entries(paymentBreakdown).map(([method, data]) => {
                             const label = toTitleCase(data.label || getPaymentLabel(method));
-                            const PayIcon = PAYMENT_ICONS[method];
+                            const PayIcon = getPaymentIcon(method) || PAYMENT_ICONS[method];
                             const totalBsEquiv = data.currency === 'USD' ? data.total * bcvRate : data.total;
                             const pct = totalBs > 0 ? (totalBsEquiv / totalBs * 100) : 0;
                             return (

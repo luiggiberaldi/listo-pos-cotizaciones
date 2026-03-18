@@ -82,13 +82,33 @@ export const getPaymentLabel = (id) => {
         if (stored) {
             const customMethods = JSON.parse(stored);
             const custom = customMethods.find(m => m.id === id);
-            if (custom) return toTitleCase(custom.label);
+            if (custom && custom.label) return toTitleCase(custom.label);
         }
     } catch (e) {
         console.warn('Error reading custom payment methods synchronously', e);
     }
     
     return toTitleCase(id);
+};
+
+export const getPaymentIcon = (id) => {
+    // Check factory
+    const factory = FACTORY_PAYMENT_METHODS.find(m => m.id === id);
+    if (factory) return factory.Icon;
+
+    // Check custom
+    try {
+        const stored = localStorage.getItem('bodega_payment_methods_v1');
+        if (stored) {
+            const customMethods = JSON.parse(stored);
+            const custom = customMethods.find(m => m.id === id);
+            if (custom && custom.icon) return ICON_COMPONENTS[custom.icon] || null;
+        }
+    } catch (e) {
+        console.warn('Error reading custom payment icons', e);
+    }
+    
+    return null;
 };
 
 // Icon lookup for React components
@@ -106,7 +126,17 @@ export const ICON_COMPONENTS = {
 };
 
 export const getPaymentMethod = (id) => {
-    return FACTORY_PAYMENT_METHODS.find(m => m.id === id) || FACTORY_PAYMENT_METHODS[0];
+    const factory = FACTORY_PAYMENT_METHODS.find(m => m.id === id);
+    if (factory) return factory;
+    try {
+        const stored = localStorage.getItem('bodega_payment_methods_v1');
+        if (stored) {
+            const customMethods = JSON.parse(stored);
+            const custom = customMethods.find(m => m.id === id);
+            if (custom) return { ...custom, Icon: ICON_COMPONENTS[custom.icon] || null };
+        }
+    } catch (e) {}
+    return FACTORY_PAYMENT_METHODS[0];
 };
 
 // Colores por método (para dashboard/historial)

@@ -3,7 +3,7 @@ import { storageService } from '../utils/storageService';
 import { showToast } from '../components/Toast';
 import { BarChart3, TrendingUp, Package, AlertTriangle, DollarSign, ShoppingBag, Clock, ArrowUpRight, Trash2, ShoppingCart, Store, Users, Send, Ban, ChevronDown, ChevronUp, Moon, Sun, UserPlus, Phone, FileText, Recycle, Key, Settings } from 'lucide-react';
 import { formatBs, formatVzlaPhone } from '../utils/calculatorUtils';
-import { getPaymentLabel, getPaymentMethod, PAYMENT_ICONS } from '../config/paymentMethods';
+import { getPaymentLabel, getPaymentMethod, PAYMENT_ICONS, getPaymentIcon } from '../config/paymentMethods';
 import SalesHistory from '../components/Dashboard/SalesHistory';
 import SalesChart from '../components/Dashboard/SalesChart';
 import ConfirmModal from '../components/ConfirmModal';
@@ -571,7 +571,7 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                     <div className="space-y-2">
                         {Object.entries(paymentBreakdown).map(([method, data]) => {
                             const label = getPaymentLabel(method);
-                            const PayIcon = PAYMENT_ICONS[method];
+                            const PayIcon = getPaymentIcon(method) || PAYMENT_ICONS[method];
                             const totalBsEquiv = data.currency === 'USD' ? data.total * bcvRate : data.total;
                             const pct = todayTotalBs > 0 ? (totalBsEquiv / todayTotalBs * 100) : 0;
                             return (

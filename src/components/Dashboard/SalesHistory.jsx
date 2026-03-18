@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Clock, Send, Ban, ChevronDown, ChevronUp, Trash2, Shuffle, Recycle, Receipt, Printer } from 'lucide-react';
 import { formatBs } from '../../utils/calculatorUtils';
-import { getPaymentLabel, getPaymentMethod, PAYMENT_ICONS, toTitleCase } from '../../config/paymentMethods';
+import { getPaymentLabel, getPaymentMethod, PAYMENT_ICONS, getPaymentIcon, toTitleCase } from '../../config/paymentMethods';
 import EmptyState from '../EmptyState';
 
 export default function SalesHistory({
@@ -57,7 +57,7 @@ export default function SalesHistory({
                     if (s.payments && s.payments.length === 1) {
                         methodLabel = toTitleCase(s.payments[0].methodLabel);
                         const m = getPaymentMethod(s.payments[0].methodId);
-                        if (m) PayMethodIcon = PAYMENT_ICONS[m.id] || m.Icon || null;
+                        if (m) PayMethodIcon = getPaymentIcon(m.id) || m.Icon || null;
                     } else if (s.payments && s.payments.length > 1) {
                         methodLabel = 'Pago Mixto';
                         PayMethodIcon = Shuffle;
@@ -65,7 +65,7 @@ export default function SalesHistory({
                         const m = getPaymentMethod(s.paymentMethod);
                         if (m) {
                             methodLabel = toTitleCase(m.label);
-                            PayMethodIcon = PAYMENT_ICONS[m.id] || m.Icon || null;
+                            PayMethodIcon = getPaymentIcon(m.id) || m.Icon || null;
                         }
                     }
 
