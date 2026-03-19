@@ -21,7 +21,7 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
     const { notifyCierrePendiente, requestPermission } = useNotifications();
     const { deviceId } = useSecurity();
     const [sales, setSales] = useState([]);
-    const { products, setProducts, isLoadingProducts } = useProductContext();
+    const { products, setProducts, isLoadingProducts, effectiveRate: bcvRate } = useProductContext();
     const [customers, setCustomers] = useState([]);
     const [isLoadingLocal, setIsLoadingLocal] = useState(true);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -41,8 +41,6 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
     const [showTopDeudas, setShowTopDeudas] = useState(false);
     const touchStartY = useRef(0);
     const scrollRef = useRef(null);
-
-    const bcvRate = rates.bcv?.price || 0;
 
     useEffect(() => {
         if (!isActive) return;

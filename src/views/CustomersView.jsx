@@ -8,6 +8,7 @@ import { DEFAULT_PAYMENT_METHODS } from '../config/paymentMethods';
 import ConfirmModal from '../components/ConfirmModal';
 import EmptyState from '../components/EmptyState';
 import SwipeableItem from '../components/SwipeableItem';
+import { useProductContext } from '../context/ProductContext';
 
 export default function CustomersView({ triggerHaptic, rates }) {
     const [customers, setCustomers] = useState([]);
@@ -21,19 +22,12 @@ export default function CustomersView({ triggerHaptic, rates }) {
     const [currencyMode, setCurrencyMode] = useState('BS'); // 'BS' | 'USD'
     const [paymentMethod, setPaymentMethod] = useState('efectivo_bs');
     const [resetBalanceCustomer, setResetBalanceCustomer] = useState(null);
-    const [bcvRate, setBcvRate] = useState(0);
+    const { effectiveRate: bcvRate } = useProductContext();
     const [expandedHistory, setExpandedHistory] = useState(null);
     const [historyData, setHistoryData] = useState([]);
     const [selectedCustomer, setSelectedCustomer] = useState(null);
     const [editingCustomer, setEditingCustomer] = useState(null);
     const [deleteCustomerTarget, setDeleteCustomerTarget] = useState(null);
-
-    useEffect(() => {
-        // Leer tasa BCV del rates prop (viene de useRates en App.jsx)
-        if (rates?.bcv?.price) {
-            setBcvRate(Number(rates.bcv.price) || 0);
-        }
-    }, [rates]);
 
     const loadCustomers = async () => {
         const saved = await storageService.getItem('bodega_customers_v1', []);
@@ -725,9 +719,16 @@ function CustomerDetailSheet({ customer, isOpen, onClose, onAjustar, onReset, on
                                                     <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
                                                         {isCobro ? 'Abono de deuda' : isFiada ? 'Venta fiada' : 'Venta'}
                                                     </p>
-                                                    <span className={`text-xs font-black ${isCobro ? 'text-emerald-500' : isFiada ? 'text-amber-500' : 'text-slate-700 dark:text-white'}`}>
-                                                        {isCobro ? '+' : ''}${formatUsd(sale.totalUsd || 0)}
-                                                    </span>
+                                                    <div className="text-right">
+                                                        <p className={`text-xs font-black ${isCobro ? 'text-emerald-500' : isFiada ? 'text-amber-500' : 'text-slate-700 dark:text-white'}`}>
+                                                            {isCobro ? '+' : ''}${formatUsd(sale.totalUsd || 0)}
+                                                        </p>
+                                                        {bcvRate > 0 && (
+                                                            <p className={`text-[9px] font-bold ${isCobro ? 'text-emerald-400/70' : isFiada ? 'text-amber-400/70' : 'text-slate-400'}`}>
+                                                                {isCobro ? '+' : ''}{formatBs((sale.totalUsd || 0) * bcvRate)} Bs
+                                                            </p>
+                                                        )}
+                                                    </div>
                                                 </div>
                                                 {sale.items && sale.items.length > 0 && (
                                                     <p className="text-[10px] text-slate-400 truncate mt-0.5">

@@ -44,14 +44,12 @@ function getDateRange(rangeId) {
 }
 
 export default function ReportsView({ rates, triggerHaptic }) {
-    const { products } = useProductContext();
+    const { products, effectiveRate: bcvRate } = useProductContext();
     const [allSales, setAllSales] = useState([]);
     const [selectedRange, setSelectedRange] = useState('week');
     const [customFrom, setCustomFrom] = useState('');
     const [customTo, setCustomTo] = useState('');
     const [isLoading, setIsLoading] = useState(true);
-
-    const bcvRate = rates?.bcv?.price || 0;
 
     useEffect(() => {
         const load = async () => {

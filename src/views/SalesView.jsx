@@ -22,6 +22,7 @@ import { useProductContext } from '../context/ProductContext';
 import ConfirmModal from '../components/ConfirmModal';
 import Confetti from '../components/Confetti';
 import { buildReceiptWhatsAppUrl } from '../components/Sales/ReceiptShareHelper';
+import { procesarImpactoCliente } from '../utils/financialLogic';
 
 const SALES_KEY = 'bodega_sales_v1';
 
@@ -505,11 +506,21 @@ export default function SalesView({ rates, triggerHaptic, onNavigate, isActive }
         // ProductContext's setProducts automatically handles persisting to storage
         setProducts(updatedProducts);
 
-        // Update customer debt
-        const amount_favor_used = payments.filter(p => p.methodId === 'saldo_favor').reduce((sum, p) => sum + p.amountUsd, 0);
-        const debtIncurred = fiadoAmountUsd + amount_favor_used;
-        if (selectedCustomer && debtIncurred > 0) {
-            const updatedCustomers = customers.map(c => c.id === selectedCustomer.id ? { ...c, deuda: c.deuda + debtIncurred } : c);
+        // Update customer debt / favor using centralized logic
+        if (selectedCustomer) {
+            const amount_favor_used = payments.filter(p => p.methodId === 'saldo_favor').reduce((sum, p) => sum + p.amountUsd, 0);
+            
+            // Si hay fiado, es deudaGenerada. Si usa saldo favor, se descuenta.
+            const transaccionOpts = {
+                usaSaldoFavor: amount_favor_used,
+                esCredito: fiadoAmountUsd > 0.009,
+                deudaGenerada: fiadoAmountUsd,
+                vueltoParaMonedero: 0 // Podríamos extender CheckoutModal para permitir guardar vuelto
+            };
+
+            const updatedCustomer = procesarImpactoCliente(selectedCustomer, transaccionOpts);
+            const updatedCustomers = customers.map(c => c.id === selectedCustomer.id ? updatedCustomer : c);
+            
             setCustomers(updatedCustomers);
             await storageService.setItem('bodega_customers_v1', updatedCustomers);
         }

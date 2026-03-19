@@ -459,6 +459,7 @@ export default function CheckoutModal({
                                         {c.deuda !== 0 && (
                                             <span className={`ml-2 text-xs font-bold ${c.deuda > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
                                                 {c.deuda > 0 ? `Debe $${c.deuda.toFixed(2)}` : `Favor $${Math.abs(c.deuda).toFixed(2)}`}
+                                                {effectiveRate > 0 && ` (${formatBs(Math.abs(c.deuda) * effectiveRate)} Bs)`}
                                             </span>
                                         )}
                                     </button>
