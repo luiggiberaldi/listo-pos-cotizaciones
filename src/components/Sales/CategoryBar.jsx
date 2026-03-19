@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Package, Calculator, ChevronDown } from 'lucide-react';
 import { BODEGA_CATEGORIES, CATEGORY_ICONS } from '../../config/categories';
 
@@ -11,7 +11,8 @@ export default function CategoryBar({
     addToCart,
     triggerHaptic,
     searchTerm = '',
-    onOpenCustomAmount
+    onOpenCustomAmount,
+    products = [],
 }) {
     const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
@@ -40,7 +41,8 @@ export default function CategoryBar({
                 {/* Divider */}
                 <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 my-auto mx-0.5 rounded-full shrink-0" />
 
-                {BODEGA_CATEGORIES.map(cat => {
+                // Only show categories that have at least one product
+                {BODEGA_CATEGORIES.filter(cat => cat.id === 'todos' || products.some(p => p.category === cat.id)).map(cat => {
                     const isActive = selectedCategory === cat.id;
                     const CatIcon = CATEGORY_ICONS[cat.id];
                     return (

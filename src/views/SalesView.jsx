@@ -707,6 +707,7 @@ export default function SalesView({ rates, triggerHaptic, onNavigate, isActive }
                             triggerHaptic={triggerHaptic}
                             searchTerm={searchTerm}
                             onOpenCustomAmount={() => setShowCustomAmountModal(true)}
+                            products={products}
                         />
                     )}
                 </div>
