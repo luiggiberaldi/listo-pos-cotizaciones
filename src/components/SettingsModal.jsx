@@ -13,7 +13,7 @@ export default function SettingsModal({ isOpen, onClose, products, onImport, tri
     const fileInputRef = useRef(null);
     const { deviceId, forceHeartbeat } = useSecurity();
     const [idCopied, setIdCopied] = useState(false);
-    const [allowNegativeStock, setAllowNegativeStock] = useState(() => localStorage.getItem('allow_negative_stock') !== 'false');
+    const [allowNegativeStock, setAllowNegativeStock] = useState(() => localStorage.getItem('allow_negative_stock') === 'true');
 
     // Configuración del negocio (Ticket WhatsApp)
     const [businessName, setBusinessName] = useState(() => localStorage.getItem('business_name') || '');

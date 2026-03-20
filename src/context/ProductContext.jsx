@@ -124,7 +124,7 @@ export function ProductProvider({ children, rates }) {
     const adjustStock = (productId, delta) => {
         setProducts(prevProducts => prevProducts.map(p => {
             if (p.id === productId) {
-                const allowNeg = localStorage.getItem('allow_negative_stock') !== 'false';
+                const allowNeg = localStorage.getItem('allow_negative_stock') === 'true';
                 const newStock = (p.stock ?? 0) + delta;
                 return { ...p, stock: allowNeg ? newStock : Math.max(0, newStock) };
             }

@@ -23,7 +23,7 @@ export default function CategoryBar({
 
     const visibleProducts = filteredByCategory.slice(0, visibleCount);
     const hasMore = filteredByCategory.length > visibleCount;
-    const allowNegativeStock = localStorage.getItem('allow_negative_stock') !== 'false';
+    const allowNegativeStock = localStorage.getItem('allow_negative_stock') === 'true';
 
     return (
         <div className={`relative ${searchTerm.length === 0 ? 'lg:flex-1 lg:overflow-hidden lg:flex lg:flex-col lg:min-h-0' : ''}`}>

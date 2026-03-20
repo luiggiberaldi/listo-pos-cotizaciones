@@ -272,7 +272,7 @@ export default function SalesView({ rates, triggerHaptic, onNavigate, isActive }
         }
 
         // Validación temprana de stock (si la configuración lo exige)
-        const allowNegativeStock = localStorage.getItem('allow_negative_stock') !== 'false';
+        const allowNegativeStock = localStorage.getItem('allow_negative_stock') === 'true';
         const currentStock = parseFloat(product.stock) || 0;
         if (!allowNegativeStock && currentStock <= 0) {
             playError();
@@ -366,7 +366,7 @@ export default function SalesView({ rates, triggerHaptic, onNavigate, isActive }
         triggerHaptic && triggerHaptic();
         if (delta < 0) playRemove();
 
-        const allowNeg = localStorage.getItem('allow_negative_stock') !== 'false';
+        const allowNeg = localStorage.getItem('allow_negative_stock') === 'true';
 
         // Pre-check stock BEFORE setCart to avoid React StrictMode double toast
         if (!allowNeg && delta > 0) {
@@ -497,7 +497,7 @@ export default function SalesView({ rates, triggerHaptic, onNavigate, isActive }
                     return sum + item.qty; // Paquetes enteros
                 }, 0);
                 
-                const allowNeg = localStorage.getItem('allow_negative_stock') !== 'false';
+                const allowNeg = localStorage.getItem('allow_negative_stock') === 'true';
                 const newStock = (p.stock ?? 0) - totalDeducted;
                 return { ...p, stock: allowNeg ? newStock : Math.max(0, newStock) };
             }
