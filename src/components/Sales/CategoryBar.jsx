@@ -23,6 +23,7 @@ export default function CategoryBar({
 
     const visibleProducts = filteredByCategory.slice(0, visibleCount);
     const hasMore = filteredByCategory.length > visibleCount;
+    const allowNegativeStock = localStorage.getItem('allow_negative_stock') !== 'false';
 
     return (
         <div className={`relative ${searchTerm.length === 0 ? 'lg:flex-1 lg:overflow-hidden lg:flex lg:flex-col lg:min-h-0' : ''}`}>
@@ -67,14 +68,15 @@ export default function CategoryBar({
                 <div className="flex-1 overflow-y-auto min-h-0 pb-2">
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
                         {visibleProducts.map(p => {
-                            const isOut = (p.stock ?? 0) === 0;
+                            const isOut = (p.stock ?? 0) <= 0;
+                            const isDisabled = isOut && !allowNegativeStock;
                             const CatIcon = CATEGORY_ICONS[p.category] || Package;
                             return (
                                 <button
                                     key={p.id}
                                     onClick={() => addToCart(p)}
-                                    disabled={isOut}
-                                    className={`bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-2 flex flex-col items-center text-center transition-all active:scale-95 hover:border-emerald-300 hover:shadow-sm ${isOut ? 'opacity-40 cursor-not-allowed' : ''
+                                    disabled={isDisabled}
+                                    className={`bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-2 flex flex-col items-center text-center transition-all active:scale-95 hover:border-emerald-300 hover:shadow-sm ${isDisabled ? 'opacity-40 cursor-not-allowed' : ''
                                         }`}
                                 >
                                     <div className="w-10 h-10 rounded-lg bg-slate-50 dark:bg-slate-800 flex items-center justify-center mb-1.5 overflow-hidden">
