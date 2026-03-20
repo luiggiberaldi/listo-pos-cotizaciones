@@ -46,6 +46,7 @@ export default function SettingsModal({ isOpen, onClose, products, onImport, tri
 
             const allProducts = await storageService.getItem('bodega_products_v1', []);
             const accounts = await storageService.getItem('bodega_accounts_v2', []);
+            const categories = await storageService.getItem('my_categories_v1', []);
 
             const backupData = {
                 timestamp: new Date().toISOString(),
@@ -53,6 +54,7 @@ export default function SettingsModal({ isOpen, onClose, products, onImport, tri
                 data: {
                     bodega_products_v1: JSON.stringify(allProducts),
                     bodega_accounts_v2: JSON.stringify(accounts),
+                    my_categories_v1: JSON.stringify(categories),
                     premium_token: localStorage.getItem('premium_token'),
                     street_rate_bs: localStorage.getItem('street_rate_bs'),
                     catalog_use_auto_usdt: localStorage.getItem('catalog_use_auto_usdt'),
@@ -108,9 +110,6 @@ export default function SettingsModal({ isOpen, onClose, products, onImport, tri
                 if (json.data.bodega_accounts_v2) {
                     await storageService.setItem('bodega_accounts_v2', typeof json.data.bodega_accounts_v2 === 'string' ? JSON.parse(json.data.bodega_accounts_v2) : json.data.bodega_accounts_v2);
                 }
-                if (json.data.my_categories_v1) {
-                    await storageService.setItem('my_categories_v1', typeof json.data.my_categories_v1 === 'string' ? JSON.parse(json.data.my_categories_v1) : json.data.my_categories_v1);
-                }
 
                 if (json.data.street_rate_bs) localStorage.setItem('street_rate_bs', json.data.street_rate_bs);
                 if (json.data.catalog_use_auto_usdt) localStorage.setItem('catalog_use_auto_usdt', json.data.catalog_use_auto_usdt);
@@ -120,9 +119,18 @@ export default function SettingsModal({ isOpen, onClose, products, onImport, tri
                 if (json.data.business_name) localStorage.setItem('business_name', json.data.business_name);
                 if (json.data.business_rif) localStorage.setItem('business_rif', json.data.business_rif);
 
+                // Write categories LAST to prevent ProductContext auto-save from overwriting them
+                if (json.data.my_categories_v1) {
+                    const cats = typeof json.data.my_categories_v1 === 'string' ? JSON.parse(json.data.my_categories_v1) : json.data.my_categories_v1;
+                    await storageService.setItem('my_categories_v1', cats);
+                    // Double-write: ensure IndexedDB commits by writing again after a tick
+                    await new Promise(r => setTimeout(r, 100));
+                    await storageService.setItem('my_categories_v1', cats);
+                }
+
                 setImportStatus('success');
                 setStatusMessage('Datos restaurados. Recargando...');
-                setTimeout(() => window.location.reload(), 1500);
+                setTimeout(() => window.location.reload(), 1800);
 
             } catch (error) {
                 console.error(error);
