@@ -875,9 +875,10 @@ export const ProductsView = ({ rates, triggerHaptic }) => {
                     await storageService.setItem('bodega_products_v1', imported);
                     setProducts(imported);
                     if (importedCats && importedCats.length > 0) {
-                        await storageService.setItem('my_categories_v1', importedCats);
-                        await new Promise(r => setTimeout(r, 100));
-                        await storageService.setItem('my_categories_v1', importedCats);
+                        // Write directly via localforage to bypass ProductContext auto-save race
+                        const localforage = (await import('localforage')).default;
+                        const lf = localforage.createInstance({ name: 'BodegaApp', storeName: 'bodega_app_data' });
+                        await lf.setItem('my_categories_v1', importedCats);
                         window.location.reload();
                     }
                 }}

@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Upload, Download, AlertTriangle, Check, X, Database, Share2, Fingerprint, Copy, Store } from 'lucide-react';
 import { storageService } from '../utils/storageService';
+import localforage from 'localforage';
 import { showToast } from '../components/Toast';
 import PaymentMethodsManager from './Settings/PaymentMethodsManager';
 
@@ -119,18 +120,17 @@ export default function SettingsModal({ isOpen, onClose, products, onImport, tri
                 if (json.data.business_name) localStorage.setItem('business_name', json.data.business_name);
                 if (json.data.business_rif) localStorage.setItem('business_rif', json.data.business_rif);
 
-                // Write categories LAST to prevent ProductContext auto-save from overwriting them
+                // Write categories DIRECTLY via localforage to bypass ProductContext auto-save race condition
+                // (storageService.setItem fires app_storage_update → ProductContext re-saves OLD categories)
                 if (json.data.my_categories_v1) {
                     const cats = typeof json.data.my_categories_v1 === 'string' ? JSON.parse(json.data.my_categories_v1) : json.data.my_categories_v1;
-                    await storageService.setItem('my_categories_v1', cats);
-                    // Double-write: ensure IndexedDB commits by writing again after a tick
-                    await new Promise(r => setTimeout(r, 100));
-                    await storageService.setItem('my_categories_v1', cats);
+                    const lf = localforage.createInstance({ name: 'BodegaApp', storeName: 'bodega_app_data' });
+                    await lf.setItem('my_categories_v1', cats);
                 }
 
                 setImportStatus('success');
                 setStatusMessage('Datos restaurados. Recargando...');
-                setTimeout(() => window.location.reload(), 1800);
+                setTimeout(() => window.location.reload(), 1200);
 
             } catch (error) {
                 console.error(error);
