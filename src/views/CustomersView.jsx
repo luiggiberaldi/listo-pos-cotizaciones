@@ -15,7 +15,7 @@ import SuppliersList from '../components/Suppliers/SuppliersList';
 import { AddSupplierModal, AddInvoiceModal, PayInvoiceModal, SupplierDetailsSheet } from '../components/Suppliers/SupplierModals';
 import { getActivePaymentMethods } from '../config/paymentMethods';
 
-export default function CustomersView({ triggerHaptic, rates }) {
+export default function CustomersView({ triggerHaptic, rates, isActive }) {
     const [customers, setCustomers] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterType, setFilterType] = useState('all'); // 'all' | 'deuda' | 'favor'
@@ -35,6 +35,21 @@ export default function CustomersView({ triggerHaptic, rates }) {
     const [selectedCustomer, setSelectedCustomer] = useState(null);
     const [editingCustomer, setEditingCustomer] = useState(null);
     const [deleteCustomerTarget, setDeleteCustomerTarget] = useState(null);
+
+    // Guard: evita eliminar clientes con deuda o saldo a favor pendiente
+    const handleDeleteCustomerRequest = (customer) => {
+        const deuda = customer.deuda || 0;
+        const saldo = customer.saldoFavor || 0;
+        if (deuda > 0.005) {
+            showToast(`No se puede eliminar: ${customer.name} tiene una deuda de $${deuda.toFixed(2)} pendiente.`, 'error');
+            return;
+        }
+        if (saldo > 0.005) {
+            showToast(`No se puede eliminar: ${customer.name} tiene un saldo a favor de $${saldo.toFixed(2)}.`, 'error');
+            return;
+        }
+        setDeleteCustomerTarget(customer);
+    };
 
     // ── ESTADOS DE PROVEEDORES ──
     const [activeTab, setActiveTab] = useState('clientes'); // 'clientes' | 'proveedores'
@@ -66,6 +81,12 @@ export default function CustomersView({ triggerHaptic, rates }) {
     useEffect(() => {
         loadData();
     }, []);
+
+    // Re-sincronizar cuando el usuario navega a esta tab para reflejar cambios
+    // realizados por otras vistas (e.g. ventas fiadas, abonos desde el ticket)
+    useEffect(() => {
+        if (isActive) loadData();
+    }, [isActive]);
 
     const saveCustomers = async (updatedCustomers) => {
         setCustomers(updatedCustomers);
@@ -479,7 +500,7 @@ export default function CustomersView({ triggerHaptic, rates }) {
                     filteredCustomers.map(customer => (
                         <SwipeableItem
                             key={customer.id}
-                            onDelete={() => setDeleteCustomerTarget(customer)}
+                            onDelete={() => handleDeleteCustomerRequest(customer)}
                             triggerHaptic={triggerHaptic}
                         >
                             <CustomerCard
@@ -491,7 +512,7 @@ export default function CustomersView({ triggerHaptic, rates }) {
                                     setSelectedCustomer(customer);
                                     toggleHistory(customer.id);
                                 }}
-                                onDelete={() => setDeleteCustomerTarget(customer)}
+                                onDelete={() => handleDeleteCustomerRequest(customer)}
                             />
                         </SwipeableItem>
                     ))
@@ -699,11 +720,14 @@ export default function CustomersView({ triggerHaptic, rates }) {
                                             onChange={(e) => setPaymentMethod(e.target.value)}
                                             className="w-full form-select bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500/50 transition-all"
                                         >
-                                            {filteredMethods.map(method => (
+                                            {filteredMethods.map(method => {
+                                                const emoji = typeof method.icon === 'string' && method.icon.length <= 2 ? method.icon : '';
+                                                return (
                                                 <option key={method.id} value={method.id}>
-                                                    {method.icon} {method.label}
+                                                    {emoji ? `${emoji} ${method.label}` : method.label}
                                                 </option>
-                                            ))}
+                                                );
+                                            })}
                                         </select>
                                     </div>
                                     );
@@ -777,6 +801,16 @@ export default function CustomersView({ triggerHaptic, rates }) {
                     setSelectedCustomer(null);
                 }}
                 onDelete={() => {
+                    const deuda = selectedCustomer?.deuda || 0;
+                    const saldo = selectedCustomer?.saldoFavor || 0;
+                    if (deuda > 0.005) {
+                        showToast(`No se puede eliminar: ${selectedCustomer.name} tiene una deuda de $${deuda.toFixed(2)} pendiente.`, 'error');
+                        return;
+                    }
+                    if (saldo > 0.005) {
+                        showToast(`No se puede eliminar: ${selectedCustomer.name} tiene un saldo a favor de $${saldo.toFixed(2)}.`, 'error');
+                        return;
+                    }
                     setDeleteCustomerTarget(selectedCustomer);
                     setSelectedCustomer(null);
                 }}
@@ -1002,21 +1036,25 @@ function CustomerDetailSheet({ customer, isOpen, onClose, onAjustar, onReset, on
                                     const timeStr = date.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', hour12: false });
                                     const isCobro = sale.tipo === 'COBRO_DEUDA';
                                     const isFiada = sale.tipo === 'VENTA_FIADA';
+                                    const isAnulada = sale.status === 'ANULADA';
                                     return (
-                                        <div key={sale.id} className="flex items-start gap-2.5 py-2 px-2 bg-slate-50 dark:bg-slate-950 rounded-xl">
-                                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${isCobro ? 'bg-emerald-100 dark:bg-emerald-900/30' : isFiada ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-blue-100 dark:bg-blue-900/30'}`}>
-                                                {isCobro ? <ArrowUpRight size={14} className="text-emerald-500" /> : isFiada ? <CreditCard size={14} className="text-amber-500" /> : <ShoppingBag size={14} className="text-blue-500" />}
+                                        <div key={sale.id} className={`flex items-start gap-2.5 py-2 px-2 bg-slate-50 dark:bg-slate-950 rounded-xl ${isAnulada ? 'opacity-50 grayscale' : ''}`}>
+                                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${isAnulada ? 'bg-slate-200 dark:bg-slate-800' : isCobro ? 'bg-emerald-100 dark:bg-emerald-900/30' : isFiada ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-blue-100 dark:bg-blue-900/30'}`}>
+                                                {isCobro ? <ArrowUpRight size={14} className={isAnulada ? "text-slate-500" : "text-emerald-500"} /> : isFiada ? <CreditCard size={14} className={isAnulada ? "text-slate-500" : "text-amber-500"} /> : <ShoppingBag size={14} className={isAnulada ? "text-slate-500" : "text-blue-500"} />}
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex justify-between items-start">
-                                                    <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
-                                                        {isCobro ? 'Abono de deuda' : isFiada ? 'Venta fiada' : 'Venta'}
-                                                    </p>
+                                                    <div className="flex flex-col">
+                                                        <p className={`text-xs font-bold ${isAnulada ? 'text-slate-500 line-through' : 'text-slate-700 dark:text-slate-200'}`}>
+                                                            {isCobro ? 'Abono de deuda' : isFiada ? 'Venta fiada' : 'Venta'}
+                                                        </p>
+                                                        {isAnulada && <span className="text-[10px] font-black text-red-500 tracking-wider">ANULADA</span>}
+                                                    </div>
                                                     <div className="text-right">
-                                                        <p className={`text-xs font-black ${isCobro ? 'text-emerald-500' : isFiada ? 'text-amber-500' : 'text-slate-700 dark:text-white'}`}>
+                                                        <p className={`text-xs font-black ${isAnulada ? 'text-slate-400 line-through' : isCobro ? 'text-emerald-500' : isFiada ? 'text-amber-500' : 'text-slate-700 dark:text-white'}`}>
                                                             {isCobro ? '+' : ''}${formatUsd(sale.totalUsd || 0)}
                                                         </p>
-                                                        {bcvRate > 0 && (
+                                                        {bcvRate > 0 && !isAnulada && (
                                                             <p className={`text-[9px] font-bold ${isCobro ? 'text-emerald-400/70' : isFiada ? 'text-amber-400/70' : 'text-slate-400'}`}>
                                                                 {isCobro ? '+' : ''}{formatBs((sale.totalUsd || 0) * bcvRate)} Bs
                                                             </p>

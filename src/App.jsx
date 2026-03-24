@@ -263,7 +263,7 @@ export default function App() {
             <div data-view="clientes" className={`flex-1 flex flex-col ${activeTab === 'clientes' ? '' : 'hidden'}`}>
               <ErrorBoundary>
                 <PremiumGuard featureName="Gestión de Clientes">
-                  <CustomersView triggerHaptic={triggerHaptic} rates={rates} />
+                  <CustomersView triggerHaptic={triggerHaptic} rates={rates} isActive={activeTab === 'clientes'} />
                 </PremiumGuard>
               </ErrorBoundary>
             </div>

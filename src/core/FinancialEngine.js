@@ -72,6 +72,24 @@ export class FinancialEngine {
         const breakdown = {};
 
         salesArray.forEach(sale => {
+            // Fiado sales go to their own bucket — tracked in USD directly since debts hold value in $
+            if (sale.tipo === 'VENTA_FIADA') {
+                if (!breakdown['fiado']) {
+                    breakdown['fiado'] = { total: 0, currency: 'FIADO', label: 'Fiado (Por Cobrar)' };
+                }
+                breakdown['fiado'].total += (sale.totalUsd || 0);
+                return; // Skip normal payment processing and change deduction
+            }
+
+            // Debt collection reduces the outstanding fiado balance for the period (using USD to prevent exchange rate drift)
+            if (sale.tipo === 'COBRO_DEUDA') {
+                if (!breakdown['fiado']) {
+                    breakdown['fiado'] = { total: 0, currency: 'FIADO', label: 'Fiado (Por Cobrar)' };
+                }
+                breakdown['fiado'].total -= (sale.totalUsd || 0);
+                // Continue execution below to register the actual cash/transfer received
+            }
+
             if (!sale.payments || sale.payments.length === 0) {
                 // V1 Legacy Sales
                 const method = sale.paymentMethod || 'efectivo_bs';
@@ -123,12 +141,16 @@ export class FinancialEngine {
             }
         });
 
-        // Round all totals strictly to 2 decimals to prevent floating point drifts
+        // Round all totals strictly to 2 decimals to prevent floating point drifts and filter out zeroes
+        const finalBreakdown = {};
         Object.keys(breakdown).forEach(k => {
-            breakdown[k].total = Math.round(breakdown[k].total * 100) / 100;
+            const roundedTotal = Math.round(breakdown[k].total * 100) / 100;
+            if (roundedTotal !== 0) {
+                finalBreakdown[k] = { ...breakdown[k], total: roundedTotal };
+            }
         });
 
-        return breakdown;
+        return finalBreakdown;
     }
 
     /**

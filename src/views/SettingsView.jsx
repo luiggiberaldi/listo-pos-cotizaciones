@@ -60,6 +60,8 @@ export default function SettingsView({ onClose, theme, toggleTheme, triggerHapti
     const [idCopied, setIdCopied] = useState(false);
     const [importStatus, setImportStatus] = useState(null);
     const [statusMessage, setStatusMessage] = useState('');
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [deleteInput, setDeleteInput] = useState('');
 
     // Business Data
     const [businessName, setBusinessName] = useState(() => localStorage.getItem('business_name') || '');
@@ -419,18 +421,7 @@ export default function SettingsView({ onClose, theme, toggleTheme, triggerHapti
                             </p>
                         </div>
                         <button
-                            onClick={async () => {
-                                if (window.confirm("¿Estás seguro de que deseas ELIMINAR TODO EL HISTORIAL DE VENTAS? Esto no se puede deshacer y dejará las estadísticas en cero. Tu inventario quedará intacto.")) {
-                                    try {
-                                        triggerHaptic && triggerHaptic();
-                                        await storageService.removeItem('bodega_sales_v1');
-                                        showToast('Historial de ventas eliminado exitosamente', 'success');
-                                        setTimeout(() => window.location.reload(), 1500);
-                                    } catch (err) {
-                                        showToast('Error eliminando historial', 'error');
-                                    }
-                                }
-                            }}
+                            onClick={() => setShowDeleteConfirm(true)}
                             className="w-full flex items-center gap-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/30 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors group active:scale-[0.98]"
                         >
                             <div className="p-2 bg-red-100 dark:bg-red-900/40 rounded-lg"><Trash2 size={18} className="text-red-600 dark:text-red-400" /></div>
@@ -447,6 +438,57 @@ export default function SettingsView({ onClose, theme, toggleTheme, triggerHapti
                     </div>
                 </div>
             </div>
+
+            {/* Delete Confirmation Modal */}
+            {showDeleteConfirm && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setShowDeleteConfirm(false)}>
+                    <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200 text-center" onClick={e => e.stopPropagation()}>
+                        <div className="w-16 h-16 mx-auto bg-red-100 dark:bg-red-900/30 text-red-500 rounded-full flex items-center justify-center mb-4">
+                            <AlertTriangle size={32} />
+                        </div>
+                        <h3 className="text-xl font-black text-slate-800 dark:text-white mb-2">¿Estás seguro?</h3>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+                            Esta acción eliminará <strong>todo el historial de ventas</strong> y dejará las estadísticas en cero.
+                            <br/><br/>
+                            Para confirmar, escribe <span className="font-mono font-bold text-red-500 bg-red-50 dark:bg-red-900/40 px-1 rounded">ELIMINAR</span> abajo:
+                        </p>
+                        <input
+                            type="text"
+                            value={deleteInput}
+                            onChange={e => setDeleteInput(e.target.value.toUpperCase())}
+                            placeholder="Escribe ELIMINAR"
+                            className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-center font-mono font-bold text-slate-800 dark:text-white mb-4 focus:ring-2 focus:ring-red-500/50 outline-none uppercase transition-colors"
+                            autoFocus
+                        />
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => { setShowDeleteConfirm(false); setDeleteInput(''); }}
+                                className="flex-1 py-3 text-sm font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 active:scale-95 transition-all"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                disabled={deleteInput !== 'ELIMINAR'}
+                                onClick={async () => {
+                                    if (deleteInput === 'ELIMINAR') {
+                                        try {
+                                            triggerHaptic && triggerHaptic();
+                                            await storageService.removeItem('bodega_sales_v1');
+                                            showToast('Historial de ventas eliminado exitosamente', 'success');
+                                            setTimeout(() => window.location.reload(), 1500);
+                                        } catch (err) {
+                                            showToast('Error eliminando historial', 'error');
+                                        }
+                                    }
+                                }}
+                                className="flex-1 py-3 text-sm font-bold text-white bg-red-500 rounded-xl hover:bg-red-600 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Sí, borrar todo
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

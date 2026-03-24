@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { FinancialEngine } from '../core/FinancialEngine';
 import { storageService } from '../utils/storageService';
 import { showToast } from '../components/Toast';
-import { BarChart3, TrendingUp, Package, AlertTriangle, DollarSign, ShoppingBag, Clock, ArrowUpRight, Trash2, ShoppingCart, Store, Users, Send, Ban, ChevronDown, ChevronUp, UserPlus, Phone, FileText, Recycle, Key, Settings, Lock, CheckCircle2 } from 'lucide-react';
+import { BarChart3, TrendingUp, Package, AlertTriangle, DollarSign, ShoppingBag, Clock, ArrowUpRight, Trash2, ShoppingCart, Store, Users, Send, Ban, ChevronDown, ChevronUp, UserPlus, Phone, FileText, Recycle, Key, Settings, LockIcon, CheckCircle2 } from 'lucide-react';
 import { formatBs, formatVzlaPhone } from '../utils/calculatorUtils';
 import { getPaymentLabel, getPaymentMethod, PAYMENT_ICONS, getPaymentIcon, toTitleCase } from '../config/paymentMethods';
 import SalesHistory from '../components/Dashboard/SalesHistory';
@@ -246,8 +246,22 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
 
     const todaySales = useMemo(() =>
         sales.filter(s => {
-            if (s.tipo === 'COBRO_DEUDA' || s.tipo === 'AJUSTE_ENTRADA' || s.tipo === 'AJUSTE_SALIDA' || s.tipo === 'VENTA_FIADA' || s.tipo === 'PAGO_PROVEEDOR' || s.status === 'ANULADA') return false;
+            if (s.status === 'ANULADA') return false;
+            if (s.tipo !== 'VENTA' && s.tipo !== 'VENTA_FIADA') return false;
             // Ocultar ventas que ya fueron cerradas previamente
+            if (s.cajaCerrada === true) return false;
+            
+            const saleLocalDay = s.timestamp ? getLocalISODate(new Date(s.timestamp)) : getLocalISODate(new Date());
+            return saleLocalDay === today;
+        }),
+        [sales, today]
+    );
+
+    // Movimientos reales de caja para el cuadre (Ventas + Abonos + Egresos)
+    const todayCashFlow = useMemo(() =>
+        sales.filter(s => {
+            if (s.status === 'ANULADA') return false;
+            if (s.tipo !== 'VENTA' && s.tipo !== 'VENTA_FIADA' && s.tipo !== 'COBRO_DEUDA' && s.tipo !== 'PAGO_PROVEEDOR') return false;
             if (s.cajaCerrada === true) return false;
             
             const saleLocalDay = s.timestamp ? getLocalISODate(new Date(s.timestamp)) : getLocalISODate(new Date());
@@ -259,10 +273,10 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
     const todayTotalUsd = useMemo(() => todaySales.reduce((sum, s) => sum + (s.totalUsd || 0), 0), [todaySales]);
     const todayItemsSold = useMemo(() => todaySales.reduce((sum, s) => sum + s.items.reduce((is, i) => is + i.qty, 0), 0), [todaySales]);
 
-    // Notificar cierre de caja pendiente (>7pm con ventas sin cerrar)
+    // Notificar cierre de caja pendiente (>7pm con ventas o cobros sin cerrar)
     useEffect(() => {
-        if (todaySales.length > 0) notifyCierrePendiente(todaySales.length);
-    }, [todaySales.length, notifyCierrePendiente]);
+        if (todayCashFlow.length > 0) notifyCierrePendiente(todayCashFlow.length);
+    }, [todayCashFlow.length, notifyCierrePendiente]);
 
     // Egresos del día (pagos a proveedores)
     const todayExpenses = useMemo(() => {
@@ -331,41 +345,8 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
 
     // Payment method breakdown (today)
     const paymentBreakdown = useMemo(() => {
-        // use todaySales to reuse the correct local timezone filtering done previously
-        const allTodayTransactions = todaySales.filter(s => s.status !== 'ANULADA');
-        const acc = allTodayTransactions.reduce((acc, s) => {
-            if (s.payments && s.payments.length > 0) {
-                s.payments.forEach(p => {
-                    if (!acc[p.methodId]) acc[p.methodId] = { total: 0, currency: p.currency || 'BS', label: p.methodLabel };
-                    if (p.currency === 'USD') {
-                        acc[p.methodId].total += p.amountUsd || 0;
-                    } else if (p.currency === 'COP') {
-                        // Store native COP amount: convert back from USD using sale's tasaCop
-                        acc[p.methodId].total += (p.amountUsd * (s.tasaCop || tasaCop || 1)) || 0;
-                    } else {
-                        acc[p.methodId].total += p.amountBs || 0;
-                    }
-                });
-            } else {
-                const method = s.paymentMethod || 'efectivo_bs';
-                if (!acc[method]) acc[method] = { total: 0, currency: 'BS' };
-                acc[method].total += (s.totalBs || 0);
-            }
-            return acc;
-        }, {});
-
-        // Restar el cambio dado en efectivo para no inflar los montos de caja bruta
-        allTodayTransactions.forEach(s => {
-            if (s.changeUsd > 0 && acc['efectivo_usd']) {
-                acc['efectivo_usd'].total -= s.changeUsd;
-            }
-            if (s.changeBs > 0 && acc['efectivo_bs']) {
-                acc['efectivo_bs'].total -= s.changeBs;
-            }
-        });
-
-        return acc;
-    }, [todaySales]);
+        return FinancialEngine.calculatePaymentBreakdown(todayCashFlow);
+    }, [todayCashFlow]);
 
     // Top productos vendidos HOY (para cierre del día)
     const todayTopProducts = useMemo(() => {
@@ -383,8 +364,8 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
     // Handler: Cierre de Caja (abre modal de confirmación y cuadre)
     const handleDailyClose = () => {
         triggerHaptic && triggerHaptic();
-        if (todaySales.length === 0) {
-            showToast('No hay ventas hoy para cerrar caja', 'error');
+        if (todayCashFlow.length === 0 && todaySales.length === 0) {
+            showToast('No hay movimientos hoy para cerrar caja', 'error');
             return;
         }
         setIsCashReconOpen(true);
@@ -394,14 +375,14 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
         const { declaredUsd, declaredBs, diffUsd, diffBs } = reconData;
 
         // 1. Generar PDF del cierre pasando los datos de reconciliación
-        if (todaySales.length > 0) {
+        if (todayCashFlow.length > 0 || todaySales.length > 0) {
             const allTodayForReport = sales.filter(s => {
                 const saleLocalDay = s.timestamp ? getLocalISODate(new Date(s.timestamp)) : getLocalISODate(new Date());
                 return saleLocalDay === today && !s.cajaCerrada;
             });
 
             await generateDailyClosePDF({
-                sales: todaySales,
+                sales: todayCashFlow,  // El PDF usa el cash flow para el iterador de ventas principal de la caja
                 allSales: allTodayForReport,
                 bcvRate,
                 paymentBreakdown,
@@ -633,14 +614,14 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
 
                 {/* ═══ BOTON CERRAR CAJA ═══ */}
                 <div className="col-span-2">
-                    {todaySales.length > 0 ? (
+                    {(todayCashFlow.length > 0 || todaySales.length > 0) ? (
                         <button
                             onClick={handleDailyClose}
                             className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-2xl p-4 shadow-lg shadow-red-500/20 active:scale-[0.98] transition-all flex items-center justify-between group"
                         >
                             <div className="flex items-center gap-3">
                                 <div className="w-11 h-11 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
-                                    <Lock size={22} />
+                                    <LockIcon size={22} />
                                 </div>
                                 <div className="text-left">
                                     <p className="text-sm font-black">Cerrar Caja</p>
@@ -648,7 +629,7 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                                 </div>
                             </div>
                             <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center group-hover:translate-x-1 transition-transform">
-                                <Lock size={16} />
+                                <LockIcon size={16} />
                             </div>
                         </button>
                     ) : (
@@ -715,7 +696,8 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
 
             {/* Pago por Metodo (agrupado Bs / USD) */}
             {Object.keys(paymentBreakdown).length > 0 && (() => {
-                const entries = Object.entries(paymentBreakdown);
+                const entries = Object.entries(paymentBreakdown).filter(([, d]) => d.total > 0);
+                const fiadoMethods = entries.filter(([, d]) => d.currency === 'FIADO');
                 const bsMethods = entries.filter(([, d]) => d.currency === 'BS' || (!d.currency));
                 const usdMethods = entries.filter(([, d]) => d.currency === 'USD');
                 const copMethods = entries.filter(([, d]) => d.currency === 'COP');
@@ -727,13 +709,27 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                 const renderMethod = ([method, data]) => {
                     const label = toTitleCase(getPaymentLabel(method));
                     const PayIcon = getPaymentIcon(method) || PAYMENT_ICONS[method];
-                    const totalBsEquiv = data.currency === 'USD' ? data.total * bcvRate : data.currency === 'COP' ? (data.total / (tasaCop || 1)) * bcvRate : data.total;
-                    const pct = todayTotalBs > 0 ? (totalBsEquiv / todayTotalBs * 100) : 0;
-                    const displayAmount = data.currency === 'USD'
-                        ? `$ ${data.total.toFixed(2)}`
-                        : data.currency === 'COP'
-                        ? `${fmtCop(data.total)} COP`
-                        : `${formatBs(data.total)} Bs`;
+                    let totalBsEquiv = data.total;
+                    let pct = 0;
+                    let displayAmount = `${formatBs(data.total)} Bs`;
+
+                    if (data.currency === 'FIADO') {
+                        // Fiado saves its total in USD, so equivalent is total * bcvRate
+                        totalBsEquiv = data.total * bcvRate;
+                        pct = todayTotalBs > 0 ? (totalBsEquiv / todayTotalBs * 100) : 0;
+                        displayAmount = `$ ${data.total.toFixed(2)}`;
+                    } else if (data.currency === 'USD') {
+                        totalBsEquiv = data.total * bcvRate;
+                        pct = todayTotalBs > 0 ? (totalBsEquiv / todayTotalBs * 100) : 0;
+                        displayAmount = `$ ${data.total.toFixed(2)}`;
+                    } else if (data.currency === 'COP') {
+                        totalBsEquiv = (data.total / (tasaCop || 1)) * bcvRate;
+                        pct = todayTotalBs > 0 ? (totalBsEquiv / todayTotalBs * 100) : 0;
+                        displayAmount = `${fmtCop(data.total)} COP`;
+                    } else {
+                        pct = todayTotalBs > 0 ? (data.total / todayTotalBs * 100) : 0;
+                    }
+
                     return (
                         <div key={method}>
                             <div className="flex justify-between text-sm mb-1">
@@ -741,54 +737,78 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                                     {PayIcon && <PayIcon size={14} className="text-slate-400" />}
                                     {label}
                                 </span>
-                                <span className="font-bold text-slate-700 dark:text-white">
-                                    {displayAmount}
-                                </span>
+                                <div className="text-right">
+                                    <span className="font-bold text-slate-700 dark:text-white">
+                                        {displayAmount}
+                                    </span>
+                                    {data.currency === 'FIADO' && (
+                                        <div className="text-[10px] text-slate-400 font-medium">
+                                            {formatBs(totalBsEquiv)} Bs
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                            <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                                <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
-                            </div>
+                            {data.currency !== 'FIADO' && (
+                                <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                    <div className="h-full bg-indigo-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                                </div>
+                            )}
                         </div>
                     );
                 };
 
                 return (
-                <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 shadow-sm mb-5">
-                    <h3 className="text-xs font-bold text-slate-400 uppercase mb-3">Pagos del dia</h3>
-                    {bsMethods.length > 0 && (
-                        <div className="mb-3">
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">Bolivares</span>
-                                <span className="text-xs font-black text-blue-600 dark:text-blue-400">{formatBs(subtotalBs)} Bs</span>
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 shadow-sm relative z-10" style={{ animation: 'fadeIn 0.3s ease' }}>
+                        <h3 className="text-xs font-bold text-slate-400 uppercase mb-3 flex items-center gap-1">
+                            <DollarSign size={12} /> Desglose por Metodo
+                        </h3>
+                        
+                        {fiadoMethods.length > 0 && (
+                            <div className="mb-4">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider">Por Cobrar</span>
+                                    <span className="text-xs font-black text-amber-600 dark:text-amber-400">${fiadoMethods.reduce((s, [,d]) => s + d.total, 0).toFixed(2)}</span>
+                                </div>
+                                <div className="space-y-3 pl-1 border-l-2 border-amber-200 dark:border-amber-800/40">
+                                    <div className="pl-3 space-y-3">{fiadoMethods.map(renderMethod)}</div>
+                                </div>
                             </div>
-                            <div className="space-y-2 pl-1 border-l-2 border-blue-200 dark:border-blue-800/40">
-                                <div className="pl-3 space-y-2">{bsMethods.map(renderMethod)}</div>
+                        )}
+
+                        {bsMethods.length > 0 && (
+                            <div className="mb-3">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">Bolivares</span>
+                                    <span className="text-xs font-black text-blue-600 dark:text-blue-400">{formatBs(subtotalBs)} Bs</span>
+                                </div>
+                                <div className="space-y-3 pl-1 border-l-2 border-blue-200 dark:border-blue-800/40">
+                                    <div className="pl-3 space-y-3">{bsMethods.map(renderMethod)}</div>
+                                </div>
                             </div>
-                        </div>
-                    )}
-                    {usdMethods.length > 0 && (
-                        <div className={copMethods.length > 0 ? 'mb-3' : ''}>
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">Dolares</span>
-                                <span className="text-xs font-black text-emerald-600 dark:text-emerald-400">${subtotalUsd.toFixed(2)}</span>
+                        )}
+                        {usdMethods.length > 0 && (
+                            <div className={copMethods.length > 0 ? 'mb-3' : ''}>
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">Dolares</span>
+                                    <span className="text-xs font-black text-emerald-600 dark:text-emerald-400">${subtotalUsd.toFixed(2)}</span>
+                                </div>
+                                <div className="space-y-3 pl-1 border-l-2 border-emerald-200 dark:border-emerald-800/40">
+                                    <div className="pl-3 space-y-3">{usdMethods.map(renderMethod)}</div>
+                                </div>
                             </div>
-                            <div className="space-y-2 pl-1 border-l-2 border-emerald-200 dark:border-emerald-800/40">
-                                <div className="pl-3 space-y-2">{usdMethods.map(renderMethod)}</div>
+                        )}
+                        {copEnabled && copMethods.length > 0 && (
+                            <div>
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider">Pesos Colombianos</span>
+                                    <span className="text-xs font-black text-amber-600 dark:text-amber-400">{fmtCop(subtotalCop)} COP</span>
+                                </div>
+                                <div className="space-y-3 pl-1 border-l-2 border-amber-200 dark:border-amber-800/40">
+                                    <div className="pl-3 space-y-3">{copMethods.map(renderMethod)}</div>
+                                </div>
                             </div>
-                        </div>
-                    )}
-                    {copEnabled && copMethods.length > 0 && (
-                        <div>
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider">Pesos Colombianos</span>
-                                <span className="text-xs font-black text-amber-600 dark:text-amber-400">{fmtCop(subtotalCop)} COP</span>
-                            </div>
-                            <div className="space-y-2 pl-1 border-l-2 border-amber-200 dark:border-amber-800/40">
-                                <div className="pl-3 space-y-2">{copMethods.map(renderMethod)}</div>
-                            </div>
-                        </div>
-                    )}
-                </div>
+                        )}
+                    </div>
                 );
             })()}
             {/* Gráfica semanal */}

@@ -250,15 +250,17 @@ export default function SalesView({ rates, triggerHaptic, onNavigate, isActive }
     // Auto-focus search
     useEffect(() => { if (!isLoading && searchInputRef.current) searchInputRef.current.focus(); }, [isLoading]);
 
-    // Refresh products and payment methods when tab becomes active (consolidates window focus + isActive)
+    // Refresh products, payment methods, and customers when tab becomes active (consolidates window focus + isActive)
     useEffect(() => {
         if (isActive && !isLoading) {
             Promise.all([
                 storageService.getItem('bodega_products_v1', []),
-                getActivePaymentMethods()
-            ]).then(([savedProducts, methods]) => {
+                getActivePaymentMethods(),
+                storageService.getItem('bodega_customers_v1', [])
+            ]).then(([savedProducts, methods, savedCustomers]) => {
                 setProducts(savedProducts);
                 setPaymentMethods(methods);
+                setCustomers(savedCustomers);
             });
         }
     }, [isActive]);

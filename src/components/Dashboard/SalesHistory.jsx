@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Clock, Send, Ban, ChevronDown, ChevronUp, Trash2, Shuffle, Recycle, Receipt, Printer } from 'lucide-react';
+import { Clock, Send, Ban, ChevronDown, ChevronUp, Trash2, Shuffle, Recycle, Receipt, Printer, LockIcon } from 'lucide-react';
 import { formatBs } from '../../utils/calculatorUtils';
 import { getPaymentLabel, getPaymentMethod, PAYMENT_ICONS, getPaymentIcon, toTitleCase } from '../../config/paymentMethods';
 import EmptyState from '../EmptyState';
@@ -54,7 +54,10 @@ export default function SalesHistory({
                     let methodLabel = 'Efectivo';
                     let PayMethodIcon = PAYMENT_ICONS['efectivo_bs'];
 
-                    if (s.payments && s.payments.length === 1) {
+                    if (s.tipo === 'VENTA_FIADA') {
+                        methodLabel = 'Por Cobrar';
+                        PayMethodIcon = Clock;
+                    } else if (s.payments && s.payments.length === 1) {
                         methodLabel = toTitleCase(s.payments[0].methodLabel);
                         const m = getPaymentMethod(s.payments[0].methodId);
                         if (m) PayMethodIcon = getPaymentIcon(m.id) || m.Icon || null;
@@ -162,7 +165,7 @@ export default function SalesHistory({
                                         )}
                                         {!isCanceled && s.cajaCerrada && (
                                             <div title="Venta protegida por Cierre de Caja" className="py-2 px-3 bg-slate-50 dark:bg-slate-900 text-slate-400 font-bold rounded-lg flex justify-center items-center gap-1.5 text-[10px] uppercase border border-slate-100 dark:border-slate-800 tracking-wider cursor-not-allowed">
-                                                <Lock size={12} /> Cerrada
+                                                <LockIcon size={12} /> Cerrada
                                             </div>
                                         )}
                                         <button

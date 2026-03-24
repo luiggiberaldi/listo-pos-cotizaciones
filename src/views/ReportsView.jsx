@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { FinancialEngine } from '../core/FinancialEngine';
-import { BarChart3, Calendar, Download, TrendingUp, ShoppingBag, DollarSign, Package, ChevronDown, ChevronUp, Clock, Send, Ban, Shuffle, Receipt, Search, X, Filter, Recycle, Lock } from 'lucide-react';
+import { BarChart3, Calendar, Download, TrendingUp, ShoppingBag, DollarSign, Package, ChevronDown, ChevronUp, Clock, Send, Ban, Shuffle, Receipt, Search, X, Filter, Recycle, LockIcon } from 'lucide-react';
 import { storageService } from '../utils/storageService';
 import { formatBs, formatVzlaPhone } from '../utils/calculatorUtils';
 import { getPaymentLabel, getPaymentMethod, PAYMENT_ICONS, toTitleCase, getPaymentIcon } from '../config/paymentMethods';
@@ -343,6 +343,7 @@ export default function ReportsView({ rates, triggerHaptic, onNavigate, isActive
             {/* Payment Breakdown */}
             {Object.keys(paymentBreakdown).length > 0 && (() => {
                 const entries = Object.entries(paymentBreakdown);
+                const fiadoMethods = entries.filter(([, d]) => d.currency === 'FIADO');
                 const bsMethods = entries.filter(([, d]) => d.currency === 'BS' || (!d.currency));
                 const usdMethods = entries.filter(([, d]) => d.currency === 'USD');
                 const copMethods = entries.filter(([, d]) => d.currency === 'COP');
@@ -351,13 +352,28 @@ export default function ReportsView({ rates, triggerHaptic, onNavigate, isActive
                 const renderMethod = ([method, data]) => {
                     const label = toTitleCase(getPaymentLabel(method));
                     const PayIcon = getPaymentIcon(method) || PAYMENT_ICONS[method];
-                    const totalBsEquiv = data.currency === 'USD' ? data.total * bcvRate : data.currency === 'COP' ? (data.total / (tasaCop || 1)) * bcvRate : data.total;
-                    const pct = totalBs > 0 ? (totalBsEquiv / totalBs * 100) : 0;
-                    const displayAmount = data.currency === 'USD'
-                        ? `$ ${data.total.toFixed(2)}`
-                        : data.currency === 'COP'
-                        ? `${fmtCop(data.total)} COP`
-                        : `${formatBs(data.total)} Bs`;
+                    let totalBsEquiv = data.total;
+                    let pct = 0;
+                    let displayAmount = `${formatBs(data.total)} Bs`;
+
+                    if (data.currency === 'FIADO') {
+                        // Fiado saves its total in USD, so equivalent is total * bcvRate
+                        totalBsEquiv = data.total * bcvRate;
+                        // For fiado, we might not want to include it in the same percentage bar scaling, but if we do:
+                        pct = totalBs > 0 ? (totalBsEquiv / totalBs * 100) : 0;
+                        displayAmount = `$ ${data.total.toFixed(2)}`;
+                    } else if (data.currency === 'USD') {
+                        totalBsEquiv = data.total * bcvRate;
+                        pct = totalBs > 0 ? (totalBsEquiv / totalBs * 100) : 0;
+                        displayAmount = `$ ${data.total.toFixed(2)}`;
+                    } else if (data.currency === 'COP') {
+                        totalBsEquiv = (data.total / (tasaCop || 1)) * bcvRate;
+                        pct = totalBs > 0 ? (totalBsEquiv / totalBs * 100) : 0;
+                        displayAmount = `${fmtCop(data.total)} COP`;
+                    } else {
+                        pct = totalBs > 0 ? (data.total / totalBs * 100) : 0;
+                    }
+
                     return (
                         <div key={method}>
                             <div className="flex justify-between text-sm mb-1">
@@ -365,13 +381,22 @@ export default function ReportsView({ rates, triggerHaptic, onNavigate, isActive
                                     {PayIcon && <PayIcon size={14} className="text-slate-400" />}
                                     {label}
                                 </span>
-                                <span className="font-bold text-slate-700 dark:text-white">
-                                    {displayAmount}
-                                </span>
+                                <div className="text-right">
+                                    <span className="font-bold text-slate-700 dark:text-white">
+                                        {displayAmount}
+                                    </span>
+                                    {data.currency === 'FIADO' && (
+                                        <div className="text-[10px] text-slate-400 font-medium">
+                                            {formatBs(totalBsEquiv)} Bs
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                            <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                                <div className="h-full bg-indigo-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
-                            </div>
+                            {data.currency !== 'FIADO' && (
+                                <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                    <div className="h-full bg-indigo-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                                </div>
+                            )}
                         </div>
                     );
                 };
@@ -381,6 +406,19 @@ export default function ReportsView({ rates, triggerHaptic, onNavigate, isActive
                     <h3 className="text-xs font-bold text-slate-400 uppercase mb-3 flex items-center gap-1">
                         <DollarSign size={12} /> Desglose por Metodo de Pago
                     </h3>
+                    
+                    {fiadoMethods.length > 0 && (
+                        <div className="mb-4">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider">Por Cobrar</span>
+                                <span className="text-xs font-black text-amber-600 dark:text-amber-400">${fiadoMethods.reduce((s, [,d]) => s + d.total, 0).toFixed(2)}</span>
+                            </div>
+                            <div className="space-y-3 pl-1 border-l-2 border-amber-200 dark:border-amber-800/40">
+                                <div className="pl-3 space-y-3">{fiadoMethods.map(renderMethod)}</div>
+                            </div>
+                        </div>
+                    )}
+
                     {bsMethods.length > 0 && (
                         <div className="mb-3">
                             <div className="flex items-center justify-between mb-2">
@@ -634,7 +672,10 @@ function TransactionRow({ sale: s, bcvRate, isExpanded, onToggle, onVoidSale, on
     let methodLabel = 'Efectivo';
     let PayMethodIcon = PAYMENT_ICONS['efectivo_bs'];
 
-    if (s.payments && s.payments.length === 1) {
+    if (s.tipo === 'VENTA_FIADA') {
+        methodLabel = 'Por Cobrar';
+        PayMethodIcon = Clock;
+    } else if (s.payments && s.payments.length === 1) {
         methodLabel = toTitleCase(s.payments[0].methodLabel);
         const m = getPaymentMethod(s.payments[0].methodId);
         if (m) PayMethodIcon = getPaymentIcon(m.id) || m.Icon || null;
@@ -749,7 +790,7 @@ function TransactionRow({ sale: s, bcvRate, isExpanded, onToggle, onVoidSale, on
                         )}
                         {!isCanceled && s.cajaCerrada && (
                             <div title="Venta protegida por Cierre de Caja" className="py-2 px-3 bg-slate-50 dark:bg-slate-900 text-slate-400 font-bold rounded-lg flex justify-center items-center gap-1.5 text-[10px] uppercase border border-slate-100 dark:border-slate-800 tracking-wider cursor-not-allowed">
-                                <Lock size={12} /> Cerrada
+                                <LockIcon size={12} /> Cerrada
                             </div>
                         )}
                         {onRecycleSale && s.items && s.items.length > 0 && (

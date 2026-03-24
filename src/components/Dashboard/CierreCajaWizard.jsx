@@ -71,7 +71,9 @@ export default function CierreCajaWizard({
         onClose();
     };
 
-    const paymentEntries = Object.entries(paymentBreakdown);
+    // Excluir entradas negativas del desglose visual: el -fiado aparece cuando un COBRO_DEUDA
+    // cancela una VENTA_FIADA de otro turno. El dinero ya aparece en el método de pago real.
+    const paymentEntries = Object.entries(paymentBreakdown).filter(([, data]) => data.total > 0);
 
     // Helper: format COP display  
     const fmtCop = (v) => v.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

@@ -148,6 +148,9 @@ export const getPaymentLabel = (id) => {
     const custom = _findCustom(id);
     if (custom && custom.label) return toTitleCase(custom.label);
     
+    // Virtual categories (not selectable, display-only)
+    if (id === 'fiado') return 'Fiado (Por Cobrar)';
+
     return toTitleCase(id);
 };
 
@@ -169,6 +172,7 @@ export const PAYMENT_ICONS = {
     pago_movil: Smartphone,
     punto_venta: CreditCard,
     efectivo_usd: DollarSign,
+    fiado: ShoppingCart,
 };
 
 // Mapa para rehidratar íconos custom por su key string
