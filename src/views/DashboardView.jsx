@@ -191,7 +191,11 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
 
     // Detect if apertura was already registered today
     const todayApertura = useMemo(() => {
-        return sales.find(s => s.tipo === 'APERTURA_CAJA' && !s.cajaCerrada && s.timestamp?.startsWith(today));
+        return sales.find(s => {
+            if (s.tipo !== 'APERTURA_CAJA' || s.cajaCerrada) return false;
+            const saleLocalDay = s.timestamp ? getLocalISODate(new Date(s.timestamp)) : today;
+            return saleLocalDay === today;
+        });
     }, [sales, today]);
     const todayTotalBs = useMemo(() => todaySales.reduce((sum, s) => sum + (s.totalBs || 0), 0), [todaySales]);
     const todayTotalUsd = useMemo(() => todaySales.reduce((sum, s) => sum + (s.totalUsd || 0), 0), [todaySales]);
@@ -221,7 +225,10 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
     // Últimas ventas (por defecto las últimas 7, o las del día seleccionado en la gráfica)
     const recentSales = useMemo(() => {
         if (selectedChartDate) {
-            return sales.filter(s => s.timestamp?.startsWith(selectedChartDate));
+            return sales.filter(s => {
+                const saleLocalDay = s.timestamp ? getLocalISODate(new Date(s.timestamp)) : getLocalISODate(new Date());
+                return saleLocalDay === selectedChartDate;
+            });
         }
         return sales.slice(0, 7);
     }, [sales, selectedChartDate]);
@@ -330,10 +337,10 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
 
         // 2. Marcar cajaCerrada en vez de borrar las ventas localmente
         const currentCierreId = new Date().getTime();
+        const validTiposParaCerrar = ['VENTA', 'VENTA_FIADA', 'COBRO_DEUDA', 'PAGO_PROVEEDOR', 'APERTURA_CAJA'];
         const updatedSales = sales.map(s => {
-            // Evaluamos si es una de las ventas que estamos cerrando
-            const saleLocalDay = s.timestamp ? getLocalISODate(new Date(s.timestamp)) : getLocalISODate(new Date());
-            if (saleLocalDay === today && !s.cajaCerrada) {
+            // Sweep all unclosed transactions of cash flow types, resolving any "zombie" entries from previous days
+            if (!s.cajaCerrada && validTiposParaCerrar.includes(s.tipo || 'VENTA')) {
                 return { ...s, cajaCerrada: true, cierreId: currentCierreId };
             }
             return s;

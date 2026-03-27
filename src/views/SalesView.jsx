@@ -21,7 +21,7 @@ import CustomAmountModal from '../components/Sales/CustomAmountModal';
 import KeyboardHelpModal from '../components/Sales/KeyboardHelpModal';
 import DiscountModal from '../components/Sales/DiscountModal';
 import CajaCerradaOverlay from '../components/Sales/CajaCerradaOverlay';
-import { useProductContext } from '../context/ProductContext';
+import { getLocalISODate } from '../utils/dateHelpers';
 import AperturaCajaModal from '../components/Dashboard/AperturaCajaModal';
 
 import ConfirmModal from '../components/ConfirmModal';
@@ -206,9 +206,12 @@ export default function SalesView({ rates, triggerHaptic, onNavigate, isActive }
     // ── Current cash float (for soft change warning in CheckoutModal) ──
     const [salesData, setSalesData] = useState([]);
     const currentFloat = useMemo(() => {
-        const d = new Date();
-        const todayStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-        const todayOpen = salesData.filter(s => !s.cajaCerrada && s.timestamp?.startsWith(todayStr));
+        const todayStr = getLocalISODate(new Date());
+        const todayOpen = salesData.filter(s => {
+            if (s.cajaCerrada) return false;
+            const saleDay = s.timestamp ? getLocalISODate(new Date(s.timestamp)) : todayStr;
+            return saleDay === todayStr;
+        });
         const bd = FinancialEngine.calculatePaymentBreakdown(todayOpen);
         return {
             usd: bd['efectivo_usd']?.total ?? 0,
@@ -253,14 +256,13 @@ export default function SalesView({ rates, triggerHaptic, onNavigate, isActive }
                     setCart(savedCart);
                 }
 
-                // Check Apertura
-                const d = new Date();
-                const year = d.getFullYear();
-                const month = String(d.getMonth() + 1).padStart(2, '0');
-                const day = String(d.getDate()).padStart(2, '0');
-                const todayStr = `${year}-${month}-${day}`;
-                
-                const apertura = savedSales.find(s => s.tipo === 'APERTURA_CAJA' && !s.cajaCerrada && s.timestamp?.startsWith(todayStr));
+                // Check Apertura (timezone-safe)
+                const todayStr = getLocalISODate(new Date());
+                const apertura = savedSales.find(s => {
+                    if (s.tipo !== 'APERTURA_CAJA' || s.cajaCerrada) return false;
+                    const saleDay = s.timestamp ? getLocalISODate(new Date(s.timestamp)) : todayStr;
+                    return saleDay === todayStr;
+                });
                 setTodayAperturaData(apertura || null);
                 
                 setIsLoadingLocal(false);
@@ -295,14 +297,14 @@ export default function SalesView({ rates, triggerHaptic, onNavigate, isActive }
             setCustomers(savedCustomers);
             setSalesData(savedSales);
             
-            // Recalculate Apertura
-            const d = new Date();
-            const year = d.getFullYear();
-            const month = String(d.getMonth() + 1).padStart(2, '0');
-            const day = String(d.getDate()).padStart(2, '0');
-            const todayStr = `${year}-${month}-${day}`;
+            // Recalculate Apertura (uses imported getLocalISODate)
+            const todayStr = getLocalISODate(new Date());
             
-            const apertura = savedSales.find(s => s.tipo === 'APERTURA_CAJA' && !s.cajaCerrada && s.timestamp?.startsWith(todayStr));
+            const apertura = savedSales.find(s => {
+                if (s.tipo !== 'APERTURA_CAJA' || s.cajaCerrada) return false;
+                const saleLocalDay = s.timestamp ? getLocalISODate(new Date(s.timestamp)) : todayStr;
+                return saleLocalDay === todayStr;
+            });
             setTodayAperturaData(apertura || null);
         });
     }, [isActive, setProducts]);
