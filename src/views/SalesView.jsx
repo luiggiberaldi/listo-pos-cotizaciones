@@ -282,31 +282,49 @@ export default function SalesView({ rates, triggerHaptic, onNavigate, isActive }
     useEffect(() => { if (!isLoading && searchInputRef.current) searchInputRef.current.focus(); }, [isLoading]);
 
     // Refresh products, payment methods, and customers when tab becomes active (consolidates window focus + isActive)
+    const handleReloadContent = useCallback(() => {
+        if (!isActive) return;
+        Promise.all([
+            storageService.getItem('bodega_products_v1', []),
+            getActivePaymentMethods(),
+            storageService.getItem('bodega_customers_v1', []),
+            storageService.getItem(SALES_KEY, [])
+        ]).then(([savedProducts, methods, savedCustomers, savedSales]) => {
+            setProducts(savedProducts);
+            setPaymentMethods(methods);
+            setCustomers(savedCustomers);
+            setSalesData(savedSales);
+            
+            // Recalculate Apertura
+            const d = new Date();
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            const todayStr = `${year}-${month}-${day}`;
+            
+            const apertura = savedSales.find(s => s.tipo === 'APERTURA_CAJA' && !s.cajaCerrada && s.timestamp?.startsWith(todayStr));
+            setTodayAperturaData(apertura || null);
+        });
+    }, [isActive, setProducts]);
+
     useEffect(() => {
-        if (isActive && !isLoading) {
-            Promise.all([
-                storageService.getItem('bodega_products_v1', []),
-                getActivePaymentMethods(),
-                storageService.getItem('bodega_customers_v1', []),
-                storageService.getItem(SALES_KEY, [])
-            ]).then(([savedProducts, methods, savedCustomers, savedSales]) => {
-                setProducts(savedProducts);
-                setPaymentMethods(methods);
-                setCustomers(savedCustomers);
-                setSalesData(savedSales);
-                
-                // Recalculate Apertura
-                const d = new Date();
-                const year = d.getFullYear();
-                const month = String(d.getMonth() + 1).padStart(2, '0');
-                const day = String(d.getDate()).padStart(2, '0');
-                const todayStr = `${year}-${month}-${day}`;
-                
-                const apertura = savedSales.find(s => s.tipo === 'APERTURA_CAJA' && !s.cajaCerrada && s.timestamp?.startsWith(todayStr));
-                setTodayAperturaData(apertura || null);
-            });
-        }
-    }, [isActive]);
+        handleReloadContent();
+    }, [handleReloadContent]);
+
+    // Recargar cuando la app vuelve desde el background en móviles (PWA)
+    useEffect(() => {
+        const onVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                handleReloadContent();
+            }
+        };
+        document.addEventListener('visibilitychange', onVisibilityChange);
+        window.addEventListener('focus', handleReloadContent);
+        return () => {
+            document.removeEventListener('visibilitychange', onVisibilityChange);
+            window.removeEventListener('focus', handleReloadContent);
+        };
+    }, [handleReloadContent]);
 
     // Return focus after closing modals
     useEffect(() => { if (!showCheckout && !showReceipt && searchInputRef.current) searchInputRef.current.focus(); }, [showCheckout, showReceipt]);
