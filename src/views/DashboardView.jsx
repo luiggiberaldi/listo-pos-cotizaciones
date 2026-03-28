@@ -28,6 +28,10 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
     const { deviceId } = useSecurity();
     const usuarioActivo = useAuthStore(s => s.usuarioActivo);
     const authLogout = useAuthStore(s => s.logout);
+    const requireLogin = useAuthStore(s => s.requireLogin ?? false);
+    const adminEmail = useAuthStore(s => s.adminEmail);
+    const adminPassword = useAuthStore(s => s.adminPassword);
+    const isCloudConfigured = Boolean(adminEmail && adminPassword);
     const { log: auditLog } = useAudit();
     const [sales, setSales] = useState([]);
     const { products, setProducts, isLoadingProducts, effectiveRate: bcvRate, copEnabled, tasaCop } = useProductContext();
@@ -432,17 +436,19 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                 <div className="flex items-center gap-2">
                     <SyncStatus />
                     {/* USER BADGE */}
-                    {usuarioActivo && (
+                    {(usuarioActivo && isCloudConfigured) && (
                         <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-full pl-3 pr-1 py-1 shadow-sm">
-                            <div className={`w-2 h-2 rounded-full ${usuarioActivo.rol === 'ADMIN' ? 'bg-purple-500' : 'bg-emerald-500'}`} />
+                            <div className={`w-2 h-2 rounded-full ${usuarioActivo.rol === 'ADMIN' ? 'bg-blue-500' : 'bg-emerald-500'}`} />
                             <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 max-w-[80px] truncate">{usuarioActivo.nombre}</span>
-                            <button
-                                onClick={() => { triggerHaptic(); authLogout(); }}
-                                className="p-1.5 text-slate-400 hover:text-red-500 active:scale-90 transition-all rounded-full hover:bg-red-50 dark:hover:bg-red-900/20"
-                                title="Cerrar Sesion"
-                            >
-                                <LockIcon size={14} />
-                            </button>
+                            {requireLogin && (
+                                <button
+                                    onClick={() => { triggerHaptic(); authLogout(); }}
+                                    className="p-1.5 text-slate-400 hover:text-red-500 active:scale-90 transition-all rounded-full hover:bg-red-50 dark:hover:bg-red-900/20"
+                                    title="Cerrar Sesion"
+                                >
+                                    <LockIcon size={14} />
+                                </button>
+                            )}
                         </div>
                     )}
                     {/* GEAR ICON FOR SETTINGS */}

@@ -70,6 +70,12 @@ export default function SettingsView({ onClose, theme, toggleTheme, triggerHapti
     } = useProductContext();
 
     const isAdmin = useAuthStore(s => s.usuarioActivo)?.rol === 'ADMIN';
+    const requireLogin = useAuthStore(s => s.requireLogin ?? false);
+    const setRequireLogin = useAuthStore(s => s.setRequireLogin);
+    const adminEmail = useAuthStore(s => s.adminEmail);
+    const adminPassword = useAuthStore(s => s.adminPassword);
+    const setAdminCredentials = useAuthStore(s => s.setAdminCredentials);
+
     const { deviceId, forceHeartbeat } = useSecurity();
     const { log: auditLog } = useAudit();
     const fileInputRef = useRef(null);
@@ -80,6 +86,11 @@ export default function SettingsView({ onClose, theme, toggleTheme, triggerHapti
     const [statusMessage, setStatusMessage] = useState('');
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [deleteInput, setDeleteInput] = useState('');
+
+    // Credenciales Locales
+    const [inputEmail, setInputEmail] = useState(adminEmail || '');
+    const [inputPassword, setInputPassword] = useState(adminPassword || '');
+    const isCloudConfigured = Boolean(adminEmail && adminPassword);
 
     // Business Data
     const [businessName, setBusinessName] = useState(() => localStorage.getItem('business_name') || '');
@@ -100,6 +111,16 @@ export default function SettingsView({ onClose, theme, toggleTheme, triggerHapti
         forceHeartbeat();
         showToast('Datos del negocio guardados', 'success');
         auditLog('CONFIG', 'NEGOCIO_ACTUALIZADO', `Datos negocio: ${businessName || 'sin nombre'}`);
+        triggerHaptic?.();
+    };
+
+    const handleSaveCloudAccount = () => {
+        if (!inputEmail.includes('@') || inputPassword.length < 4) {
+            showToast('Correo inválido o contraseña muy corta', 'error');
+            return;
+        }
+        setAdminCredentials(inputEmail, inputPassword);
+        showToast('Credenciales guardadas y seguridad habilitada', 'success');
         triggerHaptic?.();
     };
 
@@ -414,15 +435,79 @@ export default function SettingsView({ onClose, theme, toggleTheme, triggerHapti
                     {/* ═══ TAB: USUARIOS ═══ */}
                     {activeTab === 'usuarios' && isAdmin && (
                         <>
-                            <SectionCard icon={Users} title="Usuarios y Roles" subtitle="Gestiona quien opera la app" iconColor="text-indigo-500">
-                                <UsersManager triggerHaptic={triggerHaptic} />
-                            </SectionCard>
+                            {isCloudConfigured && (
+                                <SectionCard icon={Users} title="Usuarios y Roles" subtitle="Gestiona quien opera la app" iconColor="text-indigo-500">
+                                    <UsersManager triggerHaptic={triggerHaptic} />
+                                </SectionCard>
+                            )}
 
-                            <SectionCard icon={Lock} title="Seguridad (ADMIN)" subtitle="Evitar que la caja quede desatendida" iconColor="text-rose-500">
-                                <div>
-                                    <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1.5">Bloqueo Automatico</label>
-                                    <p className="text-[10px] text-slate-400 mb-3">Tu sesion se bloqueara tras estos minutos de inactividad. El cajero cierra sesion manualmente.</p>
-                                    <div className="grid grid-cols-4 gap-2">
+                            <SectionCard icon={Lock} title="Seguridad (ADMIN)" subtitle="Evitar accesos no autorizados" iconColor="text-rose-500">
+                                
+                                {/* Formulario Correo Nube */}
+                                {!isCloudConfigured && (
+                                    <div className="mb-5 p-3.5 bg-rose-50 dark:bg-rose-900/10 border border-rose-100 dark:border-rose-900/30 rounded-2xl animate-in fade-in zoom-in-95">
+                                        <div className="flex items-start gap-2.5 mb-3">
+                                            <AlertTriangle size={16} className="text-rose-500 mt-0.5 shrink-0" />
+                                            <div>
+                                                <p className="text-xs font-bold text-rose-700 dark:text-rose-400">Protección Requerida</p>
+                                                <p className="text-[10px] text-rose-600/80 dark:text-rose-400/80 leading-relaxed mt-0.5">
+                                                    Para crear nuevos usuarios, modificar las alertas de seguridad o deshabilitar el PIN de la aplicación, debes registrar primero un correo y contraseña de recuperación.
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2 mb-3">
+                                            <input 
+                                                type="email" 
+                                                autoComplete="off"
+                                                placeholder="Correo del administrador"
+                                                value={inputEmail}
+                                                onChange={e => setInputEmail(e.target.value)}
+                                                className="w-full bg-white dark:bg-slate-950 border border-rose-200 dark:border-rose-900/50 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-rose-500/30 transition-all font-medium text-slate-800 dark:text-slate-200 placeholder:text-slate-400"
+                                            />
+                                            <input 
+                                                type="password" 
+                                                autoComplete="new-password"
+                                                placeholder="Contraseña (Mín. 4 caracteres)"
+                                                value={inputPassword}
+                                                onChange={e => setInputPassword(e.target.value)}
+                                                className="w-full bg-white dark:bg-slate-950 border border-rose-200 dark:border-rose-900/50 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-rose-500/30 transition-all font-medium text-slate-800 dark:text-slate-200 placeholder:text-slate-400"
+                                            />
+                                        </div>
+                                        <button 
+                                            onClick={handleSaveCloudAccount}
+                                            className="w-full bg-rose-500 hover:bg-rose-600 text-white font-bold py-2 rounded-xl text-xs active:scale-95 transition-all shadow-sm shadow-rose-500/20"
+                                        >
+                                            Guardar Credenciales
+                                        </button>
+                                    </div>
+                                )}
+
+                                <div className={`transition-all duration-300 ${!isCloudConfigured ? 'opacity-40 grayscale pointer-events-none blur-[1px]' : ''}`}>
+                                    {/* Login Opcional */}
+                                    <div className="flex items-center justify-between mb-4 border-b border-slate-100 dark:border-slate-800 pb-4">
+                                        <div>
+                                            <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Pedir PIN al iniciar</p>
+                                            <p className="text-[10px] text-slate-400 mt-0.5">Si se desactiva, entrará directo como Administrador.</p>
+                                        </div>
+                                        <Toggle
+                                            enabled={requireLogin}
+                                            color="rose"
+                                            onChange={() => {
+                                                if (!isCloudConfigured) return;
+                                                const newVal = !requireLogin;
+                                                if (setRequireLogin) setRequireLogin(newVal);
+                                                triggerHaptic?.();
+                                                showToast(newVal ? 'PIN activado para inicio' : 'Acceso directo activado', 'success');
+                                            }}
+                                        />
+                                    </div>
+
+                                    {/* Bloqueo por inactividad */}
+                                    <div className={`transition-opacity ${!requireLogin ? 'opacity-50 pointer-events-none' : ''}`}>
+                                        <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1.5">Bloqueo Automático</label>
+                                        <p className="text-[10px] text-slate-400 mb-3">Tu sesión se bloqueará tras estos minutos de inactividad.</p>
+                                        <div className="grid grid-cols-4 gap-2">
+
                                         {[
                                             { val: '1', label: '1m' },
                                             { val: '3', label: '3m' },
@@ -445,6 +530,7 @@ export default function SettingsView({ onClose, theme, toggleTheme, triggerHapti
                                             </button>
                                         ))}
                                     </div>
+                                </div>
                                 </div>
                             </SectionCard>
                         </>

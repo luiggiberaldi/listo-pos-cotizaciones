@@ -12,6 +12,10 @@ export const useAuthStore = create(
         (set, get) => ({
             usuarioActivo: null,
             usuarios: DEFAULT_USERS,
+            requireLogin: false, // Login opcional, por defecto desactivado
+            adminEmail: '',
+            adminPassword: '',
+
 
             // ACCIONES
             login: async (pinInput, userId) => {
@@ -93,6 +97,16 @@ export const useAuthStore = create(
                 if (usuarioActivo && usuarioActivo.id === userId) {
                     set({ usuarioActivo: { ...usuarioActivo, ...datos } });
                 }
+            },
+
+            setRequireLogin: (val) => {
+                set({ requireLogin: val });
+                logEvent('CONFIG', 'LOGIN_REQUERIDO_MODIFICADO', `Login requerido establecido a ${val ? 'SI' : 'NO'}`);
+            },
+
+            setAdminCredentials: (email, password) => {
+                set({ adminEmail: email, adminPassword: password });
+                logEvent('CONFIG', 'CREDENCIALES_REMOTAS_ESTABLECIDAS', `Se ha registrado el acceso remoto para la cuenta administradora.`);
             }
         }),
         {

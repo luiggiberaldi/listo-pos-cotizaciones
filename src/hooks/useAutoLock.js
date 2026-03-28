@@ -3,18 +3,20 @@ import { useAuthStore } from './store/useAuthStore';
 import { logEvent } from '../services/auditService';
 
 export function useAutoLock() {
-    const { usuarioActivo, logout } = useAuthStore();
+    const { usuarioActivo, logout, requireLogin } = useAuthStore();
+    const isLoginRequired = requireLogin ?? false;
     const timeoutRef = useRef(null);
 
     const performLock = useCallback((reason = 'manual') => {
+        if (!isLoginRequired) return; // Si el login no es requerido, no cerrar la sesion jamas
         if (!usuarioActivo || usuarioActivo.rol !== 'ADMIN') return;
         
         logEvent('AUTH', 'SESION_BLOQUEADA', `Bloqueo de seguridad: ${reason}`, usuarioActivo);
         logout();
-    }, [usuarioActivo, logout]);
+    }, [usuarioActivo, logout, isLoginRequired]);
 
     const resetTimer = useCallback(() => {
-        if (!usuarioActivo || usuarioActivo.rol !== 'ADMIN') {
+        if (!isLoginRequired || !usuarioActivo || usuarioActivo.rol !== 'ADMIN') {
             if (timeoutRef.current) clearTimeout(timeoutRef.current);
             return;
         }
@@ -32,8 +34,8 @@ export function useAutoLock() {
     }, [usuarioActivo, performLock]);
 
     useEffect(() => {
-        // Solo importa si es ADMIN
-        if (!usuarioActivo || usuarioActivo.rol !== 'ADMIN') {
+        // Solo importa si es ADMIN y el login es requerido
+        if (!isLoginRequired || !usuarioActivo || usuarioActivo.rol !== 'ADMIN') {
             if (timeoutRef.current) clearTimeout(timeoutRef.current);
             return;
         }

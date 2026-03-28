@@ -156,7 +156,18 @@ export default function App() {
 
   // === AUTH ===
   const usuarioActivo = useAuthStore(s => s.usuarioActivo);
+  const requireLogin = useAuthStore(s => s.requireLogin ?? false);
   const isCajero = usuarioActivo?.rol === 'CAJERO';
+
+  useEffect(() => {
+    // Si el login no es requerido y no hay usuario activo, forzar el login del primer Administrador
+    if (!requireLogin && !usuarioActivo) {
+      const admins = useAuthStore.getState().usuarios.filter(u => u.rol === 'ADMIN');
+      if (admins.length > 0) {
+        useAuthStore.setState({ usuarioActivo: admins[0] });
+      }
+    }
+  }, [requireLogin, usuarioActivo]);
 
   const ALL_TABS = [
     { id: 'inicio', label: 'Inicio', icon: Home },
@@ -168,9 +179,14 @@ export default function App() {
 
   const TABS = isCajero ? ALL_TABS.filter(t => !t.adminOnly) : ALL_TABS;
 
-  // Si no hay sesion activa, mostrar LockScreen
-  if (!usuarioActivo) {
+  // Si no hay sesion activa, y el login es requerido, mostrar LockScreen
+  if (!usuarioActivo && requireLogin) {
     return <LockScreen />;
+  }
+
+  // Esperar un frame a que se auto-asigne el usuario si requireLogin es false
+  if (!usuarioActivo && !requireLogin) {
+    return <div className="h-[100dvh] bg-slate-50 dark:bg-black" />; // Prevents crashes down the tree
   }
 
   return (
