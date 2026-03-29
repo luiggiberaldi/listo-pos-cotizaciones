@@ -436,8 +436,8 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                 </div>
                 <div className="flex items-center gap-2">
                     <SyncStatus />
-                    {/* USER BADGE */}
-                    {usuarioActivo && (
+                    {/* USER BADGE — solo visible si PIN activo + cuenta cloud configurada */}
+                    {requireLogin && isCloudConfigured && usuarioActivo && (
                         <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-full pl-3 pr-2 py-1 shadow-sm">
                             <div className={`w-2 h-2 rounded-full ${usuarioActivo.rol === 'ADMIN' ? 'bg-blue-500' : 'bg-emerald-500'}`} />
                             <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 max-w-[80px] truncate">{usuarioActivo.nombre}</span>

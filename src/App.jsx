@@ -154,22 +154,27 @@ export default function App() {
     };
   }, []);
 
-  // === AUTH ===
+  // === Auth — condiciones para mostrar pantalla de PIN ===
   const usuarioActivo = useAuthStore(s => s.usuarioActivo);
   const requireLogin = useAuthStore(s => s.requireLogin ?? false);
+  const adminEmail = useAuthStore(s => s.adminEmail);
+  const adminPassword = useAuthStore(s => s.adminPassword);
+  
   const isCajero = usuarioActivo?.rol === 'CAJERO';
+  const isCloudConfigured = Boolean(adminEmail && adminPassword);
+  const pinLoginEnabled = requireLogin && isCloudConfigured;
 
   const hasAttemptedAutoLogin = useRef(false);
   useEffect(() => {
-    // Si el login no es requerido y no hay usuario activo, forzar el login del primer Administrador (sólo la primera vez)
-    if (!requireLogin && !usuarioActivo && !hasAttemptedAutoLogin.current) {
+    // Si la pantalla de login NO debe aparecer, forzamos el auto-login
+    if (!pinLoginEnabled && !usuarioActivo && !hasAttemptedAutoLogin.current) {
       hasAttemptedAutoLogin.current = true;
       const admins = useAuthStore.getState().usuarios.filter(u => u.rol === 'ADMIN');
       if (admins.length > 0) {
         useAuthStore.setState({ usuarioActivo: admins[0] });
       }
     }
-  }, [requireLogin, usuarioActivo]);
+  }, [pinLoginEnabled, usuarioActivo]);
 
   const ALL_TABS = [
     { id: 'inicio', label: 'Inicio', icon: Home },
@@ -181,12 +186,12 @@ export default function App() {
 
   const TABS = isCajero ? ALL_TABS.filter(t => !t.adminOnly) : ALL_TABS;
 
-  // Si no hay sesion activa, mostrar la pantalla de bloqueo (PIN)
   if (!usuarioActivo) {
-    // Solo mostrar el splash en blanco si está por hacer auto-login inicial
-    if (!requireLogin && !hasAttemptedAutoLogin.current) {
-      return <div className="h-[100dvh] bg-slate-50 dark:bg-black" />; // Prevents crashes
+    if (!pinLoginEnabled) {
+      // Sin PIN o sin cloud → splash neutro mientras el auto-login se completa
+      return <div className="h-[100dvh] bg-slate-50 dark:bg-black" />;
     }
+    // PIN activado + cloud configurado → mostrar pantalla de bloqueo
     return <LockScreen />;
   }
 

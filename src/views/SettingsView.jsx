@@ -20,6 +20,11 @@ import { useProductContext } from '../context/ProductContext';
 import { useAuthStore } from '../hooks/store/useAuthStore';
 import ShareInventoryModal from '../components/ShareInventoryModal';
 import { useAudit } from '../hooks/useAudit';
+import SettingsTabNegocio from '../components/Settings/tabs/SettingsTabNegocio';
+import SettingsTabVentas from '../components/Settings/tabs/SettingsTabVentas';
+import SettingsTabUsuarios from '../components/Settings/tabs/SettingsTabUsuarios';
+import SettingsTabSistema from '../components/Settings/tabs/SettingsTabSistema';
+
 
 // ───────────────────────────────────────────────────── Toggle
 function Toggle({ enabled, onChange, color = 'emerald' }) {
@@ -139,18 +144,29 @@ export default function SettingsView({ onClose, theme, toggleTheme, triggerHapti
     };
 
     // ─── HELPER: Apply a cloud backup to local storage ───────────────────────
+    // IMPORTANTE: usa storageService.setItem (instancia global de localforage)
+    // NO usar localforage.createInstance() — genera una instancia separada que la app no lee
     const applyCloudBackup = async (cloudBackup) => {
-        const lf = localforage.createInstance({ name: 'BodegaApp', storeName: 'bodega_app_data' });
-        if (cloudBackup.version === '2.0' && cloudBackup.data?.idb) {
-            for (const [key, value] of Object.entries(cloudBackup.data.idb)) {
-                await lf.setItem(key, value);
+        if (!cloudBackup?.data) {
+            console.error('[applyCloudBackup] Backup inválido o sin datos:', cloudBackup);
+            throw new Error('El backup de la nube está vacío o es inválido.');
+        }
+        if (cloudBackup.version === '2.0' && cloudBackup.data.idb) {
+            const idbEntries = Object.entries(cloudBackup.data.idb);
+            console.log(`[applyCloudBackup] Restaurando ${idbEntries.length} keys de IDB...`);
+            for (const [key, value] of idbEntries) {
+                await storageService.setItem(key, value);
+                console.log(`[applyCloudBackup] ✓ ${key}`);
             }
-            if (cloudBackup.data.ls) {
-                for (const [key, value] of Object.entries(cloudBackup.data.ls)) {
-                    localStorage.setItem(key, value);
-                }
+        } else {
+            console.warn('[applyCloudBackup] Formato no reconocido, intentando restauración legacy...');
+        }
+        if (cloudBackup.data.ls) {
+            for (const [key, value] of Object.entries(cloudBackup.data.ls)) {
+                localStorage.setItem(key, value);
             }
         }
+        console.log('[applyCloudBackup] Restauración completa.');
     };
 
     // ─── HELPER: Collect local backup payload ────────────────────────────────
@@ -520,11 +536,10 @@ export default function SettingsView({ onClose, theme, toggleTheme, triggerHapti
                 const json = JSON.parse(e.target.result);
                 
                 if (!json.data) throw new Error('Formato invalido.');
-                const lf = localforage.createInstance({ name: 'BodegaApp', storeName: 'bodega_app_data' });
-
+                // Usar storageService (instancia global) — NO createInstance()
                 if (json.version === '2.0' && json.data.idb) {
                     for (const [key, value] of Object.entries(json.data.idb)) {
-                        await lf.setItem(key, value);
+                        await storageService.setItem(key, value);
                     }
                     if (json.data.ls) {
                         for (const [key, value] of Object.entries(json.data.ls)) {
@@ -533,13 +548,13 @@ export default function SettingsView({ onClose, theme, toggleTheme, triggerHapti
                     }
                 } else {
                     if (json.data.bodega_products_v1) {
-                        await lf.setItem('bodega_products_v1', typeof json.data.bodega_products_v1 === 'string' ? JSON.parse(json.data.bodega_products_v1) : json.data.bodega_products_v1);
+                        await storageService.setItem('bodega_products_v1', typeof json.data.bodega_products_v1 === 'string' ? JSON.parse(json.data.bodega_products_v1) : json.data.bodega_products_v1);
                     }
                     if (json.data.bodega_accounts_v2) {
-                        await lf.setItem('bodega_accounts_v2', typeof json.data.bodega_accounts_v2 === 'string' ? JSON.parse(json.data.bodega_accounts_v2) : json.data.bodega_accounts_v2);
+                        await storageService.setItem('bodega_accounts_v2', typeof json.data.bodega_accounts_v2 === 'string' ? JSON.parse(json.data.bodega_accounts_v2) : json.data.bodega_accounts_v2);
                     }
                     if (json.data.my_categories_v1) {
-                        await lf.setItem('my_categories_v1', typeof json.data.my_categories_v1 === 'string' ? JSON.parse(json.data.my_categories_v1) : json.data.my_categories_v1);
+                        await storageService.setItem('my_categories_v1', typeof json.data.my_categories_v1 === 'string' ? JSON.parse(json.data.my_categories_v1) : json.data.my_categories_v1);
                     }
                     
                     const legacyLsKeys = [
@@ -703,544 +718,69 @@ export default function SettingsView({ onClose, theme, toggleTheme, triggerHapti
             <div className="flex-1 overflow-y-auto pb-[calc(3rem+env(safe-area-inset-bottom))]">
                 <div className="max-w-md mx-auto p-4 space-y-4">
 
-                    {/* ═══ TAB: NEGOCIO ═══ */}
+                                        {/* ═══ TAB: NEGOCIO ═══ */}
                     {activeTab === 'negocio' && (
-                        <>
-                            {/* Mi Negocio */}
-                            <SectionCard icon={Store} title="Mi Negocio" subtitle="Datos que aparecen en tickets" iconColor="text-indigo-500">
-                                <div>
-                                    <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1.5">Nombre del Negocio</label>
-                                    <input
-                                        type="text"
-                                        placeholder="Ej: Mi Bodega C.A."
-                                        value={businessName}
-                                        onChange={e => setBusinessName(e.target.value)}
-                                        className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1.5">RIF o Documento</label>
-                                    <input
-                                        type="text"
-                                        placeholder="Ej: J-12345678"
-                                        value={businessRif}
-                                        onChange={e => setBusinessRif(e.target.value)}
-                                        className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all"
-                                    />
-                                </div>
-                                <button
-                                    onClick={handleSaveBusinessData}
-                                    className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 font-bold text-xs uppercase tracking-wider rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors active:scale-[0.98]"
-                                >
-                                    <Check size={16} /> Guardar
-                                </button>
-                            </SectionCard>
-
-                            {/* Impresora */}
-                            <SectionCard icon={Printer} title="Impresora" subtitle="Configuracion de papel termico" iconColor="text-violet-500">
-                                <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1.5">Ancho de Papel</label>
-                                <div className="grid grid-cols-2 gap-2">
-                                    {[{ val: '58', label: '58 mm (Pequena)' }, { val: '80', label: '80 mm (Estandar)' }].map(opt => (
-                                        <button
-                                            key={opt.val}
-                                            onClick={() => { setPaperWidth(opt.val); localStorage.setItem('printer_paper_width', opt.val); triggerHaptic?.(); }}
-                                            className={`py-2.5 px-3 text-xs font-bold rounded-xl transition-all border ${paperWidth === opt.val
-                                                ? 'bg-violet-50 dark:bg-violet-900/20 border-violet-400 text-violet-700 dark:text-violet-300 shadow-sm'
-                                                : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
-                                            }`}
-                                        >
-                                            {opt.label}
-                                        </button>
-                                    ))}
-                                </div>
-                            </SectionCard>
-
-                            {/* Monedas COP */}
-                            <SectionCard icon={Coins} title="Peso Colombiano (COP)" subtitle="Habilitar pagos y calculos en COP" iconColor="text-amber-500">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Habilitar COP</p>
-                                        <p className="text-[10px] text-slate-400 mt-0.5">Pagos y calculos rapidos</p>
-                                    </div>
-                                    <Toggle
-                                        enabled={copEnabled}
-                                        color="amber"
-                                        onChange={() => {
-                                            const newVal = !copEnabled;
-                                            setCopEnabled(newVal);
-                                            localStorage.setItem('cop_enabled', newVal.toString());
-                                            forceHeartbeat();
-                                            showToast(newVal ? 'COP Habilitado' : 'COP Deshabilitado', 'success');
-                                            triggerHaptic?.();
-                                        }}
-                                    />
-                                </div>
-                                {copEnabled && (
-                                    <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-3">
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <p className="text-[13px] font-bold text-slate-700 dark:text-slate-200">Calcular Automaticamente</p>
-                                                <p className="text-[10px] text-slate-400 mt-0.5">TRM Oficial + Binance USDT</p>
-                                            </div>
-                                            <Toggle
-                                                enabled={autoCopEnabled}
-                                                color="amber"
-                                                onChange={() => {
-                                                    const newVal = !autoCopEnabled;
-                                                    setAutoCopEnabled(newVal);
-                                                    localStorage.setItem('auto_cop_enabled', newVal.toString());
-                                                    triggerHaptic?.();
-                                                }}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1.5">
-                                                {autoCopEnabled ? 'Tasa Actual Calculada' : 'Tasa Manual (COP por 1 USD)'}
-                                            </label>
-                                            <input
-                                                type="number"
-                                                placeholder="Ej: 4150"
-                                                value={autoCopEnabled ? (calculatedTasaCop > 0 ? calculatedTasaCop.toFixed(2) : '') : tasaCopManual}
-                                                readOnly={autoCopEnabled}
-                                                onChange={e => {
-                                                    if (!autoCopEnabled) {
-                                                        setTasaCopManual(e.target.value);
-                                                        localStorage.setItem('tasa_cop', e.target.value);
-                                                    }
-                                                }}
-                                                className={`w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amber-500/30 ${autoCopEnabled ? 'text-slate-400 cursor-not-allowed bg-slate-100 dark:bg-slate-800/80' : 'text-amber-600 dark:text-amber-500'}`}
-                                            />
-                                            {autoCopEnabled && (
-                                                <p className="text-[9px] text-amber-600/70 dark:text-amber-400/70 mt-1.5 font-medium">Se actualiza automaticamente cada 30 segundos.</p>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-                            </SectionCard>
-                        </>
+                        <SettingsTabNegocio
+                            businessName={businessName} setBusinessName={setBusinessName}
+                            businessRif={businessRif} setBusinessRif={setBusinessRif}
+                            paperWidth={paperWidth} setPaperWidth={setPaperWidth}
+                            copEnabled={copEnabled} setCopEnabled={setCopEnabled}
+                            autoCopEnabled={autoCopEnabled} setAutoCopEnabled={setAutoCopEnabled}
+                            tasaCopManual={tasaCopManual} setTasaCopManual={setTasaCopManual}
+                            calculatedTasaCop={calculatedTasaCop}
+                            handleSaveBusinessData={handleSaveBusinessData}
+                            forceHeartbeat={forceHeartbeat}
+                            showToast={showToast}
+                            triggerHaptic={triggerHaptic}
+                        />
                     )}
 
                     {/* ═══ TAB: VENTAS ═══ */}
                     {activeTab === 'ventas' && (
-                        <>
-                            <SectionCard icon={Package} title="Inventario" subtitle="Reglas de ventas" iconColor="text-emerald-500">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Vender sin Stock</p>
-                                        <p className="text-[10px] text-slate-400 mt-0.5">Permitir ventas si el inventario es 0</p>
-                                    </div>
-                                    <Toggle
-                                        enabled={allowNegativeStock}
-                                        onChange={() => {
-                                            const newVal = !allowNegativeStock;
-                                            setAllowNegativeStock(newVal);
-                                            localStorage.setItem('allow_negative_stock', newVal.toString());
-                                            forceHeartbeat();
-                                            showToast(newVal ? 'Se permite vender sin stock' : 'No se permite vender sin stock', 'success');
-                                            triggerHaptic?.();
-                                        }}
-                                    />
-                                </div>
-                            </SectionCard>
-
-                            <SectionCard icon={CreditCard} title="Metodos de Pago" subtitle="Configura como te pagan" iconColor="text-blue-500">
-                                <PaymentMethodsManager triggerHaptic={triggerHaptic} />
-                            </SectionCard>
-                        </>
+                        <SettingsTabVentas
+                            allowNegativeStock={allowNegativeStock} setAllowNegativeStock={setAllowNegativeStock}
+                            forceHeartbeat={forceHeartbeat}
+                            showToast={showToast}
+                            triggerHaptic={triggerHaptic}
+                        />
                     )}
 
                     {/* ═══ TAB: USUARIOS ═══ */}
                     {activeTab === 'usuarios' && isAdmin && (
-                        <>
-                            {isCloudConfigured && (
-                                <SectionCard icon={Users} title="Usuarios y Roles" subtitle="Gestiona quien opera la app" iconColor="text-indigo-500">
-                                    <UsersManager triggerHaptic={triggerHaptic} />
-                                </SectionCard>
-                            )}
-
-                            <SectionCard icon={Lock} title="Seguridad (ADMIN)" subtitle="Evitar accesos no autorizados" iconColor="text-rose-500">
-                                
-                                {/* Formulario Correo Nube */}
-                                {!isCloudConfigured && (
-                                    <div className="mb-5 p-3.5 bg-rose-50 dark:bg-rose-900/10 border border-rose-100 dark:border-rose-900/30 rounded-2xl animate-in fade-in zoom-in-95">
-                                        <div className="flex items-start gap-2.5 mb-3">
-                                            <AlertTriangle size={16} className="text-rose-500 mt-0.5 shrink-0" />
-                                            <div>
-                                                <p className="text-xs font-bold text-rose-700 dark:text-rose-400">Protección Requerida</p>
-                                                <p className="text-[10px] text-rose-600/80 dark:text-rose-400/80 leading-relaxed mt-0.5">
-                                                    Para crear nuevos usuarios, modificar las alertas de seguridad o deshabilitar el PIN de la aplicación, debes registrar primero un correo y contraseña de recuperación.
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        {/* Formulario de Auth Nube Real */}
-                                        <div className="bg-white dark:bg-slate-900 border border-rose-200/60 dark:border-rose-900/40 rounded-xl p-4 mt-3 shadow-inner">
-                                            {/* Tabs Login/Registro */}
-                                            <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-1 mb-4">
-                                                <button
-                                                    onClick={() => setIsCloudLogin(true)}
-                                                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${isCloudLogin ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-500 hover:text-slate-700'}`}
-                                                >
-                                                    Entrar
-                                                </button>
-                                                <button
-                                                    onClick={() => setIsCloudLogin(false)}
-                                                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${!isCloudLogin ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-500 hover:text-slate-700'}`}
-                                                >
-                                                    Registrarse
-                                                </button>
-                                            </div>
-
-                                            {importStatus === 'awaiting_email_confirmation' ? (
-                                                <div className="text-center py-6 px-4 animate-in fade-in zoom-in">
-                                                    <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                                                        <Mail size={32} className="text-indigo-500" />
-                                                    </div>
-                                                    <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-2">¡Revisa tu correo!</h3>
-                                                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-6">
-                                                        Hemos enviado un enlace de confirmación a <strong className="text-slate-700 dark:text-slate-300">{inputEmail}</strong>. 
-                                                        Por favor haz clic en él para verificar tu identidad y luego regresa aquí para Iniciar Sesión.
-                                                    </p>
-                                                    <button
-                                                        onClick={() => {
-                                                            setImportStatus(null);
-                                                            setIsCloudLogin(true); // Cambiamos a Login para cuando regrese
-                                                        }}
-                                                        className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-colors active:scale-95"
-                                                    >
-                                                        Ya lo confirmé, Iniciar Sesión
-                                                    </button>
-                                                </div>
-                                            ) : (
-                                                <div className="space-y-3">
-                                                    {!isCloudLogin && (
-                                                        <div className="space-y-1">
-                                                            <label className="text-[10px] uppercase font-bold text-slate-500 ml-1">Teléfono Móvil</label>
-                                                            <div className="relative">
-                                                                <input
-                                                                    type="tel"
-                                                                    placeholder="Ej: 0414..."
-                                                                    value={inputPhone}
-                                                                    onChange={e => setInputPhone(e.target.value)}
-                                                                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pl-10 pr-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500/30 outline-none"
-                                                                />
-                                                                <Database size={16} className="absolute left-3.5 top-3 text-slate-400" />
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    <div className="space-y-1">
-                                                        <label className="text-[10px] uppercase font-bold text-slate-500 ml-1">Correo Electrónico</label>
-                                                        <div className="relative">
-                                                            <input
-                                                                type="email"
-                                                                placeholder="tu@correo.com"
-                                                                value={inputEmail}
-                                                                onChange={e => {
-                                                                    setInputEmail(e.target.value);
-                                                                    setEmailError('');
-                                                                }}
-                                                                className={`w-full bg-slate-50 dark:bg-slate-950 border ${emailError ? 'border-red-400' : 'border-slate-200 dark:border-slate-800'} rounded-xl pl-10 pr-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500/30 outline-none transition-all`}
-                                                            />
-                                                            <Mail size={16} className={`absolute left-3.5 top-3 ${emailError ? 'text-red-400' : 'text-slate-400'}`} />
-                                                        </div>
-                                                        {emailError && <p className="text-[10px] text-red-500 mt-1 ml-1 font-medium">{emailError}</p>}
-                                                    </div>
-
-                                                    {!isRecoveringPassword && (
-                                                        <div className="space-y-1">
-                                                            <label className="text-[10px] uppercase font-bold text-slate-500 ml-1">Contraseña</label>
-                                                            <div className="relative">
-                                                                <input
-                                                                    type={showPassword ? 'text' : 'password'}
-                                                                    placeholder="Mínimo 6 caracteres"
-                                                                    value={inputPassword}
-                                                                    onChange={e => {
-                                                                        setInputPassword(e.target.value);
-                                                                        setPasswordError('');
-                                                                    }}
-                                                                    className={`w-full bg-slate-50 dark:bg-slate-950 border ${passwordError ? 'border-red-400' : 'border-slate-200 dark:border-slate-800'} rounded-xl pl-10 pr-10 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500/30 outline-none transition-all`}
-                                                                />
-                                                                <Lock size={16} className={`absolute left-3.5 top-3 ${passwordError ? 'text-red-400' : 'text-slate-400'}`} />
-                                                                <button 
-                                                                    type="button" 
-                                                                    onClick={() => setShowPassword(!showPassword)}
-                                                                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 focus:outline-none"
-                                                                >
-                                                                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                                                                </button>
-                                                            </div>
-                                                            {passwordError && <p className="text-[10px] text-red-500 mt-1 ml-1 font-medium">{passwordError}</p>}
-                                                        </div>
-                                                    )}
-
-                                                    {importStatus === 'error' && (
-                                                        <div className="p-2.5 mt-2 bg-red-50 dark:bg-red-900/20 border border-red-200 rounded-lg flex items-center gap-2">
-                                                            <AlertTriangle size={14} className="text-red-500 shrink-0" />
-                                                            <p className="text-[10px] text-red-600 dark:text-red-400 font-medium">{statusMessage}</p>
-                                                        </div>
-                                                    )}
-
-                                                    <button
-                                                        onClick={isRecoveringPassword ? handleResetPasswordRequest : handleSaveCloudAccount}
-                                                        disabled={importStatus === 'loading'}
-                                                        className="w-full mt-2 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 dark:disabled:bg-indigo-800 text-white text-sm font-bold rounded-xl transition-all shadow-sm flex items-center justify-center gap-2"
-                                                    >
-                                                        {importStatus === 'loading' ? (
-                                                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                                        ) : (
-                                                            <ShieldCheck size={18} />
-                                                        )}
-                                                        {importStatus === 'loading' ? 'Procesando...' : (
-                                                            isRecoveringPassword ? 'Enviar enlace de recuperación' :
-                                                            (isCloudLogin ? 'Entrar y Sincronizar' : 'Crear Cuenta Segura')
-                                                        )}
-                                                    </button>
-                                                    
-                                                    <div className="flex flex-col items-center mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-                                                        {isCloudLogin && !isRecoveringPassword && (
-                                                            <button 
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    setIsRecoveringPassword(true);
-                                                                    setImportStatus(null);
-                                                                    setStatusMessage('');
-                                                                    setEmailError('');
-                                                                    setPasswordError('');
-                                                                }}
-                                                                className="text-[11px] text-indigo-600 dark:text-indigo-400 font-bold hover:underline mb-2"
-                                                            >
-                                                                ¿Olvidaste tu contraseña?
-                                                            </button>
-                                                        )}
-
-                                                        {isRecoveringPassword && (
-                                                            <button 
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    setIsRecoveringPassword(false);
-                                                                    setImportStatus(null);
-                                                                    setStatusMessage('');
-                                                                    setEmailError('');
-                                                                }}
-                                                                className="text-[11px] text-slate-500 font-bold hover:underline mb-2"
-                                                            >
-                                                                Volver a Iniciar Sesión
-                                                            </button>
-                                                        )}
-
-                                                        {!isCloudLogin && !isRecoveringPassword && (
-                                                            <p className="text-[9px] text-center text-slate-400 dark:text-slate-500 leading-relaxed">
-                                                                Al registrarte, enviaremos un correo de validación. Tu información será encriptada y quedará lista para la próxima <strong>Estación Maestra</strong>.
-                                                            </p>
-                                                        )}
-
-                                                        {isRecoveringPassword && (
-                                                            <p className="text-[9px] text-center text-slate-400 dark:text-slate-500 leading-relaxed max-w-[200px]">
-                                                                Ingresa el correo de tu cuenta. Te enviaremos un mensaje con un enlace para crear una contraseña nueva.
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {isCloudConfigured && (
-                                    <div className="mb-5 p-3.5 bg-indigo-50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-900/30 rounded-2xl flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/40 rounded-full flex items-center justify-center">
-                                                <Database size={20} className="text-indigo-600 dark:text-indigo-400" />
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Sincronización Activa</p>
-                                                <p className="text-[10px] text-slate-500">{adminEmail}</p>
-                                            </div>
-                                        </div>
-                                        <button
-                                            onClick={async () => {
-                                                if (window.confirm('¿Seguro que deseas cerrar la sesión en la nube?')) {
-                                                    setAdminCredentials('', '');
-                                                    if (supabaseCloud) await supabaseCloud.auth.signOut();
-                                                    showToast('Sesión de nube cerrada', 'success');
-                                                }
-                                            }}
-                                            className="px-3 py-1.5 bg-white dark:bg-slate-800 text-red-500 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm hover:bg-red-50 dark:hover:bg-red-900/20 active:scale-95 transition-all"
-                                        >
-                                            Cerrar Sesión
-                                        </button>
-                                    </div>
-                                )}
-
-                                    {/* Login Opcional */}
-                                    <div className="flex items-center justify-between mb-4 border-b border-slate-100 dark:border-slate-800 pb-4 mt-6">
-                                        <div>
-                                            <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Pedir PIN al iniciar</p>
-                                            <p className="text-[10px] text-slate-400 mt-0.5">Si se desactiva, entrará directo como Administrador.</p>
-                                        </div>
-                                        <Toggle
-                                            enabled={requireLogin}
-                                            color="rose"
-                                            onChange={() => {
-                                                const newVal = !requireLogin;
-                                                if (setRequireLogin) setRequireLogin(newVal);
-                                                triggerHaptic?.();
-                                                showToast(newVal ? 'PIN activado para inicio' : 'Acceso directo activado', 'success');
-                                            }}
-                                        />
-                                    </div>
-
-                                    {/* Bloqueo por inactividad */}
-                                    <div className={`transition-opacity ${!requireLogin ? 'opacity-50 pointer-events-none' : ''}`}>
-                                        <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1.5">Bloqueo Automático</label>
-                                        <p className="text-[10px] text-slate-400 mb-3">Tu sesión se bloqueará tras estos minutos de inactividad.</p>
-                                        <div className="grid grid-cols-4 gap-2">
-
-                                        {[
-                                            { val: '1', label: '1m' },
-                                            { val: '3', label: '3m' },
-                                            { val: '5', label: '5m' },
-                                            { val: '10', label: '10m' }
-                                        ].map(opt => (
-                                            <button
-                                                key={opt.val}
-                                                onClick={() => { 
-                                                    setAutoLockMinutes(opt.val); 
-                                                    localStorage.setItem('admin_auto_lock_minutes', opt.val); 
-                                                    triggerHaptic?.(); 
-                                                }}
-                                                className={`py-2 text-xs font-bold rounded-xl transition-all border ${autoLockMinutes === opt.val
-                                                    ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-400 text-rose-700 dark:text-rose-300 shadow-sm'
-                                                    : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
-                                                }`}
-                                            >
-                                                {opt.label}
-                                            </button>
-                                        ))}
-                                        </div>
-                                    </div>
-                                </SectionCard>
-                        </>
+                        <SettingsTabUsuarios
+                            isCloudConfigured={isCloudConfigured} adminEmail={adminEmail}
+                            requireLogin={requireLogin} setRequireLogin={setRequireLogin}
+                            autoLockMinutes={autoLockMinutes} setAutoLockMinutes={setAutoLockMinutes}
+                            importStatus={importStatus} statusMessage={statusMessage}
+                            isCloudLogin={isCloudLogin} setIsCloudLogin={setIsCloudLogin}
+                            inputPhone={inputPhone} setInputPhone={setInputPhone}
+                            inputEmail={inputEmail} setInputEmail={setInputEmail}
+                            emailError={emailError} setEmailError={setEmailError}
+                            inputPassword={inputPassword} setInputPassword={setInputPassword}
+                            passwordError={passwordError} setPasswordError={setPasswordError}
+                            showPassword={showPassword} setShowPassword={setShowPassword}
+                            isRecoveringPassword={isRecoveringPassword} setIsRecoveringPassword={setIsRecoveringPassword}
+                            handleSaveCloudAccount={handleSaveCloudAccount}
+                            handleResetPasswordRequest={handleResetPasswordRequest}
+                            setAdminCredentials={setAdminCredentials}
+                            showToast={showToast}
+                            triggerHaptic={triggerHaptic}
+                        />
                     )}
 
                     {/* ═══ TAB: SISTEMA ═══ */}
                     {activeTab === 'sistema' && (
-                        <>
-                            {/* Datos y Respaldo */}
-                            <SectionCard icon={Database} title="Datos y Respaldo" subtitle="Exportar, importar y compartir" iconColor="text-cyan-500">
-                                <div className="p-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800/30 rounded-xl flex gap-2.5">
-                                    <AlertTriangle size={18} className="text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" />
-                                    <p className="text-[10px] text-amber-800 dark:text-amber-400 leading-relaxed font-bold">
-                                        PRECAUCION: Al restaurar un backup se sobrescribira por completo todo el historial de ventas, inventario, deudores y configuraciones de este dispositivo.
-                                    </p>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <button onClick={handleExport} className="w-full flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group active:scale-[0.98]">
-                                        <div className="p-2 bg-blue-50 dark:bg-blue-900/30 rounded-lg"><Download size={18} className="text-blue-500" /></div>
-                                        <div className="text-left flex-1">
-                                            <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Exportar Backup</p>
-                                            <p className="text-[10px] text-slate-400">Descargar archivo .json</p>
-                                        </div>
-                                        <ChevronRight size={16} className="text-slate-300" />
-                                    </button>
-
-                                    <button onClick={handleImportClick} className="w-full flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group active:scale-[0.98]">
-                                        <div className="p-2 bg-emerald-50 dark:bg-emerald-900/30 rounded-lg"><Upload size={18} className="text-emerald-500" /></div>
-                                        <div className="text-left flex-1">
-                                            <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Importar Backup</p>
-                                            <p className="text-[10px] text-slate-400">Restaurar desde archivo</p>
-                                        </div>
-                                        <ChevronRight size={16} className="text-slate-300" />
-                                    </button>
-
-                                    <button onClick={() => setIsShareOpen(true)} className="w-full flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group active:scale-[0.98]">
-                                        <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg"><Share2 size={18} className="text-indigo-500" /></div>
-                                        <div className="text-left flex-1">
-                                            <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Compartir Inventario</p>
-                                            <p className="text-[10px] text-slate-400">Codigo de 6 digitos, 24h</p>
-                                        </div>
-                                        <ChevronRight size={16} className="text-slate-300" />
-                                    </button>
-                                </div>
-
-                                <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden" />
-
-                                {importStatus && (
-                                    <div className={`p-2.5 rounded-xl text-xs font-bold text-center flex items-center justify-center gap-2 ${importStatus === 'success' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
-                                        {importStatus === 'success' ? <Check size={14} /> : <AlertTriangle size={14} />}
-                                        {statusMessage}
-                                    </div>
-                                )}
-                            </SectionCard>
-
-                            {/* Apariencia */}
-                            <SectionCard icon={Palette} title="Apariencia" subtitle="Estilo visual de la app" iconColor="text-pink-500">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        {theme === 'dark' ? <Moon size={18} className="text-indigo-400" /> : <Sun size={18} className="text-amber-500" />}
-                                        <div>
-                                            <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{theme === 'dark' ? 'Modo Oscuro' : 'Modo Claro'}</p>
-                                            <p className="text-[10px] text-slate-400 mt-0.5">Toca para cambiar</p>
-                                        </div>
-                                    </div>
-                                    <Toggle
-                                        enabled={theme === 'dark'}
-                                        color="indigo"
-                                        onChange={() => { toggleTheme(); triggerHaptic?.(); }}
-                                    />
-                                </div>
-                            </SectionCard>
-
-                            {/* Dispositivo */}
-                            <SectionCard icon={Fingerprint} title="Dispositivo" subtitle="Informacion tecnica" iconColor="text-slate-500">
-                                <div className="flex items-center justify-between gap-2">
-                                    <div className="min-w-0">
-                                        <p className="text-[9px] uppercase tracking-wider font-bold text-slate-400 mb-1">ID de Instalacion</p>
-                                        <p className="font-mono text-xs font-black text-slate-600 dark:text-slate-300 select-all truncate">{deviceId || '...'}</p>
-                                    </div>
-                                    <button
-                                        onClick={() => {
-                                            navigator.clipboard.writeText(deviceId).then(() => {
-                                                setIdCopied(true);
-                                                setTimeout(() => setIdCopied(false), 2000);
-                                            });
-                                        }}
-                                        className="shrink-0 p-2 rounded-lg text-slate-400 hover:text-teal-500 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-all"
-                                    >
-                                        {idCopied ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
-                                    </button>
-                                </div>
-                                <p className="text-[9px] text-slate-400">Comparte este ID si necesitas soporte tecnico.</p>
-                            </SectionCard>
-
-                            {/* Audit Log */}
-                            {isAdmin && (
-                                <SectionCard icon={FileText} title="Bitacora de Actividad" subtitle="Registro de todas las acciones" iconColor="text-slate-500">
-                                    <AuditLogViewer triggerHaptic={triggerHaptic} />
-                                </SectionCard>
-                            )}
-
-                            {/* Zona de Peligro */}
-                            <SectionCard icon={AlertTriangle} title="Zona de Peligro" subtitle="Acciones irreversibles" iconColor="text-red-500">
-                                <div className="p-2.5 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/30 rounded-xl mb-3">
-                                    <p className="text-[10px] text-red-700 dark:text-red-400 leading-relaxed font-bold">
-                                        Esta accion eliminara todo el historial de ventas y reportes estadisticos. El inventario NO sera afectado.
-                                    </p>
-                                </div>
-                                <button
-                                    onClick={() => setShowDeleteConfirm(true)}
-                                    className="w-full flex items-center gap-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/30 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors group active:scale-[0.98]"
-                                >
-                                    <div className="p-2 bg-red-100 dark:bg-red-900/40 rounded-lg"><Trash2 size={18} className="text-red-600 dark:text-red-400" /></div>
-                                    <div className="text-left flex-1">
-                                        <p className="text-sm font-bold text-red-700 dark:text-red-400">Borrar Historial de Ventas</p>
-                                        <p className="text-[10px] text-red-500/80 dark:text-red-400/80">El inventario no se borrara</p>
-                                    </div>
-                                </button>
-                            </SectionCard>
-                        </>
+                        <SettingsTabSistema
+                            theme={theme} toggleTheme={toggleTheme}
+                            deviceId={deviceId} idCopied={idCopied} setIdCopied={setIdCopied}
+                            isAdmin={isAdmin}
+                            importStatus={importStatus} statusMessage={statusMessage}
+                            handleExport={handleExport}
+                            handleImportClick={handleImportClick}
+                            setIsShareOpen={setIsShareOpen}
+                            setShowDeleteConfirm={setShowDeleteConfirm}
+                            triggerHaptic={triggerHaptic}
+                        />
                     )}
 
                     {/* Version footer */}
