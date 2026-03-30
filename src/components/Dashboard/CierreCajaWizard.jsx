@@ -175,7 +175,7 @@ export default function CierreCajaWizard({
                                                         <div className="w-8 h-8 bg-white dark:bg-slate-700 rounded-lg flex items-center justify-center shadow-sm">
                                                             {IconComp ? <IconComp size={16} className="text-slate-600 dark:text-slate-300" /> : <DollarSign size={16} className="text-slate-600 dark:text-slate-300" />}
                                                         </div>
-                                                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{toTitleCase(getPaymentLabel(methodId))}</span>
+                                                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{toTitleCase(getPaymentLabel(methodId, data.label))}</span>
                                                     </div>
                                                     <span className="text-sm font-black text-slate-800 dark:text-white font-mono">
                                                         {getCurrencyDisplay(methodId, data)}

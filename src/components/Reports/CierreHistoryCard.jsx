@@ -88,7 +88,7 @@ export default function CierreHistoryCard({ cierre, bcvRate, products }) {
                         )}
                         {Object.entries(cierre.paymentBreakdown).map(([method, data]) => {
                             const PayIcon = getPaymentIcon(method) || PAYMENT_ICONS[method] || CheckCircle2;
-                            const label = toTitleCase(getPaymentLabel(method));
+                            const label = toTitleCase(getPaymentLabel(method, data.label));
                             let displayAmount = `${formatBs(data.total)} Bs`;
                             if (data.currency === 'FIADO' || data.currency === 'USD') {
                                 displayAmount = `$ ${data.total.toFixed(2)}`;

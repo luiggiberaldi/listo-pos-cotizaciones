@@ -139,7 +139,7 @@ function _findCustom(id) {
     return _customMethodsCache.find(m => m.id === id) || null;
 }
 
-export const getPaymentLabel = (id) => {
+export const getPaymentLabel = (id, fallbackLabel) => {
     // Check factory methods first
     const factory = FACTORY_PAYMENT_METHODS.find(m => m.id === id);
     if (factory) return toTitleCase(factory.label);
@@ -150,6 +150,13 @@ export const getPaymentLabel = (id) => {
     
     // Virtual categories (not selectable, display-only)
     if (id === 'fiado') return 'Fiado (Por Cobrar)';
+
+    // Use fallback if provided and it's not a raw ID
+    if (fallbackLabel && fallbackLabel !== id && !fallbackLabel.startsWith('custom_')) {
+        return toTitleCase(fallbackLabel);
+    }
+
+    if (id && id.startsWith('custom_')) return 'Metodo Personalizado';
 
     return toTitleCase(id);
 };

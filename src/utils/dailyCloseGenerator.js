@@ -136,7 +136,7 @@ export async function generateDailyClosePDF({
         y = sectionTitle('PAGOS POR MÉTODO', y);
 
         Object.entries(paymentBreakdown).forEach(([methodId, data]) => {
-            const label = toTitleCase(getPaymentLabel(methodId));
+            const label = toTitleCase(getPaymentLabel(methodId, data.label));
             const val = data.currency === 'USD'
                 ? `$${data.total.toFixed(2)}`
                 : data.currency === 'COP'

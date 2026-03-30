@@ -674,7 +674,7 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                 const fmtCop = (v) => v.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
                 const renderMethod = ([method, data]) => {
-                    const label = toTitleCase(getPaymentLabel(method));
+                    const label = toTitleCase(getPaymentLabel(method, data.label));
                     const PayIcon = getPaymentIcon(method) || PAYMENT_ICONS[method];
                     let totalBsEquiv = data.total;
                     let pct = 0;
