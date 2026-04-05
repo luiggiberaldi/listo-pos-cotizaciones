@@ -39,15 +39,10 @@ export function useAutoBackup(isPremium, isDemo, deviceId) {
                     device: navigator.userAgent?.substring(0, 80),
                 });
 
-                // Si es usuario premium permanente y tiene deviceId, subir el backup a la nube silenciosamente
-                if (isPremium && !isDemo && deviceId) {
-                    await supabase.from('device_backups').upsert({
-                        device_id: deviceId,
-                        product_id: 'bodega',
-                        backup_data: snapshot,
-                        updated_at: new Date().toISOString()
-                    }, { onConflict: 'device_id' });
-                }
+                // Cloud backup deshabilitado: el auto-backup cada 5 min generaba
+                // ~170MB/día de egreso en Supabase (288 uploads × ~500KB snapshot).
+                // El backup a nube ahora solo ocurre manualmente o al cerrar sesión.
+                // Ver: exportCloudBackup() para backup manual bajo demanda.
 
             } catch (e) {
                 console.error('[AutoBackup] Error:', e);
@@ -80,4 +75,28 @@ export async function restoreFromBackup() {
         restoredKeys: Object.keys(backup.data),
         backupTime: new Date(backup.timestamp).toLocaleString('es-VE'),
     };
+}
+
+/**
+ * Backup manual a la nube (bajo demanda).
+ * Usar desde la UI cuando el usuario lo solicite, o al cerrar sesión.
+ */
+export async function exportCloudBackup(deviceId) {
+    if (!deviceId) return false;
+    try {
+        const backup = await storageService.getItem(BACKUP_KEY, null);
+        if (!backup?.data) return false;
+
+        await supabase.from('device_backups').upsert({
+            device_id: deviceId,
+            product_id: 'bodega',
+            backup_data: backup.data,
+            updated_at: new Date().toISOString()
+        }, { onConflict: 'device_id' });
+
+        return true;
+    } catch (e) {
+        console.error('[CloudBackup] Error al exportar:', e);
+        return false;
+    }
 }

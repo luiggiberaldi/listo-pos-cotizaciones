@@ -58,8 +58,8 @@ export default function SyncStatus() {
         checkHealth();
         checkQueue();
 
-        const healthInterval = setInterval(checkHealth, 30000); // 30s
-        const queueInterval = setInterval(checkQueue, 3000); // 3s refresca UI rapido
+        const healthInterval = setInterval(checkHealth, 300000); // 5 min (antes 30s — reducido para ahorrar egreso)
+        const queueInterval = setInterval(checkQueue, 15000); // 15s refresca UI
 
         return () => {
             mounted = false;
