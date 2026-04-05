@@ -19,9 +19,9 @@ android {
     signingConfigs {
         release {
             storeFile file('abasto-key.jks')
-            storePassword 'Abasto2026'
-            keyAlias 'abasto-alias'
-            keyPassword 'Abasto2026'
+            storePassword System.getenv("KEYSTORE_PASSWORD") ?: (project.hasProperty("KEYSTORE_PASSWORD") ? project.property("KEYSTORE_PASSWORD") : "")
+            keyAlias System.getenv("KEY_ALIAS") ?: (project.hasProperty("KEY_ALIAS") ? project.property("KEY_ALIAS") : "abasto-alias")
+            keyPassword System.getenv("KEY_PASSWORD") ?: (project.hasProperty("KEY_PASSWORD") ? project.property("KEY_PASSWORD") : "")
         }
     }
 

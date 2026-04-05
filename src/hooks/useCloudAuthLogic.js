@@ -158,6 +158,7 @@ export function useCloudAuthLogic() {
                 showToast('Datos locales guardados en la nube', 'success');
             }
             setAdminCredentials(email, inputPassword);
+            setInputPassword('');
             auditLog('NUBE', 'CONFLICTO_RESUELTO', `Resuelto: ${choice}`);
             setImportStatus(null);
         } catch (err) {
@@ -278,6 +279,7 @@ export function useCloudAuthLogic() {
                 setDataConflictPending({ email: emailToUse, cloudBackup, localBackup });
                 await registerDevice(emailToUse);
                 setAdminCredentials(emailToUse, inputPassword);
+                setInputPassword('');
                 setImportStatus(null);
                 setStatusMessage('');
                 auditLog('NUBE', 'LOGIN_NUBE', `Conflicto a resolver: ${emailToUse}`);
@@ -289,6 +291,7 @@ export function useCloudAuthLogic() {
                 await applyCloudBackup(cloudBackup);
                 await registerDevice(emailToUse);
                 setAdminCredentials(emailToUse, inputPassword);
+                setInputPassword('');
                 showToast('Datos restaurados desde la nube', 'success');
                 setImportStatus('success');
                 setTimeout(() => window.location.reload(), 1500);
@@ -324,6 +327,7 @@ export function useCloudAuthLogic() {
             }
 
             setAdminCredentials(emailToUse, inputPassword);
+            setInputPassword('');
             showToast('Sincronizado', 'success');
             setImportStatus(null);
             setStatusMessage('');

@@ -73,22 +73,28 @@ CREATE TABLE IF NOT EXISTS public.account_devices (
     UNIQUE(email, device_id)
 );
 
--- 4. RLS — políticas permisivas (anon puede leer/escribir)
+-- 4. RLS — políticas con filtro por email del usuario autenticado
 ALTER TABLE public.cloud_backups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cloud_licenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.account_devices ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Permitir todo a cloud_backups" ON public.cloud_backups;
-CREATE POLICY "Permitir todo a cloud_backups"
-    ON public.cloud_backups FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Acceso por email a cloud_backups"
+    ON public.cloud_backups FOR ALL
+    USING (auth.jwt() ->> 'email' = email)
+    WITH CHECK (auth.jwt() ->> 'email' = email);
 
 DROP POLICY IF EXISTS "Permitir todo a cloud_licenses" ON public.cloud_licenses;
-CREATE POLICY "Permitir todo a cloud_licenses"
-    ON public.cloud_licenses FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Acceso por email a cloud_licenses"
+    ON public.cloud_licenses FOR ALL
+    USING (auth.jwt() ->> 'email' = email)
+    WITH CHECK (auth.jwt() ->> 'email' = email);
 
 DROP POLICY IF EXISTS "Permitir todo a account_devices" ON public.account_devices;
-CREATE POLICY "Permitir todo a account_devices"
-    ON public.account_devices FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Acceso por email a account_devices"
+    ON public.account_devices FOR ALL
+    USING (auth.jwt() ->> 'email' = email)
+    WITH CHECK (auth.jwt() ->> 'email' = email);
 
 -- 5. Función RPC: registrar dispositivo y verificar límite atómicamente
 -- Devuelve: 'ok', 'limit_reached', o 'license_inactive'

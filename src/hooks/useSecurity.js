@@ -7,16 +7,16 @@ const PRODUCT_ID = 'bodega';
 
 const DEMO_DURATION_MS = 168 * 60 * 60 * 1000; // 168 horas (7 días)
 
-// FIX 2: Ofuscación XOR + btoa para tokens en localStorage
-// WARNING: This is basic obfuscation to prevent casual tampering by employees.
-// It is NOT cryptographically secure from a determined attacker.
-const XOR_KEY = 'PDA_SEC_2026';
+// Basic obfuscation (XOR + btoa) for tokens in localStorage.
+// WARNING: This is NOT encryption. It only deters casual inspection by employees.
+// The server-side token validation is the real security boundary.
+const OBFUSCATION_KEY = 'PDA_SEC_2026';
 
 const encodeToken = (str) => {
     try {
         const xored = str.split('').map((c, i) =>
             String.fromCharCode(
-                c.charCodeAt(0) ^ XOR_KEY.charCodeAt(i % XOR_KEY.length)
+                c.charCodeAt(0) ^ OBFUSCATION_KEY.charCodeAt(i % OBFUSCATION_KEY.length)
             )
         ).join('');
         return btoa(unescape(encodeURIComponent(xored)));
@@ -28,7 +28,7 @@ const decodeToken = (encoded) => {
         const xored = decodeURIComponent(escape(atob(encoded)));
         return xored.split('').map((c, i) =>
             String.fromCharCode(
-                c.charCodeAt(0) ^ XOR_KEY.charCodeAt(i % XOR_KEY.length)
+                c.charCodeAt(0) ^ OBFUSCATION_KEY.charCodeAt(i % OBFUSCATION_KEY.length)
             )
         ).join('');
     } catch { return encoded; }

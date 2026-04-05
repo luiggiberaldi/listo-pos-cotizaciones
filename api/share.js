@@ -28,9 +28,16 @@ function generateCode() {
 }
 
 export default async function handler(req, res) {
-    // CORS — permitir dominio de producción + localhost dev
+    // CORS — allowlist exacta de dominios permitidos
     const origin = req.headers?.origin || '';
-    const allowed = origin.includes('localhost') || origin.includes('vercel.app') || origin.includes('tasasaldia');
+    const ALLOWED_ORIGINS = [
+        'http://localhost:5173',
+        'http://localhost:4173',
+        'https://tasasaldia.com',
+        'https://www.tasasaldia.com',
+        'https://listo-pos-lite.vercel.app'
+    ];
+    const allowed = ALLOWED_ORIGINS.includes(origin);
     res.setHeader('Access-Control-Allow-Origin', allowed ? origin : '');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
