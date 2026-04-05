@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { FinancialEngine } from '../core/FinancialEngine';
 import { storageService } from '../utils/storageService';
 import { showToast } from '../components/Toast';
+import { SUPPORT_WHATSAPP } from '../config/tenant';
 import { BarChart3, TrendingUp, Package, AlertTriangle, DollarSign, ShoppingBag, Clock, ArrowUpRight, Trash2, ShoppingCart, Store, Users, Send, Ban, ChevronDown, ChevronUp, UserPlus, Phone, FileText, Recycle, Key, Settings, LockIcon, CheckCircle2, LogOut } from 'lucide-react';
 import { formatBs, formatVzlaPhone } from '../utils/calculatorUtils';
 import { getPaymentLabel, getPaymentMethod, PAYMENT_ICONS, getPaymentIcon, toTitleCase } from '../config/paymentMethods';
@@ -65,14 +66,20 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
         if (!isActive) return;
         let mounted = true;
         const load = async () => {
-            const [savedSales, savedCustomers] = await Promise.all([
-                storageService.getItem(SALES_KEY, []),
-                storageService.getItem('bodega_customers_v1', []),
-            ]);
-            if (mounted) {
-                setSales(savedSales);
-                setCustomers(savedCustomers);
-                setIsLoadingLocal(false);
+            try {
+                const [savedSales, savedCustomers] = await Promise.all([
+                    storageService.getItem(SALES_KEY, []),
+                    storageService.getItem('bodega_customers_v1', []),
+                ]);
+                if (mounted) {
+                    setSales(savedSales);
+                    setCustomers(savedCustomers);
+                }
+            } catch (err) {
+                console.error('[DashboardView] Error loading data:', err);
+                if (mounted) showToast('Error al cargar datos del dashboard', 'error');
+            } finally {
+                if (mounted) setIsLoadingLocal(false);
             }
         };
         load();
@@ -501,7 +508,7 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                     </div>
                     <div className="relative z-10">
                         <button className="text-[10px] font-black bg-white/25 hover:bg-white/35 px-3 py-1.5 rounded-lg active:scale-95 transition-colors"
-                            onClick={() => window.open(`https://wa.me/584124051793?text=Hola! Quiero adquirir Listo POS Lite. ID: ${deviceId || 'N/A'}`.replace(/\s+/g, '%20'), '_blank')}>
+                            onClick={() => window.open(`https://wa.me/${SUPPORT_WHATSAPP}?text=Hola! Quiero adquirir Listo POS Lite. ID: ${deviceId || 'N/A'}`.replace(/\s+/g, '%20'), '_blank')}>
                             ADQUIRIR
                         </button>
                     </div>

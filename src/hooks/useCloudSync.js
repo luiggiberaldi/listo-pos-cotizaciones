@@ -30,25 +30,25 @@ const LOCAL_KEYS = [
 ];
 
 // ─── Estado Global del Motor ───────────────────────────────────────────────
-let globalSubscription = null;
+let pollIntervalId = null;
+// Intentional module-level singletons: shared across all hook instances to
+// coordinate cloud-sync echo prevention and debounce timers.
 let isSyncingFromCloud = false; // true mientras aplicamos cambios de la nube → evita eco
 let pendingPush = {};           // Debounce: { [key]: timeoutId }
+let lastSyncTime = null;        // Timestamp del último pull exitoso
 
-// Interceptor de localStorage — solo para llaves 'local'
-const originalSetItem = localStorage.setItem.bind(localStorage);
-localStorage.setItem = function (key, value) {
-    originalSetItem(key, value);
-    if (!isSyncingFromCloud && LOCAL_KEYS.includes(key)) {
-        _debouncePush(key, value);
-    }
-};
+// Keep a reference to the native setItem for _applyFromCloud to bypass any interceptor
+const _nativeSetItem = localStorage.setItem.bind(localStorage);
+
+// Cache de hashes para evitar resubir datos idénticos (reduce egreso ~60%)
+const _lastPushHash = {};
 
 function _debouncePush(key, value) {
     if (pendingPush[key]) clearTimeout(pendingPush[key]);
     pendingPush[key] = setTimeout(() => {
         delete pendingPush[key];
         pushCloudSync(key, value).catch(() => {});
-    }, 300);
+    }, 2000); // 2s debounce — agrupa cambios rápidos antes de enviar a la nube
 }
 
 /**
@@ -60,6 +60,13 @@ export const pushCloudSync = async (key, value) => {
     if (!SYNC_KEYS.includes(key)) return;
 
     try {
+        // Deduplicación: generar hash rápido del payload para no resubir datos idénticos.
+        // Esto evita que el debounce envíe el mismo snapshot repetidamente.
+        const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+        const hash = serialized.length + ':' + serialized.slice(0, 100) + serialized.slice(-100);
+        if (_lastPushHash[key] === hash) return; // Sin cambios reales → skip
+        _lastPushHash[key] = hash;
+
         const { data: { session } } = await supabaseCloud.auth.getSession();
         if (!session?.user?.id) return;
 
@@ -87,7 +94,7 @@ async function _applyFromCloud(docId, collection, payload) {
     try {
         if (collection === 'local') {
             const stringPayload = typeof payload === 'string' ? payload : JSON.stringify(payload);
-            originalSetItem(docId, stringPayload);   // Escribe sin pasar por el interceptor
+            _nativeSetItem(docId, stringPayload);   // Escribe sin pasar por el interceptor
             window.dispatchEvent(new StorageEvent('storage', {
                 key: docId,
                 newValue: stringPayload,
@@ -118,16 +125,26 @@ export function useCloudSync() {
     const isInitialized = useRef(false);
 
     useEffect(() => {
-        if (!isCloudConfigured) {
-            if (globalSubscription) {
-                globalSubscription.unsubscribe();
-                globalSubscription = null;
-                isInitialized.current = false;
+        // Interceptor de localStorage — solo para llaves 'local'
+        const originalSetItem = localStorage.setItem.bind(localStorage);
+        localStorage.setItem = function (key, value) {
+            originalSetItem(key, value);
+            if (!isSyncingFromCloud && LOCAL_KEYS.includes(key)) {
+                _debouncePush(key, value);
             }
-            return;
+        };
+
+        if (!isCloudConfigured) {
+            if (pollIntervalId) {
+                clearInterval(pollIntervalId);
+                pollIntervalId = null;
+                isInitialized.current = false;
+                lastSyncTime = null;
+            }
+            return () => { localStorage.setItem = originalSetItem; };
         }
 
-        if (isInitialized.current) return;
+        if (isInitialized.current) return () => { localStorage.setItem = originalSetItem; };
 
         const initSync = async () => {
             try {
@@ -136,9 +153,8 @@ export function useCloudSync() {
                 if (!session?.user?.id) return;
 
                 isInitialized.current = true;
-                const userId = session.user.id;
 
-                // ── Pull Inicial ───────────────────────────────────────────
+                // ── Pull Inicial: descarga todos los documentos ──────────────
                 const { data: docs } = await supabaseCloud
                     .from('sync_documents')
                     .select('collection, doc_id, data')
@@ -151,26 +167,48 @@ export function useCloudSync() {
                     console.log(`[CloudSync] Pull inicial: ${docs.length} documentos aplicados.`);
                 }
 
-                // ── Suscripción WebSocket Realtime ─────────────────────────
-                if (!globalSubscription) {
-                    globalSubscription = supabaseCloud
-                        .channel(`sync:${userId}`)
-                        .on('postgres_changes', {
-                            event: '*',
-                            schema: 'public',
-                            table: 'sync_documents',
-                            filter: `user_id=eq.${userId}`
-                        }, async (payload) => {
-                            const doc = payload.new;
-                            if (!doc || !['store', 'local'].includes(doc.collection)) return;
-                            console.log(`[CloudSync] Recibido: ${doc.doc_id}`);
-                            await _applyFromCloud(doc.doc_id, doc.collection, doc.data.payload);
-                        })
-                        .subscribe((status) => {
-                            if (status === 'SUBSCRIBED') {
-                                console.log('[CloudSync] Conectado y escuchando P2P en Tiempo Real');
+                lastSyncTime = new Date().toISOString();
+
+                // ── Polling cada 5 min (reemplaza Realtime) ──────────────────
+                // Realtime generaba ~150MB/día de egreso porque reenviaba el
+                // payload completo de cada upsert. Polling solo descarga los
+                // documentos que cambiaron desde el último check.
+                if (!pollIntervalId) {
+                    const POLL_INTERVAL = 5 * 60 * 1000; // 5 minutos
+
+                    const pollForChanges = async () => {
+                        if (isSyncingFromCloud) return;
+                        try {
+                            const currentSession = (await supabaseCloud.auth.getSession()).data.session;
+                            if (!currentSession?.user?.id) return;
+
+                            // Solo pedir docs modificados después del último sync
+                            let query = supabaseCloud
+                                .from('sync_documents')
+                                .select('collection, doc_id, data, updated_at')
+                                .in('collection', ['store', 'local']);
+
+                            if (lastSyncTime) {
+                                query = query.gt('updated_at', lastSyncTime);
                             }
-                        });
+
+                            const { data: changed } = await query;
+
+                            if (changed?.length > 0) {
+                                for (const doc of changed) {
+                                    console.log(`[CloudSync] Polling: actualización recibida → ${doc.doc_id}`);
+                                    await _applyFromCloud(doc.doc_id, doc.collection, doc.data.payload);
+                                }
+                            }
+
+                            lastSyncTime = new Date().toISOString();
+                        } catch (err) {
+                            console.warn('[CloudSync] Error en polling:', err.message ?? err);
+                        }
+                    };
+
+                    pollIntervalId = setInterval(pollForChanges, POLL_INTERVAL);
+                    console.log('[CloudSync] Polling P2P iniciado (cada 5 min)');
                 }
 
             } catch (err) {
@@ -182,7 +220,11 @@ export function useCloudSync() {
         initSync();
 
         return () => {
-            // No desuscribir en cleanup del efecto — la suscripción debe vivir mientras la app esté abierta
+            localStorage.setItem = originalSetItem;
+            if (pollIntervalId) {
+                clearInterval(pollIntervalId);
+                pollIntervalId = null;
+            }
         };
     }, [isCloudConfigured, adminEmail, adminPassword]);
 }

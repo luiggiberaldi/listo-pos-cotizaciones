@@ -5,6 +5,8 @@ export function useVoiceSearch({ onResult, triggerHaptic }) {
     const [isRecording, setIsRecording] = useState(false);
     const [isProcessingAudio, setIsProcessingAudio] = useState(false);
     const recognitionRef = useRef(null);
+    const onResultRef = useRef(onResult);
+    onResultRef.current = onResult;
 
     const startRecording = () => {
         if (isRecording) return;
@@ -43,7 +45,7 @@ export function useVoiceSearch({ onResult, triggerHaptic }) {
                 const cleanText = currentText.replace(/[.,!?]$/, '').trim();
                 
                 if (cleanText) {
-                    onResult(cleanText);
+                    onResultRef.current(cleanText);
                 }
             };
 

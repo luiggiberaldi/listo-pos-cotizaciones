@@ -11,6 +11,8 @@ export function ProductProvider({ children, rates }) {
 
     // Guard ref: prevents infinite loop when auto-save fires app_storage_update
     const savingRef = useRef(false);
+    // Max-wait ref: tracks last save time for debounce ceiling
+    const lastSaveRef = useRef(Date.now());
 
     // MARKET LOGIC - Street Rate
     const [streetRate, setStreetRate] = useState(() => {
@@ -50,12 +52,17 @@ export function ProductProvider({ children, rates }) {
     useEffect(() => {
         let isMounted = true;
         const loadData = async () => {
-            const savedProducts = await storageService.getItem('bodega_products_v1', []);
-            const savedCategories = await storageService.getItem('my_categories_v1', BODEGA_CATEGORIES);
-            if (isMounted) {
-                setProducts(savedProducts);
-                setCategories(savedCategories);
-                setIsLoadingProducts(false);
+            try {
+                const savedProducts = await storageService.getItem('bodega_products_v1', []);
+                const savedCategories = await storageService.getItem('my_categories_v1', BODEGA_CATEGORIES);
+                if (isMounted) {
+                    setProducts(savedProducts);
+                    setCategories(savedCategories);
+                }
+            } catch (err) {
+                console.error('[ProductContext] Error loading initial data:', err);
+            } finally {
+                if (isMounted) setIsLoadingProducts(false);
             }
         };
         loadData();
@@ -73,7 +80,10 @@ export function ProductProvider({ children, rates }) {
     useEffect(() => {
         if (!isLoadingProducts) {
             savingRef.current = true;
+            const elapsed = Date.now() - lastSaveRef.current;
+            const delay = elapsed > 10000 ? 0 : 1000;
             const timer = setTimeout(() => {
+                lastSaveRef.current = Date.now();
                 const savePromises = [];
                 if (products.length > 0) {
                     savePromises.push(storageService.setItem('bodega_products_v1', products));
@@ -87,7 +97,7 @@ export function ProductProvider({ children, rates }) {
                     // Reset guard after microtask queue flushes
                     setTimeout(() => { savingRef.current = false; }, 50);
                 });
-            }, 1000); // 1 segundo de debounce
+            }, delay); // debounce with max-wait of 10s
 
             return () => clearTimeout(timer);
         }

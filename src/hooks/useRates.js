@@ -161,11 +161,14 @@ export function useRates() {
                 // Validación de magnitud: si el precio es irrazonablemente bajo o alto, corregir
                 const validateMagnitude = (val) => {
                     if (!val || val <= 0) return val;
-                    // Las tasas BCV venezolanas están típicamente entre 10 y 200
+                    if (val >= 10 && val <= 200) return val;
                     if (val < 1) {
-                        while (val < 10) val *= 10;
-                    } else if (val > 1000) {
-                        while (val > 200) val /= 10;
+                        const factor = Math.pow(10, Math.ceil(-Math.log10(val) + 1));
+                        return val * factor;
+                    }
+                    if (val > 1000) {
+                        const factor = Math.pow(10, Math.floor(Math.log10(val) - 2));
+                        return val / factor;
                     }
                     return val;
                 };
