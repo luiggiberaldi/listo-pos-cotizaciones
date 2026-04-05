@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Cloud, CloudOff, Wifi, WifiOff, RefreshCw } from 'lucide-react';
-import { supabase } from '../core/supabaseClient';
+import { supabaseCloud as supabase } from '../config/supabaseCloud';
 import localforage from 'localforage';
 
 /**
@@ -21,7 +21,7 @@ export default function SyncStatus() {
         }
         try {
             // Ping rápido con TIMEOUT (5 segundos) para no quedarse pegado si la conexión es intermitente
-            const pingPromise = supabase.from('products').select('id').limit(1);
+            const pingPromise = supabase.from('sync_documents').select('doc_id').limit(1);
             const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000));
             
             const result = await Promise.race([pingPromise, timeoutPromise]);
