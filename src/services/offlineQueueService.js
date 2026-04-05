@@ -37,15 +37,23 @@ export const offlineQueueService = {
         
         if (error) throw error;
 
-        updatedQueue = updatedQueue.map(q => q.id === item.id ? { ...q, sync_status: 'synced' } : q);
+        updatedQueue = updatedQueue.map(q => q.id === item.id ? { ...q, sync_status: 'synced', synced_at: new Date().toISOString() } : q);
       } catch (err) {
         console.error('[Offline Sync] Fallo al sincronizar venta offline:', err);
         updatedQueue = updatedQueue.map(q => q.id === item.id ? { ...q, attempts: q.attempts + 1 } : q);
       }
     }
     
-    const remainingPending = updatedQueue.filter(q => q.sync_status === 'pending');
-    await localforage.setItem(QUEUE_KEY, remainingPending);
+    const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const remaining = updatedQueue.filter(q => {
+      if (q.sync_status === 'pending') return true;
+      if (q.sync_status === 'synced' && q.synced_at) {
+        return (now - new Date(q.synced_at).getTime()) < TWENTY_FOUR_HOURS;
+      }
+      return false;
+    });
+    await localforage.setItem(QUEUE_KEY, remaining);
   }
 };
 

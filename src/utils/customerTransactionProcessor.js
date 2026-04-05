@@ -25,7 +25,7 @@ export async function processCustomerTransaction({
     // 2. Financial quadrant logic
     let transaccionOpts = {};
     if (type === 'ABONO') {
-        transaccionOpts = { costoTotal: 0, pagoReal: amountUsd, vueltoParaMonedero: amountUsd };
+        transaccionOpts = { vueltoParaMonedero: amountUsd };
     } else if (type === 'CREDITO') {
         transaccionOpts = { esCredito: true, deudaGenerada: amountUsd };
     }

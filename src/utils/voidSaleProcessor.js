@@ -1,6 +1,7 @@
 import { storageService } from './storageService';
 import { logEvent } from '../services/auditService';
 import { useAuthStore } from '../hooks/store/useAuthStore';
+import { round2 } from './dinero';
 
 const SALES_KEY = 'bodega_sales_v1';
 const CUSTOMERS_KEY = 'bodega_customers_v1';
@@ -41,14 +42,14 @@ export async function processVoidSale(sale, currentSales, currentProducts) {
     
     const fiadoAmountUsd = sale.fiadoUsd || (sale.tipo === 'VENTA_FIADA' ? sale.totalUsd : 0) || 0;
     const favorUsed = sale.payments?.filter(p => p.methodId === 'saldo_favor').reduce((sum, p) => sum + p.amountUsd, 0) || 0;
-    const debtToReverse = fiadoAmountUsd + favorUsed;
 
-    if (sale.customerId && debtToReverse > 0) {
+    if (sale.customerId && (fiadoAmountUsd > 0 || favorUsed > 0)) {
         updatedCustomers = savedCustomers.map(c => {
             if (c.id === sale.customerId) {
-                const newDeuda = Math.max(0, (c.deuda || 0) - debtToReverse);
-                console.log(`[Anular] Cliente ${c.name}: deuda ${c.deuda} -> ${newDeuda} (revertido $${debtToReverse})`);
-                return { ...c, deuda: newDeuda };
+                const newDeuda = round2(Math.max(0, (c.deuda || 0) - fiadoAmountUsd));
+                const newFavor = round2((c.saldo_favor || 0) + favorUsed);
+                console.log(`[Anular] Cliente ${c.name}: deuda ${c.deuda} -> ${newDeuda} (revertido fiado $${fiadoAmountUsd}), favor ${c.saldo_favor || 0} -> ${newFavor} (revertido favor $${favorUsed})`);
+                return { ...c, deuda: newDeuda, saldo_favor: newFavor };
             }
             return c;
         });
