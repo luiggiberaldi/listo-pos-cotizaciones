@@ -51,7 +51,7 @@ export default function CartPanel({
                 <span className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider">Cesta de Compra</span>
                 <div className="flex items-center gap-3">
                     {cart.length > 0 && (
-                        <button onClick={onClearCart} className="text-[10px] sm:text-xs font-bold text-red-500 hover:text-red-700 flex items-center gap-1 transition-colors bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-lg">
+                        <button onClick={onClearCart} aria-label="Vaciar carrito" className="text-[10px] sm:text-xs font-bold text-red-500 hover:text-red-700 flex items-center gap-1 transition-colors bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-lg">
                             <Trash2 size={12} /> Vaciar
                         </button>
                     )}

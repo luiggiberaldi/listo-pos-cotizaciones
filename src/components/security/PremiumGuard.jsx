@@ -3,6 +3,7 @@ import { Lock, Copy, Check, Star, Sparkles, Send, Bot, Store, MessageCircle, Dat
 import { useSecurity } from '../../hooks/useSecurity';
 import { useAuthStore } from '../../hooks/store/useAuthStore';
 import { Modal } from '../Modal';
+import { SUPPORT_WHATSAPP } from '../../config/tenant';
 import CloudAuthModal from './CloudAuthModal';
 
 export default function PremiumGuard({ children, featureName = "Esta función", isShop = false }) {
@@ -55,7 +56,7 @@ export default function PremiumGuard({ children, featureName = "Esta función", 
 
     const openWhatsApp = () => {
         const message = `Hola! Quiero adquirir una licencia Premium para Listo POS Lite Bodega. Mi ID de instalación es: ${deviceId}`;
-        const url = `https://wa.me/584124051793?text=${encodeURIComponent(message)}`;
+        const url = `https://wa.me/${SUPPORT_WHATSAPP}?text=${encodeURIComponent(message)}`;
         window.open(url, '_blank');
     };
 

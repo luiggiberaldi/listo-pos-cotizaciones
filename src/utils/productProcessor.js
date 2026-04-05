@@ -19,7 +19,7 @@ export function buildProductPayload(formData, effectiveRate) {
         lowStockAlert
     } = formData;
 
-    const formattedName = name.replace(/(^\w{1})|(\s+\w{1})/g, letter => letter.toUpperCase());
+    const formattedName = name.replace(/(^[\p{L}\p{N}])|(\s+[\p{L}\p{N}])/gu, letter => letter.toUpperCase());
     const finalPriceUsd = priceUsd ? parseFloat(priceUsd) : (priceBs ? divR(parseFloat(priceBs), effectiveRate) : 0);
     const finalCostUsd = costUsd ? parseFloat(costUsd) : (costBs ? divR(parseFloat(costBs), effectiveRate) : 0);
     const finalCostBs = costBs ? parseFloat(costBs) : (costUsd ? mulR(parseFloat(costUsd), effectiveRate) : 0);

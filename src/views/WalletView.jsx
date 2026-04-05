@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Trash2, Send, CreditCard, Landmark, DollarSign, X, Bitcoin, Smartphone, QrCode, Pencil, Crown } from 'lucide-react';
 import { useSecurity } from '../hooks/useSecurity';
 import { storageService } from '../utils/storageService';
+import { SUPPORT_WHATSAPP } from '../config/tenant';
 
 // ✅ LISTA OFICIAL DE BANCOS VENEZOLANOS (2025)
 const VENEZUELA_BANKS = [
@@ -499,7 +500,7 @@ export default function WalletView({ rates }) {
                             <button
                                 onClick={() => {
                                     const msg = `Hola! Me interesa la licencia Premium de Listo POS Lite para agregar más cuentas de pago.`;
-                                    window.open(`https://wa.me/584124051793?text=${encodeURIComponent(msg)}`, '_blank');
+                                    window.open(`https://wa.me/${SUPPORT_WHATSAPP}?text=${encodeURIComponent(msg)}`, '_blank');
                                 }}
                                 className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white bg-[#10B981] shadow-lg shadow-emerald-500/20 active:scale-95 transition-transform"
                             >

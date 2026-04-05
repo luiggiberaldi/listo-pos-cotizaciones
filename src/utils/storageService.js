@@ -60,7 +60,7 @@ export const storageService = {
                 try {
                     parsedValue = JSON.parse(fallbackValue);
                 } catch (e) {
-                    parsedValue = fallbackValue; // A veces guardamos strings directos
+                    parsedValue = fallbackValue; // Intentional: some keys store plain strings (e.g. business_name)
                 }
 
                 // Guardar en la nueva base de datos

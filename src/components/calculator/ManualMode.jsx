@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Check, Copy, ArrowRightLeft, History, Send } from 'lucide-react'; // [UPDATED] Cleaned imports
+import { SUPPORT_WHATSAPP } from '../../config/tenant';
 
 // Hooks
 import { useCalculator } from '../../hooks/useCalculator';
@@ -328,7 +329,7 @@ export const ManualMode = ({ rates, accounts, theme, triggerHaptic, isKeyboardOp
                     <button
                         onClick={() => {
                             const msg = `Hola! Me interesa la licencia Premium de Listo POS Lite para enviar cotizaciones por WhatsApp.`;
-                            window.open(`https://wa.me/584124051793?text=${encodeURIComponent(msg)}`, '_blank');
+                            window.open(`https://wa.me/${SUPPORT_WHATSAPP}?text=${encodeURIComponent(msg)}`, '_blank');
                         }}
                         className="w-full py-3 bg-[#10B981] text-white font-bold rounded-xl shadow-lg shadow-emerald-500/20 active:scale-95 transition-transform text-sm"
                     >

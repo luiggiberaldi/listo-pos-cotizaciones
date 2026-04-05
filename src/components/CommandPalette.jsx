@@ -59,11 +59,12 @@ export default function CommandPalette({ isOpen, onClose, onToggle, navigateTo }
                         ref={inputRef}
                         type="text"
                         placeholder="Buscar acciones, productos o clientes..."
+                        aria-label="Buscar acciones"
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                         className="flex-1 bg-transparent border-none outline-none text-slate-800 dark:text-white text-lg placeholder:text-slate-400"
                     />
-                    <button onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                    <button onClick={onClose} aria-label="Cerrar paleta de comandos" className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                         <X size={20} />
                     </button>
                 </div>

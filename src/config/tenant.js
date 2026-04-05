@@ -65,3 +65,6 @@ export const getTenantTheme = () => {
 };
 
 export const tenantConfig = getTenantTheme();
+
+// Número de soporte WhatsApp (formato internacional sin +)
+export const SUPPORT_WHATSAPP = '584124051793';

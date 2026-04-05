@@ -16,7 +16,7 @@ export const smartCashRounding = (amount) => {
 
 import { MessageService } from '../services/MessageService';
 
-// Re-export deprecated function referencing the new service
+/** @deprecated Use MessageService.buildPaymentMessage() directly */
 export const generatePaymentMessage = (params) => {
     return MessageService.buildPaymentMessage(params);
 };

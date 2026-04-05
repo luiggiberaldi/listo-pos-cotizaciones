@@ -5,6 +5,7 @@ export function calculateReportsData(allSales, from, to, bcvRate, products) {
     // Ventas de Mercancía (para Totales, Profit, Top Productos)
     const salesForStats = allSales.filter(s => {
         if (s.status === 'ANULADA' || (s.tipo !== 'VENTA' && s.tipo !== 'VENTA_FIADA')) return false;
+        if (!s.timestamp || isNaN(new Date(s.timestamp).getTime())) return false;
         const dateStr = getLocalISODate(new Date(s.timestamp));
         return dateStr >= from && dateStr <= to;
     });
@@ -13,12 +14,14 @@ export function calculateReportsData(allSales, from, to, bcvRate, products) {
     const salesForCashFlow = allSales.filter(s => {
         if (s.status === 'ANULADA') return false;
         if (s.tipo !== 'VENTA' && s.tipo !== 'VENTA_FIADA' && s.tipo !== 'COBRO_DEUDA' && s.tipo !== 'PAGO_PROVEEDOR') return false;
+        if (!s.timestamp || isNaN(new Date(s.timestamp).getTime())) return false;
         const dateStr = getLocalISODate(new Date(s.timestamp));
         return dateStr >= from && dateStr <= to;
     });
 
     const historySales = allSales.filter(s => {
         if (s.tipo === 'AJUSTE_ENTRADA' || s.tipo === 'AJUSTE_SALIDA') return false;
+        if (!s.timestamp || isNaN(new Date(s.timestamp).getTime())) return false;
         const dateStr = getLocalISODate(new Date(s.timestamp));
         return dateStr >= from && dateStr <= to;
     });
