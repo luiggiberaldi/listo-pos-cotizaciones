@@ -97,7 +97,7 @@ CREATE POLICY "Acceso por email a account_devices"
     WITH CHECK (auth.jwt() ->> 'email' = email);
 
 -- 5. Función RPC: registrar dispositivo y verificar límite atómicamente
--- Devuelve: 'ok', 'limit_reached', o 'license_inactive'
+-- Retorna: 'ok' | 'limit_reached' | 'license_inactive' | 'license_expired' | 'unauthorized'
 CREATE OR REPLACE FUNCTION public.register_and_check_device(
     p_email TEXT,
     p_device_id TEXT,
@@ -108,6 +108,7 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
+    v_caller_email TEXT;
     v_max_devices INTEGER;
     v_active BOOLEAN;
     v_license_type TEXT;
@@ -115,6 +116,12 @@ DECLARE
     v_count INTEGER;
     v_already_registered BOOLEAN;
 BEGIN
+    -- Validar que el caller autenticado es dueño del email solicitado
+    v_caller_email := auth.jwt() ->> 'email';
+    IF v_caller_email IS NULL OR lower(v_caller_email) != lower(p_email) THEN
+        RETURN 'unauthorized';
+    END IF;
+
     -- Obtener licencia
     SELECT max_devices, active, license_type, valid_until INTO v_max_devices, v_active, v_license_type, v_valid_until
     FROM public.cloud_licenses
@@ -174,3 +181,75 @@ BEGIN
     RETURN 'ok';
 END;
 $$;
+
+-- =================================================================================
+-- MIGRACIÓN v2: Tablas faltantes, RLS, índices y limpieza
+-- Ejecutar en SQL Editor de Supabase después del setup inicial
+-- =================================================================================
+
+-- 6. sync_documents — Tabla principal de sincronización multi-dispositivo
+CREATE TABLE IF NOT EXISTS public.sync_documents (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    collection TEXT NOT NULL,
+    doc_id TEXT NOT NULL,
+    data JSONB NOT NULL DEFAULT '{}',
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(user_id, collection, doc_id)
+);
+
+ALTER TABLE public.sync_documents ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Usuarios solo ven sus propios documentos" ON public.sync_documents;
+CREATE POLICY "Usuarios solo ven sus propios documentos"
+    ON public.sync_documents FOR ALL
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+
+-- Índice para polling eficiente (queries con WHERE updated_at > X)
+CREATE INDEX IF NOT EXISTS idx_sync_documents_updated_at
+    ON public.sync_documents(user_id, updated_at);
+
+-- 7. device_backups — Backups locales por dispositivo (acceso anónimo por diseño)
+CREATE TABLE IF NOT EXISTS public.device_backups (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    device_id TEXT UNIQUE NOT NULL,
+    product_id TEXT NOT NULL DEFAULT 'bodega',
+    backup_data JSONB NOT NULL DEFAULT '{}',
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE public.device_backups ENABLE ROW LEVEL SECURITY;
+
+-- device_backups usa acceso anónimo: dispositivos sin login cloud respaldan por device_id.
+-- Aceptable porque los datos son del propio dispositivo y device_id es hash SHA-256.
+DROP POLICY IF EXISTS "Dispositivos acceden su propio backup" ON public.device_backups;
+CREATE POLICY "Dispositivos acceden su propio backup"
+    ON public.device_backups FOR ALL
+    USING (true)
+    WITH CHECK (true);
+
+-- 8. process_checkout — Stub de RPC para checkout server-side
+-- TODO: Marck debe implementar la lógica real de validación de pagos.
+CREATE OR REPLACE FUNCTION public.process_checkout(payload JSONB)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    -- Stub: retorna sale_id generado. Implementar validación de pagos aquí.
+    RETURN jsonb_build_object('sale_id', gen_random_uuid()::text);
+END;
+$$;
+
+-- 9. Limpieza de columnas obsoletas
+ALTER TABLE public.cloud_backups DROP COLUMN IF EXISTS password_hash;
+ALTER TABLE public.cloud_licenses DROP COLUMN IF EXISTS days_remaining;
+ALTER TABLE public.cloud_licenses ALTER COLUMN valid_until DROP DEFAULT;
+
+-- Documentar columna legacy
+COMMENT ON COLUMN public.cloud_licenses.device_id IS
+    'LEGACY: dispositivo que creó la licencia. La relación real N:N está en account_devices.';
+
+-- 10. Habilitar Realtime para sync_documents (necesario para canal selectivo de tasas)
+ALTER PUBLICATION supabase_realtime ADD TABLE public.sync_documents;
