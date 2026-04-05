@@ -55,13 +55,11 @@ export function useCloudAuthLogic() {
     };
 
     const collectLocalBackup = async () => {
+        // Alineado con SYNC_KEYS de useCloudSync.js
         const idbKeys = [
-            'bodega_products_v1', 'my_categories_v1',
-            'bodega_sales_v1', 'bodega_customers_v1',
-            'bodega_suppliers_v1', 'bodega_supplier_invoices_v1',
-            'bodega_accounts_v2', 'bodega_pending_cart_v1',
-            'payment_methods_v1', 'payment_methods_v2',
-            'abasto_audit_log_v1'
+            'bodega_products_v1', 'bodega_customers_v1',
+            'bodega_sales_v1', 'bodega_payment_methods_v1',
+            'bodega_accounts_v2', 'abasto_audit_log_v1'
         ];
         const idbData = {};
         for (const key of idbKeys) {
@@ -308,9 +306,7 @@ export function useCloudAuthLogic() {
                         trialExpiry.setDate(trialExpiry.getDate() + 7);
                         const { error: licErr } = await supabaseCloud.from('cloud_licenses').upsert({
                             email: emailToUse,
-                            device_id: deviceId || 'UNKNOWN',
                             license_type: 'trial',
-                            days_remaining: 7,
                             max_devices: 1,
                             valid_until: trialExpiry.toISOString(),
                             business_name: businessName || 'Bodega',

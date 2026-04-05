@@ -76,9 +76,20 @@ export const pushCloudSync = async (key, value) => {
     if (!SYNC_KEYS.includes(key)) return;
 
     try {
+        // Seguridad: eliminar adminPassword antes de sincronizar auth-storage a la nube
+        let sanitizedValue = value;
+        if (key === 'abasto-auth-storage') {
+            try {
+                const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+                if (parsed?.state?.adminPassword) {
+                    sanitizedValue = JSON.parse(JSON.stringify(parsed));
+                    delete sanitizedValue.state.adminPassword;
+                }
+            } catch { }
+        }
+
         // Deduplicación: generar hash rápido del payload para no resubir datos idénticos.
-        // Esto evita que el debounce envíe el mismo snapshot repetidamente.
-        const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+        const serialized = typeof sanitizedValue === 'string' ? sanitizedValue : JSON.stringify(sanitizedValue);
         const hash = serialized.length + ':' + serialized.slice(0, 100) + serialized.slice(-100);
         if (_lastPushHash[key] === hash) return; // Sin cambios reales → skip
         _lastPushHash[key] = hash;
@@ -92,7 +103,7 @@ export const pushCloudSync = async (key, value) => {
             user_id: session.user.id,
             collection: collectionType,
             doc_id: key,
-            data: { payload: value },
+            data: { payload: sanitizedValue },
             updated_at: new Date().toISOString()
         }, { onConflict: 'user_id,collection,doc_id' });
 
@@ -232,9 +243,11 @@ export function useCloudSync() {
                             if (!currentSession?.user?.id) return;
 
                             // Solo pedir docs pesados modificados después del último sync
+                            // Filtro explícito por user_id como defensa en profundidad (RLS ya filtra)
                             let query = supabaseCloud
                                 .from('sync_documents')
                                 .select('collection, doc_id, data, updated_at')
+                                .eq('user_id', currentSession.user.id)
                                 .in('doc_id', POLLING_ONLY_KEYS);
 
                             if (lastSyncTime) {
