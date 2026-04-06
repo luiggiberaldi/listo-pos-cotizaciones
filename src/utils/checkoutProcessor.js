@@ -5,6 +5,7 @@ import { useAuthStore } from '../hooks/store/useAuthStore';
 import { round2, subR, sumR, mulR } from './dinero';
 import { supabase } from '../core/supabaseClient';
 import { offlineQueueService } from '../services/offlineQueueService';
+import { PrinterSerial } from '../services/PrinterSerial';
 
 const SALES_KEY = 'bodega_sales_v1';
 
@@ -176,6 +177,16 @@ export async function processSaleTransaction({
         updatedCustomers = customers.map(c => c.id === selectedCustomer.id ? updatedCustomer : c);
 
         await storageService.setItem('bodega_customers_v1', updatedCustomers);
+    }
+
+    // Apertura automática del cajón si está configurado y la impresora está conectada
+    if (
+        localStorage.getItem('printer_serial_auto_drawer') === 'true' &&
+        PrinterSerial.isConnected()
+    ) {
+        PrinterSerial.openDrawer().catch(err =>
+            console.warn('[Checkout] No se pudo abrir el cajón:', err)
+        );
     }
 
     return {

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Store, Printer, Coins, Check } from 'lucide-react';
 import { SectionCard, Toggle } from '../../SettingsShared';
+import PrinterSerialSection from '../PrinterSerialSection';
 
 export default function SettingsTabNegocio({
     businessName, setBusinessName,
@@ -15,6 +16,7 @@ export default function SettingsTabNegocio({
     showToast,
     triggerHaptic,
 }) {
+
     return (
         <>
             {/* Mi Negocio */}
@@ -65,6 +67,9 @@ export default function SettingsTabNegocio({
                     ))}
                 </div>
             </SectionCard>
+
+            {/* Impresora USB & Cajón (Web Serial API) */}
+            <PrinterSerialSection showToast={showToast} triggerHaptic={triggerHaptic} />
 
             {/* Monedas COP */}
             <SectionCard icon={Coins} title="Peso Colombiano (COP)" subtitle="Habilitar pagos y calculos en COP" iconColor="text-amber-500">

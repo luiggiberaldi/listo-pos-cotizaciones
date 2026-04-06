@@ -2,6 +2,7 @@ import React from 'react';
 import { CheckCircle, Wallet, Send, X, Printer } from 'lucide-react';
 import { formatBs } from '../../utils/calculatorUtils';
 import { printThermalTicket } from '../../utils/ticketGenerator';
+import { PrinterSerial } from '../../services/PrinterSerial';
 
 export default function ReceiptModal({ receipt, onClose, onShareWhatsApp, currentRate }) {
     if (!receipt) return null;
@@ -110,7 +111,13 @@ export default function ReceiptModal({ receipt, onClose, onShareWhatsApp, curren
                 {/* Botones de acción — diseño premium */}
                 <div className="p-4 sm:p-5 bg-white flex gap-2.5 relative z-20 shrink-0 border-t border-slate-100">
                     {/* Imprimir */}
-                    <button onClick={() => printThermalTicket(receipt, currentRate || receipt.rate)}
+                    <button onClick={async () => {
+                        if (PrinterSerial.isConnected()) {
+                            await PrinterSerial.printTicket(receipt, currentRate || receipt.rate);
+                        } else {
+                            printThermalTicket(receipt, currentRate || receipt.rate);
+                        }
+                    }}
                         className="flex-1 py-3.5 bg-gradient-to-b from-slate-700 to-slate-800 text-white font-bold rounded-2xl hover:from-slate-600 hover:to-slate-700 transition-all shadow-lg shadow-slate-800/20 hover:shadow-xl hover:shadow-slate-800/30 text-sm flex items-center justify-center gap-2 focus:outline-none active:scale-[0.97] hover:-translate-y-0.5">
                         <Printer size={17} strokeWidth={2.5} /> Imprimir
                     </button>
