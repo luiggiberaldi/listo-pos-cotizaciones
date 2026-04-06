@@ -223,8 +223,8 @@ export default function SettingsView({ onClose, theme, toggleTheme, triggerHapti
                                             : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
                                     }`}
                                 >
-                                    <Icon size={12} />
-                                    {tab.label}
+                                    <Icon size={14} />
+                                    <span className="hidden sm:inline">{tab.label}</span>
                                 </button>
                             );
                         })}
