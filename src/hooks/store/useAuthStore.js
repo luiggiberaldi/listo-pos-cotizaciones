@@ -122,8 +122,8 @@ export const useAuthStore = create(
         }),
         {
             name: 'abasto-auth-storage', // Nombre para localStorage
-            partialize: (state) => ({ 
-                usuarios: state.usuarios, 
+            partialize: (state) => ({
+                usuarios: state.usuarios,
                 requireLogin: state.requireLogin,
                 adminEmail: state.adminEmail,
                 adminPassword: state.adminPassword
