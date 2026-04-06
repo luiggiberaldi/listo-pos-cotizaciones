@@ -9,7 +9,7 @@ const DEMO_DURATION_MS = 168 * 60 * 60 * 1000; // 168 horas (7 días)
 // Basic obfuscation (XOR + btoa) for tokens in localStorage.
 // WARNING: This is NOT encryption. It only deters casual inspection by employees.
 // The server-side token validation is the real security boundary.
-const OBFUSCATION_KEY = 'PDA_SEC_2026';
+const OBFUSCATION_KEY = 'LPL_SEC_2026';
 
 const encodeToken = (str) => {
     try {
@@ -85,7 +85,7 @@ export function useSecurity() {
                     hash |= 0;
                 }
                 const hex = Math.abs(hash).toString(16).toUpperCase().padStart(8, '0');
-                return `PDA-${hex}`;
+                return `LPL-${hex}`;
             }
 
             // Mismo hardware = mismo hash SHA-256
@@ -94,7 +94,7 @@ export function useSecurity() {
             const hashBuffer = await crypto.subtle.digest('SHA-256', data);
             const hashArray = Array.from(new Uint8Array(hashBuffer));
             const hex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase().substring(0, 8);
-            return `PDA-${hex}`;
+            return `LPL-${hex}`;
         };
 
         const initDeviceId = async () => {

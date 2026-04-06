@@ -134,7 +134,7 @@ export default function TermsOverlay() {
                     <div className="bg-emerald-50 border-l-4 border-emerald-500 p-4 rounded-r-xl mb-6">
                         <h3 className="text-base font-black text-slate-900 mb-2">Aceptación Final</h3>
                         <p className="text-sm text-slate-700 leading-relaxed">
-                            <strong>AL USAR PRECIOSALDÍA, USTED DECLARA HABER LEÍDO, ENTENDIDO Y ACEPTADO ESTOS TÉRMINOS Y CONDICIONES EN SU TOTALIDAD.</strong>
+                            <strong>AL USAR LISTO POS LITE, USTED DECLARA HABER LEÍDO, ENTENDIDO Y ACEPTADO ESTOS TÉRMINOS Y CONDICIONES EN SU TOTALIDAD.</strong>
                         </p>
                     </div>
 

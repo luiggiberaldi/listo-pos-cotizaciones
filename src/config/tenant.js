@@ -52,9 +52,9 @@ export const getTenantTheme = () => {
         case TENANTS.REVENDEDOR:
         default:
             return {
-                appName: 'Precios al Día',
+                appName: 'Listo POS Lite',
                 primaryColor: 'brand',
-                themeMode: 'dark', // Legacy preference
+                themeMode: 'dark',
                 features: {
                     hasInventoryTracking: false,
                     hasWeightScale: false,

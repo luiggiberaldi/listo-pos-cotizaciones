@@ -1,7 +1,7 @@
 import { formatBs, formatVzlaPhone } from './calculatorUtils';
 
 export function shareSaleWhatsApp(sale, saleCustomer, bcvRate) {
-    let text = `*COMPROBANTE DE VENTA | PRECIOS AL DÍA*\n`;
+    let text = `*COMPROBANTE DE VENTA | LISTO POS LITE*\n`;
     text += `--------------------------------\n`;
     text += `*Orden:* #${sale.id.substring(0, 6).toUpperCase()}\n`;
     text += `Cliente: ${sale.customerName || 'Consumidor Final'}\n`;
