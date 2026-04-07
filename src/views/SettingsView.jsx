@@ -302,16 +302,7 @@ export default function SettingsView({ onClose, theme, toggleTheme, triggerHapti
                             importStatus={importStatus} statusMessage={statusMessage}
                             handleExport={handleExport}
                             handleImportClick={handleImportClick}
-                            setIsShareOpen={async () => {
-                                const { storageService } = await import('../utils/storageService');
-                                const [c, s] = await Promise.all([
-                                    storageService.getItem('bodega_customers_v1', []),
-                                    storageService.getItem('bodega_sales_v1', []),
-                                ]);
-                                setShareCustomers(c);
-                                setShareSales(s);
-                                setIsShareOpen(true);
-                            }}
+                            setIsShareOpen={() => setIsShareOpen(true)}
                             setShowFactoryReset={setShowFactoryReset}
                             triggerHaptic={triggerHaptic}
                         />
