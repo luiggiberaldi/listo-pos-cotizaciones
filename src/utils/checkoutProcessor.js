@@ -55,7 +55,7 @@ export async function processSaleTransaction({
     // correctamente sin depender del methodId hardcodeado.
     const rpcPayload = {
       total: cartTotalUsd,
-      cart: cart.map(i => ({ id: i._originalId || i.id, qty: i.qty, priceUsd: i.priceUsd })),
+      cart: cart.map(i => ({ id: i._originalId || i.id, qty: i.qty, priceUsd: i.priceUsd, name: i.name || '' })),
       payments: payments.map(p => ({
         methodId: p.methodId,
         amountUsd: p.amountUsd,
@@ -70,24 +70,19 @@ export async function processSaleTransaction({
 
     if (navigator.onLine) {
        try {
-         // Intentar RPC Transaccional Atómica
-         // NOTE: Supabase JS client (.rpc()) does not support AbortController/signal.
-         // We use Promise.race as a client-side timeout. The server-side request may
-         // continue to completion even after the client gives up — this is acceptable
-         // because the offline queue will deduplicate via idempotency keys.
-         const abortController = new AbortController();
-         const rpcPromise = supabase.rpc('process_checkout', { payload: rpcPayload });
-         const timeoutPromise = new Promise((_, reject) => setTimeout(() => {
-           abortController.abort();
-           reject(new Error('TIMEOUT'));
-         }, 3000));
+         const checkoutPromise = fetch('/api/checkout', {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify(rpcPayload),
+           signal: AbortSignal.timeout(5000),
+         }).then(r => r.json());
 
-         const { data, error } = await Promise.race([rpcPromise, timeoutPromise]);
-         if (error) throw error;
-         
+         const data = await checkoutPromise;
+         if (data.error || data.code) throw new Error(data.message || data.error || 'RPC error');
+
          finalSaleId = data.sale_id;
        } catch (err) {
-         console.warn("[Checkout] Fallo en RPC Supabase, cambiando a MODO OFFLINE", err);
+         console.warn("[Checkout] Fallo en /api/checkout, cambiando a MODO OFFLINE", err);
          saleMode = 'offline';
        }
     } else {

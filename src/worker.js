@@ -1,10 +1,14 @@
 /**
  * Cloudflare Worker — listo-pos-lite
  *
- * Handles /api/share (Upstash Redis relay for inventory share codes).
- * All other requests fall through to the static SPA assets.
+ * /api/share  — Upstash Redis relay for inventory share codes.
+ * /api/checkout — Proxy seguro para process_checkout: upsertea productos
+ *                 usando SUPABASE_SERVICE_KEY (secreto del worker, nunca expuesto
+ *                 al cliente) y luego llama al RPC de Supabase.
+ * Todo lo demás cae al SPA estático.
  */
 
+const SUPABASE_URL = 'https://fgzwmwrugerptfqfrsjd.supabase.co';
 const TTL_SECONDS = 86400; // 24 horas
 const MAX_PAYLOAD_BYTES = 5 * 1024 * 1024; // 5 MB
 
@@ -42,6 +46,74 @@ function corsHeaders(request) {
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type',
     };
+}
+
+// ── Checkout proxy handler ─────────────────────────────────────────────────
+async function handleCheckout(request, env) {
+    const headers = corsHeaders(request);
+
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers });
+    if (request.method !== 'POST') return Response.json({ error: 'Method not allowed' }, { status: 405, headers });
+
+    const SERVICE_KEY = env.SUPABASE_SERVICE_KEY;
+    if (!SERVICE_KEY) {
+        return Response.json({ error: 'SUPABASE_SERVICE_KEY not configured' }, { status: 500, headers });
+    }
+
+    let payload;
+    try {
+        payload = await request.json();
+    } catch {
+        return Response.json({ error: 'Invalid JSON' }, { status: 400, headers });
+    }
+
+    const { cart = [] } = payload;
+
+    // ── Paso 1: upsertear productos desconocidos (ON CONFLICT DO NOTHING) ──
+    // Sólo los que tienen nombre; si no, se omiten y el RPC falla de todos
+    // modos (mejor error explícito que silencio).
+    const productsToUpsert = cart
+        .filter(item => item.id && item.name)
+        .map(item => ({
+            id: item.id,
+            name: item.name,
+            price: item.priceUsd || 0,
+            stock: 0,
+            cost_price: 0,
+        }));
+
+    if (productsToUpsert.length > 0) {
+        await fetch(`${SUPABASE_URL}/rest/v1/products`, {
+            method: 'POST',
+            headers: {
+                apikey: SERVICE_KEY,
+                Authorization: `Bearer ${SERVICE_KEY}`,
+                'Content-Type': 'application/json',
+                Prefer: 'resolution=ignore-duplicates,return=minimal',
+            },
+            body: JSON.stringify(productsToUpsert),
+        });
+    }
+
+    // ── Paso 2: llamar a process_checkout con el payload limpio ──
+    // El RPC sólo necesita {id, qty, priceUsd} por item; quitamos "name".
+    const rpcPayload = {
+        ...payload,
+        cart: cart.map(({ id, qty, priceUsd }) => ({ id, qty, priceUsd })),
+    };
+
+    const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/process_checkout`, {
+        method: 'POST',
+        headers: {
+            apikey: SERVICE_KEY,
+            Authorization: `Bearer ${SERVICE_KEY}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ payload: rpcPayload }),
+    });
+
+    const result = await rpcRes.json();
+    return Response.json(result, { status: rpcRes.ok ? 200 : rpcRes.status, headers });
 }
 
 // ── Share API handler ──────────────────────────────────────────────────────
@@ -149,6 +221,10 @@ export default {
 
         if (url.pathname.startsWith('/api/share')) {
             return handleShare(request, env);
+        }
+
+        if (url.pathname.startsWith('/api/checkout')) {
+            return handleCheckout(request, env);
         }
 
         // Static SPA assets for everything else

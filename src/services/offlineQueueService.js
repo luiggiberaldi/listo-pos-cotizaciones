@@ -1,5 +1,4 @@
 import localforage from 'localforage';
-import { supabase } from '../core/supabaseClient';
 
 const QUEUE_KEY = 'offline_sales_queue';
 const MAX_ATTEMPTS = 10;
@@ -34,9 +33,18 @@ export const offlineQueueService = {
           original_created_at: item.created_at
         };
 
-        const { data, error } = await supabase.rpc('process_checkout', { payload: payloadWithOrigin });
+        const res = await fetch('/api/checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payloadWithOrigin),
+          signal: AbortSignal.timeout(10000),
+        });
 
-        if (error) throw error;
+        const data = await res.json();
+
+        if (!res.ok || data.error || data.code) {
+          throw new Error(data.message || data.error || `HTTP ${res.status}`);
+        }
 
         updatedQueue = updatedQueue.map(q => q.id === item.id ? { ...q, sync_status: 'synced', synced_at: new Date().toISOString() } : q);
       } catch (err) {
