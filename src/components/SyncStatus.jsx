@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { Wifi, WifiOff, RefreshCw, AlertTriangle, X, ChevronRight, Copy, Check } from 'lucide-react';
 import { supabaseCloud as supabase } from '../config/supabaseCloud';
 import localforage from 'localforage';
@@ -135,14 +136,14 @@ export default function SyncStatus() {
                 </button>
             )}
 
-            {/* Modal de errores */}
-            {showErrorModal && (
+            {/* Modal de errores — renderizado en body para evitar problemas de z-index */}
+            {showErrorModal && ReactDOM.createPortal(
                 <div
                     className="fixed inset-0 z-[200] bg-slate-950/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
                     onClick={() => setShowErrorModal(false)}
                 >
                     <div
-                        className="bg-white dark:bg-slate-900 w-full sm:max-w-sm sm:rounded-2xl rounded-t-[2rem] p-5 shadow-2xl max-h-[80vh] flex flex-col"
+                        className="bg-white dark:bg-slate-900 w-full sm:max-w-md sm:rounded-2xl rounded-t-[2rem] p-5 shadow-2xl max-h-[80vh] flex flex-col"
                         onClick={e => e.stopPropagation()}
                     >
                         <div className="flex items-center justify-between mb-4 shrink-0">
@@ -165,23 +166,23 @@ export default function SyncStatus() {
                                 const d = new Date(item.created_at);
                                 const totalUsd = item.payload?.total;
                                 return (
-                                    <div key={item.id} className="bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-xl p-3">
-                                        <div className="flex items-center justify-between mb-1.5">
-                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                                    <div key={item.id} className="bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-xl p-3 space-y-1.5">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs font-black text-slate-700 dark:text-slate-200">
                                                 {totalUsd != null ? `$${Number(totalUsd).toFixed(2)}` : 'Venta offline'}
                                             </span>
-                                            <span className="text-[10px] text-slate-400">
-                                                {d.toLocaleString('es-VE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                                            </span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[9px] bg-red-100 dark:bg-red-900/40 text-red-500 px-1.5 py-0.5 rounded font-bold uppercase">
+                                                    {item.attempts || 0} intentos
+                                                </span>
+                                                <span className="text-[10px] text-slate-400">
+                                                    {d.toLocaleString('es-VE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                                </span>
+                                            </div>
                                         </div>
-                                        <div className="flex items-start gap-1.5">
-                                            <span className="text-[9px] bg-red-100 dark:bg-red-900/40 text-red-500 px-1.5 py-0.5 rounded font-bold uppercase shrink-0 mt-0.5">
-                                                {item.attempts || 0} intentos
-                                            </span>
-                                            <p className="text-[10px] text-red-600 dark:text-red-400 font-mono break-all leading-tight">
-                                                {item.last_error || 'Error desconocido'}
-                                            </p>
-                                        </div>
+                                        <p className="text-[10px] text-red-600 dark:text-red-400 font-mono break-all leading-snug bg-red-100/50 dark:bg-red-900/20 rounded px-2 py-1.5">
+                                            {item.last_error || 'Error desconocido'}
+                                        </p>
                                     </div>
                                 );
                             })}
@@ -203,7 +204,7 @@ export default function SyncStatus() {
                         </div>
                     </div>
                 </div>
-            )}
+            , document.body)}
         </div>
     );
 }
