@@ -143,15 +143,26 @@ export default function ShareInventoryModal({ isOpen, onClose }) {
         if (!importResult) return;
         setLoading(true);
         try {
-            if (importResult.idb) {
+            if (importResult.idb && typeof importResult.idb === 'object') {
+                // New format: { idb: { key: value }, ls: { key: value }, groups: [] }
                 for (const [key, value] of Object.entries(importResult.idb)) {
                     await lf.setItem(key, value);
                 }
-            }
-            if (importResult.ls) {
-                for (const [key, value] of Object.entries(importResult.ls)) {
-                    localStorage.setItem(key, value);
+                if (importResult.ls && typeof importResult.ls === 'object') {
+                    for (const [key, value] of Object.entries(importResult.ls)) {
+                        localStorage.setItem(key, value);
+                    }
                 }
+            } else {
+                // Old format: { products: [], categories: [], customers: [], sales: [] }
+                if (Array.isArray(importResult.products) && importResult.products.length > 0)
+                    await lf.setItem('bodega_products_v1', importResult.products);
+                if (Array.isArray(importResult.categories) && importResult.categories.length > 0)
+                    await lf.setItem('my_categories_v1', importResult.categories);
+                if (Array.isArray(importResult.customers) && importResult.customers.length > 0)
+                    await lf.setItem('bodega_customers_v1', importResult.customers);
+                if (Array.isArray(importResult.sales) && importResult.sales.length > 0)
+                    await lf.setItem('bodega_sales_v1', importResult.sales);
             }
             setTimeout(() => window.location.reload(), 300);
         } catch (err) {
@@ -177,16 +188,22 @@ export default function ShareInventoryModal({ isOpen, onClose }) {
 
     // Summary of what the import result contains
     const getImportSummary = () => {
-        if (!importResult?.idb) return '';
+        if (!importResult) return '';
         const parts = [];
-        const products = importResult.idb['bodega_products_v1'];
-        const customers = importResult.idb['bodega_customers_v1'];
-        const sales = importResult.idb['bodega_sales_v1'];
+        // New format
+        const products = importResult.idb?.['bodega_products_v1'] ?? importResult.products;
+        const customers = importResult.idb?.['bodega_customers_v1'] ?? importResult.customers;
+        const sales = importResult.idb?.['bodega_sales_v1'] ?? importResult.sales;
         if (Array.isArray(products) && products.length) parts.push(`${products.length} productos`);
         if (Array.isArray(customers) && customers.length) parts.push(`${customers.length} clientes`);
         if (Array.isArray(sales) && sales.length) parts.push(`${sales.length} ventas`);
-        return parts.join(', ') || `${importResult.groups?.join(', ')} importados`;
+        return parts.join(', ') || `${importResult.groups?.join(', ') || 'datos'} importados`;
     };
+
+    // Counts for badge chips (supports both formats)
+    const importProducts = importResult?.idb?.['bodega_products_v1'] ?? importResult?.products;
+    const importCustomers = importResult?.idb?.['bodega_customers_v1'] ?? importResult?.customers;
+    const importSales = importResult?.idb?.['bodega_sales_v1'] ?? importResult?.sales;
 
     return (
         <div
@@ -367,19 +384,19 @@ export default function ShareInventoryModal({ isOpen, onClose }) {
                                 </p>
 
                                 <div className="flex flex-wrap justify-center gap-2 my-3">
-                                    {Array.isArray(importResult.idb?.['bodega_products_v1']) && importResult.idb['bodega_products_v1'].length > 0 && (
+                                    {Array.isArray(importProducts) && importProducts.length > 0 && (
                                         <span className="flex items-center gap-1 px-2.5 py-1 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold rounded-full">
-                                            <Package size={10} /> {importResult.idb['bodega_products_v1'].length} productos
+                                            <Package size={10} /> {importProducts.length} productos
                                         </span>
                                     )}
-                                    {Array.isArray(importResult.idb?.['bodega_customers_v1']) && importResult.idb['bodega_customers_v1'].length > 0 && (
+                                    {Array.isArray(importCustomers) && importCustomers.length > 0 && (
                                         <span className="flex items-center gap-1 px-2.5 py-1 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold rounded-full">
-                                            <Users size={10} /> {importResult.idb['bodega_customers_v1'].length} clientes
+                                            <Users size={10} /> {importCustomers.length} clientes
                                         </span>
                                     )}
-                                    {Array.isArray(importResult.idb?.['bodega_sales_v1']) && importResult.idb['bodega_sales_v1'].length > 0 && (
+                                    {Array.isArray(importSales) && importSales.length > 0 && (
                                         <span className="flex items-center gap-1 px-2.5 py-1 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 text-[10px] font-bold rounded-full">
-                                            <ShoppingBag size={10} /> {importResult.idb['bodega_sales_v1'].length} ventas
+                                            <ShoppingBag size={10} /> {importSales.length} ventas
                                         </span>
                                     )}
                                 </div>
