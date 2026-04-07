@@ -709,7 +709,12 @@ function TransactionRow({ sale: s, bcvRate, isExpanded, onToggle, onVoidSale, on
                             <span>Ref: {formatBs(s.totalBs)} Bs @ {formatBs(s.rate || bcvRate)}</span>
                             {s.tasaCop > 0 && <span>COP: {(s.totalCop || (s.totalUsd * s.tasaCop)).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} @ {s.tasaCop}</span>}
                         </div>
-                        {s.changeUsd > 0 && <div className="text-emerald-500 font-bold self-start mt-0.5">Vuelto: ${s.changeUsd.toFixed(2)}</div>}
+                        {(s.changeUsd > 0 || s.changeBs > 0) && (
+                            <div className="text-emerald-500 font-bold self-start mt-0.5 text-right">
+                                {s.changeUsd > 0 && <div>Vuelto: ${s.changeUsd.toFixed(2)}</div>}
+                                <div className="font-medium">{formatBs(s.changeBs || s.changeUsd * (s.rate || bcvRate))} Bs</div>
+                            </div>
+                        )}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 mt-2">
