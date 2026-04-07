@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Cloud, CloudOff, Wifi, WifiOff, RefreshCw, AlertTriangle, X } from 'lucide-react';
+import { Cloud, CloudOff, Wifi, WifiOff, RefreshCw, AlertTriangle, X, ChevronRight } from 'lucide-react';
 import { supabaseCloud as supabase } from '../config/supabaseCloud';
 import localforage from 'localforage';
 
@@ -8,6 +8,8 @@ export default function SyncStatus() {
     const [pendingCount, setPendingCount] = useState(0);
     const [failedCount, setFailedCount] = useState(0);
     const [showFailedBanner, setShowFailedBanner] = useState(false);
+    const [showErrorModal, setShowErrorModal] = useState(false);
+    const [failedItems, setFailedItems] = useState([]);
 
     const checkHealth = async () => {
         if (!navigator.onLine) {
@@ -33,6 +35,7 @@ export default function SyncStatus() {
             const failed = queue.filter(q => q.sync_status === 'failed');
             setPendingCount(pending.length);
             setFailedCount(failed.length);
+            setFailedItems(failed);
             if (failed.length > 0) setShowFailedBanner(true);
         } catch(err) {
             console.error('[SyncStatus] Error al leer cola', err);
@@ -44,7 +47,14 @@ export default function SyncStatus() {
         const { offlineQueueService } = await import('../services/offlineQueueService');
         await offlineQueueService.dismissFailed();
         setFailedCount(0);
+        setFailedItems([]);
         setShowFailedBanner(false);
+        setShowErrorModal(false);
+    };
+
+    const handleOpenLog = (e) => {
+        e.stopPropagation();
+        setShowErrorModal(true);
     };
 
     useEffect(() => {
@@ -101,12 +111,75 @@ export default function SyncStatus() {
 
             {/* Banner ventas fallidas */}
             {showFailedBanner && failedCount > 0 && (
-                <div className="flex items-center gap-1.5 px-2 py-1 bg-red-50 border border-red-200 rounded-lg text-[10px] text-red-600 font-medium max-w-[180px]">
+                <button
+                    onClick={handleOpenLog}
+                    className="flex items-center gap-1.5 px-2 py-1 bg-red-50 border border-red-200 rounded-lg text-[10px] text-red-600 font-medium max-w-[200px] hover:bg-red-100 transition-colors text-left"
+                >
                     <AlertTriangle size={11} className="shrink-0" />
-                    <span className="truncate">{failedCount} venta{failedCount > 1 ? 's' : ''} no sincronizada{failedCount > 1 ? 's' : ''}</span>
-                    <button onClick={handleDismissFailed} className="shrink-0 hover:text-red-800 ml-auto" title="Descartar">
-                        <X size={11} />
-                    </button>
+                    <span className="truncate flex-1">{failedCount} venta{failedCount > 1 ? 's' : ''} no sincronizada{failedCount > 1 ? 's' : ''}</span>
+                    <ChevronRight size={10} className="shrink-0" />
+                </button>
+            )}
+
+            {/* Modal de errores */}
+            {showErrorModal && (
+                <div
+                    className="fixed inset-0 z-[200] bg-slate-950/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
+                    onClick={() => setShowErrorModal(false)}
+                >
+                    <div
+                        className="bg-white dark:bg-slate-900 w-full sm:max-w-sm sm:rounded-2xl rounded-t-[2rem] p-5 shadow-2xl max-h-[80vh] flex flex-col"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between mb-4 shrink-0">
+                            <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
+                                    <AlertTriangle size={16} className="text-red-500" />
+                                </div>
+                                <div>
+                                    <p className="text-sm font-black text-slate-800 dark:text-white">Log de Sincronización</p>
+                                    <p className="text-[10px] text-slate-400">{failedCount} venta{failedCount > 1 ? 's' : ''} con error</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowErrorModal(false)} className="text-slate-400 hover:text-slate-600 p-1">
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <div className="overflow-y-auto flex-1 space-y-2 mb-4">
+                            {failedItems.map((item, i) => {
+                                const d = new Date(item.created_at);
+                                const totalUsd = item.payload?.cartTotalUsd || item.payload?.totalUsd || 0;
+                                return (
+                                    <div key={item.id} className="bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-xl p-3">
+                                        <div className="flex items-center justify-between mb-1.5">
+                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                                                {totalUsd > 0 ? `$${totalUsd.toFixed(2)}` : 'Venta offline'}
+                                            </span>
+                                            <span className="text-[10px] text-slate-400">
+                                                {d.toLocaleString('es-VE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-start gap-1.5">
+                                            <span className="text-[9px] bg-red-100 dark:bg-red-900/40 text-red-500 px-1.5 py-0.5 rounded font-bold uppercase shrink-0 mt-0.5">
+                                                {item.attempts || 0} intentos
+                                            </span>
+                                            <p className="text-[10px] text-red-600 dark:text-red-400 font-medium break-all leading-tight">
+                                                {item.last_error || 'Error desconocido'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        <button
+                            onClick={handleDismissFailed}
+                            className="w-full py-2.5 text-xs font-bold text-white bg-red-500 hover:bg-red-600 rounded-xl transition-all active:scale-95"
+                        >
+                            Descartar ventas fallidas
+                        </button>
+                    </div>
                 </div>
             )}
         </div>
