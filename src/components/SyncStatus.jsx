@@ -1,18 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Cloud, CloudOff, Wifi, WifiOff, RefreshCw } from 'lucide-react';
+import { Cloud, CloudOff, Wifi, WifiOff, RefreshCw, AlertTriangle, X } from 'lucide-react';
 import { supabaseCloud as supabase } from '../config/supabaseCloud';
 import localforage from 'localforage';
 
-/**
- * SyncStatus — Indicador visual de conectividad Híbrido.
- * Muestra el estado de la conexión y de la cola de transacciones Offline (ACID).
- * - Online (Verde):  Conexión activa a Supabase. Todo opera online.
- * - Syncing (Naranja): Ventas en cola esperando sincronización o en progreso.
- * - Offline (Rojo): Sin internet o Supabase inalcanzable.
- */
 export default function SyncStatus() {
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const [pendingCount, setPendingCount] = useState(0);
+    const [failedCount, setFailedCount] = useState(0);
+    const [showFailedBanner, setShowFailedBanner] = useState(false);
 
     const checkHealth = async () => {
         if (!navigator.onLine) {
@@ -20,17 +15,11 @@ export default function SyncStatus() {
             return;
         }
         try {
-            // Ping rápido con TIMEOUT (5 segundos) para no quedarse pegado si la conexión es intermitente
             const pingPromise = supabase.from('sync_documents').select('doc_id').limit(1);
             const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000));
-            
             const result = await Promise.race([pingPromise, timeoutPromise]);
-            
             if (result.error) throw result.error;
-            
             setIsOnline(true);
-            
-            // Auto-trigger sync if we confirm we have real internet
             import('../services/offlineQueueService').then(m => m.offlineQueueService.syncPendingSales());
         } catch (err) {
             setIsOnline(false);
@@ -41,10 +30,21 @@ export default function SyncStatus() {
         try {
             const queue = await localforage.getItem('offline_sales_queue') || [];
             const pending = queue.filter(q => q.sync_status === 'pending');
+            const failed = queue.filter(q => q.sync_status === 'failed');
             setPendingCount(pending.length);
+            setFailedCount(failed.length);
+            if (failed.length > 0) setShowFailedBanner(true);
         } catch(err) {
             console.error('[SyncStatus] Error al leer cola', err);
         }
+    };
+
+    const handleDismissFailed = async (e) => {
+        e.stopPropagation();
+        const { offlineQueueService } = await import('../services/offlineQueueService');
+        await offlineQueueService.dismissFailed();
+        setFailedCount(0);
+        setShowFailedBanner(false);
     };
 
     useEffect(() => {
@@ -54,12 +54,12 @@ export default function SyncStatus() {
 
         window.addEventListener('online', goOnline);
         window.addEventListener('offline', goOffline);
-        
+
         checkHealth();
         checkQueue();
 
-        const healthInterval = setInterval(checkHealth, 900000); // 15 min
-        const queueInterval = setInterval(checkQueue, 15000); // 15s refresca UI
+        const healthInterval = setInterval(checkHealth, 900000);
+        const queueInterval = setInterval(checkQueue, 15000);
 
         return () => {
             mounted = false;
@@ -73,45 +73,42 @@ export default function SyncStatus() {
     let statusType = 'online';
     if (!isOnline) statusType = 'offline';
     else if (pendingCount > 0) statusType = 'syncing';
-    
+
     const handleForceSync = () => {
         checkHealth();
         if (isOnline) {
-             import('../services/offlineQueueService').then(m => m.offlineQueueService.syncPendingSales());
+            import('../services/offlineQueueService').then(m => m.offlineQueueService.syncPendingSales());
         }
     };
 
     return (
-        <button
-            onClick={handleForceSync}
-            className={`flex items-center justify-center gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-xs font-bold tracking-wider transition-all duration-300 shadow-sm border focus:outline-none focus:ring-2 focus:ring-offset-1 ${
-                statusType === 'online'
-                    ? 'bg-emerald-50 border-emerald-100 text-emerald-600 focus:ring-emerald-500 hover:bg-emerald-100'
-                    : statusType === 'syncing'
-                    ? 'bg-amber-50 border-amber-100 text-amber-600 focus:ring-amber-500 hover:bg-amber-100'
-                    : 'bg-rose-50 border-rose-100 text-rose-500 animate-pulse focus:ring-rose-500'
-            }`}
-             title={statusType === 'online' ? 'Conectado - Clic para verificar conexión' : statusType === 'syncing' ? `Sincronizando ${pendingCount} transacciones. Clic para forzar.` : 'Sin conexión a la BD. Clic para reintentar.'}
-        >
-            {statusType === 'online' && (
-                <>
-                    <Wifi size={13} strokeWidth={2.5} />
-                    <span className="hidden sm:inline">Online</span>
-                </>
+        <div className="flex flex-col items-start gap-1">
+            <button
+                onClick={handleForceSync}
+                className={`flex items-center justify-center gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-xs font-bold tracking-wider transition-all duration-300 shadow-sm border focus:outline-none focus:ring-2 focus:ring-offset-1 ${
+                    statusType === 'online'
+                        ? 'bg-emerald-50 border-emerald-100 text-emerald-600 focus:ring-emerald-500 hover:bg-emerald-100'
+                        : statusType === 'syncing'
+                        ? 'bg-amber-50 border-amber-100 text-amber-600 focus:ring-amber-500 hover:bg-amber-100'
+                        : 'bg-rose-50 border-rose-100 text-rose-500 animate-pulse focus:ring-rose-500'
+                }`}
+                title={statusType === 'online' ? 'Conectado' : statusType === 'syncing' ? `${pendingCount} transacciones pendientes` : 'Sin conexión'}
+            >
+                {statusType === 'online' && <><Wifi size={13} strokeWidth={2.5} /><span className="hidden sm:inline">Online</span></>}
+                {statusType === 'syncing' && <><RefreshCw size={13} strokeWidth={2.5} className="animate-spin-slow" /><span className="hidden sm:inline">Sync ({pendingCount})</span><span className="sm:hidden">{pendingCount}</span></>}
+                {statusType === 'offline' && <><WifiOff size={13} strokeWidth={2.5} /><span>Offline</span></>}
+            </button>
+
+            {/* Banner ventas fallidas */}
+            {showFailedBanner && failedCount > 0 && (
+                <div className="flex items-center gap-1.5 px-2 py-1 bg-red-50 border border-red-200 rounded-lg text-[10px] text-red-600 font-medium max-w-[180px]">
+                    <AlertTriangle size={11} className="shrink-0" />
+                    <span className="truncate">{failedCount} venta{failedCount > 1 ? 's' : ''} no sincronizada{failedCount > 1 ? 's' : ''}</span>
+                    <button onClick={handleDismissFailed} className="shrink-0 hover:text-red-800 ml-auto" title="Descartar">
+                        <X size={11} />
+                    </button>
+                </div>
             )}
-            {statusType === 'syncing' && (
-                <>
-                    <RefreshCw size={13} strokeWidth={2.5} className="animate-spin-slow" />
-                    <span className="hidden sm:inline">Sync ({pendingCount})</span>
-                    <span className="sm:hidden">{pendingCount}</span>
-                </>
-            )}
-            {statusType === 'offline' && (
-                <>
-                    <WifiOff size={13} strokeWidth={2.5} />
-                    <span>Offline</span>
-                </>
-            )}
-        </button>
+        </div>
     );
 }

@@ -2,6 +2,7 @@ import localforage from 'localforage';
 import { supabase } from '../core/supabaseClient';
 
 const QUEUE_KEY = 'offline_sales_queue';
+const MAX_ATTEMPTS = 10;
 
 export const offlineQueueService = {
   async addSaleToQueue(salePayload) {
@@ -20,11 +21,11 @@ export const offlineQueueService = {
   async syncPendingSales() {
     const queue = await localforage.getItem(QUEUE_KEY) || [];
     const pending = queue.filter(q => q.sync_status === 'pending');
-    
+
     if (pending.length === 0) return;
 
     let updatedQueue = [...queue];
-    
+
     for (const item of pending) {
       try {
         const payloadWithOrigin = {
@@ -34,26 +35,38 @@ export const offlineQueueService = {
         };
 
         const { data, error } = await supabase.rpc('process_checkout', { payload: payloadWithOrigin });
-        
+
         if (error) throw error;
 
         updatedQueue = updatedQueue.map(q => q.id === item.id ? { ...q, sync_status: 'synced', synced_at: new Date().toISOString() } : q);
       } catch (err) {
         console.error('[Offline Sync] Fallo al sincronizar venta offline:', err);
-        updatedQueue = updatedQueue.map(q => q.id === item.id ? { ...q, attempts: q.attempts + 1 } : q);
+        const newAttempts = (item.attempts || 0) + 1;
+        const newStatus = newAttempts >= MAX_ATTEMPTS ? 'failed' : 'pending';
+        updatedQueue = updatedQueue.map(q => q.id === item.id ? { ...q, attempts: newAttempts, sync_status: newStatus, last_error: err?.message || 'Error desconocido' } : q);
       }
     }
-    
+
     const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
     const now = Date.now();
     const remaining = updatedQueue.filter(q => {
-      if (q.sync_status === 'pending') return true;
+      if (q.sync_status === 'pending' || q.sync_status === 'failed') return true;
       if (q.sync_status === 'synced' && q.synced_at) {
         return (now - new Date(q.synced_at).getTime()) < TWENTY_FOUR_HOURS;
       }
       return false;
     });
     await localforage.setItem(QUEUE_KEY, remaining);
+  },
+
+  async dismissFailed() {
+    const queue = await localforage.getItem(QUEUE_KEY) || [];
+    await localforage.setItem(QUEUE_KEY, queue.filter(q => q.sync_status !== 'failed'));
+  },
+
+  async getFailedCount() {
+    const queue = await localforage.getItem(QUEUE_KEY) || [];
+    return queue.filter(q => q.sync_status === 'failed').length;
   }
 };
 
