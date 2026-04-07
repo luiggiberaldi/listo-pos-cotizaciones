@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Cloud, CloudOff, Wifi, WifiOff, RefreshCw, AlertTriangle, X, ChevronRight } from 'lucide-react';
+import { Wifi, WifiOff, RefreshCw, AlertTriangle, X, ChevronRight, Copy, Check } from 'lucide-react';
 import { supabaseCloud as supabase } from '../config/supabaseCloud';
 import localforage from 'localforage';
 
@@ -10,6 +10,7 @@ export default function SyncStatus() {
     const [showFailedBanner, setShowFailedBanner] = useState(false);
     const [showErrorModal, setShowErrorModal] = useState(false);
     const [failedItems, setFailedItems] = useState([]);
+    const [copied, setCopied] = useState(false);
 
     const checkHealth = async () => {
         if (!navigator.onLine) {
@@ -52,9 +53,22 @@ export default function SyncStatus() {
         setShowErrorModal(false);
     };
 
-    const handleOpenLog = (e) => {
-        e.stopPropagation();
-        setShowErrorModal(true);
+    const handleCopyLogs = () => {
+        const text = failedItems.map((item, i) => {
+            const d = new Date(item.created_at);
+            const total = item.payload?.total;
+            return [
+                `--- Venta ${i + 1} ---`,
+                `Fecha: ${d.toLocaleString('es-VE')}`,
+                `Total: ${total != null ? `$${Number(total).toFixed(2)}` : 'N/A'}`,
+                `Intentos: ${item.attempts || 0}`,
+                `Error: ${item.last_error || 'Error desconocido'}`,
+            ].join('\n');
+        }).join('\n\n');
+        navigator.clipboard.writeText(text).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        });
     };
 
     useEffect(() => {
@@ -149,12 +163,12 @@ export default function SyncStatus() {
                         <div className="overflow-y-auto flex-1 space-y-2 mb-4">
                             {failedItems.map((item, i) => {
                                 const d = new Date(item.created_at);
-                                const totalUsd = item.payload?.cartTotalUsd || item.payload?.totalUsd || 0;
+                                const totalUsd = item.payload?.total;
                                 return (
                                     <div key={item.id} className="bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-xl p-3">
                                         <div className="flex items-center justify-between mb-1.5">
                                             <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
-                                                {totalUsd > 0 ? `$${totalUsd.toFixed(2)}` : 'Venta offline'}
+                                                {totalUsd != null ? `$${Number(totalUsd).toFixed(2)}` : 'Venta offline'}
                                             </span>
                                             <span className="text-[10px] text-slate-400">
                                                 {d.toLocaleString('es-VE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
@@ -164,7 +178,7 @@ export default function SyncStatus() {
                                             <span className="text-[9px] bg-red-100 dark:bg-red-900/40 text-red-500 px-1.5 py-0.5 rounded font-bold uppercase shrink-0 mt-0.5">
                                                 {item.attempts || 0} intentos
                                             </span>
-                                            <p className="text-[10px] text-red-600 dark:text-red-400 font-medium break-all leading-tight">
+                                            <p className="text-[10px] text-red-600 dark:text-red-400 font-mono break-all leading-tight">
                                                 {item.last_error || 'Error desconocido'}
                                             </p>
                                         </div>
@@ -173,12 +187,20 @@ export default function SyncStatus() {
                             })}
                         </div>
 
-                        <button
-                            onClick={handleDismissFailed}
-                            className="w-full py-2.5 text-xs font-bold text-white bg-red-500 hover:bg-red-600 rounded-xl transition-all active:scale-95"
-                        >
-                            Descartar ventas fallidas
-                        </button>
+                        <div className="flex gap-2 shrink-0">
+                            <button
+                                onClick={handleCopyLogs}
+                                className="flex-1 py-2.5 text-xs font-bold rounded-xl transition-all active:scale-95 flex items-center justify-center gap-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200"
+                            >
+                                {copied ? <><Check size={14} /> Copiado</> : <><Copy size={14} /> Copiar log</>}
+                            </button>
+                            <button
+                                onClick={handleDismissFailed}
+                                className="flex-1 py-2.5 text-xs font-bold text-white bg-red-500 hover:bg-red-600 rounded-xl transition-all active:scale-95"
+                            >
+                                Descartar
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
