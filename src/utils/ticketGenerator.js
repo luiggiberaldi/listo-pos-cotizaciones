@@ -47,8 +47,12 @@ export async function generateTicketPDF(sale, bcvRate) {
         const img = new Image();
         img.src = '/logo.png';
         await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
-        const logoW = 50;
-        const logoH = 12; // ~4:1 aspect ratio matching original
+        const maxW = 50;
+        const maxH = 18;
+        const ratio = img.naturalWidth / img.naturalHeight;
+        let logoW = maxW;
+        let logoH = logoW / ratio;
+        if (logoH > maxH) { logoH = maxH; logoW = logoH * ratio; }
         doc.addImage(img, 'PNG', CX - logoW / 2, y, logoW, logoH);
         y += logoH + 4;
     } catch (_) { y += 2; }
@@ -204,7 +208,7 @@ export async function generateTicketPDF(sale, bcvRate) {
     // ════════════════════════════════════
     //  PAGOS REALIZADOS
     // ════════════════════════════════════
-    const showPayments = (sale.payments && sale.payments.length > 0) || hasFiado;
+    const showPayments = (sale.payments && sale.payments.length > 0) || hasFiado || changeUsd > 0 || changeBs > 0;
     if (showPayments) {
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(6.5);
@@ -246,6 +250,27 @@ export async function generateTicketPDF(sale, bcvRate) {
             doc.setFontSize(6.5);
             doc.text('Bs ' + formatBs(sale.fiadoUsd * fiadoRate) + ' (tasa actual)', RIGHT, y, { align: 'right' });
             y += 6;
+        }
+
+        // Cambio entregado
+        const changeUsd = sale.changeUsd || 0;
+        const changeBs = sale.changeBs || 0;
+        if (changeUsd > 0 || changeBs > 0) {
+            y += 2;
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(8);
+            doc.setTextColor(...GREEN);
+            doc.text('Cambio entregado:', M, y);
+            if (changeUsd > 0) {
+                doc.text('$' + changeUsd.toFixed(2), RIGHT, y, { align: 'right' });
+                y += 4;
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(6.5);
+                doc.text('Bs ' + formatBs(changeBs || changeUsd * rate), RIGHT, y, { align: 'right' });
+            } else {
+                doc.text('Bs ' + formatBs(changeBs), RIGHT, y, { align: 'right' });
+            }
+            y += 5;
         }
 
         y += 2;
@@ -370,6 +395,19 @@ export function printThermalTicket(sale, bcvRate) {
             </tr></table>
         </div>` : '';
 
+    const changeUsd = sale.changeUsd || 0;
+    const changeBs = sale.changeBs || 0;
+    const cambioHtml = (changeUsd > 0 || changeBs > 0) ? `
+        <div style="margin-top:6px;padding:4px 0;border-top:1px dashed #ccc;">
+            <table style="width:100%"><tr>
+                <td style="color:#107c41;font-weight:bold;font-size:11px;">Cambio entregado:</td>
+                <td style="color:#107c41;font-weight:bold;font-size:11px;text-align:right;">${changeUsd > 0 ? '$' + changeUsd.toFixed(2) : 'Bs ' + formatBs(changeBs)}</td>
+            </tr>${changeUsd > 0 ? `<tr>
+                <td></td>
+                <td style="color:#107c41;font-size:9px;text-align:right;">Bs ${formatBs(changeBs || changeUsd * rate)}</td>
+            </tr>` : ''}</table>
+        </div>` : '';
+
     const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -428,7 +466,7 @@ export function printThermalTicket(sale, bcvRate) {
 <body>
     <!-- Logo -->
     <div class="center" style="margin-bottom:6px;">
-        <img src="/logo.png" alt="Logo" style="max-width:${cssLogoW};max-height:16mm;" onerror="this.style.display='none'">
+        <img src="/logo.png" alt="Logo" style="max-width:${cssLogoW};max-height:16mm;width:auto;height:auto;" onerror="this.style.display='none'">
     </div>
 
     <!-- Info del Negocio -->
@@ -499,11 +537,12 @@ export function printThermalTicket(sale, bcvRate) {
     <hr class="dash">
 
     <!-- Pagos -->
-    ${(sale.payments && sale.payments.length > 0) || hasFiado ? `
+    ${(sale.payments && sale.payments.length > 0) || hasFiado || changeUsd > 0 || changeBs > 0 ? `
     <div style="margin:4px 0;">
         <div style="font-size:${fTiny};color:#777;font-weight:bold;margin-bottom:4px;">PAGOS REALIZADOS</div>
         <table>${paymentsHtml}</table>
         ${fiadoHtml}
+        ${cambioHtml}
     </div>
     <hr class="dash">
     ` : ''}

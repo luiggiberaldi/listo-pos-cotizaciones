@@ -163,14 +163,19 @@ export function ProductProvider({ children, rates }) {
     }, []);
 
     const adjustStock = (productId, delta) => {
-        setProducts(prevProducts => prevProducts.map(p => {
-            if (p.id === productId) {
-                const allowNeg = localStorage.getItem('allow_negative_stock') === 'true';
-                const newStock = (p.stock ?? 0) + delta;
-                return { ...p, stock: allowNeg ? newStock : Math.max(0, newStock) };
-            }
-            return p;
-        }));
+        setProducts(prevProducts => {
+            const allowNeg = localStorage.getItem('allow_negative_stock') === 'true';
+            const updated = prevProducts.map(p => {
+                if (p.id === productId) {
+                    const newStock = (p.stock ?? 0) + delta;
+                    return { ...p, stock: allowNeg ? newStock : Math.max(0, newStock) };
+                }
+                return p;
+            });
+            // Persistir inmediatamente para no depender del debounce (evita pérdida al cambiar pestaña rápido)
+            storageService.setItem('bodega_products_v1', updated).catch(() => {});
+            return updated;
+        });
     };
 
     return (
