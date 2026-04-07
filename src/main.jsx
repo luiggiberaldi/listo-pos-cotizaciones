@@ -12,6 +12,13 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     window.location.reload();
   });
+  // Comprobar actualizaciones al recuperar el foco (evita versiones obsoletas)
+  navigator.serviceWorker.ready.then(reg => {
+    reg.update();
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') reg.update();
+    });
+  });
 }
 
 // ── Evitar que la rueda del mouse cambie valores en inputs numéricos ──

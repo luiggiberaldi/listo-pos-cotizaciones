@@ -144,10 +144,15 @@ export default function ShareInventoryModal({ isOpen, onClose }) {
         if (!importResult) return;
         setLoading(true);
         try {
+            console.log('[Import] Iniciando importación, formato:', importResult.idb ? 'nuevo (idb)' : 'antiguo');
             if (importResult.idb && typeof importResult.idb === 'object') {
-                // New format: { idb: { key: value }, ls: { key: value }, groups: [] }
+                const keys = Object.keys(importResult.idb);
+                console.log('[Import] Claves a escribir:', keys);
                 for (const [key, value] of Object.entries(importResult.idb)) {
+                    const len = Array.isArray(value) ? value.length : typeof value;
+                    console.log(`[Import] Escribiendo ${key} (${len})...`);
                     await lf.setItem(key, value);
+                    console.log(`[Import] ✓ ${key}`);
                 }
                 if (importResult.ls && typeof importResult.ls === 'object') {
                     for (const [key, value] of Object.entries(importResult.ls)) {
@@ -165,8 +170,10 @@ export default function ShareInventoryModal({ isOpen, onClose }) {
                 if (Array.isArray(importResult.sales) && importResult.sales.length > 0)
                     await lf.setItem('bodega_sales_v1', importResult.sales);
             }
+            console.log('[Import] Todo escrito. Recargando en 500ms...');
             setTimeout(() => window.location.reload(), 500);
         } catch (err) {
+            console.error('[Import] ERROR:', err);
             setError('Error al restaurar: ' + err.message);
             setLoading(false);
         }
