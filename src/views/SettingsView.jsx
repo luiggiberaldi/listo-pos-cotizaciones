@@ -346,15 +346,8 @@ export default function SettingsView({ onClose, theme, toggleTheme, triggerHapti
                                     if (factoryResetInput !== 'REINICIAR') return;
                                     triggerHaptic?.();
                                     auditLog('SISTEMA', 'FACTORY_RESET', 'Reinicio de fábrica iniciado');
-                                    // 1. Borrar IndexedDB (todos los datos pesados)
-                                    const idbKeys = [
-                                        'bodega_products_v1', 'bodega_customers_v1',
-                                        'bodega_sales_v1', 'bodega_payment_methods_v1',
-                                        'bodega_accounts_v2', 'abasto_audit_log_v1'
-                                    ];
-                                    for (const key of idbKeys) {
-                                        await storageService.removeItem(key);
-                                    }
+                                    // 1. Borrar IndexedDB completo (todas las claves sin excepción)
+                                    await localforage.clear();
                                     // 2. Borrar localStorage completo
                                     localStorage.clear();
                                     // 3. Borrar nube si está configurada
