@@ -69,20 +69,16 @@ async function handleShare(request, env) {
         // ── POST: guardar datos y devolver código ──────────────────────────
         if (request.method === 'POST') {
             const body = await request.json();
-            const { products, categories, customers, sales } = body;
+            const { idb, ls, groups } = body;
 
-            const hasProducts  = Array.isArray(products)  && products.length  > 0;
-            const hasCustomers = Array.isArray(customers) && customers.length > 0;
-            const hasSales     = Array.isArray(sales)     && sales.length     > 0;
-
-            if (!hasProducts && !hasCustomers && !hasSales) {
+            if (!idb || typeof idb !== 'object' || Object.keys(idb).length === 0) {
                 return Response.json(
                     { error: 'No hay datos seleccionados para compartir.' },
                     { status: 400, headers }
                 );
             }
 
-            const payloadStr = JSON.stringify({ products, categories, customers, sales });
+            const payloadStr = JSON.stringify({ idb, ls: ls || {}, groups: groups || [] });
             if (payloadStr.length > MAX_PAYLOAD_BYTES) {
                 return Response.json(
                     { error: `Payload demasiado grande (${(payloadStr.length / 1024 / 1024).toFixed(1)} MB). Máximo: 5 MB.` },
@@ -98,22 +94,15 @@ async function handleShare(request, env) {
                 if (!exists) break;
             }
 
-            const payload = JSON.stringify({
-                products: hasProducts ? products : null,
-                categories: categories || null,
-                customers: hasCustomers ? customers : null,
-                sales: hasSales ? sales : null,
-                createdAt: new Date().toISOString(),
-                count: (products?.length || 0) + (customers?.length || 0) + (sales?.length || 0),
-            });
+            await db('SET', `inv:${code}`, payloadStr, 'EX', TTL_SECONDS);
 
-            await db('SET', `inv:${code}`, payload, 'EX', TTL_SECONDS);
+            const productCount = Array.isArray(idb['bodega_products_v1']) ? idb['bodega_products_v1'].length : 0;
 
             return Response.json(
                 {
                     code: `${code.slice(0, 3)}-${code.slice(3)}`,
                     expiresIn: '24 horas',
-                    productCount: products?.length || 0,
+                    productCount,
                 },
                 { status: 200, headers }
             );

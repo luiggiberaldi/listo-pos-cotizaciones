@@ -875,12 +875,7 @@ export const ProductsView = ({ rates, triggerHaptic }) => {
 
 
             <ShareInventoryModal
-                isOpen={isShareOpen} onClose={() => setIsShareOpen(false)} products={products} categories={categories}
-                onImport={(result) => {
-                    if (result.categories?.length > 0) setCategories(result.categories);
-                    if (result.products?.length > 0) setProducts(result.products);
-                    showToast('Inventario importado correctamente', 'success');
-                }}
+                isOpen={isShareOpen} onClose={() => setIsShareOpen(false)}
             />
             <BulkPriceAdjustModal
                 isOpen={isBulkPriceOpen}

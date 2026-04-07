@@ -67,8 +67,6 @@ export default function SettingsView({ onClose, theme, toggleTheme, triggerHapti
     const [activeTab, setActiveTab] = useState('negocio');
     const [idCopied, setIdCopied] = useState(false);
     const [isShareOpen, setIsShareOpen] = useState(false);
-    const [shareCustomers, setShareCustomers] = useState([]);
-    const [shareSales, setShareSales] = useState([]);
     const [importStatus, setImportStatus] = useState(null);
     const [statusMessage, setStatusMessage] = useState('');
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -392,33 +390,6 @@ export default function SettingsView({ onClose, theme, toggleTheme, triggerHapti
             <ShareInventoryModal
                 isOpen={isShareOpen}
                 onClose={() => setIsShareOpen(false)}
-                products={products}
-                categories={categories}
-                customers={shareCustomers}
-                sales={shareSales}
-                onImport={async (result) => {
-                    // Use direct localforage to avoid firing app_storage_update events
-                    // that would trigger ProductContext auto-save with stale state.
-                    const lf = localforage.createInstance({ name: 'BodegaApp', storeName: 'bodega_app_data' });
-                    if (result.categories?.length > 0) setCategories(result.categories);
-                    if (result.products?.length > 0) {
-                        setProducts(result.products);
-                        await lf.setItem('bodega_products_v1', result.products);
-                    }
-                    if (result.customers?.length > 0) {
-                        await lf.setItem('bodega_customers_v1', result.customers);
-                    }
-                    if (result.sales?.length > 0) {
-                        await lf.setItem('bodega_sales_v1', result.sales);
-                    }
-                    const types = [];
-                    if (result.products?.length) types.push('inventario');
-                    if (result.customers?.length) types.push('clientes');
-                    if (result.sales?.length) types.push('ventas');
-                    showToast(`${types.join(', ')} importado(s)`, 'success');
-                    setIsShareOpen(false);
-                    setTimeout(() => window.location.reload(), 1200);
-                }}
             />
 
             <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleFileChange} />
