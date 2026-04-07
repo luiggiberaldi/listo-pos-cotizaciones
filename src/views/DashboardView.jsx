@@ -691,10 +691,12 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
             {Object.keys(paymentBreakdown).length > 0 && (() => {
                 const entries = Object.entries(paymentBreakdown).filter(([, d]) => d.total > 0);
                 const fiadoMethods = entries.filter(([, d]) => d.currency === 'FIADO');
-                const bsMethods = entries.filter(([, d]) => d.currency === 'BS' || (!d.currency));
+                const bsIncomeMethods = entries.filter(([, d]) => (d.currency === 'BS' || (!d.currency)) && !d.isChange);
+                const vueltoMethods = entries.filter(([, d]) => d.isChange === true);
+                const bsMethods = [...bsIncomeMethods, ...vueltoMethods];
                 const usdMethods = entries.filter(([, d]) => d.currency === 'USD');
                 const copMethods = entries.filter(([, d]) => d.currency === 'COP');
-                const subtotalBs = bsMethods.reduce((s, [, d]) => s + d.total, 0);
+                const subtotalBs = bsIncomeMethods.reduce((s, [, d]) => s + d.total, 0) - vueltoMethods.reduce((s, [, d]) => s + d.total, 0);
                 const subtotalUsd = usdMethods.reduce((s, [, d]) => s + d.total, 0);
                 const subtotalCop = copMethods.reduce((s, [, d]) => s + d.total, 0);
                 const fmtCop = (v) => v.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -702,6 +704,7 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                 const renderMethod = ([method, data]) => {
                     const label = toTitleCase(getPaymentLabel(method, data.label));
                     const PayIcon = getPaymentIcon(method) || PAYMENT_ICONS[method];
+                    const isChange = data.isChange === true;
                     let totalBsEquiv = data.total;
                     let pct = 0;
                     let displayAmount = `${formatBs(data.total)} Bs`;
@@ -725,13 +728,15 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                     return (
                         <div key={method} className="mb-3">
                             <div className="flex justify-between items-center mb-1.5">
-                                <span className="text-slate-600 font-bold text-xs flex items-center gap-1.5">
-                                    {PayIcon && <PayIcon size={14} className="text-[#0EA5E9]" />}
+                                <span className={`font-bold text-xs flex items-center gap-1.5 ${isChange ? 'text-orange-500' : 'text-slate-600'}`}>
+                                    {PayIcon && <PayIcon size={14} className={isChange ? 'text-orange-400' : 'text-[#0EA5E9]'} />}
                                     {label}
                                 </span>
                                 <div className="text-right flex items-center gap-2">
                                     <div className="flex flex-col items-end">
-                                        <span className="font-black text-slate-800 text-sm">{displayAmount}</span>
+                                        <span className={`font-black text-sm ${isChange ? 'text-orange-500' : 'text-slate-800'}`}>
+                                            {isChange ? '− ' : ''}{displayAmount}
+                                        </span>
                                         {data.currency === 'FIADO' && <span className="text-[9px] text-slate-400">{formatBs(totalBsEquiv)} Bs</span>}
                                     </div>
                                     <span className="text-[10px] font-black w-8 text-right text-slate-400">{pct.toFixed(0)}%</span>
@@ -739,7 +744,7 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                             </div>
                             {data.currency !== 'FIADO' && (
                                 <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                                    <div className="h-full bg-gradient-to-r from-[#0EA5E9] to-[#5EEAD4] rounded-full transition-all" style={{ width: `${pct}%` }} />
+                                    <div className={`h-full rounded-full transition-all ${isChange ? 'bg-orange-400' : 'bg-gradient-to-r from-[#0EA5E9] to-[#5EEAD4]'}`} style={{ width: `${pct}%` }} />
                                 </div>
                             )}
                         </div>
@@ -764,7 +769,7 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                             <div className="mb-4">
                                 <div className="flex justify-between items-end mb-2 pb-1 border-b border-sky-50">
                                     <span className="text-[10px] font-bold text-sky-500 uppercase tracking-wider">Bolívares</span>
-                                    <span className="text-xs font-black text-sky-600">{formatBs(subtotalBs)} Bs</span>
+                                    <span className="text-xs font-black text-sky-600">{formatBs(subtotalBs)} Bs neto</span>
                                 </div>
                                 <div className="pl-2 border-l-2 border-sky-200">{bsMethods.map(renderMethod)}</div>
                             </div>
