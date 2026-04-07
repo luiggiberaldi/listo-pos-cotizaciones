@@ -33,8 +33,9 @@ const COLOR_MAP = {
     amber: { bg: 'bg-amber-50 dark:bg-amber-900/20', icon: 'text-amber-500', border: 'border-amber-400', check: 'bg-amber-500' },
 };
 
-// Direct localforage instance (same store as storageService)
-const lf = localforage.createInstance({ name: 'BodegaApp', storeName: 'bodega_app_data' });
+// Use the default localforage instance (configured by storageService to BodegaApp/bodega_app_data)
+// Do NOT use createInstance — it can behave differently from the already-initialized default instance
+const lf = localforage;
 
 // Strip product images to keep payload small
 function stripImages(products) {
@@ -164,7 +165,7 @@ export default function ShareInventoryModal({ isOpen, onClose }) {
                 if (Array.isArray(importResult.sales) && importResult.sales.length > 0)
                     await lf.setItem('bodega_sales_v1', importResult.sales);
             }
-            setTimeout(() => window.location.reload(), 300);
+            setTimeout(() => window.location.reload(), 500);
         } catch (err) {
             setError('Error al restaurar: ' + err.message);
             setLoading(false);
