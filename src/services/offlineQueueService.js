@@ -67,6 +67,13 @@ export const offlineQueueService = {
     await localforage.setItem(QUEUE_KEY, remaining);
   },
 
+  async retryFailed() {
+    const queue = await localforage.getItem(QUEUE_KEY) || [];
+    const reset = queue.map(q => q.sync_status === 'failed' ? { ...q, sync_status: 'pending', attempts: 0, last_error: null } : q);
+    await localforage.setItem(QUEUE_KEY, reset);
+    await offlineQueueService.syncPendingSales();
+  },
+
   async dismissFailed() {
     const queue = await localforage.getItem(QUEUE_KEY) || [];
     await localforage.setItem(QUEUE_KEY, queue.filter(q => q.sync_status !== 'failed'));

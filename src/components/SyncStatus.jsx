@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
-import { Wifi, WifiOff, RefreshCw, AlertTriangle, X, ChevronRight, Copy, Check } from 'lucide-react';
+import { Wifi, WifiOff, RefreshCw, AlertTriangle, X, ChevronRight, Copy, Check, RotateCcw } from 'lucide-react';
 import { supabaseCloud as supabase } from '../config/supabaseCloud';
 import localforage from 'localforage';
 
@@ -44,6 +44,8 @@ export default function SyncStatus() {
         }
     };
 
+    const [isRetrying, setIsRetrying] = useState(false);
+
     const handleDismissFailed = async (e) => {
         e.stopPropagation();
         const { offlineQueueService } = await import('../services/offlineQueueService');
@@ -52,6 +54,19 @@ export default function SyncStatus() {
         setFailedItems([]);
         setShowFailedBanner(false);
         setShowErrorModal(false);
+    };
+
+    const handleRetryFailed = async (e) => {
+        e.stopPropagation();
+        setIsRetrying(true);
+        try {
+            const { offlineQueueService } = await import('../services/offlineQueueService');
+            await offlineQueueService.retryFailed();
+            await checkQueue();
+            setShowErrorModal(false);
+        } finally {
+            setIsRetrying(false);
+        }
     };
 
     const handleCopyLogs = () => {
@@ -191,13 +206,21 @@ export default function SyncStatus() {
                         <div className="flex gap-2 shrink-0">
                             <button
                                 onClick={handleCopyLogs}
-                                className="flex-1 py-2.5 text-xs font-bold rounded-xl transition-all active:scale-95 flex items-center justify-center gap-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200"
+                                className="py-2.5 px-3 text-xs font-bold rounded-xl transition-all active:scale-95 flex items-center justify-center gap-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200"
                             >
-                                {copied ? <><Check size={14} /> Copiado</> : <><Copy size={14} /> Copiar log</>}
+                                {copied ? <><Check size={14} /> Copiado</> : <><Copy size={14} /></>}
+                            </button>
+                            <button
+                                onClick={handleRetryFailed}
+                                disabled={isRetrying || !isOnline}
+                                className="flex-1 py-2.5 text-xs font-bold text-white bg-blue-500 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                            >
+                                <RotateCcw size={13} className={isRetrying ? 'animate-spin' : ''} />
+                                {isRetrying ? 'Reintentando...' : 'Reintentar todas'}
                             </button>
                             <button
                                 onClick={handleDismissFailed}
-                                className="flex-1 py-2.5 text-xs font-bold text-white bg-red-500 hover:bg-red-600 rounded-xl transition-all active:scale-95"
+                                className="py-2.5 px-3 text-xs font-bold text-white bg-red-500 hover:bg-red-600 rounded-xl transition-all active:scale-95"
                             >
                                 Descartar
                             </button>
