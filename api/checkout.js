@@ -46,11 +46,12 @@ export default async function handler(req, res) {
     const { cart = [] } = payload;
 
     // Upsert unknown products (ON CONFLICT DO NOTHING)
+    // name may be absent in offline queue entries saved before the fix — use fallback
     const productsToUpsert = cart
-        .filter(item => item.id && item.name)
+        .filter(item => item.id)
         .map(item => ({
             id: item.id,
-            name: item.name,
+            name: item.name || `Producto ${item.id.slice(0, 8)}`,
             price: item.priceUsd || 0,
             stock: 0,
             cost_price: 0,

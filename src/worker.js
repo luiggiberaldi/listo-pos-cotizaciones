@@ -70,13 +70,12 @@ async function handleCheckout(request, env) {
     const { cart = [] } = payload;
 
     // ── Paso 1: upsertear productos desconocidos (ON CONFLICT DO NOTHING) ──
-    // Sólo los que tienen nombre; si no, se omiten y el RPC falla de todos
-    // modos (mejor error explícito que silencio).
+    // name puede estar ausente en entradas de la cola offline guardadas antes del fix.
     const productsToUpsert = cart
-        .filter(item => item.id && item.name)
+        .filter(item => item.id)
         .map(item => ({
             id: item.id,
-            name: item.name,
+            name: item.name || `Producto ${item.id.slice(0, 8)}`,
             price: item.priceUsd || 0,
             stock: 0,
             cost_price: 0,
