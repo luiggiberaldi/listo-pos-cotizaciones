@@ -175,7 +175,7 @@ export default function CloudAuthModal({ isOpen, onClose, forceLogin = false }) 
                             draggable={false}
                         />
                         <p className="text-slate-400 text-xs mt-3 font-medium text-center">
-                            Tu negocio, siempre listo.
+
                         </p>
                     </div>
 

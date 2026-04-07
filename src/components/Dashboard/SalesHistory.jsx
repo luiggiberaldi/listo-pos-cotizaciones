@@ -107,33 +107,96 @@ export default function SalesHistory({
                             {/* Expanded details */}
                             {isExpanded && (
                                 <div className="px-3 pb-3 pt-1 border-t border-slate-200 dark:border-slate-700/50 text-sm animate-in fade-in slide-in-from-top-1">
+
+                                    {/* Productos */}
                                     {s.items && s.items.length > 0 ? (
-                                        <div className="space-y-1 mb-3 pt-2">
-                                            <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">Productos ({s.items.length})</p>
-                                            {s.items.map((item, i) => (
-                                                <div key={i} className={`flex justify-between items-center text-xs ${isCanceled ? 'text-slate-400 line-through' : 'text-slate-600 dark:text-slate-300'}`}>
-                                                    <span className="truncate pr-2">{item.isWeight ? `${item.qty.toFixed(3)}kg` : `${item.qty}u`} {item.name}</span>
-                                                    <span className="font-medium">${(item.priceUsd * item.qty).toFixed(2)}</span>
-                                                </div>
-                                            ))}
+                                        <div className="pt-2 mb-3">
+                                            <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1.5">Productos ({s.items.length})</p>
+                                            <div className="space-y-1">
+                                                {s.items.map((item, i) => (
+                                                    <div key={i} className={`flex justify-between items-center text-xs ${isCanceled ? 'text-slate-400 line-through' : 'text-slate-600 dark:text-slate-300'}`}>
+                                                        <span className="truncate pr-2">{item.isWeight ? `${item.qty.toFixed(3)} kg` : `${item.qty}u`} · {item.name}</span>
+                                                        <span className="font-semibold shrink-0">${(item.priceUsd * item.qty).toFixed(2)}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </div>
                                     ) : (
                                         <p className="text-xs text-slate-400 mb-3 pt-2">Pago de Deudas (Sin productos)</p>
                                     )}
 
-                                    <div className="flex justify-between text-[10px] font-medium text-slate-400 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-lg p-2 mb-3">
-                                        <div className="flex flex-col gap-0.5">
-                                            <span>Ref: {formatBs(s.totalBs)} Bs @ {formatBs(s.rate || bcvRate)}</span>
-                                            {s.tasaCop > 0 && <span>COP: {(s.totalCop || (s.totalUsd * s.tasaCop)).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} @ {s.tasaCop}</span>}
+                                    {/* Resumen de cobro */}
+                                    <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-2.5 mb-3 space-y-1.5">
+                                        <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-2">Resumen de cobro</p>
+
+                                        {/* Total en Bs */}
+                                        <div className="flex justify-between items-center text-[11px]">
+                                            <span className="text-slate-500">Total en Bs</span>
+                                            <span className="font-bold text-slate-700 dark:text-slate-200">{formatBs(s.totalBs)} Bs</span>
                                         </div>
+
+                                        {/* Tasa aplicada */}
+                                        <div className="flex justify-between items-center text-[11px]">
+                                            <span className="text-slate-400">Tasa BCV aplicada</span>
+                                            <span className="text-slate-400">{formatBs(s.rate || bcvRate)} Bs/$</span>
+                                        </div>
+
+                                        {/* COP si aplica */}
+                                        {s.tasaCop > 0 && (
+                                            <div className="flex justify-between items-center text-[11px]">
+                                                <span className="text-slate-500">Total en COP</span>
+                                                <span className="font-bold text-amber-600">{(s.totalCop || (s.totalUsd * s.tasaCop)).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} COP</span>
+                                            </div>
+                                        )}
+
+                                        {/* Pagos */}
+                                        {s.payments && s.payments.length > 0 && (
+                                            <>
+                                                <div className="border-t border-slate-100 dark:border-slate-800 pt-1.5 mt-1">
+                                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Pagos recibidos</p>
+                                                    {s.payments.map((p, i) => {
+                                                        const isCop = p.currency === 'COP';
+                                                        const isBs = !isCop && (p.currency ? p.currency !== 'USD' : (p.methodId?.includes('_bs') || p.methodId === 'pago_movil'));
+                                                        const val = isCop
+                                                            ? `${(p.amountBs || (p.amountUsd * (s.tasaCop || 1))).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} COP`
+                                                            : isBs
+                                                            ? `${formatBs(p.amountBs || (p.amountUsd * (s.rate || bcvRate)))} Bs`
+                                                            : `$${(p.amountUsd || 0).toFixed(2)}`;
+                                                        return (
+                                                            <div key={i} className="flex justify-between items-center text-[11px]">
+                                                                <span className="text-slate-500">{p.methodLabel || 'Pago'}</span>
+                                                                <span className="font-semibold text-slate-700 dark:text-slate-200">{val}</span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </>
+                                        )}
+
+                                        {/* Fiado */}
+                                        {s.fiadoUsd > 0 && (
+                                            <div className="flex justify-between items-center text-[11px] border-t border-slate-100 dark:border-slate-800 pt-1.5 mt-1">
+                                                <span className="text-amber-600 font-bold">Pendiente (fiado)</span>
+                                                <div className="text-right">
+                                                    <div className="font-bold text-amber-600">${s.fiadoUsd.toFixed(2)}</div>
+                                                    <div className="text-amber-500 text-[10px]">{formatBs(s.fiadoUsd * (s.rate || bcvRate))} Bs</div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Cambio */}
                                         {(s.changeUsd > 0 || s.changeBs > 0) && (
-                                            <div className="text-emerald-500 font-bold self-start mt-0.5 text-right">
-                                                {s.changeUsd > 0 && <div>Vuelto: ${s.changeUsd.toFixed(2)}</div>}
-                                                <div className="font-medium">{formatBs(s.changeBs || s.changeUsd * (s.rate || bcvRate))} Bs</div>
+                                            <div className="flex justify-between items-center text-[11px] border-t border-slate-100 dark:border-slate-800 pt-1.5 mt-1">
+                                                <span className="text-emerald-600 font-bold">Cambio entregado</span>
+                                                <div className="text-right">
+                                                    {s.changeUsd > 0 && <div className="font-bold text-emerald-600">${s.changeUsd.toFixed(2)}</div>}
+                                                    <div className="text-emerald-500 text-[10px]">{formatBs(s.changeBs || s.changeUsd * (s.rate || bcvRate))} Bs</div>
+                                                </div>
                                             </div>
                                         )}
                                     </div>
 
+                                    {/* Botones */}
                                     <div className="flex flex-wrap items-center gap-2 mt-2">
                                         <button
                                             onClick={(e) => {
@@ -163,7 +226,6 @@ export default function SalesHistory({
                                                 <Printer size={14} />
                                             </button>
                                         )}
-
                                         {isAdmin && !isCanceled && !s.cajaCerrada && (
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); onVoidSale(s); }}
