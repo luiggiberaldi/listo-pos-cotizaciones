@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import localforage from 'localforage';
-import { pushCloudSync } from '../hooks/useCloudSync';
 import { Share2, Download, X, Copy, Check, Loader2, AlertTriangle, Package, Users, ShoppingBag, Database } from 'lucide-react';
 
 // IDB keys per group
@@ -145,17 +144,9 @@ export default function ShareInventoryModal({ isOpen, onClose }) {
         if (!importResult) return;
         setLoading(true);
         try {
-            console.log('[Import] Iniciando importación, formato:', importResult.idb ? 'nuevo (idb)' : 'antiguo');
             if (importResult.idb && typeof importResult.idb === 'object') {
-                const keys = Object.keys(importResult.idb);
-                console.log('[Import] Claves a escribir:', keys);
                 for (const [key, value] of Object.entries(importResult.idb)) {
-                    const len = Array.isArray(value) ? value.length : typeof value;
-                    console.log(`[Import] Escribiendo ${key} (${len})...`);
                     await lf.setItem(key, value);
-                    // También actualiza Supabase para que el Pull inicial no sobreescriba con datos viejos
-                    pushCloudSync(key, value).catch(() => {});
-                    console.log(`[Import] ✓ ${key}`);
                 }
                 if (importResult.ls && typeof importResult.ls === 'object') {
                     for (const [key, value] of Object.entries(importResult.ls)) {
@@ -163,27 +154,21 @@ export default function ShareInventoryModal({ isOpen, onClose }) {
                     }
                 }
             } else {
-                // Old format: { products: [], categories: [], customers: [], sales: [] }
-                if (Array.isArray(importResult.products) && importResult.products.length > 0) {
+                if (Array.isArray(importResult.products) && importResult.products.length > 0)
                     await lf.setItem('bodega_products_v1', importResult.products);
-                    pushCloudSync('bodega_products_v1', importResult.products).catch(() => {});
-                }
-                if (Array.isArray(importResult.categories) && importResult.categories.length > 0) {
+                if (Array.isArray(importResult.categories) && importResult.categories.length > 0)
                     await lf.setItem('my_categories_v1', importResult.categories);
-                }
-                if (Array.isArray(importResult.customers) && importResult.customers.length > 0) {
+                if (Array.isArray(importResult.customers) && importResult.customers.length > 0)
                     await lf.setItem('bodega_customers_v1', importResult.customers);
-                    pushCloudSync('bodega_customers_v1', importResult.customers).catch(() => {});
-                }
-                if (Array.isArray(importResult.sales) && importResult.sales.length > 0) {
+                if (Array.isArray(importResult.sales) && importResult.sales.length > 0)
                     await lf.setItem('bodega_sales_v1', importResult.sales);
-                    pushCloudSync('bodega_sales_v1', importResult.sales).catch(() => {});
-                }
             }
-            console.log('[Import] Todo escrito. Recargando en 500ms...');
-            setTimeout(() => window.location.reload(), 500);
+            // Marcar que se acaba de importar: CloudSync debe saltarse el Pull inicial
+            // para que no sobreescriba con datos viejos de Supabase.
+            // sessionStorage sobrevive a window.location.reload() dentro del mismo tab.
+            sessionStorage.setItem('skip_cloud_pull', '1');
+            setTimeout(() => window.location.reload(), 300);
         } catch (err) {
-            console.error('[Import] ERROR:', err);
             setError('Error al restaurar: ' + err.message);
             setLoading(false);
         }
