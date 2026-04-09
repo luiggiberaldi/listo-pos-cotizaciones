@@ -5,7 +5,7 @@ export function procesarImpactoCliente(clienteInicial, transaccion) {
     let cliente = { ...clienteInicial };
 
     // INPUTS INTERMEDIOS
-    const { usaSaldoFavor = 0, esCredito = false, deudaGenerada = 0, vueltoParaMonedero = 0 } = transaccion;
+    const { usaSaldoFavor = 0, esCredito = false, deudaGenerada = 0, vueltoParaMonedero = 0, esCashea = false } = transaccion;
 
     // 0. Q0: CONSUMO DE SALDO A FAVOR
     if (usaSaldoFavor > 0) {
@@ -13,8 +13,13 @@ export function procesarImpactoCliente(clienteInicial, transaccion) {
     }
 
     // 1. Q1: GENERACIÓN DE DEUDA
+    // Si es venta Cashea, la deuda se guarda en casheaDeuda (separada del fiado normal)
     if (esCredito) {
-        cliente.deuda = round2((cliente.deuda || 0) + deudaGenerada);
+        if (esCashea) {
+            cliente.casheaDeuda = round2((cliente.casheaDeuda || 0) + deudaGenerada);
+        } else {
+            cliente.deuda = round2((cliente.deuda || 0) + deudaGenerada);
+        }
     }
 
     // 2. Q2 & Q3: VUELTO (ABONO A DEUDA O MONEDERO)

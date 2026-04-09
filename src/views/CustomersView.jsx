@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Users, Plus, Search, User, X, Trash2, Pencil, Phone, RefreshCw, Save, ArrowDownRight, ArrowUpRight, Clock, CheckCircle2, CreditCard, ShoppingBag, Truck, Check } from 'lucide-react';
+import CasheaIcon from '../components/CasheaIcon';
 import { storageService } from '../utils/storageService';
 import { showToast } from '../components/Toast';
 import { formatBs, formatUsd } from '../utils/calculatorUtils';
@@ -644,6 +645,11 @@ function CustomerCard({ customer, bcvRate, tasaCop, copEnabled, onClick, onDelet
                             {bcvRate > 0 && <p className="text-[10px] font-bold text-red-400/70">-{formatBs(customer.deuda * bcvRate)} Bs</p>}
                             {copEnabled && tasaCop > 0 && <p className="text-[10px] font-bold text-red-400/90">-{(customer.deuda * tasaCop).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} COP</p>}
                         </>
+                    ) : customer.casheaDeuda > 0 ? (
+                        <>
+                            <p className="text-sm font-black text-purple-500 leading-tight flex items-center gap-1 justify-end"><CasheaIcon size={12} /> ${formatUsd(customer.casheaDeuda)}</p>
+                            {bcvRate > 0 && <p className="text-[10px] font-bold text-purple-400/70">{formatBs(customer.casheaDeuda * bcvRate)} Bs</p>}
+                        </>
                     ) : customer.favor > 0 ? (
                         <>
                             <p className="text-sm font-black text-emerald-500 leading-tight">+${formatUsd(customer.favor)}</p>
@@ -732,20 +738,28 @@ function CustomerDetailSheet({ customer, isOpen, isAdmin, onClose, onAjustar, on
                                 {bcvRate > 0 && <p className="text-[10px] font-bold text-red-400/70">-{formatBs(customer.deuda * bcvRate)} Bs</p>}
                                 {copEnabled && tasaCop > 0 && <p className="text-[10px] font-bold text-red-500/90">-{(customer.deuda * tasaCop).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} COP</p>}
                             </div>
-                        ) : customer.favor > 0 ? (
+                        ) : null}
+                        {customer.casheaDeuda > 0 ? (
+                            <div className="flex-1 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800/30 rounded-xl px-3 py-2.5 text-center">
+                                <p className="text-[10px] font-bold text-purple-400 uppercase flex items-center gap-1 justify-center"><CasheaIcon size={10} /> Cashea</p>
+                                <p className="text-lg font-black text-purple-500">${formatUsd(customer.casheaDeuda)}</p>
+                                {bcvRate > 0 && <p className="text-[10px] font-bold text-purple-400/70">{formatBs(customer.casheaDeuda * bcvRate)} Bs</p>}
+                            </div>
+                        ) : null}
+                        {!customer.deuda && !customer.casheaDeuda && customer.favor > 0 ? (
                             <div className="flex-1 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/30 rounded-xl px-3 py-2.5 text-center">
                                 <p className="text-[10px] font-bold text-emerald-400 uppercase">A favor</p>
                                 <p className="text-lg font-black text-emerald-500">+${formatUsd(customer.favor)}</p>
                                 {bcvRate > 0 && <p className="text-[10px] font-bold text-emerald-400/70">+{formatBs(customer.favor * bcvRate)} Bs</p>}
                                 {copEnabled && tasaCop > 0 && <p className="text-[10px] font-bold text-emerald-500/90">+{(customer.favor * tasaCop).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} COP</p>}
                             </div>
-                        ) : (
+                        ) : !customer.deuda && !customer.casheaDeuda ? (
                             <div className="flex-1 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-center">
                                 <p className="text-sm font-black text-slate-400 flex items-center justify-center gap-1">
                                     <CheckCircle2 size={14} className="text-emerald-400" /> Al día
                                 </p>
                             </div>
-                        )}
+                        ) : null}
                     </div>
 
                     {/* Acciones */}

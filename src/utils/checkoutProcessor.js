@@ -103,7 +103,7 @@ export async function processSaleTransaction({
 
     const sale = {
         id: finalSaleId || crypto.randomUUID(),
-        tipo: fiadoAmountUsd > 0 ? 'VENTA_FIADA' : 'VENTA',
+        tipo: fiadoAmountUsd > 0 ? (casheaUsd > 0 ? 'VENTA_CASHEA' : 'VENTA_FIADA') : 'VENTA',
         status: saleMode === 'online' ? 'COMPLETADA' : 'PENDIENTE_SYNC',
         items: cart.map(i => ({ id: i.id, name: i.name, qty: i.qty, priceUsd: i.priceUsd, costBs: i.costBs || 0, costUsd: i.costUsd || 0, isWeight: i.isWeight })),
         cartSubtotalUsd: cartSubtotalUsd,
@@ -139,7 +139,7 @@ export async function processSaleTransaction({
 
     // Audit log
     const user = useAuthStore.getState().usuarioActivo;
-    const tipo = fiadoAmountUsd > 0 ? 'VENTA_FIADO' : 'VENTA_COMPLETADA';
+    const tipo = fiadoAmountUsd > 0 ? (casheaUsd > 0 ? 'VENTA_CASHEA' : 'VENTA_FIADO') : 'VENTA_COMPLETADA';
     logEvent('VENTA', tipo, `Venta #${saleNumber} [${saleMode.toUpperCase()}] - $${cartTotalUsd.toFixed(2)} - ${cart.length} items - ${selectedCustomer?.name || 'Consumidor Final'}`, user, { saleId: finalPersistedSale.id, total: cartTotalUsd, items: cart.length });
 
     // Deduct stock in local cache immediately
@@ -174,6 +174,7 @@ export async function processSaleTransaction({
             usaSaldoFavor: amount_favor_used,
             esCredito: fiadoAmountUsd > 0.009,
             deudaGenerada: fiadoAmountUsd,
+            esCashea: casheaUsd > 0,   // deuda va a casheaDeuda si es Cashea
             vueltoParaMonedero: 0
         };
 

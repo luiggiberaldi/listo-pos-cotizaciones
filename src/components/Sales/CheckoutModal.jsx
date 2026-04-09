@@ -674,14 +674,18 @@ export default function CheckoutModal({
                     className={`w-full py-4 text-white font-black text-base rounded-2xl shadow-lg transition-all tracking-wide flex items-center justify-center gap-2 ${isPaid
                         ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/25 active:scale-[0.98]'
                         : selectedCustomerId
-                            ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/25 active:scale-[0.98]'
+                            ? casheaActive
+                                ? 'bg-purple-500 hover:bg-purple-600 shadow-purple-500/25 active:scale-[0.98]'
+                                : 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/25 active:scale-[0.98]'
                             : 'bg-slate-300 dark:bg-slate-800 text-slate-500 shadow-none cursor-not-allowed'
                         }`}
                 >
                     {isPaid ? (
                         <><Receipt size={18} /> CONFIRMAR VENTA</>
                     ) : selectedCustomerId ? (
-                        <><Users size={18} /> FIAR RESTANTE (${remainingUsd.toFixed(2)})</>
+                        casheaActive
+                            ? <><CasheaIcon size={18} /> REGISTRAR CON CASHEA (${remainingUsd.toFixed(2)})</>
+                            : <><Users size={18} /> FIAR RESTANTE (${remainingUsd.toFixed(2)})</>
                     ) : (
                         <><Receipt size={18} /> INGRESA LOS PAGOS</>
                     )}
@@ -695,32 +699,41 @@ export default function CheckoutModal({
                         
                         {/* Header */}
                         <div className="flex items-center gap-4 mb-5">
-                            <div className="w-12 h-12 sm:w-14 sm:h-14 bg-amber-100 dark:bg-amber-900/30 rounded-2xl flex items-center justify-center shrink-0">
-                                <AlertTriangle size={24} className="text-amber-600 sm:w-7 sm:h-7" />
+                            <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center shrink-0 ${casheaActive ? 'bg-yellow-100 dark:bg-yellow-900/30' : 'bg-amber-100 dark:bg-amber-900/30'}`}>
+                                {casheaActive
+                                    ? <CasheaIcon size={32} />
+                                    : <AlertTriangle size={24} className="text-amber-600 sm:w-7 sm:h-7" />}
                             </div>
                             <div>
-                                <h3 className="text-lg sm:text-xl font-black text-slate-800 dark:text-white">Confirmar Fiado</h3>
+                                <h3 className="text-lg sm:text-xl font-black text-slate-800 dark:text-white">
+                                    {casheaActive ? 'Confirmar con Cashea' : 'Confirmar Fiado'}
+                                </h3>
                                 <p className="text-xs sm:text-sm text-slate-400 mt-0.5">Revisa los detalles antes de continuar</p>
                             </div>
                         </div>
 
                         {/* Monto destacado */}
-                        <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 rounded-2xl p-4 sm:p-5 mb-5">
+                        <div className={`border rounded-2xl p-4 sm:p-5 mb-5 ${casheaActive ? 'bg-purple-50 dark:bg-purple-900/10 border-purple-200 dark:border-purple-800/30' : 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800/30'}`}>
                             <div className="text-center mb-3">
-                                <p className="text-[11px] sm:text-xs font-bold text-amber-500 uppercase tracking-widest mb-1">Monto a fiar</p>
-                                <p className="text-3xl sm:text-4xl font-black text-amber-600">${remainingUsd.toFixed(2)}</p>
-                                <p className="text-sm sm:text-base font-bold text-amber-500/70 mt-0.5">{formatBs(remainingBs)} Bs</p>
+                                <p className={`text-[11px] sm:text-xs font-bold uppercase tracking-widest mb-1 ${casheaActive ? 'text-purple-500' : 'text-amber-500'}`}>
+                                    {casheaActive ? 'Monto pendiente Cashea' : 'Monto a fiar'}
+                                </p>
+                                <p className={`text-3xl sm:text-4xl font-black ${casheaActive ? 'text-purple-600' : 'text-amber-600'}`}>${remainingUsd.toFixed(2)}</p>
+                                <p className={`text-sm sm:text-base font-bold mt-0.5 ${casheaActive ? 'text-purple-500/70' : 'text-amber-500/70'}`}>{formatBs(remainingBs)} Bs</p>
                             </div>
-                            <div className="border-t border-amber-200/50 dark:border-amber-800/20 pt-3 space-y-2">
+                            <div className={`border-t pt-3 space-y-2 ${casheaActive ? 'border-purple-200/50 dark:border-purple-800/20' : 'border-amber-200/50 dark:border-amber-800/20'}`}>
                                 <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300">
-                                    Se registrara como deuda a nombre de <span className="font-black text-slate-800 dark:text-white">{selectedCustomer?.name}</span>.
+                                    {casheaActive
+                                        ? <>Cashea cobrará <span className="font-black text-slate-800 dark:text-white">${remainingUsd.toFixed(2)}</span> a <span className="font-black text-slate-800 dark:text-white">{selectedCustomer?.name}</span>. Se registrará como deuda Cashea.</>
+                                        : <>Se registrara como deuda a nombre de <span className="font-black text-slate-800 dark:text-white">{selectedCustomer?.name}</span>.</>
+                                    }
                                 </p>
                                 {totalPaidUsd > 0.01 && (
                                     <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">
                                         El cliente abona <span className="font-bold text-emerald-600">${totalPaidUsd.toFixed(2)}</span> ahora y el restante queda pendiente.
                                     </p>
                                 )}
-                                {totalPaidUsd <= 0.01 && (
+                                {totalPaidUsd <= 0.01 && !casheaActive && (
                                     <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">
                                         El monto total de la venta quedara como deuda del cliente.
                                     </p>
@@ -729,6 +742,13 @@ export default function CheckoutModal({
                                     <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30 rounded-lg p-2.5 mt-2">
                                         <p className="text-[11px] sm:text-xs font-bold text-red-600 dark:text-red-400">
                                             Este cliente ya tiene una deuda de ${(selectedCustomer.deuda || 0).toFixed(2)}. La deuda total pasara a ser ${((selectedCustomer.deuda || 0) + remainingUsd).toFixed(2)}.
+                                        </p>
+                                    </div>
+                                )}
+                                {selectedCustomer && casheaActive && (selectedCustomer.casheaDeuda || 0) > 0.01 && (
+                                    <div className="bg-purple-50 dark:bg-purple-900/10 border border-purple-200 dark:border-purple-800/30 rounded-lg p-2.5 mt-2">
+                                        <p className="text-[11px] sm:text-xs font-bold text-purple-600 dark:text-purple-400">
+                                            Ya tiene ${(selectedCustomer.casheaDeuda || 0).toFixed(2)} pendiente con Cashea. El total Cashea pasará a ${((selectedCustomer.casheaDeuda || 0) + remainingUsd).toFixed(2)}.
                                         </p>
                                     </div>
                                 )}
@@ -745,9 +765,9 @@ export default function CheckoutModal({
                             </button>
                             <button
                                 onClick={() => { setConfirmFiar(false); handleConfirm(); }}
-                                className="flex-1 py-3.5 sm:py-4 font-black text-sm sm:text-base text-white bg-amber-500 hover:bg-amber-600 rounded-xl shadow-lg shadow-amber-500/25 active:scale-95 transition-all"
+                                className={`flex-1 py-3.5 sm:py-4 font-black text-sm sm:text-base text-white rounded-xl shadow-lg active:scale-95 transition-all ${casheaActive ? 'bg-purple-500 hover:bg-purple-600 shadow-purple-500/25' : 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/25'}`}
                             >
-                                Confirmar fiado
+                                {casheaActive ? 'Confirmar Cashea' : 'Confirmar fiado'}
                             </button>
                         </div>
                     </div>
