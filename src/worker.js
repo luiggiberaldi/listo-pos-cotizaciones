@@ -73,17 +73,23 @@ async function handleCheckout(request, env) {
     const { cart = [] } = payload;
 
     // ── Idempotencia: evitar duplicar ventas offline si el cliente reintenta ──
-    // queue_id es el UUID del item en la cola offline.
-    // _processedQueueIds es un Set module-level que dura el tiempo de vida del worker.
-    // Para idempotencia persistente ejecutar la migración SQL (agrega queue_id a sales).
     if (payload.queue_id && payload.sync_origin === 'offline_sync') {
+        // 1. Check en memoria (rápido, sin egress)
         if (_processedQueueIds.has(payload.queue_id)) {
-            console.log(`[checkout] Venta duplicada ignorada en memoria (queue_id=${payload.queue_id})`);
             return Response.json({ ok: true, duplicate: true }, { headers });
         }
-        _processedQueueIds.add(payload.queue_id);
-        // Limpiar el Set si crece demasiado (evitar fuga de memoria)
-        if (_processedQueueIds.size > 500) _processedQueueIds.clear();
+        // 2. Check persistente en DB (sobrevive reinicios del worker)
+        const dupCheck = await fetch(
+            `${SUPABASE_URL}/rest/v1/sales?queue_id=eq.${payload.queue_id}&select=id&limit=1`,
+            { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } }
+        );
+        if (dupCheck.ok) {
+            const existing = await dupCheck.json();
+            if (existing?.length > 0) {
+                _processedQueueIds.add(payload.queue_id);
+                return Response.json({ ok: true, duplicate: true, sale_id: existing[0].id }, { headers });
+            }
+        }
     }
 
     // Normaliza IDs de carrito: si un item tiene un ID legacy (no-UUID como "p-snack-4"),
@@ -150,6 +156,23 @@ async function handleCheckout(request, env) {
     });
 
     const result = await rpcRes.json();
+
+    // ── Estampar queue_id en la venta para idempotencia futura ──
+    if (rpcRes.ok && payload.queue_id && result?.sale_id) {
+        fetch(`${SUPABASE_URL}/rest/v1/sales?id=eq.${result.sale_id}`, {
+            method: 'PATCH',
+            headers: {
+                apikey: SERVICE_KEY,
+                Authorization: `Bearer ${SERVICE_KEY}`,
+                'Content-Type': 'application/json',
+                Prefer: 'return=minimal',
+            },
+            body: JSON.stringify({ queue_id: payload.queue_id }),
+        }).catch(() => {}); // fire-and-forget, no bloquea la respuesta
+        _processedQueueIds.add(payload.queue_id);
+        if (_processedQueueIds.size > 500) _processedQueueIds.clear();
+    }
+
     return Response.json(result, { status: rpcRes.ok ? 200 : rpcRes.status, headers });
 }
 
