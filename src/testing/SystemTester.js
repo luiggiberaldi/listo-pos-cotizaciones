@@ -339,7 +339,7 @@ async function suitePagosInconsistentes() {
         // Suma de pagos en USD (cada pago tiene amountUsd o se deriva de amount/rate)
         let sumPaidUsd = 0;
         for (const pmt of sale.payments) {
-            if (pmt.currency === 'USD' || pmt.methodId?.includes('usd')) {
+            if (pmt.currency === 'USD' || pmt.methodId?.includes('usd') || pmt.methodId === 'cashea') {
                 sumPaidUsd = sumR(sumPaidUsd, pmt.amountUsd || pmt.amount || 0);
             } else if (pmt.amountUsd) {
                 sumPaidUsd = sumR(sumPaidUsd, pmt.amountUsd);
@@ -348,8 +348,10 @@ async function suitePagosInconsistentes() {
             }
         }
 
-        // Restar vuelto dado (en USD directo + vuelto en Bs convertido a USD)
-        const changeUsd = sumR(sale.changeUsd || 0, sale.rate ? round2((sale.changeBs || 0) / sale.rate) : 0);
+        // Para VENTA_CASHEA no hay vuelto (ya validado en suiteCashea)
+        const changeUsd = sale.tipo === 'VENTA_CASHEA'
+            ? 0
+            : sumR(sale.changeUsd || 0, sale.rate ? round2((sale.changeBs || 0) / sale.rate) : 0);
         const netPaidUsd = subR(sumPaidUsd, changeUsd);
 
         // Tolerancia de $0.05 por redondeos de cambio en Bs
@@ -419,8 +421,103 @@ async function suiteIdsDuplicados() {
 }
 
 // ════════════════════════════════════════════
-// REGISTRO DE SUITES
+// 10. AUDITORÍA CASHEA
 // ════════════════════════════════════════════
+async function suiteCashea() {
+    section('⚡ SUITE: Auditoría Cashea (Integridad de Ventas Financiadas)');
+    const [sales, customers] = await Promise.all([
+        storageService.getItem('bodega_sales_v1', []),
+        storageService.getItem('bodega_customers_v1', []),
+    ]);
+
+    const casheaSales = sales.filter(s => s.tipo === 'VENTA_CASHEA' && s.status !== 'ANULADA');
+
+    if (casheaSales.length === 0) {
+        log('No hay ventas Cashea registradas. Suite omitida.', 'info');
+        return;
+    }
+
+    log(`Auditando ${casheaSales.length} venta(s) Cashea...`, 'info');
+    let errors = 0;
+
+    for (const sale of casheaSales) {
+        const id = sale.id?.slice(-6) || '?';
+
+        // 1. Debe tener casheaUsd > 0
+        if (!sale.casheaUsd || sale.casheaUsd <= 0) {
+            log(`[${id}] VENTA_CASHEA sin casheaUsd registrado.`, 'error');
+            errors++;
+        }
+
+        // 2. Debe tener un pago con methodId 'cashea' en el array
+        const casheaPmt = sale.payments?.find(p => p.methodId === 'cashea');
+        if (!casheaPmt) {
+            log(`[${id}] Falta pago methodId='cashea' en payments[].`, 'error');
+            errors++;
+            continue;
+        }
+
+        // 3. El amountUsd del pago cashea debe coincidir con casheaUsd
+        if (Math.abs((casheaPmt.amountUsd || 0) - (sale.casheaUsd || 0)) > 0.02) {
+            log(`[${id}] casheaUsd=$${sale.casheaUsd} vs payments.cashea=$${casheaPmt.amountUsd} — descuadre.`, 'error');
+            errors++;
+        }
+
+        // 4. La suma de TODOS los pagos (cliente + cashea) debe igualar totalUsd
+        const sumPagos = sumR(...(sale.payments || []).map(p => p.amountUsd || 0));
+        const diff = Math.abs(sumPagos - sale.totalUsd);
+        if (diff > 0.05) {
+            log(`[${id}] Suma pagos $${sumPagos} ≠ totalUsd $${sale.totalUsd} (diff $${diff.toFixed(2)}).`, 'error');
+            errors++;
+        }
+
+        // 5. casheaUsd debe estar en rango válido (1% - 99% del total)
+        const pct = sale.casheaUsd / sale.totalUsd;
+        if (pct <= 0.01 || pct >= 0.99) {
+            log(`[${id}] casheaUsd=${(pct*100).toFixed(0)}% del total — fuera del rango válido (1%-99%).`, 'warn');
+        }
+
+        // 6. No debe tener changeUsd ni changeBs (Cashea no genera vuelto)
+        if ((sale.changeUsd || 0) > 0.01 || (sale.changeBs || 0) > 0.01) {
+            log(`[${id}] VENTA_CASHEA con vuelto registrado — changeUsd=$${sale.changeUsd}, changeBs=$${sale.changeBs}. Inconsistente.`, 'error');
+            errors++;
+        }
+
+        // 7. Debe tener customerId (Cashea requiere cliente)
+        if (!sale.customerId) {
+            log(`[${id}] VENTA_CASHEA sin customerId — Cashea requiere cliente vinculado.`, 'error');
+            errors++;
+        }
+    }
+
+    // 8. Cruzar casheaDeuda del cliente con suma de ventas Cashea pendientes
+    const casheaDeudaPorCliente = {};
+    for (const sale of casheaSales) {
+        if (sale.customerId) {
+            casheaDeudaPorCliente[sale.customerId] = sumR(
+                casheaDeudaPorCliente[sale.customerId] || 0,
+                sale.casheaUsd || 0
+            );
+        }
+    }
+
+    for (const customer of customers) {
+        const registradaUsd = casheaDeudaPorCliente[customer.id] || 0;
+        const storedDeuda = customer.casheaDeuda || 0;
+        if (registradaUsd > 0 && Math.abs(storedDeuda - registradaUsd) > 0.10) {
+            log(`[Cliente: ${customer.name}] casheaDeuda=$${storedDeuda} vs suma ventas Cashea=$${registradaUsd.toFixed(2)} — posible desincronía.`, 'warn');
+        }
+    }
+
+    if (errors > 0) {
+        log(`${errors} error(es) en ventas Cashea.`, 'error');
+        throw new AssertionError(`${errors} ventas Cashea con inconsistencias de integridad`);
+    } else {
+        log(`${casheaSales.length} ventas Cashea auditadas. Integridad 100%.`, 'success');
+    }
+}
+
+
 const SUITES = [
     { key: 'precision_financiera',   name: '🔬 Motor: Certificación de Precisión',            fn: suitePrecisionFinanciera,   fast: true },
     { key: 'auditoria_historica',    name: '🕵️ Histórico: Integridad de Libros',               fn: suiteAuditarDataHistorica,  fast: true },
@@ -431,6 +528,7 @@ const SUITES = [
     { key: 'margen_negativo',        name: '💸 Catálogo: Margen Negativo (Venta a Pérdida)',   fn: suiteMargenNegativo,        fast: true },
     { key: 'pagos_inconsistentes',   name: '🧾 Caja: Pagos Inconsistentes',                    fn: suitePagosInconsistentes,   fast: true },
     { key: 'ids_duplicados',         name: '🪪 Registros: IDs y Nombres Duplicados',           fn: suiteIdsDuplicados,         fast: true },
+    { key: 'auditoria_cashea',       name: '⚡ Cashea: Integridad de Ventas Financiadas',       fn: suiteCashea,                fast: true },
 ];
 
 // ════════════════════════════════════════════

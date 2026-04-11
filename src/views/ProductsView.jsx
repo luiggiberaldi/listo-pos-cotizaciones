@@ -292,7 +292,7 @@ export const ProductsView = ({ rates, triggerHaptic }) => {
 
         if (editingId) {
             const updated = products.map(p =>
-                p.id === editingId ? { ...p, ...productData, image: image || p.image } : p
+                p.id === editingId ? { ...p, ...productData, image } : p
             );
             setProducts(updated);
             pushCloudSync('bodega_products_v1', updated).catch(() => {});

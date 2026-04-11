@@ -3,7 +3,7 @@ import { FinancialEngine } from '../core/FinancialEngine';
 import { storageService } from '../utils/storageService';
 import { showToast } from '../components/Toast';
 import { SUPPORT_WHATSAPP } from '../config/tenant';
-import { BarChart3, TrendingUp, Package, AlertTriangle, DollarSign, ShoppingBag, Clock, ArrowUpRight, Trash2, ShoppingCart, Store, Users, Send, Ban, ChevronDown, ChevronUp, UserPlus, Phone, FileText, Recycle, Key, Settings, LockIcon, CheckCircle2, LogOut } from 'lucide-react';
+import { BarChart3, TrendingUp, Package, AlertTriangle, DollarSign, ShoppingBag, Clock, ArrowUpRight, Trash2, ShoppingCart, Store, Users, Send, Ban, ChevronDown, ChevronUp, UserPlus, Phone, FileText, Recycle, Key, Settings, LockIcon, CheckCircle2, LogOut, Bell } from 'lucide-react';
 import { formatBs, formatVzlaPhone } from '../utils/calculatorUtils';
 import { getPaymentLabel, getPaymentMethod, PAYMENT_ICONS, getPaymentIcon, toTitleCase } from '../config/paymentMethods';
 import SalesHistory from '../components/Dashboard/SalesHistory';
@@ -14,6 +14,8 @@ import { generateTicketPDF, printThermalTicket } from '../utils/ticketGenerator'
 import { generateDailyClosePDF } from '../utils/dailyCloseGenerator';
 import { processVoidSale } from '../utils/voidSaleProcessor';
 import { useNotifications } from '../hooks/useNotifications';
+import { createNotification, NOTIF_TYPES } from '../services/notificationService';
+import { useAdminAlerts } from '../hooks/useAdminAlerts';
 import AnimatedCounter from '../components/AnimatedCounter';
 import SyncStatus from '../components/SyncStatus';
 import { useProductContext } from '../context/ProductContext';
@@ -25,10 +27,23 @@ import { supabaseCloud } from '../config/supabaseCloud';
 import { useConfirm } from '../hooks/useConfirm.jsx';
 
 import Skeleton from '../components/Skeleton';
+import CasheaIcon from '../components/CasheaIcon';
 
 const SALES_KEY = 'bodega_sales_v1';
 export default function DashboardView({ rates, triggerHaptic, onNavigate, theme, toggleTheme, isActive, isDemo, demoTimeLeft }) {
     const { notifyCierrePendiente, requestPermission } = useNotifications();
+    const { unreadCount: alertCount, notifications: adminAlerts, markAllRead: markAlertsRead, clearAll: clearAlerts } = useAdminAlerts();
+    const [showAlerts, setShowAlerts] = useState(false);
+
+    // Close alerts dropdown when clicking outside
+    useEffect(() => {
+        if (!showAlerts) return;
+        const handler = (e) => {
+            if (!e.target.closest('[data-alerts-dropdown]')) setShowAlerts(false);
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, [showAlerts]);
     const { deviceId } = useSecurity();
     const usuarioActivo = useAuthStore(s => s.usuarioActivo);
     const isAdmin = !usuarioActivo || usuarioActivo.rol === 'ADMIN';
@@ -187,10 +202,10 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
     const todaySales = useMemo(() =>
         sales.filter(s => {
             if (s.status === 'ANULADA') return false;
-            if (s.tipo !== 'VENTA' && s.tipo !== 'VENTA_FIADA') return false;
+            if (s.tipo !== 'VENTA' && s.tipo !== 'VENTA_FIADA' && s.tipo !== 'VENTA_CASHEA') return false;
             // Ocultar ventas que ya fueron cerradas previamente
             if (s.cajaCerrada === true) return false;
-            
+
             const saleLocalDay = s.timestamp ? getLocalISODate(new Date(s.timestamp)) : getLocalISODate(new Date());
             return saleLocalDay === today;
         }),
@@ -201,9 +216,9 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
     const todayCashFlow = useMemo(() =>
         sales.filter(s => {
             if (s.status === 'ANULADA') return false;
-            if (s.tipo !== 'VENTA' && s.tipo !== 'VENTA_FIADA' && s.tipo !== 'COBRO_DEUDA' && s.tipo !== 'PAGO_PROVEEDOR' && s.tipo !== 'APERTURA_CAJA') return false;
+            if (s.tipo !== 'VENTA' && s.tipo !== 'VENTA_FIADA' && s.tipo !== 'VENTA_CASHEA' && s.tipo !== 'COBRO_DEUDA' && s.tipo !== 'PAGO_PROVEEDOR' && s.tipo !== 'APERTURA_CAJA') return false;
             if (s.cajaCerrada === true) return false;
-            
+
             const saleLocalDay = s.timestamp ? getLocalISODate(new Date(s.timestamp)) : getLocalISODate(new Date());
             return saleLocalDay === today;
         }),
@@ -279,9 +294,17 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
 
     // Deudas pendientes totales
     const totalDeudas = useMemo(() => {
-        const deudores = customers.filter(c => (c.deuda || 0) > 0.01);
-        const totalUsd = deudores.reduce((sum, c) => sum + (c.deuda || 0), 0);
-        return { count: deudores.length, totalUsd, top5: [...deudores].sort((a, b) => (b.deuda || 0) - (a.deuda || 0)).slice(0, 5) };
+        const deudores = customers.filter(c => (c.deuda || 0) > 0.01 || (c.casheaDeuda || 0) > 0.01);
+        const totalFiado = deudores.reduce((sum, c) => sum + (c.deuda || 0), 0);
+        const totalCashea = deudores.reduce((sum, c) => sum + (c.casheaDeuda || 0), 0);
+        const totalUsd = totalFiado + totalCashea;
+        return {
+            count: deudores.length,
+            totalUsd,
+            totalFiado,
+            totalCashea,
+            top5: [...deudores].sort((a, b) => ((b.deuda||0)+(b.casheaDeuda||0)) - ((a.deuda||0)+(a.casheaDeuda||0))).slice(0, 5)
+        };
     }, [customers]);
 
 
@@ -375,6 +398,12 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
         setIsCashReconOpen(false);
         showToast('Cierre de caja completado (Historial conservado)', 'success');
         auditLog('VENTA', 'CIERRE_CAJA', 'Cierre de caja completado');
+        createNotification(
+            NOTIF_TYPES.CAJA_CERRADA,
+            'Caja cerrada',
+            `Cierre completado — $${todayTotalUsd.toFixed(2)} en ventas (${todaySales.length} transacciones)`,
+            { totalUsd: todayTotalUsd, declaredUsd, diffUsd }
+        );
     };
 
     if (isLoading) {
@@ -470,8 +499,52 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                     <img src="/logo.png" alt="Listo POS Lite" style={{ height: '65px' }} className="sm:h-[99px] w-auto object-contain select-none drop-shadow-sm pointer-events-auto transition-transform hover:scale-105 duration-200" draggable={false} />
                 </div>
 
-                {/* ====== LATERAL DERECHO: Botones de Salir ====== */}
-                <div className="flex items-center justify-end z-20">
+                {/* ====== LATERAL DERECHO: Notificaciones + Botones de Salir ====== */}
+                <div className="flex items-center justify-end gap-2 z-20">
+                    {/* Notification Bell — admin only */}
+                    {isAdmin && (
+                        <div className="relative" data-alerts-dropdown>
+                            <button
+                                onClick={() => { setShowAlerts(v => !v); if (alertCount > 0) markAlertsRead(); }}
+                                className="relative p-2 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 active:scale-95 transition-all"
+                            >
+                                <Bell size={16} className="text-slate-500 dark:text-slate-400" />
+                                {alertCount > 0 && (
+                                    <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 bg-rose-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1 animate-bounce">
+                                        {alertCount > 9 ? '9+' : alertCount}
+                                    </span>
+                                )}
+                            </button>
+
+                            {/* Alerts dropdown */}
+                            {showAlerts && (
+                                <div className="absolute right-0 top-10 w-72 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-800 z-50 overflow-hidden">
+                                    <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                                        <p className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider">Alertas</p>
+                                        {adminAlerts.length > 0 && (
+                                            <button onClick={() => { clearAlerts(); setShowAlerts(false); }} className="text-[10px] font-bold text-slate-400 hover:text-rose-500 transition-colors">
+                                                Limpiar todo
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="max-h-64 overflow-y-auto">
+                                        {adminAlerts.length === 0 ? (
+                                            <p className="text-xs text-slate-400 text-center py-6">Sin alertas recientes</p>
+                                        ) : (
+                                            adminAlerts.slice(0, 20).map(n => (
+                                                <div key={n.id} className="px-4 py-3 border-b border-slate-50 dark:border-slate-800/60 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                                                    <p className="text-xs font-bold text-slate-700 dark:text-slate-200">{n.title}</p>
+                                                    <p className="text-[10px] text-slate-400 mt-0.5 leading-snug">{n.body}</p>
+                                                    <p className="text-[9px] text-slate-300 dark:text-slate-600 mt-1">{new Date(n.ts).toLocaleString('es-VE', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })}</p>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {/* Cloud Logout */}
                     {isAdmin && (
                         <button
@@ -544,7 +617,8 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
             </div>
 
             {/* ── KPIs ROW ── */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className={`grid gap-3 ${isAdmin ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                {isAdmin && (
                 <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm relative overflow-hidden">
                     <div className="absolute -right-3 -top-3 w-14 h-14 bg-emerald-50 rounded-full blur-xl" />
                     <div className="relative z-10">
@@ -558,6 +632,7 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                         <p className="text-[10px] text-slate-400 mt-1.5 font-medium">Ganancia est.</p>
                     </div>
                 </div>
+                )}
                 <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm relative overflow-hidden">
                     <div className="absolute -right-3 -top-3 w-14 h-14 bg-sky-50 rounded-full blur-xl" />
                     <div className="relative z-10">
@@ -596,8 +671,8 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                 </div>
             </div>
 
-            {/* Egresos del día */}
-            {todayExpensesUsd > 0 && (
+            {/* Egresos del día — solo admin */}
+            {isAdmin && todayExpensesUsd > 0 && (
                 <div className="bg-white rounded-2xl p-4 border border-orange-100 shadow-sm flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center"><Package size={18} className="text-orange-500" /></div>
@@ -614,6 +689,7 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
 
             {/* ── CERRAR CAJA ── */}
             {(todayCashFlow.length > 0 || todaySales.length > 0) ? (
+                (isAdmin || localStorage.getItem('cajero_puede_cerrar_caja') === 'true') ? (
                 <button onClick={handleDailyClose}
                     className="w-full rounded-2xl p-4 flex items-center justify-between active:scale-[0.98] transition-all group"
                     style={{ background: 'linear-gradient(135deg, #F97316, #EF4444)', boxShadow: '0 6px 20px rgba(239,68,68,0.25)' }}>
@@ -630,6 +706,7 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                         <ArrowUpRight size={18} className="text-white" />
                     </div>
                 </button>
+                ) : null
             ) : (
                 <div className="w-full bg-white rounded-2xl p-4 border border-emerald-100 shadow-sm flex items-center gap-3">
                     <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center">
@@ -642,9 +719,9 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                 </div>
             )}
 
-                {/* Deudas Pendientes */}
-                {totalDeudas.count > 0 && (
-                    <div 
+                {/* Deudas Pendientes — solo admin */}
+                {isAdmin && totalDeudas.count > 0 && (
+                    <div
                         onClick={() => { setShowTopDeudas(!showTopDeudas); triggerHaptic && triggerHaptic(); }}
                         className="bg-white rounded-2xl p-4 border border-rose-100 shadow-sm relative overflow-hidden cursor-pointer active:scale-[0.99] transition-all"
                     >
@@ -657,6 +734,17 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                                 <div>
                                     <p className="text-[10px] font-bold text-rose-400 uppercase tracking-widest">Deudas</p>
                                     <p className="text-xl font-black text-rose-600">${totalDeudas.totalUsd.toFixed(2)}</p>
+                                    {totalDeudas.totalCashea > 0 && (
+                                        <div className="flex items-center gap-2 mt-0.5">
+                                            {totalDeudas.totalFiado > 0 && (
+                                                <span className="text-[10px] font-bold text-rose-400">Fiado ${totalDeudas.totalFiado.toFixed(2)}</span>
+                                            )}
+                                            {totalDeudas.totalFiado > 0 && <span className="text-[10px] text-slate-300">·</span>}
+                                            <span className="text-[10px] font-bold text-purple-500 flex items-center gap-0.5">
+                                                <CasheaIcon size={9} /> ${totalDeudas.totalCashea.toFixed(2)}
+                                            </span>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                             <div className="text-right flex items-center gap-2">
@@ -680,8 +768,26 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                                             <p className="text-xs font-bold truncate">{c.name}</p>
                                         </div>
                                         <div className="text-right shrink-0">
-                                            <p className="text-sm font-black text-rose-600">${(c.deuda || 0).toFixed(2)}</p>
-                                            {bcvRate > 0 && <p className="text-[9px] text-rose-400/60">{formatBs((c.deuda || 0) * bcvRate)} Bs</p>}
+                                            {(c.deuda || 0) > 0 && (c.casheaDeuda || 0) > 0 ? (
+                                                <>
+                                                    <p className="text-sm font-black text-rose-600">${((c.deuda||0)+(c.casheaDeuda||0)).toFixed(2)}</p>
+                                                    <div className="flex items-center gap-1.5 justify-end mt-0.5">
+                                                        <span className="text-[9px] font-bold text-rose-400">F ${(c.deuda||0).toFixed(2)}</span>
+                                                        <span className="text-[9px] text-slate-300">·</span>
+                                                        <span className="text-[9px] font-bold text-purple-500 flex items-center gap-0.5"><CasheaIcon size={7} />${(c.casheaDeuda||0).toFixed(2)}</span>
+                                                    </div>
+                                                </>
+                                            ) : (c.casheaDeuda || 0) > 0 ? (
+                                                <>
+                                                    <p className="text-sm font-black text-purple-600 flex items-center gap-1 justify-end"><CasheaIcon size={12} />${(c.casheaDeuda||0).toFixed(2)}</p>
+                                                    {bcvRate > 0 && <p className="text-[9px] text-purple-400/60">{formatBs((c.casheaDeuda||0) * bcvRate)} Bs</p>}
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <p className="text-sm font-black text-rose-600">${(c.deuda || 0).toFixed(2)}</p>
+                                                    {bcvRate > 0 && <p className="text-[9px] text-rose-400/60">{formatBs((c.deuda || 0) * bcvRate)} Bs</p>}
+                                                </>
+                                            )}
                                         </div>
                                     </div>
                                 ))}
@@ -690,15 +796,16 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                     </div>
                 )}
 
-            {/* Pago por Metodo */}
-            {Object.keys(paymentBreakdown).length > 0 && (() => {
+            {/* Pago por Metodo — solo admin */}
+            {isAdmin && Object.keys(paymentBreakdown).length > 0 && (() => {
                 const entries = Object.entries(paymentBreakdown).filter(([, d]) => d.total > 0);
                 const fiadoMethods = entries.filter(([, d]) => d.currency === 'FIADO');
+                const casheaMethods = entries.filter(([k, d]) => k === 'cashea' && d.total > 0);
                 const bsIncomeMethods = entries.filter(([, d]) => (d.currency === 'BS' || (!d.currency)) && !d.isChange);
                 const vueltoMethods = entries.filter(([, d]) => d.isChange === true && d.currency !== 'USD');
                 const vueltoUsdMethods = entries.filter(([, d]) => d.isChange === true && d.currency === 'USD');
                 const bsMethods = [...bsIncomeMethods, ...vueltoMethods];
-                const usdIncomeMethods = entries.filter(([, d]) => d.currency === 'USD' && !d.isChange);
+                const usdIncomeMethods = entries.filter(([k, d]) => d.currency === 'USD' && !d.isChange && k !== 'cashea');
                 const usdMethods = [...usdIncomeMethods, ...vueltoUsdMethods];
                 const copMethods = entries.filter(([, d]) => d.currency === 'COP');
                 const subtotalBs = bsIncomeMethods.reduce((s, [, d]) => s + d.total, 0) - vueltoMethods.reduce((s, [, d]) => s + d.total, 0);
@@ -744,12 +851,12 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                                         </span>
                                         {data.currency === 'FIADO' && <span className="text-[9px] text-slate-400">{formatBs(totalBsEquiv)} Bs</span>}
                                     </div>
-                                    <span className="text-[10px] font-black w-8 text-right text-slate-400">{pct.toFixed(0)}%</span>
+                                    {!isChange && <span className="text-[10px] font-black w-8 text-right text-slate-400">{pct.toFixed(0)}%</span>}
                                 </div>
                             </div>
-                            {data.currency !== 'FIADO' && (
+                            {!isChange && data.currency !== 'FIADO' && (
                                 <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                                    <div className={`h-full rounded-full transition-all ${isChange ? 'bg-orange-400' : 'bg-gradient-to-r from-[#0EA5E9] to-[#5EEAD4]'}`} style={{ width: `${pct}%` }} />
+                                    <div className="h-full rounded-full transition-all bg-gradient-to-r from-[#0EA5E9] to-[#5EEAD4]" style={{ width: `${pct}%` }} />
                                 </div>
                             )}
                         </div>
@@ -760,13 +867,36 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                     <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm relative z-10 animate-fade-in">
                         <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Medios de Pago</h3>
                         
-                        {fiadoMethods.length > 0 && (
+                        {(fiadoMethods.length > 0 || casheaMethods.length > 0) && (
                             <div className="mb-4">
                                 <div className="flex justify-between items-end mb-2 pb-1 border-b border-rose-50">
                                     <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider">Por Cobrar</span>
-                                    <span className="text-xs font-black text-amber-600">${fiadoMethods.reduce((s, [,d]) => s + d.total, 0).toFixed(2)}</span>
+                                    <span className="text-xs font-black text-amber-600">
+                                        ${(fiadoMethods.reduce((s, [,d]) => s + d.total, 0) + casheaMethods.reduce((s, [,d]) => s + d.total, 0)).toFixed(2)}
+                                    </span>
                                 </div>
-                                <div className="pl-2 border-l-2 border-amber-200">{fiadoMethods.map(renderMethod)}</div>
+                                <div className="pl-2 border-l-2 border-amber-200">
+                                    {fiadoMethods.map(renderMethod)}
+                                    {casheaMethods.map(([method, data]) => {
+                                        const pct = todayTotalBs > 0 ? (data.total * bcvRate / todayTotalBs * 100) : 0;
+                                        return (
+                                            <div key={method} className="mb-3">
+                                                <div className="flex justify-between items-center mb-1.5">
+                                                    <span className="font-bold text-xs flex items-center gap-1.5 text-purple-600 dark:text-purple-400">
+                                                        <CasheaIcon size={14} /> Cashea (Por Cobrar)
+                                                    </span>
+                                                    <div className="text-right flex items-center gap-2">
+                                                        <div className="flex flex-col items-end">
+                                                            <span className="font-black text-sm text-purple-600 dark:text-purple-400">$ {data.total.toFixed(2)}</span>
+                                                            <span className="text-[9px] text-purple-400/70">{formatBs(data.total * bcvRate)} Bs</span>
+                                                        </div>
+                                                        <span className="text-[10px] font-black w-8 text-right text-slate-400">{pct.toFixed(0)}%</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         )}
 
@@ -1101,6 +1231,7 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                 bcvRate={bcvRate}
                 copEnabled={copEnabled}
                 tasaCop={tasaCop}
+                blindClose={!isAdmin && localStorage.getItem('cajero_puede_cerrar_caja') === 'true'}
             />
 
 

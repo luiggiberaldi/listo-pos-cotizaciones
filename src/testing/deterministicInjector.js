@@ -37,11 +37,12 @@ const FIXED_PRODUCTS = [
     { id: 'det-10', name: 'Jabon Las Llaves 3u',   priceUsd: 1.80, priceUsdt: 1.80, costUsd: 1.20, stock: 220 },
 ];
 
-// 3 clientes fijos para ventas fiadas
+// 3 clientes fijos para ventas fiadas + 1 para Cashea
 const FIXED_CUSTOMERS = [
-    { id: 'det-cli-01', name: 'Maria Garcia',    phone: '0412-1111111', deuda: 0, favor: 0 },
-    { id: 'det-cli-02', name: 'Jose Rodriguez',  phone: '0414-2222222', deuda: 0, favor: 0 },
-    { id: 'det-cli-03', name: 'Ana Martinez',    phone: '0424-3333333', deuda: 0, favor: 0 },
+    { id: 'det-cli-01', name: 'Maria Garcia',    phone: '0412-1111111', deuda: 0, casheaDeuda: 0, favor: 0 },
+    { id: 'det-cli-02', name: 'Jose Rodriguez',  phone: '0414-2222222', deuda: 0, casheaDeuda: 0, favor: 0 },
+    { id: 'det-cli-03', name: 'Ana Martinez',    phone: '0424-3333333', deuda: 0, casheaDeuda: 0, favor: 0 },
+    { id: 'det-cli-04', name: 'Luis Perez',      phone: '0416-4444444', deuda: 0, casheaDeuda: 0, favor: 0, casheaLevel: 3 },
 ];
 
 // Curva de trafico diario (picos a 12pm y 6pm)
@@ -145,11 +146,26 @@ export async function injectDeterministicSales() {
                 const p = products.find(x => x.id === it.id);
                 if (p) p.stock += it.qty;
             }
-        } else if (rType < 0.15) {
+        } else if (rType < 0.13) {
+            // ~8% Cashea (cliente paga 40%, Cashea financia 60%)
+            tipoVenta = 'VENTA_CASHEA';
+            const casheaPct = 0.60;
+            const casheaUsd = round2(payableUsd * casheaPct);
+            const clienteUsd = round2(payableUsd - casheaUsd);
+            const c = customers[3]; // Luis Perez — tiene casheaLevel
+            customerId = c.id;
+            customerName = c.name;
+            c.casheaDeuda = sumR(c.casheaDeuda || 0, casheaUsd);
+            payments = [
+                { methodId: 'pago_movil', amount: round2(clienteUsd * currentRate), amountUsd: clienteUsd, amountBs: round2(clienteUsd * currentRate), currency: 'BS', methodLabel: 'Pago Móvil' },
+                { methodId: 'cashea', amount: casheaUsd, amountUsd: casheaUsd, amountBs: round2(casheaUsd * currentRate), currency: 'USD', methodLabel: 'Cashea' },
+            ];
+            fiadoUsd = 0;
+        } else if (rType < 0.23) {
             // ~10% fiadas
             tipoVenta = 'VENTA_FIADA';
             fiadoUsd = payableUsd;
-            const c = customers[Math.floor(rand() * customers.length)];
+            const c = customers[Math.floor(rand() * 3)]; // solo primeros 3 para fiado
             customerId = c.id;
             customerName = c.name;
             c.deuda = sumR(c.deuda || 0, fiadoUsd);
@@ -188,6 +204,7 @@ export async function injectDeterministicSales() {
             changeUsd,
             changeBs,
             fiadoUsd,
+            casheaUsd: tipoVenta === 'VENTA_CASHEA' ? payments.find(p => p.methodId === 'cashea')?.amountUsd || 0 : 0,
             payments,
             customerId,
             customerName,
@@ -214,15 +231,17 @@ export async function injectDeterministicSales() {
         await storageService.setItem('bodega_customers_v1', [...cleanCustomers, ...customers]);
 
         // ── Resumen de verificacion ──
-        const netSales = testSales.filter(s => s.status !== 'ANULADA' && (s.tipo === 'VENTA' || s.tipo === 'VENTA_FIADA'));
+        const netSales = testSales.filter(s => s.status !== 'ANULADA' && (s.tipo === 'VENTA' || s.tipo === 'VENTA_FIADA' || s.tipo === 'VENTA_CASHEA'));
         const voidedCount = testSales.filter(s => s.status === 'ANULADA').length;
         const fiadoSales = netSales.filter(s => s.tipo === 'VENTA_FIADA');
+        const casheaSales = netSales.filter(s => s.tipo === 'VENTA_CASHEA');
         const normalSales = netSales.filter(s => s.tipo === 'VENTA');
 
         const netTotalUsd = round2(netSales.reduce((s, v) => s + (v.totalUsd || 0), 0));
         const netTotalBs = round2(netSales.reduce((s, v) => s + (v.totalBs || 0), 0));
         const netItems = netSales.reduce((s, v) => s + v.items.reduce((is, it) => is + it.qty, 0), 0);
         const fiadoTotalUsd = round2(fiadoSales.reduce((s, v) => s + (v.totalUsd || 0), 0));
+        const casheaTotalUsd = round2(casheaSales.reduce((s, v) => s + (v.casheaUsd || 0), 0));
         const discountTotalUsd = round2(netSales.reduce((s, v) => s + (v.discountAmountUsd || 0), 0));
 
         let profitBs = 0;
@@ -253,6 +272,7 @@ export async function injectDeterministicSales() {
             `\n── RESUMEN ──\n` +
             `Ventas normales: ${normalSales.length}\n` +
             `Ventas fiadas: ${fiadoSales.length}\n` +
+            `Ventas Cashea: ${casheaSales.length} (Por cobrar a Cashea: $${casheaTotalUsd.toFixed(2)})\n` +
             `Anuladas: ${voidedCount}\n` +
             `Articulos vendidos: ${netItems}\n` +
             `Descuentos: $${discountTotalUsd.toFixed(2)}\n` +

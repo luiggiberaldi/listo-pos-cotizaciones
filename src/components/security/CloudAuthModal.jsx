@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { 
-    Mail, Key, Phone, ArrowRight, ShieldCheck, 
-    Smartphone, Database, AlertCircle, X, Download, Eye, EyeOff
+import {
+    Mail, Key, Phone, ArrowRight, ShieldCheck,
+    Smartphone, Database, AlertCircle, X, Download, Eye, EyeOff, Store
 } from 'lucide-react';
 import { useCloudAuthLogic } from '../../hooks/useCloudAuthLogic';
 import { useConfirm } from '../../hooks/useConfirm.jsx';
@@ -23,6 +23,8 @@ export default function CloudAuthModal({ isOpen, onClose, forceLogin = false }) 
     const {
         inputEmail, setInputEmail,
         inputPassword, setInputPassword,
+        inputConfirmPassword, setInputConfirmPassword,
+        inputBusinessName, setInputBusinessName,
         inputPhone, setInputPhone,
         isCloudLogin, setIsCloudLogin,
         emailError, setEmailError,
@@ -41,6 +43,7 @@ export default function CloudAuthModal({ isOpen, onClose, forceLogin = false }) 
     } = authLogic;
 
     const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const confirm = useConfirm();
 
     if (!isOpen && !forceLogin) return null;
@@ -235,6 +238,18 @@ export default function CloudAuthModal({ isOpen, onClose, forceLogin = false }) 
                                     {emailError && <p className="text-[11px] text-red-500 font-bold mt-1 ml-1">{emailError}</p>}
                                 </div>
 
+                                {/* Nombre del negocio (solo registro) */}
+                                {!isCloudLogin && (
+                                    <div className="relative">
+                                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none"><Store size={16} className="text-slate-400" /></div>
+                                        <input
+                                            type="text" value={inputBusinessName} onChange={e => setInputBusinessName(e.target.value)}
+                                            className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 outline-none transition-all"
+                                            placeholder="Nombre del negocio"
+                                        />
+                                    </div>
+                                )}
+
                                 {/* Teléfono (solo registro) */}
                                 {!isCloudLogin && (
                                     <div className="relative">
@@ -263,15 +278,32 @@ export default function CloudAuthModal({ isOpen, onClose, forceLogin = false }) 
                                     {passwordError && <p className="text-[11px] text-red-500 font-bold mt-1 ml-1">{passwordError}</p>}
                                 </div>
 
-                                {/* Alias del equipo */}
-                                <div className="relative">
-                                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none"><Smartphone size={16} className="text-slate-400" /></div>
-                                    <input
-                                        type="text" value={localDeviceAlias} onChange={e => setLocalDeviceAlias(e.target.value)}
-                                        className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 outline-none transition-all"
-                                        placeholder="Nombre de esta PC (ej. Mostrador 1)"
-                                    />
-                                </div>
+                                {/* Confirmar contraseña (solo registro) */}
+                                {!isCloudLogin && (
+                                    <div className="relative">
+                                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none"><Key size={16} className="text-slate-400" /></div>
+                                        <input
+                                            type={showConfirmPassword ? 'text' : 'password'} value={inputConfirmPassword} onChange={e => setInputConfirmPassword(e.target.value)}
+                                            className="w-full pl-10 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 outline-none transition-all"
+                                            placeholder="Confirmar contraseña"
+                                        />
+                                        <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-sky-500 transition-colors">
+                                            {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                        </button>
+                                    </div>
+                                )}
+
+                                {/* Alias del equipo (solo login) */}
+                                {isCloudLogin && (
+                                    <div className="relative">
+                                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none"><Smartphone size={16} className="text-slate-400" /></div>
+                                        <input
+                                            type="text" value={localDeviceAlias} onChange={e => setLocalDeviceAlias(e.target.value)}
+                                            className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 outline-none transition-all"
+                                            placeholder="Nombre de esta PC (ej. Mostrador 1)"
+                                        />
+                                    </div>
+                                )}
 
                                 {/* Olvidé contraseña */}
                                 {isCloudLogin && (

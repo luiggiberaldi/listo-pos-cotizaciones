@@ -3,6 +3,7 @@ import { Clock, Send, Ban, ChevronDown, ChevronUp, Trash2, Shuffle, Recycle, Rec
 import { formatBs } from '../../utils/calculatorUtils';
 import { getPaymentLabel, getPaymentMethod, PAYMENT_ICONS, getPaymentIcon, toTitleCase } from '../../config/paymentMethods';
 import EmptyState from '../EmptyState';
+import CasheaIcon from '../CasheaIcon';
 
 export default function SalesHistory({
     sales,
@@ -60,6 +61,15 @@ export default function SalesHistory({
                     if (s.tipo === 'VENTA_FIADA') {
                         methodLabel = 'Por Cobrar';
                         PayMethodIcon = Clock;
+                    } else if (s.tipo === 'VENTA_CASHEA') {
+                        const realPayment = s.payments && s.payments.find(p => p.methodId !== 'cashea');
+                        if (realPayment) {
+                            methodLabel = toTitleCase(realPayment.methodLabel || realPayment.methodId);
+                            const m = getPaymentMethod(realPayment.methodId);
+                            if (m) PayMethodIcon = getPaymentIcon(m.id) || m.Icon || null;
+                        } else {
+                            methodLabel = 'Cashea';
+                        }
                     } else if (s.payments && s.payments.length === 1) {
                         methodLabel = toTitleCase(s.payments[0].methodLabel);
                         const m = getPaymentMethod(s.payments[0].methodId);
@@ -90,6 +100,7 @@ export default function SalesHistory({
                                 <div className="flex-1 min-w-0">
                                     <p className={`text-sm font-bold flex items-center gap-1.5 truncate ${isCanceled ? 'line-through text-slate-400' : 'text-slate-800 dark:text-slate-200'}`}>
                                         {s.customerName || 'Consumidor Final'} {s.tipo === 'VENTA_FIADA' && <span className="text-[9px] bg-amber-100 text-amber-600 px-1 rounded uppercase">Fiado</span>}
+                                        {s.tipo === 'VENTA_CASHEA' && <span className="text-[9px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded flex items-center gap-0.5 uppercase font-black"><CasheaIcon size={8} />Cashea</span>}
                                     </p>
                                     <p className="text-[11px] text-slate-500 flex items-center gap-1 flex-wrap">
                                         {s.saleNumber && <span className="font-bold text-indigo-400">#{String(s.saleNumber).padStart(7, '0')}</span>}
@@ -188,6 +199,17 @@ export default function SalesHistory({
                                                 <div className="text-right">
                                                     <div className="font-bold text-amber-600">${s.fiadoUsd.toFixed(2)}</div>
                                                     <div className="text-amber-500 text-[10px]">{formatBs(s.fiadoUsd * (s.rate || bcvRate))} Bs</div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Cashea */}
+                                        {s.casheaUsd > 0 && (
+                                            <div className="flex justify-between items-center text-[11px] border-t border-slate-100 dark:border-slate-800 pt-1.5 mt-1">
+                                                <span className="text-purple-600 font-bold flex items-center gap-1"><CasheaIcon size={11} />Cashea (por cobrar)</span>
+                                                <div className="text-right">
+                                                    <div className="font-bold text-purple-600">${s.casheaUsd.toFixed(2)}</div>
+                                                    <div className="text-purple-400 text-[10px]">{formatBs(s.casheaUsd * (s.rate || bcvRate))} Bs</div>
                                                 </div>
                                             </div>
                                         )}

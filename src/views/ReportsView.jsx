@@ -13,6 +13,7 @@ import { getLocalISODate, getDateRange } from '../utils/dateHelpers';
 import { calculateReportsData, groupSalesByCierreId } from '../utils/reportsProcessor';
 import { processVoidSale } from '../utils/voidSaleProcessor';
 import CierreHistoryCard from '../components/Reports/CierreHistoryCard';
+import CasheaIcon from '../components/CasheaIcon';
 
 const SALES_KEY = 'bodega_sales_v1';
 
@@ -260,11 +261,12 @@ export default function ReportsView({ rates, triggerHaptic, onNavigate, isActive
             {Object.keys(paymentBreakdown).length > 0 && (() => {
                 const entries = Object.entries(paymentBreakdown);
                 const fiadoMethods = entries.filter(([, d]) => d.currency === 'FIADO');
+                const casheaMethods = entries.filter(([k, d]) => k === 'cashea' && d.total > 0);
                 const bsIncomeMethods = entries.filter(([k, d]) => (d.currency === 'BS' || (!d.currency)) && !d.isChange);
                 const vueltoMethods = entries.filter(([, d]) => d.isChange === true && d.currency !== 'USD');
                 const vueltoUsdMethods = entries.filter(([, d]) => d.isChange === true && d.currency === 'USD');
                 const bsMethods = [...bsIncomeMethods, ...vueltoMethods];
-                const usdIncomeMethods = entries.filter(([, d]) => d.currency === 'USD' && !d.isChange);
+                const usdIncomeMethods = entries.filter(([k, d]) => d.currency === 'USD' && !d.isChange && k !== 'cashea');
                 const usdMethods = [...usdIncomeMethods, ...vueltoUsdMethods];
                 const copMethods = entries.filter(([, d]) => d.currency === 'COP');
                 const fmtCop = (v) => v.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -314,9 +316,9 @@ export default function ReportsView({ rates, triggerHaptic, onNavigate, isActive
                                     )}
                                 </div>
                             </div>
-                            {data.currency !== 'FIADO' && (
+                            {!isChange && data.currency !== 'FIADO' && (
                                 <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                                    <div className={`h-full rounded-full transition-all ${isChange ? 'bg-orange-400' : 'bg-indigo-500'}`} style={{ width: `${pct}%` }} />
+                                    <div className="h-full rounded-full transition-all bg-indigo-500" style={{ width: `${pct}%` }} />
                                 </div>
                             )}
                         </div>
@@ -329,14 +331,39 @@ export default function ReportsView({ rates, triggerHaptic, onNavigate, isActive
                         <DollarSign size={12} /> Desglose por Metodo de Pago
                     </h3>
                     
-                    {fiadoMethods.length > 0 && (
+                    {(fiadoMethods.length > 0 || casheaMethods.length > 0) && (
                         <div className="mb-4">
                             <div className="flex items-center justify-between mb-2">
                                 <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider">Por Cobrar</span>
-                                <span className="text-xs font-black text-amber-600 dark:text-amber-400">${fiadoMethods.reduce((s, [,d]) => s + d.total, 0).toFixed(2)}</span>
+                                <span className="text-xs font-black text-amber-600 dark:text-amber-400">
+                                    ${(fiadoMethods.reduce((s, [,d]) => s + d.total, 0) + casheaMethods.reduce((s, [,d]) => s + d.total, 0)).toFixed(2)}
+                                </span>
                             </div>
                             <div className="space-y-3 pl-1 border-l-2 border-amber-200 dark:border-amber-800/40">
                                 <div className="pl-3 space-y-3">{fiadoMethods.map(renderMethod)}</div>
+                                {casheaMethods.length > 0 && (
+                                    <div className="pl-3 space-y-3">
+                                        {casheaMethods.map(([method, data]) => {
+                                            const pct = totalBs > 0 ? (data.total * bcvRate / totalBs * 100) : 0;
+                                            return (
+                                                <div key={method}>
+                                                    <div className="flex justify-between text-sm mb-1">
+                                                        <span className="font-medium flex items-center gap-1.5 text-purple-600 dark:text-purple-400">
+                                                            <CasheaIcon size={14} /> Cashea (Por Cobrar)
+                                                        </span>
+                                                        <div className="text-right flex items-center gap-2">
+                                                            <div>
+                                                                <span className="font-bold text-purple-600 dark:text-purple-400">$ {data.total.toFixed(2)}</span>
+                                                                <div className="text-[10px] text-purple-400/70">{formatBs(data.total * bcvRate)} Bs</div>
+                                                            </div>
+                                                            <span className="text-[10px] font-black w-8 text-right text-slate-400">{pct.toFixed(0)}%</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
@@ -628,6 +655,16 @@ function TransactionRow({ sale: s, bcvRate, isExpanded, onToggle, onVoidSale, on
     if (s.tipo === 'VENTA_FIADA') {
         methodLabel = 'Por Cobrar';
         PayMethodIcon = Clock;
+    } else if (s.tipo === 'VENTA_CASHEA') {
+        // Show the client's real payment method (non-cashea payment) as the label
+        const realPayment = s.payments && s.payments.find(p => p.methodId !== 'cashea');
+        if (realPayment) {
+            methodLabel = toTitleCase(realPayment.methodLabel || realPayment.methodId);
+            const m = getPaymentMethod(realPayment.methodId);
+            if (m) PayMethodIcon = getPaymentIcon(m.id) || m.Icon || null;
+        } else {
+            methodLabel = 'Cashea';
+        }
     } else if (s.payments && s.payments.length === 1) {
         methodLabel = toTitleCase(s.payments[0].methodLabel);
         const m = getPaymentMethod(s.payments[0].methodId);
@@ -682,6 +719,7 @@ function TransactionRow({ sale: s, bcvRate, isExpanded, onToggle, onVoidSale, on
                     <p className={`text-sm font-bold flex items-center gap-1.5 truncate ${isCanceled ? 'line-through text-slate-400' : 'text-slate-800 dark:text-slate-200'}`}>
                         {s.customerName || 'Consumidor Final'}
                         {s.tipo === 'VENTA_FIADA' && <span className="text-[9px] bg-amber-100 text-amber-600 px-1 rounded uppercase">Fiado</span>}
+                        {s.tipo === 'VENTA_CASHEA' && <span className="text-[9px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded flex items-center gap-0.5 uppercase font-black"><CasheaIcon size={8} />Cashea</span>}
                         {isCanceled && <span className="text-[9px] bg-red-100 text-red-500 px-1 rounded uppercase">Anulada</span>}
                     </p>
                     <p className="text-[11px] text-slate-500 flex items-center gap-1 flex-wrap">
@@ -764,6 +802,16 @@ function TransactionRow({ sale: s, bcvRate, isExpanded, onToggle, onVoidSale, on
                                 <div className="text-right">
                                     <div className="font-bold text-amber-600">${s.fiadoUsd.toFixed(2)}</div>
                                     <div className="text-amber-500 text-[10px]">{formatBs(s.fiadoUsd * (s.rate || bcvRate))} Bs</div>
+                                </div>
+                            </div>
+                        )}
+
+                        {s.casheaUsd > 0 && (
+                            <div className="flex justify-between items-center text-[11px] border-t border-slate-100 dark:border-slate-800 pt-1.5 mt-1">
+                                <span className="text-purple-600 font-bold flex items-center gap-1"><CasheaIcon size={11} />Cashea (por cobrar)</span>
+                                <div className="text-right">
+                                    <div className="font-bold text-purple-600">${s.casheaUsd.toFixed(2)}</div>
+                                    <div className="text-purple-400 text-[10px]">{formatBs(s.casheaUsd * (s.rate || bcvRate))} Bs</div>
                                 </div>
                             </div>
                         )}

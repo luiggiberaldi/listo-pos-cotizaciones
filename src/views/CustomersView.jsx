@@ -638,25 +638,28 @@ function CustomerCard({ customer, bcvRate, tasaCop, copEnabled, onClick, onDelet
                         )}
                     </div>
                 </div>
-                <div className="text-right shrink-0">
-                    {customer.deuda > 0 ? (
-                        <>
+                <div className="text-right shrink-0 flex flex-col items-end gap-0.5">
+                    {customer.deuda > 0 && (
+                        <div>
                             <p className="text-sm font-black text-red-500 leading-tight">-${formatUsd(customer.deuda)}</p>
-                            {bcvRate > 0 && <p className="text-[10px] font-bold text-red-400/70">-{formatBs(customer.deuda * bcvRate)} Bs</p>}
+                            {bcvRate > 0 && <p className="text-[10px] font-bold text-red-400/70 leading-tight">-{formatBs(customer.deuda * bcvRate)} Bs</p>}
                             {copEnabled && tasaCop > 0 && <p className="text-[10px] font-bold text-red-400/90">-{(customer.deuda * tasaCop).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} COP</p>}
-                        </>
-                    ) : customer.casheaDeuda > 0 ? (
-                        <>
-                            <p className="text-sm font-black text-purple-500 leading-tight flex items-center gap-1 justify-end"><CasheaIcon size={12} /> ${formatUsd(customer.casheaDeuda)}</p>
-                            {bcvRate > 0 && <p className="text-[10px] font-bold text-purple-400/70">{formatBs(customer.casheaDeuda * bcvRate)} Bs</p>}
-                        </>
-                    ) : customer.favor > 0 ? (
-                        <>
+                        </div>
+                    )}
+                    {customer.casheaDeuda > 0 && (
+                        <div>
+                            <p className="text-sm font-black text-purple-500 leading-tight flex items-center gap-1 justify-end"><CasheaIcon size={11} />${formatUsd(customer.casheaDeuda)}</p>
+                            {bcvRate > 0 && <p className="text-[10px] font-bold text-purple-400/70 leading-tight">{formatBs(customer.casheaDeuda * bcvRate)} Bs</p>}
+                        </div>
+                    )}
+                    {!customer.deuda && !customer.casheaDeuda && customer.favor > 0 && (
+                        <div>
                             <p className="text-sm font-black text-emerald-500 leading-tight">+${formatUsd(customer.favor)}</p>
-                            {bcvRate > 0 && <p className="text-[10px] font-bold text-emerald-400/70">+{formatBs(customer.favor * bcvRate)} Bs</p>}
+                            {bcvRate > 0 && <p className="text-[10px] font-bold text-emerald-400/70 leading-tight">+{formatBs(customer.favor * bcvRate)} Bs</p>}
                             {copEnabled && tasaCop > 0 && <p className="text-[10px] font-bold text-emerald-400/90">+{(customer.favor * tasaCop).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} COP</p>}
-                        </>
-                    ) : (
+                        </div>
+                    )}
+                    {!customer.deuda && !customer.casheaDeuda && !customer.favor && (
                         <p className="text-xs font-bold text-slate-400 flex items-center gap-1">
                             <CheckCircle2 size={12} className="text-emerald-400" /> Al día
                         </p>
@@ -730,36 +733,48 @@ function CustomerDetailSheet({ customer, isOpen, isAdmin, onClose, onAjustar, on
                     </div>
 
                     {/* Saldo */}
-                    <div className="flex gap-2">
-                        {customer.deuda > 0 ? (
-                            <div className="flex-1 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/30 rounded-xl px-3 py-2.5 text-center">
-                                <p className="text-[10px] font-bold text-red-400 uppercase">Debe</p>
-                                <p className="text-lg font-black text-red-500">-${formatUsd(customer.deuda)}</p>
-                                {bcvRate > 0 && <p className="text-[10px] font-bold text-red-400/70">-{formatBs(customer.deuda * bcvRate)} Bs</p>}
-                                {copEnabled && tasaCop > 0 && <p className="text-[10px] font-bold text-red-500/90">-{(customer.deuda * tasaCop).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} COP</p>}
+                    <div className="space-y-2">
+                        {customer.deuda > 0 && customer.casheaDeuda > 0 && (
+                            <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 flex items-center justify-between">
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Total deuda</p>
+                                <div className="text-right">
+                                    <p className="text-base font-black text-slate-700 dark:text-slate-200">-${formatUsd(customer.deuda + customer.casheaDeuda)}</p>
+                                    {bcvRate > 0 && <p className="text-[10px] font-bold text-slate-400">-{formatBs((customer.deuda + customer.casheaDeuda) * bcvRate)} Bs</p>}
+                                </div>
                             </div>
-                        ) : null}
-                        {customer.casheaDeuda > 0 ? (
-                            <div className="flex-1 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800/30 rounded-xl px-3 py-2.5 text-center">
-                                <p className="text-[10px] font-bold text-purple-400 uppercase flex items-center gap-1 justify-center"><CasheaIcon size={10} /> Cashea</p>
-                                <p className="text-lg font-black text-purple-500">${formatUsd(customer.casheaDeuda)}</p>
-                                {bcvRate > 0 && <p className="text-[10px] font-bold text-purple-400/70">{formatBs(customer.casheaDeuda * bcvRate)} Bs</p>}
-                            </div>
-                        ) : null}
-                        {!customer.deuda && !customer.casheaDeuda && customer.favor > 0 ? (
-                            <div className="flex-1 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/30 rounded-xl px-3 py-2.5 text-center">
-                                <p className="text-[10px] font-bold text-emerald-400 uppercase">A favor</p>
-                                <p className="text-lg font-black text-emerald-500">+${formatUsd(customer.favor)}</p>
-                                {bcvRate > 0 && <p className="text-[10px] font-bold text-emerald-400/70">+{formatBs(customer.favor * bcvRate)} Bs</p>}
-                                {copEnabled && tasaCop > 0 && <p className="text-[10px] font-bold text-emerald-500/90">+{(customer.favor * tasaCop).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} COP</p>}
-                            </div>
-                        ) : !customer.deuda && !customer.casheaDeuda ? (
-                            <div className="flex-1 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-center">
-                                <p className="text-sm font-black text-slate-400 flex items-center justify-center gap-1">
-                                    <CheckCircle2 size={14} className="text-emerald-400" /> Al día
-                                </p>
-                            </div>
-                        ) : null}
+                        )}
+                        <div className="flex gap-2">
+                            {customer.deuda > 0 && (
+                                <div className="flex-1 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/30 rounded-xl px-3 py-2.5 text-center">
+                                    <p className="text-[10px] font-bold text-red-400 uppercase">Fiado</p>
+                                    <p className="text-lg font-black text-red-500">-${formatUsd(customer.deuda)}</p>
+                                    {bcvRate > 0 && <p className="text-[10px] font-bold text-red-400/70">-{formatBs(customer.deuda * bcvRate)} Bs</p>}
+                                    {copEnabled && tasaCop > 0 && <p className="text-[10px] font-bold text-red-500/90">-{(customer.deuda * tasaCop).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} COP</p>}
+                                </div>
+                            )}
+                            {customer.casheaDeuda > 0 && (
+                                <div className="flex-1 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800/30 rounded-xl px-3 py-2.5 text-center">
+                                    <p className="text-[10px] font-bold text-purple-400 uppercase flex items-center gap-1 justify-center"><CasheaIcon size={10} /> Cashea</p>
+                                    <p className="text-lg font-black text-purple-500">-${formatUsd(customer.casheaDeuda)}</p>
+                                    {bcvRate > 0 && <p className="text-[10px] font-bold text-purple-400/70">-{formatBs(customer.casheaDeuda * bcvRate)} Bs</p>}
+                                </div>
+                            )}
+                            {!customer.deuda && !customer.casheaDeuda && customer.favor > 0 && (
+                                <div className="flex-1 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/30 rounded-xl px-3 py-2.5 text-center">
+                                    <p className="text-[10px] font-bold text-emerald-400 uppercase">A favor</p>
+                                    <p className="text-lg font-black text-emerald-500">+${formatUsd(customer.favor)}</p>
+                                    {bcvRate > 0 && <p className="text-[10px] font-bold text-emerald-400/70">+{formatBs(customer.favor * bcvRate)} Bs</p>}
+                                    {copEnabled && tasaCop > 0 && <p className="text-[10px] font-bold text-emerald-500/90">+{(customer.favor * tasaCop).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} COP</p>}
+                                </div>
+                            )}
+                            {!customer.deuda && !customer.casheaDeuda && !customer.favor && (
+                                <div className="flex-1 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-center">
+                                    <p className="text-sm font-black text-slate-400 flex items-center justify-center gap-1">
+                                        <CheckCircle2 size={14} className="text-emerald-400" /> Al día
+                                    </p>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     {/* Acciones */}
@@ -782,8 +797,8 @@ function CustomerDetailSheet({ customer, isOpen, isAdmin, onClose, onAjustar, on
                         )}
                     </div>
 
-                    {/* Historial */}
-                    <div>
+                    {/* Historial — solo admin */}
+                    {isAdmin && <div>
                         <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5 mb-3">
                             <Clock size={12} /> Historial
                         </h4>
@@ -837,7 +852,7 @@ function CustomerDetailSheet({ customer, isOpen, isAdmin, onClose, onAjustar, on
                                 })}
                             </div>
                         )}
-                    </div>
+                    </div>}
 
                     {/* Editar / Eliminar */}
                     <div className="flex gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">

@@ -2,9 +2,19 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { logEvent } from '../../services/auditService';
 
+// ─── PIN Hashing (SHA-256 via Web Crypto) ───────────────────────────────────
+async function hashPin(pin) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(String(pin));
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(hashBuffer))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+}
+
 const DEFAULT_USERS = [
-    { id: 1, nombre: 'Administrador', rol: 'ADMIN', pin: '123456' },
-    { id: 2, nombre: 'Cajero', rol: 'CAJERO', pin: '0000' }
+    { id: 1, nombre: 'Administrador', rol: 'ADMIN', pin: '123456', pinHashed: false },
+    { id: 2, nombre: 'Cajero', rol: 'CAJERO', pin: '0000', pinHashed: false }
 ];
 
 export const useAuthStore = create(
@@ -26,24 +36,48 @@ export const useAuthStore = create(
             login: async (pinInput, userId) => {
                 // Simular un pequeño retardo para feedback visual (UX)
                 await new Promise(r => setTimeout(r, 400));
-                
+
                 const { usuarios } = get();
-                
-                let userEncontrado;
-                
-                if (userId) {
-                    userEncontrado = usuarios.find(u => u.id === userId && u.pin === pinInput);
-                } else {
-                    userEncontrado = usuarios.find(u => u.pin === pinInput);
+                const hashedInput = await hashPin(pinInput);
+
+                let userEncontrado = null;
+                let needsMigration = false;
+
+                const candidates = userId
+                    ? usuarios.filter(u => u.id === userId)
+                    : usuarios;
+
+                for (const u of candidates) {
+                    const matches = u.pinHashed
+                        ? u.pin === hashedInput
+                        : u.pin === String(pinInput);
+
+                    if (matches) {
+                        userEncontrado = u;
+                        // Si el PIN es texto plano, migrarlo a hash
+                        if (!u.pinHashed) needsMigration = true;
+                        break;
+                    }
                 }
 
                 if (userEncontrado) {
-                    set({ usuarioActivo: userEncontrado });
-                    localStorage.setItem('abasto-device-session', JSON.stringify(userEncontrado));
-                    logEvent('AUTH', 'LOGIN', `${userEncontrado.nombre} inicio sesion`, userEncontrado);
+                    // Migrar PIN a hash silenciosamente
+                    if (needsMigration) {
+                        set(state => ({
+                            usuarios: state.usuarios.map(u =>
+                                u.id === userEncontrado.id
+                                    ? { ...u, pin: hashedInput, pinHashed: true }
+                                    : u
+                            )
+                        }));
+                    }
+                    const sessionUser = { ...userEncontrado, pin: undefined, pinHashed: undefined };
+                    set({ usuarioActivo: sessionUser });
+                    localStorage.setItem('abasto-device-session', JSON.stringify(sessionUser));
+                    logEvent('AUTH', 'LOGIN', `${userEncontrado.nombre} inicio sesion`, sessionUser);
                     return true;
                 }
-                
+
                 return false;
             },
 
@@ -54,29 +88,25 @@ export const useAuthStore = create(
                 localStorage.removeItem('abasto-device-session');
             },
 
-            cambiarPin: (userId, nuevoPin) => {
+            cambiarPin: async (userId, nuevoPin) => {
+                const hashed = await hashPin(nuevoPin);
                 set((state) => ({
-                    usuarios: state.usuarios.map(u => 
-                        u.id === userId ? { ...u, pin: nuevoPin } : u
+                    usuarios: state.usuarios.map(u =>
+                        u.id === userId ? { ...u, pin: hashed, pinHashed: true } : u
                     )
                 }));
-                
-                // Si el usuario que cambió el PIN es el activo, actualizar su sesión local
-                const { usuarioActivo } = get();
-                if (usuarioActivo && usuarioActivo.id === userId) {
-                    const nuevoActivo = { ...usuarioActivo, pin: nuevoPin };
-                    set({ usuarioActivo: nuevoActivo });
-                    localStorage.setItem('abasto-device-session', JSON.stringify(nuevoActivo));
-                }
+
+                // Si el usuario que cambió el PIN es el activo, su sesión no cambia (no guardamos pin en sesión)
                 const target = get().usuarios.find(u => u.id === userId);
                 logEvent('AUTH', 'PIN_CAMBIADO', `PIN cambiado para ${target?.nombre || 'usuario'}`, get().usuarioActivo);
             },
 
-            agregarUsuario: (nombre, rol, pin) => {
+            agregarUsuario: async (nombre, rol, pin) => {
+                const hashed = await hashPin(pin);
                 set((state) => {
                     const maxId = state.usuarios.reduce((max, u) => Math.max(max, u.id), 0);
                     return {
-                        usuarios: [...state.usuarios, { id: maxId + 1, nombre, rol, pin }]
+                        usuarios: [...state.usuarios, { id: maxId + 1, nombre, rol, pin: hashed, pinHashed: true }]
                     };
                 });
                 logEvent('USUARIO', 'USUARIO_CREADO', `Usuario "${nombre}" (${rol}) creado`, get().usuarioActivo);
@@ -122,7 +152,7 @@ export const useAuthStore = create(
         }),
         {
             name: 'abasto-auth-storage', // Nombre para localStorage
-            version: 1,
+            version: 2,
             migrate: (persistedState, fromVersion) => {
                 // v0 → v1: admin PIN cambia de 4 a 6 dígitos (1234 → 123456)
                 if (fromVersion < 1 && persistedState?.usuarios) {
@@ -130,6 +160,12 @@ export const useAuthStore = create(
                         u.rol === 'ADMIN' && u.pin === '1234'
                             ? { ...u, pin: '123456' }
                             : u
+                    );
+                }
+                // v1 → v2: marcar todos los PINs como plaintext para migración lazy en login
+                if (fromVersion < 2 && persistedState?.usuarios) {
+                    persistedState.usuarios = persistedState.usuarios.map(u =>
+                        u.pinHashed === undefined ? { ...u, pinHashed: false } : u
                     );
                 }
                 return persistedState;

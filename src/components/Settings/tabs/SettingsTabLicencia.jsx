@@ -20,6 +20,27 @@ function timeAgo(dateStr) {
     return `Hace ${days}d`;
 }
 
+// Devuelve el estado de sesión basado en last_seen
+function sessionStatus(lastSeen) {
+    if (!lastSeen) return 'offline';
+    const mins = Math.floor((Date.now() - new Date(lastSeen).getTime()) / 60000);
+    if (mins < 5) return 'active';
+    if (mins < 30) return 'recent';
+    return 'offline';
+}
+
+const SESSION_DOT = {
+    active: 'bg-emerald-400',
+    recent: 'bg-amber-400',
+    offline: 'bg-slate-300 dark:bg-slate-600',
+};
+
+const SESSION_LABEL = {
+    active: 'Activo ahora',
+    recent: 'Reciente',
+    offline: 'Sin actividad',
+};
+
 // ─── Loading skeleton ──────────────────────────────────────────────────────────
 function LicenseSkeleton() {
     return (
@@ -51,10 +72,17 @@ function CloudLicenseViewer({ adminEmail }) {
         else setRefreshing(true);
 
         const [devRes, licRes] = await Promise.all([
-            supabaseCloud.from('account_devices').select('*').eq('email', adminEmail).order('created_at', { ascending: true }),
+            supabaseCloud.from('account_devices').select('*').eq('email', adminEmail).order('last_seen', { ascending: false }),
             supabaseCloud.from('cloud_licenses').select('*').eq('email', adminEmail).maybeSingle()
         ]);
-        if (!devRes.error && devRes.data) setDevices(devRes.data);
+        if (!devRes.error && devRes.data) {
+            // Ordenar: activos primero, luego recientes, luego offline
+            const statusOrder = { active: 0, recent: 1, offline: 2 };
+            const sorted = [...devRes.data].sort((a, b) =>
+                statusOrder[sessionStatus(a.last_seen)] - statusOrder[sessionStatus(b.last_seen)]
+            );
+            setDevices(sorted);
+        }
         if (!licRes.error && licRes.data) setLicense(licRes.data);
 
         if (!silent) setLoading(false);
@@ -212,7 +240,7 @@ function CloudLicenseViewer({ adminEmail }) {
                             </div>
                             <div>
                                 <p className="text-xs font-black text-slate-700 dark:text-slate-200 capitalize">
-                                    Plan {license.plan_tier}
+                                    {license.business_name || `Plan ${license.plan_tier}`}
                                 </p>
                                 <p className="text-[10px] text-slate-500 dark:text-slate-400">{adminEmail}</p>
                             </div>
@@ -290,25 +318,36 @@ function CloudLicenseViewer({ adminEmail }) {
             {/* ── Devices section ── */}
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
                 {/* Section header */}
-                <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
-                    <div className="flex items-center gap-2">
-                        <Wifi size={13} className="text-indigo-500" />
-                        <span className="text-[10px] uppercase font-black text-slate-500 dark:text-slate-400 tracking-widest">
-                            Equipos Activos
-                        </span>
-                        <span className="px-1.5 py-0.5 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 text-[9px] font-black rounded-md">
-                            {devices.length}
-                        </span>
-                    </div>
-                    <button
-                        onClick={() => loadData(true)}
-                        disabled={refreshing}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all active:scale-90"
-                        title="Actualizar"
-                    >
-                        <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
-                    </button>
-                </div>
+                {(() => {
+                    const activeCount = devices.filter(d => sessionStatus(d.last_seen) === 'active').length;
+                    return (
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                            <div className="flex items-center gap-2">
+                                <Wifi size={13} className="text-indigo-500" />
+                                <span className="text-[10px] uppercase font-black text-slate-500 dark:text-slate-400 tracking-widest">
+                                    Equipos con sesión
+                                </span>
+                                <span className="px-1.5 py-0.5 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 text-[9px] font-black rounded-md">
+                                    {devices.length}
+                                </span>
+                                {activeCount > 0 && (
+                                    <span className="flex items-center gap-1 px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 text-[9px] font-black rounded-md">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block" />
+                                        {activeCount} activo{activeCount !== 1 ? 's' : ''}
+                                    </span>
+                                )}
+                            </div>
+                            <button
+                                onClick={() => loadData(true)}
+                                disabled={refreshing}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all active:scale-90"
+                                title="Actualizar"
+                            >
+                                <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
+                            </button>
+                        </div>
+                    );
+                })()}
 
                 {/* Device list */}
                 {devices.length === 0 ? (
@@ -321,6 +360,8 @@ function CloudLicenseViewer({ adminEmail }) {
                         {devices.map((d, i) => {
                             const isCurrent = d.device_id === currentDeviceId;
                             const isEditing = editingId === d.device_id;
+                            const status = sessionStatus(d.last_seen);
+                            const canUnlink = devices.length > 1;
                             return (
                                 <div key={d.device_id} className={`flex items-center justify-between px-4 py-3 group transition-colors ${isCurrent ? 'bg-indigo-50/50 dark:bg-indigo-900/10' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}>
                                     <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -328,7 +369,7 @@ function CloudLicenseViewer({ adminEmail }) {
                                             <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isCurrent ? 'bg-gradient-to-br from-indigo-500 to-violet-600 shadow-md shadow-indigo-500/30' : 'bg-gradient-to-br from-indigo-100 to-violet-100 dark:from-indigo-900/50 dark:to-violet-900/50'}`}>
                                                 <Smartphone size={16} className={isCurrent ? 'text-white' : 'text-indigo-500'} />
                                             </div>
-                                            <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-white dark:border-slate-900" />
+                                            <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-slate-900 ${SESSION_DOT[status]} ${status === 'active' ? 'animate-pulse' : ''}`} title={SESSION_LABEL[status]} />
                                         </div>
 
                                         <div className="min-w-0 flex-1 mr-2">
@@ -381,7 +422,7 @@ function CloudLicenseViewer({ adminEmail }) {
                                         </div>
                                     </div>
 
-                                    {/* Actions: edit (current only) + delete */}
+                                    {/* Actions: edit (current only) + unlink (solo si hay más de 1 dispositivo) */}
                                     {!isEditing && (
                                         <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                                             {isCurrent && (
@@ -393,13 +434,15 @@ function CloudLicenseViewer({ adminEmail }) {
                                                     <Pencil size={13} />
                                                 </button>
                                             )}
-                                            <button
-                                                onClick={() => handleRemoveDevice(d.device_id, d.device_alias || `Dispositivo ${i + 1}`)}
-                                                className="p-2 rounded-xl text-slate-300 dark:text-slate-600 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all active:scale-90"
-                                                title="Desvincular"
-                                            >
-                                                <Trash2 size={13} />
-                                            </button>
+                                            {canUnlink && (
+                                                <button
+                                                    onClick={() => handleRemoveDevice(d.device_id, d.device_alias || `Dispositivo ${i + 1}`)}
+                                                    className="p-2 rounded-xl text-slate-300 dark:text-slate-600 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all active:scale-90"
+                                                    title="Desvincular"
+                                                >
+                                                    <Trash2 size={13} />
+                                                </button>
+                                            )}
                                         </div>
                                     )}
                                 </div>

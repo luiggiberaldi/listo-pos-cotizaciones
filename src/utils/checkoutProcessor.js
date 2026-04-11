@@ -101,9 +101,15 @@ export async function processSaleTransaction({
     const casheaPayment = payments.find(p => p.methodId === 'cashea');
     const casheaUsd = casheaPayment ? round2(casheaPayment.amountUsd) : 0;
 
+    // Cuando Cashea financia parte de la venta, la deuda del cliente es sólo
+    // el monto que Cashea adelantó (casheaUsd), NO el fiadoAmountUsd completo.
+    // fiadoAmountUsd sigue yendo al RPC para cuadrar la contabilidad de Supabase.
+    const deudaParaCliente = casheaUsd > 0 ? casheaUsd : fiadoAmountUsd;
+    const tipoVenta = casheaUsd > 0 ? 'VENTA_CASHEA' : (fiadoAmountUsd > 0 ? 'VENTA_FIADA' : 'VENTA');
+
     const sale = {
         id: finalSaleId || crypto.randomUUID(),
-        tipo: fiadoAmountUsd > 0 ? (casheaUsd > 0 ? 'VENTA_CASHEA' : 'VENTA_FIADA') : 'VENTA',
+        tipo: tipoVenta,
         status: saleMode === 'online' ? 'COMPLETADA' : 'PENDIENTE_SYNC',
         items: cart.map(i => ({ id: i.id, name: i.name, qty: i.qty, priceUsd: i.priceUsd, costBs: i.costBs || 0, costUsd: i.costUsd || 0, isWeight: i.isWeight })),
         cartSubtotalUsd: cartSubtotalUsd,
@@ -121,8 +127,8 @@ export async function processSaleTransaction({
         copEnabled: copEnabled,
         rateSource: useAutoRate ? 'BCV Auto' : 'Manual',
         timestamp: new Date().toISOString(),
-        changeUsd: fiadoAmountUsd > 0 ? 0 : (changeBreakdown?.changeUsdGiven || 0),
-        changeBs: fiadoAmountUsd > 0 ? 0 : (changeBreakdown?.changeBsGiven || 0),
+        changeUsd: tipoVenta !== 'VENTA' ? 0 : (changeBreakdown?.changeUsdGiven || 0),
+        changeBs: tipoVenta !== 'VENTA' ? 0 : (changeBreakdown?.changeBsGiven || 0),
         customerId: selectedCustomerId || null,
         customerName: selectedCustomer ? selectedCustomer.name : 'Consumidor Final',
         customerDocument: selectedCustomer?.documentId || null,
@@ -139,7 +145,7 @@ export async function processSaleTransaction({
 
     // Audit log
     const user = useAuthStore.getState().usuarioActivo;
-    const tipo = fiadoAmountUsd > 0 ? (casheaUsd > 0 ? 'VENTA_CASHEA' : 'VENTA_FIADO') : 'VENTA_COMPLETADA';
+    const tipo = casheaUsd > 0 ? 'VENTA_CASHEA' : (fiadoAmountUsd > 0 ? 'VENTA_FIADO' : 'VENTA_COMPLETADA');
     logEvent('VENTA', tipo, `Venta #${saleNumber} [${saleMode.toUpperCase()}] - $${cartTotalUsd.toFixed(2)} - ${cart.length} items - ${selectedCustomer?.name || 'Consumidor Final'}`, user, { saleId: finalPersistedSale.id, total: cartTotalUsd, items: cart.length });
 
     // Deduct stock in local cache immediately
@@ -172,8 +178,8 @@ export async function processSaleTransaction({
 
         const transaccionOpts = {
             usaSaldoFavor: amount_favor_used,
-            esCredito: fiadoAmountUsd > 0.009,
-            deudaGenerada: fiadoAmountUsd,
+            esCredito: deudaParaCliente > 0.009,
+            deudaGenerada: deudaParaCliente,
             esCashea: casheaUsd > 0,   // deuda va a casheaDeuda si es Cashea
             vueltoParaMonedero: 0
         };

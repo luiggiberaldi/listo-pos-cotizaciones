@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Percent, DollarSign, Calculator } from 'lucide-react';
+import { X, Percent, DollarSign, Calculator, ShieldAlert, KeyRound } from 'lucide-react';
+import { useAuthStore } from '../../hooks/store/useAuthStore';
 
 export default function DiscountModal({
     currentDiscount,
@@ -10,30 +11,34 @@ export default function DiscountModal({
     tasaCop,
     copEnabled
 }) {
+    const { usuarioActivo, login } = useAuthStore();
+    const isCajero = usuarioActivo?.rol === 'CAJERO';
+    const maxCajeroDiscount = parseInt(localStorage.getItem('cajero_max_descuento') ?? '100', 10) || 100;
+
     const [type, setType] = useState(currentDiscount?.type || 'percentage');
     const [value, setValue] = useState(currentDiscount?.value ? currentDiscount.value.toString() : '');
+    const [adminPin, setAdminPin] = useState('');
+    const [pinError, setPinError] = useState(false);
+    const [pinChecking, setPinChecking] = useState(false);
+    const [overrideGranted, setOverrideGranted] = useState(false);
     const inputRef = useRef(null);
+    const pinRef = useRef(null);
 
     useEffect(() => {
-        // Auto focus input on mount for fast typing
-        // Small delay ensures modal transition is done
         setTimeout(() => inputRef.current?.focus(), 150);
     }, []);
 
     const numValue = parseFloat(value) || 0;
 
-    // Calculate real preview
+    const needsOverride = isCajero && !overrideGranted && type === 'percentage' && numValue > maxCajeroDiscount && maxCajeroDiscount < 100;
+
     let discountAmountUsd = 0;
     if (type === 'percentage') {
         discountAmountUsd = cartSubtotalUsd * (numValue / 100);
     } else {
         discountAmountUsd = numValue;
     }
-    
-    // Prevent exceeding subtotal
-    if (discountAmountUsd > cartSubtotalUsd) {
-        discountAmountUsd = cartSubtotalUsd;
-    }
+    if (discountAmountUsd > cartSubtotalUsd) discountAmountUsd = cartSubtotalUsd;
 
     const newTotalUsd = cartSubtotalUsd - discountAmountUsd;
     const newTotalBs = newTotalUsd * effectiveRate;
@@ -41,13 +46,42 @@ export default function DiscountModal({
     const formatBs = (n) => new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 
     const handleSubmit = (e) => {
-        e.preventDefault();
+        e?.preventDefault();
+        if (needsOverride) return;
         onApply({ type, value: numValue });
     };
 
     const handleClear = () => {
         onApply({ type: 'percentage', value: 0 });
     };
+
+    const handleAdminOverride = async () => {
+        if (adminPin.length < 6 || pinChecking) return;
+        setPinChecking(true);
+        // Find admin user IDs
+        const { usuarios } = useAuthStore.getState();
+        const admins = usuarios.filter(u => u.rol === 'ADMIN');
+        let granted = false;
+        for (const admin of admins) {
+            const ok = await login(adminPin, admin.id);
+            if (ok) { granted = true; break; }
+        }
+        setPinChecking(false);
+        if (granted) {
+            setOverrideGranted(true);
+            setPinError(false);
+            setAdminPin('');
+        } else {
+            setPinError(true);
+            setAdminPin('');
+            setTimeout(() => setPinError(false), 800);
+        }
+    };
+
+    // Auto-submit pin when 6 digits entered
+    useEffect(() => {
+        if (adminPin.length === 6) handleAdminOverride();
+    }, [adminPin]);
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
@@ -68,19 +102,19 @@ export default function DiscountModal({
 
                 {/* Body */}
                 <form onSubmit={handleSubmit} className="p-4 sm:p-5 flex flex-col gap-5">
-                    
+
                     {/* Toggle Type */}
                     <div className="flex bg-slate-100 dark:bg-slate-950 p-1.5 rounded-2xl shadow-inner">
                         <button
                             type="button"
-                            onClick={() => { setType('percentage'); setValue(''); inputRef.current?.focus(); }}
+                            onClick={() => { setType('percentage'); setValue(''); setOverrideGranted(false); inputRef.current?.focus(); }}
                             className={`flex flex-1 items-center justify-center gap-2 py-2.5 text-sm font-bold rounded-xl transition-all duration-300 ${type === 'percentage' ? 'bg-white dark:bg-slate-900 shadow-sm text-blue-600 dark:text-blue-400 scale-100 ring-1 ring-slate-900/5 dark:ring-white/10' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 scale-95 hover:scale-100'}`}
                         >
                             <Percent size={16} /> Porcentaje
                         </button>
                         <button
                             type="button"
-                            onClick={() => { setType('fixed'); setValue(''); inputRef.current?.focus(); }}
+                            onClick={() => { setType('fixed'); setValue(''); setOverrideGranted(false); inputRef.current?.focus(); }}
                             className={`flex flex-1 items-center justify-center gap-2 py-2.5 text-sm font-bold rounded-xl transition-all duration-300 ${type === 'fixed' ? 'bg-white dark:bg-slate-900 shadow-sm text-emerald-600 dark:text-emerald-400 scale-100 ring-1 ring-slate-900/5 dark:ring-white/10' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 scale-95 hover:scale-100'}`}
                         >
                             <DollarSign size={16} /> Monto ($)
@@ -105,17 +139,60 @@ export default function DiscountModal({
                                 min="0"
                                 value={value}
                                 onChange={(e) => {
-                                    // Limite heurístico
                                     let val = e.target.value;
                                     if (type === 'percentage' && parseFloat(val) > 100) val = '100';
                                     setValue(val);
+                                    setOverrideGranted(false);
                                 }}
                                 className="w-full bg-white dark:bg-slate-950 border-2 border-slate-200 dark:border-slate-800 rounded-2xl py-4 pl-12 pr-4 text-2xl font-black text-slate-800 dark:text-white placeholder:text-slate-300 dark:placeholder:text-slate-700 focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-center"
                                 placeholder={type === 'percentage' ? "0%" : "0.00"}
                                 autoFocus
                             />
                         </div>
+                        {isCajero && maxCajeroDiscount < 100 && (
+                            <p className="text-[10px] text-slate-400 text-center mt-1.5">
+                                Límite cajero: <strong>{maxCajeroDiscount}%</strong> · Para más, ingresa PIN de admin
+                            </p>
+                        )}
                     </div>
+
+                    {/* Admin PIN override — shown when cajero exceeds limit */}
+                    {needsOverride && (
+                        <div className="flex flex-col gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl">
+                            <div className="flex items-center gap-2">
+                                <ShieldAlert size={14} className="text-amber-500 shrink-0" />
+                                <p className="text-xs font-bold text-amber-700 dark:text-amber-300">
+                                    Descuento supera el límite ({maxCajeroDiscount}%). Ingresa PIN de Administrador para autorizar.
+                                </p>
+                            </div>
+                            <div className="relative">
+                                <KeyRound size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-amber-400" />
+                                <input
+                                    ref={pinRef}
+                                    type="password"
+                                    inputMode="numeric"
+                                    maxLength={6}
+                                    value={adminPin}
+                                    onChange={e => setAdminPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                    placeholder="PIN Admin (6 dígitos)"
+                                    className={`w-full pl-9 pr-4 py-2.5 text-sm font-bold rounded-xl border-2 bg-white dark:bg-slate-900 focus:outline-none transition-all text-center tracking-widest ${pinError
+                                        ? 'border-red-400 text-red-600 animate-shake'
+                                        : 'border-amber-200 dark:border-amber-800 focus:border-amber-400 text-slate-700 dark:text-slate-200'
+                                    }`}
+                                    autoFocus
+                                    disabled={pinChecking}
+                                />
+                            </div>
+                            {pinChecking && <p className="text-[10px] text-amber-500 text-center font-bold animate-pulse">Verificando...</p>}
+                        </div>
+                    )}
+
+                    {overrideGranted && (
+                        <div className="flex items-center gap-2 p-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl">
+                            <ShieldAlert size={13} className="text-emerald-500 shrink-0" />
+                            <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">Autorizado por Administrador</p>
+                        </div>
+                    )}
 
                     {/* Preview Area */}
                     <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-2">
@@ -152,7 +229,11 @@ export default function DiscountModal({
                         </button>
                         <button
                             type="submit"
-                            className="py-3.5 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-xl active:scale-95 transition-all outline-none shadow-lg shadow-blue-500/30"
+                            disabled={needsOverride}
+                            className={`py-3.5 font-bold rounded-xl active:scale-95 transition-all outline-none shadow-lg ${needsOverride
+                                ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed shadow-none'
+                                : 'bg-blue-500 hover:bg-blue-600 text-white shadow-blue-500/30'
+                            }`}
                         >
                             Aplicar
                         </button>

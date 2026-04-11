@@ -2,59 +2,55 @@ import { useEffect, useCallback, useRef } from 'react';
 import { useAuthStore } from './store/useAuthStore';
 import { logEvent } from '../services/auditService';
 
+const CAJERO_LOCK_MINUTES = 5; // Fijo, no configurable
+
 export function useAutoLock() {
     const { usuarioActivo, logout, requireLogin } = useAuthStore();
     const adminEmail = useAuthStore(s => s.adminEmail);
-    const adminPassword = useAuthStore(s => s.adminPassword);
     const isCloudConfigured = Boolean(adminEmail);
-    // El auto-lock solo tiene sentido si hay cuenta cloud Y requireLogin está activo.
-    // Sin cloud no hay LockScreen que mostrar → nunca bloquear.
+    // Lock aplica si: es ADMIN con cloud+requireLogin, O si es CAJERO (siempre)
+    const isAdmin = usuarioActivo?.rol === 'ADMIN';
+    const isCajero = usuarioActivo?.rol === 'CAJERO';
     const isLoginRequired = (requireLogin ?? false) && isCloudConfigured;
+    const shouldLock = (isAdmin && isLoginRequired) || isCajero;
     const timeoutRef = useRef(null);
 
+    const getLockMinutes = useCallback(() => {
+        if (isCajero) return CAJERO_LOCK_MINUTES;
+        const minutesStr = localStorage.getItem('admin_auto_lock_minutes') || '5';
+        const minutes = parseInt(minutesStr, 10);
+        return isNaN(minutes) || minutes < 1 ? 5 : minutes;
+    }, [isCajero]);
+
     const performLock = useCallback((reason = 'manual') => {
-        if (!isLoginRequired) return; // Sin cloud o sin PIN → nunca bloquear
-        if (!usuarioActivo || usuarioActivo.rol !== 'ADMIN') return;
-        
-        logEvent('AUTH', 'SESION_BLOQUEADA', `Bloqueo de seguridad: ${reason}`, usuarioActivo);
+        if (!shouldLock) return;
+        logEvent('AUTH', 'SESION_BLOQUEADA', `Bloqueo de ${usuarioActivo?.nombre} (${usuarioActivo?.rol}): ${reason}`, usuarioActivo);
         logout();
-    }, [usuarioActivo, logout, isLoginRequired]);
+    }, [usuarioActivo, logout, shouldLock]);
 
     const resetTimer = useCallback(() => {
-        if (!isLoginRequired || !usuarioActivo || usuarioActivo.rol !== 'ADMIN') {
+        if (!shouldLock) {
             if (timeoutRef.current) clearTimeout(timeoutRef.current);
             return;
         }
-
-        // Obtener timeout en minutos desde config, por defecto 3 min
-        const minutesStr = localStorage.getItem('admin_auto_lock_minutes') || '3';
-        const minutes = parseInt(minutesStr, 10);
-        // Minimum timeout 1 minute
-        const ms = (isNaN(minutes) || minutes < 1 ? 3 : minutes) * 60 * 1000;
-
+        const ms = getLockMinutes() * 60 * 1000;
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
         timeoutRef.current = setTimeout(() => {
             performLock('inactividad');
         }, ms);
-    }, [usuarioActivo, performLock]);
+    }, [shouldLock, getLockMinutes, performLock]);
 
     useEffect(() => {
-        // Solo importa si es ADMIN y el login es requerido
-        if (!isLoginRequired || !usuarioActivo || usuarioActivo.rol !== 'ADMIN') {
+        if (!shouldLock) {
             if (timeoutRef.current) clearTimeout(timeoutRef.current);
             return;
         }
 
         const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart'];
-        
-        // Función debounced para no saturar el event loop en scroll/mouse move
         let tick = false;
         const throttledResetTimer = () => {
             if (!tick) {
-                requestAnimationFrame(() => {
-                    resetTimer();
-                    tick = false;
-                });
+                requestAnimationFrame(() => { resetTimer(); tick = false; });
                 tick = true;
             }
         };
@@ -63,22 +59,26 @@ export function useAutoLock() {
 
         const handleVisibilityChange = () => {
             if (document.hidden) {
-                // Suspender sesión automáticamente si minimiza la app (ADMIN only)
-                performLock('app_minimizada');
+                // Admin: bloquear al minimizar. Cajero: solo reiniciar el timer
+                if (isAdmin) {
+                    performLock('app_minimizada');
+                } else {
+                    resetTimer();
+                }
             } else {
                 resetTimer();
             }
         };
         document.addEventListener('visibilitychange', handleVisibilityChange);
 
-        resetTimer(); // Iniciar on mount
+        resetTimer();
 
         return () => {
             events.forEach(e => window.removeEventListener(e, throttledResetTimer));
             document.removeEventListener('visibilitychange', handleVisibilityChange);
             if (timeoutRef.current) clearTimeout(timeoutRef.current);
         };
-    }, [usuarioActivo, resetTimer, performLock]);
+    }, [usuarioActivo, shouldLock, resetTimer, performLock, isAdmin]);
 
     return { manualLock: () => performLock('manual') };
 }

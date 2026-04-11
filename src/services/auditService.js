@@ -3,13 +3,31 @@
  *  AUDIT SERVICE — Bitacora Universal Oculta
  *  Registra todas las acciones de la app con usuario,
  *  timestamp, categoría y descripción.
+ *
+ *  Cloud sync: requiere tabla en Supabase:
+ *    CREATE TABLE audit_log (
+ *      id UUID PRIMARY KEY,
+ *      ts BIGINT NOT NULL,
+ *      cat TEXT NOT NULL,
+ *      action TEXT NOT NULL,
+ *      desc TEXT,
+ *      user_id INT,
+ *      user_name TEXT,
+ *      user_role TEXT,
+ *      email TEXT,
+ *      device_id TEXT,
+ *      meta JSONB,
+ *      synced_at TIMESTAMPTZ DEFAULT NOW()
+ *    );
  * ═══════════════════════════════════════════════════════
  */
 import { storageService } from '../utils/storageService';
 
 const AUDIT_KEY = 'abasto_audit_log_v1';
+const AUDIT_SYNC_CURSOR = 'abasto_audit_sync_cursor';
 const MAX_ENTRIES = 15000;
 const MAX_AGE_DAYS = 90;
+const SYNC_BATCH = 50; // entries per cloud push
 
 // ─── Core ──────────────────────────────────────────────
 
@@ -143,4 +161,57 @@ export async function exportAuditLog() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+}
+
+// ─── Cloud Sync ─────────────────────────────────────────────────────────────
+
+/**
+ * Sincroniza entradas del audit log local a Supabase.
+ * Llama desde App.jsx al iniciar o en background periódicamente.
+ * Solo actúa si adminEmail está configurado.
+ *
+ * @param {string} adminEmail - Email de la cuenta admin
+ * @param {string} deviceId - ID del dispositivo actual
+ */
+export async function syncAuditToCloud(adminEmail, deviceId) {
+    if (!adminEmail) return;
+
+    try {
+        const { supabaseCloud } = await import('../config/supabaseCloud');
+        const log = await storageService.getItem(AUDIT_KEY, []);
+        if (!log.length) return;
+
+        // Cursor: el timestamp del último entry ya sincronizado
+        const cursor = parseInt(localStorage.getItem(AUDIT_SYNC_CURSOR) || '0', 10);
+
+        // Entries no sincronizadas (más recientes primero → invertir para procesar cronológicamente)
+        const pending = log.filter(e => e.ts > cursor).reverse().slice(0, SYNC_BATCH);
+        if (!pending.length) return;
+
+        const rows = pending.map(e => ({
+            id: e.id,
+            ts: e.ts,
+            cat: e.cat,
+            action: e.action,
+            desc: e.desc,
+            user_id: e.userId ?? null,
+            user_name: e.userName ?? 'Sistema',
+            user_role: e.userRole ?? 'SYSTEM',
+            email: adminEmail,
+            device_id: deviceId ?? null,
+            meta: e.meta ?? null,
+        }));
+
+        const { error } = await supabaseCloud
+            .from('audit_log')
+            .upsert(rows, { onConflict: 'id' });
+
+        if (!error) {
+            const newCursor = Math.max(...pending.map(e => e.ts));
+            localStorage.setItem(AUDIT_SYNC_CURSOR, String(newCursor));
+        }
+    } catch (err) {
+        // Silencioso — sync cloud nunca debe romper la app
+        console.warn('[AuditService] Cloud sync error:', err);
+    }
 }

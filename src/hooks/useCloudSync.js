@@ -398,12 +398,11 @@ export function useCloudSync() {
                         });
                 }
 
-                // ── Polling cada 10 min: solo datos pesados ──────────────────
+                // ── Polling cada 15 min: solo datos pesados ──────────────────
                 // Productos, ventas, clientes, cuentas — payloads grandes que
-                // no necesitan ser instantáneos. 10 min es suficiente para
-                // multi-dispositivo en datos de catálogo.
+                // no necesitan ser instantáneos. 15 min reduce egress ~66% vs 5 min.
                 if (!pollIntervalId) {
-                    const POLL_INTERVAL = 5 * 60 * 1000; // 5 minutos (incremental: solo docs cambiados)
+                    const POLL_INTERVAL = 15 * 60 * 1000; // 15 minutos
 
                     const pollForChanges = async () => {
                         if (isSyncingFromCloud) return;
@@ -449,14 +448,21 @@ export function useCloudSync() {
                     };
 
                     pollIntervalId = setInterval(pollForChanges, POLL_INTERVAL);
-                    console.log('[CloudSync] Híbrido iniciado: Realtime (config) + Polling 5min (datos)');
+                    console.log('[CloudSync] Híbrido iniciado: Realtime (config) + Polling 15min (datos)');
 
-                    // ── Sync al recuperar visibilidad ─────────────────────────
-                    // Cuando el usuario vuelve al tab o desbloquea el teléfono,
-                    // disparar un pull inmediato sin esperar el próximo intervalo.
+                    // ── Sync al recuperar visibilidad — con cooldown de 10 min ─────
+                    // Previene egress masivo cuando el usuario alterna apps frecuentemente.
+                    // Sin cooldown: 50 cambios de tab/día × 218KB = 10MB/día por cliente.
+                    let lastVisibilityPoll = 0;
+                    const VISIBILITY_COOLDOWN_MS = 10 * 60 * 1000; // mínimo 10 min entre polls por visibilidad
+
                     const onVisible = () => {
                         if (document.visibilityState === 'visible') {
-                            pollForChanges().catch(() => {});
+                            const now = Date.now();
+                            if (now - lastVisibilityPoll >= VISIBILITY_COOLDOWN_MS) {
+                                lastVisibilityPoll = now;
+                                pollForChanges().catch(() => {});
+                            }
                         }
                     };
                     document.addEventListener('visibilitychange', onVisible);

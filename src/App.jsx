@@ -28,7 +28,7 @@ import LockScreen from './components/security/LockScreen';
 import CloudAuthModal from './components/security/CloudAuthModal';
 import { useAuthStore } from './hooks/store/useAuthStore';
 import { useAutoLock } from './hooks/useAutoLock';
-import { purgeOldEntries } from './services/auditService';
+import { purgeOldEntries, syncAuditToCloud } from './services/auditService';
 import { useCloudSync } from './hooks/useCloudSync';
 import { supabaseCloud } from './config/supabaseCloud';
 import { useConfirm } from './hooks/useConfirm.jsx';
@@ -60,6 +60,18 @@ export default function App() {
   useEffect(() => {
     let mounted = true;
 
+    // ── Cache de verificación de dispositivo (15 min) ─────────────────────────
+    // El RPC register_and_check_device + select account_devices se llama en cada
+    // recarga y authStateChange. Con 30 clientes recargas frecuentes suman ~1-2MB/día.
+    // Cache de 15 min: si el dispositivo ya fue verificado recientemente, se omite el RPC.
+    const DEVICE_CHECK_CACHE_KEY = 'pda_device_check_ts';
+    const DEVICE_CHECK_TTL_MS = 15 * 60 * 1000; // 15 minutos
+
+    const isDeviceCheckCached = () => {
+      const ts = localStorage.getItem(DEVICE_CHECK_CACHE_KEY);
+      return ts && Date.now() - parseInt(ts, 10) < DEVICE_CHECK_TTL_MS;
+    };
+
     const applySession = async (session) => {
       if (!mounted) return;
 
@@ -78,6 +90,15 @@ export default function App() {
         const finalAlias = savedAlias && savedAlias.trim() !== '' ? savedAlias.trim() : defaultAlias;
 
         const isExplicitLogin = localStorage.getItem('pda_explicit_login') === 'true';
+
+        // Si ya verificamos el dispositivo recientemente y no es un login explícito, omitir llamadas a Supabase
+        if (!isExplicitLogin && isDeviceCheckCached()) {
+          if (mounted) {
+            setCloudSession(session);
+            setCheckingSession(false);
+          }
+          return;
+        }
 
         // Si el login NO es explícito (es un auto-login normal),
         // checamos si este dispositivo ya fue expulsado.
@@ -108,6 +129,7 @@ export default function App() {
 
         if (!error) {
           if (result === 'license_inactive' || result === 'limit_reached') {
+            localStorage.removeItem(DEVICE_CHECK_CACHE_KEY);
             await supabaseCloud.auth.signOut();
             if (mounted) { setCloudSession(null); setCheckingSession(false); }
             return;
@@ -124,6 +146,7 @@ export default function App() {
             const now = new Date();
             const daysOverdue = validUntil ? Math.ceil((now - validUntil) / 86400000) : 999;
             if (!validUntil || daysOverdue > GRACE_DAYS) {
+              localStorage.removeItem(DEVICE_CHECK_CACHE_KEY);
               await supabaseCloud.auth.signOut();
               if (mounted) { setCloudSession(null); setCheckingSession(false); }
               return;
@@ -131,6 +154,8 @@ export default function App() {
             // Dentro de gracia — permitir pero mostrar banner
             if (mounted) setGraceInfo({ daysOverdue, daysLeft: GRACE_DAYS - daysOverdue });
           }
+          // Verificación exitosa — guardar timestamp del cache
+          localStorage.setItem(DEVICE_CHECK_CACHE_KEY, String(Date.now()));
         }
         // Si la RPC no existe aún (error), deja pasar sin bloquear
       } catch {
@@ -278,6 +303,14 @@ export default function App() {
   const isCloudConfigured = Boolean(adminEmail);
   // El PIN solo bloquea si requireLogin está activado Y hay cuenta cloud registrada
   const pinLoginEnabled = requireLogin && isCloudConfigured;
+
+  // Sync audit log to cloud periodically (every 5 min) when cloud is configured
+  useEffect(() => {
+    if (!adminEmail || !deviceId) return;
+    syncAuditToCloud(adminEmail, deviceId);
+    const interval = setInterval(() => syncAuditToCloud(adminEmail, deviceId), 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [adminEmail, deviceId]);
 
   const confirm = useConfirm();
 

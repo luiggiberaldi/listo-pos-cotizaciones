@@ -20,9 +20,11 @@ export function useCloudAuthLogic() {
     // ─── STATE ──────────────────────────────────────────
     const [inputEmail, setInputEmail] = useState(adminEmail || '');
     const [inputPassword, setInputPassword] = useState(''); // ← Siempre en blanco por seguridad
+    const [inputConfirmPassword, setInputConfirmPassword] = useState('');
+    const [inputBusinessName, setInputBusinessName] = useState(() => localStorage.getItem('business_name') || '');
     const isCloudConfigured = Boolean(adminEmail);
     const [isCloudLogin, setIsCloudLogin] = useState(true);
-    
+
     const [localDeviceAlias, setLocalDeviceAlias] = useState(() => localStorage.getItem('pda_device_alias') || '');
     const [inputPhone, setInputPhone] = useState('');
     const [emailError, setEmailError] = useState('');
@@ -193,7 +195,11 @@ export function useCloudAuthLogic() {
         let hasError = false;
         if (!inputEmail.includes('@')) { setEmailError('Formato no válido'); hasError = true; }
         if (inputPassword.length < 6) { setPasswordError('Mínimo 6 caracteres'); hasError = true; }
-        if (!isCloudLogin && !inputPhone.trim()) { showToast('El teléfono es obligatorio', 'error'); hasError = true; }
+        if (!isCloudLogin) {
+            if (!inputBusinessName.trim()) { showToast('El nombre del negocio es obligatorio', 'error'); hasError = true; }
+            if (inputPassword !== inputConfirmPassword) { setPasswordError('Las contraseñas no coinciden'); hasError = true; }
+            if (!inputPhone.trim()) { showToast('El teléfono es obligatorio', 'error'); hasError = true; }
+        }
         
         if (hasError) return;
 
@@ -212,7 +218,7 @@ export function useCloudAuthLogic() {
                 } else {
                     const { data, error: err } = await supabaseCloud.auth.signUp({
                         email: emailToUse, password: inputPassword,
-                        options: { data: { full_name: businessName || 'Bodega', phone: inputPhone } },
+                        options: { data: { full_name: inputBusinessName.trim() || 'Negocio', phone: inputPhone } },
                     });
                     if (err) {
                         if (err.message.includes('already registered')) throw new Error('Ya registrado. Entrar.');
@@ -220,6 +226,8 @@ export function useCloudAuthLogic() {
                     }
                     if (data?.user?.identities?.length === 0) throw new Error('Ya registrado. Entrar.');
                     if (data?.user && !data.session) {
+                        // Guardar el nombre del negocio antes del redirect
+                        if (inputBusinessName.trim()) localStorage.setItem('business_name', inputBusinessName.trim());
                         showToast('Revisa tu correo y confírmalo.', 'success');
                         setImportStatus('awaiting_email_confirmation');
                         return;
@@ -231,6 +239,47 @@ export function useCloudAuthLogic() {
             const finalAlias = localDeviceAlias.trim() || `Dispositivo ${navigator.platform || 'Web'}`;
             localStorage.setItem('pda_device_alias', finalAlias);
             localStorage.setItem('pda_explicit_login', 'true'); // Bandera para evitar que App.jsx tumba nuestra sesión antes de registrar
+
+            // Jalar metadatos del usuario (nombre del negocio y teléfono) desde Supabase
+            // y guardarlos en localStorage para que la estación los tenga disponibles
+            if (isCloudLogin && supabaseCloud) {
+                try {
+                    const { data: { user } } = await supabaseCloud.auth.getUser();
+                    if (user?.user_metadata) {
+                        const meta = user.user_metadata;
+                        if (meta.full_name && !localStorage.getItem('business_name')) {
+                            localStorage.setItem('business_name', meta.full_name);
+                        }
+                        if (meta.phone && !localStorage.getItem('business_phone')) {
+                            localStorage.setItem('business_phone', meta.phone);
+                        }
+                    }
+                    // También intentar desde cloud_licenses (fuente más actualizada)
+                    const { data: lic } = await supabaseCloud
+                        .from('cloud_licenses')
+                        .select('business_name, phone')
+                        .eq('email', emailToUse)
+                        .maybeSingle();
+                    if (lic?.business_name) localStorage.setItem('business_name', lic.business_name);
+                    if (lic?.phone) localStorage.setItem('business_phone', lic.phone);
+
+                    // Sincronizar Display name y Phone en auth.users via Admin API (worker)
+                    const { data: { session } } = await supabaseCloud.auth.getSession();
+                    if (session?.access_token && (lic?.business_name || lic?.phone)) {
+                        fetch('/api/update-profile', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                accessToken: session.access_token,
+                                businessName: lic?.business_name || undefined,
+                                phone: lic?.phone || undefined,
+                            }),
+                        }).catch(() => {}); // fire-and-forget
+                    }
+                } catch (e) {
+                    console.warn('[Login] No se pudieron sincronizar metadatos del negocio:', e);
+                }
+            }
 
             try {
                 const { data: rpcResult } = await supabaseCloud.rpc('register_and_check_device', {
@@ -321,7 +370,7 @@ export function useCloudAuthLogic() {
                             license_type: 'trial',
                             max_devices: 2,
                             valid_until: trialExpiry.toISOString(),
-                            business_name: businessName || 'Bodega',
+                            business_name: inputBusinessName.trim() || 'Negocio',
                             phone: inputPhone || '',
                             active: true,
                             updated_at: new Date().toISOString()
@@ -336,6 +385,27 @@ export function useCloudAuthLogic() {
 
             setAdminCredentials(emailToUse, inputPassword);
             setInputPassword('');
+            // Guardar datos del negocio en localStorage para la estación
+            if (!isCloudLogin) {
+                if (inputBusinessName.trim()) localStorage.setItem('business_name', inputBusinessName.trim());
+                if (inputPhone.trim()) localStorage.setItem('business_phone', inputPhone.trim());
+
+                // Sincronizar Display name y Phone en auth.users via Admin API (worker)
+                try {
+                    const { data: { session } } = await supabaseCloud.auth.getSession();
+                    if (session?.access_token) {
+                        fetch('/api/update-profile', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                accessToken: session.access_token,
+                                businessName: inputBusinessName.trim() || undefined,
+                                phone: inputPhone.trim() || undefined,
+                            }),
+                        }).catch(() => {});
+                    }
+                } catch (e) { /* silencioso */ }
+            }
             showToast('Sincronizado', 'success');
             setImportStatus(null);
             setStatusMessage('');
@@ -371,6 +441,8 @@ export function useCloudAuthLogic() {
     return {
         inputEmail, setInputEmail,
         inputPassword, setInputPassword,
+        inputConfirmPassword, setInputConfirmPassword,
+        inputBusinessName, setInputBusinessName,
         inputPhone, setInputPhone,
         isCloudConfigured,
         isCloudLogin, setIsCloudLogin,

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { X, Users, Receipt, ChevronDown, Wallet, Zap, UserPlus, Check, ArrowLeftRight, AlertTriangle, Smartphone } from 'lucide-react';
+import { X, Users, Receipt, ChevronDown, Wallet, Zap, UserPlus, Check, ArrowLeftRight, AlertTriangle, Smartphone, Lock } from 'lucide-react';
 import CasheaIcon from '../CasheaIcon';
 import { BsIcon, UsdIcon } from '../CurrencyIcons';
 import { formatBs } from '../../utils/calculatorUtils';
@@ -29,13 +29,16 @@ export default function CheckoutModal({
     copEnabled,
     tasaCop,
     currentFloatUsd = 0,
-    currentFloatBs = 0
+    currentFloatBs = 0,
+    useAutoRate = false
 }) {
     // -- State: un valor por barra --
     const [barValues, setBarValues] = useState({});
 
     // -- Cashea --
     const casheaEnabled = localStorage.getItem('cashea_enabled') === 'true';
+    const casheaMinAmount = parseFloat(localStorage.getItem('cashea_min_amount') || '0') || 0;
+    const casheaMeetsMinimum = casheaMinAmount <= 0 || cartTotalUsd >= casheaMinAmount;
     const [casheaActive, setCasheaActive] = useState(false);
     const [casheaPercent, setCasheaPercent] = useState(40);
     const CASHEA_PERCENTS = [10, 20, 30, 40, 50, 60, 70, 80];
@@ -108,6 +111,9 @@ export default function CheckoutModal({
     const changeBs = round2(Math.max(0, subR(totalPaidBs + mulR(casheaAmountUsd, effectiveRate), cartTotalBs)));
     const PAYMENT_TOLERANCE = 0.01;
     const isPaid = remainingUsd < PAYMENT_TOLERANCE;
+    // Cashea: el cajero debe haber ingresado el monto del cliente antes de poder registrar.
+    // casheaConfirmReady = true cuando el pago manual cubre la porción del cliente (totalPaidUsd >= cartTotal - casheaAmount).
+    const casheaConfirmReady = !casheaActive || isPaid || totalPaidUsd >= round2(cartTotalUsd - casheaAmountUsd) - PAYMENT_TOLERANCE;
 
     // -- Handlers --
     const handleBarChange = useCallback((methodId, value) => {
@@ -397,7 +403,23 @@ export default function CheckoutModal({
 
                 {/* -- SECCION CASHEA -- */}
                 {casheaEnabled && (
-                    !selectedCustomer ? (
+                    !useAutoRate ? (
+                        <div className="mx-3 mb-3 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 p-3 flex items-center gap-3 opacity-60">
+                            <CasheaIcon size={28} />
+                            <div>
+                                <p className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Lock size={11} /> Cashea no disponible</p>
+                                <p className="text-[10px] text-slate-400">Requiere tasa BCV automática</p>
+                            </div>
+                        </div>
+                    ) : !casheaMeetsMinimum ? (
+                        <div className="mx-3 mb-3 rounded-2xl border border-dashed border-purple-200 dark:border-purple-800/40 p-3 flex items-center gap-3 opacity-60">
+                            <CasheaIcon size={28} />
+                            <div>
+                                <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Cashea</p>
+                                <p className="text-[10px] text-slate-400">Mínimo ${casheaMinAmount.toFixed(2)} para activar Cashea</p>
+                            </div>
+                        </div>
+                    ) : !selectedCustomer ? (
                         <div className="mx-3 mb-3 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 p-3 flex items-center gap-3">
                             <CasheaIcon size={28} />
                             <div>
@@ -663,20 +685,22 @@ export default function CheckoutModal({
             <div className="shrink-0 px-4 py-3 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
                 <button
                     onClick={() => {
-                        if (!isPaid && selectedCustomerId && remainingUsd > 0.01) {
+                        if (!isPaid && selectedCustomerId && remainingUsd > 0.01 && casheaConfirmReady) {
                             triggerHaptic && triggerHaptic();
                             setConfirmFiar(true);
-                        } else {
+                        } else if (casheaConfirmReady || isPaid) {
                             handleConfirm();
                         }
                     }}
-                    disabled={!selectedCustomerId && remainingUsd > 0.01}
-                    className={`w-full py-4 text-white font-black text-base rounded-2xl shadow-lg transition-all tracking-wide flex items-center justify-center gap-2 ${isPaid
-                        ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/25 active:scale-[0.98]'
+                    disabled={(!selectedCustomerId && remainingUsd > 0.01) || (casheaActive && !isPaid && !casheaConfirmReady)}
+                    className={`w-full py-4 font-black text-base rounded-2xl shadow-lg transition-all tracking-wide flex items-center justify-center gap-2 ${isPaid
+                        ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/25 active:scale-[0.98] text-white'
                         : selectedCustomerId
                             ? casheaActive
-                                ? 'bg-purple-500 hover:bg-purple-600 shadow-purple-500/25 active:scale-[0.98]'
-                                : 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/25 active:scale-[0.98]'
+                                ? casheaConfirmReady
+                                    ? 'bg-purple-500 hover:bg-purple-600 shadow-purple-500/25 active:scale-[0.98] text-white'
+                                    : 'bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 shadow-none cursor-not-allowed'
+                                : 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/25 active:scale-[0.98] text-white'
                             : 'bg-slate-300 dark:bg-slate-800 text-slate-500 shadow-none cursor-not-allowed'
                         }`}
                 >
@@ -684,7 +708,9 @@ export default function CheckoutModal({
                         <><Receipt size={18} /> CONFIRMAR VENTA</>
                     ) : selectedCustomerId ? (
                         casheaActive
-                            ? <><CasheaIcon size={18} /> REGISTRAR CON CASHEA (${remainingUsd.toFixed(2)})</>
+                            ? casheaConfirmReady
+                                ? <><CasheaIcon size={18} /> REGISTRAR CON CASHEA · PAGA AHORA ${remainingUsd.toFixed(2)}</>
+                                : <><Lock size={16} /> CASHEA — INGRESA ${remainingUsd.toFixed(2)} DEL CLIENTE</>
                             : <><Users size={18} /> FIAR RESTANTE (${remainingUsd.toFixed(2)})</>
                     ) : (
                         <><Receipt size={18} /> INGRESA LOS PAGOS</>
@@ -718,13 +744,13 @@ export default function CheckoutModal({
                                 <p className={`text-[11px] sm:text-xs font-bold uppercase tracking-widest mb-1 ${casheaActive ? 'text-purple-500' : 'text-amber-500'}`}>
                                     {casheaActive ? 'Monto pendiente Cashea' : 'Monto a fiar'}
                                 </p>
-                                <p className={`text-3xl sm:text-4xl font-black ${casheaActive ? 'text-purple-600' : 'text-amber-600'}`}>${remainingUsd.toFixed(2)}</p>
-                                <p className={`text-sm sm:text-base font-bold mt-0.5 ${casheaActive ? 'text-purple-500/70' : 'text-amber-500/70'}`}>{formatBs(remainingBs)} Bs</p>
+                                <p className={`text-3xl sm:text-4xl font-black ${casheaActive ? 'text-purple-600' : 'text-amber-600'}`}>${(casheaActive ? casheaAmountUsd : remainingUsd).toFixed(2)}</p>
+                                <p className={`text-sm sm:text-base font-bold mt-0.5 ${casheaActive ? 'text-purple-500/70' : 'text-amber-500/70'}`}>{formatBs(casheaActive ? mulR(casheaAmountUsd, effectiveRate) : remainingBs)} Bs</p>
                             </div>
                             <div className={`border-t pt-3 space-y-2 ${casheaActive ? 'border-purple-200/50 dark:border-purple-800/20' : 'border-amber-200/50 dark:border-amber-800/20'}`}>
                                 <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300">
                                     {casheaActive
-                                        ? <>Cashea cobrará <span className="font-black text-slate-800 dark:text-white">${remainingUsd.toFixed(2)}</span> a <span className="font-black text-slate-800 dark:text-white">{selectedCustomer?.name}</span>. Se registrará como deuda Cashea.</>
+                                        ? <>Cashea cobrará <span className="font-black text-slate-800 dark:text-white">${casheaAmountUsd.toFixed(2)}</span> a <span className="font-black text-slate-800 dark:text-white">{selectedCustomer?.name}</span>. Se registrará como deuda Cashea.</>
                                         : <>Se registrara como deuda a nombre de <span className="font-black text-slate-800 dark:text-white">{selectedCustomer?.name}</span>.</>
                                     }
                                 </p>
@@ -741,14 +767,17 @@ export default function CheckoutModal({
                                 {selectedCustomer && (selectedCustomer.deuda || 0) > 0.01 && (
                                     <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30 rounded-lg p-2.5 mt-2">
                                         <p className="text-[11px] sm:text-xs font-bold text-red-600 dark:text-red-400">
-                                            Este cliente ya tiene una deuda de ${(selectedCustomer.deuda || 0).toFixed(2)}. La deuda total pasara a ser ${((selectedCustomer.deuda || 0) + remainingUsd).toFixed(2)}.
+                                            {casheaActive
+                                                ? <>Este cliente tiene <span className="font-black">${(selectedCustomer.deuda || 0).toFixed(2)}</span> de fiado pendiente (independiente de Cashea).</>
+                                                : <>Este cliente ya tiene una deuda de ${(selectedCustomer.deuda || 0).toFixed(2)}. La deuda total pasara a ser ${((selectedCustomer.deuda || 0) + remainingUsd).toFixed(2)}.</>
+                                            }
                                         </p>
                                     </div>
                                 )}
                                 {selectedCustomer && casheaActive && (selectedCustomer.casheaDeuda || 0) > 0.01 && (
                                     <div className="bg-purple-50 dark:bg-purple-900/10 border border-purple-200 dark:border-purple-800/30 rounded-lg p-2.5 mt-2">
                                         <p className="text-[11px] sm:text-xs font-bold text-purple-600 dark:text-purple-400">
-                                            Ya tiene ${(selectedCustomer.casheaDeuda || 0).toFixed(2)} pendiente con Cashea. El total Cashea pasará a ${((selectedCustomer.casheaDeuda || 0) + remainingUsd).toFixed(2)}.
+                                            Ya tiene ${(selectedCustomer.casheaDeuda || 0).toFixed(2)} pendiente con Cashea. El total Cashea pasará a ${((selectedCustomer.casheaDeuda || 0) + casheaAmountUsd).toFixed(2)}.
                                         </p>
                                     </div>
                                 )}

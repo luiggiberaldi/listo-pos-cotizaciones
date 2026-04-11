@@ -41,6 +41,7 @@ function corsHeaders(request) {
         'http://localhost:4173',
         'https://listo-pos-lite.camelai.app',
         'https://listo-pos-lite.apps.camelai.dev',
+        'https://listo-pos-lite.vercel.app',
         'https://tasasaldia.com',
         'https://www.tasasaldia.com',
     ];
@@ -49,6 +50,52 @@ function corsHeaders(request) {
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type',
     };
+}
+
+// ── Update Profile handler (Admin API — service key never exposed al cliente) ─
+async function handleUpdateProfile(request, env) {
+    const headers = corsHeaders(request);
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers });
+    if (request.method !== 'POST') return Response.json({ error: 'Method not allowed' }, { status: 405, headers });
+
+    const SERVICE_KEY = env.SUPABASE_SERVICE_KEY;
+    if (!SERVICE_KEY) return Response.json({ error: 'Not configured' }, { status: 500, headers });
+
+    let body;
+    try { body = await request.json(); } catch { return Response.json({ error: 'Invalid JSON' }, { status: 400, headers }); }
+
+    const { accessToken, businessName, phone } = body;
+    if (!accessToken) return Response.json({ error: 'accessToken required' }, { status: 400, headers });
+
+    // 1. Verificar el access token y obtener el UID del usuario
+    const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${accessToken}` },
+    });
+    if (!userRes.ok) return Response.json({ error: 'Token inválido' }, { status: 401, headers });
+    const user = await userRes.json();
+    if (!user?.id) return Response.json({ error: 'Usuario no encontrado' }, { status: 404, headers });
+
+    // 2. Actualizar vía Admin API (servicio — nunca expuesto al frontend)
+    const updateBody = { user_metadata: { ...user.user_metadata } };
+    if (businessName) updateBody.user_metadata.full_name = businessName;
+    if (phone) updateBody.phone = phone;
+
+    const updateRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${user.id}`, {
+        method: 'PUT',
+        headers: {
+            apikey: SERVICE_KEY,
+            Authorization: `Bearer ${SERVICE_KEY}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updateBody),
+    });
+
+    if (!updateRes.ok) {
+        const err = await updateRes.text();
+        return Response.json({ error: err }, { status: updateRes.status, headers });
+    }
+
+    return Response.json({ ok: true }, { headers });
 }
 
 // ── Checkout proxy handler ─────────────────────────────────────────────────
@@ -278,6 +325,10 @@ async function handleShare(request, env) {
 export default {
     async fetch(request, env) {
         const url = new URL(request.url);
+
+        if (url.pathname.startsWith('/api/update-profile')) {
+            return handleUpdateProfile(request, env);
+        }
 
         if (url.pathname.startsWith('/api/share')) {
             return handleShare(request, env);

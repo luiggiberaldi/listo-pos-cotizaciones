@@ -735,9 +735,14 @@ export default function SalesView({ rates, triggerHaptic, onNavigate, isActive }
             />
 
             {!todayAperturaData ? (
-                <CajaCerradaOverlay 
+                <CajaCerradaOverlay
                     cartCount={cartRef.current.length}
-                    onOpenApertura={() => setIsAperturaOpen(true)} 
+                    onOpenApertura={() => setIsAperturaOpen(true)}
+                    canOpen={
+                        !usuarioActivo ||
+                        usuarioActivo.rol === 'ADMIN' ||
+                        localStorage.getItem('cajero_puede_abrir_caja') !== 'false'
+                    }
                 />
             ) : (
                 <>
@@ -889,6 +894,7 @@ export default function SalesView({ rates, triggerHaptic, onNavigate, isActive }
                     triggerHaptic={triggerHaptic}
                     copEnabled={copEnabled}
                     tasaCop={tasaCop}
+                    useAutoRate={useAutoRate}
                     currentFloatUsd={currentFloat.usd}
                     currentFloatBs={currentFloat.bs}
                 />
