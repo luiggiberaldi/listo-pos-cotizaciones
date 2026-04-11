@@ -263,6 +263,41 @@ export function useCloudAuthLogic() {
                     if (lic?.business_name) localStorage.setItem('business_name', lic.business_name);
                     if (lic?.phone) localStorage.setItem('business_phone', lic.phone);
 
+                    // Sincronizar phone/business_name desde auth metadata si el registro está incompleto
+                    const meta = user?.user_metadata || {};
+                    if (!lic) {
+                        // No existe el registro (ej: usuario confirmó email pero licencia no se creó)
+                        const trialExpiry = new Date();
+                        trialExpiry.setDate(trialExpiry.getDate() + 7);
+                        await supabaseCloud.from('cloud_licenses').upsert({
+                            email: emailToUse,
+                            device_id: deviceId || 'UNKNOWN',
+                            license_type: 'trial',
+                            max_devices: 2,
+                            valid_until: trialExpiry.toISOString(),
+                            business_name: meta.full_name || '',
+                            phone: meta.phone || '',
+                            active: true,
+                            updated_at: new Date().toISOString()
+                        }, { onConflict: 'email' }).catch(e => console.warn('[Login] No se pudo crear licencia inicial:', e.message));
+                        if (meta.full_name) localStorage.setItem('business_name', meta.full_name);
+                        if (meta.phone) localStorage.setItem('business_phone', meta.phone);
+                    } else if (!lic.phone || !lic.business_name) {
+                        // El registro existe pero le faltan datos — completar desde auth metadata
+                        const updateFields = {};
+                        if (!lic.phone && meta.phone) updateFields.phone = meta.phone;
+                        if (!lic.business_name && meta.full_name) updateFields.business_name = meta.full_name;
+                        if (Object.keys(updateFields).length > 0) {
+                            updateFields.updated_at = new Date().toISOString();
+                            await supabaseCloud.from('cloud_licenses')
+                                .update(updateFields)
+                                .eq('email', emailToUse)
+                                .catch(e => console.warn('[Login] No se pudo completar perfil:', e.message));
+                            if (updateFields.business_name) localStorage.setItem('business_name', updateFields.business_name);
+                            if (updateFields.phone) localStorage.setItem('business_phone', updateFields.phone);
+                        }
+                    }
+
                     // Sincronizar Display name y Phone en auth.users via Admin API (worker)
                     const { data: { session } } = await supabaseCloud.auth.getSession();
                     if (session?.access_token && (lic?.business_name || lic?.phone)) {
@@ -367,6 +402,7 @@ export function useCloudAuthLogic() {
                         trialExpiry.setDate(trialExpiry.getDate() + 7);
                         const { error: licErr } = await supabaseCloud.from('cloud_licenses').upsert({
                             email: emailToUse,
+                            device_id: deviceId || 'UNKNOWN',
                             license_type: 'trial',
                             max_devices: 2,
                             valid_until: trialExpiry.toISOString(),
