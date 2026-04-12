@@ -126,8 +126,9 @@ async function handleCheckout(request, env) {
             return Response.json({ ok: true, duplicate: true }, { headers });
         }
         // 2. Check persistente en DB (sobrevive reinicios del worker)
+        const safeQueueId = encodeURIComponent(payload.queue_id);
         const dupCheck = await fetch(
-            `${SUPABASE_URL}/rest/v1/sales?queue_id=eq.${payload.queue_id}&select=id&limit=1`,
+            `${SUPABASE_URL}/rest/v1/sales?queue_id=eq.${safeQueueId}&select=id&limit=1`,
             { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } }
         );
         if (dupCheck.ok) {

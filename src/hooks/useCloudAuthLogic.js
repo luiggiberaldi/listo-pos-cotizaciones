@@ -71,7 +71,7 @@ export function useCloudAuthLogic() {
         const lsKeys = [
             'premium_token', 'street_rate_bs', 'catalog_use_auto_usdt',
             'catalog_custom_usdt_price', 'catalog_show_cash_price',
-            'monitor_rates_v12', 'business_name', 'business_rif',
+            'monitor_rates_v12', 'business_name', 'business_phone', 'business_rif',
             'printer_paper_width', 'allow_negative_stock', 'cop_enabled',
             'auto_cop_enabled', 'tasa_cop', 'bodega_use_auto_rate',
             'bodega_custom_rate', 'bodega_inventory_view', 'abasto-auth-storage'
@@ -316,12 +316,19 @@ export function useCloudAuthLogic() {
                 }
             }
 
-            try {
-                const { data: rpcResult } = await supabaseCloud.rpc('register_and_check_device', {
-                    p_email: emailToUse,
-                    p_device_id: deviceId || 'UNKNOWN',
-                    p_device_alias: finalAlias
-                });
+            {
+                let rpcResult;
+                try {
+                    const { data } = await supabaseCloud.rpc('register_and_check_device', {
+                        p_email: emailToUse,
+                        p_device_id: deviceId || 'UNKNOWN',
+                        p_device_alias: finalAlias
+                    });
+                    rpcResult = data;
+                } catch (rpcErr) {
+                    // Silenciar error si RPC aun no existe (fallback)
+                    console.warn("RPC Device Check falló", rpcErr);
+                }
 
                 if (rpcResult === 'license_inactive') {
                     throw new Error('Licencia suspendida por el administrador.');
@@ -348,16 +355,13 @@ export function useCloudAuthLogic() {
 
                     const { data: existingDevices } = await supabaseCloud
                         .from('account_devices').select('*').eq('email', emailToUse).order('created_at', { ascending: true });
-                    
+
                     setDeviceLimitError({ devices: existingDevices, limit: DEVICE_LIMIT, currentId: deviceId || 'UNKNOWN' });
                     setBlockedDevices(existingDevices || []);
                     setImportStatus('error');
                     setStatusMessage(`Límite de ${DEVICE_LIMIT} equipo(s) excedido.`);
                     return;
                 }
-            } catch (rpcErr) {
-               // Silenciar error si RPC aun no existe (fallback)
-               console.warn("RPC Device Check falló", rpcErr);
             }
 
             setStatusMessage('Consultando nube...');

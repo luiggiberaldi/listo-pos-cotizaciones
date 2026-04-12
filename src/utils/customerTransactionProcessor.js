@@ -7,15 +7,17 @@ import { round2, divR, mulR } from './dinero';
  * Guarda en `bodega_customers_v1` y añade un registro en `bodega_sales_v1`.
  */
 export async function processCustomerTransaction({
-    transactionAmount, 
-    currencyMode, 
-    type, 
-    customer, 
-    paymentMethod, 
-    bcvRate, 
-    tasaCop, 
+    transactionAmount,
+    currencyMode,
+    type,
+    customer,
+    paymentMethod,
+    bcvRate,
+    tasaCop,
     copEnabled
 }) {
+    if (!customer) throw new Error('Se requiere un cliente para esta transacción');
+
     // 1. Convert to float and USD (with precision)
     const rawAmount = parseFloat(transactionAmount);
     let amountUsd = round2(rawAmount);

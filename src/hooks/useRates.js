@@ -215,7 +215,7 @@ export function useRates() {
                 };
             }
 
-            newRates.lastUpdate = new Date();
+            newRates.lastUpdate = new Date().toISOString();
             setRates(newRates);
             if (!isAutoUpdate) addLog("Actualización completada", 'success');
 

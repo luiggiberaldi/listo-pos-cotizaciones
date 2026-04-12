@@ -98,10 +98,20 @@ export function useSecurity() {
         };
 
         const initDeviceId = async () => {
-            let storedId = localStorage.getItem('pda_device_id');
+            let storedId;
+            try {
+                storedId = localStorage.getItem('pda_device_id');
+            } catch (e) {
+                // Private browsing or storage blocked
+                console.warn('[Security] localStorage not available:', e.message);
+            }
             if (!storedId) {
                 storedId = await generateFingerprint();
-                localStorage.setItem('pda_device_id', storedId);
+                try {
+                    localStorage.setItem('pda_device_id', storedId);
+                } catch (e) {
+                    // Storage write blocked — continue with generated ID in memory only
+                }
             }
             setDeviceId(storedId);
 

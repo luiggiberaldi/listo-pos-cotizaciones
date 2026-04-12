@@ -99,7 +99,7 @@ export const storageService = {
                 window.dispatchEvent(new CustomEvent("app_storage_update", { detail: { key } }));
             }
             // Emitir a la nube silenciosamente de fondo
-            pushCloudSync(key, value);
+            pushCloudSync(key, value).catch(() => {});
         } catch (error) {
             console.error(`[Storage Error] Guardando ${key}:`, error);
             // Fallback de emergencia a localStorage si falla algo catastrófico
@@ -109,7 +109,7 @@ export const storageService = {
                 if (typeof window !== "undefined") {
                     window.dispatchEvent(new CustomEvent("app_storage_update", { detail: { key } }));
                 }
-                pushCloudSync(key, value);
+                pushCloudSync(key, value).catch(() => {});
             } catch (e) {
                 console.error(`[Storage Error CRÍTICO] Ni IndexedDB ni LocalStorage funcionan para ${key}`, e);
             }

@@ -158,7 +158,9 @@ export const pushCloudSync = async (key, value) => {
 
         // Deduplicación: generar hash rápido del payload para no resubir datos idénticos.
         const serialized = typeof sanitizedValue === 'string' ? sanitizedValue : JSON.stringify(sanitizedValue);
-        const hash = serialized.length + ':' + serialized.slice(0, 100) + serialized.slice(-100);
+        // Hash includes length + start + middle + end to catch changes anywhere in payload
+        const mid = Math.floor(serialized.length / 2);
+        const hash = serialized.length + ':' + serialized.slice(0, 100) + serialized.slice(mid, mid + 100) + serialized.slice(-100);
         if (_lastPushHash[key] === hash) return; // Sin cambios reales → skip
         // NOTA: hash se actualiza DESPUÉS del push exitoso para garantizar reintentos si falla
 
@@ -350,13 +352,13 @@ export function useCloudSync() {
                 supabaseCloud.channel(`factory-reset-${userId}`)
                     .on('broadcast', { event: 'factory_reset' }, async () => {
                         console.log('[CloudSync] Factory reset remoto recibido — limpiando...');
-                        await localforage.clear();
                         try {
-                            const oldStore = localforage.createInstance({ name: 'TasasAlDiaApp', storeName: 'app_data' });
-                            await oldStore.clear();
-                        } catch (e) { /* ignorar */ }
-                        localStorage.clear();
-                        try {
+                            await localforage.clear();
+                            try {
+                                const oldStore = localforage.createInstance({ name: 'TasasAlDiaApp', storeName: 'app_data' });
+                                await oldStore.clear();
+                            } catch (e) { /* ignorar */ }
+                            localStorage.clear();
                             if ('caches' in window) {
                                 const cacheKeys = await caches.keys();
                                 await Promise.all(cacheKeys.map(k => caches.delete(k)));
@@ -365,7 +367,9 @@ export function useCloudSync() {
                                 const regs = await navigator.serviceWorker.getRegistrations();
                                 await Promise.all(regs.map(r => r.unregister()));
                             }
-                        } catch (e) { /* ignorar */ }
+                        } catch (e) {
+                            console.warn('[CloudSync] Error parcial en factory reset:', e);
+                        }
                         window.location.reload();
                     })
                     .subscribe();
@@ -480,6 +484,11 @@ export function useCloudSync() {
 
         return () => {
             localStorage.setItem = originalSetItem;
+            // Clear all pending debounce timers to prevent pushes after unmount
+            for (const key of Object.keys(pendingPush)) {
+                clearTimeout(pendingPush[key]);
+                delete pendingPush[key];
+            }
             if (pollIntervalId) {
                 clearInterval(pollIntervalId);
                 pollIntervalId = null;
