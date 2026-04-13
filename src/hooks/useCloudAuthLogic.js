@@ -133,12 +133,23 @@ export function useCloudAuthLogic() {
     };
 
     const registerDevice = async (email) => {
-        await supabaseCloud.from('account_devices').upsert({
-            email: email.toLowerCase(),
-            device_id: deviceId || 'UNKNOWN',
-            device_alias: `Dispositivo ${navigator.platform || 'Web'}`,
+        const alias = localStorage.getItem('pda_device_alias') || `Dispositivo ${navigator.platform || 'Web'}`;
+        const did = deviceId || 'UNKNOWN';
+        const emailLower = email.toLowerCase();
+        // Intentar INSERT (nuevo dispositivo con alias)
+        const { error } = await supabaseCloud.from('account_devices').insert({
+            email: emailLower,
+            device_id: did,
+            device_alias: alias,
             last_seen: new Date().toISOString()
-        }, { onConflict: 'email,device_id' });
+        });
+        if (error?.code === '23505') {
+            // Ya existe — solo actualizar last_seen, preservando device_alias personalizado
+            await supabaseCloud.from('account_devices')
+                .update({ last_seen: new Date().toISOString() })
+                .eq('email', emailLower)
+                .eq('device_id', did);
+        }
     };
 
     // ─── ACTION HANDLERS ────────────────────────────────
