@@ -486,9 +486,9 @@ export function useCloudSync() {
                         });
                 }
 
-                // ── Polling cada 15 min: solo datos pesados ──────────────────
+                // ── Polling cada 60 min: solo datos pesados ──────────────────
                 // Productos, ventas, clientes, cuentas — payloads grandes que
-                // no necesitan ser instantáneos. 15 min reduce egress ~66% vs 5 min.
+                // no necesitan ser instantáneos. 60 min optimiza egress para 5GB/mes.
                 if (!pollIntervalId) {
                     const POLL_INTERVAL = 60 * 60 * 1000; // 60 minutos — optimizado para egress
 

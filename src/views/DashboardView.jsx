@@ -3,7 +3,7 @@ import { FinancialEngine } from '../core/FinancialEngine';
 import { storageService } from '../utils/storageService';
 import { showToast } from '../components/Toast';
 import { SUPPORT_WHATSAPP } from '../config/tenant';
-import { BarChart3, TrendingUp, Package, AlertTriangle, DollarSign, ShoppingBag, Clock, ArrowUpRight, Trash2, ShoppingCart, Store, Users, Send, Ban, ChevronDown, ChevronUp, UserPlus, Phone, FileText, Recycle, Key, Settings, LockIcon, CheckCircle2, LogOut, Bell } from 'lucide-react';
+import { BarChart3, TrendingUp, Package, AlertTriangle, DollarSign, ShoppingBag, Clock, ArrowUpRight, Trash2, ShoppingCart, Store, Users, Send, Ban, ChevronDown, ChevronUp, UserPlus, Phone, FileText, Recycle, Key, Settings, LockIcon, CheckCircle2, LogOut, Bell, Download } from 'lucide-react';
 import { formatBs, formatVzlaPhone } from '../utils/calculatorUtils';
 import { getPaymentLabel, getPaymentMethod, PAYMENT_ICONS, getPaymentIcon, toTitleCase } from '../config/paymentMethods';
 import SalesHistory from '../components/Dashboard/SalesHistory';
@@ -30,7 +30,7 @@ import Skeleton from '../components/Skeleton';
 import CasheaIcon from '../components/CasheaIcon';
 
 const SALES_KEY = 'bodega_sales_v1';
-export default function DashboardView({ rates, triggerHaptic, onNavigate, theme, toggleTheme, isActive, isDemo, demoTimeLeft }) {
+export default function DashboardView({ rates, triggerHaptic, onNavigate, theme, toggleTheme, isActive, isDemo, demoTimeLeft, installPrompt, onInstall, showIOSButton, onShowIOSInstall }) {
     const { notifyCierrePendiente, requestPermission } = useNotifications();
     const { unreadCount: alertCount, notifications: adminAlerts, markAllRead: markAlertsRead, clearAll: clearAlerts } = useAdminAlerts();
     const [showAlerts, setShowAlerts] = useState(false);
@@ -646,6 +646,23 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                     </div>
                 </div>
             </div>
+
+            {/* ── BANNER INSTALAR APP ── */}
+            {(installPrompt || showIOSButton) && (
+                <button
+                    onClick={() => { triggerHaptic(); installPrompt ? onInstall() : onShowIOSInstall(); }}
+                    className="w-full flex items-center gap-3 bg-gradient-to-r from-[#0EA5E9] to-[#0284C7] text-white rounded-2xl p-3 shadow-md active:scale-[0.98] transition-all"
+                >
+                    <div className="bg-white/20 rounded-xl p-2.5">
+                        <Download size={20} strokeWidth={2.5} />
+                    </div>
+                    <div className="flex-1 text-left">
+                        <p className="text-[13px] font-black">Instalar Listo POS</p>
+                        <p className="text-[10px] text-white/80">Acceso rápido desde tu pantalla de inicio</p>
+                    </div>
+                    <ArrowUpRight size={18} className="text-white/60" />
+                </button>
+            )}
 
             {/* ── ACCIONES RÁPIDAS ── */}
             <div className="bg-white rounded-2xl p-3 border border-slate-100 shadow-sm">

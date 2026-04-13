@@ -63,7 +63,7 @@ export default function App() {
     // ── Cache de verificación de dispositivo (15 min) ─────────────────────────
     // El RPC register_and_check_device + select account_devices se llama en cada
     // recarga y authStateChange. Con 30 clientes recargas frecuentes suman ~1-2MB/día.
-    // Cache de 15 min: si el dispositivo ya fue verificado recientemente, se omite el RPC.
+    // Cache de 60 min: si el dispositivo ya fue verificado recientemente, se omite el RPC.
     const DEVICE_CHECK_CACHE_KEY = 'pda_device_check_ts';
     const DEVICE_CHECK_TTL_MS = 60 * 60 * 1000; // 60 minutos — optimizado para egress
 
@@ -448,7 +448,7 @@ export default function App() {
 
         <div className={`flex-1 flex flex-col ${activeTab === 'inicio' ? '' : 'hidden'}`}>
           <ErrorBoundary>
-            <DashboardView rates={rates} triggerHaptic={triggerHaptic} onNavigate={setActiveTab} theme={theme} toggleTheme={toggleTheme} isActive={activeTab === 'inicio'} />
+            <DashboardView rates={rates} triggerHaptic={triggerHaptic} onNavigate={setActiveTab} theme={theme} toggleTheme={toggleTheme} isActive={activeTab === 'inicio'} installPrompt={installPrompt} onInstall={handleInstall} showIOSButton={showIOSButton} onShowIOSInstall={() => setShowIOSInstall(true)} />
           </ErrorBoundary>
         </div>
 
@@ -509,18 +509,6 @@ export default function App() {
               />
             ))}
 
-            {installPrompt && activeTab === 'inicio' && (
-              <button onClick={() => { triggerHaptic(); handleInstall(); }} className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 rounded-xl transition-all duration-300 bg-brand text-white shadow-md animate-pulse">
-                <Download size={20} strokeWidth={3} />
-              </button>
-            )}
-
-            {/* iOS: botón manual de instalación */}
-            {!installPrompt && showIOSButton && activeTab === 'inicio' && (
-              <button onClick={() => { triggerHaptic(); setShowIOSInstall(true); }} className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 rounded-xl transition-all duration-300 bg-brand text-white shadow-md animate-pulse">
-                <Download size={20} strokeWidth={3} />
-              </button>
-            )}
 
 
           </div>
