@@ -82,6 +82,9 @@ export default function SettingsView({ onClose, theme, toggleTheme, triggerHapti
     const [autoLockMinutes, setAutoLockMinutes] = useState(localStorage.getItem('admin_auto_lock_minutes') || '5');
 
     const isCloudConfigured = Boolean(adminEmail);
+    // Sin PIN activo, tratar a todos como admin para mostrar todas las pestañas
+    const pinLoginEnabled = requireLogin && isCloudConfigured;
+    const effectiveAdmin = isAdmin || !pinLoginEnabled;
     const [showPostImportCloud, setShowPostImportCloud] = useState(false);
 
     const handleSaveBusinessData = () => {
@@ -175,7 +178,7 @@ export default function SettingsView({ onClose, theme, toggleTheme, triggerHapti
         reader.readAsText(file);
     };
 
-    const visibleTabs = TABS.filter(t => !t.adminOnly || isAdmin);
+    const visibleTabs = TABS.filter(t => !t.adminOnly || effectiveAdmin);
     const currentTab = visibleTabs.find(t => t.id === activeTab) || visibleTabs[0];
     const colors = COLOR_MAP[currentTab?.color] || COLOR_MAP.indigo;
 
@@ -195,7 +198,7 @@ export default function SettingsView({ onClose, theme, toggleTheme, triggerHapti
                             </p>
                         </div>
                         {/* Cloud session badge + logout */}
-                        {isAdmin && adminEmail && (
+                        {effectiveAdmin && adminEmail && (
                             <button
                                 onClick={async () => {
                                     const ok = await confirm({
@@ -285,7 +288,7 @@ export default function SettingsView({ onClose, theme, toggleTheme, triggerHapti
                     )}
 
                     {/* ═══ TAB USUARIOS ═══ */}
-                    {activeTab === 'usuarios' && isAdmin && (
+                    {activeTab === 'usuarios' && effectiveAdmin && (
                         <SettingsTabUsuarios
                             isCloudConfigured={isCloudConfigured} adminEmail={adminEmail}
                             requireLogin={requireLogin} setRequireLogin={setRequireLogin}
@@ -296,7 +299,7 @@ export default function SettingsView({ onClose, theme, toggleTheme, triggerHapti
                     )}
 
                     {/* ═══ TAB LICENCIA ═══ */}
-                    {activeTab === 'licencia' && isAdmin && (
+                    {activeTab === 'licencia' && effectiveAdmin && (
                         <SettingsTabLicencia
                             isCloudConfigured={isCloudConfigured}
                             adminEmail={adminEmail}
