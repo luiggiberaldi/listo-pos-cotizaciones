@@ -327,12 +327,14 @@ export default function App() {
     setCloudSession(null);
   };
 
-  // Auto-login: cuando el PIN no aplica y no hay sesión, restaurar el admin local
-  // automáticamente. useEffect corre antes del primer paint visible → sin flash.
+  // Auto-login: cuando el PIN no aplica, forzar rol ADMIN.
+  // Sin PIN no hay seguridad de roles, así que el usuario siempre es Admin.
   useEffect(() => {
-    if (!pinLoginEnabled && !usuarioActivo) {
+    if (!pinLoginEnabled) {
       const admins = useAuthStore.getState().usuarios.filter(u => u.rol === 'ADMIN');
-      if (admins.length > 0) {
+      if (admins.length > 0 && usuarioActivo?.rol !== 'ADMIN') {
+        useAuthStore.setState({ usuarioActivo: admins[0] });
+      } else if (!usuarioActivo && admins.length > 0) {
         useAuthStore.setState({ usuarioActivo: admins[0] });
       }
     }
