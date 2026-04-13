@@ -65,7 +65,7 @@ export default function App() {
     // recarga y authStateChange. Con 30 clientes recargas frecuentes suman ~1-2MB/día.
     // Cache de 15 min: si el dispositivo ya fue verificado recientemente, se omite el RPC.
     const DEVICE_CHECK_CACHE_KEY = 'pda_device_check_ts';
-    const DEVICE_CHECK_TTL_MS = 15 * 60 * 1000; // 15 minutos
+    const DEVICE_CHECK_TTL_MS = 60 * 60 * 1000; // 60 minutos — optimizado para egress
 
     const isDeviceCheckCached = () => {
       const ts = localStorage.getItem(DEVICE_CHECK_CACHE_KEY);

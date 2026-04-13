@@ -490,7 +490,7 @@ export function useCloudSync() {
                 // Productos, ventas, clientes, cuentas — payloads grandes que
                 // no necesitan ser instantáneos. 15 min reduce egress ~66% vs 5 min.
                 if (!pollIntervalId) {
-                    const POLL_INTERVAL = 15 * 60 * 1000; // 15 minutos
+                    const POLL_INTERVAL = 60 * 60 * 1000; // 60 minutos — optimizado para egress
 
                     const pollForChanges = async () => {
                         if (isSyncingFromCloud) return;
@@ -536,20 +536,30 @@ export function useCloudSync() {
                     };
 
                     pollIntervalId = setInterval(pollForChanges, POLL_INTERVAL);
-                    console.log('[CloudSync] Híbrido iniciado: Realtime (config) + Polling 15min (datos)');
+                    console.log('[CloudSync] Híbrido iniciado: Realtime (config) + Polling 60min (datos)');
 
-                    // ── Sync al recuperar visibilidad — con cooldown de 10 min ─────
-                    // Previene egress masivo cuando el usuario alterna apps frecuentemente.
-                    // Sin cooldown: 50 cambios de tab/día × 218KB = 10MB/día por cliente.
+                    // ── Pausar polling con pestaña oculta — ahorra egress ────────
+                    // Si la pestaña no está visible, pausamos el interval.
+                    // Al volver visible, hacemos un poll inmediato (con cooldown) y reiniciamos el interval.
                     let lastVisibilityPoll = 0;
                     const VISIBILITY_COOLDOWN_MS = 10 * 60 * 1000; // mínimo 10 min entre polls por visibilidad
 
                     const onVisible = () => {
                         if (document.visibilityState === 'visible') {
+                            // Reactivar polling
+                            if (!pollIntervalId) {
+                                pollIntervalId = setInterval(pollForChanges, POLL_INTERVAL);
+                            }
                             const now = Date.now();
                             if (now - lastVisibilityPoll >= VISIBILITY_COOLDOWN_MS) {
                                 lastVisibilityPoll = now;
                                 pollForChanges().catch(() => {});
+                            }
+                        } else {
+                            // Pestaña oculta — pausar polling para ahorrar egress
+                            if (pollIntervalId) {
+                                clearInterval(pollIntervalId);
+                                pollIntervalId = null;
                             }
                         }
                     };
