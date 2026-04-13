@@ -6,7 +6,7 @@ export function useProductFiltering(products, searchTerm, activeCategory, sortFi
     const filteredProducts = useMemo(() => {
         let result = products.filter(p => {
             const term = deferredSearchTerm.toLowerCase();
-            const matchesSearch = p.name.toLowerCase().includes(term) || (p.barcode && p.barcode.toLowerCase().includes(term));
+            const matchesSearch = (p.name || '').toLowerCase().includes(term) || (p.barcode && p.barcode.toLowerCase().includes(term));
             if (activeCategory === 'bajo-stock') {
                 return matchesSearch && (p.stock ?? 0) <= (p.lowStockAlert ?? 5);
             }
@@ -37,7 +37,7 @@ export function useProductFiltering(products, searchTerm, activeCategory, sortFi
             });
         }
         return result;
-    }, [products, deferredSearchTerm, activeCategory, sortField, sortDir, effectiveRate]);
+    }, [products, deferredSearchTerm, activeCategory, sortField, sortDir, effectiveRate, duplicateNames]);
 
     return { filteredProducts };
 }
