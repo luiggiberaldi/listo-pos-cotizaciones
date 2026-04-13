@@ -196,6 +196,18 @@ export const ProductsView = ({ rates, triggerHaptic }) => {
 
     // ─── FILTERING & PAGINATION ─────────────────────────────
 
+    // Duplicate product detection (same name, case-insensitive)
+    const duplicateNames = useMemo(() => {
+        const nameCount = {};
+        for (const p of products) {
+            const key = (p.name || '').trim().toLowerCase();
+            if (!key) continue;
+            nameCount[key] = (nameCount[key] || 0) + 1;
+        }
+        return new Set(Object.keys(nameCount).filter(k => nameCount[k] > 1));
+    }, [products]);
+    const duplicateCount = duplicateNames.size;
+
     const { filteredProducts } = useProductFiltering(products, searchTerm, activeCategory, sortField, sortDir, effectiveRate, duplicateNames);
 
     const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
@@ -218,18 +230,6 @@ export const ProductsView = ({ rates, triggerHaptic }) => {
 
     // Low stock count
     const lowStockCount = products.filter(p => (p.stock ?? 0) <= (p.lowStockAlert ?? 5) && (p.stock ?? 0) >= 0).length;
-
-    // Duplicate product detection (same name, case-insensitive)
-    const duplicateNames = useMemo(() => {
-        const nameCount = {};
-        for (const p of products) {
-            const key = (p.name || '').trim().toLowerCase();
-            if (!key) continue;
-            nameCount[key] = (nameCount[key] || 0) + 1;
-        }
-        return new Set(Object.keys(nameCount).filter(k => nameCount[k] > 1));
-    }, [products]);
-    const duplicateCount = duplicateNames.size;
 
     // ─── IMAGE HANDLER ──────────────────────────────────────
 
