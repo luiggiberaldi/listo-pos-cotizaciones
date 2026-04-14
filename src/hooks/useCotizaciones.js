@@ -15,31 +15,65 @@ export function useCotizaciones({ estado = '', clienteId = '' } = {}) {
   return useQuery({
     queryKey: [...COTIZACIONES_KEY, estado, clienteId, esSupervisor],
     queryFn: async () => {
-      // Supervisor usa la tabla directa (tiene notas_internas)
-      // Vendedor usa la vista sin notas_internas
-      const tabla = esSupervisor ? 'cotizaciones' : 'v_cotizaciones_vendedor'
+      if (esSupervisor) {
+        // Supervisor: tabla directa con joins por FK
+        let query = supabase
+          .from('cotizaciones')
+          .select(`
+            id, numero, version, estado,
+            subtotal_usd, descuento_global_pct, descuento_usd,
+            costo_envio_usd, total_usd,
+            tasa_bcv_snapshot, total_bs_snapshot,
+            valida_hasta, creado_en, enviada_en,
+            notas_cliente,
+            cliente_id, vendedor_id,
+            cliente:clientes!cotizaciones_cliente_id_fkey(id, nombre, rif_cedula, telefono, tipo_cliente),
+            vendedor:usuarios!cotizaciones_vendedor_id_fkey(id, nombre)
+          `)
+          .order('creado_en', { ascending: false })
 
+        if (estado) query = query.eq('estado', estado)
+        if (clienteId) query = query.eq('cliente_id', clienteId)
+
+        const { data, error } = await query
+        if (error) throw error
+        return data ?? []
+      }
+
+      // Vendedor: vista sin FK hints (las vistas no soportan FK joins)
       let query = supabase
-        .from(tabla)
-        .select(`
-          id, numero, version, estado,
-          subtotal_usd, descuento_global_pct, descuento_usd,
-          costo_envio_usd, total_usd,
-          tasa_bcv_snapshot, total_bs_snapshot,
-          valida_hasta, creado_en, enviada_en,
-          notas_cliente,
-          cliente_id, vendedor_id,
-          cliente:clientes!cotizaciones_cliente_id_fkey(id, nombre, rif_cedula, telefono, tipo_cliente),
-          vendedor:usuarios!cotizaciones_vendedor_id_fkey(id, nombre)
-        `)
+        .from('v_cotizaciones_vendedor')
+        .select('*')
         .order('creado_en', { ascending: false })
 
       if (estado) query = query.eq('estado', estado)
       if (clienteId) query = query.eq('cliente_id', clienteId)
 
-      const { data, error } = await query
+      const { data: rows, error } = await query
       if (error) throw error
-      return data ?? []
+      if (!rows?.length) return []
+
+      // Fetch related clients and vendors in batch
+      const clienteIds  = [...new Set(rows.map(r => r.cliente_id).filter(Boolean))]
+      const vendedorIds = [...new Set(rows.map(r => r.vendedor_id).filter(Boolean))]
+
+      const [clientesRes, vendedoresRes] = await Promise.all([
+        clienteIds.length
+          ? supabase.from('clientes').select('id, nombre, rif_cedula, telefono, tipo_cliente').in('id', clienteIds)
+          : { data: [] },
+        vendedorIds.length
+          ? supabase.from('usuarios').select('id, nombre').in('id', vendedorIds)
+          : { data: [] },
+      ])
+
+      const clientesMap  = Object.fromEntries((clientesRes.data ?? []).map(c => [c.id, c]))
+      const vendedoresMap = Object.fromEntries((vendedoresRes.data ?? []).map(v => [v.id, v]))
+
+      return rows.map(r => ({
+        ...r,
+        cliente:  clientesMap[r.cliente_id]  ?? null,
+        vendedor: vendedoresMap[r.vendedor_id] ?? null,
+      }))
     },
     enabled: !!perfil,
   })

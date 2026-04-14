@@ -2,17 +2,21 @@
 // Vista principal del módulo de Clientes
 // — Vendedor: ve y gestiona sus propios clientes
 // — Supervisor: ve todos los clientes + puede reasignar
-import { useState } from 'react'
-import { Users, Plus, Search, RefreshCw, X } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { Users, Plus, Search, RefreshCw, X, LayoutGrid, List } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { useClientes, useDesactivarCliente } from '../hooks/useClientes'
 import ClienteCard       from '../components/clientes/ClienteCard'
+import ClienteRow        from '../components/clientes/ClienteRow'
 import ClienteForm       from '../components/clientes/ClienteForm'
 import ReasignacionModal from '../components/clientes/ReasignacionModal'
 import { Modal }         from '../components/ui/Modal'
 import ConfirmModal      from '../components/ui/ConfirmModal'
 import EmptyState        from '../components/ui/EmptyState'
 import Skeleton          from '../components/ui/Skeleton'
+import Pagination        from '../components/ui/Pagination'
+
+const ITEMS_POR_PAGINA = 12
 
 // ─── Skeleton de carga ────────────────────────────────────────────────────────
 function SkeletonClientes() {
@@ -36,6 +40,8 @@ export default function ClientesView() {
   // Búsqueda
   const [busqueda, setBusqueda] = useState('')
   const [textoBusqueda, setTextoBusqueda] = useState('')
+  const [vistaMode, setVistaMode] = useState(() => localStorage.getItem('clientes_vista') || 'grid')
+  const [pagina, setPagina] = useState(1)
 
   // Estados de modales
   const [modalFormOpen,    setModalFormOpen]    = useState(false)
@@ -49,15 +55,29 @@ export default function ClientesView() {
   const { data: clientes = [], isLoading, isError, refetch } = useClientes(busqueda)
   const desactivar = useDesactivarCliente()
 
+  // Paginación
+  const totalPaginas = Math.max(1, Math.ceil(clientes.length / ITEMS_POR_PAGINA))
+  const clientesPaginados = useMemo(() => {
+    const inicio = (pagina - 1) * ITEMS_POR_PAGINA
+    return clientes.slice(inicio, inicio + ITEMS_POR_PAGINA)
+  }, [clientes, pagina])
+
   // ── Handlers ────────────────────────────────────────────────────────────────
   function handleBuscar(e) {
     e.preventDefault()
     setBusqueda(textoBusqueda)
+    setPagina(1)
   }
 
   function limpiarBusqueda() {
     setTextoBusqueda('')
     setBusqueda('')
+    setPagina(1)
+  }
+
+  function cambiarVista(modo) {
+    setVistaMode(modo)
+    localStorage.setItem('clientes_vista', modo)
   }
 
   function abrirCrear() {
@@ -151,6 +171,26 @@ export default function ClientesView() {
         >
           <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
         </button>
+
+        {/* Toggle cuadrícula / lista */}
+        <div className="flex bg-slate-100 rounded-xl p-0.5">
+          <button
+            type="button"
+            onClick={() => cambiarVista('grid')}
+            title="Vista cuadrícula"
+            className={`p-2 rounded-lg transition-colors ${vistaMode === 'grid' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            <LayoutGrid size={16} />
+          </button>
+          <button
+            type="button"
+            onClick={() => cambiarVista('list')}
+            title="Vista lista"
+            className={`p-2 rounded-lg transition-colors ${vistaMode === 'list' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            <List size={16} />
+          </button>
+        </div>
       </form>
 
       {/* ── Contenido principal ────────────────────────────────────────────── */}
@@ -179,17 +219,40 @@ export default function ClientesView() {
           onAction={busqueda ? limpiarBusqueda : abrirCrear}
         />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {clientes.map(cliente => (
-            <ClienteCard
-              key={cliente.id}
-              cliente={cliente}
-              onEditar={abrirEditar}
-              onDesactivar={abrirDesactivar}
-              onReasignar={abrirReasignar}
-            />
-          ))}
-        </div>
+        vistaMode === 'grid' ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {clientesPaginados.map(cliente => (
+              <ClienteCard
+                key={cliente.id}
+                cliente={cliente}
+                onEditar={abrirEditar}
+                onDesactivar={abrirDesactivar}
+                onReasignar={abrirReasignar}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {clientesPaginados.map(cliente => (
+              <ClienteRow
+                key={cliente.id}
+                cliente={cliente}
+                onEditar={abrirEditar}
+                onDesactivar={abrirDesactivar}
+                onReasignar={abrirReasignar}
+              />
+            ))}
+          </div>
+        )
+      )}
+
+      {/* ── Paginación ───────────────────────────────────────────────────────── */}
+      {!isLoading && clientes.length > ITEMS_POR_PAGINA && (
+        <Pagination
+          paginaActual={pagina}
+          totalPaginas={totalPaginas}
+          onCambiarPagina={setPagina}
+        />
       )}
 
       {/* ── Modal: Crear / Editar cliente ──────────────────────────────────── */}

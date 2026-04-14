@@ -20,7 +20,7 @@ import { useConfigNegocio }    from '../../hooks/useConfigNegocio'
 import { generarPDF }          from '../../services/pdf/cotizacionPDF'
 import { compartirPorWhatsApp, generarMensaje } from '../../utils/whatsapp'
 import { round2, round4, mulR } from '../../utils/dinero'
-import { fmtUsdSimple as fmtUsd } from '../../utils/format'
+import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../../utils/format'
 import { getLocalISODate }     from '../../utils/dateHelpers'
 import supabase from '../../services/supabase/client'
 import CustomSelect from '../ui/CustomSelect'
@@ -84,6 +84,7 @@ function ItemLinea({ item, idx, onChange, onDelete }) {
         <input type="number" min="0.01" step="0.01"
           value={item.cantidad}
           onChange={e => onChange(idx, 'cantidad', Math.max(0.01, Number(e.target.value)))}
+          onFocus={e => e.target.select()}
           className="w-20 px-2 py-1 text-sm text-right border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-focus bg-white"
         />
       </td>
@@ -91,6 +92,7 @@ function ItemLinea({ item, idx, onChange, onDelete }) {
         <input type="number" min="0" step="0.01"
           value={item.precioUnitUsd}
           onChange={e => onChange(idx, 'precioUnitUsd', Math.max(0, Number(e.target.value)))}
+          onFocus={e => e.target.select()}
           className="w-24 px-2 py-1 text-sm text-right border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-focus bg-white"
         />
       </td>
@@ -99,6 +101,7 @@ function ItemLinea({ item, idx, onChange, onDelete }) {
           <input type="number" min="0" max="100" step="0.5"
             value={item.descuentoPct}
             onChange={e => onChange(idx, 'descuentoPct', Math.min(100, Math.max(0, Number(e.target.value))))}
+            onFocus={e => e.target.select()}
             className="w-16 px-2 py-1 text-sm text-right border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-focus bg-white"
           />
           <span className="ml-1 text-xs text-slate-400">%</span>
@@ -173,7 +176,7 @@ function ItemCard({ item, idx, onChange, onDelete }) {
 // ─── Buscador de productos ────────────────────────────────────────────────────
 const PRODUCTOS_POR_PAGINA = 12
 
-function BuscadorProductos({ onAgregar, itemsAgregados = [] }) {
+function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
   const [texto, setTexto] = useState('')
   const [catActiva, setCatActiva] = useState('')
   const [vistaGrid, setVistaGrid] = useState(true)
@@ -317,7 +320,10 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [] }) {
                       <span className="text-[10px] text-slate-400">{p.unidad}</span>
                     </div>
                     {/* Precio */}
-                    <p className="text-sm font-bold text-slate-800">{fmtUsd(p.precio_usd)}</p>
+                    <div>
+                      <p className="text-sm font-bold text-slate-800">{fmtUsd(p.precio_usd)}</p>
+                      {tasa > 0 && <p className="text-[10px] text-slate-400">{fmtBs(usdToBs(p.precio_usd, tasa))}</p>}
+                    </div>
                   </button>
                 )
               })}
@@ -353,6 +359,7 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [] }) {
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-sm font-bold text-slate-800">{fmtUsd(p.precio_usd)}</p>
+                      {tasa > 0 && <p className="text-[10px] text-slate-400">{fmtBs(usdToBs(p.precio_usd, tasa))}</p>}
                       {p.stock_actual != null && (
                         <p className={`text-[10px] font-medium ${
                           sinStock ? 'text-red-500' :
@@ -1040,7 +1047,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
               <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wide">
                 Agregar productos
               </h3>
-              <BuscadorProductos onAgregar={agregarProducto} itemsAgregados={items} />
+              <BuscadorProductos onAgregar={agregarProducto} itemsAgregados={items} tasa={tasaHook.tasaEfectiva} />
 
               {items.length > 0 && (
                 <>
@@ -1079,6 +1086,9 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
                     <div className="bg-slate-50 rounded-xl px-4 py-2 text-sm">
                       <span className="text-slate-500">Subtotal: </span>
                       <span className="font-bold text-slate-800">{fmtUsd(subtotal)}</span>
+                      {tasaHook.tasaEfectiva > 0 && (
+                        <span className="text-slate-400 ml-1 text-xs">({fmtBs(usdToBs(subtotal, tasaHook.tasaEfectiva))})</span>
+                      )}
                       <span className="text-slate-400 ml-2">({items.length} item{items.length !== 1 ? 's' : ''})</span>
                     </div>
                   </div>
@@ -1169,6 +1179,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
                     <input type="number" min="0" max="100" step="0.5"
                       value={descuentoGlobalPct}
                       onChange={e => setDescuentoGlobalPct(Math.min(100, Math.max(0, Number(e.target.value))))}
+                      onFocus={e => e.target.select()}
                       className={inputCls} disabled={cargando} />
                   </div>
                   <div className="space-y-1.5">
@@ -1176,6 +1187,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
                     <input type="number" min="0" step="0.01"
                       value={costoEnvioUsd}
                       onChange={e => setCostoEnvioUsd(Math.max(0, Number(e.target.value)))}
+                      onFocus={e => e.target.select()}
                       className={inputCls} disabled={cargando} />
                   </div>
                 </div>
@@ -1254,8 +1266,8 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
                   {guardarBorrador.isPending ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
                   Guardar borrador
                 </button>
-                <button onClick={() => { setErrorGeneral(''); setModalEnvio(true) }}
-                  disabled={cargando}
+                <button onClick={() => { setErrorGeneral(''); handleEnviar(tasaHook.tasaEfectiva) }}
+                  disabled={cargando || tasaHook.tasaEfectiva <= 0}
                   className="flex items-center gap-2 px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white font-bold text-sm rounded-xl transition-colors shadow-sm disabled:opacity-50">
                   {enviarCotizacion.isPending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
                   Enviar cotización

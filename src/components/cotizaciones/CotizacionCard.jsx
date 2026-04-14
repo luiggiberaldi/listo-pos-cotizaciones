@@ -8,9 +8,9 @@ import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import { generarPDF } from '../../services/pdf/cotizacionPDF'
 import { compartirPorWhatsApp, generarMensaje } from '../../utils/whatsapp'
 
-import { fmtUsdSimple as fmtUsd, fmtFecha } from '../../utils/format'
+import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs } from '../../utils/format'
 
-export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambiarEstado }) {
+export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambiarEstado, tasa = 0 }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const esBorrador = cotizacion.estado === 'borrador'
@@ -177,7 +177,12 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
       {/* Total */}
       <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
         <span className="text-xs text-slate-400">Total</span>
-        <span className="font-bold text-slate-800">{fmtUsd(cotizacion.total_usd)}</span>
+        <div className="text-right">
+          <span className="font-bold text-slate-800">{fmtUsd(cotizacion.total_usd)}</span>
+          {tasa > 0 && cotizacion.total_usd > 0 && (
+            <div className="text-[11px] text-slate-400">{fmtBs(usdToBs(cotizacion.total_usd, tasa))}</div>
+          )}
+        </div>
       </div>
 
       {/* Vendedor (solo supervisor) */}

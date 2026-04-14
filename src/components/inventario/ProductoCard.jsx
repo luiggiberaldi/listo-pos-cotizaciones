@@ -1,8 +1,9 @@
 // src/components/inventario/ProductoCard.jsx
 // Tarjeta de producto para el catálogo
 // costo_usd solo se muestra si el dato existe (supervisores)
-import { Package, Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle } from 'lucide-react'
+import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
+import { fmtBs, usdToBs } from '../../utils/format'
 
 // ─── Formateador de precio ────────────────────────────────────────────────────
 function fmtUsd(n) {
@@ -27,7 +28,7 @@ function BadgeStock({ actual, minimo }) {
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export default function ProductoCard({ producto, onEditar, onDesactivar }) {
+export default function ProductoCard({ producto, onEditar, onDesactivar, tasa = 0 }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
 
@@ -91,14 +92,24 @@ export default function ProductoCard({ producto, onEditar, onDesactivar }) {
         {/* Precio de venta */}
         <div className="flex items-center justify-between">
           <span className="text-xs text-slate-500">Precio venta</span>
-          <span className="font-bold text-slate-800 text-sm">{fmtUsd(producto.precio_usd)}</span>
+          <div className="text-right">
+            <span className="font-bold text-slate-800 text-sm">{fmtUsd(producto.precio_usd)}</span>
+            {tasa > 0 && producto.precio_usd != null && (
+              <div className="text-[11px] text-slate-400">{fmtBs(usdToBs(producto.precio_usd, tasa))}</div>
+            )}
+          </div>
         </div>
 
         {/* Costo (solo supervisor) */}
         {esSupervisor && producto.costo_usd != null && (
           <div className="flex items-center justify-between">
             <span className="text-xs text-slate-400">Costo</span>
-            <span className="text-xs text-slate-500">{fmtUsd(producto.costo_usd)}</span>
+            <div className="text-right">
+              <span className="text-xs text-slate-500">{fmtUsd(producto.costo_usd)}</span>
+              {tasa > 0 && (
+                <div className="text-[10px] text-slate-400">{fmtBs(usdToBs(producto.costo_usd, tasa))}</div>
+              )}
+            </div>
           </div>
         )}
 

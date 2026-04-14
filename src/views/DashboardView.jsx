@@ -5,7 +5,8 @@ import { useNavigate } from 'react-router-dom'
 import { LayoutDashboard, FileText, Users, DollarSign, TrendingUp, Clock, Plus } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import supabase     from '../services/supabase/client'
-import { fmtUsd }   from '../utils/format'
+import { fmtUsd, fmtBs, usdToBs } from '../utils/format'
+import { useTasaCambio } from '../hooks/useTasaCambio'
 import Skeleton     from '../components/ui/Skeleton'
 
 // ─── Colores de estado ────────────────────────────────────────────────────────
@@ -116,6 +117,7 @@ export default function DashboardView() {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const { data: m, isLoading } = useMetricas()
+  const { tasaEfectiva } = useTasaCambio()
   const navigate = useNavigate()
 
   const mesActual = new Date().toLocaleDateString('es-VE', { month: 'long', year: 'numeric' })
@@ -173,9 +175,11 @@ export default function DashboardView() {
             icon={DollarSign}
             label={`Facturado en ${new Date().toLocaleDateString('es-VE',{month:'long'})}`}
             value={fmtUsd(m?.totalMesUsd ?? 0)}
-            sub={variacionMes !== null
-              ? `${variacionMes >= 0 ? '+' : ''}${variacionMes}% vs mes anterior`
-              : 'Sin datos del mes anterior'}
+            sub={tasaEfectiva > 0
+              ? fmtBs(usdToBs(m?.totalMesUsd ?? 0, tasaEfectiva))
+              : variacionMes !== null
+                ? `${variacionMes >= 0 ? '+' : ''}${variacionMes}% vs mes anterior`
+                : 'Sin datos del mes anterior'}
             color="emerald"
           />
           <MetricCard
@@ -226,7 +230,10 @@ export default function DashboardView() {
                       <div className="flex items-center justify-between mb-0.5">
                         <span className="text-sm text-slate-700">{ESTADO_LABEL[estado]}</span>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-slate-400">{fmtUsd(total)}</span>
+                          <span className="text-xs text-slate-400">
+                            {fmtUsd(total)}
+                            {tasaEfectiva > 0 && <span className="ml-1">({fmtBs(usdToBs(total, tasaEfectiva))})</span>}
+                          </span>
                           <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${col.bg} ${col.text}`}>
                             {count}
                           </span>

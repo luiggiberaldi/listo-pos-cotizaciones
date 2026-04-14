@@ -9,6 +9,16 @@ export function fmtUsdSimple(n) {
   return `$${Number(n || 0).toFixed(2)}`
 }
 
+export function fmtBs(n) {
+  if (n == null || isNaN(n)) return 'Bs 0,00'
+  return `Bs ${Number(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+export function usdToBs(usd, tasa) {
+  if (!usd || !tasa) return 0
+  return Number(usd) * Number(tasa)
+}
+
 export function fmtFecha(f) {
   if (!f) return '—'
   return new Date(f).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })

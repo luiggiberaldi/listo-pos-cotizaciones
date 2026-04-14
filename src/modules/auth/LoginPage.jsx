@@ -222,11 +222,6 @@ function UserSelectStep({ onBack }) {
         <div className="relative z-10">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
-              <button onClick={handleBack}
-                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 transition-colors"
-                title="Volver al acceso">
-                <ArrowLeft size={16} />
-              </button>
               <div>
                 <h1 className="text-lg font-black text-slate-800">¿Quién eres?</h1>
                 <p className="text-sm text-slate-400">Selecciona tu usuario para continuar</p>
@@ -286,12 +281,7 @@ function UserSelectStep({ onBack }) {
 }
 
 // ─── Vista principal ────────────────────────────────────────────────────────────
+// DEMO MODE: se salta el gate (correo/contraseña) y va directo a selección de usuario
 export default function LoginPage() {
-  const [gateOk, setGateOk] = useState(() => sessionStorage.getItem(GATE_SESSION_KEY) === '1')
-
-  if (!gateOk) {
-    return <GateStep onSuccess={() => setGateOk(true)} />
-  }
-
-  return <UserSelectStep onBack={() => setGateOk(false)} />
+  return <UserSelectStep onBack={() => {}} />
 }

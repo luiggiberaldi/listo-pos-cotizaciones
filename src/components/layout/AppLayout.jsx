@@ -219,18 +219,18 @@ export default function AppLayout() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <div className="flex gap-1.5">
+                  <div className="flex gap-1.5 items-center">
                     <input type="number" min="0.01" step="0.01"
                       value={tasaInput}
                       onChange={e => { setTasaInput(e.target.value); setTasaConfirmada(false) }}
                       placeholder="Tasa manual Bs/$"
-                      className="flex-1 px-2.5 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm font-bold text-primary focus:outline-none focus:ring-1 focus:ring-primary-focus"
+                      className="flex-1 min-w-0 px-2.5 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm font-bold text-primary focus:outline-none focus:ring-1 focus:ring-primary-focus"
                       onKeyDown={e => e.key === 'Enter' && confirmarTasaManual()}
                     />
                     <button
                       onClick={confirmarTasaManual}
                       disabled={!tasaInput || parseFloat(tasaInput) <= 0 || tasaConfirmada}
-                      className={`px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                      className={`shrink-0 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
                         tasaConfirmada
                           ? 'bg-emerald-100 text-emerald-600'
                           : 'bg-primary text-white hover:bg-primary-hover disabled:opacity-40'

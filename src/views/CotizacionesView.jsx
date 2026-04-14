@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { FileText, Plus, RefreshCw, Filter, GitBranch, AlertTriangle } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
+import { useTasaCambio } from '../hooks/useTasaCambio'
 import { useCotizaciones, useAnularCotizacion, useActualizarEstado, useCrearVersion } from '../hooks/useCotizaciones'
 import { useCotizacion } from '../hooks/useCotizaciones'
 import CotizacionCard    from '../components/cotizaciones/CotizacionCard'
@@ -84,6 +85,7 @@ function ModalVersionar({ cotizacion, onConfirm, onCancel, cargando }) {
 // ─── Vista lista ──────────────────────────────────────────────────────────────
 function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
   const { perfil } = useAuthStore()
+  const { tasaEfectiva } = useTasaCambio()
   const [estadoFiltro, setEstadoFiltro] = useState('')
   const [cotizacionAAnular, setCotizacionAAnular] = useState(null)
 
@@ -172,6 +174,7 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
               onEditar={handleEditar}
               onAnular={setCotizacionAAnular}
               onCambiarEstado={(id, estado) => cambiarEstado.mutate({ id, estado })}
+              tasa={tasaEfectiva}
             />
           ))}
         </div>

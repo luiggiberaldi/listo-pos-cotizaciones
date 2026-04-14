@@ -2,17 +2,22 @@
 // Catálogo de productos
 // — Vendedor: solo consulta (sin costo, sin edición)
 // — Supervisor: vista completa + crear/editar/desactivar
-import { useState } from 'react'
-import { Package, Plus, Search, RefreshCw, X, Filter } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { Package, Plus, Search, RefreshCw, X, Filter, LayoutGrid, List } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
+import { useTasaCambio } from '../hooks/useTasaCambio'
 import CustomSelect from '../components/ui/CustomSelect'
 import { useInventario, useCategorias, useDesactivarProducto } from '../hooks/useInventario'
 import ProductoCard  from '../components/inventario/ProductoCard'
+import ProductoRow   from '../components/inventario/ProductoRow'
 import ProductoForm  from '../components/inventario/ProductoForm'
 import { Modal }     from '../components/ui/Modal'
 import ConfirmModal  from '../components/ui/ConfirmModal'
 import EmptyState    from '../components/ui/EmptyState'
 import Skeleton      from '../components/ui/Skeleton'
+import Pagination    from '../components/ui/Pagination'
+
+const ITEMS_POR_PAGINA = 12
 
 // ─── Skeleton de carga ────────────────────────────────────────────────────────
 function SkeletonProductos() {
@@ -37,11 +42,14 @@ function SkeletonProductos() {
 export default function InventarioView() {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
+  const { tasaEfectiva } = useTasaCambio()
 
   // Filtros
   const [busqueda,      setBusqueda]      = useState('')
   const [textoBusqueda, setTextoBusqueda] = useState('')
   const [categoria,     setCategoria]     = useState('')
+  const [vistaMode,     setVistaMode]     = useState(() => localStorage.getItem('inventario_vista') || 'grid')
+  const [pagina,        setPagina]        = useState(1)
 
   // Modales
   const [modalFormOpen,    setModalFormOpen]    = useState(false)
@@ -54,16 +62,30 @@ export default function InventarioView() {
   const { data: categorias = [] } = useCategorias()
   const desactivar = useDesactivarProducto()
 
+  // Paginación
+  const totalPaginas = Math.max(1, Math.ceil(productos.length / ITEMS_POR_PAGINA))
+  const productosPaginados = useMemo(() => {
+    const inicio = (pagina - 1) * ITEMS_POR_PAGINA
+    return productos.slice(inicio, inicio + ITEMS_POR_PAGINA)
+  }, [productos, pagina])
+
   // ── Handlers ────────────────────────────────────────────────────────────────
   function handleBuscar(e) {
     e.preventDefault()
     setBusqueda(textoBusqueda)
+    setPagina(1)
   }
 
   function limpiarFiltros() {
     setTextoBusqueda('')
     setBusqueda('')
     setCategoria('')
+    setPagina(1)
+  }
+
+  function cambiarVista(modo) {
+    setVistaMode(modo)
+    localStorage.setItem('inventario_vista', modo)
   }
 
   function abrirCrear() {
@@ -124,10 +146,9 @@ export default function InventarioView() {
       </div>
 
       {/* ── Filtros ─────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row gap-2">
-
-        {/* Búsqueda */}
-        <form onSubmit={handleBuscar} className="flex gap-2 flex-1">
+      <div className="space-y-2">
+        {/* Fila 1: Búsqueda */}
+        <form onSubmit={handleBuscar} className="flex gap-2">
           <div className="relative flex-1">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             <input
@@ -145,35 +166,60 @@ export default function InventarioView() {
             )}
           </div>
           <button type="submit"
-            className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm rounded-xl transition-colors">
+            className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm rounded-xl transition-colors shrink-0">
             Buscar
           </button>
         </form>
 
-        {/* Filtro categoría */}
-        {categorias.length > 0 && (
-          <div className="flex items-center gap-2 min-w-[180px]">
-            <Filter size={15} className="text-slate-400 shrink-0" />
-            <div className="flex-1">
-              <CustomSelect
-                options={[
-                  { value: '', label: 'Todas las categorías' },
-                  ...categorias.map(cat => ({ value: cat, label: cat })),
-                ]}
-                value={categoria}
-                onChange={val => setCategoria(val)}
-                placeholder="Todas las categorías"
-                icon={Filter}
-                clearable
-              />
+        {/* Fila 2: Categoría + controles */}
+        <div className="flex items-center gap-2">
+          {/* Filtro categoría */}
+          {categorias.length > 0 && (
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <Filter size={15} className="text-slate-400 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <CustomSelect
+                  options={[
+                    { value: '', label: 'Todas las categorías' },
+                    ...categorias.map(cat => ({ value: cat, label: cat })),
+                  ]}
+                  value={categoria}
+                  onChange={val => { setCategoria(val); setPagina(1) }}
+                  placeholder="Todas las categorías"
+                  icon={Filter}
+                  clearable
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 shrink-0 ml-auto">
+            <button type="button" onClick={() => refetch()} title="Actualizar"
+              className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
+              <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
+            </button>
+
+            {/* Toggle cuadrícula / lista */}
+            <div className="flex bg-slate-100 rounded-xl p-0.5">
+              <button
+                type="button"
+                onClick={() => cambiarVista('grid')}
+                title="Vista cuadrícula"
+                className={`p-2 rounded-lg transition-colors ${vistaMode === 'grid' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                <LayoutGrid size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={() => cambiarVista('list')}
+                title="Vista lista"
+                className={`p-2 rounded-lg transition-colors ${vistaMode === 'list' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                <List size={16} />
+              </button>
             </div>
           </div>
-        )}
-
-        <button type="button" onClick={() => refetch()} title="Actualizar"
-          className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
-          <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
-        </button>
+        </div>
       </div>
 
       {/* ── Contenido ──────────────────────────────────────────────────────── */}
@@ -201,16 +247,40 @@ export default function InventarioView() {
           onAction={hayFiltros ? limpiarFiltros : esSupervisor ? abrirCrear : undefined}
         />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {productos.map(p => (
-            <ProductoCard
-              key={p.id}
-              producto={p}
-              onEditar={abrirEditar}
-              onDesactivar={abrirDesactivar}
-            />
-          ))}
-        </div>
+        vistaMode === 'grid' ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {productosPaginados.map(p => (
+              <ProductoCard
+                key={p.id}
+                producto={p}
+                onEditar={abrirEditar}
+                onDesactivar={abrirDesactivar}
+                tasa={tasaEfectiva}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {productosPaginados.map(p => (
+              <ProductoRow
+                key={p.id}
+                producto={p}
+                onEditar={abrirEditar}
+                onDesactivar={abrirDesactivar}
+                tasa={tasaEfectiva}
+              />
+            ))}
+          </div>
+        )
+      )}
+
+      {/* ── Paginación ───────────────────────────────────────────────────────── */}
+      {!isLoading && productos.length > ITEMS_POR_PAGINA && (
+        <Pagination
+          paginaActual={pagina}
+          totalPaginas={totalPaginas}
+          onCambiarPagina={setPagina}
+        />
       )}
 
       {/* ── Modal: Crear / Editar ───────────────────────────────────────────── */}
