@@ -427,6 +427,54 @@ Construir el sistema de autenticación completo y el layout principal de la apli
 
 ---
 
+## SESIÓN 6 — 14/04/2026 — Git + Supabase Migrations
+
+### Objetivo
+Conectar el proyecto al repositorio GitHub real y escribir las 15 migrations SQL definitivas.
+
+### Acciones realizadas
+
+**1. Configuración de Git:**
+- Remote origin actualizado a `https://github.com/luiggiberaldi/listo-pos-cotizaciones`
+- Commit 1: `feat: estructura base + autenticación por roles (Fases 1 y 2)` — 260 archivos
+  - Eliminados: android/, capacitor, PWA, componentes POS, hooks viejos, Groq
+  - Creados: ARQUITECTURA.md, BITACORA.md, estructura de módulos, auth completo
+- Commit 2: `feat: 15 migrations SQL completas segun arquitectura v1.1` — 15 archivos
+- Ambos commits subidos a `main` exitosamente
+
+**2. Migrations SQL escritas (supabase/migrations/):**
+
+| Archivo | Contenido |
+|---|---|
+| 001_extensions.sql | uuid-ossp |
+| 002_tabla_usuarios.sql | Tabla usuarios + FK a auth.users |
+| 003_tabla_productos.sql | Tabla productos + índices FTS |
+| 004_tabla_transportistas.sql | Tabla transportistas |
+| 005_tabla_clientes.sql | Tabla clientes + anti-robo |
+| 006_tabla_cotizaciones.sql | ENUM estado_cotizacion + tabla cotizaciones |
+| 007_tabla_cotizacion_items.sql | Items con snapshot de producto |
+| 008_tabla_auditoria.sql | ENUM categoria_auditoria + tabla append-only |
+| 009_tabla_reasignaciones.sql | Historial de reasignaciones |
+| 010_tabla_configuracion.sql | Singleton configuracion_negocio |
+| 011_triggers.sql | updated_at + validar_transicion_estado + validar_cliente_para_cotizar |
+| 012_views.sql | v_productos_vendedor + v_cotizaciones_vendedor |
+| 013_rls_enable_and_policies.sql | RLS habilitado + todas las políticas (35 políticas) |
+| 014_funciones_rpc.sql | 4 RPCs: registrar_auditoria, reasignar_cliente, enviar_cotizacion, crear_version_cotizacion |
+| 015_seed_configuracion.sql | Fila inicial de configuracion_negocio |
+
+**Pendiente para siguiente sesión:**
+- El usuario agrega `.env` con credenciales reales de Supabase
+- Ejecutar las 15 migrations en Supabase (SQL Editor en orden)
+- Crear el primer usuario supervisor en Supabase Auth + insertar en public.usuarios
+- Probar login end-to-end
+- Iniciar Fase 3: Módulo Clientes o Módulo Inventario
+
+**Errores / Notas:**
+- El push requirió token PAT porque el entorno camelAI no tiene credenciales GitHub configuradas
+- Token usado temporalmente — removido del remote URL después del push
+
+---
+
 ## REGISTRO DE ERRORES
 
 > Tabla de errores encontrados durante el desarrollo.
