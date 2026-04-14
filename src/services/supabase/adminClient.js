@@ -21,7 +21,9 @@ async function adminFetch(path, method = 'POST', body = null) {
     ...(body ? { body: JSON.stringify(body) } : {}),
   })
 
-  const data = await res.json()
+  const text = await res.text()
+  let data = {}
+  try { data = text ? JSON.parse(text) : {} } catch { /* respuesta no JSON */ }
   if (!res.ok) {
     throw new Error(data.error || `Error ${res.status}`)
   }
