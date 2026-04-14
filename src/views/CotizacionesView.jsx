@@ -48,8 +48,8 @@ function ModalVersionar({ cotizacion, onConfirm, onCancel, cargando }) {
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-sm p-6 space-y-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
-            <GitBranch size={20} className="text-amber-600" />
+          <div className="w-10 h-10 bg-primary-light rounded-xl flex items-center justify-center">
+            <GitBranch size={20} className="text-primary" />
           </div>
           <h3 className="font-black text-slate-800 text-lg">Crear nueva versión</h3>
         </div>
@@ -69,7 +69,7 @@ function ModalVersionar({ cotizacion, onConfirm, onCancel, cargando }) {
             Cancelar
           </button>
           <button onClick={onConfirm} disabled={cargando}
-            className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+            className="flex-1 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white font-semibold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
             {cargando
               ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Creando...</>
               : <><GitBranch size={14} />Crear Rev.{(cotizacion.version ?? 1) + 1}</>}
@@ -111,8 +111,8 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
       {/* Encabezado */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
-            <FileText size={20} className="text-amber-600" />
+          <div className="w-10 h-10 bg-primary-light rounded-xl flex items-center justify-center">
+            <FileText size={20} className="text-primary" />
           </div>
           <div>
             <h1 className="text-xl font-bold text-slate-800">Cotizaciones</h1>
@@ -122,7 +122,7 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
           </div>
         </div>
         <button onClick={onNueva}
-          className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm px-4 py-2.5 rounded-xl transition-colors shadow-sm">
+          className="flex items-center gap-2 bg-primary hover:bg-primary-hover text-white font-semibold text-sm px-4 py-2.5 rounded-xl transition-colors shadow-sm">
           <Plus size={16} />
           Nueva cotización
         </button>
@@ -135,8 +135,8 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
           <button key={valor} onClick={() => setEstadoFiltro(valor)}
             className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
               estadoFiltro === valor
-                ? 'bg-amber-500 text-white border-amber-500'
-                : 'bg-white text-slate-600 border-slate-200 hover:border-amber-300'
+                ? 'bg-primary text-white border-primary'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-primary-focus'
             }`}>
             {label}
           </button>
@@ -237,7 +237,7 @@ export default function CotizacionesView() {
     if (editandoId && !cotizacionParaEditar) {
       return (
         <div className="flex items-center justify-center min-h-64">
-          <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
       )
     }

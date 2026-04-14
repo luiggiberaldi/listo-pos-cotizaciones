@@ -1,18 +1,36 @@
 // src/views/UsuariosView.jsx
 // Gestión de usuarios — solo supervisores
+// Estilo: Listo POS Lite (sky/teal, avatares con inicial, Crown para supervisor)
 import { useState } from 'react'
-import { UserCog, Plus, Pencil, UserCheck, UserX, RefreshCw, ShieldCheck, User, Eye, EyeOff } from 'lucide-react'
+import { UserCog, Plus, Pencil, UserCheck, UserX, RefreshCw, Crown, Eye, EyeOff, Trash2 } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import {
   useUsuarios,
   useCrearUsuario,
   useActualizarUsuario,
   useCambiarActivoUsuario,
+  useEliminarUsuario,
 } from '../hooks/useUsuarios'
-import { hasAdminKey } from '../services/supabase/adminClient'
 import ConfirmModal from '../components/ui/ConfirmModal'
-import Skeleton     from '../components/ui/Skeleton'
-import EmptyState   from '../components/ui/EmptyState'
+import Skeleton    from '../components/ui/Skeleton'
+import EmptyState  from '../components/ui/EmptyState'
+
+const ROL_CONFIG = {
+  supervisor: {
+    label:    'Supervisor',
+    gradient: 'from-sky-500 to-teal-400',
+    bg:       'bg-sky-50',
+    text:     'text-sky-700',
+    border:   'border-sky-200',
+  },
+  vendedor: {
+    label:    'Vendedor',
+    gradient: 'from-emerald-500 to-teal-500',
+    bg:       'bg-emerald-50',
+    text:     'text-emerald-700',
+    border:   'border-emerald-200',
+  },
+}
 
 // ─── Formulario crear usuario ─────────────────────────────────────────────────
 function FormCrear({ onGuardar, onCancelar, cargando }) {
@@ -24,58 +42,63 @@ function FormCrear({ onGuardar, onCancelar, cargando }) {
 
   function submit(e) {
     e.preventDefault()
-    if (!campos.email.trim())   { setError('El email es obligatorio'); return }
-    if (!campos.nombre.trim())  { setError('El nombre es obligatorio'); return }
-    if (campos.password.length < 8) { setError('La contraseña debe tener al menos 8 caracteres'); return }
+    if (!campos.email.trim())                    { setError('El email es obligatorio'); return }
+    if (!campos.nombre.trim())                   { setError('El nombre es obligatorio'); return }
+    if (!/^\d{6}$/.test(campos.password))        { setError('El PIN debe ser exactamente 6 dígitos numéricos'); return }
     onGuardar(campos)
   }
 
-  const inputCls = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 placeholder:text-slate-400'
+  const inputCls = `
+    w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl
+    text-sm font-medium text-slate-800 placeholder:text-slate-400
+    focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 outline-none transition-all
+  `
 
   return (
-    <form onSubmit={submit} className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Nombre completo *</label>
-          <input value={campos.nombre} onChange={e => cambiar('nombre', e.target.value)}
-            placeholder="Ej: María González" className={inputCls} disabled={cargando} />
-        </div>
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Email *</label>
-          <input type="email" value={campos.email} onChange={e => cambiar('email', e.target.value)}
-            placeholder="vendedor@empresa.com" className={inputCls} disabled={cargando} />
-        </div>
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Contraseña inicial *</label>
-          <div className="relative">
-            <input type={mostrarPass ? 'text' : 'password'}
-              value={campos.password} onChange={e => cambiar('password', e.target.value)}
-              placeholder="Mínimo 8 caracteres" className={`${inputCls} pr-10`} disabled={cargando} />
-            <button type="button" onClick={() => setMostrarPass(p => !p)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-              {mostrarPass ? <EyeOff size={15} /> : <Eye size={15} />}
-            </button>
-          </div>
-        </div>
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Rol</label>
-          <select value={campos.rol} onChange={e => cambiar('rol', e.target.value)}
-            className={inputCls} disabled={cargando}>
-            <option value="vendedor">Vendedor</option>
-            <option value="supervisor">Supervisor</option>
-          </select>
-        </div>
+    <form onSubmit={submit} className="space-y-3">
+      {/* Nombre */}
+      <div className="relative">
+        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 text-xs font-bold">N</div>
+        <input value={campos.nombre} onChange={e => cambiar('nombre', e.target.value)}
+          placeholder="Nombre completo" className={inputCls} disabled={cargando} />
       </div>
+      {/* Email */}
+      <div className="relative">
+        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 text-xs font-bold">@</div>
+        <input type="email" value={campos.email} onChange={e => cambiar('email', e.target.value)}
+          placeholder="Correo electrónico" className={inputCls} disabled={cargando} />
+      </div>
+      {/* Contraseña */}
+      <div className="relative">
+        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 text-xs font-bold">#</div>
+        <input type={mostrarPass ? 'text' : 'password'} value={campos.password}
+          onChange={e => cambiar('password', e.target.value.replace(/\D/g, '').slice(0, 6))}
+          placeholder="PIN de 6 dígitos (solo números)"
+          inputMode="numeric"
+          className={`${inputCls} pr-11`} disabled={cargando} />
+        <button type="button" onClick={() => setMostrarPass(p => !p)}
+          className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-sky-500 transition-colors">
+          {mostrarPass ? <EyeOff size={15} /> : <Eye size={15} />}
+        </button>
+      </div>
+      {/* Rol */}
+      <select value={campos.rol} onChange={e => cambiar('rol', e.target.value)}
+        className="w-full px-3 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 outline-none transition-all"
+        disabled={cargando}>
+        <option value="vendedor">Vendedor</option>
+        <option value="supervisor">Supervisor</option>
+      </select>
 
-      {error && <p className="text-xs text-red-500">{error}</p>}
+      {error && <p className="text-xs text-red-500 font-bold ml-1">{error}</p>}
 
       <div className="flex justify-end gap-3 pt-2">
         <button type="button" onClick={onCancelar} disabled={cargando}
-          className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50">
+          className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-sm font-bold hover:bg-slate-50 transition-colors disabled:opacity-50">
           Cancelar
         </button>
         <button type="submit" disabled={cargando}
-          className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold transition-colors disabled:opacity-50">
+          className="px-5 py-2 rounded-xl text-white text-sm font-black transition-all shadow-lg shadow-sky-500/20 active:scale-[0.98] disabled:opacity-60"
+          style={{ background: 'linear-gradient(135deg, #0EA5E9, #5EEAD4)' }}>
           {cargando ? 'Creando...' : 'Crear usuario'}
         </button>
       </div>
@@ -85,42 +108,65 @@ function FormCrear({ onGuardar, onCancelar, cargando }) {
 
 // ─── Formulario editar usuario ────────────────────────────────────────────────
 function FormEditar({ usuario, onGuardar, onCancelar, cargando }) {
-  const [campos, setCampos] = useState({ nombre: usuario.nombre, rol: usuario.rol })
+  const [campos, setCampos] = useState({ nombre: usuario.nombre, rol: usuario.rol, pin: '' })
+  const [mostrarPin, setMostrarPin] = useState(false)
   const [error, setError] = useState('')
 
   function submit(e) {
     e.preventDefault()
     if (!campos.nombre.trim()) { setError('El nombre es obligatorio'); return }
-    onGuardar(campos)
+    if (campos.pin && !/^\d{6}$/.test(campos.pin)) {
+      setError('El PIN debe ser exactamente 6 dígitos numéricos')
+      return
+    }
+    onGuardar({ nombre: campos.nombre, rol: campos.rol, pin: campos.pin || undefined })
   }
 
-  const inputCls = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400'
+  const inputCls = `
+    w-full px-3 py-3 bg-slate-50 border border-slate-200 rounded-xl
+    text-sm font-medium text-slate-800
+    focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 outline-none transition-all
+  `
 
   return (
-    <form onSubmit={submit} className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Nombre</label>
-          <input value={campos.nombre} onChange={e => setCampos(p => ({ ...p, nombre: e.target.value }))}
-            className={inputCls} disabled={cargando} />
-        </div>
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Rol</label>
-          <select value={campos.rol} onChange={e => setCampos(p => ({ ...p, rol: e.target.value }))}
-            className={inputCls} disabled={cargando}>
-            <option value="vendedor">Vendedor</option>
-            <option value="supervisor">Supervisor</option>
-          </select>
-        </div>
+    <form onSubmit={submit} className="space-y-3">
+      <input value={campos.nombre} onChange={e => setCampos(p => ({ ...p, nombre: e.target.value }))}
+        className={inputCls} placeholder="Nombre completo" disabled={cargando} />
+      <select value={campos.rol} onChange={e => setCampos(p => ({ ...p, rol: e.target.value }))}
+        className={inputCls} disabled={cargando}>
+        <option value="vendedor">Vendedor</option>
+        <option value="supervisor">Supervisor</option>
+      </select>
+
+      {/* PIN opcional */}
+      <div className="relative">
+        <input
+          type={mostrarPin ? 'text' : 'password'}
+          value={campos.pin}
+          onChange={e => setCampos(p => ({ ...p, pin: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
+          className={`${inputCls} pr-11`}
+          placeholder="Nuevo PIN (dejar vacío para no cambiar)"
+          inputMode="numeric"
+          disabled={cargando}
+        />
+        <button type="button" onClick={() => setMostrarPin(p => !p)}
+          className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-sky-500 transition-colors">
+          {mostrarPin ? <EyeOff size={15} /> : <Eye size={15} />}
+        </button>
       </div>
-      {error && <p className="text-xs text-red-500">{error}</p>}
+      {campos.pin.length > 0 && campos.pin.length < 6 && (
+        <p className="text-xs text-slate-400 ml-1">{6 - campos.pin.length} dígitos restantes</p>
+      )}
+
+      {error && <p className="text-xs text-red-500 font-bold ml-1">{error}</p>}
       <div className="flex justify-end gap-3 pt-2">
         <button type="button" onClick={onCancelar} disabled={cargando}
-          className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50">
+          className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-sm font-bold hover:bg-slate-50 disabled:opacity-50">
           Cancelar
         </button>
         <button type="submit" disabled={cargando}
-          className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold disabled:opacity-50">
+          className="px-5 py-2 rounded-xl text-white text-sm font-black transition-all shadow-lg shadow-sky-500/20 active:scale-[0.98] disabled:opacity-60"
+          style={{ background: 'linear-gradient(135deg, #0EA5E9, #5EEAD4)' }}>
           {cargando ? 'Guardando...' : 'Guardar'}
         </button>
       </div>
@@ -129,8 +175,8 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando }) {
 }
 
 // ─── Modal crear/editar ───────────────────────────────────────────────────────
-function UsuarioModal({ usuario = null, onClose, errorExterno }) {
-  const crear     = useCrearUsuario()
+function UsuarioModal({ usuario = null, onClose }) {
+  const crear      = useCrearUsuario()
   const actualizar = useActualizarUsuario()
   const esEdicion  = !!usuario
   const [err, setErr] = useState('')
@@ -138,11 +184,8 @@ function UsuarioModal({ usuario = null, onClose, errorExterno }) {
   async function guardar(campos) {
     setErr('')
     try {
-      if (esEdicion) {
-        await actualizar.mutateAsync({ id: usuario.id, ...campos })
-      } else {
-        await crear.mutateAsync(campos)
-      }
+      if (esEdicion) await actualizar.mutateAsync({ id: usuario.id, ...campos })
+      else           await crear.mutateAsync(campos)
       onClose()
     } catch (e) {
       setErr(e.message === 'NO_SERVICE_KEY'
@@ -154,67 +197,76 @@ function UsuarioModal({ usuario = null, onClose, errorExterno }) {
   const cargando = crear.isPending || actualizar.isPending
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-lg p-6 space-y-5">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-amber-100 rounded-xl flex items-center justify-center">
-            <UserCog size={18} className="text-amber-600" />
-          </div>
-          <h3 className="font-bold text-slate-800 text-lg">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="bg-white rounded-[2rem] shadow-2xl border border-slate-100 w-full max-w-md p-7 space-y-5 relative overflow-hidden">
+
+        {/* Destellos decorativos */}
+        <div className="absolute top-0 right-0 -mr-10 -mt-10 w-32 h-32 rounded-full blur-3xl pointer-events-none"
+          style={{ background: 'rgba(125,211,252,0.2)' }} />
+        <div className="absolute bottom-0 left-0 -ml-10 -mb-10 w-32 h-32 rounded-full blur-3xl pointer-events-none"
+          style={{ background: 'rgba(94,234,212,0.15)' }} />
+
+        <div className="relative z-10">
+          <h3 className="font-black text-slate-800 text-lg mb-5">
             {esEdicion ? 'Editar usuario' : 'Nuevo usuario'}
           </h3>
+
+          {err && (
+            <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-sm text-red-700 font-medium mb-4">
+              {err}
+            </div>
+          )}
+
+          {esEdicion
+            ? <FormEditar usuario={usuario} onGuardar={guardar} onCancelar={onClose} cargando={cargando} />
+            : <FormCrear  onGuardar={guardar} onCancelar={onClose} cargando={cargando} />
+          }
         </div>
-
-        {err && (
-          <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-sm text-red-700">
-            {err}
-          </div>
-        )}
-
-        {esEdicion
-          ? <FormEditar usuario={usuario} onGuardar={guardar} onCancelar={onClose} cargando={cargando} />
-          : <FormCrear  onGuardar={guardar} onCancelar={onClose} cargando={cargando} />
-        }
       </div>
     </div>
   )
 }
 
 // ─── Tarjeta de usuario ───────────────────────────────────────────────────────
-function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo }) {
+function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar }) {
+  const conf = ROL_CONFIG[usuario.rol] ?? ROL_CONFIG.vendedor
   const esSupervisor = usuario.rol === 'supervisor'
+
   return (
     <div className={`bg-white rounded-2xl border transition-all p-4 flex flex-col gap-3 ${
       usuario.activo
-        ? 'border-slate-200 hover:border-amber-200 hover:shadow-md'
+        ? `${conf.border} hover:shadow-md`
         : 'border-slate-100 opacity-60'
     }`}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2.5">
-          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-            esSupervisor ? 'bg-amber-100' : 'bg-slate-100'
-          }`}>
-            {esSupervisor
-              ? <ShieldCheck size={16} className="text-amber-600" />
-              : <User size={16} className="text-slate-500" />
-            }
+      <div className="flex items-center gap-3">
+        {/* Avatar con inicial */}
+        <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${conf.gradient} flex items-center justify-center shrink-0 shadow-sm relative`}>
+          <span className="text-white font-black text-xl">
+            {(usuario.nombre || 'U')[0].toUpperCase()}
+          </span>
+          {esSupervisor && (
+            <div className="absolute -top-2 left-1/2 -translate-x-1/2">
+              <Crown size={13} className="text-yellow-400 fill-yellow-400 drop-shadow-sm" />
+            </div>
+          )}
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-black text-slate-800 truncate">{usuario.nombre}</p>
+            {propio && (
+              <span className="text-[8px] font-black uppercase tracking-wider bg-sky-100 text-sky-500 px-1.5 py-0.5 rounded-full shrink-0">Tú</span>
+            )}
           </div>
-          <div>
-            <p className="font-bold text-slate-800 text-sm leading-tight">{usuario.nombre}</p>
-            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-              esSupervisor
-                ? 'bg-amber-50 text-amber-700'
-                : 'bg-slate-100 text-slate-600'
-            }`}>
-              {esSupervisor ? 'Supervisor' : 'Vendedor'}
-            </span>
-          </div>
+          <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${conf.bg} ${conf.text}`}>
+            {conf.label}
+          </span>
         </div>
 
         {!propio && (
           <div className="flex items-center gap-1 shrink-0">
             <button onClick={() => onEditar(usuario)} title="Editar"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 transition-colors">
+              className="p-1.5 rounded-lg text-slate-400 hover:text-sky-500 hover:bg-sky-50 transition-colors">
               <Pencil size={14} />
             </button>
             <button
@@ -222,25 +274,22 @@ function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo }) {
               title={usuario.activo ? 'Desactivar' : 'Activar'}
               className={`p-1.5 rounded-lg transition-colors ${
                 usuario.activo
-                  ? 'text-slate-400 hover:text-red-500 hover:bg-red-50'
+                  ? 'text-slate-400 hover:text-primary hover:bg-primary-light'
                   : 'text-slate-400 hover:text-emerald-500 hover:bg-emerald-50'
               }`}>
               {usuario.activo ? <UserX size={14} /> : <UserCheck size={14} />}
             </button>
+            <button onClick={() => onEliminar(usuario)} title="Eliminar"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+              <Trash2 size={14} />
+            </button>
           </div>
-        )}
-        {propio && (
-          <span className="text-xs text-slate-400 bg-slate-50 px-2 py-0.5 rounded-full">Tú</span>
         )}
       </div>
 
-      <div className="text-xs text-slate-500 truncate">{usuario.email}</div>
-
       <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-          usuario.activo
-            ? 'bg-emerald-50 text-emerald-700'
-            : 'bg-slate-100 text-slate-400'
+        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+          usuario.activo ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'
         }`}>
           {usuario.activo ? 'Activo' : 'Inactivo'}
         </span>
@@ -257,14 +306,13 @@ function SkeletonUsuarios() {
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
       {Array.from({ length: 4 }).map((_, i) => (
         <div key={i} className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
-          <div className="flex gap-2.5">
-            <Skeleton className="h-9 w-9 rounded-xl shrink-0" />
-            <div className="flex-1 space-y-1.5">
+          <div className="flex gap-3">
+            <Skeleton className="h-12 w-12 rounded-xl shrink-0" />
+            <div className="flex-1 space-y-2">
               <Skeleton className="h-4 w-2/3 rounded" />
               <Skeleton className="h-3 w-1/3 rounded" />
             </div>
           </div>
-          <Skeleton className="h-3 w-3/4 rounded" />
           <div className="pt-2 border-t border-slate-100">
             <Skeleton className="h-4 w-1/2 rounded" />
           </div>
@@ -277,12 +325,14 @@ function SkeletonUsuarios() {
 // ─── Vista principal ──────────────────────────────────────────────────────────
 export default function UsuariosView() {
   const { perfil } = useAuthStore()
-  const [modalAbierto,       setModalAbierto]       = useState(false)
-  const [editando,           setEditando]           = useState(null)
-  const [confirmCambio,      setConfirmCambio]      = useState(null) // { usuario, activo }
+  const [modalAbierto,  setModalAbierto]  = useState(false)
+  const [editando,      setEditando]      = useState(null)
+  const [confirmCambio, setConfirmCambio] = useState(null)
+  const [confirmBorrar, setConfirmBorrar] = useState(null)
 
   const { data: usuarios = [], isLoading, isError, refetch } = useUsuarios()
   const cambiarActivo = useCambiarActivoUsuario()
+  const eliminar      = useEliminarUsuario()
 
   function abrirNuevo()   { setEditando(null); setModalAbierto(true) }
   function abrirEditar(u) { setEditando(u);    setModalAbierto(true) }
@@ -290,11 +340,22 @@ export default function UsuariosView() {
 
   async function confirmarCambioActivo() {
     if (!confirmCambio) return
-    await cambiarActivo.mutateAsync({ id: confirmCambio.usuario.id, activo: confirmCambio.activo })
-    setConfirmCambio(null)
+    try {
+      await cambiarActivo.mutateAsync({ id: confirmCambio.usuario.id, activo: confirmCambio.activo })
+    } finally {
+      setConfirmCambio(null)
+    }
   }
 
-  // Separar activos e inactivos
+  async function confirmarBorrar() {
+    if (!confirmBorrar) return
+    try {
+      await eliminar.mutateAsync({ id: confirmBorrar.id })
+    } finally {
+      setConfirmBorrar(null)
+    }
+  }
+
   const activos   = usuarios.filter(u => u.activo)
   const inactivos = usuarios.filter(u => !u.activo)
 
@@ -304,13 +365,16 @@ export default function UsuariosView() {
       {/* Encabezado */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
-            <UserCog size={20} className="text-amber-600" />
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-sky-500 to-teal-400 shadow-sm">
+            <UserCog size={20} className="text-white" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-slate-800">Usuarios</h1>
+            <h1 className="text-xl font-black text-slate-800">Usuarios</h1>
             <p className="text-sm text-slate-500">
-              {isLoading ? 'Cargando...' : `${activos.length} activo${activos.length !== 1 ? 's' : ''}${inactivos.length > 0 ? ` · ${inactivos.length} inactivo${inactivos.length !== 1 ? 's' : ''}` : ''}`}
+              {isLoading
+                ? 'Cargando...'
+                : `${activos.length} activo${activos.length !== 1 ? 's' : ''}${inactivos.length > 0 ? ` · ${inactivos.length} inactivo${inactivos.length !== 1 ? 's' : ''}` : ''}`
+              }
             </p>
           </div>
         </div>
@@ -320,56 +384,52 @@ export default function UsuariosView() {
             <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
           </button>
           <button onClick={abrirNuevo}
-            className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm px-4 py-2.5 rounded-xl transition-colors shadow-sm">
+            className="flex items-center gap-2 text-white font-black text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg shadow-sky-500/20 active:scale-[0.98]"
+            style={{ background: 'linear-gradient(135deg, #0EA5E9, #5EEAD4)' }}>
             <Plus size={16} />
             Nuevo usuario
           </button>
         </div>
       </div>
 
-      {/* Aviso si falta service key */}
-      {!hasAdminKey && (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-sm text-amber-800">
-          <strong>Para crear usuarios</strong> agrega <code className="bg-amber-100 px-1 rounded">VITE_SUPABASE_SERVICE_KEY</code> en el archivo <code className="bg-amber-100 px-1 rounded">.env</code> con el service role key de tu proyecto Supabase. Los usuarios existentes se pueden editar normalmente.
-        </div>
-      )}
-
       {/* Contenido */}
       {isLoading ? (
         <SkeletonUsuarios />
       ) : isError ? (
-        <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center text-red-700">
-          <p className="font-semibold">Error al cargar usuarios</p>
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-8 text-center text-red-700">
+          <p className="font-bold">Error al cargar usuarios</p>
           <button onClick={() => refetch()} className="mt-3 text-sm underline">Intentar de nuevo</button>
         </div>
       ) : usuarios.length === 0 ? (
         <EmptyState icon={UserCog} title="No hay usuarios" description="Crea el primer usuario del sistema." actionLabel="Nuevo usuario" onAction={abrirNuevo} />
       ) : (
         <div className="space-y-6">
-          {/* Activos */}
-          <div className="space-y-3">
-            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Activos</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {activos.map(u => (
-                <UsuarioCard key={u.id} usuario={u}
-                  propio={u.id === perfil?.id}
-                  onEditar={abrirEditar}
-                  onCambiarActivo={(usuario, activo) => setConfirmCambio({ usuario, activo })}
-                />
-              ))}
+          {activos.length > 0 && (
+            <div className="space-y-3">
+              <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest">Activos</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {activos.map(u => (
+                  <UsuarioCard key={u.id} usuario={u}
+                    propio={u.id === perfil?.id}
+                    onEditar={abrirEditar}
+                    onCambiarActivo={(usuario, activo) => setConfirmCambio({ usuario, activo })}
+                    onEliminar={setConfirmBorrar}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Inactivos */}
           {inactivos.length > 0 && (
             <div className="space-y-3">
-              <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Inactivos</h2>
+              <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">Inactivos</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {inactivos.map(u => (
                   <UsuarioCard key={u.id} usuario={u}
                     propio={u.id === perfil?.id}
                     onEditar={abrirEditar}
                     onCambiarActivo={(usuario, activo) => setConfirmCambio({ usuario, activo })}
+                    onEliminar={setConfirmBorrar}
                   />
                 ))}
               </div>
@@ -378,10 +438,8 @@ export default function UsuariosView() {
         </div>
       )}
 
-      {/* Modal */}
       {modalAbierto && <UsuarioModal usuario={editando} onClose={cerrarModal} />}
 
-      {/* Confirm cambio activo */}
       <ConfirmModal
         isOpen={!!confirmCambio}
         onClose={() => setConfirmCambio(null)}
@@ -392,6 +450,16 @@ export default function UsuariosView() {
           : `"${confirmCambio?.usuario?.nombre}" no podrá iniciar sesión.\nSus datos y cotizaciones se conservan.`}
         confirmText={confirmCambio?.activo ? 'Sí, activar' : 'Sí, desactivar'}
         variant={confirmCambio?.activo ? 'default' : 'danger'}
+      />
+
+      <ConfirmModal
+        isOpen={!!confirmBorrar}
+        onClose={() => setConfirmBorrar(null)}
+        onConfirm={confirmarBorrar}
+        title="¿Eliminar usuario?"
+        message={`"${confirmBorrar?.nombre}" será eliminado permanentemente.\nEsta acción no se puede deshacer.`}
+        confirmText="Sí, eliminar"
+        variant="danger"
       />
     </div>
   )

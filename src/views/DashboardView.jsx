@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { LayoutDashboard, FileText, Users, DollarSign, TrendingUp, Clock } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import supabase     from '../services/supabase/client'
+import { fmtUsd }   from '../utils/format'
 import Skeleton     from '../components/ui/Skeleton'
 
 // ─── Colores de estado ────────────────────────────────────────────────────────
@@ -19,10 +20,6 @@ const ESTADO_COLOR = {
 const ESTADO_LABEL = {
   borrador: 'Borradores', enviada: 'Enviadas', aceptada: 'Aceptadas',
   rechazada: 'Rechazadas', vencida: 'Vencidas', anulada: 'Anuladas',
-}
-
-function fmtUsd(n) {
-  return `$${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
 // ─── Hook de métricas ─────────────────────────────────────────────────────────
@@ -92,9 +89,9 @@ function useMetricas() {
 }
 
 // ─── Tarjeta de métrica ───────────────────────────────────────────────────────
-function MetricCard({ icon: Icon, label, value, sub, color = 'amber' }) {
+function MetricCard({ icon: Icon, label, value, sub, color = 'primary' }) {
   const colors = {
-    amber:   'bg-amber-100 text-amber-600',
+    primary: 'bg-primary-light text-primary',
     blue:    'bg-blue-100 text-blue-600',
     emerald: 'bg-emerald-100 text-emerald-600',
     slate:   'bg-slate-100 text-slate-500',
@@ -130,8 +127,8 @@ export default function DashboardView() {
 
       {/* Encabezado */}
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
-          <LayoutDashboard size={20} className="text-amber-600" />
+        <div className="w-10 h-10 bg-primary-light rounded-xl flex items-center justify-center">
+          <LayoutDashboard size={20} className="text-primary" />
         </div>
         <div>
           <h1 className="text-xl font-bold text-slate-800">Inicio</h1>
@@ -161,7 +158,7 @@ export default function DashboardView() {
             label="Total cotizaciones"
             value={m?.total ?? 0}
             sub="histórico"
-            color="amber"
+            color="primary"
           />
           <MetricCard
             icon={DollarSign}
@@ -184,7 +181,7 @@ export default function DashboardView() {
             label="Tasa de aceptación"
             value={m?.tasaAceptacion !== null ? `${m?.tasaAceptacion}%` : '—'}
             sub={m?.tasaAceptacion !== null ? 'aceptadas vs rechazadas' : 'sin datos suficientes'}
-            color="amber"
+            color="primary"
           />
         </div>
       )}
@@ -246,10 +243,10 @@ export default function DashboardView() {
       {/* Actividad del mes */}
       {!isLoading && m && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
-            <p className="text-xs font-bold text-amber-700 uppercase tracking-wide mb-1">Este mes</p>
-            <p className="text-3xl font-black text-amber-800">{m.delMesCount}</p>
-            <p className="text-sm text-amber-700 mt-1">cotizaciones generadas</p>
+          <div className="bg-primary-light border border-primary-focus rounded-2xl p-5">
+            <p className="text-xs font-bold text-primary-dark uppercase tracking-wide mb-1">Este mes</p>
+            <p className="text-3xl font-black text-primary">{m.delMesCount}</p>
+            <p className="text-sm text-primary-dark mt-1">cotizaciones generadas</p>
           </div>
           {esSupervisor && (
             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5">

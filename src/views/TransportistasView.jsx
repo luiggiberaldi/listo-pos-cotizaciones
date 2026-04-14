@@ -35,7 +35,7 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
     onGuardar(campos)
   }
 
-  const inputCls = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 placeholder:text-slate-400'
+  const inputCls = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400'
 
   return (
     <form onSubmit={submit} className="space-y-4">
@@ -76,7 +76,7 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
           Cancelar
         </button>
         <button type="submit" disabled={cargando}
-          className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold transition-colors disabled:opacity-50">
+          className="px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-white text-sm font-semibold transition-colors disabled:opacity-50">
           {cargando ? 'Guardando...' : 'Guardar'}
         </button>
       </div>
@@ -89,8 +89,10 @@ function TransportistaModal({ transportista = null, onClose }) {
   const crear     = useCrearTransportista()
   const actualizar = useActualizarTransportista()
   const esEdicion  = !!transportista
+  const [error, setError] = useState('')
 
   async function guardar(campos) {
+    setError('')
     try {
       if (esEdicion) {
         await actualizar.mutateAsync({ id: transportista.id, campos })
@@ -99,7 +101,7 @@ function TransportistaModal({ transportista = null, onClose }) {
       }
       onClose()
     } catch (e) {
-      // error se maneja vía isPending state
+      setError(e.message ?? 'Error al guardar')
     }
   }
 
@@ -109,13 +111,18 @@ function TransportistaModal({ transportista = null, onClose }) {
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-lg p-6 space-y-5">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-amber-100 rounded-xl flex items-center justify-center">
-            <Truck size={18} className="text-amber-600" />
+          <div className="w-9 h-9 bg-primary-light rounded-xl flex items-center justify-center">
+            <Truck size={18} className="text-primary" />
           </div>
           <h3 className="font-bold text-slate-800 text-lg">
             {esEdicion ? 'Editar transportista' : 'Nuevo transportista'}
           </h3>
         </div>
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-sm text-red-700">
+            {error}
+          </div>
+        )}
         <TransportistaForm
           inicial={transportista ?? {}}
           onGuardar={guardar}
@@ -130,11 +137,11 @@ function TransportistaModal({ transportista = null, onClose }) {
 // ─── Tarjeta ──────────────────────────────────────────────────────────────────
 function TransportistaCard({ transportista, esSupervisor, onEditar, onDesactivar }) {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 hover:border-amber-200 hover:shadow-md transition-all p-4 flex flex-col gap-3">
+    <div className="bg-white rounded-2xl border border-slate-200 hover:border-primary-light hover:shadow-md transition-all p-4 flex flex-col gap-3">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 bg-amber-50 rounded-xl flex items-center justify-center shrink-0">
-            <Truck size={16} className="text-amber-500" />
+          <div className="w-9 h-9 bg-primary-light rounded-xl flex items-center justify-center shrink-0">
+            <Truck size={16} className="text-primary" />
           </div>
           <div>
             <p className="font-bold text-slate-800 text-sm leading-tight">{transportista.nombre}</p>
@@ -147,7 +154,7 @@ function TransportistaCard({ transportista, esSupervisor, onEditar, onDesactivar
         {esSupervisor && (
           <div className="flex items-center gap-1 shrink-0">
             <button onClick={() => onEditar(transportista)} title="Editar"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 transition-colors">
+              className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-light transition-colors">
               <Pencil size={14} />
             </button>
             <button onClick={() => onDesactivar(transportista)} title="Desactivar"
@@ -227,8 +234,11 @@ export default function TransportistasView() {
 
   async function confirmarDesactivar() {
     if (!desactivandoTransp) return
-    await desactivar.mutateAsync(desactivandoTransp.id)
-    setDesactivandoTransp(null)
+    try {
+      await desactivar.mutateAsync(desactivandoTransp.id)
+    } finally {
+      setDesactivandoTransp(null)
+    }
   }
 
   return (
@@ -237,8 +247,8 @@ export default function TransportistasView() {
       {/* Encabezado */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
-            <Truck size={20} className="text-amber-600" />
+          <div className="w-10 h-10 bg-primary-light rounded-xl flex items-center justify-center">
+            <Truck size={20} className="text-primary" />
           </div>
           <div>
             <h1 className="text-xl font-bold text-slate-800">Transportistas</h1>
@@ -255,7 +265,7 @@ export default function TransportistasView() {
           </button>
           {esSupervisor && (
             <button onClick={abrirNuevo}
-              className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm px-4 py-2.5 rounded-xl transition-colors shadow-sm">
+              className="flex items-center gap-2 bg-primary hover:bg-primary-hover text-white font-semibold text-sm px-4 py-2.5 rounded-xl transition-colors shadow-sm">
               <Plus size={16} />
               Nuevo transportista
             </button>

@@ -76,7 +76,7 @@ export default function ReasignacionModal({ cliente, isOpen, onClose }) {
                 value={nuevoVendedorId}
                 onChange={e => { setNuevoVendedorId(e.target.value); setError('') }}
                 disabled={cargando}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 disabled:opacity-50"
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary disabled:opacity-50"
               >
                 <option value="">Seleccionar vendedor...</option>
                 {opcionesVendedor.map(v => (
@@ -100,7 +100,7 @@ export default function ReasignacionModal({ cliente, isOpen, onClose }) {
             rows={3}
             placeholder="Describe el motivo (mínimo 10 caracteres)..."
             disabled={cargando}
-            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 resize-none disabled:opacity-50 placeholder:text-slate-400"
+            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary resize-none disabled:opacity-50 placeholder:text-slate-400"
           />
           <p className="text-xs text-slate-400 text-right">{motivo.trim().length}/10 min</p>
         </div>

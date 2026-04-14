@@ -32,7 +32,7 @@ export default function ProductoCard({ producto, onEditar, onDesactivar }) {
   const esSupervisor = perfil?.rol === 'supervisor'
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 hover:border-amber-200 hover:shadow-md transition-all p-4 flex flex-col gap-3">
+    <div className="bg-white rounded-2xl border border-slate-200 hover:border-primary-light hover:shadow-md transition-all p-4 flex flex-col gap-3">
 
       {/* Cabecera */}
       <div className="flex items-start justify-between gap-2">
@@ -63,7 +63,7 @@ export default function ProductoCard({ producto, onEditar, onDesactivar }) {
             <button
               onClick={() => onEditar(producto)}
               title="Editar producto"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 transition-colors"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-light transition-colors"
             >
               <Pencil size={14} />
             </button>

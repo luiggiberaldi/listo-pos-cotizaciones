@@ -4,10 +4,11 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import {
   Users, FileText, Package, Truck,
-  UserCog, ClipboardList, LogOut,
-  ChevronRight, LayoutDashboard,
+  UserCog, ClipboardList,
+  LayoutDashboard, Settings, LogOut,
 } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
+import LoginAvatar from '../auth/LoginAvatar'
 
 // ─── Definición de rutas de navegación ────────────────────────────────────────
 const NAV_TODOS = [
@@ -19,15 +20,16 @@ const NAV_TODOS = [
 ]
 
 const NAV_SUPERVISOR = [
-  { path: '/usuarios',  label: 'Usuarios',   icono: UserCog },
-  { path: '/auditoria', label: 'Auditoría',  icono: ClipboardList },
+  { path: '/usuarios',      label: 'Usuarios',      icono: UserCog },
+  { path: '/auditoria',     label: 'Auditoría',     icono: ClipboardList },
+  { path: '/configuracion', label: 'Configuración', icono: Settings },
 ]
 
 // ─── Badge de rol ──────────────────────────────────────────────────────────────
 function BadgeRol({ rol }) {
   const estilos = {
-    supervisor: 'bg-amber-100 text-amber-700',
-    vendedor:   'bg-sky-100 text-sky-700',
+    supervisor: 'bg-sky-100 text-sky-700',
+    vendedor:   'bg-emerald-100 text-emerald-700',
   }
   const textos = { supervisor: 'Supervisor', vendedor: 'Vendedor' }
   return (
@@ -44,15 +46,19 @@ function NavItem({ path, label, Icono }) {
       to={path}
       end={path === '/'}
       className={({ isActive }) => `
-        flex items-center gap-3 px-4 py-3 rounded-xl
-        text-base font-medium transition-colors
+        flex items-center gap-3 px-4 py-2.5 rounded-xl
+        text-sm font-bold transition-all
         ${isActive
-          ? 'bg-amber-500 text-white shadow-sm'
+          ? 'text-white shadow-md shadow-sky-500/20'
           : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
         }
       `}
+      style={({ isActive }) => isActive
+        ? { background: 'linear-gradient(135deg, #0EA5E9, #5EEAD4)' }
+        : {}
+      }
     >
-      <Icono size={20} />
+      <Icono size={18} />
       <span>{label}</span>
     </NavLink>
   )
@@ -77,16 +83,9 @@ export default function AppLayout() {
       <aside className="w-64 shrink-0 bg-white border-r border-slate-200 flex flex-col">
 
         {/* Logo */}
-        <div className="p-5 border-b border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center shadow-sm">
-              <span className="text-white font-black text-sm">LP</span>
-            </div>
-            <div>
-              <p className="font-bold text-slate-800 text-sm leading-tight">Listo POS</p>
-              <p className="text-xs text-slate-400 leading-tight">Cotizaciones</p>
-            </div>
-          </div>
+        <div className="p-5 border-b border-slate-100 flex justify-center">
+          <img src="/logo.png" alt="Listo POS Cotizaciones"
+            className="h-[55px] w-auto object-contain" />
         </div>
 
         {/* Navegación */}
@@ -112,39 +111,22 @@ export default function AppLayout() {
           )}
         </nav>
 
-        {/* Info del usuario + logout */}
-        <div className="border-t border-slate-100 p-4 space-y-3">
-
-          {/* Perfil */}
-          <div className="flex items-center gap-3 px-2">
-            <div className="w-9 h-9 bg-slate-200 rounded-full flex items-center justify-center shrink-0">
-              <span className="text-slate-600 font-bold text-sm">
-                {perfil?.nombre?.[0]?.toUpperCase() ?? '?'}
-              </span>
-            </div>
-            <div className="min-w-0">
-              <p className="font-semibold text-slate-800 text-sm truncate">
+        {/* Usuario + botón de cierre de sesión */}
+        <div className="border-t border-slate-100 p-4">
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 p-3 rounded-2xl hover:bg-slate-50 active:scale-[0.98] transition-all group"
+          >
+            <LoginAvatar user={perfil} size="sm" />
+            <div className="flex-1 min-w-0 text-left">
+              <p className="text-sm font-black text-slate-800 truncate leading-tight">
                 {perfil?.nombre ?? 'Usuario'}
               </p>
               <BadgeRol rol={perfil?.rol} />
             </div>
-          </div>
-
-          {/* Botón cerrar sesión */}
-          <button
-            onClick={handleLogout}
-            className="
-              w-full flex items-center justify-center gap-2
-              py-3 px-4 rounded-xl
-              bg-slate-100 hover:bg-red-50
-              text-slate-600 hover:text-red-600
-              font-semibold text-base
-              transition-colors
-              focus:outline-none focus:ring-2 focus:ring-red-200
-            "
-          >
-            <LogOut size={18} />
-            Cerrar sesión
+            <div className="shrink-0 w-8 h-8 rounded-xl bg-slate-100 group-hover:bg-red-100 flex items-center justify-center transition-colors">
+              <LogOut size={15} className="text-slate-400 group-hover:text-red-500 transition-colors" />
+            </div>
           </button>
         </div>
 

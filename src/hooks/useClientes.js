@@ -4,6 +4,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
 import useAuthStore from '../store/useAuthStore'
+import { sanitizePostgrestSearch } from '../utils/format'
 
 // ─── Keys de caché ────────────────────────────────────────────────────────────
 export const CLIENTES_KEY = ['clientes']
@@ -31,11 +32,14 @@ export function useClientes(busqueda = '') {
         .eq('activo', true)
         .order('nombre', { ascending: true })
 
-      // Filtro de búsqueda (por nombre o RIF)
+      // Filtro de búsqueda (por nombre o RIF) — sanitizado
       if (busqueda.trim()) {
-        query = query.or(
-          `nombre.ilike.%${busqueda.trim()}%,rif_cedula.ilike.%${busqueda.trim()}%`
-        )
+        const safe = sanitizePostgrestSearch(busqueda)
+        if (safe) {
+          query = query.or(
+            `nombre.ilike.%${safe}%,rif_cedula.ilike.%${safe}%`
+          )
+        }
       }
 
       const { data, error } = await query

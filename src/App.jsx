@@ -26,6 +26,7 @@ import InventarioView   from './views/InventarioView'
 import TransportistasView from './views/TransportistasView'
 import UsuariosView     from './views/UsuariosView'
 import AuditoriaView    from './views/AuditoriaView'
+import ConfiguracionView from './views/ConfiguracionView'
 
 // ─── QueryClient (instancia única) ────────────────────────────────────────────
 const queryClient = new QueryClient({
@@ -40,10 +41,11 @@ const queryClient = new QueryClient({
 // ─── Pantalla de carga mientras se verifica la sesión ─────────────────────────
 function PantallaCarga() {
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+    <div className="min-h-screen flex items-center justify-center"
+      style={{ background: 'linear-gradient(135deg, #f0f9ff 0%, #ecfdf5 100%)' }}>
       <div className="flex flex-col items-center gap-4">
-        <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-slate-500 text-lg font-medium">Cargando...</p>
+        <img src="/logo.png" alt="Listo POS" className="h-24 w-auto object-contain opacity-90" />
+        <div className="w-8 h-8 border-[3px] border-sky-300 border-t-sky-500 rounded-full animate-spin" />
       </div>
     </div>
   )
@@ -110,8 +112,9 @@ function AppRoutes() {
 
           {/* Rutas exclusivas de supervisor */}
           <Route element={<RutaSupervisor />}>
-            <Route path="/usuarios"  element={<UsuariosView />} />
-            <Route path="/auditoria" element={<AuditoriaView />} />
+            <Route path="/usuarios"      element={<UsuariosView />} />
+            <Route path="/auditoria"     element={<AuditoriaView />} />
+            <Route path="/configuracion" element={<ConfiguracionView />} />
           </Route>
         </Route>
       </Route>

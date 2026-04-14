@@ -11,10 +11,11 @@ import { useInventario }       from '../../hooks/useInventario'
 import { useTransportistas }   from '../../hooks/useTransportistas'
 import { useGuardarBorrador, useEnviarCotizacion } from '../../hooks/useCotizaciones'
 import { round2, round4 }      from '../../utils/dinero'
+import { fmtUsdSimple as fmtUsd } from '../../utils/format'
 import { getLocalISODate }     from '../../utils/dateHelpers'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-function fmtUsd(n) { return `$${Number(n || 0).toFixed(2)}` }
+let _itemCounter = 0
 
 function calcTotales(items, descGlobalPct, costoEnvio) {
   const subtotal    = round2(items.reduce((s, it) =>
@@ -39,14 +40,14 @@ function ItemLinea({ item, idx, onChange, onDelete }) {
         <input type="number" min="0.01" step="0.01"
           value={item.cantidad}
           onChange={e => onChange(idx, 'cantidad', Math.max(0.01, Number(e.target.value)))}
-          className="w-20 px-2 py-1 text-sm text-right border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-400 bg-white"
+          className="w-20 px-2 py-1 text-sm text-right border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-focus bg-white"
         />
       </td>
       <td className="py-2 px-2">
         <input type="number" min="0" step="0.01"
           value={item.precioUnitUsd}
           onChange={e => onChange(idx, 'precioUnitUsd', Math.max(0, Number(e.target.value)))}
-          className="w-24 px-2 py-1 text-sm text-right border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-400 bg-white"
+          className="w-24 px-2 py-1 text-sm text-right border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-focus bg-white"
         />
       </td>
       <td className="py-2 px-2">
@@ -54,7 +55,7 @@ function ItemLinea({ item, idx, onChange, onDelete }) {
           <input type="number" min="0" max="100" step="0.5"
             value={item.descuentoPct}
             onChange={e => onChange(idx, 'descuentoPct', Math.min(100, Math.max(0, Number(e.target.value))))}
-            className="w-16 px-2 py-1 text-sm text-right border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-400 bg-white"
+            className="w-16 px-2 py-1 text-sm text-right border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-focus bg-white"
           />
           <span className="ml-1 text-xs text-slate-400">%</span>
         </div>
@@ -87,7 +88,7 @@ function BuscadorProductos({ onAgregar }) {
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           <input type="text" value={texto} onChange={e => setTexto(e.target.value)}
             placeholder="Buscar producto por nombre o código..."
-            className="w-full pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400"
+            className="w-full pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary"
           />
         </div>
         <button type="submit" className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-xl transition-colors">
@@ -101,14 +102,14 @@ function BuscadorProductos({ onAgregar }) {
         <div className="max-h-52 overflow-y-auto rounded-xl border border-slate-200 divide-y divide-slate-100">
           {productos.map(p => (
             <button key={p.id} type="button" onClick={() => onAgregar(p)}
-              className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-amber-50 transition-colors text-left">
+              className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-primary-light/50 transition-colors text-left">
               <div>
                 <p className="text-sm font-medium text-slate-800">{p.nombre}</p>
                 <p className="text-xs text-slate-400">{p.codigo ?? ''} · {p.unidad}</p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <span className="text-sm font-semibold text-slate-700">{fmtUsd(p.precio_usd)}</span>
-                <Plus size={14} className="text-amber-500" />
+                <Plus size={14} className="text-primary" />
               </div>
             </button>
           ))}
@@ -148,7 +149,7 @@ function ModalEnvio({ isOpen, onConfirm, onCancel, cargando }) {
           <input type="number" min="0.01" step="0.01" value={tasa}
             onChange={e => { setTasa(e.target.value); setError('') }}
             placeholder="Ej: 48.50"
-            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-primary-focus"
             autoFocus
           />
           {error && <p className="text-xs text-red-500">{error}</p>}
@@ -182,6 +183,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
   const [costoEnvioUsd,      setCostoEnvioUsd]      = useState(cotizacionExistente?.costo_envio_usd ?? 0)
   const [items,              setItems]              = useState(
     (cotizacionExistente?.items ?? []).map(it => ({
+      _key:          `item-${++_itemCounter}`,
       productoId:    it.producto_id,
       codigoSnap:    it.codigo_snap,
       nombreSnap:    it.nombre_snap,
@@ -206,6 +208,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
   // ── Agregar producto ─────────────────────────────────────────────────────
   function agregarProducto(p) {
     setItems(prev => [...prev, {
+      _key:          `item-${++_itemCounter}`,
       productoId:    p.id,
       codigoSnap:    p.codigo ?? '',
       nombreSnap:    p.nombre,
@@ -260,7 +263,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
 
     try {
       let id = cotizacionId
-      if (!id || guardarBorrador.isPending) {
+      if (!id) {
         id = await guardarBorrador.mutateAsync({
           cotizacionId,
           campos: { clienteId, transportistaId, validaHasta, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd },
@@ -279,7 +282,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
 
   const cargando = guardarBorrador.isPending || enviarCotizacion.isPending
 
-  const inputCls = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 placeholder:text-slate-400'
+  const inputCls = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400'
 
   return (
     <div className="min-h-full bg-slate-50">
@@ -401,7 +404,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
                 </thead>
                 <tbody>
                   {items.map((it, idx) => (
-                    <ItemLinea key={idx} item={it} idx={idx}
+                    <ItemLinea key={it._key} item={it} idx={idx}
                       onChange={cambiarItem} onDelete={eliminarItem} />
                   ))}
                 </tbody>

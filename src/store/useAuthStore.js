@@ -43,15 +43,14 @@ const useAuthStore = create((set, get) => ({
         if (event === 'INITIAL_SESSION') {
           try {
             if (session?.user) {
-              // Timeout de 6s para la carga del perfil
               const perfilPromise = get()._cargarPerfil(session.user)
               const timeoutPromise = new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('timeout')), 6000)
               )
               await Promise.race([perfilPromise, timeoutPromise])
             }
-          } catch (_) {
-            // Timeout o error — liberar pantalla de carga igual
+          } catch (err) {
+            console.warn('Error al cargar perfil inicial:', err.message)
           } finally {
             clearTimeout(timeoutId)
             set({ initialized: true })
@@ -157,7 +156,16 @@ const useAuthStore = create((set, get) => ({
       // Si falla la carga del perfil, el error ya fue seteado en _cargarPerfil
     }
     set({ loading: false })
-    return { ok: true }
+    // Solo ok:true si el perfil se cargó correctamente
+    return get().perfil ? { ok: true } : { ok: false }
+  },
+
+  // ─── Reset de contraseña (email) ───────────────────────────────────────────
+  resetPassword: async (email) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+      redirectTo: `${window.location.origin}/reset-password`,
+    })
+    return { ok: !error, error: error?.message }
   },
 
   // ─── Logout ────────────────────────────────────────────────────────────────

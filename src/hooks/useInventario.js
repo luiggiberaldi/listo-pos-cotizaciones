@@ -5,6 +5,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
 import useAuthStore from '../store/useAuthStore'
+import { sanitizePostgrestSearch } from '../utils/format'
 
 export const INVENTARIO_KEY = ['inventario']
 
@@ -29,13 +30,14 @@ export function useInventario({ busqueda = '', categoria = '' } = {}) {
         .select(columnas)
         .eq('activo', true)
 
-      // Búsqueda FTS en español
+      // Búsqueda sanitizada
       if (busqueda.trim()) {
-        // Intentar FTS primero; si falla, caer en ilike
-        const termino = busqueda.trim().split(/\s+/).join(' & ')
-        query = query.or(
-          `nombre.ilike.%${busqueda.trim()}%,codigo.ilike.%${busqueda.trim()}%`
-        )
+        const safe = sanitizePostgrestSearch(busqueda)
+        if (safe) {
+          query = query.or(
+            `nombre.ilike.%${safe}%,codigo.ilike.%${safe}%`
+          )
+        }
       }
 
       // Filtro de categoría

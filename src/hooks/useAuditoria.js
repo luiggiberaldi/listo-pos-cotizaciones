@@ -15,22 +15,23 @@ export function useAuditoria({ pagina = 0, porPagina = 50, usuarioId = '', categ
       let q = supabase
         .from('auditoria')
         .select(`
-          id, accion, descripcion, creado_en,
+          id, accion, descripcion, ts,
           categoria,
-          usuario:usuarios!auditoria_usuario_id_fkey(id, nombre, rol),
-          cotizacion:cotizaciones(numero, version)
+          entidad_tipo, entidad_id,
+          usuario_nombre, usuario_rol,
+          usuario:usuarios!auditoria_usuario_id_fkey(id, nombre, rol)
         `, { count: 'exact' })
-        .order('creado_en', { ascending: false })
+        .order('ts', { ascending: false })
         .range(pagina * porPagina, (pagina + 1) * porPagina - 1)
 
       if (usuarioId) q = q.eq('usuario_id', usuarioId)
-      if (categoria)  q = q.eq('categoria', categoria)
+      // ENUM es uppercase en la BD
+      if (categoria)  q = q.eq('categoria', categoria.toUpperCase())
 
       const { data, error, count } = await q
       if (error) throw error
       return { registros: data ?? [], total: count ?? 0 }
     },
     enabled: perfil?.rol === 'supervisor',
-    keepPreviousData: true,
   })
 }

@@ -23,7 +23,7 @@ function Campo({ label, icono: Icono, error, children }) {
 const inputClass = `
   w-full px-3 py-2.5 rounded-xl border text-sm text-slate-800
   bg-slate-50 border-slate-200
-  focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400
+  focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary
   placeholder:text-slate-400
   transition-colors
 `
@@ -201,7 +201,7 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel }) {
         <button
           type="submit"
           disabled={cargando}
-          className="flex-1 py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+          className="flex-1 py-2.5 px-4 rounded-xl bg-primary hover:bg-primary-hover text-white font-semibold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
         >
           {cargando
             ? <><Loader2 size={16} className="animate-spin" /> Guardando...</>

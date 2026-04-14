@@ -82,8 +82,11 @@ export default function ClientesView() {
 
   async function confirmarDesactivar() {
     if (!clienteADesact) return
-    await desactivar.mutateAsync(clienteADesact.id)
-    setClienteADesact(null)
+    try {
+      await desactivar.mutateAsync(clienteADesact.id)
+    } finally {
+      setClienteADesact(null)
+    }
   }
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -93,8 +96,8 @@ export default function ClientesView() {
       {/* ── Encabezado ─────────────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
-            <Users size={20} className="text-amber-600" />
+          <div className="w-10 h-10 bg-primary-light rounded-xl flex items-center justify-center">
+            <Users size={20} className="text-primary" />
           </div>
           <div>
             <h1 className="text-xl font-bold text-slate-800">Clientes</h1>
@@ -106,7 +109,7 @@ export default function ClientesView() {
 
         <button
           onClick={abrirCrear}
-          className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm px-4 py-2.5 rounded-xl transition-colors shadow-sm"
+          className="flex items-center gap-2 bg-primary hover:bg-primary-hover text-white font-semibold text-sm px-4 py-2.5 rounded-xl transition-colors shadow-sm"
         >
           <Plus size={16} />
           Nuevo cliente
@@ -122,7 +125,7 @@ export default function ClientesView() {
             value={textoBusqueda}
             onChange={e => setTextoBusqueda(e.target.value)}
             placeholder="Buscar por nombre o RIF/cédula..."
-            className="w-full pl-9 pr-9 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 placeholder:text-slate-400"
+            className="w-full pl-9 pr-9 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400"
           />
           {textoBusqueda && (
             <button

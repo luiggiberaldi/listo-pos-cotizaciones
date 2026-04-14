@@ -8,11 +8,7 @@ import supabase from '../../services/supabase/client'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import { generarPDF } from '../../services/pdf/cotizacionPDF'
 
-function fmtUsd(n) { return `$${Number(n || 0).toFixed(2)}` }
-function fmtFecha(f) {
-  if (!f) return '—'
-  return new Date(f).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })
-}
+import { fmtUsdSimple as fmtUsd, fmtFecha } from '../../utils/format'
 
 export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambiarEstado }) {
   const { perfil } = useAuthStore()
@@ -30,17 +26,20 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
   async function descargarPDF() {
     setPdfLoading(true)
     try {
-      const [{ data: header }, { data: items }] = await Promise.all([
+      const [headerRes, itemsRes] = await Promise.all([
         supabase.from('cotizaciones').select('*').eq('id', cotizacion.id).single(),
         supabase.from('cotizacion_items').select('*').eq('cotizacion_id', cotizacion.id).order('orden'),
       ])
+      if (headerRes.error) throw headerRes.error
+      if (itemsRes.error) throw itemsRes.error
       generarPDF({
-        cotizacion: { ...header, cliente: cotizacion.cliente },
-        items: items ?? [],
+        cotizacion: { ...headerRes.data, cliente: cotizacion.cliente },
+        items: itemsRes.data ?? [],
         config,
       })
     } catch (err) {
       console.error('PDF error:', err)
+      alert('Error al generar PDF: ' + (err.message || 'Error desconocido'))
     } finally {
       setPdfLoading(false)
     }
@@ -59,13 +58,13 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 hover:border-amber-200 hover:shadow-md transition-all p-4 flex flex-col gap-3">
+    <div className="bg-white rounded-2xl border border-slate-200 hover:border-primary-light hover:shadow-md transition-all p-4 flex flex-col gap-3">
 
       {/* Cabecera: número + estado */}
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="flex items-center gap-1.5">
-            <FileText size={14} className="text-amber-500" />
+            <FileText size={14} className="text-primary" />
             <span className="font-bold text-slate-800 text-sm font-mono">{numDisplay}</span>
           </div>
           <div className="mt-1">
@@ -77,7 +76,7 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
         <div className="flex items-center gap-1 shrink-0">
           {esBorrador && (
             <button onClick={() => onEditar(cotizacion)} title="Editar borrador"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 transition-colors">
+              className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-light transition-colors">
               <Pencil size={14} />
             </button>
           )}

@@ -49,7 +49,6 @@ function fmtFechaHora(f) {
   return d.toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' })
     + ' ' + d.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })
 }
-
 function SkeletonAuditoria() {
   return (
     <div className="space-y-2">
@@ -93,8 +92,8 @@ export default function AuditoriaView() {
       {/* Encabezado */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
-            <ClipboardList size={20} className="text-amber-600" />
+          <div className="w-10 h-10 bg-primary-light rounded-xl flex items-center justify-center">
+            <ClipboardList size={20} className="text-primary" />
           </div>
           <div>
             <h1 className="text-xl font-bold text-slate-800">Auditoría</h1>
@@ -114,14 +113,14 @@ export default function AuditoriaView() {
         <Filter size={14} className="text-slate-400 shrink-0" />
         {/* Filtro por categoría */}
         <select value={categoria} onChange={e => cambiarFiltro(() => setCategoria(e.target.value))}
-          className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400">
+          className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-focus">
           {CATEGORIAS_FILTRO.map(({ valor, label }) => (
             <option key={valor} value={valor}>{label}</option>
           ))}
         </select>
         {/* Filtro por usuario */}
         <select value={usuarioId} onChange={e => cambiarFiltro(() => setUsuarioId(e.target.value))}
-          className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400">
+          className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-focus">
           <option value="">Todos los usuarios</option>
           {usuarios.map(u => (
             <option key={u.id} value={u.id}>{u.nombre}</option>
@@ -166,12 +165,16 @@ export default function AuditoriaView() {
                 {registros.map(r => (
                   <tr key={r.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="py-2.5 px-4 text-xs text-slate-400 whitespace-nowrap font-mono">
-                      {fmtFechaHora(r.creado_en)}
+                      {fmtFechaHora(r.ts)}
                     </td>
                     <td className="py-2.5 px-4">
                       <div className="flex flex-col">
-                        <span className="font-medium text-slate-800 text-xs">{r.usuario?.nombre ?? '—'}</span>
-                        <span className="text-xs text-slate-400">{r.usuario?.rol ?? ''}</span>
+                        <span className="font-medium text-slate-800 text-xs">
+                          {r.usuario?.nombre ?? r.usuario_nombre ?? '—'}
+                        </span>
+                        <span className="text-xs text-slate-400">
+                          {r.usuario?.rol ?? r.usuario_rol ?? ''}
+                        </span>
                       </div>
                     </td>
                     <td className="py-2.5 px-4">
@@ -180,10 +183,9 @@ export default function AuditoriaView() {
                     <td className="py-2.5 px-4 text-xs font-mono text-slate-600 whitespace-nowrap">{r.accion}</td>
                     <td className="py-2.5 px-4 text-xs text-slate-600 max-w-xs">
                       <span className="line-clamp-2">{r.descripcion ?? '—'}</span>
-                      {r.cotizacion && (
+                      {r.entidad_tipo === 'cotizacion' && r.entidad_id && (
                         <span className="ml-1 font-mono text-slate-400 text-xs">
-                          COT-{String(r.cotizacion.numero).padStart(5,'0')}
-                          {r.cotizacion.version > 1 ? ` Rev.${r.cotizacion.version}` : ''}
+                          [{r.entidad_tipo}]
                         </span>
                       )}
                     </td>
