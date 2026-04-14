@@ -46,7 +46,7 @@ function ModalVersionar({ cotizacion, onConfirm, onCancel, cargando }) {
   const num = `COT-${String(cotizacion.numero).padStart(5, '0')}`
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-sm p-6 space-y-4">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-sm p-4 sm:p-6 space-y-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-primary-light rounded-xl flex items-center justify-center">
             <GitBranch size={20} className="text-primary" />
@@ -63,7 +63,7 @@ function ModalVersionar({ cotizacion, onConfirm, onCancel, cargando }) {
           </p>
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex flex-col-reverse sm:flex-row gap-3">
           <button onClick={onCancel} disabled={cargando}
             className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 transition-colors disabled:opacity-50">
             Cancelar
@@ -106,7 +106,7 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-screen-xl">
+    <div className="p-4 md:p-6 space-y-4 md:space-y-6 max-w-screen-xl">
 
       {/* Encabezado */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">

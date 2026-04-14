@@ -1,11 +1,12 @@
 // src/components/layout/AppLayout.jsx
-// Layout principal: sidebar fijo + área de contenido
-// Navegación adaptada al rol (supervisor ve más opciones que vendedor)
+// Layout principal: sidebar fijo en desktop, drawer en móvil
+import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import {
   Users, FileText, Package, Truck,
   UserCog, ClipboardList,
   LayoutDashboard, Settings, LogOut,
+  Menu, X,
 } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import LoginAvatar from '../auth/LoginAvatar'
@@ -40,11 +41,12 @@ function BadgeRol({ rol }) {
 }
 
 // ─── Item de navegación ────────────────────────────────────────────────────────
-function NavItem({ path, label, Icono }) {
+function NavItem({ path, label, Icono, onClick }) {
   return (
     <NavLink
       to={path}
       end={path === '/'}
+      onClick={onClick}
       className={({ isActive }) => `
         flex items-center gap-3 px-4 py-2.5 rounded-xl
         text-sm font-bold transition-all
@@ -68,6 +70,7 @@ function NavItem({ path, label, Icono }) {
 export default function AppLayout() {
   const { perfil, logout } = useAuthStore()
   const navigate = useNavigate()
+  const [menuOpen, setMenuOpen] = useState(false)
 
   const esSupervisor = perfil?.rol === 'supervisor'
 
@@ -76,16 +79,53 @@ export default function AppLayout() {
     navigate('/login', { replace: true })
   }
 
+  function cerrarMenu() { setMenuOpen(false) }
+
   return (
     <div className="flex min-h-screen bg-slate-50">
 
-      {/* ── Sidebar ─────────────────────────────────────────────────────────── */}
-      <aside className="w-64 shrink-0 bg-white border-r border-slate-200 flex flex-col">
+      {/* ── Barra superior móvil ─────────────────────────────────────────── */}
+      <div className="md:hidden fixed top-0 left-0 right-0 z-40 bg-white border-b border-slate-200 px-4 h-14 flex items-center justify-between">
+        <button
+          onClick={() => setMenuOpen(true)}
+          className="p-2 -ml-2 rounded-xl hover:bg-slate-100 text-slate-600 transition-colors"
+        >
+          <Menu size={22} />
+        </button>
+        <img src="/logo.png" alt="Listo POS" className="h-8 w-auto object-contain" />
+        <div className="w-10" />
+      </div>
+
+      {/* ── Backdrop overlay (móvil) ─────────────────────────────────────── */}
+      {menuOpen && (
+        <div
+          className="md:hidden fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm transition-opacity"
+          onClick={cerrarMenu}
+        />
+      )}
+
+      {/* ── Sidebar / Drawer ─────────────────────────────────────────────── */}
+      <aside className={`
+        fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 flex flex-col
+        transition-transform duration-300 ease-out
+        ${menuOpen ? 'translate-x-0' : '-translate-x-full'}
+        md:translate-x-0 md:static md:z-auto
+      `}>
+
+        {/* Botón cerrar — solo móvil */}
+        <div className="md:hidden flex justify-end p-3 pb-0">
+          <button
+            onClick={cerrarMenu}
+            className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 transition-colors"
+          >
+            <X size={20} />
+          </button>
+        </div>
 
         {/* Logo */}
         <div className="p-5 border-b border-slate-100 flex justify-center">
           <img src="/logo.png" alt="Listo POS Cotizaciones"
-            className="h-[55px] w-auto object-contain" />
+            className="h-[55px] md:h-[55px] w-auto object-contain" />
         </div>
 
         {/* Navegación */}
@@ -93,7 +133,7 @@ export default function AppLayout() {
 
           {/* Rutas accesibles para todos */}
           {NAV_TODOS.map(({ path, label, icono: Icono }) => (
-            <NavItem key={path} path={path} label={label} Icono={Icono} />
+            <NavItem key={path} path={path} label={label} Icono={Icono} onClick={cerrarMenu} />
           ))}
 
           {/* Rutas solo para supervisor */}
@@ -105,7 +145,7 @@ export default function AppLayout() {
                 </p>
               </div>
               {NAV_SUPERVISOR.map(({ path, label, icono: Icono }) => (
-                <NavItem key={path} path={path} label={label} Icono={Icono} />
+                <NavItem key={path} path={path} label={label} Icono={Icono} onClick={cerrarMenu} />
               ))}
             </>
           )}
@@ -132,8 +172,8 @@ export default function AppLayout() {
 
       </aside>
 
-      {/* ── Área de contenido ───────────────────────────────────────────────── */}
-      <main className="flex-1 overflow-y-auto">
+      {/* ── Área de contenido ───────────────────────────────────────────── */}
+      <main className="flex-1 overflow-y-auto pt-14 md:pt-0">
         <Outlet />
       </main>
 

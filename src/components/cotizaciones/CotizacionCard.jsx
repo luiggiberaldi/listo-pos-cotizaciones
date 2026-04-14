@@ -76,43 +76,43 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
         <div className="flex items-center gap-1 shrink-0">
           {esBorrador && (
             <button onClick={() => onEditar(cotizacion)} title="Editar borrador"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-light transition-colors">
-              <Pencil size={14} />
+              className="p-2 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-light transition-colors">
+              <Pencil size={16} />
             </button>
           )}
           {/* PDF — disponible en cotizaciones enviadas/aceptadas/rechazadas */}
           {cotizacion.estado !== 'borrador' && cotizacion.estado !== 'anulada' && (
             <button onClick={descargarPDF} disabled={pdfLoading} title="Descargar PDF"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-blue-500 hover:bg-blue-50 transition-colors disabled:opacity-40">
+              className="p-2 rounded-lg text-slate-400 hover:text-blue-500 hover:bg-blue-50 transition-colors disabled:opacity-40">
               {pdfLoading
                 ? <div className="w-3.5 h-3.5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-                : <FileDown size={14} />}
+                : <FileDown size={16} />}
             </button>
           )}
           {/* WhatsApp — disponible en cotizaciones enviadas/aceptadas */}
           {(cotizacion.estado === 'enviada' || cotizacion.estado === 'aceptada') && (
             <button onClick={compartirWhatsApp} title="Compartir por WhatsApp"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors">
-              <MessageCircle size={14} />
+              className="p-2 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors">
+              <MessageCircle size={16} />
             </button>
           )}
           {/* Supervisor puede marcar como aceptada/rechazada */}
           {esSupervisor && esEnviada && (
             <>
               <button onClick={() => onCambiarEstado(cotizacion.id, 'aceptada')} title="Marcar aceptada"
-                className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 transition-colors">
-                <CheckCircle size={14} />
+                className="p-2 rounded-lg text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 transition-colors">
+                <CheckCircle size={16} />
               </button>
               <button onClick={() => onCambiarEstado(cotizacion.id, 'rechazada')} title="Marcar rechazada"
-                className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
-                <XCircle size={14} />
+                className="p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+                <XCircle size={16} />
               </button>
             </>
           )}
           {(esBorrador || (esSupervisor && cotizacion.estado !== 'anulada')) && (
             <button onClick={() => onAnular(cotizacion)} title="Anular"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
-              <Ban size={14} />
+              className="p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+              <Ban size={16} />
             </button>
           )}
         </div>

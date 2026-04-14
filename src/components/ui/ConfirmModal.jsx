@@ -52,12 +52,12 @@ export default function ConfirmModal({
 
     return (
         <div className="fixed inset-0 z-[200] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={onClose}>
-            <div className="relative bg-white rounded-[1.5rem] p-6 max-w-sm w-full shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200"
+            <div className="relative bg-white rounded-[1.5rem] p-5 sm:p-6 max-w-sm w-full shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200"
                 onClick={e => e.stopPropagation()}>
 
                 {/* Close button */}
                 <button onClick={onClose} disabled={loading}
-                    className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors disabled:opacity-50">
+                    className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors disabled:opacity-50">
                     <X size={16} />
                 </button>
 

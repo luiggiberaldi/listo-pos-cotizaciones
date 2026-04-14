@@ -73,6 +73,59 @@ function ItemLinea({ item, idx, onChange, onDelete }) {
   )
 }
 
+// ─── Tarjeta de ítem (móvil) ────────────────────────────────────────────────
+function ItemCard({ item, idx, onChange, onDelete }) {
+  const lineTotal = round2(item.cantidad * item.precioUnitUsd * (1 - item.descuentoPct / 100))
+
+  return (
+    <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 space-y-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="font-medium text-sm text-slate-800 truncate">{item.nombreSnap}</p>
+          {item.codigoSnap && <p className="text-xs text-slate-400 font-mono">{item.codigoSnap}</p>}
+          <p className="text-xs text-slate-400">{item.unidadSnap}</p>
+        </div>
+        <button onClick={() => onDelete(idx)}
+          className="p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors shrink-0">
+          <Trash2 size={16} />
+        </button>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-slate-500">Cantidad</label>
+          <input type="number" min="0.01" step="0.01"
+            value={item.cantidad}
+            onChange={e => onChange(idx, 'cantidad', Math.max(0.01, Number(e.target.value)))}
+            className="w-full px-3 py-2.5 text-sm text-right border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-primary-focus bg-white"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-slate-500">Precio USD</label>
+          <input type="number" min="0" step="0.01"
+            value={item.precioUnitUsd}
+            onChange={e => onChange(idx, 'precioUnitUsd', Math.max(0, Number(e.target.value)))}
+            className="w-full px-3 py-2.5 text-sm text-right border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-primary-focus bg-white"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-slate-500">Desc. %</label>
+          <input type="number" min="0" max="100" step="0.5"
+            value={item.descuentoPct}
+            onChange={e => onChange(idx, 'descuentoPct', Math.min(100, Math.max(0, Number(e.target.value))))}
+            className="w-full px-3 py-2.5 text-sm text-right border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-primary-focus bg-white"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-slate-500">Total</label>
+          <div className="px-3 py-2.5 text-sm text-right font-bold text-slate-800 bg-white border border-slate-200 rounded-xl">
+            {fmtUsd(lineTotal)}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Buscador de productos ────────────────────────────────────────────────────
 function BuscadorProductos({ onAgregar }) {
   const [texto, setTexto] = useState('')
@@ -136,7 +189,7 @@ function ModalEnvio({ isOpen, onConfirm, onCancel, cargando }) {
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-sm p-6 space-y-4">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-sm p-4 sm:p-6 space-y-4">
         <h3 className="font-black text-slate-800 text-lg">Enviar cotización</h3>
         <p className="text-sm text-slate-500">
           Ingresa la tasa BCV del día para calcular el total en Bs. Este valor quedará registrado en la cotización.
@@ -154,7 +207,7 @@ function ModalEnvio({ isOpen, onConfirm, onCancel, cargando }) {
           />
           {error && <p className="text-xs text-red-500">{error}</p>}
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-col-reverse sm:flex-row gap-3">
           <button onClick={onCancel} disabled={cargando}
             className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 transition-colors disabled:opacity-50">
             Cancelar
@@ -288,13 +341,13 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
     <div className="min-h-full bg-slate-50">
 
       {/* ── Header del builder ────────────────────────────────────────────── */}
-      <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-10">
+      <div className="bg-white border-b border-slate-200 px-4 md:px-6 py-3 md:py-4 flex items-center justify-between sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <button onClick={onVolver}
             className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 transition-colors">
             <ArrowLeft size={18} />
           </button>
-          <h2 className="font-bold text-slate-800 text-lg">
+          <h2 className="font-bold text-slate-800 text-base md:text-lg truncate">
             {esEdicion
               ? cotizacionExistente.version > 1
                 ? `Editar Rev.${cotizacionExistente.version} — COT-${String(cotizacionExistente.numero).padStart(5,'0')}`
@@ -306,21 +359,21 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
         {/* Acciones */}
         <div className="flex items-center gap-2">
           <button onClick={handleGuardar} disabled={cargando}
-            className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm rounded-xl transition-colors disabled:opacity-50">
+            className="flex items-center gap-2 px-3 md:px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm rounded-xl transition-colors disabled:opacity-50">
             {guardarBorrador.isPending ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-            Guardar borrador
+            <span className="hidden sm:inline">Guardar borrador</span>
           </button>
           <button onClick={() => { const e = validar(); if (e) { setErrorGeneral(e); return } setErrorGeneral(''); setModalEnvio(true) }}
             disabled={cargando}
-            className="flex items-center gap-2 px-4 py-2.5 bg-blue-500 hover:bg-blue-600 text-white font-semibold text-sm rounded-xl transition-colors disabled:opacity-50">
+            className="flex items-center gap-2 px-3 md:px-4 py-2.5 bg-blue-500 hover:bg-blue-600 text-white font-semibold text-sm rounded-xl transition-colors disabled:opacity-50">
             {enviarCotizacion.isPending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-            Enviar cotización
+            <span className="hidden sm:inline">Enviar cotización</span>
           </button>
         </div>
       </div>
 
       {/* ── Contenido ─────────────────────────────────────────────────────── */}
-      <div className="p-6 max-w-5xl mx-auto space-y-6">
+      <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-4 md:space-y-6">
 
         {/* Error general */}
         {errorGeneral && (
@@ -389,8 +442,10 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
 
           {/* Tabla de ítems */}
           {items.length > 0 && (
-            <div className="overflow-x-auto rounded-xl border border-slate-100">
-              <table className="w-full text-sm min-w-[600px]">
+            <>
+              {/* Desktop: tabla */}
+              <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-100">
+                <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 text-xs text-slate-500 uppercase tracking-wide">
                     <th className="text-left py-2 px-3">Producto</th>
@@ -409,7 +464,15 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
                   ))}
                 </tbody>
               </table>
-            </div>
+              </div>
+              {/* Móvil: cards */}
+              <div className="md:hidden space-y-3">
+                {items.map((it, idx) => (
+                  <ItemCard key={it._key} item={it} idx={idx}
+                    onChange={cambiarItem} onDelete={eliminarItem} />
+                ))}
+              </div>
+            </>
           )}
 
           {items.length === 0 && (
@@ -495,7 +558,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
         </div>
 
         {/* Botones inferiores */}
-        <div className="flex justify-end gap-3 pb-8">
+        <div className="flex flex-col sm:flex-row justify-end gap-3 pb-8">
           <button onClick={onVolver} disabled={cargando}
             className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 transition-colors disabled:opacity-50">
             Cancelar

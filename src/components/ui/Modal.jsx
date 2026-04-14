@@ -24,14 +24,14 @@ export const Modal = ({ isOpen, onClose, title, children, className = '' }) => {
       />
       
       {/* Contenido del Modal */}
-      <div className={`relative bg-white dark:bg-slate-900 w-full max-w-sm rounded-[2rem] shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden animate-in zoom-in-95 duration-200 transition-all ${className}`}>
+      <div className={`relative bg-white dark:bg-slate-900 w-full max-w-sm rounded-2xl sm:rounded-[2rem] max-h-[100dvh] sm:max-h-[90vh] shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden animate-in zoom-in-95 duration-200 transition-all ${className}`}>
         
         {/* Cabecera */}
         <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
           <h3 className="font-black text-slate-800 dark:text-white text-lg tracking-tight">{title}</h3>
           <button 
             onClick={onClose}
-            className="p-1.5 bg-slate-200 dark:bg-slate-700 rounded-full text-slate-500 hover:text-red-500 transition-colors"
+            className="p-2 bg-slate-200 dark:bg-slate-700 rounded-full text-slate-500 hover:text-red-500 transition-colors"
           >
             <X size={16} strokeWidth={3} />
           </button>
@@ -39,7 +39,7 @@ export const Modal = ({ isOpen, onClose, title, children, className = '' }) => {
 
         {/* Body con Scroll Mejorado */}
         {/* ✅ CAMBIO: max-h-[85vh] para más espacio y pb-10 para margen inferior seguro */}
-        <div className="p-6 max-h-[85vh] overflow-y-auto custom-scrollbar pb-10">
+        <div className="p-4 sm:p-6 max-h-[calc(100dvh-60px)] sm:max-h-[85vh] overflow-y-auto custom-scrollbar pb-10">
           {children}
         </div>
       </div>

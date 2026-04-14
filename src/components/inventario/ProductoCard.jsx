@@ -63,16 +63,16 @@ export default function ProductoCard({ producto, onEditar, onDesactivar }) {
             <button
               onClick={() => onEditar(producto)}
               title="Editar producto"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-light transition-colors"
+              className="p-2 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-light transition-colors"
             >
-              <Pencil size={14} />
+              <Pencil size={16} />
             </button>
             <button
               onClick={() => onDesactivar(producto)}
               title="Desactivar producto"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+              className="p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
             >
-              <EyeOff size={14} />
+              <EyeOff size={16} />
             </button>
           </div>
         )}

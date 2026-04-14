@@ -42,9 +42,9 @@ export default function ClienteCard({ cliente, onEditar, onDesactivar, onReasign
           <button
             onClick={() => onEditar(cliente)}
             title="Editar cliente"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-light transition-colors"
+            className="p-2 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-light transition-colors"
           >
-            <Pencil size={15} />
+            <Pencil size={16} />
           </button>
 
           {/* Reasignar: solo supervisor */}
@@ -52,18 +52,18 @@ export default function ClienteCard({ cliente, onEditar, onDesactivar, onReasign
             <button
               onClick={() => onReasignar(cliente)}
               title="Reasignar cliente"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-sky-500 hover:bg-sky-50 transition-colors"
+              className="p-2 rounded-lg text-slate-400 hover:text-sky-500 hover:bg-sky-50 transition-colors"
             >
-              <ArrowRightLeft size={15} />
+              <ArrowRightLeft size={16} />
             </button>
           )}
 
           <button
             onClick={() => onDesactivar(cliente)}
             title="Desactivar cliente"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+            className="p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
           >
-            <UserMinus size={15} />
+            <UserMinus size={16} />
           </button>
         </div>
       </div>
