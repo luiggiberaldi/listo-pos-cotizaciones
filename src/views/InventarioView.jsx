@@ -176,7 +176,6 @@ export default function InventarioView() {
           {/* Filtro categoría */}
           {categorias.length > 0 && (
             <div className="flex items-center gap-2 flex-1 min-w-0">
-              <Filter size={15} className="text-slate-400 shrink-0" />
               <div className="flex-1 min-w-0">
                 <CustomSelect
                   options={[
