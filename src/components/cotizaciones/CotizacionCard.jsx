@@ -5,7 +5,6 @@ import EstadoBadge from './EstadoBadge'
 import useAuthStore from '../../store/useAuthStore'
 import supabase from '../../services/supabase/client'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
-import { generarPDF } from '../../services/pdf/cotizacionPDF'
 import { compartirPorWhatsApp, generarMensaje } from '../../utils/whatsapp'
 
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs } from '../../utils/format'
@@ -27,7 +26,8 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
   async function descargarPDF() {
     setPdfLoading(true)
     try {
-      const [headerRes, itemsRes] = await Promise.all([
+      const [{ generarPDF }, headerRes, itemsRes] = await Promise.all([
+        import('../../services/pdf/cotizacionPDF'),
         supabase.from('cotizaciones').select('*').eq('id', cotizacion.id).single(),
         supabase.from('cotizacion_items').select('*').eq('cotizacion_id', cotizacion.id).order('orden'),
       ])
@@ -50,8 +50,8 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
   async function handleWhatsApp() {
     setWaLoading(true)
     try {
-      // Cargar datos completos de la cotización para generar el PDF
-      const [headerRes, itemsRes] = await Promise.all([
+      const [{ generarPDF }, headerRes, itemsRes] = await Promise.all([
+        import('../../services/pdf/cotizacionPDF'),
         supabase.from('cotizaciones').select('*').eq('id', cotizacion.id).single(),
         supabase.from('cotizacion_items').select('*').eq('cotizacion_id', cotizacion.id).order('orden'),
       ])

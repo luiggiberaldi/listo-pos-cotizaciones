@@ -17,7 +17,6 @@ import { useTransportistas }   from '../../hooks/useTransportistas'
 import { useGuardarBorrador, useEnviarCotizacion } from '../../hooks/useCotizaciones'
 import { useTasaCambio }       from '../../hooks/useTasaCambio'
 import { useConfigNegocio }    from '../../hooks/useConfigNegocio'
-import { generarPDF }          from '../../services/pdf/cotizacionPDF'
 import { compartirPorWhatsApp, generarMensaje } from '../../utils/whatsapp'
 import { round2, round4, mulR } from '../../utils/dinero'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../../utils/format'
@@ -849,7 +848,8 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
   async function descargarPDF() {
     setPdfLoading(true)
     try {
-      const [headerRes, itemsRes] = await Promise.all([
+      const [{ generarPDF }, headerRes, itemsRes] = await Promise.all([
+        import('../../services/pdf/cotizacionPDF'),
         supabase.from('cotizaciones').select('*').eq('id', cotizacionId).single(),
         supabase.from('cotizacion_items').select('*').eq('cotizacion_id', cotizacionId).order('orden'),
       ])
@@ -870,7 +870,8 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
   async function handleWhatsApp() {
     setWaLoading(true)
     try {
-      const [headerRes, itemsRes] = await Promise.all([
+      const [{ generarPDF }, headerRes, itemsRes] = await Promise.all([
+        import('../../services/pdf/cotizacionPDF'),
         supabase.from('cotizaciones').select('*').eq('id', cotizacionId).single(),
         supabase.from('cotizacion_items').select('*').eq('cotizacion_id', cotizacionId).order('orden'),
       ])

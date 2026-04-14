@@ -1,7 +1,7 @@
 // src/App.jsx
 // Configuración central de React Router v7
 // Rutas públicas, protegidas y exclusivas de supervisor
-import { useEffect } from 'react'
+import { useEffect, lazy, Suspense } from 'react'
 import {
   BrowserRouter,
   Routes,
@@ -12,21 +12,21 @@ import {
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import useAuthStore from './store/useAuthStore'
 
-// Layout
+// Layout (se carga siempre con las rutas protegidas)
 import AppLayout from './components/layout/AppLayout'
 
-// Auth
+// Auth (se carga siempre en /login)
 import LoginPage from './modules/auth/LoginPage'
 
-// Views
-import DashboardView    from './views/DashboardView'
-import ClientesView     from './views/ClientesView'
-import CotizacionesView from './views/CotizacionesView'
-import InventarioView   from './views/InventarioView'
-import TransportistasView from './views/TransportistasView'
-import UsuariosView     from './views/UsuariosView'
-import AuditoriaView    from './views/AuditoriaView'
-import ConfiguracionView from './views/ConfiguracionView'
+// Views — lazy loading para que solo se descarguen al navegar
+const DashboardView     = lazy(() => import('./views/DashboardView'))
+const ClientesView      = lazy(() => import('./views/ClientesView'))
+const CotizacionesView  = lazy(() => import('./views/CotizacionesView'))
+const InventarioView    = lazy(() => import('./views/InventarioView'))
+const TransportistasView = lazy(() => import('./views/TransportistasView'))
+const UsuariosView      = lazy(() => import('./views/UsuariosView'))
+const AuditoriaView     = lazy(() => import('./views/AuditoriaView'))
+const ConfiguracionView = lazy(() => import('./views/ConfiguracionView'))
 
 // ─── QueryClient (instancia única) ────────────────────────────────────────────
 const queryClient = new QueryClient({
@@ -47,6 +47,15 @@ function PantallaCarga() {
         <img src="/logo.png" alt="Listo POS" className="h-24 w-auto object-contain opacity-90" />
         <div className="w-8 h-8 border-[3px] border-sky-300 border-t-sky-500 rounded-full animate-spin" />
       </div>
+    </div>
+  )
+}
+
+// ─── Fallback para lazy loading de vistas ────────────────────────────────────
+function ViewLoader() {
+  return (
+    <div className="flex items-center justify-center py-20">
+      <div className="w-6 h-6 border-[3px] border-sky-300 border-t-sky-500 rounded-full animate-spin" />
     </div>
   )
 }
@@ -94,35 +103,37 @@ function AppRoutes() {
   }, [initialize])
 
   return (
-    <Routes>
+    <Suspense fallback={<ViewLoader />}>
+      <Routes>
 
-      {/* Rutas públicas (no accesibles si ya hay sesión) */}
-      <Route element={<RutaPublica />}>
-        <Route path="/login" element={<LoginPage />} />
-      </Route>
+        {/* Rutas públicas (no accesibles si ya hay sesión) */}
+        <Route element={<RutaPublica />}>
+          <Route path="/login" element={<LoginPage />} />
+        </Route>
 
-      {/* Rutas protegidas para todos los roles */}
-      <Route element={<RutaProtegida />}>
-        <Route element={<AppLayout />}>
-          <Route path="/"               element={<DashboardView />} />
-          <Route path="/clientes"       element={<ClientesView />} />
-          <Route path="/cotizaciones"   element={<CotizacionesView />} />
-          <Route path="/inventario"     element={<InventarioView />} />
-          <Route path="/transportistas" element={<TransportistasView />} />
+        {/* Rutas protegidas para todos los roles */}
+        <Route element={<RutaProtegida />}>
+          <Route element={<AppLayout />}>
+            <Route path="/"               element={<DashboardView />} />
+            <Route path="/clientes"       element={<ClientesView />} />
+            <Route path="/cotizaciones"   element={<CotizacionesView />} />
+            <Route path="/inventario"     element={<InventarioView />} />
+            <Route path="/transportistas" element={<TransportistasView />} />
 
-          {/* Rutas exclusivas de supervisor */}
-          <Route element={<RutaSupervisor />}>
-            <Route path="/usuarios"      element={<UsuariosView />} />
-            <Route path="/auditoria"     element={<AuditoriaView />} />
-            <Route path="/configuracion" element={<ConfiguracionView />} />
+            {/* Rutas exclusivas de supervisor */}
+            <Route element={<RutaSupervisor />}>
+              <Route path="/usuarios"      element={<UsuariosView />} />
+              <Route path="/auditoria"     element={<AuditoriaView />} />
+              <Route path="/configuracion" element={<ConfiguracionView />} />
+            </Route>
           </Route>
         </Route>
-      </Route>
 
-      {/* Cualquier ruta desconocida → dashboard (o login si no hay sesión) */}
-      <Route path="*" element={<Navigate to="/" replace />} />
+        {/* Cualquier ruta desconocida → dashboard (o login si no hay sesión) */}
+        <Route path="*" element={<Navigate to="/" replace />} />
 
-    </Routes>
+      </Routes>
+    </Suspense>
   )
 }
 
