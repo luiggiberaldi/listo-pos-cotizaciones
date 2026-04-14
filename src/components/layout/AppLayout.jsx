@@ -118,7 +118,7 @@ export default function AppLayout() {
 
       {/* ── Sidebar / Drawer ─────────────────────────────────────────────── */}
       <aside className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 flex flex-col
+        fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 flex flex-col shrink-0
         transition-transform duration-300 ease-out
         ${menuOpen ? 'translate-x-0' : '-translate-x-full'}
         md:translate-x-0 md:static md:z-auto
@@ -271,8 +271,10 @@ export default function AppLayout() {
       </aside>
 
       {/* ── Área de contenido ───────────────────────────────────────────── */}
-      <main className="flex-1 overflow-y-auto pt-14 md:pt-0">
-        <Outlet />
+      <main className="flex-1 overflow-y-auto pt-14 md:pt-0 min-w-0">
+        <div className="mx-auto max-w-screen-2xl">
+          <Outlet />
+        </div>
       </main>
 
     </div>

@@ -317,7 +317,7 @@ function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar })
 
 function SkeletonUsuarios() {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
       {Array.from({ length: 4 }).map((_, i) => (
         <div key={i} className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
           <div className="flex gap-3">
@@ -374,7 +374,7 @@ export default function UsuariosView() {
   const inactivos = usuarios.filter(u => !u.activo)
 
   return (
-    <div className="p-4 md:p-6 space-y-4 md:space-y-6 max-w-screen-xl">
+    <div className="p-4 md:p-6 lg:p-8 space-y-4 md:space-y-6">
 
       {/* Encabezado */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -421,7 +421,7 @@ export default function UsuariosView() {
           {activos.length > 0 && (
             <div className="space-y-3">
               <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest">Activos</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
                 {activos.map(u => (
                   <UsuarioCard key={u.id} usuario={u}
                     propio={u.id === perfil?.id}
@@ -437,7 +437,7 @@ export default function UsuariosView() {
           {inactivos.length > 0 && (
             <div className="space-y-3">
               <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">Inactivos</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
                 {inactivos.map(u => (
                   <UsuarioCard key={u.id} usuario={u}
                     propio={u.id === perfil?.id}

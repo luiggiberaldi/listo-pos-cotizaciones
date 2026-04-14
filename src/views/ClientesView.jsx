@@ -21,7 +21,7 @@ const ITEMS_POR_PAGINA = 12
 // ─── Skeleton de carga ────────────────────────────────────────────────────────
 function SkeletonClientes() {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
       {Array.from({ length: 8 }).map((_, i) => (
         <div key={i} className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
           <Skeleton className="h-5 w-3/4 rounded-lg" />
@@ -111,7 +111,7 @@ export default function ClientesView() {
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="p-4 md:p-6 space-y-4 md:space-y-6 max-w-screen-xl">
+    <div className="p-4 md:p-6 lg:p-8 space-y-4 md:space-y-6">
 
       {/* ── Encabezado ─────────────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -220,7 +220,7 @@ export default function ClientesView() {
         />
       ) : (
         vistaMode === 'grid' ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
             {clientesPaginados.map(cliente => (
               <ClienteCard
                 key={cliente.id}

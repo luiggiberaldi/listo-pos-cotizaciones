@@ -278,7 +278,7 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
         <>
           {vistaGrid ? (
             /* ── Vista cuadrícula ── */
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2">
               {paginados.map(p => {
                 const yaAgregado = idsAgregados.has(p.id)
                 const sinStock = p.stock_actual != null && p.stock_actual <= 0
@@ -920,7 +920,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
 
       {/* ── Header ────────────────────────────────────────────────────────── */}
       <div className="bg-white border-b border-slate-200 px-4 md:px-6 py-3 md:py-4 sticky top-0 z-10">
-        <div className="flex items-center justify-between gap-2 max-w-5xl mx-auto">
+        <div className="flex items-center justify-between gap-2 max-w-6xl mx-auto">
           <div className="flex items-center gap-3 min-w-0">
             {paso < 4 && (
               <button onClick={paso === 1 ? onVolver : anterior}
@@ -943,7 +943,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
       </div>
 
       {/* ── Contenido por paso ─────────────────────────────────────────── */}
-      <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-4 md:space-y-6">
+      <div className="p-4 md:p-6 lg:p-8 max-w-6xl mx-auto space-y-4 md:space-y-6">
 
         {/* Error general */}
         {errorGeneral && (
@@ -1139,7 +1139,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
               <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wide flex items-center gap-2">
                 <Truck size={14} className="text-slate-400" /> Envío y validez
               </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-slate-700">Transportista</label>
                   <CustomSelect
