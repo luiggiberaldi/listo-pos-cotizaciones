@@ -140,8 +140,8 @@ export default function AppLayout() {
             className="h-[55px] md:h-[55px] w-auto object-contain" />
         </div>
 
-        {/* Navegación */}
-        <nav className="p-4 space-y-1 overflow-y-auto">
+        {/* Navegación — ocupa el espacio restante, scroll si hace falta */}
+        <nav className="flex-1 min-h-0 overflow-y-auto p-4 space-y-1">
 
           {/* Rutas accesibles para todos */}
           {NAV_TODOS.map(({ path, label, icono: Icono }) => (
@@ -162,9 +162,6 @@ export default function AppLayout() {
             </>
           )}
         </nav>
-
-        {/* Spacer flexible para empujar bottom al final sin exceso */}
-        <div className="flex-1 min-h-4" />
 
         {/* Tasa de cambio */}
         <div className="border-t border-slate-100 px-4 py-3">
