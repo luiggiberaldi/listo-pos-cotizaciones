@@ -100,70 +100,66 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
     <div className="bg-white rounded-2xl border border-slate-200 hover:border-primary-light hover:shadow-md transition-all p-4 flex flex-col gap-3">
 
       {/* Cabecera: número + estado */}
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <div className="flex items-center gap-1.5">
-            <FileText size={14} className="text-primary" />
-            <span className="font-bold text-slate-800 text-sm font-mono">{numDisplay}</span>
-          </div>
-          <div className="mt-1">
-            <EstadoBadge estado={cotizacion.estado} />
-          </div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <FileText size={14} className="text-primary shrink-0" />
+          <span className="font-bold text-slate-800 text-sm font-mono truncate">{numDisplay}</span>
         </div>
+        <EstadoBadge estado={cotizacion.estado} />
+      </div>
 
-        {/* Acciones */}
-        <div className="flex items-center gap-1 shrink-0">
-          {esBorrador && (
-            <button onClick={() => onEditar(cotizacion)} title="Editar borrador"
-              className="p-2 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-light transition-colors">
-              <Pencil size={16} />
+      {/* Barra de acciones */}
+      <div className="flex items-center gap-1 flex-wrap">
+        {esBorrador && (
+          <button onClick={() => onEditar(cotizacion)} title="Editar borrador"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-light transition-colors">
+            <Pencil size={15} />
+          </button>
+        )}
+        {/* PDF — disponible en cotizaciones enviadas/aceptadas/rechazadas */}
+        {cotizacion.estado !== 'borrador' && cotizacion.estado !== 'anulada' && (
+          <button onClick={descargarPDF} disabled={pdfLoading} title="Descargar PDF"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-blue-500 hover:bg-blue-50 transition-colors disabled:opacity-40">
+            {pdfLoading
+              ? <div className="w-3.5 h-3.5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+              : <FileDown size={15} />}
+          </button>
+        )}
+        {/* WhatsApp — disponible en cotizaciones enviadas/aceptadas */}
+        {(cotizacion.estado === 'enviada' || cotizacion.estado === 'aceptada') && (
+          <button onClick={handleWhatsApp} disabled={waLoading} title="Compartir por WhatsApp"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-40">
+            {waLoading
+              ? <div className="w-3.5 h-3.5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+              : <MessageCircle size={15} />}
+          </button>
+        )}
+        {/* Supervisor puede marcar como aceptada/rechazada */}
+        {esSupervisor && esEnviada && (
+          <>
+            <button onClick={() => onCambiarEstado(cotizacion.id, 'aceptada')} title="Marcar aceptada"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 transition-colors">
+              <CheckCircle size={15} />
             </button>
-          )}
-          {/* PDF — disponible en cotizaciones enviadas/aceptadas/rechazadas */}
-          {cotizacion.estado !== 'borrador' && cotizacion.estado !== 'anulada' && (
-            <button onClick={descargarPDF} disabled={pdfLoading} title="Descargar PDF"
-              className="p-2 rounded-lg text-slate-400 hover:text-blue-500 hover:bg-blue-50 transition-colors disabled:opacity-40">
-              {pdfLoading
-                ? <div className="w-3.5 h-3.5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-                : <FileDown size={16} />}
+            <button onClick={() => onCambiarEstado(cotizacion.id, 'rechazada')} title="Marcar rechazada"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+              <XCircle size={15} />
             </button>
-          )}
-          {/* WhatsApp — disponible en cotizaciones enviadas/aceptadas */}
-          {(cotizacion.estado === 'enviada' || cotizacion.estado === 'aceptada') && (
-            <button onClick={handleWhatsApp} disabled={waLoading} title="Compartir por WhatsApp"
-              className="p-2 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-40">
-              {waLoading
-                ? <div className="w-3.5 h-3.5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
-                : <MessageCircle size={16} />}
-            </button>
-          )}
-          {/* Supervisor puede marcar como aceptada/rechazada */}
-          {esSupervisor && esEnviada && (
-            <>
-              <button onClick={() => onCambiarEstado(cotizacion.id, 'aceptada')} title="Marcar aceptada"
-                className="p-2 rounded-lg text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 transition-colors">
-                <CheckCircle size={16} />
-              </button>
-              <button onClick={() => onCambiarEstado(cotizacion.id, 'rechazada')} title="Marcar rechazada"
-                className="p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
-                <XCircle size={16} />
-              </button>
-            </>
-          )}
-          {/* Supervisor puede despachar cotizaciones enviadas o aceptadas */}
-          {esSupervisor && (cotizacion.estado === 'aceptada' || cotizacion.estado === 'enviada') && onDespachar && (
-            <button onClick={() => onDespachar(cotizacion)} title="Crear nota de despacho"
-              className="p-2 rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 transition-colors">
-              <Truck size={16} />
-            </button>
-          )}
-          {(esBorrador || (esSupervisor && cotizacion.estado !== 'anulada')) && (
-            <button onClick={() => onAnular(cotizacion)} title="Anular"
-              className="p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
-              <Ban size={16} />
-            </button>
-          )}
-        </div>
+          </>
+        )}
+        {/* Supervisor puede despachar cotizaciones enviadas o aceptadas */}
+        {esSupervisor && (cotizacion.estado === 'aceptada' || cotizacion.estado === 'enviada') && onDespachar && (
+          <button onClick={() => onDespachar(cotizacion)} title="Crear nota de despacho"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 transition-colors">
+            <Truck size={15} />
+          </button>
+        )}
+        {(esBorrador || (esSupervisor && cotizacion.estado !== 'anulada')) && (
+          <button onClick={() => onAnular(cotizacion)} title="Anular"
+            className="ml-auto p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+            <Ban size={15} />
+          </button>
+        )}
       </div>
 
       {/* Cliente */}
