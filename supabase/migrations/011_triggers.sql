@@ -1,0 +1,3 @@
+-- Migration 011: triggers
+-- Ver ARQUITECTURA.md sección 3 para el SQL completo
+-- Estado: PENDIENTE DE EJECUCIÓN EN SUPABASE

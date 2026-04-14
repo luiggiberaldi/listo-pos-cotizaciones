@@ -1,0 +1,3 @@
+-- Migration 013: rls_enable_and_policies
+-- Ver ARQUITECTURA.md sección 3 para el SQL completo
+-- Estado: PENDIENTE DE EJECUCIÓN EN SUPABASE

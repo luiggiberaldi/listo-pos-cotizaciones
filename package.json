@@ -1,29 +1,24 @@
 {
-  "name": "tasas-al-dia-base",
+  "name": "listo-pos-cotizaciones",
   "private": true,
-  "version": "1.0.0",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "preview": "vite preview",
     "lint": "eslint .",
-    "prettier": "prettier --write .",
-    "linc": "eslint .",
-    "preview": "vite preview"
+    "format": "prettier --write ."
   },
   "dependencies": {
-    "@capacitor/android": "^8.2.0",
-    "@capacitor/cli": "^8.2.0",
-    "@capacitor/core": "^8.2.0",
     "@supabase/supabase-js": "^2.97.0",
-    "groq-sdk": "^0.37.0",
+    "@tanstack/react-query": "^5.80.2",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.0",
-    "localforage": "^1.10.0",
     "lucide-react": "^0.575.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "vite-plugin-pwa": "^1.2.0",
+    "react-router-dom": "^7.14.1",
     "zustand": "^5.0.11"
   },
   "devDependencies": {

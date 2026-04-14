@@ -1,0 +1,3 @@
+-- Migration 003: tabla_productos
+-- Ver ARQUITECTURA.md sección 3 para el SQL completo
+-- Estado: PENDIENTE DE EJECUCIÓN EN SUPABASE

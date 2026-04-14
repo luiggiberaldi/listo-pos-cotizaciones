@@ -1,0 +1,3 @@
+-- Migration 014: funciones_rpc
+-- Ver ARQUITECTURA.md sección 3 para el SQL completo
+-- Estado: PENDIENTE DE EJECUCIÓN EN SUPABASE

@@ -1,93 +1,31 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
 # Dependencias y Build
 node_modules
 dist
 dist-ssr
-*.local
 
-# Editor directories and files
+# Entorno (NUNCA subir al repo)
+.env
+.env.local
+.env*.local
+
+# Editor
 .vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+*.suo *.ntvs* *.njsproj *.sln *.sw?
 
-# SEGURIDAD: Bloquear archivos de entorno con keys
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-.env*.local
+# Logs
+*.log
+npm-debug.log* yarn-debug.log* pnpm-debug.log*
 
-# API serverless (deploy via Vercel, usar vars de entorno para keys)
-!api/
-api/*.js
-!api/share.js
-!api/checkout.js
-
-# Backups y datos locales
-backup_*.json
-*.zip
-
-# Archivos de office / inventarios
-*.xls
-*.xlsx
-
-# Documentos PDF y texto de trabajo
-*.pdf
-*.txt
-
-# Scripts de desarrollo / scraping / utilidades (no son parte del producto)
-*.cjs
-*.py
-
-# Videos y capturas
-*.mp4
-*.mov
-frames/
-
-# Iconos sueltos y logos (van en /public si se necesitan)
-*.ico
-logodark*.png
-"logo .png"
-
-# HTML sueltos (solo se usa index.html en la raíz)
-*.html
-!index.html
-
-# Documentación interna / privada
-"Manual Completo de Usuario*"
-Manual_Usuario_*.md
-PERFORMANCE_AUDIT.md
-EXPLICACION_ERRORES.md
-TASASALDIA_MANUAL_TEXTO.md
-"licencia tasas al dia.html"
-CONTEXT.md
-capturas_manual/
-directivas/
-future_plans/
-android/
-server/
-scripts/
-
-# Herramientas de agente y configs de deploy privadas
-.agent/
+# Vercel
 .vercel
-capacitor.config.json
 
-# Android signing keys
-*.jks
-*.keystore
+# Archivos de datos y backups locales
+*.zip *.xls *.xlsx
+backup_*.json
+
+# Capturas y videos de trabajo
+*.mp4 *.mov
+frames/

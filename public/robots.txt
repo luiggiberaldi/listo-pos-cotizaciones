@@ -1,5 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /api/
-
-Sitemap: https://preciosaldia-bodega.vercel.app/sitemap.xml

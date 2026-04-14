@@ -1,0 +1,3 @@
+-- Migration 007: tabla_cotizacion_items
+-- Ver ARQUITECTURA.md sección 3 para el SQL completo
+-- Estado: PENDIENTE DE EJECUCIÓN EN SUPABASE

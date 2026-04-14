@@ -4,172 +4,27 @@
 
 @layer base {
   :root {
-    /* ── LISTO POS LITE — DESIGN TOKENS ── */
-    /* Paleta extraída del gradiente del logo (sky-blue → teal) */
-
-    /* Primary (sky-500 → sky-600) */
-    --color-primary-50:  240 249 255;
-    --color-primary-100: 224 242 254;
-    --color-primary-200: 186 230 253;
-    --color-primary-300: 125 211 252;
-    --color-primary-400:  56 189 248;
-    --color-primary-500:  14 165 233;  /* #0EA5E9 — color base */
-    --color-primary-600:   2 132 199;
-    --color-primary-700:   3 105 161;
-    --color-primary-800:   7  89 133;
-    --color-primary-900:  12  74 110;
-    --color-primary-950:   8  47  73;
-
-    /* Surface (Slate — neutros de fondo) */
-    --color-surface-50:  248 250 252;
-    --color-surface-100: 241 245 249;
-    --color-surface-200: 226 232 240;
-    --color-surface-300: 203 213 225;
-    --color-surface-400: 148 163 184;
-    --color-surface-500: 100 116 139;
-    --color-surface-600:  71  85 105;
-    --color-surface-700:  51  65  85;
-    --color-surface-800:  30  41  59;
-    --color-surface-900:  15  23  42;
-    --color-surface-950:   2   6  23;
-
-    /* Semantic: Success */
-    --color-success-50:  236 253 245;
-    --color-success-100: 209 250 229;
-    --color-success-400:  52 211 153;
-    --color-success-500:  16 185 129;
-    --color-success-600:   5 150 105;
-    --color-success-900:   6  78  59;
-
-    /* Semantic: Danger */
-    --color-danger-50:  255 241 242;
-    --color-danger-100: 255 228 230;
-    --color-danger-400: 251 113 133;
-    --color-danger-500: 244  63  94;
-    --color-danger-600: 225  29  72;
-    --color-danger-900: 136  19  55;
-
-    /* Semantic: Warning */
-    --color-warning-50:  255 251 235;
-    --color-warning-100: 254 243 199;
-    --color-warning-400: 251 191  36;
-    --color-warning-500: 245 158  11;
-    --color-warning-600: 217 119   6;
-    --color-warning-900: 120  53  15;
-
-    /* App Backgrounds */
-    --color-bg-light: var(--color-surface-50);
-    --color-bg-dark:  var(--color-surface-900);
-
-    /* Gradiente del logo (sky → teal) — disponible como var CSS */
-    --gradient-brand: linear-gradient(135deg, #7DD3FC 0%, #5EEAD4 100%);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    color: #334155;
+    background-color: #F8FAFC;
   }
-}
 
-/* ── BASE TIPOGRAFÍA Y FONDO ── */
-html,
-body {
-  background-color: #F8FAFC;
-  color: #334155;
-  font-family: 'Inter', system-ui, sans-serif;
-  -webkit-tap-highlight-color: transparent;
-  scroll-behavior: smooth;
-}
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
 
-/* ── SCROLLBAR PERSONALIZADO ── */
-::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
-}
+  /* Accesibilidad: botones con min-height para personas mayores */
+  button {
+    min-height: 44px;
+    cursor: pointer;
+  }
 
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #CBD5E1;
-  border-radius: 10px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #94A3B8;
-}
-
-/* ── SKELETON LOADING ── */
-@keyframes shimmer {
-  0%   { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
-
-.skeleton {
-  background: linear-gradient(90deg, #E2E8F0 25%, #F1F5F9 50%, #E2E8F0 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
-  border-radius: 0.75rem;
-}
-
-/* ── SCROLL MASKS ── */
-.cart-scroll-shadow {
-  mask-image: linear-gradient(to bottom, black calc(100% - 24px), transparent);
-  -webkit-mask-image: linear-gradient(to bottom, black calc(100% - 24px), transparent);
-}
-
-.horizontal-scroll-mask {
-  mask-image: linear-gradient(to right, black calc(100% - 32px), transparent);
-  -webkit-mask-image: linear-gradient(to right, black calc(100% - 32px), transparent);
-}
-
-/* ── ANIMACIONES ── */
-@keyframes spin-slow {
-  to { transform: rotate(360deg); }
-}
-
-.animate-spin-slow {
-  animation: spin-slow 1s linear infinite;
-}
-
-@keyframes shake {
-  10%, 90% { transform: translate3d(-1px, 0, 0); }
-  20%, 80% { transform: translate3d(2px, 0, 0); }
-  30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
-  40%, 60% { transform: translate3d(4px, 0, 0); }
-}
-
-.animate-shake {
-  animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
-}
-
-@keyframes fade-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-
-.animate-fade-in {
-  animation: fade-in 0.3s ease-out forwards;
-}
-
-/* ── SCROLLBAR HIDE ── */
-.scrollbar-hide::-webkit-scrollbar { display: none; }
-.scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-/* ── INPUT PIN (PIN numérico oculto) ── */
-.input-pin {
-  -webkit-text-security: disc;
-  text-security: disc;
-  font-family: monospace;
-}
-
-/* ── GRADIENTE DE MARCA (logo) ── */
-.bg-brand-gradient {
-  background: var(--gradient-brand);
-}
-
-.text-brand-gradient {
-  background: var(--gradient-brand);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  input, select, textarea {
+    font-family: inherit;
+    font-size: 1rem;
+  }
 }
