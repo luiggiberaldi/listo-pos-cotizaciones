@@ -54,7 +54,7 @@ CREATE POLICY usuarios_supervisor_update ON public.usuarios
   USING (public.get_rol_actual() = 'supervisor')
   WITH CHECK (
     -- Un supervisor no puede quitarse el rol a sí mismo
-    NOT (id = auth.uid() AND NEW.rol <> 'supervisor')
+    NOT (id = auth.uid() AND rol <> 'supervisor')
   );
 
 -- Nadie elimina usuarios (se desactivan con activo = false)
