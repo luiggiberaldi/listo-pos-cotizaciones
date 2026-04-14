@@ -14,6 +14,27 @@ export default {
 
     // ── Security headers para assets estáticos ─────────────────────────────
     const response = await env.ASSETS.fetch(request);
+
+    // SPA fallback: si el asset no existe y no es un archivo estático,
+    // servir index.html para que React Router maneje la ruta
+    if (response.status === 404) {
+      const ext = url.pathname.split('.').pop()
+      const isStaticFile = ['js', 'css', 'png', 'jpg', 'jpeg', 'svg', 'ico', 'woff', 'woff2', 'ttf', 'webp', 'gif', 'map'].includes(ext)
+      if (!isStaticFile) {
+        const fallback = await env.ASSETS.fetch(new Request(new URL('/', url.origin), request))
+        const fbHeaders = new Headers(fallback.headers)
+        fbHeaders.set('X-Content-Type-Options', 'nosniff')
+        fbHeaders.set('X-Frame-Options', 'DENY')
+        fbHeaders.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+        fbHeaders.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+        return new Response(fallback.body, {
+          status: 200,
+          statusText: 'OK',
+          headers: fbHeaders,
+        })
+      }
+    }
+
     const newHeaders = new Headers(response.headers);
     newHeaders.set('X-Content-Type-Options', 'nosniff');
     newHeaders.set('X-Frame-Options', 'DENY');

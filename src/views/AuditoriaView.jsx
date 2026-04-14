@@ -1,15 +1,18 @@
 // src/views/AuditoriaView.jsx
 // Historial de actividad del sistema — solo supervisor
-// Vista estilo timeline para demo
+// Vista estilo timeline con detalle expandible
 import { useState } from 'react'
 import {
   ClipboardList, RefreshCw, ChevronLeft, ChevronRight, Filter,
   FileText, Users, Package, UserCog, ArrowRightLeft, Settings,
   Send, Ban, CheckCircle, XCircle, PenLine, PlusCircle, Trash2,
-  Eye, GitBranch, Clock,
+  Eye, GitBranch, Clock, ChevronDown, ChevronUp, DollarSign,
+  User, Calendar, Hash, Info, Loader2,
 } from 'lucide-react'
 import { useAuditoria }  from '../hooks/useAuditoria'
 import { useUsuarios }   from '../hooks/useUsuarios'
+import supabase from '../services/supabase/client'
+import { fmtUsdSimple as fmtUsd, fmtFecha } from '../utils/format'
 import CustomSelect from '../components/ui/CustomSelect'
 import Skeleton from '../components/ui/Skeleton'
 
@@ -134,8 +137,259 @@ function SkeletonAuditoria() {
   )
 }
 
-// ─── Tarjeta de actividad (timeline item) ───────────────────────────────────
+// ─── Detalle de entidad (se muestra al expandir) ────────────────────────────
+function DetalleEntidad({ tipo, id }) {
+  const [data, setData]       = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError]     = useState(null)
+
+  useState(() => {
+    if (!tipo || !id) { setLoading(false); return }
+
+    async function cargar() {
+      try {
+        let result = null
+
+        if (tipo === 'cotizacion') {
+          const { data: cot, error: e } = await supabase
+            .from('cotizaciones')
+            .select('id, numero, version, estado, total_usd, creado_en, valida_hasta, cliente_id, notas_cliente')
+            .eq('id', id)
+            .single()
+          if (e) throw e
+
+          // Cargar cliente
+          let clienteNombre = null
+          if (cot.cliente_id) {
+            const { data: cli } = await supabase.from('clientes').select('nombre').eq('id', cot.cliente_id).single()
+            clienteNombre = cli?.nombre
+          }
+          result = { ...cot, _tipo: 'cotizacion', _clienteNombre: clienteNombre }
+
+        } else if (tipo === 'cliente') {
+          const { data: cli, error: e } = await supabase
+            .from('clientes')
+            .select('id, nombre, rif_cedula, telefono, tipo_cliente, activo')
+            .eq('id', id)
+            .single()
+          if (e) throw e
+          result = { ...cli, _tipo: 'cliente' }
+
+        } else if (tipo === 'producto') {
+          const { data: prod, error: e } = await supabase
+            .from('productos')
+            .select('id, nombre, codigo, precio_usd, categoria, activo')
+            .eq('id', id)
+            .single()
+          if (e) throw e
+          result = { ...prod, _tipo: 'producto' }
+
+        } else if (tipo === 'usuario') {
+          const { data: usr, error: e } = await supabase
+            .from('usuarios')
+            .select('id, nombre, rol, activo')
+            .eq('id', id)
+            .single()
+          if (e) throw e
+          result = { ...usr, _tipo: 'usuario' }
+        }
+
+        setData(result)
+      } catch (err) {
+        setError('No se pudo cargar el detalle')
+      } finally {
+        setLoading(false)
+      }
+    }
+    cargar()
+  })
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-slate-400 py-2">
+        <Loader2 size={12} className="animate-spin" /> Cargando detalle...
+      </div>
+    )
+  }
+
+  if (error || !data) {
+    return (
+      <div className="text-xs text-slate-400 py-2 flex items-center gap-1.5">
+        <Info size={12} />
+        {error || 'Sin datos adicionales para esta entidad'}
+      </div>
+    )
+  }
+
+  const ESTADO_COLORS = {
+    borrador:  'bg-slate-100 text-slate-600',
+    enviada:   'bg-blue-50 text-blue-700',
+    aceptada:  'bg-emerald-50 text-emerald-700',
+    rechazada: 'bg-red-50 text-red-700',
+    vencida:   'bg-orange-50 text-orange-700',
+    anulada:   'bg-slate-100 text-slate-400',
+  }
+
+  const ESTADO_LABELS = {
+    borrador: 'Borrador', enviada: 'Enviada', aceptada: 'Aceptada',
+    rechazada: 'Rechazada', vencida: 'Vencida', anulada: 'Anulada',
+  }
+
+  // ── Render por tipo ──
+  if (data._tipo === 'cotizacion') {
+    const numDisplay = data.version > 1
+      ? `COT-${String(data.numero).padStart(5, '0')} Rev.${data.version}`
+      : `COT-${String(data.numero).padStart(5, '0')}`
+
+    return (
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 text-xs">
+        <div className="flex items-center gap-1.5">
+          <Hash size={11} className="text-slate-400" />
+          <span className="text-slate-500">Número:</span>
+          <span className="font-bold text-slate-700 font-mono">{numDisplay}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Info size={11} className="text-slate-400" />
+          <span className="text-slate-500">Estado:</span>
+          <span className={`font-bold px-1.5 py-0.5 rounded-full text-[10px] ${ESTADO_COLORS[data.estado] ?? 'bg-slate-100 text-slate-500'}`}>
+            {ESTADO_LABELS[data.estado] ?? data.estado}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <DollarSign size={11} className="text-slate-400" />
+          <span className="text-slate-500">Total:</span>
+          <span className="font-bold text-slate-700">{fmtUsd(data.total_usd)}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <User size={11} className="text-slate-400" />
+          <span className="text-slate-500">Cliente:</span>
+          <span className="font-medium text-slate-700 truncate">{data._clienteNombre ?? '—'}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Calendar size={11} className="text-slate-400" />
+          <span className="text-slate-500">Creada:</span>
+          <span className="text-slate-600">{fmtFecha(data.creado_en)}</span>
+        </div>
+        {data.valida_hasta && (
+          <div className="flex items-center gap-1.5">
+            <Clock size={11} className="text-slate-400" />
+            <span className="text-slate-500">Válida hasta:</span>
+            <span className="text-slate-600">{fmtFecha(data.valida_hasta)}</span>
+          </div>
+        )}
+        {data.notas_cliente && (
+          <div className="col-span-full flex items-start gap-1.5">
+            <FileText size={11} className="text-slate-400 mt-0.5" />
+            <span className="text-slate-500">Nota:</span>
+            <span className="text-slate-600 italic">{data.notas_cliente}</span>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  if (data._tipo === 'cliente') {
+    return (
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 text-xs">
+        <div className="flex items-center gap-1.5">
+          <User size={11} className="text-slate-400" />
+          <span className="text-slate-500">Nombre:</span>
+          <span className="font-bold text-slate-700">{data.nombre}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Hash size={11} className="text-slate-400" />
+          <span className="text-slate-500">RIF/Cédula:</span>
+          <span className="font-mono text-slate-700">{data.rif_cedula ?? '—'}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Info size={11} className="text-slate-400" />
+          <span className="text-slate-500">Tipo:</span>
+          <span className="font-medium text-slate-700 capitalize">{data.tipo_cliente ?? '—'}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Info size={11} className="text-slate-400" />
+          <span className="text-slate-500">Estado:</span>
+          <span className={`font-bold ${data.activo ? 'text-emerald-600' : 'text-red-500'}`}>
+            {data.activo ? 'Activo' : 'Inactivo'}
+          </span>
+        </div>
+      </div>
+    )
+  }
+
+  if (data._tipo === 'producto') {
+    return (
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 text-xs">
+        <div className="flex items-center gap-1.5">
+          <Package size={11} className="text-slate-400" />
+          <span className="text-slate-500">Producto:</span>
+          <span className="font-bold text-slate-700">{data.nombre}</span>
+        </div>
+        {data.codigo && (
+          <div className="flex items-center gap-1.5">
+            <Hash size={11} className="text-slate-400" />
+            <span className="text-slate-500">Código:</span>
+            <span className="font-mono text-slate-700">{data.codigo}</span>
+          </div>
+        )}
+        <div className="flex items-center gap-1.5">
+          <DollarSign size={11} className="text-slate-400" />
+          <span className="text-slate-500">Precio:</span>
+          <span className="font-bold text-slate-700">{fmtUsd(data.precio_usd)}</span>
+        </div>
+        {data.categoria && (
+          <div className="flex items-center gap-1.5">
+            <Info size={11} className="text-slate-400" />
+            <span className="text-slate-500">Categoría:</span>
+            <span className="text-slate-700">{data.categoria}</span>
+          </div>
+        )}
+        <div className="flex items-center gap-1.5">
+          <Info size={11} className="text-slate-400" />
+          <span className="text-slate-500">Estado:</span>
+          <span className={`font-bold ${data.activo ? 'text-emerald-600' : 'text-red-500'}`}>
+            {data.activo ? 'Activo' : 'Inactivo'}
+          </span>
+        </div>
+      </div>
+    )
+  }
+
+  if (data._tipo === 'usuario') {
+    return (
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+        <div className="flex items-center gap-1.5">
+          <User size={11} className="text-slate-400" />
+          <span className="text-slate-500">Nombre:</span>
+          <span className="font-bold text-slate-700">{data.nombre}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Info size={11} className="text-slate-400" />
+          <span className="text-slate-500">Rol:</span>
+          <span className={`font-bold px-1.5 py-0.5 rounded-full text-[10px] ${
+            data.rol === 'supervisor' ? 'bg-sky-100 text-sky-600' : 'bg-emerald-100 text-emerald-600'
+          }`}>
+            {data.rol === 'supervisor' ? 'Supervisor' : 'Vendedor'}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Info size={11} className="text-slate-400" />
+          <span className="text-slate-500">Estado:</span>
+          <span className={`font-bold ${data.activo ? 'text-emerald-600' : 'text-red-500'}`}>
+            {data.activo ? 'Activo' : 'Inactivo'}
+          </span>
+        </div>
+      </div>
+    )
+  }
+
+  return null
+}
+
+// ─── Tarjeta de actividad (timeline item) — expandible ──────────────────────
 function ActividadCard({ registro }) {
+  const [expandido, setExpandido] = useState(false)
+
   const catKey = getCatKey(registro.categoria)
   const cat = CATEGORIA_CONFIG[catKey] ?? CATEGORIA_CONFIG.sistema
   const CatIcon = cat.icon
@@ -143,58 +397,115 @@ function ActividadCard({ registro }) {
   const accionLabel = ACCION_LABEL[registro.accion] ?? registro.accion?.replace(/_/g, ' ').toLowerCase()
   const usuario = registro.usuario?.nombre ?? registro.usuario_nombre ?? 'Sistema'
   const rol = registro.usuario?.rol ?? registro.usuario_rol
+  const tieneEntidad = registro.entidad_tipo && registro.entidad_id
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 hover:border-slate-300 hover:shadow-sm transition-all p-4 flex gap-4 items-start group">
+    <div className={`bg-white rounded-2xl border transition-all ${expandido ? 'border-primary-focus shadow-md' : 'border-slate-200 hover:border-slate-300 hover:shadow-sm'}`}>
 
-      {/* Icono de categoría */}
-      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${cat.bg} ${cat.text}`}>
-        <CatIcon size={18} />
-      </div>
+      {/* Contenido principal (siempre visible) */}
+      <button
+        onClick={() => setExpandido(!expandido)}
+        className="w-full p-4 flex gap-4 items-start text-left"
+      >
+        {/* Icono de categoría */}
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${cat.bg} ${cat.text}`}>
+          <CatIcon size={18} />
+        </div>
 
-      {/* Contenido */}
-      <div className="flex-1 min-w-0">
-        {/* Acción principal */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm font-bold text-slate-800">{usuario}</span>
-          {rol && (
-            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-              rol === 'supervisor' ? 'bg-sky-100 text-sky-600' : 'bg-emerald-100 text-emerald-600'
-            }`}>
-              {rol === 'supervisor' ? 'Supervisor' : 'Vendedor'}
-            </span>
+        {/* Contenido */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-bold text-slate-800">{usuario}</span>
+            {rol && (
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                rol === 'supervisor' ? 'bg-sky-100 text-sky-600' : 'bg-emerald-100 text-emerald-600'
+              }`}>
+                {rol === 'supervisor' ? 'Supervisor' : 'Vendedor'}
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5 mt-1">
+            <AccIcon size={12} className="text-slate-400 shrink-0" />
+            <span className="text-sm text-slate-600">{accionLabel}</span>
+          </div>
+
+          {registro.descripcion && (
+            <p className="text-xs text-slate-400 mt-1.5 line-clamp-1">{registro.descripcion}</p>
           )}
-        </div>
 
-        {/* Descripción de la acción */}
-        <div className="flex items-center gap-1.5 mt-1">
-          <AccIcon size={12} className="text-slate-400 shrink-0" />
-          <span className="text-sm text-slate-600">{accionLabel}</span>
-        </div>
-
-        {/* Descripción adicional si existe */}
-        {registro.descripcion && (
-          <p className="text-xs text-slate-400 mt-1.5 line-clamp-2">{registro.descripcion}</p>
-        )}
-
-        {/* Badges: categoría + entidad */}
-        <div className="flex items-center gap-2 mt-2 flex-wrap">
-          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${cat.bg} ${cat.text} ${cat.border}`}>
-            {cat.label}
-          </span>
-          {registro.entidad_tipo && registro.entidad_id && (
-            <span className="text-[10px] text-slate-400 font-mono">
-              #{registro.entidad_id.slice(0, 8)}
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
+            <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${cat.bg} ${cat.text} ${cat.border}`}>
+              {cat.label}
             </span>
-          )}
+            {tieneEntidad && (
+              <span className="text-[10px] text-slate-400 font-mono">
+                #{registro.entidad_id.slice(0, 8)}
+              </span>
+            )}
+          </div>
         </div>
-      </div>
 
-      {/* Timestamp */}
-      <div className="shrink-0 text-right">
-        <p className="text-xs font-medium text-slate-400">{fmtFechaRelativa(registro.ts)}</p>
-        <p className="text-[10px] text-slate-300 mt-0.5 hidden sm:block">{fmtFechaCompleta(registro.ts)}</p>
-      </div>
+        {/* Timestamp + flecha */}
+        <div className="shrink-0 text-right flex flex-col items-end gap-2">
+          <div>
+            <p className="text-xs font-medium text-slate-400">{fmtFechaRelativa(registro.ts)}</p>
+            <p className="text-[10px] text-slate-300 mt-0.5 hidden sm:block">{fmtFechaCompleta(registro.ts)}</p>
+          </div>
+          <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${expandido ? 'bg-primary-light text-primary' : 'bg-slate-100 text-slate-400'}`}>
+            {expandido ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </div>
+        </div>
+      </button>
+
+      {/* Panel expandible */}
+      {expandido && (
+        <div className="px-4 pb-4 pt-0 border-t border-slate-100 animate-fade-in">
+          <div className="mt-3 bg-slate-50 rounded-xl p-3 space-y-3">
+            {/* Descripción completa */}
+            {registro.descripcion && (
+              <div className="text-xs">
+                <span className="font-bold text-slate-500 uppercase tracking-wide text-[10px]">Descripción</span>
+                <p className="text-slate-600 mt-1">{registro.descripcion}</p>
+              </div>
+            )}
+
+            {/* Metadata */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+              <div>
+                <span className="text-slate-400">Acción</span>
+                <p className="font-mono text-slate-600 text-[11px]">{registro.accion}</p>
+              </div>
+              <div>
+                <span className="text-slate-400">Fecha exacta</span>
+                <p className="text-slate-600">{fmtFechaCompleta(registro.ts)}</p>
+              </div>
+              {registro.entidad_tipo && (
+                <div>
+                  <span className="text-slate-400">Entidad</span>
+                  <p className="text-slate-600 capitalize">{registro.entidad_tipo}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Detalle de la entidad referenciada */}
+            {tieneEntidad && (
+              <div>
+                <span className="font-bold text-slate-500 uppercase tracking-wide text-[10px]">
+                  Detalle de {registro.entidad_tipo}
+                </span>
+                <div className="mt-2">
+                  <DetalleEntidad tipo={registro.entidad_tipo} id={registro.entidad_id} />
+                </div>
+              </div>
+            )}
+
+            {!tieneEntidad && !registro.descripcion && (
+              <p className="text-xs text-slate-400 italic">No hay datos adicionales para esta acción.</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
