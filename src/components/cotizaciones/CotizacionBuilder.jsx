@@ -4,13 +4,14 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   User, Truck, Search, Plus, Trash2, ChevronDown,
-  Save, Send, ArrowLeft, Loader2, AlertCircle, DollarSign,
+  Save, Send, ArrowLeft, Loader2, AlertCircle, DollarSign, RefreshCw,
 } from 'lucide-react'
 import { useClientes }         from '../../hooks/useClientes'
 import { useInventario }       from '../../hooks/useInventario'
 import { useTransportistas }   from '../../hooks/useTransportistas'
 import { useGuardarBorrador, useEnviarCotizacion } from '../../hooks/useCotizaciones'
-import { round2, round4 }      from '../../utils/dinero'
+import { useTasaCambio }       from '../../hooks/useTasaCambio'
+import { round2, round4, mulR } from '../../utils/dinero'
 import { fmtUsdSimple as fmtUsd } from '../../utils/format'
 import { getLocalISODate }     from '../../utils/dateHelpers'
 
@@ -172,47 +173,91 @@ function BuscadorProductos({ onAgregar }) {
   )
 }
 
-// ─── Modal de envío (pide tasa BCV) ──────────────────────────────────────────
-function ModalEnvio({ isOpen, onConfirm, onCancel, cargando }) {
-  const [tasa, setTasa] = useState('')
+// ─── Modal de envío (con tasa auto/manual) ──────────────────────────────────
+function ModalEnvio({ isOpen, onConfirm, onCancel, cargando, tasaHook }) {
+  const { tasaBcv, tasaEfectiva, modoAuto, setModoAuto, tasaManual, setTasaManual, cargando: tasaCargando, refrescar } = tasaHook
   const [error, setError] = useState('')
 
   if (!isOpen) return null
 
   function confirmar() {
-    if (!tasa || isNaN(Number(tasa)) || Number(tasa) <= 0) {
-      setError('Ingresa la tasa BCV vigente')
+    if (!tasaEfectiva || tasaEfectiva <= 0) {
+      setError('La tasa debe ser mayor a 0')
       return
     }
-    onConfirm(Number(tasa))
+    onConfirm(tasaEfectiva)
   }
+
+  const fmtBs = n => new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-sm p-4 sm:p-6 space-y-4">
         <h3 className="font-black text-slate-800 text-lg">Enviar cotización</h3>
         <p className="text-sm text-slate-500">
-          Ingresa la tasa BCV del día para calcular el total en Bs. Este valor quedará registrado en la cotización.
+          Confirma la tasa de cambio para registrar el equivalente en bolívares.
         </p>
-        <div className="space-y-1.5">
-          <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
-            <DollarSign size={14} className="text-slate-400" />
-            Tasa BCV (Bs por USD)
-          </label>
-          <input type="number" min="0.01" step="0.01" value={tasa}
-            onChange={e => { setTasa(e.target.value); setError('') }}
-            placeholder="Ej: 48.50"
-            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-primary-focus"
-            autoFocus
-          />
-          {error && <p className="text-xs text-red-500">{error}</p>}
+
+        {/* Toggle auto/manual */}
+        <div className="bg-slate-50 rounded-xl border border-slate-200 p-3 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-500">Tasa de cambio</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold">
+                {modoAuto
+                  ? <span className="text-emerald-600">Auto BCV</span>
+                  : <span className="text-primary">Manual</span>}
+              </span>
+              <button
+                onClick={() => setModoAuto(!modoAuto)}
+                style={{ minHeight: 0 }}
+                className={`relative w-10 h-6 rounded-full transition-colors ${modoAuto ? 'bg-emerald-500' : 'bg-slate-300'}`}
+              >
+                <span className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform shadow-sm ${modoAuto ? 'translate-x-4' : 'translate-x-0'}`} />
+              </button>
+            </div>
+          </div>
+
+          {modoAuto ? (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-lg font-black text-emerald-600">{fmtBs(tasaBcv.precio)} <span className="text-xs font-medium text-slate-400">Bs/$</span></p>
+                <p className="text-[10px] text-slate-400">
+                  {tasaBcv.fuente || 'Sin datos'}
+                  {tasaBcv.ultimaActualizacion && ` · ${new Date(tasaBcv.ultimaActualizacion).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}`}
+                </p>
+              </div>
+              <button onClick={refrescar} disabled={tasaCargando}
+                className="p-2 rounded-xl hover:bg-white text-slate-400 hover:text-emerald-600 transition-colors">
+                <RefreshCw size={16} className={tasaCargando ? 'animate-spin' : ''} />
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <input type="number" min="0.01" step="0.01"
+                value={tasaManual}
+                onChange={e => { setTasaManual(e.target.value); setError('') }}
+                placeholder="Ej: 48.50"
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-primary focus:outline-none focus:ring-2 focus:ring-primary-focus"
+                autoFocus
+              />
+              {tasaBcv.precio > 0 && (
+                <p className="text-[10px] text-slate-400">
+                  Referencia BCV: {fmtBs(tasaBcv.precio)} Bs/$
+                </p>
+              )}
+            </div>
+          )}
         </div>
+
+        {error && <p className="text-xs text-red-500">{error}</p>}
+
         <div className="flex flex-col-reverse sm:flex-row gap-3">
           <button onClick={onCancel} disabled={cargando}
             className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 transition-colors disabled:opacity-50">
             Cancelar
           </button>
-          <button onClick={confirmar} disabled={cargando}
+          <button onClick={confirmar} disabled={cargando || tasaEfectiva <= 0}
             className="flex-1 py-2.5 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-semibold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
             {cargando ? <><Loader2 size={15} className="animate-spin" />Enviando...</> : 'Confirmar envío'}
           </button>
@@ -255,8 +300,10 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
   const { data: transportistas = [] } = useTransportistas()
   const guardarBorrador  = useGuardarBorrador()
   const enviarCotizacion = useEnviarCotizacion()
+  const tasaHook         = useTasaCambio()
 
   const { subtotal, descuentoUsd, totalUsd } = calcTotales(items, descuentoGlobalPct, costoEnvioUsd)
+  const totalBs = tasaHook.tasaEfectiva > 0 ? mulR(totalUsd, tasaHook.tasaEfectiva) : 0
 
   // ── Agregar producto ─────────────────────────────────────────────────────
   function agregarProducto(p) {
@@ -528,6 +575,20 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
                 <span>TOTAL</span>
                 <span>{fmtUsd(totalUsd)}</span>
               </div>
+              {tasaHook.tasaEfectiva > 0 && totalUsd > 0 && (
+                <div className="flex justify-between text-sm text-slate-500 pt-1">
+                  <span className="flex items-center gap-1">
+                    <DollarSign size={12} className="text-slate-400" />
+                    Equiv. Bs
+                    <span className="text-[10px] text-slate-400">
+                      ({tasaHook.modoAuto ? 'BCV' : 'manual'}: {Number(tasaHook.tasaEfectiva).toFixed(2)})
+                    </span>
+                  </span>
+                  <span className="font-semibold text-slate-700">
+                    Bs {new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(totalBs)}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -583,6 +644,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
         onConfirm={handleEnviar}
         onCancel={() => setModalEnvio(false)}
         cargando={enviarCotizacion.isPending}
+        tasaHook={tasaHook}
       />
     </div>
   )

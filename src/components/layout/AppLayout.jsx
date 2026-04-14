@@ -6,10 +6,11 @@ import {
   Users, FileText, Package, Truck,
   UserCog, ClipboardList,
   LayoutDashboard, Settings, LogOut,
-  Menu, X,
+  Menu, X, DollarSign, RefreshCw,
 } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import LoginAvatar from '../auth/LoginAvatar'
+import { useTasaCambio } from '../../hooks/useTasaCambio'
 
 // ─── Definición de rutas de navegación ────────────────────────────────────────
 const NAV_TODOS = [
@@ -71,6 +72,8 @@ export default function AppLayout() {
   const { perfil, logout } = useAuthStore()
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
+  const { tasaBcv, tasaEfectiva, modoAuto, setModoAuto, tasaManual, setTasaManual, cargando: tasaCargando, refrescar } = useTasaCambio()
+  const [showTasaConfig, setShowTasaConfig] = useState(false)
 
   const esSupervisor = perfil?.rol === 'supervisor'
 
@@ -150,6 +153,72 @@ export default function AppLayout() {
             </>
           )}
         </nav>
+
+        {/* Tasa de cambio */}
+        <div className="border-t border-slate-100 px-4 py-3">
+          <button
+            onClick={() => setShowTasaConfig(!showTasaConfig)}
+            className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors group"
+          >
+            <div className="flex items-center gap-2">
+              <DollarSign size={14} className="text-emerald-500" />
+              <span className="text-xs font-bold text-slate-500">BCV</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-black text-emerald-600">
+                {tasaEfectiva > 0
+                  ? new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(tasaEfectiva)
+                  : '—'}
+              </span>
+              <span className="text-[10px] text-slate-400">Bs/$</span>
+              {!modoAuto && <span className="text-[9px] bg-primary-light text-primary px-1 rounded font-bold">MAN</span>}
+            </div>
+          </button>
+
+          {showTasaConfig && (
+            <div className="mt-2 bg-white rounded-xl border border-slate-200 p-3 space-y-2.5 animate-fade-in">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-400 uppercase">Modo</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold">
+                    {modoAuto ? <span className="text-emerald-600">Auto</span> : <span className="text-primary">Manual</span>}
+                  </span>
+                  <button
+                    onClick={() => setModoAuto(!modoAuto)}
+                    style={{ minHeight: 0 }}
+                    className={`relative w-9 h-5 rounded-full transition-colors ${modoAuto ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 bg-white w-4 h-4 rounded-full transition-transform shadow-sm ${modoAuto ? 'translate-x-4' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+              </div>
+
+              {modoAuto ? (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-slate-500">{tasaBcv.fuente || 'Cargando...'}</p>
+                    {tasaBcv.ultimaActualizacion && (
+                      <p className="text-[10px] text-slate-400">
+                        {new Date(tasaBcv.ultimaActualizacion).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    )}
+                  </div>
+                  <button onClick={refrescar} disabled={tasaCargando}
+                    className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-emerald-600 transition-colors">
+                    <RefreshCw size={13} className={tasaCargando ? 'animate-spin' : ''} />
+                  </button>
+                </div>
+              ) : (
+                <input type="number" min="0.01" step="0.01"
+                  value={tasaManual}
+                  onChange={e => setTasaManual(e.target.value)}
+                  placeholder="Tasa manual Bs/$"
+                  className="w-full px-2.5 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm font-bold text-primary focus:outline-none focus:ring-1 focus:ring-primary-focus"
+                />
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Usuario + botón de cierre de sesión */}
         <div className="border-t border-slate-100 p-4">
