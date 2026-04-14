@@ -5,6 +5,7 @@
 import { useState } from 'react'
 import { Package, Plus, Search, RefreshCw, X, Filter } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
+import CustomSelect from '../components/ui/CustomSelect'
 import { useInventario, useCategorias, useDesactivarProducto } from '../hooks/useInventario'
 import ProductoCard  from '../components/inventario/ProductoCard'
 import ProductoForm  from '../components/inventario/ProductoForm'
@@ -151,18 +152,21 @@ export default function InventarioView() {
 
         {/* Filtro categoría */}
         {categorias.length > 0 && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-[180px]">
             <Filter size={15} className="text-slate-400 shrink-0" />
-            <select
-              value={categoria}
-              onChange={e => setCategoria(e.target.value)}
-              className="py-2.5 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-focus"
-            >
-              <option value="">Todas las categorías</option>
-              {categorias.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
+            <div className="flex-1">
+              <CustomSelect
+                options={[
+                  { value: '', label: 'Todas las categorías' },
+                  ...categorias.map(cat => ({ value: cat, label: cat })),
+                ]}
+                value={categoria}
+                onChange={val => setCategoria(val)}
+                placeholder="Todas las categorías"
+                icon={Filter}
+                clearable
+              />
+            </div>
           </div>
         )}
 

@@ -1,7 +1,7 @@
 // src/components/clientes/ClienteCard.jsx
 // Tarjeta de cliente para el listado
 // Props adicionales si el viewer es supervisor: botón reasignar
-import { Phone, Mail, MapPin, Hash, Pencil, UserMinus, ArrowRightLeft } from 'lucide-react'
+import { Phone, Mail, MapPin, Hash, Tag, Pencil, UserMinus, ArrowRightLeft } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 
 // ─── Dato de contacto con icono ───────────────────────────────────────────────
@@ -13,6 +13,20 @@ function Contacto({ icono: Icono, valor }) {
       <span className="truncate">{valor}</span>
     </div>
   )
+}
+
+const TIPO_LABELS = {
+  ferreteria:  'Ferretería',
+  constructor: 'Constructor',
+  particular:  'Particular',
+  empresa:     'Empresa',
+}
+
+const TIPO_COLORS = {
+  ferreteria:  'bg-amber-50 text-amber-700 border-amber-200',
+  constructor: 'bg-sky-50 text-sky-700 border-sky-200',
+  particular:  'bg-slate-50 text-slate-600 border-slate-200',
+  empresa:     'bg-violet-50 text-violet-700 border-violet-200',
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
@@ -34,6 +48,12 @@ export default function ClienteCard({ cliente, onEditar, onDesactivar, onReasign
               <Hash size={11} className="text-slate-400" />
               <span className="text-xs text-slate-400">{cliente.rif_cedula}</span>
             </div>
+          )}
+          {cliente.tipo_cliente && (
+            <span className={`inline-flex items-center gap-1 mt-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${TIPO_COLORS[cliente.tipo_cliente] || TIPO_COLORS.particular}`}>
+              <Tag size={10} />
+              {TIPO_LABELS[cliente.tipo_cliente] || cliente.tipo_cliente}
+            </span>
           )}
         </div>
 

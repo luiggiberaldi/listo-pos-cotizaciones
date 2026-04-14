@@ -29,7 +29,7 @@ export function useCotizaciones({ estado = '', clienteId = '' } = {}) {
           valida_hasta, creado_en, enviada_en,
           notas_cliente,
           cliente_id, vendedor_id,
-          cliente:clientes!cotizaciones_cliente_id_fkey(id, nombre, rif_cedula),
+          cliente:clientes!cotizaciones_cliente_id_fkey(id, nombre, rif_cedula, telefono, tipo_cliente),
           vendedor:usuarios!cotizaciones_vendedor_id_fkey(id, nombre)
         `)
         .order('creado_en', { ascending: false })

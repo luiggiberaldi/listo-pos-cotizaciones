@@ -74,6 +74,15 @@ export default function AppLayout() {
   const [menuOpen, setMenuOpen] = useState(false)
   const { tasaBcv, tasaEfectiva, modoAuto, setModoAuto, tasaManual, setTasaManual, cargando: tasaCargando, refrescar } = useTasaCambio()
   const [showTasaConfig, setShowTasaConfig] = useState(false)
+  const [tasaInput, setTasaInput] = useState(tasaManual)
+  const [tasaConfirmada, setTasaConfirmada] = useState(!!tasaManual)
+
+  function confirmarTasaManual() {
+    if (parseFloat(tasaInput) > 0) {
+      setTasaManual(tasaInput)
+      setTasaConfirmada(true)
+    }
+  }
 
   const esSupervisor = perfil?.rol === 'supervisor'
 
@@ -209,12 +218,32 @@ export default function AppLayout() {
                   </button>
                 </div>
               ) : (
-                <input type="number" min="0.01" step="0.01"
-                  value={tasaManual}
-                  onChange={e => setTasaManual(e.target.value)}
-                  placeholder="Tasa manual Bs/$"
-                  className="w-full px-2.5 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm font-bold text-primary focus:outline-none focus:ring-1 focus:ring-primary-focus"
-                />
+                <div className="space-y-2">
+                  <div className="flex gap-1.5">
+                    <input type="number" min="0.01" step="0.01"
+                      value={tasaInput}
+                      onChange={e => { setTasaInput(e.target.value); setTasaConfirmada(false) }}
+                      placeholder="Tasa manual Bs/$"
+                      className="flex-1 px-2.5 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm font-bold text-primary focus:outline-none focus:ring-1 focus:ring-primary-focus"
+                      onKeyDown={e => e.key === 'Enter' && confirmarTasaManual()}
+                    />
+                    <button
+                      onClick={confirmarTasaManual}
+                      disabled={!tasaInput || parseFloat(tasaInput) <= 0 || tasaConfirmada}
+                      className={`px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                        tasaConfirmada
+                          ? 'bg-emerald-100 text-emerald-600'
+                          : 'bg-primary text-white hover:bg-primary-hover disabled:opacity-40'
+                      }`}>
+                      {tasaConfirmada ? '✓' : 'OK'}
+                    </button>
+                  </div>
+                  {tasaBcv.precio > 0 && (
+                    <p className="text-[10px] text-slate-400">
+                      Referencia BCV: {new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(tasaBcv.precio)} Bs/$
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           )}

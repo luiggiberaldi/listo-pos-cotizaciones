@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Hash, Package, Tag, Layers, DollarSign, BarChart2, Loader2 } from 'lucide-react'
 import { useCrearProducto, useActualizarProducto } from '../../hooks/useInventario'
+import CustomSelect from '../ui/CustomSelect'
 
 function Campo({ label, icono: Icono, error, children }) {
   return (
@@ -118,13 +119,14 @@ export default function ProductoForm({ producto = null, onSuccess, onCancel }) {
             className={inputClass} disabled={cargando} />
         </Campo>
         <Campo label="Unidad" icono={Layers} error={errores.unidad}>
-          <select name="unidad" value={campos.unidad} onChange={cambiar}
+          <CustomSelect
+            options={['und', 'kg', 'g', 'lt', 'ml', 'm', 'cm', 'm2', 'm3', 'caja', 'rollo', 'par', 'bolsa'].map(u => ({ value: u, label: u }))}
+            value={campos.unidad}
+            onChange={val => setCampos(p => ({ ...p, unidad: val }))}
+            icon={Layers}
             disabled={cargando}
-            className={inputClass}>
-            {['und', 'kg', 'g', 'lt', 'ml', 'm', 'cm', 'm2', 'm3', 'caja', 'rollo', 'par', 'bolsa'].map(u => (
-              <option key={u} value={u}>{u}</option>
-            ))}
-          </select>
+            searchable={false}
+          />
         </Campo>
       </div>
 

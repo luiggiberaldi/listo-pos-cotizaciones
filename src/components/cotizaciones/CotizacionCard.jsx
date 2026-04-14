@@ -1,12 +1,12 @@
 // src/components/cotizaciones/CotizacionCard.jsx
-// src/components/cotizaciones/CotizacionCard.jsx
 import { useState } from 'react'
-import { FileText, User, Calendar, Pencil, Ban, CheckCircle, XCircle, FileDown, MessageCircle } from 'lucide-react'
+import { FileText, User, Calendar, Pencil, Ban, CheckCircle, XCircle, FileDown, MessageCircle, Loader2 } from 'lucide-react'
 import EstadoBadge from './EstadoBadge'
 import useAuthStore from '../../store/useAuthStore'
 import supabase from '../../services/supabase/client'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import { generarPDF } from '../../services/pdf/cotizacionPDF'
+import { compartirPorWhatsApp, generarMensaje } from '../../utils/whatsapp'
 
 import { fmtUsdSimple as fmtUsd, fmtFecha } from '../../utils/format'
 
@@ -16,6 +16,7 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
   const esBorrador = cotizacion.estado === 'borrador'
   const esEnviada  = cotizacion.estado === 'enviada'
   const [pdfLoading, setPdfLoading] = useState(false)
+  const [waLoading, setWaLoading]   = useState(false)
   const { data: config = {} } = useConfigNegocio()
 
   const numDisplay = cotizacion.version > 1
@@ -45,16 +46,54 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
     }
   }
 
-  // ── Compartir por WhatsApp ──────────────────────────────────────────────────
-  function compartirWhatsApp() {
-    const nombre    = config.nombre_negocio || 'Cotización'
-    const cliente   = cotizacion.cliente?.nombre ?? ''
-    const total     = `$${Number(cotizacion.total_usd || 0).toFixed(2)}`
-    const vencim    = cotizacion.valida_hasta
-      ? `\nVálida hasta: ${new Date(cotizacion.valida_hasta + 'T12:00:00').toLocaleDateString('es-VE')}`
-      : ''
-    const texto = `Hola${cliente ? ` ${cliente}` : ''}, te envío la ${numDisplay} de *${nombre}*.\n\nTotal: *${total}*${vencim}\n\nQuedo a tu disposición para cualquier consulta.`
-    window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank', 'noopener')
+  // ── Compartir por WhatsApp (con PDF en móvil) ──────────────────────────────
+  async function handleWhatsApp() {
+    setWaLoading(true)
+    try {
+      // Cargar datos completos de la cotización para generar el PDF
+      const [headerRes, itemsRes] = await Promise.all([
+        supabase.from('cotizaciones').select('*').eq('id', cotizacion.id).single(),
+        supabase.from('cotizacion_items').select('*').eq('cotizacion_id', cotizacion.id).order('orden'),
+      ])
+      if (headerRes.error) throw headerRes.error
+      if (itemsRes.error) throw itemsRes.error
+
+      // Generar PDF como blob (sin descargar)
+      const pdfBlob = generarPDF({
+        cotizacion: { ...headerRes.data, cliente: cotizacion.cliente },
+        items: itemsRes.data ?? [],
+        config,
+        returnBlob: true,
+      })
+
+      const mensaje = generarMensaje({
+        nombreNegocio: config.nombre_negocio,
+        nombreCliente: cotizacion.cliente?.nombre,
+        numDisplay,
+        totalUsd: cotizacion.total_usd,
+        validaHasta: cotizacion.valida_hasta,
+      })
+
+      await compartirPorWhatsApp({
+        pdfBlob,
+        pdfFilename: `${numDisplay.replace(/\s+/g, '_')}.pdf`,
+        telefono: cotizacion.cliente?.telefono,
+        mensaje,
+      })
+    } catch (err) {
+      console.error('WhatsApp error:', err)
+      // Fallback: solo abrir WhatsApp con mensaje de texto
+      const texto = generarMensaje({
+        nombreNegocio: config.nombre_negocio,
+        nombreCliente: cotizacion.cliente?.nombre,
+        numDisplay,
+        totalUsd: cotizacion.total_usd,
+        validaHasta: cotizacion.valida_hasta,
+      })
+      window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank', 'noopener')
+    } finally {
+      setWaLoading(false)
+    }
   }
 
   return (
@@ -91,9 +130,11 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
           )}
           {/* WhatsApp — disponible en cotizaciones enviadas/aceptadas */}
           {(cotizacion.estado === 'enviada' || cotizacion.estado === 'aceptada') && (
-            <button onClick={compartirWhatsApp} title="Compartir por WhatsApp"
-              className="p-2 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors">
-              <MessageCircle size={16} />
+            <button onClick={handleWhatsApp} disabled={waLoading} title="Compartir por WhatsApp"
+              className="p-2 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-40">
+              {waLoading
+                ? <div className="w-3.5 h-3.5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+                : <MessageCircle size={16} />}
             </button>
           )}
           {/* Supervisor puede marcar como aceptada/rechazada */}

@@ -4,6 +4,7 @@
 import { useState } from 'react'
 import { ArrowRightLeft, Loader2, AlertCircle } from 'lucide-react'
 import { Modal } from '../ui/Modal'
+import CustomSelect from '../ui/CustomSelect'
 import { useReasignarCliente, useVendedores } from '../../hooks/useClientes'
 
 export default function ReasignacionModal({ cliente, isOpen, onClose }) {
@@ -72,19 +73,18 @@ export default function ReasignacionModal({ cliente, isOpen, onClose }) {
           {cargandoVendedores
             ? <div className="h-10 bg-slate-100 rounded-xl animate-pulse" />
             : (
-              <select
+              <CustomSelect
+                options={opcionesVendedor.map(v => ({
+                  value: v.id,
+                  label: v.nombre,
+                  sub: v.rol === 'supervisor' ? 'Supervisor' : 'Vendedor',
+                }))}
                 value={nuevoVendedorId}
-                onChange={e => { setNuevoVendedorId(e.target.value); setError('') }}
+                onChange={val => { setNuevoVendedorId(val); setError('') }}
+                placeholder="Seleccionar vendedor..."
+                icon={ArrowRightLeft}
                 disabled={cargando}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary disabled:opacity-50"
-              >
-                <option value="">Seleccionar vendedor...</option>
-                {opcionesVendedor.map(v => (
-                  <option key={v.id} value={v.id}>
-                    {v.nombre} {v.rol === 'supervisor' ? '(Supervisor)' : ''}
-                  </option>
-                ))}
-              </select>
+              />
             )
           }
         </div>

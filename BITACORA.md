@@ -69,11 +69,11 @@ que corresponde al sistema **Listo POS Lite** — un punto de venta completo par
 | **Fase 0** | Arquitectura, BD y reglas de negocio | ✅ Completada (v1.1) |
 | **Fase 1** | Limpieza del proyecto + estructura base | ✅ Completada |
 | **Fase 2** | Módulo de Clientes (con anti-robo) | ✅ Completada |
-| **Fase 3** | Inventario consultable | ⏳ Pendiente |
-| **Fase 4** | Constructor de cotizaciones (wizard) | ⏳ Pendiente |
-| **Fase 5** | Generador de PDF + WhatsApp | ⏳ Pendiente |
+| **Fase 3** | Inventario consultable | ✅ Completada |
+| **Fase 4** | Constructor de cotizaciones (wizard) | ✅ Completada |
+| **Fase 5** | Generador de PDF + WhatsApp | ✅ Completada |
 | **Fase 6** | Transportistas + Historial + Versioning | ⏳ Pendiente |
-| **Fase 7** | Panel supervisor + Auditoría + Usuarios | ⏳ Pendiente |
+| **Fase 7** | Panel supervisor + Auditoría + Usuarios | ✅ Completada |
 
 ---
 
@@ -517,7 +517,81 @@ Implementar el módulo completo de gestión de clientes con lógica anti-robo.
 
 | # | Fecha | Fase | Descripción del error | Causa raíz | Solución aplicada | Estado |
 |---|---|---|---|---|---|---|
-| — | — | — | Sin errores registrados aún | — | — | — |
+| 1 | 14/04/2026 | S8 | 400 Bad Request en query de clientes | `tipo_cliente` seleccionado en hook pero columna no existía en BD | Ejecutar migration 019 vía Supabase Management API | ✅ Resuelto |
+
+---
+
+## SESIÓN 8 — 14/04/2026 — Mejoras: Login Gate, Tipo Cliente, WhatsApp
+
+### Objetivo
+Implementar 3 mejoras al sistema: login en dos pasos (gate), campo tipo de cliente, y compartir PDF por WhatsApp.
+
+### Acciones realizadas
+
+**1. Migrations SQL ejecutadas:**
+
+| Archivo | Contenido |
+|---|---|
+| `018_gate_credentials.sql` | `gate_email` y `gate_password_hash` en `configuracion_negocio` |
+| `019_tipo_cliente.sql` | `tipo_cliente` (default 'particular') en `clientes` |
+
+Ambas ejecutadas vía Supabase Management API (`POST /v1/projects/{id}/database/query`).
+
+**2. Login en dos pasos (Gate → Avatar+PIN):**
+
+| Archivo | Cambio |
+|---|---|
+| `src/modules/auth/LoginPage.jsx` | Reescrito completo: GateStep (correo+contraseña) → UserSelectStep (avatares+PIN) |
+| `src/hooks/useConfigNegocio.js` | Funciones `hashSHA256()` y `validarGate()` agregadas |
+| `src/views/ConfiguracionView.jsx` | Sección "Acceso al sistema" para configurar gate_email + contraseña |
+
+**Diseño del gate:**
+- Inspirado en CloudAuthModal de Listo POS Lite
+- Fondo degradado sky→teal, logo centrado, card con blur
+- Inputs con iconos (Mail, Key), toggle ver/ocultar contraseña
+- Validación SHA-256 contra `configuracion_negocio.gate_password_hash`
+- Si no hay gate configurado, permite pasar (primera vez)
+- Sesión gate en `sessionStorage` (expira al cerrar pestaña)
+
+**3. Campo tipo de cliente:**
+
+| Archivo | Cambio |
+|---|---|
+| `src/components/clientes/ClienteForm.jsx` | Select con 4 opciones: Ferretería, Constructor, Particular, Empresa |
+| `src/components/clientes/ClienteCard.jsx` | Badge coloreado con tipo de cliente |
+| `src/hooks/useClientes.js` | `tipo_cliente` en SELECT, INSERT y UPDATE |
+| `src/hooks/useCotizaciones.js` | Join de clientes incluye `telefono` y `tipo_cliente` |
+| `src/services/pdf/cotizacionPDF.js` | Tipo de cliente mostrado en sección CLIENTE del PDF |
+
+**4. Compartir por WhatsApp:**
+
+| Archivo | Cambio |
+|---|---|
+| `src/utils/whatsapp.js` | **NUEVO** — `compartirPorWhatsApp()`, `generarMensaje()`, `formatearTelefono()` |
+| `src/components/cotizaciones/CotizacionCard.jsx` | Botón WhatsApp con spinner, genera PDF blob y comparte |
+| `src/services/pdf/cotizacionPDF.js` | Parámetro `returnBlob` para obtener blob sin descargar |
+
+**Flujo WhatsApp:**
+- Móvil: Web Share API (`navigator.share`) comparte PDF como archivo
+- Escritorio: descarga PDF + abre `wa.me/{telefono}?text={mensaje}`
+- Fallback: si falla la generación del PDF, abre wa.me solo con texto
+
+**5. Documentación:**
+- `ARQUITECTURA.md` actualizado a v1.2 (gate, tipo_cliente, WhatsApp, fases)
+- `BITACORA.md` actualizado con Sesión 8
+
+### Decisiones técnicas
+- Gate usa SHA-256 local, NO una cuenta separada de Supabase Auth
+- `sessionStorage` (no `localStorage`) para que el gate expire al cerrar la pestaña
+- `returnBlob` en `generarPDF()` evita duplicar lógica de generación de PDF
+- Código de país por defecto: +57 (Colombia) en `formatearTelefono()`
+
+### Errores encontrados
+- **400 Bad Request en clientes**: el hook seleccionaba `tipo_cliente` pero la migration no se había ejecutado en Supabase. Resuelto ejecutando las migrations vía API.
+
+### Pendiente
+- RLS de `configuracion_negocio` podría necesitar ajuste para lectura anónima de `gate_email`/`gate_password_hash` (el gate se valida antes de autenticarse)
+- Fase 6: Transportistas + Historial + Versioning (única fase pendiente)
 
 ---
 

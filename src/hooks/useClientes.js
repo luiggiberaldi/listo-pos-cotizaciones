@@ -23,7 +23,7 @@ export function useClientes(busqueda = '') {
         .from('clientes')
         .select(`
           id, nombre, rif_cedula, telefono, email,
-          direccion, notas, activo,
+          direccion, notas, tipo_cliente, activo,
           vendedor_id, asignado_en,
           ultima_reasig_por, ultima_reasig_motivo, ultima_reasig_en,
           creado_en, actualizado_en,
@@ -60,7 +60,7 @@ export function useCliente(id) {
         .from('clientes')
         .select(`
           id, nombre, rif_cedula, telefono, email,
-          direccion, notas, activo,
+          direccion, notas, tipo_cliente, activo,
           vendedor_id, asignado_en,
           vendedor:usuarios!clientes_vendedor_id_fkey(id, nombre)
         `)
@@ -85,12 +85,13 @@ export function useCrearCliente() {
       const { data, error } = await supabase
         .from('clientes')
         .insert({
-          nombre:     campos.nombre.trim(),
-          rif_cedula: campos.rif_cedula?.trim() || null,
-          telefono:   campos.telefono?.trim() || null,
-          email:      campos.email?.trim()     || null,
-          direccion:  campos.direccion?.trim() || null,
-          notas:      campos.notas?.trim()     || null,
+          nombre:      campos.nombre.trim(),
+          rif_cedula:  campos.rif_cedula?.trim() || null,
+          telefono:    campos.telefono?.trim() || null,
+          email:       campos.email?.trim()     || null,
+          direccion:   campos.direccion?.trim() || null,
+          notas:       campos.notas?.trim()     || null,
+          tipo_cliente: campos.tipo_cliente || 'particular',
           vendedor_id: perfil.id,
         })
         .select()
@@ -119,12 +120,13 @@ export function useActualizarCliente() {
       const { data, error } = await supabase
         .from('clientes')
         .update({
-          nombre:     campos.nombre.trim(),
-          rif_cedula: campos.rif_cedula?.trim() || null,
-          telefono:   campos.telefono?.trim() || null,
-          email:      campos.email?.trim()     || null,
-          direccion:  campos.direccion?.trim() || null,
-          notas:      campos.notas?.trim()     || null,
+          nombre:      campos.nombre.trim(),
+          rif_cedula:  campos.rif_cedula?.trim() || null,
+          telefono:    campos.telefono?.trim() || null,
+          email:       campos.email?.trim()     || null,
+          direccion:   campos.direccion?.trim() || null,
+          notas:       campos.notas?.trim()     || null,
+          tipo_cliente: campos.tipo_cliente || 'particular',
         })
         .eq('id', id)
         .select()

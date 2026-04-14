@@ -2,8 +2,9 @@
 // Formulario para crear o editar un cliente
 // Usado dentro de un Modal — recibe onSuccess para cerrar tras guardar
 import { useState, useEffect } from 'react'
-import { User, Hash, Phone, Mail, MapPin, StickyNote, Loader2 } from 'lucide-react'
+import { User, Hash, Phone, Mail, MapPin, StickyNote, Loader2, Tag } from 'lucide-react'
 import { useCrearCliente, useActualizarCliente } from '../../hooks/useClientes'
+import CustomSelect from '../ui/CustomSelect'
 
 // ─── Campo de formulario reutilizable ─────────────────────────────────────────
 function Campo({ label, icono: Icono, error, children }) {
@@ -29,17 +30,25 @@ const inputClass = `
 `
 
 // ─── Valores iniciales vacíos ─────────────────────────────────────────────────
+const TIPOS_CLIENTE = [
+  { valor: 'particular',  label: 'Particular' },
+  { valor: 'ferreteria',  label: 'Ferretería' },
+  { valor: 'constructor', label: 'Constructor' },
+  { valor: 'empresa',     label: 'Empresa' },
+]
+
 const VACIO = {
-  nombre:    '',
-  rif_cedula: '',
-  telefono:  '',
-  email:     '',
-  direccion: '',
-  notas:     '',
+  nombre:       '',
+  rif_cedula:   '',
+  telefono:     '',
+  email:        '',
+  direccion:    '',
+  notas:        '',
+  tipo_cliente: 'particular',
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export default function ClienteForm({ cliente = null, onSuccess, onCancel }) {
+export default function ClienteForm({ cliente = null, onSuccess, onCancel, compact = false }) {
   const esEdicion = !!cliente
 
   const [campos, setCampos] = useState(VACIO)
@@ -55,12 +64,13 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel }) {
   useEffect(() => {
     if (cliente) {
       setCampos({
-        nombre:     cliente.nombre     ?? '',
-        rif_cedula: cliente.rif_cedula ?? '',
-        telefono:   cliente.telefono   ?? '',
-        email:      cliente.email      ?? '',
-        direccion:  cliente.direccion  ?? '',
-        notas:      cliente.notas      ?? '',
+        nombre:       cliente.nombre       ?? '',
+        rif_cedula:   cliente.rif_cedula   ?? '',
+        telefono:     cliente.telefono     ?? '',
+        email:        cliente.email        ?? '',
+        direccion:    cliente.direccion    ?? '',
+        notas:        cliente.notas        ?? '',
+        tipo_cliente: cliente.tipo_cliente ?? 'particular',
       })
     }
   }, [cliente])
@@ -76,6 +86,7 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel }) {
   function validar() {
     const errs = {}
     if (!campos.nombre.trim()) errs.nombre = 'El nombre es obligatorio'
+    if (!campos.rif_cedula.trim()) errs.rif_cedula = 'El RIF/Cédula es obligatorio para proteger la asignación del cliente'
     if (campos.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(campos.email.trim())) {
       errs.email = 'Correo inválido'
     }
@@ -88,12 +99,13 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel }) {
     if (Object.keys(errs).length) { setErrores(errs); return }
 
     try {
+      let resultado
       if (esEdicion) {
-        await actualizarCliente.mutateAsync({ id: cliente.id, campos })
+        resultado = await actualizarCliente.mutateAsync({ id: cliente.id, campos })
       } else {
-        await crearCliente.mutateAsync(campos)
+        resultado = await crearCliente.mutateAsync(campos)
       }
-      onSuccess?.()
+      onSuccess?.(resultado)
     } catch (err) {
       setErrorGeneral(err.message ?? 'Ocurrió un error. Intenta de nuevo.')
     }
@@ -116,8 +128,21 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel }) {
         />
       </Campo>
 
+      {/* Tipo de cliente */}
+      <Campo label="Tipo de cliente *" icono={Tag} error={errores.tipo_cliente}>
+        <CustomSelect
+          options={TIPOS_CLIENTE.map(t => ({ value: t.valor, label: t.label }))}
+          value={campos.tipo_cliente}
+          onChange={val => { setCampos(prev => ({ ...prev, tipo_cliente: val })); if (errores.tipo_cliente) setErrores(prev => ({ ...prev, tipo_cliente: '' })); if (errorGeneral) setErrorGeneral('') }}
+          placeholder="Seleccionar tipo..."
+          icon={Tag}
+          disabled={cargando}
+          searchable={false}
+        />
+      </Campo>
+
       {/* RIF / Cédula */}
-      <Campo label="RIF / Cédula" icono={Hash} error={errores.rif_cedula}>
+      <Campo label="RIF / Cédula *" icono={Hash} error={errores.rif_cedula}>
         <input
           type="text"
           name="rif_cedula"
@@ -201,11 +226,15 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel }) {
         <button
           type="submit"
           disabled={cargando}
-          className="flex-1 py-2.5 px-4 rounded-xl bg-primary hover:bg-primary-hover text-white font-semibold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+          className={`flex-1 py-2.5 px-4 rounded-xl text-white font-semibold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2 ${
+            compact
+              ? 'bg-emerald-500 hover:bg-emerald-600'
+              : 'bg-primary hover:bg-primary-hover'
+          }`}
         >
           {cargando
             ? <><Loader2 size={16} className="animate-spin" /> Guardando...</>
-            : esEdicion ? 'Guardar cambios' : 'Crear cliente'
+            : esEdicion ? 'Guardar cambios' : compact ? 'Crear y seleccionar' : 'Crear cliente'
           }
         </button>
       </div>

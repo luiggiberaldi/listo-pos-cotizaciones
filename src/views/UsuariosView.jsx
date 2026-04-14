@@ -4,6 +4,7 @@
 import { useState } from 'react'
 import { UserCog, Plus, Pencil, UserCheck, UserX, RefreshCw, Crown, Eye, EyeOff, Trash2 } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
+import CustomSelect from '../components/ui/CustomSelect'
 import {
   useUsuarios,
   useCrearUsuario,
@@ -34,18 +35,26 @@ const ROL_CONFIG = {
 
 // ─── Formulario crear usuario ─────────────────────────────────────────────────
 function FormCrear({ onGuardar, onCancelar, cargando }) {
-  const [campos, setCampos] = useState({ email: '', nombre: '', password: '', rol: 'vendedor' })
+  const [campos, setCampos] = useState({ nombre: '', password: '', rol: 'vendedor' })
   const [mostrarPass, setMostrarPass] = useState(false)
   const [error, setError] = useState('')
 
   function cambiar(k, v) { setCampos(p => ({ ...p, [k]: v })); setError('') }
 
+  // Generar email interno a partir del nombre
+  function generarEmail(nombre) {
+    const slug = nombre.trim().toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '')
+    return slug ? `${slug}.${Date.now()}@listo.internal` : ''
+  }
+
   function submit(e) {
     e.preventDefault()
-    if (!campos.email.trim())                    { setError('El email es obligatorio'); return }
     if (!campos.nombre.trim())                   { setError('El nombre es obligatorio'); return }
     if (!/^\d{6}$/.test(campos.password))        { setError('El PIN debe ser exactamente 6 dígitos numéricos'); return }
-    onGuardar(campos)
+    const email = generarEmail(campos.nombre)
+    onGuardar({ ...campos, email })
   }
 
   const inputCls = `
@@ -60,13 +69,7 @@ function FormCrear({ onGuardar, onCancelar, cargando }) {
       <div className="relative">
         <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 text-xs font-bold">N</div>
         <input value={campos.nombre} onChange={e => cambiar('nombre', e.target.value)}
-          placeholder="Nombre completo" className={inputCls} disabled={cargando} />
-      </div>
-      {/* Email */}
-      <div className="relative">
-        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 text-xs font-bold">@</div>
-        <input type="email" value={campos.email} onChange={e => cambiar('email', e.target.value)}
-          placeholder="Correo electrónico" className={inputCls} disabled={cargando} />
+          placeholder="Nombre completo" className={inputCls} disabled={cargando} autoFocus />
       </div>
       {/* Contraseña */}
       <div className="relative">
@@ -82,12 +85,17 @@ function FormCrear({ onGuardar, onCancelar, cargando }) {
         </button>
       </div>
       {/* Rol */}
-      <select value={campos.rol} onChange={e => cambiar('rol', e.target.value)}
-        className="w-full px-3 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 outline-none transition-all"
-        disabled={cargando}>
-        <option value="vendedor">Vendedor</option>
-        <option value="supervisor">Supervisor</option>
-      </select>
+      <CustomSelect
+        options={[
+          { value: 'vendedor', label: 'Vendedor' },
+          { value: 'supervisor', label: 'Supervisor' },
+        ]}
+        value={campos.rol}
+        onChange={val => cambiar('rol', val)}
+        placeholder="Seleccionar rol..."
+        disabled={cargando}
+        searchable={false}
+      />
 
       {error && <p className="text-xs text-red-500 font-bold ml-1">{error}</p>}
 
@@ -132,11 +140,17 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando }) {
     <form onSubmit={submit} className="space-y-3">
       <input value={campos.nombre} onChange={e => setCampos(p => ({ ...p, nombre: e.target.value }))}
         className={inputCls} placeholder="Nombre completo" disabled={cargando} />
-      <select value={campos.rol} onChange={e => setCampos(p => ({ ...p, rol: e.target.value }))}
-        className={inputCls} disabled={cargando}>
-        <option value="vendedor">Vendedor</option>
-        <option value="supervisor">Supervisor</option>
-      </select>
+      <CustomSelect
+        options={[
+          { value: 'vendedor', label: 'Vendedor' },
+          { value: 'supervisor', label: 'Supervisor' },
+        ]}
+        value={campos.rol}
+        onChange={val => setCampos(p => ({ ...p, rol: val }))}
+        placeholder="Seleccionar rol..."
+        disabled={cargando}
+        searchable={false}
+      />
 
       {/* PIN opcional */}
       <div className="relative">

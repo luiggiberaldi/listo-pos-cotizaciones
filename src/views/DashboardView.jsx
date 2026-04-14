@@ -1,7 +1,8 @@
 // src/views/DashboardView.jsx
 // Panel de inicio — resumen de actividad y métricas clave
 import { useQuery } from '@tanstack/react-query'
-import { LayoutDashboard, FileText, Users, DollarSign, TrendingUp, Clock } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { LayoutDashboard, FileText, Users, DollarSign, TrendingUp, Clock, Plus } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import supabase     from '../services/supabase/client'
 import { fmtUsd }   from '../utils/format'
@@ -115,6 +116,7 @@ export default function DashboardView() {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const { data: m, isLoading } = useMetricas()
+  const navigate = useNavigate()
 
   const mesActual = new Date().toLocaleDateString('es-VE', { month: 'long', year: 'numeric' })
 
@@ -126,16 +128,23 @@ export default function DashboardView() {
     <div className="p-4 md:p-6 space-y-4 md:space-y-6 max-w-screen-xl">
 
       {/* Encabezado */}
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 bg-primary-light rounded-xl flex items-center justify-center">
-          <LayoutDashboard size={20} className="text-primary" />
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-primary-light rounded-xl flex items-center justify-center">
+            <LayoutDashboard size={20} className="text-primary" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-slate-800">Inicio</h1>
+            <p className="text-sm text-slate-500 capitalize">
+              Bienvenido, {perfil?.nombre?.split(' ')[0] ?? 'usuario'} · {mesActual}
+            </p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-xl font-bold text-slate-800">Inicio</h1>
-          <p className="text-sm text-slate-500 capitalize">
-            Bienvenido, {perfil?.nombre?.split(' ')[0] ?? 'usuario'} · {mesActual}
-          </p>
-        </div>
+        <button onClick={() => navigate('/cotizaciones?nueva=1')}
+          className="flex items-center gap-2 bg-primary hover:bg-primary-hover text-white font-bold text-sm px-5 py-3 rounded-xl transition-colors shadow-md shadow-primary/20 active:scale-[0.98]">
+          <Plus size={18} strokeWidth={2.5} />
+          Nueva cotización
+        </button>
       </div>
 
       {/* Métricas principales */}

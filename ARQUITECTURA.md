@@ -1,7 +1,7 @@
 # Listo POS Cotizaciones — Arquitectura del Sistema
 
 > Documento maestro de arquitectura, base de datos y reglas de negocio.
-> **Versión 1.1** — Revisión crítica sobre v1.0 del 14/04/2026.
+> **Versión 1.2** — Actualización con gate login, tipo_cliente y WhatsApp (14/04/2026).
 > Todos los SQL en esta versión son ejecutables en Supabase sin ambigüedades.
 
 ---
@@ -102,6 +102,7 @@ listo pos cotizaciones/
 │   │   └── cotizacionPDF.js
 │   ├── utils/
 │   │   ├── dinero.js
+│   │   ├── whatsapp.js                # Compartir PDF por WhatsApp
 │   │   └── formatters.js
 │   ├── views/
 │   │   ├── LoginView.jsx
@@ -130,7 +131,9 @@ listo pos cotizaciones/
 │       ├── 012_views.sql
 │       ├── 013_rls_enable_and_policies.sql
 │       ├── 014_funciones_rpc.sql
-│       └── 015_seed_configuracion.sql
+│       ├── 015_seed_configuracion.sql
+│       ├── 018_gate_credentials.sql       # Gate login (correo+contraseña del negocio)
+│       └── 019_tipo_cliente.sql           # Campo tipo_cliente en clientes
 ├── index.html
 ├── package.json
 ├── vite.config.js
@@ -266,6 +269,7 @@ CREATE TABLE public.clientes (
   email           TEXT,
   direccion       TEXT,
   notas           TEXT,
+  tipo_cliente    TEXT DEFAULT 'particular',  -- ferreteria, constructor, particular, empresa
 
   -- Control de asignación (núcleo del anti-robo)
   vendedor_id     UUID NOT NULL REFERENCES public.usuarios(id) ON DELETE RESTRICT,
@@ -504,6 +508,8 @@ CREATE TABLE public.configuracion_negocio (
                       CHECK (validez_cotizacion_dias > 0),
   pie_pagina_pdf      TEXT DEFAULT 'Gracias por su preferencia.',
   tasa_bcv_manual     NUMERIC(10,4),  -- Si no hay integración con BCV
+  gate_email          TEXT,           -- Correo compartido del negocio (gate login paso 1)
+  gate_password_hash  TEXT,           -- SHA-256 hash de la contraseña del gate
   creado_en           TIMESTAMPTZ NOT NULL DEFAULT now(),
   actualizado_en      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -1525,33 +1531,44 @@ workbox-*
 
 ---
 
-## 9. DISEÑO DEL PDF (sin cambios desde v1.0)
+## 9. DISEÑO DEL PDF (actualizado v1.2)
 
 Los datos que el PDF necesita de `configuracion_negocio`:
 - `nombre_negocio`, `rif_negocio`, `telefono_negocio`, `direccion_negocio`, `logo_url`, `pie_pagina_pdf`
 
 Los datos que el PDF toma de la cotización:
 - `numero`, `version`, `creado_en`, `valida_hasta`, `tasa_bcv_snapshot`
-- `cliente.*` (nombre, rif_cedula, telefono, direccion)
+- `cliente.*` (nombre, rif_cedula, telefono, direccion, tipo_cliente)
 - `cotizacion_items.*_snap` (snapshot del momento)
 - `transportista.nombre` (si aplica)
 - Totales: `subtotal_usd`, `descuento_usd`, `costo_envio_usd`, `total_usd`, `total_bs_snapshot`
 - `notas_cliente` (NO `notas_internas`)
 
+### Compartir por WhatsApp
+- **Móvil**: `navigator.share()` (Web Share API) comparte el PDF como archivo adjunto
+- **Escritorio**: descarga el PDF + abre `wa.me/{telefono}?text={mensaje}`
+- Mensaje prellenado: saludo con nombre del cliente, número de cotización, total y vigencia
+- Función `formatearTelefono()` normaliza el número y agrega código de país (+57 Colombia)
+
 ---
 
-## 10. MVP POR FASES (sin cambios desde v1.0)
+## 10. MVP POR FASES (actualizado v1.2)
 
 | Fase | Descripción | Estado |
 |---|---|---|
 | **Fase 0** | Arquitectura, BD y reglas de negocio | ✅ v1.1 completada |
-| **Fase 1** | Limpieza + Auth + Navegación base | ⏳ Pendiente |
-| **Fase 2** | Módulo de Clientes (con anti-robo) | ⏳ Pendiente |
-| **Fase 3** | Inventario consultable | ⏳ Pendiente |
-| **Fase 4** | Constructor de cotizaciones (wizard) | ⏳ Pendiente |
-| **Fase 5** | Generador de PDF + WhatsApp | ⏳ Pendiente |
+| **Fase 1** | Limpieza + Auth + Navegación base | ✅ Completada |
+| **Fase 2** | Módulo de Clientes (con anti-robo) | ✅ Completada |
+| **Fase 3** | Inventario consultable | ✅ Completada |
+| **Fase 4** | Constructor de cotizaciones (wizard) | ✅ Completada |
+| **Fase 5** | Generador de PDF + WhatsApp | ✅ Completada |
 | **Fase 6** | Transportistas + Historial + Versioning | ⏳ Pendiente |
-| **Fase 7** | Panel supervisor + Auditoría + Usuarios | ⏳ Pendiente |
+| **Fase 7** | Panel supervisor + Auditoría + Usuarios | ✅ Completada |
+
+### Mejoras post-fases (Sesión 8)
+- Login en dos pasos: gate (correo+contraseña del negocio) → avatar+PIN individual
+- Campo `tipo_cliente` en clientes (Ferretería, Constructor, Particular, Empresa)
+- Compartir cotización por WhatsApp con PDF adjunto (móvil) o enlace (escritorio)
 
 ---
 

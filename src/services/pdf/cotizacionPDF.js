@@ -37,7 +37,7 @@ const COLOR_ROW_ALT = [248, 250, 252] // slate-50
  * @param {object} [opts.config]     — fila de configuracion_negocio (puede ser {})
  * @returns {void} — llama a doc.save() para descargar el PDF
  */
-export function generarPDF({ cotizacion, items = [], config = {} }) {
+export function generarPDF({ cotizacion, items = [], config = {}, returnBlob = false }) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
 
   let y = MARGIN  // cursor vertical
@@ -83,7 +83,7 @@ export function generarPDF({ cotizacion, items = [], config = {} }) {
 
   // Columna izquierda
   doc.setFillColor(...COLOR_LIGHT)
-  doc.roundedRect(MARGIN, y, colW, 28, 2, 2, 'F')
+  doc.roundedRect(MARGIN, y, colW, 32, 2, 2, 'F')
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7.5)
@@ -107,7 +107,7 @@ export function generarPDF({ cotizacion, items = [], config = {} }) {
   // Columna derecha
   const colX2 = MARGIN + colW + 8
   doc.setFillColor(...COLOR_LIGHT)
-  doc.roundedRect(colX2, y, colW, 28, 2, 2, 'F')
+  doc.roundedRect(colX2, y, colW, 32, 2, 2, 'F')
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7.5)
@@ -116,9 +116,14 @@ export function generarPDF({ cotizacion, items = [], config = {} }) {
 
   doc.setTextColor(...COLOR_DARK)
   doc.setFontSize(8)
+  const TIPO_LABELS = {
+    ferreteria: 'Ferretería', constructor: 'Constructor',
+    particular: 'Particular', empresa: 'Empresa',
+  }
   const cliente = cotizacion.cliente || {}
   const rightRows = [
     ['Nombre:', cliente.nombre || '—'],
+    ['Tipo:', TIPO_LABELS[cliente.tipo_cliente] || cliente.tipo_cliente || '—'],
     ['RIF/CI:', cliente.rif_cedula || '—'],
     ['Teléfono:', cotizacion.cliente?.telefono || '—'],
   ]
@@ -134,7 +139,7 @@ export function generarPDF({ cotizacion, items = [], config = {} }) {
     doc.text(truncated, colX2 + 22, y + 11 + i * 6)
   })
 
-  y += 36
+  y += 40
 
   // ── TABLA DE ITEMS ────────────────────────────────────────────────────────
   // Encabezado tabla
@@ -307,5 +312,11 @@ export function generarPDF({ cotizacion, items = [], config = {} }) {
 
   // ── GUARDAR ───────────────────────────────────────────────────────────────
   const filename = `${numDisplay.replace(/\s+/g, '_')}.pdf`
+
+  if (returnBlob) {
+    return doc.output('blob')
+  }
+
   doc.save(filename)
+  return null
 }

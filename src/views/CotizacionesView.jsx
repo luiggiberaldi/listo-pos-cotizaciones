@@ -1,7 +1,8 @@
 // src/views/CotizacionesView.jsx
 // Vista principal: lista de cotizaciones + builder integrado
 // El builder reemplaza la lista in-page (sin navegación adicional)
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { FileText, Plus, RefreshCw, Filter, GitBranch, AlertTriangle } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { useCotizaciones, useAnularCotizacion, useActualizarEstado, useCrearVersion } from '../hooks/useCotizaciones'
@@ -192,9 +193,19 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
 
 // ─── Vista raíz ───────────────────────────────────────────────────────────────
 export default function CotizacionesView() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [modo,      setModo]      = useState('lista')           // 'lista' | 'builder'
   const [editandoId, setEditandoId] = useState(null)            // ID del borrador a editar
   const [versionandoCot, setVersionandoCot] = useState(null)   // cotizacion no-borrador para versionar
+
+  // Si viene ?nueva=1 del dashboard, abrir wizard directamente
+  useEffect(() => {
+    if (searchParams.get('nueva') === '1') {
+      setEditandoId(null)
+      setModo('builder')
+      setSearchParams({}, { replace: true })
+    }
+  }, [searchParams, setSearchParams])
 
   const { data: cotizacionParaEditar } = useCotizacion(editandoId)
   const crearVersion = useCrearVersion()

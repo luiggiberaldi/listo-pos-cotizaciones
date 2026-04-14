@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { ClipboardList, RefreshCw, ChevronLeft, ChevronRight, Filter } from 'lucide-react'
 import { useAuditoria }  from '../hooks/useAuditoria'
 import { useUsuarios }   from '../hooks/useUsuarios'
+import CustomSelect from '../components/ui/CustomSelect'
 import Skeleton from '../components/ui/Skeleton'
 
 // ─── Colores por categoría ────────────────────────────────────────────────────
@@ -112,20 +113,27 @@ export default function AuditoriaView() {
       <div className="flex flex-wrap gap-3 items-center">
         <Filter size={14} className="text-slate-400 shrink-0" />
         {/* Filtro por categoría */}
-        <select value={categoria} onChange={e => cambiarFiltro(() => setCategoria(e.target.value))}
-          className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-focus">
-          {CATEGORIAS_FILTRO.map(({ valor, label }) => (
-            <option key={valor} value={valor}>{label}</option>
-          ))}
-        </select>
+        <div className="min-w-[180px]">
+          <CustomSelect
+            options={CATEGORIAS_FILTRO.map(({ valor, label }) => ({ value: valor, label }))}
+            value={categoria}
+            onChange={val => cambiarFiltro(() => setCategoria(val))}
+            placeholder="Todas las categorías"
+            searchable={false}
+          />
+        </div>
         {/* Filtro por usuario */}
-        <select value={usuarioId} onChange={e => cambiarFiltro(() => setUsuarioId(e.target.value))}
-          className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-focus">
-          <option value="">Todos los usuarios</option>
-          {usuarios.map(u => (
-            <option key={u.id} value={u.id}>{u.nombre}</option>
-          ))}
-        </select>
+        <div className="min-w-[180px]">
+          <CustomSelect
+            options={[
+              { value: '', label: 'Todos los usuarios' },
+              ...usuarios.map(u => ({ value: u.id, label: u.nombre })),
+            ]}
+            value={usuarioId}
+            onChange={val => cambiarFiltro(() => setUsuarioId(val))}
+            placeholder="Todos los usuarios"
+          />
+        </div>
         {(categoria || usuarioId) && (
           <button onClick={() => { setCategoria(''); setUsuarioId(''); setPagina(0) }}
             className="text-xs text-slate-500 hover:text-slate-800 underline">
