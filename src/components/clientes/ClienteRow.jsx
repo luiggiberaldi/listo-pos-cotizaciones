@@ -4,17 +4,13 @@ import { Phone, Mail, MapPin, Hash, Tag, Pencil, UserMinus, ArrowRightLeft } fro
 import useAuthStore from '../../store/useAuthStore'
 
 const TIPO_LABELS = {
-  ferreteria:  'Ferretería',
-  constructor: 'Constructor',
-  particular:  'Particular',
-  empresa:     'Empresa',
+  natural:  'Natural',
+  juridico: 'Jurídico',
 }
 
 const TIPO_COLORS = {
-  ferreteria:  'bg-amber-50 text-amber-700 border-amber-200',
-  constructor: 'bg-sky-50 text-sky-700 border-sky-200',
-  particular:  'bg-slate-50 text-slate-600 border-slate-200',
-  empresa:     'bg-violet-50 text-violet-700 border-violet-200',
+  natural:  'bg-slate-50 text-slate-600 border-slate-200',
+  juridico: 'bg-violet-50 text-violet-700 border-violet-200',
 }
 
 export default function ClienteRow({ cliente, onEditar, onDesactivar, onReasignar }) {
@@ -35,7 +31,7 @@ export default function ClienteRow({ cliente, onEditar, onDesactivar, onReasigna
             </span>
           )}
           {cliente.tipo_cliente && (
-            <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${TIPO_COLORS[cliente.tipo_cliente] || TIPO_COLORS.particular}`}>
+            <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${TIPO_COLORS[cliente.tipo_cliente] || TIPO_COLORS.natural}`}>
               <Tag size={9} />
               {TIPO_LABELS[cliente.tipo_cliente] || cliente.tipo_cliente}
             </span>

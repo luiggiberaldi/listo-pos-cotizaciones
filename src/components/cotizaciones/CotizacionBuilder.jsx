@@ -546,14 +546,11 @@ function ModalEnvio({ isOpen, onConfirm, onCancel, cargando, tasaHook }) {
 
 // ─── Selector de cliente personalizado (reemplaza el select nativo) ──────────
 const TIPO_COLORS = {
-  particular:  'bg-slate-100 text-slate-600',
-  ferreteria:  'bg-amber-100 text-amber-700',
-  constructor: 'bg-blue-100 text-blue-700',
-  empresa:     'bg-purple-100 text-purple-700',
+  natural:  'bg-slate-100 text-slate-600',
+  juridico: 'bg-violet-100 text-violet-700',
 }
 const TIPO_LABELS_SHORT = {
-  particular: 'Particular', ferreteria: 'Ferretería',
-  constructor: 'Constructor', empresa: 'Empresa',
+  natural: 'Natural', juridico: 'Jurídico',
 }
 
 function ClienteSelector({ clientes, clienteId, onSelect }) {
@@ -616,7 +613,7 @@ function ClienteSelector({ clientes, clienteId, onSelect }) {
                 {seleccionado.rif_cedula ?? ''}{seleccionado.rif_cedula && seleccionado.telefono ? ' · ' : ''}{seleccionado.telefono ?? ''}
               </p>
             </div>
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${TIPO_COLORS[seleccionado.tipo_cliente] ?? TIPO_COLORS.particular}`}>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${TIPO_COLORS[seleccionado.tipo_cliente] ?? TIPO_COLORS.natural}`}>
               {TIPO_LABELS_SHORT[seleccionado.tipo_cliente] ?? 'Particular'}
             </span>
             <button type="button" onClick={limpiar}
@@ -678,7 +675,7 @@ function ClienteSelector({ clientes, clienteId, onSelect }) {
                       {[c.rif_cedula, c.telefono].filter(Boolean).join(' · ') || 'Sin datos adicionales'}
                     </p>
                   </div>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${TIPO_COLORS[c.tipo_cliente] ?? TIPO_COLORS.particular}`}>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${TIPO_COLORS[c.tipo_cliente] ?? TIPO_COLORS.natural}`}>
                     {TIPO_LABELS_SHORT[c.tipo_cliente] ?? 'Particular'}
                   </span>
                   {c.id === clienteId && (

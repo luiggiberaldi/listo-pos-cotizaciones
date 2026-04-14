@@ -31,10 +31,8 @@ const inputClass = `
 
 // ─── Valores iniciales vacíos ─────────────────────────────────────────────────
 const TIPOS_CLIENTE = [
-  { valor: 'particular',  label: 'Particular' },
-  { valor: 'ferreteria',  label: 'Ferretería' },
-  { valor: 'constructor', label: 'Constructor' },
-  { valor: 'empresa',     label: 'Empresa' },
+  { valor: 'natural',   label: 'Natural' },
+  { valor: 'juridico',  label: 'Jurídico' },
 ]
 
 const VACIO = {
@@ -44,7 +42,7 @@ const VACIO = {
   email:        '',
   direccion:    '',
   notas:        '',
-  tipo_cliente: 'particular',
+  tipo_cliente: 'natural',
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
@@ -70,7 +68,7 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
         email:        cliente.email        ?? '',
         direccion:    cliente.direccion    ?? '',
         notas:        cliente.notas        ?? '',
-        tipo_cliente: cliente.tipo_cliente ?? 'particular',
+        tipo_cliente: cliente.tipo_cliente ?? 'natural',
       })
     }
   }, [cliente])

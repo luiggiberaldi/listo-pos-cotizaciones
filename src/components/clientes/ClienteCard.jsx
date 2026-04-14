@@ -16,17 +16,13 @@ function Contacto({ icono: Icono, valor }) {
 }
 
 const TIPO_LABELS = {
-  ferreteria:  'Ferretería',
-  constructor: 'Constructor',
-  particular:  'Particular',
-  empresa:     'Empresa',
+  natural:  'Natural',
+  juridico: 'Jurídico',
 }
 
 const TIPO_COLORS = {
-  ferreteria:  'bg-amber-50 text-amber-700 border-amber-200',
-  constructor: 'bg-sky-50 text-sky-700 border-sky-200',
-  particular:  'bg-slate-50 text-slate-600 border-slate-200',
-  empresa:     'bg-violet-50 text-violet-700 border-violet-200',
+  natural:  'bg-slate-50 text-slate-600 border-slate-200',
+  juridico: 'bg-violet-50 text-violet-700 border-violet-200',
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
@@ -50,7 +46,7 @@ export default function ClienteCard({ cliente, onEditar, onDesactivar, onReasign
             </div>
           )}
           {cliente.tipo_cliente && (
-            <span className={`inline-flex items-center gap-1 mt-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${TIPO_COLORS[cliente.tipo_cliente] || TIPO_COLORS.particular}`}>
+            <span className={`inline-flex items-center gap-1 mt-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${TIPO_COLORS[cliente.tipo_cliente] || TIPO_COLORS.natural}`}>
               <Tag size={10} />
               {TIPO_LABELS[cliente.tipo_cliente] || cliente.tipo_cliente}
             </span>

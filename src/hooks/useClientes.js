@@ -91,7 +91,7 @@ export function useCrearCliente() {
           email:       campos.email?.trim()     || null,
           direccion:   campos.direccion?.trim() || null,
           notas:       campos.notas?.trim()     || null,
-          tipo_cliente: campos.tipo_cliente || 'particular',
+          tipo_cliente: campos.tipo_cliente || 'natural',
           vendedor_id: perfil.id,
         })
         .select()
@@ -126,7 +126,7 @@ export function useActualizarCliente() {
           email:       campos.email?.trim()     || null,
           direccion:   campos.direccion?.trim() || null,
           notas:       campos.notas?.trim()     || null,
-          tipo_cliente: campos.tipo_cliente || 'particular',
+          tipo_cliente: campos.tipo_cliente || 'natural',
         })
         .eq('id', id)
         .select()

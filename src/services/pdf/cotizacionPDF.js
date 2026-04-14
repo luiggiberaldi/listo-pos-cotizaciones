@@ -117,8 +117,7 @@ export function generarPDF({ cotizacion, items = [], config = {}, returnBlob = f
   doc.setTextColor(...COLOR_DARK)
   doc.setFontSize(8)
   const TIPO_LABELS = {
-    ferreteria: 'Ferretería', constructor: 'Constructor',
-    particular: 'Particular', empresa: 'Empresa',
+    natural: 'Natural', juridico: 'Jurídico',
   }
   const cliente = cotizacion.cliente || {}
   const rightRows = [
