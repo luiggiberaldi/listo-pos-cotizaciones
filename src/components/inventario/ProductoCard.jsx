@@ -1,0 +1,116 @@
+// src/components/inventario/ProductoCard.jsx
+// Tarjeta de producto para el catálogo
+// costo_usd solo se muestra si el dato existe (supervisores)
+import { Package, Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle } from 'lucide-react'
+import useAuthStore from '../../store/useAuthStore'
+
+// ─── Formateador de precio ────────────────────────────────────────────────────
+function fmtUsd(n) {
+  if (n == null) return '—'
+  return `$${Number(n).toFixed(2)}`
+}
+
+// ─── Badge de stock ───────────────────────────────────────────────────────────
+function BadgeStock({ actual, minimo }) {
+  const bajo = actual <= minimo
+  if (bajo) return (
+    <span className="flex items-center gap-1 text-xs font-semibold text-orange-600 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full">
+      <AlertTriangle size={11} />
+      Stock bajo
+    </span>
+  )
+  return (
+    <span className="text-xs text-slate-400">
+      Stock: {Number(actual).toLocaleString('es-VE')}
+    </span>
+  )
+}
+
+// ─── Componente principal ─────────────────────────────────────────────────────
+export default function ProductoCard({ producto, onEditar, onDesactivar }) {
+  const { perfil } = useAuthStore()
+  const esSupervisor = perfil?.rol === 'supervisor'
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 hover:border-amber-200 hover:shadow-md transition-all p-4 flex flex-col gap-3">
+
+      {/* Cabecera */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          {/* Código */}
+          {producto.codigo && (
+            <div className="flex items-center gap-1 mb-1">
+              <Hash size={11} className="text-slate-400" />
+              <span className="text-xs text-slate-400 font-mono">{producto.codigo}</span>
+            </div>
+          )}
+          {/* Nombre */}
+          <h3 className="font-bold text-slate-800 text-sm leading-snug line-clamp-2">
+            {producto.nombre}
+          </h3>
+          {/* Categoría */}
+          {producto.categoria && (
+            <div className="flex items-center gap-1 mt-1">
+              <Tag size={11} className="text-slate-400" />
+              <span className="text-xs text-slate-500">{producto.categoria}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Acciones (solo supervisor) */}
+        {esSupervisor && (
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={() => onEditar(producto)}
+              title="Editar producto"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 transition-colors"
+            >
+              <Pencil size={14} />
+            </button>
+            <button
+              onClick={() => onDesactivar(producto)}
+              title="Desactivar producto"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+            >
+              <EyeOff size={14} />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Descripción */}
+      {producto.descripcion && (
+        <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
+          {producto.descripcion}
+        </p>
+      )}
+
+      {/* Precios y stock */}
+      <div className="pt-2 border-t border-slate-100 space-y-2">
+
+        {/* Precio de venta */}
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-slate-500">Precio venta</span>
+          <span className="font-bold text-slate-800 text-sm">{fmtUsd(producto.precio_usd)}</span>
+        </div>
+
+        {/* Costo (solo supervisor) */}
+        {esSupervisor && producto.costo_usd != null && (
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-400">Costo</span>
+            <span className="text-xs text-slate-500">{fmtUsd(producto.costo_usd)}</span>
+          </div>
+        )}
+
+        {/* Unidad + Stock */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1">
+            <Layers size={11} className="text-slate-400" />
+            <span className="text-xs text-slate-400">{producto.unidad}</span>
+          </div>
+          <BadgeStock actual={producto.stock_actual} minimo={producto.stock_minimo} />
+        </div>
+      </div>
+    </div>
+  )
+}

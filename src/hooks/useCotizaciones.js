@@ -1,0 +1,235 @@
+// src/hooks/useCotizaciones.js
+// Queries y mutations para cotizaciones + items
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import supabase from '../services/supabase/client'
+import useAuthStore from '../store/useAuthStore'
+import { round2 } from '../utils/dinero'
+
+export const COTIZACIONES_KEY = ['cotizaciones']
+
+// ─── Lista de cotizaciones ────────────────────────────────────────────────────
+export function useCotizaciones({ estado = '', clienteId = '' } = {}) {
+  const { perfil } = useAuthStore()
+  const esSupervisor = perfil?.rol === 'supervisor'
+
+  return useQuery({
+    queryKey: [...COTIZACIONES_KEY, estado, clienteId, esSupervisor],
+    queryFn: async () => {
+      // Supervisor usa la tabla directa (tiene notas_internas)
+      // Vendedor usa la vista sin notas_internas
+      const tabla = esSupervisor ? 'cotizaciones' : 'v_cotizaciones_vendedor'
+
+      let query = supabase
+        .from(tabla)
+        .select(`
+          id, numero, version, estado,
+          subtotal_usd, descuento_global_pct, descuento_usd,
+          costo_envio_usd, total_usd,
+          tasa_bcv_snapshot, total_bs_snapshot,
+          valida_hasta, creado_en, enviada_en,
+          notas_cliente,
+          cliente_id, vendedor_id,
+          cliente:clientes!cotizaciones_cliente_id_fkey(id, nombre, rif_cedula),
+          vendedor:usuarios!cotizaciones_vendedor_id_fkey(id, nombre)
+        `)
+        .order('creado_en', { ascending: false })
+
+      if (estado) query = query.eq('estado', estado)
+      if (clienteId) query = query.eq('cliente_id', clienteId)
+
+      const { data, error } = await query
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: !!perfil,
+  })
+}
+
+// ─── Cotización individual con items ─────────────────────────────────────────
+export function useCotizacion(id) {
+  const { perfil } = useAuthStore()
+  const esSupervisor = perfil?.rol === 'supervisor'
+
+  return useQuery({
+    queryKey: [...COTIZACIONES_KEY, id],
+    queryFn: async () => {
+      const tabla = esSupervisor ? 'cotizaciones' : 'v_cotizaciones_vendedor'
+      const { data: cot, error: e1 } = await supabase
+        .from(tabla)
+        .select('*')
+        .eq('id', id)
+        .single()
+      if (e1) throw e1
+
+      const { data: items, error: e2 } = await supabase
+        .from('cotizacion_items')
+        .select('*')
+        .eq('cotizacion_id', id)
+        .order('orden')
+      if (e2) throw e2
+
+      return { ...cot, items: items ?? [] }
+    },
+    enabled: !!id && !!perfil,
+  })
+}
+
+// ─── Guardar borrador (crear o actualizar) ────────────────────────────────────
+// Si cotizacionId es null → crea nueva. Si tiene ID → actualiza.
+export function useGuardarBorrador() {
+  const qc = useQueryClient()
+  const { perfil } = useAuthStore()
+
+  return useMutation({
+    mutationFn: async ({ cotizacionId = null, campos, items }) => {
+      // Calcular totales
+      const subtotal = round2(
+        items.reduce((s, it) =>
+          round2(s + round2(it.cantidad * it.precioUnitUsd * (1 - it.descuentoPct / 100))), 0)
+      )
+      const descuentoUsd = round2(subtotal * (Number(campos.descuentoGlobalPct) || 0) / 100)
+      const totalUsd = round2(subtotal - descuentoUsd + (Number(campos.costoEnvioUsd) || 0))
+
+      const headerData = {
+        cliente_id:           campos.clienteId,
+        transportista_id:     campos.transportistaId || null,
+        vendedor_id:          perfil.id,
+        valida_hasta:         campos.validaHasta    || null,
+        notas_cliente:        campos.notasCliente?.trim()  || null,
+        notas_internas:       campos.notasInternas?.trim() || null,
+        descuento_global_pct: Number(campos.descuentoGlobalPct) || 0,
+        costo_envio_usd:      Number(campos.costoEnvioUsd)      || 0,
+        subtotal_usd:         subtotal,
+        descuento_usd:        descuentoUsd,
+        total_usd:            totalUsd,
+      }
+
+      let id = cotizacionId
+
+      if (!id) {
+        // Crear nueva cotización
+        const { data, error } = await supabase
+          .from('cotizaciones')
+          .insert({ ...headerData, estado: 'borrador' })
+          .select('id')
+          .single()
+        if (error) throw error
+        id = data.id
+      } else {
+        // Actualizar header
+        const { error } = await supabase
+          .from('cotizaciones')
+          .update(headerData)
+          .eq('id', id)
+        if (error) throw error
+
+        // Borrar items anteriores
+        const { error: e2 } = await supabase
+          .from('cotizacion_items')
+          .delete()
+          .eq('cotizacion_id', id)
+        if (e2) throw e2
+      }
+
+      // Insertar items
+      if (items.length > 0) {
+        const rows = items.map((it, idx) => ({
+          cotizacion_id:   id,
+          producto_id:     it.productoId || null,
+          codigo_snap:     it.codigoSnap || null,
+          nombre_snap:     it.nombreSnap,
+          unidad_snap:     it.unidadSnap  || 'und',
+          cantidad:        it.cantidad,
+          precio_unit_usd: it.precioUnitUsd,
+          descuento_pct:   it.descuentoPct,
+          total_linea_usd: round2(it.cantidad * it.precioUnitUsd * (1 - it.descuentoPct / 100)),
+          orden:           idx,
+        }))
+        const { error: e3 } = await supabase.from('cotizacion_items').insert(rows)
+        if (e3) throw e3
+      }
+
+      return id
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: COTIZACIONES_KEY }),
+  })
+}
+
+// ─── Enviar cotización (RPC) ──────────────────────────────────────────────────
+export function useEnviarCotizacion() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ cotizacionId, tasaBcv }) => {
+      const { error } = await supabase.rpc('enviar_cotizacion', {
+        p_cotizacion_id: cotizacionId,
+        p_tasa_bcv:      Number(tasaBcv),
+      })
+      if (error) {
+        if (error.message.includes('SIN_ITEMS'))
+          throw new Error('La cotización no tiene productos')
+        if (error.message.includes('ESTADO_INVALIDO'))
+          throw new Error('Solo se pueden enviar cotizaciones en borrador')
+        throw error
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: COTIZACIONES_KEY }),
+  })
+}
+
+// ─── Anular cotización ────────────────────────────────────────────────────────
+export function useAnularCotizacion() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (id) => {
+      const { error } = await supabase
+        .from('cotizaciones')
+        .update({ estado: 'anulada' })
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: COTIZACIONES_KEY }),
+  })
+}
+
+// ─── Actualizar estado (supervisor) ──────────────────────────────────────────
+export function useActualizarEstado() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ id, estado }) => {
+      const { error } = await supabase
+        .from('cotizaciones')
+        .update({ estado })
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: COTIZACIONES_KEY }),
+  })
+}
+
+// ─── Crear nueva versión de cotización enviada (RPC) ──────────────────────────
+// Llama crear_version_cotizacion(p_cotizacion_id) que:
+// 1. Crea un borrador nuevo con version = anterior + 1
+// 2. Copia todos los items de la versión anterior
+// 3. Devuelve el ID del nuevo borrador
+export function useCrearVersion() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (cotizacionId) => {
+      const { data, error } = await supabase.rpc('crear_version_cotizacion', {
+        p_cotizacion_id: cotizacionId,
+      })
+      if (error) {
+        if (error.message.includes('ESTADO_INVALIDO'))
+          throw new Error('Solo se pueden versionar cotizaciones enviadas')
+        throw error
+      }
+      // data es el UUID del nuevo borrador
+      return data
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: COTIZACIONES_KEY }),
+  })
+}

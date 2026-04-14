@@ -68,7 +68,7 @@ que corresponde al sistema **Listo POS Lite** — un punto de venta completo par
 |---|---|---|
 | **Fase 0** | Arquitectura, BD y reglas de negocio | ✅ Completada (v1.1) |
 | **Fase 1** | Limpieza del proyecto + estructura base | ✅ Completada |
-| **Fase 2** | Módulo de Clientes (con anti-robo) | ⏳ Pendiente |
+| **Fase 2** | Módulo de Clientes (con anti-robo) | ✅ Completada |
 | **Fase 3** | Inventario consultable | ⏳ Pendiente |
 | **Fase 4** | Constructor de cotizaciones (wizard) | ⏳ Pendiente |
 | **Fase 5** | Generador de PDF + WhatsApp | ⏳ Pendiente |
@@ -472,6 +472,41 @@ Conectar el proyecto al repositorio GitHub real y escribir las 15 migrations SQL
 **Errores / Notas:**
 - El push requirió token PAT porque el entorno camelAI no tiene credenciales GitHub configuradas
 - Token usado temporalmente — removido del remote URL después del push
+
+---
+
+## SESIÓN 7 — 14/04/2026 — Fase 3: Módulo de Clientes
+
+### Objetivo
+Implementar el módulo completo de gestión de clientes con lógica anti-robo.
+
+### Acciones realizadas
+
+**1. Deploy inicial de la app:**
+- Creados `wrangler.jsonc` + `worker.js` para servir la SPA como Cloudflare Worker
+- Asset binding con `not_found_handling: single-page-application` para SPA routing
+- App deployada en: `https://listo-pos-cotizaciones-95qqtr.camelai.app`
+
+**2. Módulo Clientes — Archivos creados:**
+
+| Archivo | Descripción |
+|---|---|
+| `src/hooks/useClientes.js` | TanStack Query: useClientes, useCliente, useCrearCliente, useActualizarCliente, useDesactivarCliente, useReasignarCliente, useVendedores |
+| `src/components/clientes/ClienteForm.jsx` | Formulario crear/editar con validación (nombre, RIF, teléfono, email, dirección, notas) |
+| `src/components/clientes/ClienteCard.jsx` | Tarjeta de cliente con acciones (editar, desactivar, reasignar) |
+| `src/components/clientes/ReasignacionModal.jsx` | Modal exclusivo supervisor para llamar RPC reasignar_cliente() |
+| `src/views/ClientesView.jsx` | Vista principal: lista con búsqueda, grid responsive, modales integrados |
+
+**3. Comportamiento por rol:**
+- **Vendedor**: ve solo sus clientes (RLS), puede crear/editar/desactivar los propios
+- **Supervisor**: ve todos los clientes con badge de vendedor, puede reasignar vía RPC
+- **Anti-robo**: un vendedor nunca puede ver clientes de otro (enforced en BD vía RLS)
+
+**Pendiente para siguiente sesión (Fase 4):**
+- Fase 4: Inventario consultable (hook useInventario + vista + búsqueda FTS)
+
+**Errores / Notas:**
+- Ninguno. Fase 3 completada limpiamente.
 
 ---
 

@@ -30,19 +30,36 @@ const useAuthStore = create((set, get) => ({
   // ─── Inicializar: suscribirse a cambios de auth ────────────────────────────
   // Llamar UNA sola vez en el arranque de la app (App.jsx useEffect)
   initialize: () => {
+    // Timeout de seguridad: si en 8 segundos no se inicializó, forzar login
+    const timeoutId = setTimeout(() => {
+      if (!get().initialized) {
+        set({ initialized: true, user: null, perfil: null })
+      }
+    }, 8000)
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         // INITIAL_SESSION = primera verificación al registrar el listener
         if (event === 'INITIAL_SESSION') {
-          if (session?.user) {
-            await get()._cargarPerfil(session.user)
+          try {
+            if (session?.user) {
+              // Timeout de 6s para la carga del perfil
+              const perfilPromise = get()._cargarPerfil(session.user)
+              const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('timeout')), 6000)
+              )
+              await Promise.race([perfilPromise, timeoutPromise])
+            }
+          } catch (_) {
+            // Timeout o error — liberar pantalla de carga igual
+          } finally {
+            clearTimeout(timeoutId)
+            set({ initialized: true })
           }
-          set({ initialized: true })
         }
 
-        // SIGNED_IN = login exitoso (incluye token refresh inicial en algunos casos)
+        // SIGNED_IN = login exitoso
         if (event === 'SIGNED_IN' && session?.user) {
-          // Solo recargar si el perfil no está cargado aún
           if (!get().perfil || get().perfil.id !== session.user.id) {
             await get()._cargarPerfil(session.user)
           }
@@ -60,18 +77,28 @@ const useAuthStore = create((set, get) => ({
       }
     )
 
-    // Devolver la función de cleanup (para componentes que quieran limpiar)
-    return () => subscription.unsubscribe()
+    // Devolver la función de cleanup
+    return () => {
+      clearTimeout(timeoutId)
+      subscription.unsubscribe()
+    }
   },
 
   // ─── Cargar perfil desde public.usuarios ──────────────────────────────────
-  // Uso interno. Separado para poder llamarlo desde initialize y desde login.
+  // Uso interno. Con timeout de 7s para evitar colgamiento infinito.
   _cargarPerfil: async (authUser) => {
-    const { data, error } = await supabase
+    const queryPromise = supabase
       .from('usuarios')
       .select('id, nombre, rol, activo')
       .eq('id', authUser.id)
       .single()
+
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('timeout_perfil')), 7000)
+    )
+
+    const { data, error } = await Promise.race([queryPromise, timeoutPromise])
+      .catch(err => ({ data: null, error: err }))
 
     if (error || !data) {
       // El usuario existe en auth pero no en la tabla usuarios
@@ -124,7 +151,11 @@ const useAuthStore = create((set, get) => ({
 
     // El perfil se carga vía onAuthStateChange (SIGNED_IN)
     // pero lo cargamos también aquí para no depender del timing del evento
-    await get()._cargarPerfil(data.user)
+    try {
+      await get()._cargarPerfil(data.user)
+    } catch (_) {
+      // Si falla la carga del perfil, el error ya fue seteado en _cargarPerfil
+    }
     set({ loading: false })
     return { ok: true }
   },
