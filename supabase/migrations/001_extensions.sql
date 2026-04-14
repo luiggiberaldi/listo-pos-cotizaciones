@@ -1,3 +1,3 @@
--- Migration 001: extensions
--- Ver ARQUITECTURA.md sección 3 para el SQL completo
--- Estado: PENDIENTE DE EJECUCIÓN EN SUPABASE
+-- 001_extensions.sql
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- gen_random_uuid() ya viene incluido en PG14+; uuid-ossp es por compatibilidad
