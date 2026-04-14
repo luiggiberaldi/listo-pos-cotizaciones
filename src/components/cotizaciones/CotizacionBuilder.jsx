@@ -70,7 +70,7 @@ function StepIndicator({ paso, totalPasos = 4 }) {
 }
 
 // ─── Línea de ítem (desktop) ────────────────────────────────────────────────
-function ItemLinea({ item, idx, onChange, onDelete }) {
+function ItemLinea({ item, idx, onChange, onDelete, tasa = 0 }) {
   const lineTotal = round2(item.cantidad * item.precioUnitUsd * (1 - item.descuentoPct / 100))
 
   return (
@@ -107,8 +107,9 @@ function ItemLinea({ item, idx, onChange, onDelete }) {
           <span className="ml-1 text-xs text-slate-400">%</span>
         </div>
       </td>
-      <td className="py-2 px-2 text-sm font-semibold text-slate-800 text-right">
-        {fmtUsd(lineTotal)}
+      <td className="py-2 px-2 text-right">
+        <p className="text-sm font-semibold text-slate-800">{fmtUsd(lineTotal)}</p>
+        {tasa > 0 && <p className="text-[10px] text-slate-400">{fmtBs(usdToBs(lineTotal, tasa))}</p>}
       </td>
       <td className="py-2 px-2">
         <button onClick={() => onDelete(idx)}
@@ -121,7 +122,7 @@ function ItemLinea({ item, idx, onChange, onDelete }) {
 }
 
 // ─── Tarjeta de ítem (móvil) ────────────────────────────────────────────────
-function ItemCard({ item, idx, onChange, onDelete }) {
+function ItemCard({ item, idx, onChange, onDelete, tasa = 0 }) {
   const lineTotal = round2(item.cantidad * item.precioUnitUsd * (1 - item.descuentoPct / 100))
 
   return (
@@ -164,8 +165,9 @@ function ItemCard({ item, idx, onChange, onDelete }) {
         </div>
         <div className="space-y-1">
           <label className="text-xs font-medium text-slate-500">Total</label>
-          <div className="px-3 py-2.5 text-sm text-right font-bold text-slate-800 bg-white border border-slate-200 rounded-xl">
-            {fmtUsd(lineTotal)}
+          <div className="px-3 py-2.5 text-right bg-white border border-slate-200 rounded-xl">
+            <p className="text-sm font-bold text-slate-800">{fmtUsd(lineTotal)}</p>
+            {tasa > 0 && <p className="text-[10px] text-slate-400">{fmtBs(usdToBs(lineTotal, tasa))}</p>}
           </div>
         </div>
       </div>
@@ -1068,7 +1070,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
                     <tbody>
                       {items.map((it, idx) => (
                         <ItemLinea key={it._key} item={it} idx={idx}
-                          onChange={cambiarItem} onDelete={eliminarItem} />
+                          onChange={cambiarItem} onDelete={eliminarItem} tasa={tasaHook.tasaEfectiva} />
                       ))}
                     </tbody>
                   </table>
@@ -1077,7 +1079,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
                   <div className="md:hidden space-y-3">
                     {items.map((it, idx) => (
                       <ItemCard key={it._key} item={it} idx={idx}
-                        onChange={cambiarItem} onDelete={eliminarItem} />
+                        onChange={cambiarItem} onDelete={eliminarItem} tasa={tasaHook.tasaEfectiva} />
                     ))}
                   </div>
 

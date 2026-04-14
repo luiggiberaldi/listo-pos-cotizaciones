@@ -12,7 +12,8 @@ import {
 import { useAuditoria }  from '../hooks/useAuditoria'
 import { useUsuarios }   from '../hooks/useUsuarios'
 import supabase from '../services/supabase/client'
-import { fmtUsdSimple as fmtUsd, fmtFecha } from '../utils/format'
+import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs } from '../utils/format'
+import { useTasaCambio } from '../hooks/useTasaCambio'
 import CustomSelect from '../components/ui/CustomSelect'
 import Skeleton from '../components/ui/Skeleton'
 
@@ -138,7 +139,7 @@ function SkeletonAuditoria() {
 }
 
 // ─── Detalle de entidad (se muestra al expandir) ────────────────────────────
-function DetalleEntidad({ tipo, id }) {
+function DetalleEntidad({ tipo, id, tasa = 0 }) {
   const [data, setData]       = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState(null)
@@ -242,47 +243,43 @@ function DetalleEntidad({ tipo, id }) {
       : `COT-${String(data.numero).padStart(5, '0')}`
 
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 text-xs">
-        <div className="flex items-center gap-1.5">
-          <Hash size={11} className="text-slate-400" />
-          <span className="text-slate-500">Número:</span>
-          <span className="font-bold text-slate-700 font-mono">{numDisplay}</span>
+      <div className="space-y-3">
+        {/* Fila principal: número + estado + total */}
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2.5">
+            <span className="font-bold text-slate-800 font-mono text-sm">{numDisplay}</span>
+            <span className={`font-bold px-2 py-0.5 rounded-full text-[10px] ${ESTADO_COLORS[data.estado] ?? 'bg-slate-100 text-slate-500'}`}>
+              {ESTADO_LABELS[data.estado] ?? data.estado}
+            </span>
+          </div>
+          <div className="text-right">
+            <span className="font-black text-slate-800 text-sm">{fmtUsd(data.total_usd)}</span>
+            {tasa > 0 && data.total_usd > 0 && (
+              <span className="text-[11px] text-slate-400 ml-1.5">({fmtBs(usdToBs(data.total_usd, tasa))})</span>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-1.5">
-          <Info size={11} className="text-slate-400" />
-          <span className="text-slate-500">Estado:</span>
-          <span className={`font-bold px-1.5 py-0.5 rounded-full text-[10px] ${ESTADO_COLORS[data.estado] ?? 'bg-slate-100 text-slate-500'}`}>
-            {ESTADO_LABELS[data.estado] ?? data.estado}
+
+        {/* Detalles secundarios */}
+        <div className="flex items-center gap-4 flex-wrap text-xs text-slate-500">
+          <span className="flex items-center gap-1">
+            <User size={11} className="text-slate-400" />
+            {data._clienteNombre ?? 'Sin cliente'}
           </span>
+          <span className="flex items-center gap-1">
+            <Calendar size={11} className="text-slate-400" />
+            {fmtFecha(data.creado_en)}
+          </span>
+          {data.valida_hasta && (
+            <span className="flex items-center gap-1">
+              <Clock size={11} className="text-slate-400" />
+              Válida hasta {fmtFecha(data.valida_hasta)}
+            </span>
+          )}
         </div>
-        <div className="flex items-center gap-1.5">
-          <DollarSign size={11} className="text-slate-400" />
-          <span className="text-slate-500">Total:</span>
-          <span className="font-bold text-slate-700">{fmtUsd(data.total_usd)}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <User size={11} className="text-slate-400" />
-          <span className="text-slate-500">Cliente:</span>
-          <span className="font-medium text-slate-700 truncate">{data._clienteNombre ?? '—'}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <Calendar size={11} className="text-slate-400" />
-          <span className="text-slate-500">Creada:</span>
-          <span className="text-slate-600">{fmtFecha(data.creado_en)}</span>
-        </div>
-        {data.valida_hasta && (
-          <div className="flex items-center gap-1.5">
-            <Clock size={11} className="text-slate-400" />
-            <span className="text-slate-500">Válida hasta:</span>
-            <span className="text-slate-600">{fmtFecha(data.valida_hasta)}</span>
-          </div>
-        )}
+
         {data.notas_cliente && (
-          <div className="col-span-full flex items-start gap-1.5">
-            <FileText size={11} className="text-slate-400 mt-0.5" />
-            <span className="text-slate-500">Nota:</span>
-            <span className="text-slate-600 italic">{data.notas_cliente}</span>
-          </div>
+          <p className="text-xs text-slate-500 italic border-l-2 border-slate-200 pl-2">{data.notas_cliente}</p>
         )}
       </div>
     )
@@ -290,28 +287,32 @@ function DetalleEntidad({ tipo, id }) {
 
   if (data._tipo === 'cliente') {
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 text-xs">
-        <div className="flex items-center gap-1.5">
-          <User size={11} className="text-slate-400" />
-          <span className="text-slate-500">Nombre:</span>
-          <span className="font-bold text-slate-700">{data.nombre}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <Hash size={11} className="text-slate-400" />
-          <span className="text-slate-500">RIF/Cédula:</span>
-          <span className="font-mono text-slate-700">{data.rif_cedula ?? '—'}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <Info size={11} className="text-slate-400" />
-          <span className="text-slate-500">Tipo:</span>
-          <span className="font-medium text-slate-700 capitalize">{data.tipo_cliente ?? '—'}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <Info size={11} className="text-slate-400" />
-          <span className="text-slate-500">Estado:</span>
-          <span className={`font-bold ${data.activo ? 'text-emerald-600' : 'text-red-500'}`}>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <span className="font-bold text-slate-800 text-sm">{data.nombre}</span>
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${data.activo ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
             {data.activo ? 'Activo' : 'Inactivo'}
           </span>
+        </div>
+        <div className="flex items-center gap-4 flex-wrap text-xs text-slate-500">
+          {data.rif_cedula && (
+            <span className="flex items-center gap-1">
+              <Hash size={11} className="text-slate-400" />
+              {data.rif_cedula}
+            </span>
+          )}
+          {data.tipo_cliente && (
+            <span className="flex items-center gap-1 capitalize">
+              <Info size={11} className="text-slate-400" />
+              {data.tipo_cliente}
+            </span>
+          )}
+          {data.telefono && (
+            <span className="flex items-center gap-1">
+              <User size={11} className="text-slate-400" />
+              {data.telefono}
+            </span>
+          )}
         </div>
       </div>
     )
@@ -319,37 +320,30 @@ function DetalleEntidad({ tipo, id }) {
 
   if (data._tipo === 'producto') {
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 text-xs">
-        <div className="flex items-center gap-1.5">
-          <Package size={11} className="text-slate-400" />
-          <span className="text-slate-500">Producto:</span>
-          <span className="font-bold text-slate-700">{data.nombre}</span>
-        </div>
-        {data.codigo && (
-          <div className="flex items-center gap-1.5">
-            <Hash size={11} className="text-slate-400" />
-            <span className="text-slate-500">Código:</span>
-            <span className="font-mono text-slate-700">{data.codigo}</span>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-slate-800 text-sm">{data.nombre}</span>
+            {data.codigo && <span className="text-[10px] font-mono bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded">{data.codigo}</span>}
           </div>
-        )}
-        <div className="flex items-center gap-1.5">
-          <DollarSign size={11} className="text-slate-400" />
-          <span className="text-slate-500">Precio:</span>
-          <span className="font-bold text-slate-700">{fmtUsd(data.precio_usd)}</span>
-        </div>
-        {data.categoria && (
-          <div className="flex items-center gap-1.5">
-            <Info size={11} className="text-slate-400" />
-            <span className="text-slate-500">Categoría:</span>
-            <span className="text-slate-700">{data.categoria}</span>
-          </div>
-        )}
-        <div className="flex items-center gap-1.5">
-          <Info size={11} className="text-slate-400" />
-          <span className="text-slate-500">Estado:</span>
-          <span className={`font-bold ${data.activo ? 'text-emerald-600' : 'text-red-500'}`}>
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${data.activo ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
             {data.activo ? 'Activo' : 'Inactivo'}
           </span>
+        </div>
+        <div className="flex items-center gap-4 flex-wrap text-xs text-slate-500">
+          <span className="flex items-center gap-1">
+            <DollarSign size={11} className="text-slate-400" />
+            <strong className="text-slate-700">{fmtUsd(data.precio_usd)}</strong>
+            {tasa > 0 && data.precio_usd > 0 && (
+              <span className="text-slate-400">({fmtBs(usdToBs(data.precio_usd, tasa))})</span>
+            )}
+          </span>
+          {data.categoria && (
+            <span className="flex items-center gap-1">
+              <Package size={11} className="text-slate-400" />
+              {data.categoria}
+            </span>
+          )}
         </div>
       </div>
     )
@@ -357,28 +351,18 @@ function DetalleEntidad({ tipo, id }) {
 
   if (data._tipo === 'usuario') {
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-        <div className="flex items-center gap-1.5">
-          <User size={11} className="text-slate-400" />
-          <span className="text-slate-500">Nombre:</span>
-          <span className="font-bold text-slate-700">{data.nombre}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <Info size={11} className="text-slate-400" />
-          <span className="text-slate-500">Rol:</span>
-          <span className={`font-bold px-1.5 py-0.5 rounded-full text-[10px] ${
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <span className="font-bold text-slate-800 text-sm">{data.nombre}</span>
+          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
             data.rol === 'supervisor' ? 'bg-sky-100 text-sky-600' : 'bg-emerald-100 text-emerald-600'
           }`}>
             {data.rol === 'supervisor' ? 'Supervisor' : 'Vendedor'}
           </span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <Info size={11} className="text-slate-400" />
-          <span className="text-slate-500">Estado:</span>
-          <span className={`font-bold ${data.activo ? 'text-emerald-600' : 'text-red-500'}`}>
-            {data.activo ? 'Activo' : 'Inactivo'}
-          </span>
-        </div>
+        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${data.activo ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
+          {data.activo ? 'Activo' : 'Inactivo'}
+        </span>
       </div>
     )
   }
@@ -387,7 +371,7 @@ function DetalleEntidad({ tipo, id }) {
 }
 
 // ─── Tarjeta de actividad (timeline item) — expandible ──────────────────────
-function ActividadCard({ registro }) {
+function ActividadCard({ registro, tasa }) {
   const [expandido, setExpandido] = useState(false)
 
   const catKey = getCatKey(registro.categoria)
@@ -461,47 +445,26 @@ function ActividadCard({ registro }) {
       {/* Panel expandible */}
       {expandido && (
         <div className="px-4 pb-4 pt-0 border-t border-slate-100 animate-fade-in">
-          <div className="mt-3 bg-slate-50 rounded-xl p-3 space-y-3">
-            {/* Descripción completa */}
+          <div className="mt-3 space-y-3">
+
+            {/* Descripción completa si existe */}
             {registro.descripcion && (
-              <div className="text-xs">
-                <span className="font-bold text-slate-500 uppercase tracking-wide text-[10px]">Descripción</span>
-                <p className="text-slate-600 mt-1">{registro.descripcion}</p>
+              <div className="bg-slate-50 rounded-xl px-3.5 py-2.5">
+                <p className="text-xs text-slate-600 leading-relaxed">{registro.descripcion}</p>
               </div>
             )}
 
-            {/* Metadata */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-              <div>
-                <span className="text-slate-400">Acción</span>
-                <p className="font-mono text-slate-600 text-[11px]">{registro.accion}</p>
-              </div>
-              <div>
-                <span className="text-slate-400">Fecha exacta</span>
-                <p className="text-slate-600">{fmtFechaCompleta(registro.ts)}</p>
-              </div>
-              {registro.entidad_tipo && (
-                <div>
-                  <span className="text-slate-400">Entidad</span>
-                  <p className="text-slate-600 capitalize">{registro.entidad_tipo}</p>
-                </div>
-              )}
-            </div>
-
             {/* Detalle de la entidad referenciada */}
             {tieneEntidad && (
-              <div>
-                <span className="font-bold text-slate-500 uppercase tracking-wide text-[10px]">
-                  Detalle de {registro.entidad_tipo}
-                </span>
-                <div className="mt-2">
-                  <DetalleEntidad tipo={registro.entidad_tipo} id={registro.entidad_id} />
-                </div>
+              <div className="bg-slate-50 rounded-xl p-3.5">
+                <DetalleEntidad tipo={registro.entidad_tipo} id={registro.entidad_id} tasa={tasa} />
               </div>
             )}
 
             {!tieneEntidad && !registro.descripcion && (
-              <p className="text-xs text-slate-400 italic">No hay datos adicionales para esta acción.</p>
+              <div className="bg-slate-50 rounded-xl px-3.5 py-2.5">
+                <p className="text-xs text-slate-400 italic">No hay datos adicionales para esta acción.</p>
+              </div>
             )}
           </div>
         </div>
@@ -520,6 +483,7 @@ export default function AuditoriaView() {
 
   const { data, isLoading, isError, refetch } = useAuditoria({ pagina, porPagina: POR_PAGINA, usuarioId, categoria })
   const { data: usuarios = [] } = useUsuarios()
+  const { tasaEfectiva } = useTasaCambio()
 
   const registros = data?.registros ?? []
   const total     = data?.total ?? 0
@@ -600,7 +564,7 @@ export default function AuditoriaView() {
       ) : (
         <div className="space-y-3">
           {registros.map(r => (
-            <ActividadCard key={r.id} registro={r} />
+            <ActividadCard key={r.id} registro={r} tasa={tasaEfectiva} />
           ))}
         </div>
       )}
