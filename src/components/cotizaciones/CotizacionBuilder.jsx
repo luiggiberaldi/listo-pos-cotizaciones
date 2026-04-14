@@ -95,6 +95,7 @@ function ItemLinea({ item, idx, onChange, onDelete, tasa = 0 }) {
           onFocus={e => e.target.select()}
           className="w-24 px-2 py-1 text-sm text-right border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-focus bg-white"
         />
+        {tasa > 0 && <p className="text-[10px] text-slate-400 text-right pr-1">{fmtBs(usdToBs(item.precioUnitUsd, tasa))}</p>}
       </td>
       <td className="py-2 px-2">
         <div className="flex items-center">
@@ -154,6 +155,7 @@ function ItemCard({ item, idx, onChange, onDelete, tasa = 0 }) {
             onChange={e => onChange(idx, 'precioUnitUsd', Math.max(0, Number(e.target.value)))}
             className="w-full px-3 py-2.5 text-sm text-right border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-primary-focus bg-white"
           />
+          {tasa > 0 && <p className="text-[10px] text-slate-400 text-right">{fmtBs(usdToBs(item.precioUnitUsd, tasa))}</p>}
         </div>
         <div className="space-y-1">
           <label className="text-xs font-medium text-slate-500">Desc. %</label>
@@ -1198,7 +1200,10 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
                 <div className="bg-slate-50 rounded-xl p-4 space-y-2">
                   <div className="flex justify-between text-sm text-slate-600">
                     <span>Subtotal</span>
-                    <span className="font-medium">{fmtUsd(subtotal)}</span>
+                    <div className="text-right">
+                      <span className="font-medium">{fmtUsd(subtotal)}</span>
+                      {tasaHook.tasaEfectiva > 0 && <p className="text-[10px] text-slate-400">{fmtBs(usdToBs(subtotal, tasaHook.tasaEfectiva))}</p>}
+                    </div>
                   </div>
                   {descuentoUsd > 0 && (
                     <div className="flex justify-between text-sm text-emerald-600">
