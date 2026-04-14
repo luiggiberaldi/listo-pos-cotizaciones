@@ -6,7 +6,7 @@ import {
   Users, FileText, Package, Truck,
   UserCog, ClipboardList,
   LayoutDashboard, Settings, LogOut,
-  Menu, X, DollarSign, RefreshCw,
+  Menu, X, DollarSign, RefreshCw, PackageCheck,
 } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import LoginAvatar from '../auth/LoginAvatar'
@@ -18,6 +18,7 @@ const NAV_TODOS = [
   { path: '/',               label: 'Inicio',         icono: LayoutDashboard },
   { path: '/clientes',       label: 'Clientes',       icono: Users },
   { path: '/cotizaciones',   label: 'Cotizaciones',   icono: FileText },
+  { path: '/despachos',      label: 'Despachos',      icono: PackageCheck },
   { path: '/inventario',     label: 'Inventario',     icono: Package },
   { path: '/transportistas', label: 'Transportistas', icono: Truck },
 ]

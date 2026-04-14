@@ -22,6 +22,7 @@ import LoginPage from './modules/auth/LoginPage'
 const DashboardView     = lazy(() => import('./views/DashboardView'))
 const ClientesView      = lazy(() => import('./views/ClientesView'))
 const CotizacionesView  = lazy(() => import('./views/CotizacionesView'))
+const DespachosView     = lazy(() => import('./views/DespachosView'))
 const InventarioView    = lazy(() => import('./views/InventarioView'))
 const TransportistasView = lazy(() => import('./views/TransportistasView'))
 const UsuariosView      = lazy(() => import('./views/UsuariosView'))
@@ -117,6 +118,7 @@ function AppRoutes() {
             <Route path="/"               element={<DashboardView />} />
             <Route path="/clientes"       element={<ClientesView />} />
             <Route path="/cotizaciones"   element={<CotizacionesView />} />
+            <Route path="/despachos"      element={<DespachosView />} />
             <Route path="/inventario"     element={<InventarioView />} />
             <Route path="/transportistas" element={<TransportistasView />} />
 

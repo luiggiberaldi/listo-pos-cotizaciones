@@ -7,15 +7,17 @@ import { useQueryClient } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
 import useAuthStore from '../store/useAuthStore'
 import { INVENTARIO_KEY } from './useInventario'
+import { DESPACHOS_KEY } from './useDespachos'
 
 const COTIZACIONES_KEY = ['cotizaciones']
 const CLIENTES_KEY = ['clientes']
 
 // Tablas que escuchamos y sus query keys correspondientes
 const TABLAS = [
-  { tabla: 'productos',    keys: [INVENTARIO_KEY] },
-  { tabla: 'cotizaciones', keys: [COTIZACIONES_KEY] },
-  { tabla: 'clientes',     keys: [CLIENTES_KEY] },
+  { tabla: 'productos',       keys: [INVENTARIO_KEY] },
+  { tabla: 'cotizaciones',    keys: [COTIZACIONES_KEY] },
+  { tabla: 'clientes',        keys: [CLIENTES_KEY] },
+  { tabla: 'notas_despacho',  keys: [DESPACHOS_KEY, INVENTARIO_KEY] },
 ]
 
 export function useRealtimeSync() {

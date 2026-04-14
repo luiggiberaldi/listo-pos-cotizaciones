@@ -1,6 +1,6 @@
 // src/components/cotizaciones/CotizacionCard.jsx
 import { useState } from 'react'
-import { FileText, User, Calendar, Pencil, Ban, CheckCircle, XCircle, FileDown, MessageCircle, Loader2 } from 'lucide-react'
+import { FileText, User, Calendar, Pencil, Ban, CheckCircle, XCircle, FileDown, MessageCircle, Loader2, Truck } from 'lucide-react'
 import EstadoBadge from './EstadoBadge'
 import useAuthStore from '../../store/useAuthStore'
 import supabase from '../../services/supabase/client'
@@ -9,7 +9,7 @@ import { compartirPorWhatsApp, generarMensaje } from '../../utils/whatsapp'
 
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs } from '../../utils/format'
 
-export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambiarEstado, tasa = 0 }) {
+export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambiarEstado, onDespachar, tasa = 0 }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const esBorrador = cotizacion.estado === 'borrador'
@@ -149,6 +149,13 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
                 <XCircle size={16} />
               </button>
             </>
+          )}
+          {/* Supervisor puede despachar cotizaciones enviadas o aceptadas */}
+          {esSupervisor && (cotizacion.estado === 'aceptada' || cotizacion.estado === 'enviada') && onDespachar && (
+            <button onClick={() => onDespachar(cotizacion)} title="Crear nota de despacho"
+              className="p-2 rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 transition-colors">
+              <Truck size={16} />
+            </button>
           )}
           {(esBorrador || (esSupervisor && cotizacion.estado !== 'anulada')) && (
             <button onClick={() => onAnular(cotizacion)} title="Anular"
