@@ -22,8 +22,8 @@ export function useInventario({ busqueda = '', categoria = '' } = {}) {
       const tabla = esSupervisor ? 'productos' : 'v_productos_vendedor'
 
       const columnas = esSupervisor
-        ? 'id, codigo, nombre, descripcion, categoria, unidad, precio_usd, costo_usd, stock_actual, stock_minimo, activo, creado_en, actualizado_en'
-        : 'id, codigo, nombre, descripcion, categoria, unidad, precio_usd, stock_actual, stock_minimo, activo'
+        ? 'id, codigo, nombre, descripcion, categoria, unidad, precio_usd, costo_usd, stock_actual, stock_minimo, activo, imagen_url, creado_en, actualizado_en'
+        : 'id, codigo, nombre, descripcion, categoria, unidad, precio_usd, stock_actual, stock_minimo, activo, imagen_url'
 
       let query = supabase
         .from(tabla)

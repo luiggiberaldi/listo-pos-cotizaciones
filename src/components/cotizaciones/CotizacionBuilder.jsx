@@ -295,12 +295,14 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
                           ? 'border-emerald-200 bg-emerald-50/30 hover:shadow-md'
                           : 'border-slate-200 hover:border-primary hover:shadow-md active:scale-[0.98]'
                     }`}>
-                    {/* Icono + badge */}
+                    {/* Imagen/icono + badge */}
                     <div className="flex items-center justify-between">
-                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center overflow-hidden ${
                         yaAgregado ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400 group-hover:bg-primary-light group-hover:text-primary'
                       } transition-colors`}>
-                        {yaAgregado ? <CheckCircle size={16} /> : <Package size={16} />}
+                        {p.imagen_url ? (
+                          <img src={p.imagen_url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                        ) : yaAgregado ? <CheckCircle size={16} /> : <Package size={16} />}
                       </div>
                       {p.stock_actual != null && (
                         <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
@@ -347,10 +349,12 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
                           ? 'bg-emerald-50/30 hover:bg-emerald-50'
                           : 'bg-white hover:bg-primary-light/40 active:scale-[0.995]'
                     }`}>
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 overflow-hidden ${
                       yaAgregado ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'
                     }`}>
-                      {yaAgregado ? <CheckCircle size={16} /> : <Package size={16} />}
+                      {p.imagen_url ? (
+                        <img src={p.imagen_url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                      ) : yaAgregado ? <CheckCircle size={16} /> : <Package size={16} />}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-slate-800 truncate group-hover:text-primary transition-colors">{p.nombre}</p>

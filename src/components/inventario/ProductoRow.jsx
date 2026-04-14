@@ -1,6 +1,6 @@
 // src/components/inventario/ProductoRow.jsx
 // Fila compacta de producto para vista de lista
-import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle } from 'lucide-react'
+import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle, Package } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtBs, usdToBs } from '../../utils/format'
 
@@ -16,6 +16,15 @@ export default function ProductoRow({ producto, onEditar, onDesactivar, tasa = 0
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 hover:border-primary-light hover:shadow-sm transition-all px-4 py-3 flex items-center gap-4">
+
+      {/* Thumbnail */}
+      <div className="w-10 h-10 rounded-lg bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
+        {producto.imagen_url ? (
+          <img src={producto.imagen_url} alt="" className="w-full h-full object-cover" loading="lazy" />
+        ) : (
+          <Package size={18} className="text-slate-300" />
+        )}
+      </div>
 
       {/* Info principal */}
       <div className="min-w-0 flex-1">

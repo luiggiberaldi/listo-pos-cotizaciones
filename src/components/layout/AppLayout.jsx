@@ -11,6 +11,7 @@ import {
 import useAuthStore from '../../store/useAuthStore'
 import LoginAvatar from '../auth/LoginAvatar'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
+import { useRealtimeSync } from '../../hooks/useRealtimeSync'
 
 // ─── Definición de rutas de navegación ────────────────────────────────────────
 const NAV_TODOS = [
@@ -73,6 +74,9 @@ export default function AppLayout() {
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
   const { tasaBcv, tasaEfectiva, modoAuto, setModoAuto, tasaManual, setTasaManual, cargando: tasaCargando, refrescar } = useTasaCambio()
+
+  // Realtime: escucha cambios en tablas y refresca cache automáticamente
+  useRealtimeSync()
   const [showTasaConfig, setShowTasaConfig] = useState(false)
   const [tasaInput, setTasaInput] = useState(tasaManual)
   const [tasaConfirmada, setTasaConfirmada] = useState(!!tasaManual)

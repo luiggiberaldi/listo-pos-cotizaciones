@@ -1,8 +1,10 @@
 // src/components/inventario/ProductoForm.jsx
 // Formulario para crear/editar productos — solo supervisor
-import { useState, useEffect } from 'react'
-import { Hash, Package, Tag, Layers, DollarSign, BarChart2, Loader2 } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Hash, Package, Tag, Layers, DollarSign, BarChart2, Loader2, Camera, X } from 'lucide-react'
 import { useCrearProducto, useActualizarProducto } from '../../hooks/useInventario'
+import { comprimirImagen, subirImagenProducto } from '../../utils/imageCompress'
+import supabase from '../../services/supabase/client'
 import CustomSelect from '../ui/CustomSelect'
 
 function Campo({ label, icono: Icono, error, children }) {
@@ -37,6 +39,13 @@ export default function ProductoForm({ producto = null, onSuccess, onCancel }) {
   const [errores, setErrores] = useState({})
   const [errorGeneral, setErrorGeneral] = useState('')
 
+  // Imagen
+  const fileRef = useRef(null)
+  const [imagenPreview, setImagenPreview] = useState(null) // URL para preview
+  const [imagenBlob, setImagenBlob] = useState(null)       // Blob comprimido para subir
+  const [imagenEliminada, setImagenEliminada] = useState(false)
+  const [comprimiendo, setComprimiendo] = useState(false)
+
   const crear     = useCrearProducto()
   const actualizar = useActualizarProducto()
   const mutation  = esEdicion ? actualizar : crear
@@ -55,8 +64,44 @@ export default function ProductoForm({ producto = null, onSuccess, onCancel }) {
         stock_actual: producto.stock_actual != null ? String(producto.stock_actual) : '0',
         stock_minimo: producto.stock_minimo != null ? String(producto.stock_minimo) : '0',
       })
+      if (producto.imagen_url) setImagenPreview(producto.imagen_url)
     }
   }, [producto])
+
+  // Cleanup preview URLs on unmount
+  useEffect(() => {
+    return () => {
+      if (imagenPreview && imagenPreview.startsWith('blob:')) URL.revokeObjectURL(imagenPreview)
+    }
+  }, [imagenPreview])
+
+  async function handleImagen(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    // Reset file input
+    e.target.value = ''
+
+    setComprimiendo(true)
+    try {
+      const { blob, dataUrl } = await comprimirImagen(file)
+      // Limpiar preview anterior si era blob
+      if (imagenPreview?.startsWith('blob:')) URL.revokeObjectURL(imagenPreview)
+      setImagenBlob(blob)
+      setImagenPreview(dataUrl)
+      setImagenEliminada(false)
+    } catch (err) {
+      setErrorGeneral('Error al procesar la imagen: ' + err.message)
+    } finally {
+      setComprimiendo(false)
+    }
+  }
+
+  function quitarImagen() {
+    if (imagenPreview?.startsWith('blob:')) URL.revokeObjectURL(imagenPreview)
+    setImagenPreview(null)
+    setImagenBlob(null)
+    setImagenEliminada(true)
+  }
 
   function cambiar(e) {
     const { name, value } = e.target
@@ -83,19 +128,62 @@ export default function ProductoForm({ producto = null, onSuccess, onCancel }) {
     if (Object.keys(errs).length) { setErrores(errs); return }
 
     try {
+      let productoResult
       if (esEdicion) {
-        await actualizar.mutateAsync({ id: producto.id, campos })
+        productoResult = await actualizar.mutateAsync({ id: producto.id, campos })
       } else {
-        await crear.mutateAsync(campos)
+        productoResult = await crear.mutateAsync(campos)
       }
+
+      // Subir imagen si hay una nueva
+      const productoId = productoResult?.id ?? producto?.id
+      if (imagenBlob && productoId) {
+        const url = await subirImagenProducto(supabase, productoId, imagenBlob)
+        await supabase.from('productos').update({ imagen_url: url }).eq('id', productoId)
+      } else if (imagenEliminada && productoId) {
+        await supabase.from('productos').update({ imagen_url: null }).eq('id', productoId)
+      }
+
       onSuccess?.()
     } catch (err) {
       setErrorGeneral(err.message ?? 'Ocurrió un error. Intenta de nuevo.')
     }
   }
 
+  const tieneImagen = !!imagenPreview
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+
+      {/* Imagen del producto */}
+      <div className="flex items-center gap-4">
+        <div
+          onClick={() => !cargando && fileRef.current?.click()}
+          className={`relative w-20 h-20 rounded-xl border-2 border-dashed flex items-center justify-center cursor-pointer transition-all overflow-hidden shrink-0 ${
+            tieneImagen ? 'border-primary/30 bg-white' : 'border-slate-300 bg-slate-50 hover:border-primary hover:bg-primary-light'
+          }`}
+        >
+          {comprimiendo ? (
+            <Loader2 size={20} className="text-slate-400 animate-spin" />
+          ) : tieneImagen ? (
+            <img src={imagenPreview} alt="Producto" className="w-full h-full object-cover" />
+          ) : (
+            <Camera size={22} className="text-slate-400" />
+          )}
+          <input ref={fileRef} type="file" accept="image/*" className="hidden"
+            onChange={handleImagen} disabled={cargando} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-slate-700">Foto del producto</p>
+          <p className="text-xs text-slate-400">JPG, PNG o WebP. Se comprime automáticamente.</p>
+          {tieneImagen && (
+            <button type="button" onClick={quitarImagen} disabled={cargando}
+              className="flex items-center gap-1 mt-1 text-xs text-red-500 hover:text-red-700 transition-colors">
+              <X size={12} /> Quitar imagen
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* Nombre */}
       <Campo label="Nombre *" icono={Package} error={errores.nombre}>
@@ -177,7 +265,7 @@ export default function ProductoForm({ producto = null, onSuccess, onCancel }) {
           className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 transition-colors disabled:opacity-50">
           Cancelar
         </button>
-        <button type="submit" disabled={cargando}
+        <button type="submit" disabled={cargando || comprimiendo}
           className="flex-1 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white font-semibold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
           {cargando
             ? <><Loader2 size={16} className="animate-spin" /> Guardando...</>

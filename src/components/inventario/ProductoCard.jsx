@@ -1,7 +1,7 @@
 // src/components/inventario/ProductoCard.jsx
 // Tarjeta de producto para el catálogo
 // costo_usd solo se muestra si el dato existe (supervisores)
-import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle } from 'lucide-react'
+import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle, Package } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtBs, usdToBs } from '../../utils/format'
 
@@ -33,8 +33,19 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, tasa = 
   const esSupervisor = perfil?.rol === 'supervisor'
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 hover:border-primary-light hover:shadow-md transition-all p-4 flex flex-col gap-3">
+    <div className="bg-white rounded-2xl border border-slate-200 hover:border-primary-light hover:shadow-md transition-all flex flex-col gap-3 overflow-hidden">
 
+      {/* Imagen del producto */}
+      <div className="w-full aspect-square bg-slate-50 flex items-center justify-center overflow-hidden">
+        {producto.imagen_url ? (
+          <img src={producto.imagen_url} alt={producto.nombre}
+            className="w-full h-full object-cover" loading="lazy" />
+        ) : (
+          <Package size={36} className="text-slate-200" />
+        )}
+      </div>
+
+      <div className="px-4 pb-4 flex flex-col gap-3 flex-1">
       {/* Cabecera */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
@@ -121,6 +132,7 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, tasa = 
           </div>
           <BadgeStock actual={producto.stock_actual} minimo={producto.stock_minimo} />
         </div>
+      </div>
       </div>
     </div>
   )
