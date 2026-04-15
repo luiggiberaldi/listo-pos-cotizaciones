@@ -104,6 +104,13 @@ function AppRoutes() {
     return cleanup
   }, [initialize])
 
+  // Aplicar modo accesible desde localStorage al montar
+  useEffect(() => {
+    if (localStorage.getItem('modo-accesible') === '1') {
+      document.documentElement.classList.add('modo-accesible')
+    }
+  }, [])
+
   return (
     <Suspense fallback={<ViewLoader />}>
       <Routes>

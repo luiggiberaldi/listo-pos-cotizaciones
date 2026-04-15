@@ -70,7 +70,7 @@ function FormCrear({ onGuardar, onCancelar, cargando }) {
     if (!campos.nombre.trim())                   { setError('El nombre es obligatorio'); return }
     if (!/^\d{6}$/.test(campos.password))        { setError('El PIN debe ser exactamente 6 dígitos numéricos'); return }
     const email = generarEmail(campos.nombre)
-    onGuardar({ ...campos, email, color: campos.rol === 'vendedor' ? campos.color : null })
+    onGuardar({ ...campos, email, color: campos.color })
   }
 
   const inputCls = `
@@ -113,19 +113,17 @@ function FormCrear({ onGuardar, onCancelar, cargando }) {
         searchable={false}
       />
 
-      {/* Color del vendedor */}
-      {campos.rol === 'vendedor' && (
-        <div className="space-y-1.5">
-          <label className="text-xs font-bold text-slate-500 ml-1">Color del vendedor</label>
-          <div className="flex flex-wrap gap-2">
-            {COLORES_VENDEDOR.map(c => (
-              <button key={c} type="button" onClick={() => cambiar('color', c)}
-                className={`w-8 h-8 rounded-lg transition-all ${campos.color === c ? 'ring-2 ring-offset-2 ring-slate-400 scale-110' : 'hover:scale-105'}`}
-                style={{ backgroundColor: c }} />
-            ))}
-          </div>
+      {/* Color del usuario */}
+      <div className="space-y-1.5">
+        <label className="text-xs font-bold text-slate-500 ml-1">Color del usuario</label>
+        <div className="flex flex-wrap gap-2">
+          {COLORES_VENDEDOR.map(c => (
+            <button key={c} type="button" onClick={() => cambiar('color', c)}
+              className={`w-8 h-8 rounded-lg transition-all ${campos.color === c ? 'ring-2 ring-offset-2 ring-slate-400 scale-110' : 'hover:scale-105'}`}
+              style={{ backgroundColor: c }} />
+          ))}
         </div>
-      )}
+      </div>
 
       {error && <p className="text-xs text-red-500 font-bold ml-1">{error}</p>}
 
@@ -157,7 +155,7 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando }) {
       setError('El PIN debe ser exactamente 6 dígitos numéricos')
       return
     }
-    onGuardar({ nombre: campos.nombre, rol: campos.rol, pin: campos.pin || undefined, color: campos.rol === 'vendedor' ? campos.color : null })
+    onGuardar({ nombre: campos.nombre, rol: campos.rol, pin: campos.pin || undefined, color: campos.color })
   }
 
   const inputCls = `
@@ -182,19 +180,17 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando }) {
         searchable={false}
       />
 
-      {/* Color del vendedor */}
-      {campos.rol === 'vendedor' && (
-        <div className="space-y-1.5">
-          <label className="text-xs font-bold text-slate-500 ml-1">Color del vendedor</label>
-          <div className="flex flex-wrap gap-2">
-            {COLORES_VENDEDOR.map(c => (
-              <button key={c} type="button" onClick={() => setCampos(p => ({ ...p, color: c }))}
-                className={`w-8 h-8 rounded-lg transition-all ${campos.color === c ? 'ring-2 ring-offset-2 ring-slate-400 scale-110' : 'hover:scale-105'}`}
-                style={{ backgroundColor: c }} />
-            ))}
-          </div>
+      {/* Color del usuario */}
+      <div className="space-y-1.5">
+        <label className="text-xs font-bold text-slate-500 ml-1">Color del usuario</label>
+        <div className="flex flex-wrap gap-2">
+          {COLORES_VENDEDOR.map(c => (
+            <button key={c} type="button" onClick={() => setCampos(p => ({ ...p, color: c }))}
+              className={`w-8 h-8 rounded-lg transition-all ${campos.color === c ? 'ring-2 ring-offset-2 ring-slate-400 scale-110' : 'hover:scale-105'}`}
+              style={{ backgroundColor: c }} />
+          ))}
         </div>
-      )}
+      </div>
 
       {/* PIN opcional */}
       <div className="relative">
@@ -286,10 +282,11 @@ function UsuarioModal({ usuario = null, onClose }) {
 }
 
 // ─── Tarjeta de usuario ───────────────────────────────────────────────────────
-function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar }) {
+function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar, coloresUsados, onCambiarColor }) {
   const conf = ROL_CONFIG[usuario.rol] ?? ROL_CONFIG.vendedor
   const esSupervisor = usuario.rol === 'supervisor'
   const vendedorColor = usuario.color || null
+  const [showColors, setShowColors] = useState(false)
 
   return (
     <div className={`group bg-white rounded-2xl border transition-all duration-200 overflow-hidden flex flex-col ${
@@ -301,7 +298,11 @@ function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar })
 
       {/* ── Cabecera: avatar + nombre + rol ── */}
       <div className="px-4 pt-4 pb-2 flex items-center gap-3">
-        <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 shadow-sm relative ${!vendedorColor ? `bg-gradient-to-br ${conf.gradient}` : ''}`}
+        <button
+          type="button"
+          onClick={() => setShowColors(!showColors)}
+          title="Cambiar color"
+          className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 shadow-sm relative cursor-pointer ring-offset-2 transition-all hover:ring-2 hover:ring-slate-300 ${!vendedorColor ? `bg-gradient-to-br ${conf.gradient}` : ''}`}
           style={vendedorColor ? { background: `linear-gradient(135deg, ${vendedorColor}, ${vendedorColor}99)` } : undefined}>
           <span className="text-white font-black text-xl">
             {(usuario.nombre || 'U')[0].toUpperCase()}
@@ -311,7 +312,7 @@ function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar })
               <Crown size={13} className="text-yellow-400 fill-yellow-400 drop-shadow-sm" />
             </div>
           )}
-        </div>
+        </button>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
@@ -325,6 +326,35 @@ function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar })
           </span>
         </div>
       </div>
+
+      {/* ── Selector de color (expandible) ── */}
+      {showColors && (
+        <div className="px-4 pb-3">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Color</p>
+          <div className="flex flex-wrap gap-1.5">
+            {COLORES_VENDEDOR.map(c => {
+              const enUso = coloresUsados.includes(c) && c !== usuario.color
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  disabled={enUso}
+                  onClick={() => { onCambiarColor(usuario.id, c); setShowColors(false) }}
+                  className={`w-7 h-7 rounded-lg transition-all ${
+                    c === usuario.color
+                      ? 'ring-2 ring-offset-1 ring-slate-500 scale-110'
+                      : enUso
+                        ? 'opacity-20 cursor-not-allowed'
+                        : 'hover:scale-110'
+                  }`}
+                  style={{ backgroundColor: c }}
+                  title={enUso ? 'En uso por otro usuario' : c === usuario.color ? 'Color actual' : 'Seleccionar'}
+                />
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Estado + fecha ── */}
       <div className="px-4 pb-3 flex items-center justify-between">
@@ -406,11 +436,19 @@ export default function UsuariosView() {
 
   const { data: usuarios = [], isLoading, isError, refetch } = useUsuarios()
   const cambiarActivo = useCambiarActivoUsuario()
+  const actualizarUsuario = useActualizarUsuario()
   const eliminar      = useEliminarUsuario()
+
+  // Colores ya asignados (para evitar repetidos)
+  const coloresUsados = usuarios.filter(u => u.color).map(u => u.color)
 
   function abrirNuevo()   { setEditando(null); setModalAbierto(true) }
   function abrirEditar(u) { setEditando(u);    setModalAbierto(true) }
   function cerrarModal()  { setModalAbierto(false); setEditando(null) }
+
+  async function cambiarColor(id, color) {
+    await actualizarUsuario.mutateAsync({ id, color })
+  }
 
   async function confirmarCambioActivo() {
     if (!confirmCambio) return
@@ -488,6 +526,8 @@ export default function UsuariosView() {
                     onEditar={abrirEditar}
                     onCambiarActivo={(usuario, activo) => setConfirmCambio({ usuario, activo })}
                     onEliminar={setConfirmBorrar}
+                    coloresUsados={coloresUsados}
+                    onCambiarColor={cambiarColor}
                   />
                 ))}
               </div>
@@ -504,6 +544,8 @@ export default function UsuariosView() {
                     onEditar={abrirEditar}
                     onCambiarActivo={(usuario, activo) => setConfirmCambio({ usuario, activo })}
                     onEliminar={setConfirmBorrar}
+                    coloresUsados={coloresUsados}
+                    onCambiarColor={cambiarColor}
                   />
                 ))}
               </div>
