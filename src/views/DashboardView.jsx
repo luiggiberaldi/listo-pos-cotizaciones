@@ -99,12 +99,14 @@ function MetricCard({ icon: Icon, label, value, sub, color = 'primary' }) {
     slate:   'bg-slate-100 text-slate-500',
   }
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-5 flex items-center gap-4">
-      <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${colors[color]}`}>
-        <Icon size={20} />
+    <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col gap-3">
+      <div className="flex items-center gap-2.5">
+        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${colors[color]}`}>
+          <Icon size={18} />
+        </div>
+        <p className="text-xs text-slate-500 font-medium leading-tight">{label}</p>
       </div>
       <div>
-        <p className="text-xs text-slate-500 font-medium">{label}</p>
         <p className="text-2xl font-black text-slate-800 leading-tight">{value}</p>
         {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
       </div>
@@ -153,12 +155,12 @@ export default function DashboardView() {
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="bg-white rounded-2xl border border-slate-200 p-5 flex items-center gap-4">
-              <Skeleton className="w-11 h-11 rounded-xl shrink-0" />
-              <div className="space-y-2 flex-1">
-                <Skeleton className="h-3 w-1/2 rounded" />
-                <Skeleton className="h-6 w-2/3 rounded" />
+            <div key={i} className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col gap-3">
+              <div className="flex items-center gap-2.5">
+                <Skeleton className="w-9 h-9 rounded-xl shrink-0" />
+                <Skeleton className="h-3 w-2/3 rounded" />
               </div>
+              <Skeleton className="h-6 w-1/2 rounded" />
             </div>
           ))}
         </div>
