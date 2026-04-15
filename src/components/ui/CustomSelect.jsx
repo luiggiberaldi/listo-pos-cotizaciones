@@ -71,7 +71,7 @@ export default function CustomSelect({
         type="button"
         onClick={toggle}
         disabled={disabled}
-        className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border text-left transition-all text-sm ${
+        className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border text-left transition-all text-base ${
           disabled ? 'opacity-50 cursor-not-allowed bg-slate-100 border-slate-200' :
           abierto
             ? 'border-primary ring-2 ring-primary-focus bg-white'
@@ -83,11 +83,11 @@ export default function CustomSelect({
         {TriggerIcon && (
           <TriggerIcon size={15} className={seleccionada ? 'text-primary shrink-0' : 'text-slate-400 shrink-0'} />
         )}
-        <span className={`flex-1 truncate ${seleccionada ? 'text-slate-800 font-medium' : 'text-slate-400'}`}>
+        <span className={`flex-1 truncate ${seleccionada ? 'text-slate-800 font-medium' : 'text-slate-500'}`}>
           {seleccionada ? seleccionada.label : placeholder}
         </span>
         {seleccionada?.sub && (
-          <span className="text-xs text-slate-400 truncate max-w-[120px] hidden sm:inline">{seleccionada.sub}</span>
+          <span className="text-xs text-slate-500 truncate max-w-[120px] hidden sm:inline">{seleccionada.sub}</span>
         )}
         {clearable && seleccionada && !disabled && (
           <button type="button" onClick={limpiar}
@@ -111,7 +111,7 @@ export default function CustomSelect({
                   value={busqueda}
                   onChange={e => setBusqueda(e.target.value)}
                   placeholder="Buscar..."
-                  className="w-full pl-7 pr-3 py-1.5 text-sm border border-slate-100 rounded-lg bg-slate-50 focus:outline-none focus:ring-1 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400"
+                  className="w-full pl-7 pr-3 py-2.5 text-base border border-slate-100 rounded-lg bg-slate-50 focus:outline-none focus:ring-1 focus:ring-primary-focus focus:border-primary placeholder:text-slate-500"
                   autoFocus
                 />
               </div>
@@ -121,7 +121,7 @@ export default function CustomSelect({
           {/* Lista */}
           <div className="max-h-52 overflow-y-auto py-1">
             {filtradas.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-4">
+              <p className="text-base text-slate-500 text-center py-4">
                 {busqueda ? 'Sin resultados' : 'Sin opciones'}
               </p>
             ) : (
@@ -133,7 +133,7 @@ export default function CustomSelect({
                     key={opt.value}
                     type="button"
                     onClick={() => elegir(opt.value)}
-                    className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left text-sm transition-colors ${
+                    className={`w-full flex items-center gap-2.5 px-3.5 py-3 text-left text-base transition-colors ${
                       isSelected
                         ? 'bg-primary-light/40 text-primary font-medium'
                         : 'hover:bg-slate-50 text-slate-700'
@@ -141,7 +141,7 @@ export default function CustomSelect({
                   >
                     {OptIcon && <OptIcon size={14} className={isSelected ? 'text-primary shrink-0' : 'text-slate-400 shrink-0'} />}
                     <span className="flex-1 truncate">{opt.label}</span>
-                    {opt.sub && <span className="text-xs text-slate-400 truncate max-w-[140px]">{opt.sub}</span>}
+                    {opt.sub && <span className="text-xs text-slate-500 truncate max-w-[140px]">{opt.sub}</span>}
                     {isSelected && <Check size={14} className="text-primary shrink-0" />}
                   </button>
                 )

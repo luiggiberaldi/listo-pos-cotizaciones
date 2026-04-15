@@ -4,6 +4,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
 import useAuthStore from '../store/useAuthStore'
 import { round2 } from '../utils/dinero'
+import {
+  notifyCotizacionEnviada,
+  notifyCotizacionAceptada,
+  notifyCotizacionAnulada,
+} from '../services/notificationService'
+import { showToast } from '../components/ui/Toast'
+import { sendPushNotification } from './usePushNotifications'
 
 export const COTIZACIONES_KEY = ['cotizaciones']
 
@@ -28,7 +35,7 @@ export function useCotizaciones({ estado = '', clienteId = '' } = {}) {
             notas_cliente,
             cliente_id, vendedor_id,
             cliente:clientes!cotizaciones_cliente_id_fkey(id, nombre, rif_cedula, telefono, tipo_cliente),
-            vendedor:usuarios!cotizaciones_vendedor_id_fkey(id, nombre)
+            vendedor:usuarios!cotizaciones_vendedor_id_fkey(id, nombre, color)
           `)
           .order('creado_en', { ascending: false })
 
@@ -62,7 +69,7 @@ export function useCotizaciones({ estado = '', clienteId = '' } = {}) {
           ? supabase.from('clientes').select('id, nombre, rif_cedula, telefono, tipo_cliente').in('id', clienteIds)
           : { data: [] },
         vendedorIds.length
-          ? supabase.from('usuarios').select('id, nombre').in('id', vendedorIds)
+          ? supabase.from('usuarios').select('id, nombre, color').in('id', vendedorIds)
           : { data: [] },
       ])
 
@@ -194,7 +201,7 @@ export function useEnviarCotizacion() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ cotizacionId, tasaBcv }) => {
+    mutationFn: async ({ cotizacionId, tasaBcv, numero, clienteNombre }) => {
       const { error } = await supabase.rpc('enviar_cotizacion', {
         p_cotizacion_id: cotizacionId,
         p_tasa_bcv:      Number(tasaBcv),
@@ -206,8 +213,19 @@ export function useEnviarCotizacion() {
           throw new Error('Solo se pueden enviar cotizaciones en borrador')
         throw error
       }
+      return { numero, clienteNombre }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: COTIZACIONES_KEY }),
+    onSuccess: ({ numero, clienteNombre }) => {
+      qc.invalidateQueries({ queryKey: COTIZACIONES_KEY })
+      showToast(`Cotización #${numero} enviada`, 'success')
+      notifyCotizacionEnviada(numero, clienteNombre ?? 'cliente')
+      sendPushNotification({
+        title: '📤 Cotización Enviada',
+        message: `Cotización #${numero} enviada a ${clienteNombre ?? 'cliente'}`,
+        tag: `cotizacion-enviada-${numero}`,
+        url: '/cotizaciones',
+      })
+    },
   })
 }
 
@@ -216,14 +234,19 @@ export function useAnularCotizacion() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async (id) => {
+    mutationFn: async ({ id, numero }) => {
       const { error } = await supabase
         .from('cotizaciones')
         .update({ estado: 'anulada' })
         .eq('id', id)
       if (error) throw error
+      return { numero }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: COTIZACIONES_KEY }),
+    onSuccess: ({ numero }) => {
+      qc.invalidateQueries({ queryKey: COTIZACIONES_KEY })
+      showToast(`Cotización #${numero} anulada`, 'warning')
+      notifyCotizacionAnulada(numero)
+    },
   })
 }
 
@@ -232,14 +255,27 @@ export function useActualizarEstado() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ id, estado }) => {
+    mutationFn: async ({ id, estado, numero, clienteNombre, totalUsd }) => {
       const { error } = await supabase
         .from('cotizaciones')
         .update({ estado })
         .eq('id', id)
       if (error) throw error
+      return { estado, numero, clienteNombre, totalUsd }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: COTIZACIONES_KEY }),
+    onSuccess: ({ estado, numero, clienteNombre, totalUsd }) => {
+      qc.invalidateQueries({ queryKey: COTIZACIONES_KEY })
+      if (estado === 'aceptada') {
+        showToast(`Cotización #${numero} aceptada`, 'success')
+        notifyCotizacionAceptada(numero, clienteNombre ?? 'cliente', totalUsd ?? 0)
+        sendPushNotification({
+          title: '✅ Cotización Aceptada',
+          message: `Cotización #${numero} — ${clienteNombre ?? 'cliente'} — $${Number(totalUsd).toFixed(2)}`,
+          tag: `cotizacion-aceptada-${numero}`,
+          url: '/cotizaciones',
+        })
+      }
+    },
   })
 }
 

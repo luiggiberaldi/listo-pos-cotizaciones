@@ -5,6 +5,9 @@ import supabase from '../services/supabase/client'
 import useAuthStore from '../store/useAuthStore'
 import { INVENTARIO_KEY } from './useInventario'
 import { COTIZACIONES_KEY } from './useCotizaciones'
+import { notifyDespachoCreado } from '../services/notificationService'
+import { showToast } from '../components/ui/Toast'
+import { sendPushNotification } from './usePushNotifications'
 
 export const DESPACHOS_KEY = ['despachos']
 
@@ -24,7 +27,7 @@ export function useDespachos({ estado = '' } = {}) {
           creado_en, despachada_en, entregada_en,
           cliente_id, vendedor_id, transportista_id,
           cliente:clientes!notas_despacho_cliente_id_fkey(id, nombre, rif_cedula, telefono),
-          vendedor:usuarios!notas_despacho_vendedor_id_fkey(id, nombre),
+          vendedor:usuarios!notas_despacho_vendedor_id_fkey(id, nombre, color),
           cotizacion:cotizaciones!notas_despacho_cotizacion_id_fkey(id, numero, version)
         `)
         .order('creado_en', { ascending: false })
@@ -44,7 +47,7 @@ export function useCrearDespacho() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ cotizacionId, notas = null }) => {
+    mutationFn: async ({ cotizacionId, notas = null, numeroCotizacion, clienteNombre }) => {
       const { data, error } = await supabase.rpc('crear_nota_despacho', {
         p_cotizacion_id: cotizacionId,
         p_notas: notas || null,
@@ -60,11 +63,19 @@ export function useCrearDespacho() {
           throw new Error('Solo supervisores pueden crear notas de despacho')
         throw error
       }
-      return data // UUID del despacho
+      return { id: data, numeroCotizacion, clienteNombre }
     },
-    onSuccess: () => {
+    onSuccess: ({ numeroCotizacion, clienteNombre }) => {
       qc.invalidateQueries({ queryKey: DESPACHOS_KEY })
       qc.invalidateQueries({ queryKey: INVENTARIO_KEY })
+      showToast('Nota de despacho creada', 'success')
+      notifyDespachoCreado(numeroCotizacion ?? '—', clienteNombre ?? 'cliente')
+      sendPushNotification({
+        title: '🚚 Orden de Despacho Creada',
+        message: `Despacho para cotización #${numeroCotizacion ?? '—'} — ${clienteNombre ?? 'cliente'}`,
+        tag: `despacho-${numeroCotizacion}`,
+        url: '/despachos',
+      })
     },
   })
 }

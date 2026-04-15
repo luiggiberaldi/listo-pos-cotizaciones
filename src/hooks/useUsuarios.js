@@ -16,7 +16,7 @@ export function useUsuarios() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('usuarios')
-        .select('id, nombre, rol, activo, creado_en')
+        .select('id, nombre, rol, activo, creado_en, color')
         .order('nombre')
       if (error) throw error
       return data ?? []
@@ -29,8 +29,8 @@ export function useUsuarios() {
 export function useCrearUsuario() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ email, password, nombre, rol }) => {
-      await adminAPI.createUser({ email, password, nombre, rol })
+    mutationFn: async ({ email, password, nombre, rol, color }) => {
+      await adminAPI.createUser({ email, password, nombre, rol, color })
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   })
@@ -40,8 +40,8 @@ export function useCrearUsuario() {
 export function useActualizarUsuario() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, nombre, rol, pin }) => {
-      await adminAPI.updateUser(id, { nombre, rol, pin })
+    mutationFn: async ({ id, nombre, rol, pin, color }) => {
+      await adminAPI.updateUser(id, { nombre, rol, pin, color })
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   })

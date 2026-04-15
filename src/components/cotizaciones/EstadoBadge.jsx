@@ -27,7 +27,7 @@ const ETIQUETAS = {
 
 export default function EstadoBadge({ estado }) {
   return (
-    <span className={`inline-flex items-center text-xs font-semibold px-2.5 py-0.5 rounded-full border ${ESTILOS[estado] ?? ESTILOS.borrador}`}>
+    <span className={`inline-flex items-center text-sm font-semibold px-2.5 py-1 rounded-full border ${ESTILOS[estado] ?? ESTILOS.borrador}`}>
       {ETIQUETAS[estado] ?? estado}
     </span>
   )

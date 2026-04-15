@@ -33,9 +33,25 @@ const ROL_CONFIG = {
   },
 }
 
+// Colores predefinidos para vendedores
+const COLORES_VENDEDOR = [
+  '#EF4444', // rojo
+  '#F97316', // naranja
+  '#F59E0B', // ámbar
+  '#84CC16', // lima
+  '#22C55E', // verde
+  '#14B8A6', // teal
+  '#06B6D4', // cyan
+  '#3B82F6', // azul
+  '#6366F1', // indigo
+  '#8B5CF6', // violeta
+  '#D946EF', // fucsia
+  '#EC4899', // rosa
+]
+
 // ─── Formulario crear usuario ─────────────────────────────────────────────────
 function FormCrear({ onGuardar, onCancelar, cargando }) {
-  const [campos, setCampos] = useState({ nombre: '', password: '', rol: 'vendedor' })
+  const [campos, setCampos] = useState({ nombre: '', password: '', rol: 'vendedor', color: COLORES_VENDEDOR[0] })
   const [mostrarPass, setMostrarPass] = useState(false)
   const [error, setError] = useState('')
 
@@ -54,7 +70,7 @@ function FormCrear({ onGuardar, onCancelar, cargando }) {
     if (!campos.nombre.trim())                   { setError('El nombre es obligatorio'); return }
     if (!/^\d{6}$/.test(campos.password))        { setError('El PIN debe ser exactamente 6 dígitos numéricos'); return }
     const email = generarEmail(campos.nombre)
-    onGuardar({ ...campos, email })
+    onGuardar({ ...campos, email, color: campos.rol === 'vendedor' ? campos.color : null })
   }
 
   const inputCls = `
@@ -97,6 +113,20 @@ function FormCrear({ onGuardar, onCancelar, cargando }) {
         searchable={false}
       />
 
+      {/* Color del vendedor */}
+      {campos.rol === 'vendedor' && (
+        <div className="space-y-1.5">
+          <label className="text-xs font-bold text-slate-500 ml-1">Color del vendedor</label>
+          <div className="flex flex-wrap gap-2">
+            {COLORES_VENDEDOR.map(c => (
+              <button key={c} type="button" onClick={() => cambiar('color', c)}
+                className={`w-8 h-8 rounded-lg transition-all ${campos.color === c ? 'ring-2 ring-offset-2 ring-slate-400 scale-110' : 'hover:scale-105'}`}
+                style={{ backgroundColor: c }} />
+            ))}
+          </div>
+        </div>
+      )}
+
       {error && <p className="text-xs text-red-500 font-bold ml-1">{error}</p>}
 
       <div className="flex justify-end gap-3 pt-2">
@@ -116,7 +146,7 @@ function FormCrear({ onGuardar, onCancelar, cargando }) {
 
 // ─── Formulario editar usuario ────────────────────────────────────────────────
 function FormEditar({ usuario, onGuardar, onCancelar, cargando }) {
-  const [campos, setCampos] = useState({ nombre: usuario.nombre, rol: usuario.rol, pin: '' })
+  const [campos, setCampos] = useState({ nombre: usuario.nombre, rol: usuario.rol, pin: '', color: usuario.color || COLORES_VENDEDOR[0] })
   const [mostrarPin, setMostrarPin] = useState(false)
   const [error, setError] = useState('')
 
@@ -127,7 +157,7 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando }) {
       setError('El PIN debe ser exactamente 6 dígitos numéricos')
       return
     }
-    onGuardar({ nombre: campos.nombre, rol: campos.rol, pin: campos.pin || undefined })
+    onGuardar({ nombre: campos.nombre, rol: campos.rol, pin: campos.pin || undefined, color: campos.rol === 'vendedor' ? campos.color : null })
   }
 
   const inputCls = `
@@ -152,6 +182,20 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando }) {
         searchable={false}
       />
 
+      {/* Color del vendedor */}
+      {campos.rol === 'vendedor' && (
+        <div className="space-y-1.5">
+          <label className="text-xs font-bold text-slate-500 ml-1">Color del vendedor</label>
+          <div className="flex flex-wrap gap-2">
+            {COLORES_VENDEDOR.map(c => (
+              <button key={c} type="button" onClick={() => setCampos(p => ({ ...p, color: c }))}
+                className={`w-8 h-8 rounded-lg transition-all ${campos.color === c ? 'ring-2 ring-offset-2 ring-slate-400 scale-110' : 'hover:scale-105'}`}
+                style={{ backgroundColor: c }} />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* PIN opcional */}
       <div className="relative">
         <input
@@ -169,7 +213,7 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando }) {
         </button>
       </div>
       {campos.pin.length > 0 && campos.pin.length < 6 && (
-        <p className="text-xs text-slate-400 ml-1">{6 - campos.pin.length} dígitos restantes</p>
+        <p className="text-sm text-slate-500 ml-1">{6 - campos.pin.length} dígitos restantes</p>
       )}
 
       {error && <p className="text-xs text-red-500 font-bold ml-1">{error}</p>}
@@ -245,16 +289,19 @@ function UsuarioModal({ usuario = null, onClose }) {
 function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar }) {
   const conf = ROL_CONFIG[usuario.rol] ?? ROL_CONFIG.vendedor
   const esSupervisor = usuario.rol === 'supervisor'
+  const vendedorColor = usuario.color || null
 
   return (
     <div className={`bg-white rounded-2xl border transition-all p-4 flex flex-col gap-3 ${
       usuario.activo
         ? `${conf.border} hover:shadow-md`
         : 'border-slate-100 opacity-60'
-    }`}>
+    }`}
+      style={vendedorColor && usuario.activo ? { borderLeftWidth: '4px', borderLeftColor: vendedorColor } : undefined}>
       <div className="flex items-center gap-3">
         {/* Avatar con inicial */}
-        <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${conf.gradient} flex items-center justify-center shrink-0 shadow-sm relative`}>
+        <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 shadow-sm relative ${!vendedorColor ? `bg-gradient-to-br ${conf.gradient}` : ''}`}
+          style={vendedorColor ? { background: `linear-gradient(135deg, ${vendedorColor}, ${vendedorColor}99)` } : undefined}>
           <span className="text-white font-black text-xl">
             {(usuario.nombre || 'U')[0].toUpperCase()}
           </span>
@@ -269,10 +316,10 @@ function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar })
           <div className="flex items-center gap-2">
             <p className="text-sm font-black text-slate-800 truncate">{usuario.nombre}</p>
             {propio && (
-              <span className="text-[8px] font-black uppercase tracking-wider bg-sky-100 text-sky-500 px-1.5 py-0.5 rounded-full shrink-0">Tú</span>
+              <span className="text-xs font-black uppercase tracking-wider bg-sky-100 text-sky-500 px-1.5 py-0.5 rounded-full shrink-0">Tú</span>
             )}
           </div>
-          <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${conf.bg} ${conf.text}`}>
+          <span className={`text-sm font-bold px-2 py-0.5 rounded-full ${conf.bg} ${conf.text}`}>
             {conf.label}
           </span>
         </div>
@@ -280,34 +327,37 @@ function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar })
         {!propio && (
           <div className="flex items-center gap-1 shrink-0">
             <button onClick={() => onEditar(usuario)} title="Editar"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-sky-500 hover:bg-sky-50 transition-colors">
+              className="px-2.5 py-2 rounded-lg text-slate-500 hover:text-sky-500 hover:bg-sky-50 transition-colors flex items-center gap-1 text-sm">
               <Pencil size={14} />
+              <span>Editar</span>
             </button>
             <button
               onClick={() => onCambiarActivo(usuario, !usuario.activo)}
               title={usuario.activo ? 'Desactivar' : 'Activar'}
-              className={`p-1.5 rounded-lg transition-colors ${
+              className={`px-2.5 py-2 rounded-lg transition-colors flex items-center gap-1 text-sm ${
                 usuario.activo
-                  ? 'text-slate-400 hover:text-primary hover:bg-primary-light'
-                  : 'text-slate-400 hover:text-emerald-500 hover:bg-emerald-50'
+                  ? 'text-slate-500 hover:text-primary hover:bg-primary-light'
+                  : 'text-slate-500 hover:text-emerald-500 hover:bg-emerald-50'
               }`}>
               {usuario.activo ? <UserX size={14} /> : <UserCheck size={14} />}
+              <span>{usuario.activo ? 'Desactivar' : 'Activar'}</span>
             </button>
             <button onClick={() => onEliminar(usuario)} title="Eliminar"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+              className="px-2.5 py-2 rounded-lg text-slate-500 hover:text-red-500 hover:bg-red-50 transition-colors flex items-center gap-1 text-sm">
               <Trash2 size={14} />
+              <span>Eliminar</span>
             </button>
           </div>
         )}
       </div>
 
       <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-          usuario.activo ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'
+        <span className={`text-sm font-bold px-2 py-0.5 rounded-full ${
+          usuario.activo ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
         }`}>
           {usuario.activo ? 'Activo' : 'Inactivo'}
         </span>
-        <span className="text-xs text-slate-400">
+        <span className="text-sm text-slate-500">
           {new Date(usuario.creado_en).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}
         </span>
       </div>
@@ -420,7 +470,7 @@ export default function UsuariosView() {
         <div className="space-y-6">
           {activos.length > 0 && (
             <div className="space-y-3">
-              <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest">Activos</h2>
+              <h2 className="text-sm font-black text-slate-500 uppercase tracking-widest">Activos</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
                 {activos.map(u => (
                   <UsuarioCard key={u.id} usuario={u}
@@ -436,7 +486,7 @@ export default function UsuariosView() {
 
           {inactivos.length > 0 && (
             <div className="space-y-3">
-              <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">Inactivos</h2>
+              <h2 className="text-sm font-black text-slate-500 uppercase tracking-widest">Inactivos</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
                 {inactivos.map(u => (
                   <UsuarioCard key={u.id} usuario={u}

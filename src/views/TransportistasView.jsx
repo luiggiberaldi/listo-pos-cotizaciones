@@ -35,48 +35,48 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
     onGuardar(campos)
   }
 
-  const inputCls = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400'
+  const inputCls = 'w-full px-3 py-3 rounded-xl border border-slate-200 bg-slate-50 text-base text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-500'
 
   return (
     <form onSubmit={submit} className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Nombre *</label>
+          <label className="text-base font-medium text-slate-700">Nombre *</label>
           <input value={campos.nombre} onChange={e => cambiar('nombre', e.target.value)}
             placeholder="Nombre del transportista" className={inputCls} disabled={cargando} />
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">RIF</label>
+          <label className="text-base font-medium text-slate-700">RIF</label>
           <input value={campos.rif} onChange={e => cambiar('rif', e.target.value)}
             placeholder="J-00000000-0" className={inputCls} disabled={cargando} />
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Teléfono</label>
+          <label className="text-base font-medium text-slate-700">Teléfono</label>
           <input value={campos.telefono} onChange={e => cambiar('telefono', e.target.value)}
             placeholder="0414-000-0000" className={inputCls} disabled={cargando} />
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Zona de cobertura</label>
+          <label className="text-base font-medium text-slate-700">Zona de cobertura</label>
           <input value={campos.zona_cobertura} onChange={e => cambiar('zona_cobertura', e.target.value)}
             placeholder="Ej: Caracas y Miranda" className={inputCls} disabled={cargando} />
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Tarifa base (USD)</label>
+          <label className="text-base font-medium text-slate-700">Tarifa base (USD)</label>
           <input type="number" min="0" step="0.01"
             value={campos.tarifa_base} onChange={e => cambiar('tarifa_base', e.target.value)}
             placeholder="0.00" className={inputCls} disabled={cargando} />
         </div>
       </div>
 
-      {error && <p className="text-xs text-red-500">{error}</p>}
+      {error && <p className="text-sm text-red-500">{error}</p>}
 
       <div className="flex justify-end gap-3 pt-2">
         <button type="button" onClick={onCancelar} disabled={cargando}
-          className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50">
+          className="px-5 py-3 rounded-xl border border-slate-200 text-slate-600 text-base font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50">
           Cancelar
         </button>
         <button type="submit" disabled={cargando}
-          className="px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-white text-sm font-semibold transition-colors disabled:opacity-50">
+          className="px-5 py-3 rounded-xl bg-primary hover:bg-primary-hover text-white text-base font-semibold transition-colors disabled:opacity-50">
           {cargando ? 'Guardando...' : 'Guardar'}
         </button>
       </div>
@@ -119,7 +119,7 @@ function TransportistaModal({ transportista = null, onClose }) {
           </h3>
         </div>
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-sm text-red-700">
+          <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-base text-red-700">
             {error}
           </div>
         )}
@@ -144,9 +144,9 @@ function TransportistaCard({ transportista, esSupervisor, onEditar, onDesactivar
             <Truck size={16} className="text-primary" />
           </div>
           <div>
-            <p className="font-bold text-slate-800 text-sm leading-tight">{transportista.nombre}</p>
+            <p className="font-bold text-slate-800 text-base leading-tight">{transportista.nombre}</p>
             {transportista.rif && (
-              <p className="text-xs text-slate-400 font-mono">{transportista.rif}</p>
+              <p className="text-sm text-slate-500 font-mono">{transportista.rif}</p>
             )}
           </div>
         </div>
@@ -154,12 +154,14 @@ function TransportistaCard({ transportista, esSupervisor, onEditar, onDesactivar
         {esSupervisor && (
           <div className="flex items-center gap-1 shrink-0">
             <button onClick={() => onEditar(transportista)} title="Editar"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-light transition-colors">
+              className="px-2.5 py-2 rounded-lg text-slate-500 hover:text-primary hover:bg-primary-light transition-colors flex items-center gap-1.5">
               <Pencil size={14} />
+              <span className="text-sm">Editar</span>
             </button>
             <button onClick={() => onDesactivar(transportista)} title="Desactivar"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+              className="px-2.5 py-2 rounded-lg text-slate-500 hover:text-red-500 hover:bg-red-50 transition-colors flex items-center gap-1.5">
               <Ban size={14} />
+              <span className="text-sm">Eliminar</span>
             </button>
           </div>
         )}
@@ -167,24 +169,24 @@ function TransportistaCard({ transportista, esSupervisor, onEditar, onDesactivar
 
       <div className="space-y-1.5">
         {transportista.telefono && (
-          <div className="flex items-center gap-1.5 text-xs text-slate-500">
-            <Phone size={11} className="text-slate-400 shrink-0" />
+          <div className="flex items-center gap-1.5 text-sm text-slate-500">
+            <Phone size={11} className="text-slate-500 shrink-0" />
             <span>{transportista.telefono}</span>
           </div>
         )}
         {transportista.zona_cobertura && (
-          <div className="flex items-center gap-1.5 text-xs text-slate-500">
-            <MapPin size={11} className="text-slate-400 shrink-0" />
+          <div className="flex items-center gap-1.5 text-sm text-slate-500">
+            <MapPin size={11} className="text-slate-500 shrink-0" />
             <span>{transportista.zona_cobertura}</span>
           </div>
         )}
       </div>
 
       <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-        <span className="text-xs text-slate-400">Tarifa base</span>
+        <span className="text-sm text-slate-500">Tarifa base</span>
         <div className="flex items-center gap-1">
-          <DollarSign size={11} className="text-slate-400" />
-          <span className="font-bold text-slate-800 text-sm">
+          <DollarSign size={11} className="text-slate-500" />
+          <span className="font-bold text-slate-800 text-base">
             {Number(transportista.tarifa_base || 0).toFixed(2)}
           </span>
         </div>
@@ -252,7 +254,7 @@ export default function TransportistasView() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-slate-800">Transportistas</h1>
-            <p className="text-sm text-slate-500">
+            <p className="text-base text-slate-500">
               {isLoading ? 'Cargando...' : `${transportistas.length} activo${transportistas.length !== 1 ? 's' : ''}`}
             </p>
           </div>
@@ -260,12 +262,12 @@ export default function TransportistasView() {
 
         <div className="flex items-center gap-2">
           <button onClick={() => refetch()}
-            className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
-            <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+            className="p-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
+            <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
           </button>
           {esSupervisor && (
             <button onClick={abrirNuevo}
-              className="flex items-center gap-2 bg-primary hover:bg-primary-hover text-white font-semibold text-sm px-4 py-2.5 rounded-xl transition-colors shadow-sm">
+              className="flex items-center gap-2 bg-primary hover:bg-primary-hover text-white font-semibold text-base px-5 py-3 rounded-xl transition-colors shadow-sm">
               <Plus size={16} />
               Nuevo transportista
             </button>
@@ -279,7 +281,7 @@ export default function TransportistasView() {
       ) : isError ? (
         <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center text-red-700">
           <p className="font-semibold">Error al cargar transportistas</p>
-          <button onClick={() => refetch()} className="mt-3 text-sm underline">Intentar de nuevo</button>
+          <button onClick={() => refetch()} className="mt-3 text-base underline">Intentar de nuevo</button>
         </div>
       ) : transportistas.length === 0 ? (
         <EmptyState

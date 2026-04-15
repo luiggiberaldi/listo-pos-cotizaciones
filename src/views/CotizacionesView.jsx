@@ -86,8 +86,8 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
 
         {/* Cliente */}
         <div className="bg-slate-50 rounded-xl px-4 py-2.5 flex items-center justify-between">
-          <span className="text-xs text-slate-400 font-semibold uppercase">Cliente</span>
-          <span className="text-sm font-bold text-slate-700 truncate ml-3">{cotizacion.cliente?.nombre ?? '—'}</span>
+          <span className="text-sm text-slate-500 font-semibold uppercase">Cliente</span>
+          <span className="text-base font-bold text-slate-700 truncate ml-3">{cotizacion.cliente?.nombre ?? '—'}</span>
         </div>
 
         {/* Tabla de items */}
@@ -99,7 +99,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-xs text-slate-400 uppercase border-b border-slate-100">
+                <tr className="text-sm text-slate-500 uppercase border-b border-slate-100">
                   <th className="text-left py-2 font-semibold">Producto</th>
                   <th className="text-center py-2 font-semibold w-16">Cant.</th>
                   <th className="text-right py-2 font-semibold w-24">P. Unit.</th>
@@ -112,7 +112,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                     <td className="py-2 pr-2">
                       <p className="font-medium text-slate-700 truncate max-w-[200px]">{item.nombre_snap}</p>
                       {item.codigo_snap && (
-                        <p className="text-[10px] text-slate-400 font-mono">{item.codigo_snap}</p>
+                        <p className="text-xs text-slate-500 font-mono">{item.codigo_snap}</p>
                       )}
                     </td>
                     <td className="py-2 text-center text-slate-600">
@@ -152,7 +152,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
             <div className="text-right">
               <span className="font-black text-slate-800">{fmtUsd(cotizacion.total_usd)}</span>
               {tasa > 0 && (
-                <div className="text-[11px] text-slate-400">{fmtBs(usdToBs(cotizacion.total_usd, tasa))}</div>
+                <div className="text-sm text-slate-500">{fmtBs(usdToBs(cotizacion.total_usd, tasa))}</div>
               )}
             </div>
           </div>
@@ -161,14 +161,14 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
         {/* Botones */}
         <div className="flex flex-col-reverse sm:flex-row gap-3 pt-1">
           <button onClick={onCancel} disabled={cargando}
-            className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 transition-colors disabled:opacity-50">
+            className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-700 font-semibold text-base hover:bg-slate-50 transition-colors disabled:opacity-50">
             Cancelar
           </button>
           <button onClick={onConfirm} disabled={cargando || items.length === 0}
-            className="flex-1 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-semibold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20">
+            className="flex-1 py-3 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-semibold text-base transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20">
             {cargando
-              ? <><Loader2 size={14} className="animate-spin" />Procesando...</>
-              : <><PackageCheck size={14} />Confirmar despacho</>}
+              ? <><Loader2 size={16} className="animate-spin" />Procesando...</>
+              : <><PackageCheck size={16} />Confirmar despacho</>}
           </button>
         </div>
       </div>
@@ -201,14 +201,14 @@ function ModalVersionar({ cotizacion, onConfirm, onCancel, cargando }) {
 
         <div className="flex flex-col-reverse sm:flex-row gap-3">
           <button onClick={onCancel} disabled={cargando}
-            className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 transition-colors disabled:opacity-50">
+            className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-700 font-semibold text-base hover:bg-slate-50 transition-colors disabled:opacity-50">
             Cancelar
           </button>
           <button onClick={onConfirm} disabled={cargando}
-            className="flex-1 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white font-semibold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+            className="flex-1 py-3 rounded-xl bg-primary hover:bg-primary-hover text-white font-semibold text-base transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
             {cargando
               ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Creando...</>
-              : <><GitBranch size={14} />Crear Rev.{(cotizacion.version ?? 1) + 1}</>}
+              : <><GitBranch size={16} />Crear Rev.{(cotizacion.version ?? 1) + 1}</>}
           </button>
         </div>
       </div>
@@ -265,33 +265,33 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
           </div>
           <div>
             <h1 className="text-xl font-bold text-slate-800">Cotizaciones</h1>
-            <p className="text-sm text-slate-500">
+            <p className="text-base text-slate-600">
               {isLoading ? 'Cargando...' : `${cotizaciones.length} cotización${cotizaciones.length !== 1 ? 'es' : ''}`}
             </p>
           </div>
         </div>
         <button onClick={onNueva}
-          className="flex items-center gap-2 bg-primary hover:bg-primary-hover text-white font-semibold text-sm px-4 py-2.5 rounded-xl transition-colors shadow-sm">
-          <Plus size={16} />
+          className="flex items-center gap-2 bg-primary hover:bg-primary-hover text-white font-semibold text-base px-5 py-3 rounded-xl transition-colors shadow-sm">
+          <Plus size={18} />
           Nueva cotización
         </button>
       </div>
 
       {/* Filtros de estado */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <Filter size={14} className="text-slate-400 shrink-0" />
+      <div className="flex items-center gap-2.5 flex-wrap">
+        <Filter size={16} className="text-slate-500 shrink-0" />
         {ESTADOS_FILTRO.map(({ valor, label }) => (
           <button key={valor} onClick={() => setEstadoFiltro(valor)}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
+            className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors border ${
               estadoFiltro === valor
                 ? 'bg-primary text-white border-primary'
-                : 'bg-white text-slate-600 border-slate-200 hover:border-primary-focus'
+                : 'bg-white text-slate-700 border-slate-200 hover:border-primary-focus'
             }`}>
             {label}
           </button>
         ))}
-        <button onClick={() => refetch()} className="ml-auto p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
-          <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+        <button onClick={() => refetch()} title="Recargar" className="ml-auto p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
+          <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
         </button>
       </div>
 

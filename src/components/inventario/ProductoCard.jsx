@@ -15,13 +15,13 @@ function fmtUsd(n) {
 function BadgeStock({ actual, minimo }) {
   const bajo = actual <= minimo
   if (bajo) return (
-    <span className="flex items-center gap-1 text-xs font-semibold text-orange-600 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full">
+    <span className="flex items-center gap-1 text-sm font-semibold text-orange-600 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full">
       <AlertTriangle size={11} />
       Stock bajo
     </span>
   )
   return (
-    <span className="text-xs text-slate-400">
+    <span className="text-sm text-slate-500">
       Stock: {Number(actual).toLocaleString('es-VE')}
     </span>
   )
@@ -52,19 +52,19 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, tasa = 
           {/* Código */}
           {producto.codigo && (
             <div className="flex items-center gap-1 mb-1">
-              <Hash size={11} className="text-slate-400" />
-              <span className="text-xs text-slate-400 font-mono">{producto.codigo}</span>
+              <Hash size={11} className="text-slate-500" />
+              <span className="text-sm text-slate-500 font-mono">{producto.codigo}</span>
             </div>
           )}
           {/* Nombre */}
-          <h3 className="font-bold text-slate-800 text-sm leading-snug line-clamp-2">
+          <h3 className="font-bold text-slate-800 text-base leading-snug line-clamp-2">
             {producto.nombre}
           </h3>
           {/* Categoría */}
           {producto.categoria && (
             <div className="flex items-center gap-1 mt-1">
-              <Tag size={11} className="text-slate-400" />
-              <span className="text-xs text-slate-500">{producto.categoria}</span>
+              <Tag size={11} className="text-slate-500" />
+              <span className="text-sm text-slate-500">{producto.categoria}</span>
             </div>
           )}
         </div>
@@ -75,14 +75,14 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, tasa = 
             <button
               onClick={() => onEditar(producto)}
               title="Editar producto"
-              className="p-2 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-light transition-colors"
+              className="p-2 rounded-lg text-slate-500 hover:text-primary hover:bg-primary-light transition-colors"
             >
               <Pencil size={16} />
             </button>
             <button
               onClick={() => onDesactivar(producto)}
               title="Desactivar producto"
-              className="p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+              className="p-2 rounded-lg text-slate-500 hover:text-red-500 hover:bg-red-50 transition-colors"
             >
               <EyeOff size={16} />
             </button>
@@ -92,7 +92,7 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, tasa = 
 
       {/* Descripción */}
       {producto.descripcion && (
-        <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
+        <p className="text-sm text-slate-500 line-clamp-2 leading-relaxed">
           {producto.descripcion}
         </p>
       )}
@@ -102,11 +102,11 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, tasa = 
 
         {/* Precio de venta */}
         <div className="flex items-center justify-between">
-          <span className="text-xs text-slate-500">Precio venta</span>
+          <span className="text-sm text-slate-500">Precio venta</span>
           <div className="text-right">
-            <span className="font-bold text-slate-800 text-sm">{fmtUsd(producto.precio_usd)}</span>
+            <span className="font-bold text-slate-800 text-base">{fmtUsd(producto.precio_usd)}</span>
             {tasa > 0 && producto.precio_usd != null && (
-              <div className="text-[11px] text-slate-400">{fmtBs(usdToBs(producto.precio_usd, tasa))}</div>
+              <div className="text-sm text-slate-500">{fmtBs(usdToBs(producto.precio_usd, tasa))}</div>
             )}
           </div>
         </div>
@@ -114,11 +114,11 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, tasa = 
         {/* Costo (solo supervisor) */}
         {esSupervisor && producto.costo_usd != null && (
           <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-400">Costo</span>
+            <span className="text-sm text-slate-500">Costo</span>
             <div className="text-right">
-              <span className="text-xs text-slate-500">{fmtUsd(producto.costo_usd)}</span>
+              <span className="text-sm text-slate-500">{fmtUsd(producto.costo_usd)}</span>
               {tasa > 0 && (
-                <div className="text-[10px] text-slate-400">{fmtBs(usdToBs(producto.costo_usd, tasa))}</div>
+                <div className="text-sm text-slate-500">{fmtBs(usdToBs(producto.costo_usd, tasa))}</div>
               )}
             </div>
           </div>
@@ -127,8 +127,8 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, tasa = 
         {/* Unidad + Stock */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1">
-            <Layers size={11} className="text-slate-400" />
-            <span className="text-xs text-slate-400">{producto.unidad}</span>
+            <Layers size={11} className="text-slate-500" />
+            <span className="text-sm text-slate-500">{producto.unidad}</span>
           </div>
           <BadgeStock actual={producto.stock_actual} minimo={producto.stock_minimo} />
         </div>

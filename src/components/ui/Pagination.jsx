@@ -32,20 +32,20 @@ export default function Pagination({ paginaActual, totalPaginas, onCambiarPagina
       <button
         onClick={() => onCambiarPagina(paginaActual - 1)}
         disabled={paginaActual === 1}
-        className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        className="p-3 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
       >
-        <ChevronLeft size={16} />
+        <ChevronLeft size={18} />
       </button>
 
       {/* Números */}
       {getPaginas().map((p, i) =>
         p === '...' ? (
-          <span key={`dots-${i}`} className="px-1 text-slate-400 text-sm">...</span>
+          <span key={`dots-${i}`} className="px-1 text-slate-400 text-base">...</span>
         ) : (
           <button
             key={p}
             onClick={() => onCambiarPagina(p)}
-            className={`min-w-[32px] h-8 rounded-lg text-sm font-medium transition-colors ${
+            className={`min-w-[40px] h-10 rounded-lg text-base font-medium transition-colors ${
               p === paginaActual
                 ? 'bg-primary text-white shadow-sm'
                 : 'text-slate-600 hover:bg-slate-100'
@@ -60,9 +60,9 @@ export default function Pagination({ paginaActual, totalPaginas, onCambiarPagina
       <button
         onClick={() => onCambiarPagina(paginaActual + 1)}
         disabled={paginaActual === totalPaginas}
-        className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        className="p-3 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
       >
-        <ChevronRight size={16} />
+        <ChevronRight size={18} />
       </button>
     </div>
   )

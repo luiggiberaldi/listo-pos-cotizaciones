@@ -64,7 +64,7 @@ export default function ConfiguracionView() {
     }
   }
 
-  const inputCls = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400'
+  const inputCls = 'w-full px-3 py-3 rounded-xl border border-slate-200 bg-slate-50 text-base text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400'
   const cargando = actualizar.isPending
 
   return (
@@ -77,7 +77,7 @@ export default function ConfiguracionView() {
         </div>
         <div>
           <h1 className="text-xl font-bold text-slate-800">Configuración del negocio</h1>
-          <p className="text-sm text-slate-500">Datos que aparecen en el encabezado de los PDFs</p>
+          <p className="text-base text-slate-500">Datos que aparecen en el encabezado de los PDFs</p>
         </div>
       </div>
 
@@ -85,13 +85,13 @@ export default function ConfiguracionView() {
 
         {/* Sección: Identidad */}
         <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-          <h2 className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
+          <h2 className="flex items-center gap-2 text-base font-bold text-slate-700 uppercase tracking-wide">
             <Building2 size={14} className="text-slate-400" />
             Identidad
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5 sm:col-span-2">
-              <label className="text-sm font-medium text-slate-700">Nombre del negocio *</label>
+              <label className="text-base font-medium text-slate-700">Nombre del negocio *</label>
               <input
                 value={campos.nombre_negocio}
                 onChange={e => cambiar('nombre_negocio', e.target.value)}
@@ -100,7 +100,7 @@ export default function ConfiguracionView() {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-slate-700">RIF</label>
+              <label className="text-base font-medium text-slate-700">RIF</label>
               <input
                 value={campos.rif_negocio}
                 onChange={e => cambiar('rif_negocio', e.target.value)}
@@ -113,13 +113,13 @@ export default function ConfiguracionView() {
 
         {/* Sección: Contacto */}
         <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-          <h2 className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
+          <h2 className="flex items-center gap-2 text-base font-bold text-slate-700 uppercase tracking-wide">
             <Phone size={14} className="text-slate-400" />
             Contacto
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+              <label className="flex items-center gap-1.5 text-base font-medium text-slate-700">
                 <Phone size={12} className="text-slate-400" /> Teléfono
               </label>
               <input
@@ -130,7 +130,7 @@ export default function ConfiguracionView() {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+              <label className="flex items-center gap-1.5 text-base font-medium text-slate-700">
                 <Mail size={12} className="text-slate-400" /> Email
               </label>
               <input
@@ -142,7 +142,7 @@ export default function ConfiguracionView() {
               />
             </div>
             <div className="space-y-1.5 sm:col-span-2">
-              <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+              <label className="flex items-center gap-1.5 text-base font-medium text-slate-700">
                 <MapPin size={12} className="text-slate-400" /> Dirección
               </label>
               <input
@@ -157,15 +157,15 @@ export default function ConfiguracionView() {
 
         {/* Sección: PDF */}
         <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-          <h2 className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
+          <h2 className="flex items-center gap-2 text-base font-bold text-slate-700 uppercase tracking-wide">
             <FileText size={14} className="text-slate-400" />
             PDF y cotizaciones
           </h2>
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-slate-700">
+              <label className="text-base font-medium text-slate-700">
                 Pie de página del PDF
-                <span className="ml-1.5 text-xs text-slate-400">(aparece al final de cada cotización)</span>
+                <span className="ml-1.5 text-sm text-slate-500">(aparece al final de cada cotización)</span>
               </label>
               <textarea
                 value={campos.pie_pagina_pdf}
@@ -176,15 +176,15 @@ export default function ConfiguracionView() {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-slate-700">
+              <label className="text-base font-medium text-slate-700">
                 Validez por defecto de cotizaciones
-                <span className="ml-1.5 text-xs text-slate-400">(días)</span>
+                <span className="ml-1.5 text-sm text-slate-500">(días)</span>
               </label>
               <input
                 type="number" min="1" max="365"
                 value={campos.validez_cotizacion_dias}
                 onChange={e => cambiar('validez_cotizacion_dias', Math.max(1, Number(e.target.value)))}
-                className="w-32 px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus"
+                className="w-32 px-3 py-3 rounded-xl border border-slate-200 bg-slate-50 text-base text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus"
                 disabled={isLoading || cargando}
               />
             </div>
@@ -193,17 +193,17 @@ export default function ConfiguracionView() {
 
         {/* Sección: Acceso al sistema (gate) */}
         <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-          <h2 className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
+          <h2 className="flex items-center gap-2 text-base font-bold text-slate-700 uppercase tracking-wide">
             <Lock size={14} className="text-slate-400" />
             Acceso al sistema
           </h2>
-          <p className="text-xs text-slate-500 -mt-2">
+          <p className="text-sm text-slate-500 -mt-2">
             Credenciales compartidas que se usan en todos los dispositivos para entrar al sistema.
             Cada vendedor se identifica después con su PIN personal.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+              <label className="flex items-center gap-1.5 text-base font-medium text-slate-700">
                 <Mail size={12} className="text-slate-400" /> Correo de acceso
               </label>
               <input
@@ -215,9 +215,9 @@ export default function ConfiguracionView() {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+              <label className="flex items-center gap-1.5 text-base font-medium text-slate-700">
                 <Lock size={12} className="text-slate-400" /> Nueva contraseña
-                <span className="text-xs text-slate-400">(dejar vacío para no cambiar)</span>
+                <span className="text-sm text-slate-500">(dejar vacío para no cambiar)</span>
               </label>
               <div className="relative">
                 <input
@@ -238,12 +238,12 @@ export default function ConfiguracionView() {
             </div>
           </div>
           {config.gate_email && (
-            <p className="text-xs text-emerald-600 font-medium">
+            <p className="text-sm text-emerald-600 font-medium">
               Acceso configurado: {config.gate_email}
             </p>
           )}
           {!config.gate_email && (
-            <p className="text-xs text-amber-600 font-medium">
+            <p className="text-sm text-amber-600 font-medium">
               Sin configurar — cualquier persona puede acceder al paso de usuarios.
             </p>
           )}
@@ -251,7 +251,7 @@ export default function ConfiguracionView() {
 
         {/* Error */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
+          <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-base text-red-700">
             {error}
           </div>
         )}
@@ -259,7 +259,7 @@ export default function ConfiguracionView() {
         {/* Botón guardar */}
         <div className="flex items-center justify-end gap-3">
           {guardado && (
-            <div className="flex items-center gap-1.5 text-sm text-emerald-600 font-medium">
+            <div className="flex items-center gap-1.5 text-base text-emerald-600 font-medium">
               <CheckCircle size={15} />
               Cambios guardados
             </div>
@@ -267,7 +267,7 @@ export default function ConfiguracionView() {
           <button
             type="submit"
             disabled={isLoading || cargando}
-            className="flex items-center gap-2 bg-primary hover:bg-primary-hover text-white font-semibold text-sm px-5 py-2.5 rounded-xl transition-colors shadow-sm disabled:opacity-50"
+            className="flex items-center gap-2 bg-primary hover:bg-primary-hover text-white font-semibold text-base px-5 py-3 rounded-xl transition-colors shadow-sm disabled:opacity-50"
           >
             {cargando
               ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Guardando...</>

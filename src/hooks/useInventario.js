@@ -6,6 +6,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
 import useAuthStore from '../store/useAuthStore'
 import { sanitizePostgrestSearch } from '../utils/format'
+import { notifyStockBajo } from '../services/notificationService'
+import { showToast } from '../components/ui/Toast'
 
 export const INVENTARIO_KEY = ['inventario']
 
@@ -49,7 +51,15 @@ export function useInventario({ busqueda = '', categoria = '' } = {}) {
 
       const { data, error } = await query
       if (error) throw error
-      return data ?? []
+      const productos = data ?? []
+
+      // Verificar stock bajo al cargar (solo supervisor, solo sin filtros activos)
+      if (esSupervisor && !busqueda && !categoria) {
+        const bajos = productos.filter(p => p.stock_actual <= p.stock_minimo)
+        if (bajos.length > 0) notifyStockBajo(bajos)
+      }
+
+      return productos
     },
     enabled: !!perfil,
   })
@@ -108,7 +118,10 @@ export function useCrearProducto() {
       }
       return data
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: INVENTARIO_KEY }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: INVENTARIO_KEY })
+      showToast('Producto creado', 'success')
+    },
   })
 }
 
@@ -141,7 +154,13 @@ export function useActualizarProducto() {
       }
       return data
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: INVENTARIO_KEY }),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: INVENTARIO_KEY })
+      showToast('Producto actualizado', 'success')
+      if (data.stock_actual <= data.stock_minimo) {
+        notifyStockBajo([data])
+      }
+    },
   })
 }
 

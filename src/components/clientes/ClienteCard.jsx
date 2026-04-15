@@ -9,7 +9,7 @@ function Contacto({ icono: Icono, valor }) {
   if (!valor) return null
   return (
     <div className="flex items-center gap-1.5 text-sm text-slate-500">
-      <Icono size={13} className="shrink-0 text-slate-400" />
+      <Icono size={14} className="shrink-0 text-slate-500" />
       <span className="truncate">{valor}</span>
     </div>
   )
@@ -41,13 +41,13 @@ export default function ClienteCard({ cliente, onEditar, onDesactivar, onReasign
           </h3>
           {cliente.rif_cedula && (
             <div className="flex items-center gap-1 mt-0.5">
-              <Hash size={11} className="text-slate-400" />
-              <span className="text-xs text-slate-400">{cliente.rif_cedula}</span>
+              <Hash size={12} className="text-slate-500" />
+              <span className="text-sm text-slate-500">{cliente.rif_cedula}</span>
             </div>
           )}
           {cliente.tipo_cliente && (
-            <span className={`inline-flex items-center gap-1 mt-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${TIPO_COLORS[cliente.tipo_cliente] || TIPO_COLORS.natural}`}>
-              <Tag size={10} />
+            <span className={`inline-flex items-center gap-1 mt-1.5 text-sm font-semibold px-2 py-0.5 rounded-full border ${TIPO_COLORS[cliente.tipo_cliente] || TIPO_COLORS.natural}`}>
+              <Tag size={12} />
               {TIPO_LABELS[cliente.tipo_cliente] || cliente.tipo_cliente}
             </span>
           )}
@@ -58,9 +58,10 @@ export default function ClienteCard({ cliente, onEditar, onDesactivar, onReasign
           <button
             onClick={() => onEditar(cliente)}
             title="Editar cliente"
-            className="p-2 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-light transition-colors"
+            className="px-2.5 py-2 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-light transition-colors flex items-center gap-1"
           >
             <Pencil size={16} />
+            <span className="text-sm">Editar</span>
           </button>
 
           {/* Reasignar: solo supervisor */}
@@ -68,16 +69,17 @@ export default function ClienteCard({ cliente, onEditar, onDesactivar, onReasign
             <button
               onClick={() => onReasignar(cliente)}
               title="Reasignar cliente"
-              className="p-2 rounded-lg text-slate-400 hover:text-sky-500 hover:bg-sky-50 transition-colors"
+              className="px-2.5 py-2 rounded-lg text-slate-400 hover:text-sky-500 hover:bg-sky-50 transition-colors flex items-center gap-1"
             >
               <ArrowRightLeft size={16} />
+              <span className="text-sm">Reasignar</span>
             </button>
           )}
 
           <button
             onClick={() => onDesactivar(cliente)}
             title="Desactivar cliente"
-            className="p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+            className="px-2.5 py-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
           >
             <UserMinus size={16} />
           </button>
@@ -94,8 +96,8 @@ export default function ClienteCard({ cliente, onEditar, onDesactivar, onReasign
       {/* Footer: vendedor asignado (solo visible para supervisor) */}
       {esSupervisor && cliente.vendedor && (
         <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-          <span className="text-xs text-slate-400">Vendedor</span>
-          <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">
+          <span className="text-sm text-slate-500">Vendedor</span>
+          <span className="text-sm font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">
             {cliente.vendedor.nombre}
           </span>
         </div>
@@ -103,7 +105,7 @@ export default function ClienteCard({ cliente, onEditar, onDesactivar, onReasign
 
       {/* Nota si fue reasignado */}
       {cliente.ultima_reasig_en && (
-        <div className="text-xs text-slate-400 bg-slate-50 rounded-lg px-3 py-1.5 border border-slate-100">
+        <div className="text-sm text-slate-500 bg-slate-50 rounded-lg px-3 py-1.5 border border-slate-100">
           Reasignado: {new Date(cliente.ultima_reasig_en).toLocaleDateString('es-VE')}
         </div>
       )}

@@ -10,19 +10,19 @@ import CustomSelect from '../ui/CustomSelect'
 function Campo({ label, icono: Icono, error, children }) {
   return (
     <div className="space-y-1.5">
-      <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+      <label className="flex items-center gap-1.5 text-base font-medium text-slate-700">
         {Icono && <Icono size={14} className="text-slate-400" />}
         {label}
       </label>
       {children}
-      {error && <p className="text-xs text-red-500">{error}</p>}
+      {error && <p className="text-sm text-red-600">{error}</p>}
     </div>
   )
 }
 
 // ─── Estilo base de input ─────────────────────────────────────────────────────
 const inputClass = `
-  w-full px-3 py-2.5 rounded-xl border text-sm text-slate-800
+  w-full px-3 py-3 rounded-xl border text-base text-slate-800
   bg-slate-50 border-slate-200
   focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary
   placeholder:text-slate-400
@@ -206,7 +206,7 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
 
       {/* Error general */}
       {errorGeneral && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-base text-red-700">
           {errorGeneral}
         </div>
       )}
@@ -217,14 +217,14 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
           type="button"
           onClick={onCancel}
           disabled={cargando}
-          className="flex-1 py-2.5 px-4 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 transition-colors disabled:opacity-50"
+          className="flex-1 py-3 px-4 rounded-xl border border-slate-200 text-slate-600 font-semibold text-base hover:bg-slate-50 transition-colors disabled:opacity-50"
         >
           Cancelar
         </button>
         <button
           type="submit"
           disabled={cargando}
-          className={`flex-1 py-2.5 px-4 rounded-xl text-white font-semibold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2 ${
+          className={`flex-1 py-3 px-4 rounded-xl text-white font-semibold text-base transition-colors disabled:opacity-50 flex items-center justify-center gap-2 ${
             compact
               ? 'bg-emerald-500 hover:bg-emerald-600'
               : 'bg-primary hover:bg-primary-hover'

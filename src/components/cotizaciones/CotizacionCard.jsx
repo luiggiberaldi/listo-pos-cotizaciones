@@ -96,14 +96,17 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
     }
   }
 
+  const vendedorColor = cotizacion.vendedor?.color || null
+
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 hover:border-primary-light hover:shadow-md transition-all p-4 flex flex-col gap-3">
+    <div className="bg-white rounded-2xl border border-slate-200 hover:border-primary-light hover:shadow-md transition-all p-4 flex flex-col gap-3"
+      style={vendedorColor ? { borderLeftWidth: '4px', borderLeftColor: vendedorColor } : undefined}>
 
       {/* Cabecera: número + estado */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
           <FileText size={14} className="text-primary shrink-0" />
-          <span className="font-bold text-slate-800 text-sm font-mono truncate">{numDisplay}</span>
+          <span className="font-bold text-slate-800 text-base font-mono truncate">{numDisplay}</span>
         </div>
         <EstadoBadge estado={cotizacion.estado} />
       </div>
@@ -112,64 +115,85 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
       <div className="flex items-center gap-1 flex-wrap">
         {esBorrador && (
           <button onClick={() => onEditar(cotizacion)} title="Editar borrador"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-light transition-colors">
-            <Pencil size={15} />
+            className="px-2.5 py-2 rounded-lg text-slate-500 hover:text-primary hover:bg-primary-light transition-colors">
+            <span className="flex items-center gap-1.5">
+              <Pencil size={15} />
+              <span className="text-sm font-medium">Editar</span>
+            </span>
           </button>
         )}
         {/* PDF — disponible en cotizaciones enviadas/aceptadas/rechazadas */}
         {cotizacion.estado !== 'borrador' && cotizacion.estado !== 'anulada' && (
           <button onClick={descargarPDF} disabled={pdfLoading} title="Descargar PDF"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-blue-500 hover:bg-blue-50 transition-colors disabled:opacity-40">
-            {pdfLoading
-              ? <div className="w-3.5 h-3.5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-              : <FileDown size={15} />}
+            className="px-2.5 py-2 rounded-lg text-slate-500 hover:text-blue-500 hover:bg-blue-50 transition-colors disabled:opacity-40">
+            <span className="flex items-center gap-1.5">
+              {pdfLoading
+                ? <div className="w-3.5 h-3.5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                : <FileDown size={15} />}
+              <span className="text-sm font-medium">PDF</span>
+            </span>
           </button>
         )}
         {/* WhatsApp — disponible en cotizaciones enviadas/aceptadas */}
         {(cotizacion.estado === 'enviada' || cotizacion.estado === 'aceptada') && (
           <button onClick={handleWhatsApp} disabled={waLoading} title="Compartir por WhatsApp"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-40">
-            {waLoading
-              ? <div className="w-3.5 h-3.5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
-              : <MessageCircle size={15} />}
+            className="px-2.5 py-2 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-40">
+            <span className="flex items-center gap-1.5">
+              {waLoading
+                ? <div className="w-3.5 h-3.5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+                : <MessageCircle size={15} />}
+              <span className="text-sm font-medium">WhatsApp</span>
+            </span>
           </button>
         )}
         {/* Supervisor puede marcar como aceptada/rechazada */}
         {esSupervisor && esEnviada && (
           <>
             <button onClick={() => onCambiarEstado(cotizacion.id, 'aceptada')} title="Marcar aceptada"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 transition-colors">
-              <CheckCircle size={15} />
+              className="px-2.5 py-2 rounded-lg text-slate-500 hover:text-emerald-500 hover:bg-emerald-50 transition-colors">
+              <span className="flex items-center gap-1.5">
+                <CheckCircle size={15} />
+                <span className="text-sm font-medium">Aceptar</span>
+              </span>
             </button>
             <button onClick={() => onCambiarEstado(cotizacion.id, 'rechazada')} title="Marcar rechazada"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
-              <XCircle size={15} />
+              className="px-2.5 py-2 rounded-lg text-slate-500 hover:text-red-500 hover:bg-red-50 transition-colors">
+              <span className="flex items-center gap-1.5">
+                <XCircle size={15} />
+                <span className="text-sm font-medium">Rechazar</span>
+              </span>
             </button>
           </>
         )}
         {/* Supervisor puede despachar cotizaciones enviadas o aceptadas */}
         {esSupervisor && (cotizacion.estado === 'aceptada' || cotizacion.estado === 'enviada') && onDespachar && (
           <button onClick={() => onDespachar(cotizacion)} title="Crear nota de despacho"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 transition-colors">
-            <Truck size={15} />
+            className="px-2.5 py-2 rounded-lg text-slate-500 hover:text-indigo-500 hover:bg-indigo-50 transition-colors">
+            <span className="flex items-center gap-1.5">
+              <Truck size={15} />
+              <span className="text-sm font-medium">Despachar</span>
+            </span>
           </button>
         )}
         {(esBorrador || (esSupervisor && cotizacion.estado !== 'anulada')) && (
           <button onClick={() => onAnular(cotizacion)} title="Anular"
-            className="ml-auto p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
-            <Ban size={15} />
+            className="ml-auto px-2.5 py-2 rounded-lg text-slate-500 hover:text-red-500 hover:bg-red-50 transition-colors">
+            <span className="flex items-center gap-1.5">
+              <Ban size={15} />
+              <span className="text-sm font-medium">Anular</span>
+            </span>
           </button>
         )}
       </div>
 
       {/* Cliente */}
-      <div className="flex items-center gap-1.5 text-sm text-slate-600">
-        <User size={13} className="text-slate-400 shrink-0" />
+      <div className="flex items-center gap-1.5 text-base text-slate-600">
+        <User size={13} className="text-slate-500 shrink-0" />
         <span className="truncate font-medium">{cotizacion.cliente?.nombre ?? '—'}</span>
       </div>
 
       {/* Fecha */}
-      <div className="flex items-center gap-1.5 text-xs text-slate-400">
+      <div className="flex items-center gap-1.5 text-sm text-slate-500">
         <Calendar size={12} />
         <span>{fmtFecha(cotizacion.creado_en)}</span>
         {cotizacion.valida_hasta && (
@@ -179,11 +203,11 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
 
       {/* Total */}
       <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-        <span className="text-xs text-slate-400">Total</span>
+        <span className="text-sm text-slate-500">Total</span>
         <div className="text-right">
           <span className="font-bold text-slate-800">{fmtUsd(cotizacion.total_usd)}</span>
           {tasa > 0 && cotizacion.total_usd > 0 && (
-            <div className="text-[11px] text-slate-400">{fmtBs(usdToBs(cotizacion.total_usd, tasa))}</div>
+            <div className="text-sm text-slate-500">{fmtBs(usdToBs(cotizacion.total_usd, tasa))}</div>
           )}
         </div>
       </div>
@@ -191,8 +215,12 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
       {/* Vendedor (solo supervisor) */}
       {esSupervisor && cotizacion.vendedor && (
         <div className="flex items-center justify-between -mt-1">
-          <span className="text-xs text-slate-400">Vendedor</span>
-          <span className="text-xs font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">
+          <span className="text-sm text-slate-500">Vendedor</span>
+          <span className="text-xs font-medium px-2 py-0.5 rounded-full"
+            style={vendedorColor
+              ? { backgroundColor: vendedorColor + '18', color: vendedorColor, border: `1px solid ${vendedorColor}40` }
+              : { backgroundColor: '#f1f5f9', color: '#475569' }
+            }>
             {cotizacion.vendedor.nombre}
           </span>
         </div>

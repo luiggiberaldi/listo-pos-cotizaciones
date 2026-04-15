@@ -1,17 +1,42 @@
 // src/components/layout/AppLayout.jsx
 // Layout principal: sidebar fijo en desktop, drawer en móvil
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import {
   Users, FileText, Package, Truck,
   UserCog, ClipboardList,
   LayoutDashboard, Settings, LogOut,
-  Menu, X, DollarSign, RefreshCw, PackageCheck,
+  Menu, X, DollarSign, RefreshCw, PackageCheck, Bell, BellOff,
+  AlertTriangle, Send, CheckCircle, Ban,
 } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import LoginAvatar from '../auth/LoginAvatar'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
 import { useRealtimeSync } from '../../hooks/useRealtimeSync'
+import { useAdminAlerts } from '../../hooks/useAdminAlerts'
+import { usePushNotifications } from '../../hooks/usePushNotifications'
+import { showToast } from '../ui/Toast'
+import { NOTIF_TYPES } from '../../services/notificationService'
+
+// ─── Iconos por tipo de notificación ────────────────────────────────────────
+const NOTIF_ICON_MAP = {
+  [NOTIF_TYPES.STOCK_BAJO]:          { icon: AlertTriangle, color: 'text-amber-500', bg: 'bg-amber-50' },
+  [NOTIF_TYPES.COTIZACION_ENVIADA]:  { icon: Send,          color: 'text-sky-500',   bg: 'bg-sky-50' },
+  [NOTIF_TYPES.COTIZACION_ACEPTADA]: { icon: CheckCircle,   color: 'text-emerald-500', bg: 'bg-emerald-50' },
+  [NOTIF_TYPES.COTIZACION_CREADA]:   { icon: FileText,      color: 'text-indigo-500', bg: 'bg-indigo-50' },
+  [NOTIF_TYPES.DESPACHO_CREADO]:     { icon: Truck,         color: 'text-indigo-500', bg: 'bg-indigo-50' },
+  [NOTIF_TYPES.COTIZACION_ANULADA]:  { icon: Ban,           color: 'text-red-500',   bg: 'bg-red-50' },
+}
+const DEFAULT_NOTIF_ICON = { icon: Bell, color: 'text-slate-400', bg: 'bg-slate-50' }
+
+function NotifIcon({ type }) {
+  const { icon: Icon, color, bg } = NOTIF_ICON_MAP[type] || DEFAULT_NOTIF_ICON
+  return (
+    <div className={`w-8 h-8 rounded-lg ${bg} flex items-center justify-center shrink-0`}>
+      <Icon size={16} className={color} />
+    </div>
+  )
+}
 
 // ─── Definición de rutas de navegación ────────────────────────────────────────
 const NAV_TODOS = [
@@ -37,7 +62,7 @@ function BadgeRol({ rol }) {
   }
   const textos = { supervisor: 'Supervisor', vendedor: 'Vendedor' }
   return (
-    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${estilos[rol] ?? 'bg-slate-100 text-slate-600'}`}>
+    <span className={`text-sm font-bold px-2.5 py-0.5 rounded-full ${estilos[rol] ?? 'bg-slate-100 text-slate-600'}`}>
       {textos[rol] ?? rol}
     </span>
   )
@@ -51,11 +76,11 @@ function NavItem({ path, label, Icono, onClick }) {
       end={path === '/'}
       onClick={onClick}
       className={({ isActive }) => `
-        flex items-center gap-3 px-4 py-2.5 rounded-xl
-        text-sm font-bold transition-all
+        flex items-center gap-3 px-4 py-3.5 rounded-xl
+        text-base font-bold transition-all
         ${isActive
           ? 'text-white shadow-md shadow-sky-500/20'
-          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+          : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
         }
       `}
       style={({ isActive }) => isActive
@@ -63,7 +88,7 @@ function NavItem({ path, label, Icono, onClick }) {
         : {}
       }
     >
-      <Icono size={18} />
+      <Icono size={20} />
       <span>{label}</span>
     </NavLink>
   )
@@ -78,6 +103,37 @@ export default function AppLayout() {
 
   // Realtime: escucha cambios en tablas y refresca cache automáticamente
   useRealtimeSync()
+
+  // Notificaciones
+  const { unreadCount, notifications, markAllRead, clearAll } = useAdminAlerts()
+  const [showNotifs, setShowNotifs] = useState(false)
+  const notifsRef = useRef(null)
+
+  // Push notifications
+  const { supported: pushSupported, subscribed: pushSubscribed, loading: pushLoading, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe } = usePushNotifications()
+
+  async function togglePush() {
+    if (pushSubscribed) {
+      await pushUnsubscribe()
+      showToast('Notificaciones push desactivadas', 'info')
+    } else {
+      const result = await pushSubscribe()
+      if (result.ok) showToast('Notificaciones push activadas', 'success')
+      else showToast(result.error || 'No se pudo activar', 'error')
+    }
+  }
+
+  // Cerrar dropdown al hacer click fuera
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (notifsRef.current && !notifsRef.current.contains(e.target)) {
+        setShowNotifs(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   const [showTasaConfig, setShowTasaConfig] = useState(false)
   const [tasaInput, setTasaInput] = useState(tasaManual)
   const [tasaConfirmada, setTasaConfirmada] = useState(!!tasaManual)
@@ -110,7 +166,20 @@ export default function AppLayout() {
           <Menu size={22} />
         </button>
         <img src="/logo.png" alt="Listo POS" className="h-8 w-auto object-contain" />
-        <div className="w-10" />
+        {/* Campana móvil */}
+        <div className="relative" ref={null}>
+          <button
+            onClick={() => { setShowNotifs(v => !v); if (unreadCount > 0) markAllRead() }}
+            className="relative p-2 rounded-xl hover:bg-slate-100 text-slate-600 transition-colors"
+          >
+            <Bell size={20} />
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-rose-500 text-white text-xs font-black rounded-full flex items-center justify-center px-1">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* ── Backdrop overlay (móvil) ─────────────────────────────────────── */}
@@ -123,7 +192,7 @@ export default function AppLayout() {
 
       {/* ── Sidebar / Drawer ─────────────────────────────────────────────── */}
       <aside className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 flex flex-col shrink-0
+        fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-slate-200 flex flex-col shrink-0
         transition-transform duration-300 ease-out
         ${menuOpen ? 'translate-x-0' : '-translate-x-full'}
         md:translate-x-0 md:static md:z-auto md:h-screen md:sticky md:top-0
@@ -146,7 +215,7 @@ export default function AppLayout() {
         </div>
 
         {/* Navegación — ocupa el espacio restante, scroll si hace falta */}
-        <nav className="flex-1 min-h-0 overflow-y-auto p-4 space-y-1">
+        <nav className="flex-1 min-h-0 overflow-y-auto p-4 space-y-1.5">
 
           {/* Rutas accesibles para todos */}
           {NAV_TODOS.map(({ path, label, icono: Icono }) => (
@@ -157,7 +226,7 @@ export default function AppLayout() {
           {esSupervisor && (
             <>
               <div className="pt-4 pb-1 px-4">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
                   Administración
                 </p>
               </div>
@@ -168,6 +237,80 @@ export default function AppLayout() {
           )}
         </nav>
 
+        {/* Campana de notificaciones — sidebar desktop */}
+        <div className="border-t border-slate-100 px-4 py-3 relative" ref={notifsRef}>
+          <button
+            onClick={() => { setShowNotifs(v => !v); if (unreadCount > 0) markAllRead() }}
+            className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <Bell size={16} className="text-slate-500" />
+              <span className="text-sm font-bold text-slate-600">Alertas</span>
+            </div>
+            {unreadCount > 0 && (
+              <span className="min-w-[20px] h-[20px] bg-rose-500 text-white text-xs font-black rounded-full flex items-center justify-center px-1">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </button>
+
+          {/* Botón Push Notifications */}
+          {pushSupported && (
+            <button
+              onClick={togglePush}
+              disabled={pushLoading}
+              className={`mt-1.5 w-full flex items-center justify-between px-3 py-2 rounded-xl border transition-colors ${
+                pushSubscribed
+                  ? 'bg-sky-50 border-sky-200 hover:bg-sky-100'
+                  : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                {pushSubscribed
+                  ? <Bell size={16} className="text-sky-500" />
+                  : <BellOff size={16} className="text-slate-400" />
+                }
+                <span className={`text-sm font-bold ${pushSubscribed ? 'text-sky-600' : 'text-slate-500'}`}>
+                  {pushLoading ? 'Procesando…' : pushSubscribed ? 'Push activado' : 'Activar push'}
+                </span>
+              </div>
+              {pushSubscribed && <span className="w-2 h-2 rounded-full bg-sky-500 animate-pulse" />}
+            </button>
+          )}
+
+          {showNotifs && (
+            <div className="absolute bottom-full left-2 right-2 mb-2 bg-white rounded-2xl shadow-2xl border border-slate-100 z-50 overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+                <p className="text-sm font-black text-slate-700 uppercase tracking-wider">Alertas</p>
+                {notifications.length > 0 && (
+                  <button onClick={() => { clearAll(); setShowNotifs(false) }}
+                    className="text-xs font-bold text-slate-500 hover:text-rose-500 transition-colors">
+                    Limpiar todo
+                  </button>
+                )}
+              </div>
+              <div className="max-h-72 overflow-y-auto">
+                {notifications.length === 0 ? (
+                  <p className="text-sm text-slate-500 text-center py-6">Sin alertas recientes</p>
+                ) : (
+                  notifications.slice(0, 20).map(n => (
+                    <div key={n.id} className="px-4 py-3 border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors flex gap-3 items-start">
+                      <NotifIcon type={n.type} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-bold text-slate-700">{n.title}</p>
+                        {n.body && <p className="text-sm text-slate-600 mt-0.5 leading-snug">{n.body}</p>}
+                        <p className="text-xs text-slate-400 mt-1">
+                          {new Date(n.ts).toLocaleString('es-VE', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Tasa de cambio */}
         <div className="border-t border-slate-100 px-4 py-3">
           <button
@@ -175,26 +318,26 @@ export default function AppLayout() {
             className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors group"
           >
             <div className="flex items-center gap-2">
-              <DollarSign size={14} className="text-emerald-500" />
-              <span className="text-xs font-bold text-slate-500">BCV</span>
+              <DollarSign size={16} className="text-emerald-500" />
+              <span className="text-sm font-bold text-slate-600">BCV</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="text-sm font-black text-emerald-600">
+              <span className="text-base font-black text-emerald-600">
                 {tasaEfectiva > 0
                   ? new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(tasaEfectiva)
                   : '—'}
               </span>
-              <span className="text-[10px] text-slate-400">Bs/$</span>
-              {!modoAuto && <span className="text-[9px] bg-primary-light text-primary px-1 rounded font-bold">MAN</span>}
+              <span className="text-xs text-slate-500">Bs/$</span>
+              {!modoAuto && <span className="text-xs bg-primary-light text-primary px-1.5 rounded font-bold">MAN</span>}
             </div>
           </button>
 
           {showTasaConfig && (
             <div className="mt-2 bg-white rounded-xl border border-slate-200 p-3 space-y-2.5 animate-fade-in">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-slate-400 uppercase">Modo</span>
+                <span className="text-xs font-bold text-slate-500 uppercase">Modo</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-bold">
+                  <span className="text-sm font-bold">
                     {modoAuto ? <span className="text-emerald-600">Auto</span> : <span className="text-primary">Manual</span>}
                   </span>
                   <button
@@ -210,9 +353,9 @@ export default function AppLayout() {
               {modoAuto ? (
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs text-slate-500">{tasaBcv.fuente || 'Cargando...'}</p>
+                    <p className="text-sm text-slate-600">{tasaBcv.fuente || 'Cargando...'}</p>
                     {tasaBcv.ultimaActualizacion && (
-                      <p className="text-[10px] text-slate-400">
+                      <p className="text-xs text-slate-500">
                         {new Date(tasaBcv.ultimaActualizacion).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}
                       </p>
                     )}
@@ -244,7 +387,7 @@ export default function AppLayout() {
                     </button>
                   </div>
                   {tasaBcv.precio > 0 && (
-                    <p className="text-[10px] text-slate-400">
+                    <p className="text-xs text-slate-500">
                       Referencia BCV: {new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(tasaBcv.precio)} Bs/$
                     </p>
                   )}
@@ -262,13 +405,13 @@ export default function AppLayout() {
           >
             <LoginAvatar user={perfil} size="sm" />
             <div className="flex-1 min-w-0 text-left">
-              <p className="text-sm font-black text-slate-800 truncate leading-tight">
+              <p className="text-base font-black text-slate-800 truncate leading-tight">
                 {perfil?.nombre ?? 'Usuario'}
               </p>
               <BadgeRol rol={perfil?.rol} />
             </div>
-            <div className="shrink-0 w-8 h-8 rounded-xl bg-slate-100 group-hover:bg-red-100 flex items-center justify-center transition-colors">
-              <LogOut size={15} className="text-slate-400 group-hover:text-red-500 transition-colors" />
+            <div className="shrink-0 w-10 h-10 rounded-xl bg-slate-100 group-hover:bg-red-100 flex items-center justify-center transition-colors">
+              <LogOut size={18} className="text-slate-400 group-hover:text-red-500 transition-colors" />
             </div>
           </button>
         </div>

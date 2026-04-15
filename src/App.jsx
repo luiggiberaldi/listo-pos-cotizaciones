@@ -11,6 +11,7 @@ import {
 } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import useAuthStore from './store/useAuthStore'
+import { ToastProvider } from './components/ui/Toast'
 
 // Layout (se carga siempre con las rutas protegidas)
 import AppLayout from './components/layout/AppLayout'
@@ -144,7 +145,9 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <AppRoutes />
+        <ToastProvider>
+          <AppRoutes />
+        </ToastProvider>
       </BrowserRouter>
     </QueryClientProvider>
   )
