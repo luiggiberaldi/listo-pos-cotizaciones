@@ -1,0 +1,102 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Modo Accesible — se activa con la clase .modo-accesible en <html>
+   Todas las reglas usan el selector .modo-accesible para sobreescribir
+   los estilos base de Tailwind cuando el modo está activado.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Tipografía global ───────────────────────────────────────────────────── */
+.modo-accesible {
+  font-size: 18px !important;
+}
+
+/* Textos pequeños (text-xs, text-[10px], text-[11px]) → más legibles */
+.modo-accesible .text-xs {
+  font-size: 0.8125rem !important;   /* 13px */
+  line-height: 1.25rem !important;
+}
+.modo-accesible .text-\[10px\],
+.modo-accesible .text-\[11px\] {
+  font-size: 0.8125rem !important;
+  line-height: 1.25rem !important;
+}
+
+/* text-sm → un poco más grande */
+.modo-accesible .text-sm {
+  font-size: 0.9375rem !important;   /* 15px */
+  line-height: 1.375rem !important;
+}
+
+/* ─── Contraste mejorado ──────────────────────────────────────────────────── */
+.modo-accesible .text-slate-400 {
+  color: #64748b !important;  /* slate-500 */
+}
+.modo-accesible .text-slate-300 {
+  color: #64748b !important;
+}
+.modo-accesible .text-gray-400 {
+  color: #6b7280 !important;  /* gray-500 */
+}
+
+/* ─── Botones: tap target mínimo 44x44 ────────────────────────────────────── */
+.modo-accesible button,
+.modo-accesible a[role="button"],
+.modo-accesible [role="button"] {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Botones con padding más generoso */
+.modo-accesible .p-1 { padding: 0.5rem !important; }
+.modo-accesible .p-1\.5 { padding: 0.625rem !important; }
+.modo-accesible .p-2 { padding: 0.625rem !important; }
+
+.modo-accesible .px-3 { padding-left: 1rem !important; padding-right: 1rem !important; }
+.modo-accesible .px-4 { padding-left: 1.25rem !important; padding-right: 1.25rem !important; }
+
+.modo-accesible .py-1 { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
+.modo-accesible .py-1\.5 { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
+.modo-accesible .py-2 { padding-top: 0.625rem !important; padding-bottom: 0.625rem !important; }
+.modo-accesible .py-2\.5 { padding-top: 0.75rem !important; padding-bottom: 0.75rem !important; }
+
+/* ─── Inputs: más grandes y fáciles de tocar ──────────────────────────────── */
+.modo-accesible input[type="text"],
+.modo-accesible input[type="number"],
+.modo-accesible input[type="email"],
+.modo-accesible input[type="password"],
+.modo-accesible input[type="search"],
+.modo-accesible input[type="tel"],
+.modo-accesible input[type="url"],
+.modo-accesible textarea,
+.modo-accesible select {
+  font-size: 1rem !important;
+  padding-top: 0.75rem !important;
+  padding-bottom: 0.75rem !important;
+  min-height: 48px;
+}
+
+/* ─── Sidebar nav items: más espacio ──────────────────────────────────────── */
+.modo-accesible nav a {
+  padding-top: 0.875rem !important;
+  padding-bottom: 0.875rem !important;
+  font-size: 1rem !important;
+}
+
+/* ─── Paginación: botones más grandes ─────────────────────────────────────── */
+.modo-accesible [aria-label="pagination"] button,
+.modo-accesible nav[role="navigation"] button {
+  min-width: 40px;
+  min-height: 40px;
+}
+
+/* ─── Badges: un poco más legibles ────────────────────────────────────────── */
+.modo-accesible .rounded-full {
+  font-size: max(0.8125rem, inherit) !important;
+}
+
+/* ─── Select dropdown items ───────────────────────────────────────────────── */
+.modo-accesible [role="listbox"] > *,
+.modo-accesible [role="option"] {
+  padding-top: 0.75rem !important;
+  padding-bottom: 0.75rem !important;
+  font-size: 1rem !important;
+}

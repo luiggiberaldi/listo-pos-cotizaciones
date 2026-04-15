@@ -16,7 +16,7 @@ const ESTADO_COLOR = {
   aceptada:  { bg: 'bg-emerald-50',  text: 'text-emerald-700', dot: 'bg-emerald-500' },
   rechazada: { bg: 'bg-red-50',      text: 'text-red-700',     dot: 'bg-red-500'     },
   vencida:   { bg: 'bg-orange-50',   text: 'text-orange-700',  dot: 'bg-orange-500'  },
-  anulada:   { bg: 'bg-slate-100',   text: 'text-slate-500',   dot: 'bg-slate-300'   },
+  anulada:   { bg: 'bg-slate-100',   text: 'text-slate-400',   dot: 'bg-slate-300'   },
 }
 
 const ESTADO_LABEL = {
@@ -104,9 +104,9 @@ function MetricCard({ icon: Icon, label, value, sub, color = 'primary' }) {
         <Icon size={20} />
       </div>
       <div>
-        <p className="text-sm text-slate-500 font-medium">{label}</p>
+        <p className="text-xs text-slate-500 font-medium">{label}</p>
         <p className="text-2xl font-black text-slate-800 leading-tight">{value}</p>
-        {sub && <p className="text-sm text-slate-500 mt-0.5">{sub}</p>}
+        {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
       </div>
     </div>
   )
@@ -230,11 +230,11 @@ export default function DashboardView() {
                       <div className="flex items-center justify-between mb-0.5">
                         <span className="text-sm text-slate-700">{ESTADO_LABEL[estado]}</span>
                         <div className="flex items-center gap-2">
-                          <span className="text-sm text-slate-500">
+                          <span className="text-xs text-slate-400">
                             {fmtUsd(total)}
                             {tasaEfectiva > 0 && <span className="ml-1">({fmtBs(usdToBs(total, tasaEfectiva))})</span>}
                           </span>
-                          <span className={`text-sm font-bold px-2 py-0.5 rounded-full ${col.bg} ${col.text}`}>
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${col.bg} ${col.text}`}>
                             {count}
                           </span>
                         </div>
@@ -250,7 +250,7 @@ export default function DashboardView() {
                 )
               })}
             {m?.total === 0 && (
-              <p className="text-sm text-slate-500 text-center py-4">No hay cotizaciones aún.</p>
+              <p className="text-sm text-slate-400 text-center py-4">No hay cotizaciones aún.</p>
             )}
           </div>
         )}
@@ -260,13 +260,13 @@ export default function DashboardView() {
       {!isLoading && m && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="bg-primary-light border border-primary-focus rounded-2xl p-5">
-            <p className="text-sm font-bold text-primary-dark uppercase tracking-wide mb-1">Este mes</p>
+            <p className="text-xs font-bold text-primary-dark uppercase tracking-wide mb-1">Este mes</p>
             <p className="text-3xl font-black text-primary">{m.delMesCount}</p>
             <p className="text-sm text-primary-dark mt-1">cotizaciones generadas</p>
           </div>
           {esSupervisor && (
             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5">
-              <p className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-1 flex items-center gap-1.5">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1 flex items-center gap-1.5">
                 <Users size={12} />
                 Equipo de ventas
               </p>

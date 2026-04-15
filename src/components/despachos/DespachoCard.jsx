@@ -26,7 +26,7 @@ export default function DespachoCard({ despacho, onCambiarEstado, onAnular, onRe
         <div>
           <div className="flex items-center gap-1.5">
             <Package size={14} className="text-indigo-500" />
-            <span className="font-bold text-slate-800 text-base font-mono">{numDisplay}</span>
+            <span className="font-bold text-slate-800 text-sm font-mono">{numDisplay}</span>
           </div>
           <div className="mt-1">
             <EstadoBadge estado={despacho.estado} />
@@ -39,7 +39,7 @@ export default function DespachoCard({ despacho, onCambiarEstado, onAnular, onRe
             {/* Pendiente: marcar despachada */}
             {despacho.estado === 'pendiente' && (
               <button onClick={() => onCambiarEstado(despacho.id, 'despachada')} title="Marcar como despachada"
-                className="px-2.5 py-2 rounded-lg text-slate-500 hover:text-indigo-500 hover:bg-indigo-50 transition-colors">
+                className="p-2 rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 transition-colors">
                 <span className="flex items-center gap-1.5 text-sm font-medium">
                   <Truck size={16} />
                   Despachar
@@ -49,7 +49,7 @@ export default function DespachoCard({ despacho, onCambiarEstado, onAnular, onRe
             {/* Despachada: marcar entregada */}
             {despacho.estado === 'despachada' && (
               <button onClick={() => onCambiarEstado(despacho.id, 'entregada')} title="Marcar como entregada"
-                className="px-2.5 py-2 rounded-lg text-slate-500 hover:text-emerald-500 hover:bg-emerald-50 transition-colors">
+                className="p-2 rounded-lg text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 transition-colors">
                 <span className="flex items-center gap-1.5 text-sm font-medium">
                   <CheckCircle size={16} />
                   Entregada
@@ -59,7 +59,7 @@ export default function DespachoCard({ despacho, onCambiarEstado, onAnular, onRe
             {/* Pendiente o Despachada: anular (restaura stock) */}
             {(despacho.estado === 'pendiente' || despacho.estado === 'despachada') && (
               <button onClick={() => onAnular(despacho)} title="Anular despacho"
-                className="px-2.5 py-2 rounded-lg text-slate-500 hover:text-red-500 hover:bg-red-50 transition-colors">
+                className="p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
                 <span className="flex items-center gap-1.5 text-sm font-medium">
                   <Ban size={16} />
                   Anular
@@ -69,7 +69,7 @@ export default function DespachoCard({ despacho, onCambiarEstado, onAnular, onRe
             {/* Anulada: reciclar (nueva cotización borrador) */}
             {despacho.estado === 'anulada' && onReciclar && (
               <button onClick={() => onReciclar(despacho)} title="Reciclar como cotización borrador"
-                className="px-2.5 py-2 rounded-lg text-slate-500 hover:text-primary hover:bg-primary-light transition-colors">
+                className="p-2 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-light transition-colors">
                 <span className="flex items-center gap-1.5 text-sm font-medium">
                   <RefreshCcw size={16} />
                   Reciclar
@@ -81,19 +81,19 @@ export default function DespachoCard({ despacho, onCambiarEstado, onAnular, onRe
       </div>
 
       {/* Cliente */}
-      <div className="flex items-center gap-1.5 text-base text-slate-600">
-        <User size={13} className="text-slate-500 shrink-0" />
+      <div className="flex items-center gap-1.5 text-sm text-slate-600">
+        <User size={13} className="text-slate-400 shrink-0" />
         <span className="truncate font-medium">{despacho.cliente?.nombre ?? '—'}</span>
       </div>
 
       {/* Referencia cotización */}
-      <div className="flex items-center gap-1.5 text-sm text-slate-500">
+      <div className="flex items-center gap-1.5 text-xs text-slate-400">
         <FileText size={12} />
         <span>{cotNum}</span>
       </div>
 
       {/* Fecha */}
-      <div className="flex items-center gap-1.5 text-sm text-slate-500">
+      <div className="flex items-center gap-1.5 text-xs text-slate-400">
         <Calendar size={12} />
         <span>{fmtFecha(despacho.creado_en)}</span>
         {despacho.despachada_en && (
@@ -106,11 +106,11 @@ export default function DespachoCard({ despacho, onCambiarEstado, onAnular, onRe
 
       {/* Total */}
       <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-        <span className="text-sm text-slate-500">Total</span>
+        <span className="text-xs text-slate-400">Total</span>
         <div className="text-right">
           <span className="font-bold text-slate-800">{fmtUsd(despacho.total_usd)}</span>
           {tasa > 0 && despacho.total_usd > 0 && (
-            <div className="text-sm text-slate-500">{fmtBs(usdToBs(despacho.total_usd, tasa))}</div>
+            <div className="text-[11px] text-slate-400">{fmtBs(usdToBs(despacho.total_usd, tasa))}</div>
           )}
         </div>
       </div>
@@ -118,7 +118,7 @@ export default function DespachoCard({ despacho, onCambiarEstado, onAnular, onRe
       {/* Vendedor (solo supervisor) */}
       {esSupervisor && despacho.vendedor && (
         <div className="flex items-center justify-between -mt-1">
-          <span className="text-sm text-slate-500">Vendedor</span>
+          <span className="text-xs text-slate-400">Vendedor</span>
           <span className="text-xs font-medium px-2 py-0.5 rounded-full"
             style={vendedorColor
               ? { backgroundColor: vendedorColor + '18', color: vendedorColor, border: `1px solid ${vendedorColor}40` }

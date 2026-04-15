@@ -76,11 +76,11 @@ function NavItem({ path, label, Icono, onClick }) {
       end={path === '/'}
       onClick={onClick}
       className={({ isActive }) => `
-        flex items-center gap-3 px-4 py-3.5 rounded-xl
-        text-base font-bold transition-all
+        flex items-center gap-3 px-4 py-2.5 rounded-xl
+        text-sm font-bold transition-all
         ${isActive
           ? 'text-white shadow-md shadow-sky-500/20'
-          : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
         }
       `}
       style={({ isActive }) => isActive
@@ -88,7 +88,7 @@ function NavItem({ path, label, Icono, onClick }) {
         : {}
       }
     >
-      <Icono size={20} />
+      <Icono size={18} />
       <span>{label}</span>
     </NavLink>
   )
@@ -192,7 +192,7 @@ export default function AppLayout() {
 
       {/* ── Sidebar / Drawer ─────────────────────────────────────────────── */}
       <aside className={`
-        fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-slate-200 flex flex-col shrink-0
+        fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 flex flex-col shrink-0
         transition-transform duration-300 ease-out
         ${menuOpen ? 'translate-x-0' : '-translate-x-full'}
         md:translate-x-0 md:static md:z-auto md:h-screen md:sticky md:top-0
@@ -215,7 +215,7 @@ export default function AppLayout() {
         </div>
 
         {/* Navegación — ocupa el espacio restante, scroll si hace falta */}
-        <nav className="flex-1 min-h-0 overflow-y-auto p-4 space-y-1.5">
+        <nav className="flex-1 min-h-0 overflow-y-auto p-4 space-y-1">
 
           {/* Rutas accesibles para todos */}
           {NAV_TODOS.map(({ path, label, icono: Icono }) => (
@@ -226,7 +226,7 @@ export default function AppLayout() {
           {esSupervisor && (
             <>
               <div className="pt-4 pb-1 px-4">
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                   Administración
                 </p>
               </div>
@@ -405,13 +405,13 @@ export default function AppLayout() {
           >
             <LoginAvatar user={perfil} size="sm" />
             <div className="flex-1 min-w-0 text-left">
-              <p className="text-base font-black text-slate-800 truncate leading-tight">
+              <p className="text-sm font-black text-slate-800 truncate leading-tight">
                 {perfil?.nombre ?? 'Usuario'}
               </p>
               <BadgeRol rol={perfil?.rol} />
             </div>
-            <div className="shrink-0 w-10 h-10 rounded-xl bg-slate-100 group-hover:bg-red-100 flex items-center justify-center transition-colors">
-              <LogOut size={18} className="text-slate-400 group-hover:text-red-500 transition-colors" />
+            <div className="shrink-0 w-8 h-8 rounded-xl bg-slate-100 group-hover:bg-red-100 flex items-center justify-center transition-colors">
+              <LogOut size={15} className="text-slate-400 group-hover:text-red-500 transition-colors" />
             </div>
           </button>
         </div>

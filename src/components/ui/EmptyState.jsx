@@ -17,7 +17,7 @@ export default function EmptyState({
       <h3 className="text-xl font-bold text-slate-800 dark:text-slate-200 mb-2">
         {title}
       </h3>
-      <p className="text-base text-slate-600 dark:text-slate-300 max-w-sm mb-6">
+      <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm mb-6">
         {description}
       </p>
       
@@ -25,7 +25,7 @@ export default function EmptyState({
         {actionLabel && onAction && (
           <button
             onClick={onAction}
-            className="px-7 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-medium rounded-xl shadow-lg shadow-emerald-500/20 active:scale-95 transition-all outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 text-base"
+            className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-medium rounded-xl shadow-lg shadow-emerald-500/20 active:scale-95 transition-all outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900"
           >
             {actionLabel}
           </button>
@@ -34,7 +34,7 @@ export default function EmptyState({
         {secondaryActionLabel && onSecondaryAction && (
           <button
             onClick={onSecondaryAction}
-            className="px-7 py-3 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium rounded-xl border border-slate-200 dark:border-slate-700 active:scale-95 transition-all outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 text-base"
+            className="px-6 py-2.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium rounded-xl border border-slate-200 dark:border-slate-700 active:scale-95 transition-all outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900"
           >
             {secondaryActionLabel}
           </button>

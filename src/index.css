@@ -17,14 +17,11 @@
     padding: 0;
   }
 
-  /* Accesibilidad: botones con min-height para personas mayores */
   button {
-    min-height: 44px;
     cursor: pointer;
   }
 
   input, select, textarea {
     font-family: inherit;
-    font-size: 1rem;
   }
 }

@@ -10,18 +10,18 @@ import CustomSelect from '../ui/CustomSelect'
 function Campo({ label, icono: Icono, error, children }) {
   return (
     <div className="space-y-1.5">
-      <label className="flex items-center gap-1.5 text-base font-medium text-slate-700">
+      <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
         {Icono && <Icono size={14} className="text-slate-400" />}
         {label}
       </label>
       {children}
-      {error && <p className="text-sm text-red-500">{error}</p>}
+      {error && <p className="text-xs text-red-500">{error}</p>}
     </div>
   )
 }
 
 const inputClass = `
-  w-full px-3 py-3 rounded-xl border text-base text-slate-800
+  w-full px-3 py-2.5 rounded-xl border text-sm text-slate-800
   bg-slate-50 border-slate-200
   focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary
   placeholder:text-slate-400 transition-colors
@@ -174,11 +174,11 @@ export default function ProductoForm({ producto = null, onSuccess, onCancel }) {
             onChange={handleImagen} disabled={cargando} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-base font-medium text-slate-700">Foto del producto</p>
-          <p className="text-sm text-slate-500">JPG, PNG o WebP. Se comprime automáticamente.</p>
+          <p className="text-sm font-medium text-slate-700">Foto del producto</p>
+          <p className="text-xs text-slate-400">JPG, PNG o WebP. Se comprime automáticamente.</p>
           {tieneImagen && (
             <button type="button" onClick={quitarImagen} disabled={cargando}
-              className="flex items-center gap-1 mt-1 text-sm text-red-500 hover:text-red-700 transition-colors">
+              className="flex items-center gap-1 mt-1 text-xs text-red-500 hover:text-red-700 transition-colors">
               <X size={12} /> Quitar imagen
             </button>
           )}
@@ -262,11 +262,11 @@ export default function ProductoForm({ producto = null, onSuccess, onCancel }) {
 
       <div className="flex gap-3 pt-2">
         <button type="button" onClick={onCancel} disabled={cargando}
-          className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-600 font-semibold text-base hover:bg-slate-50 transition-colors disabled:opacity-50">
+          className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 transition-colors disabled:opacity-50">
           Cancelar
         </button>
         <button type="submit" disabled={cargando || comprimiendo}
-          className="flex-1 py-3 rounded-xl bg-primary hover:bg-primary-hover text-white font-semibold text-base transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+          className="flex-1 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white font-semibold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
           {cargando
             ? <><Loader2 size={16} className="animate-spin" /> Guardando...</>
             : esEdicion ? 'Guardar cambios' : 'Crear producto'

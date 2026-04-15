@@ -121,7 +121,7 @@ export default function ClientesView() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-slate-800">Clientes</h1>
-            <p className="text-base text-slate-600">
+            <p className="text-sm text-slate-500">
               {isLoading ? 'Cargando...' : `${clientes.length} cliente${clientes.length !== 1 ? 's' : ''}`}
             </p>
           </div>
@@ -129,9 +129,9 @@ export default function ClientesView() {
 
         <button
           onClick={abrirCrear}
-          className="flex items-center gap-2 bg-primary hover:bg-primary-hover text-white font-semibold text-base px-5 py-3 rounded-xl transition-colors shadow-sm"
+          className="flex items-center gap-2 bg-primary hover:bg-primary-hover text-white font-semibold text-sm px-4 py-2.5 rounded-xl transition-colors shadow-sm"
         >
-          <Plus size={18} />
+          <Plus size={16} />
           Nuevo cliente
         </button>
       </div>
@@ -139,13 +139,13 @@ export default function ClientesView() {
       {/* ── Barra de búsqueda ──────────────────────────────────────────────── */}
       <form onSubmit={handleBuscar} className="flex gap-2">
         <div className="relative flex-1">
-          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           <input
             type="text"
             value={textoBusqueda}
             onChange={e => setTextoBusqueda(e.target.value)}
             placeholder="Buscar por nombre o RIF/cédula..."
-            className="w-full pl-10 pr-9 py-3 rounded-xl border border-slate-200 bg-white text-base text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400"
+            className="w-full pl-9 pr-9 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400"
           />
           {textoBusqueda && (
             <button
@@ -159,7 +159,7 @@ export default function ClientesView() {
         </div>
         <button
           type="submit"
-          className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-base rounded-xl transition-colors"
+          className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm rounded-xl transition-colors"
         >
           Buscar
         </button>
@@ -167,9 +167,9 @@ export default function ClientesView() {
           type="button"
           onClick={() => refetch()}
           title="Actualizar lista"
-          className="p-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors"
+          className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors"
         >
-          <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
+          <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
         </button>
 
         {/* Toggle cuadrícula / lista */}
@@ -178,17 +178,17 @@ export default function ClientesView() {
             type="button"
             onClick={() => cambiarVista('grid')}
             title="Vista cuadrícula"
-            className={`p-2.5 rounded-lg transition-colors ${vistaMode === 'grid' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+            className={`p-2 rounded-lg transition-colors ${vistaMode === 'grid' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
           >
-            <LayoutGrid size={18} />
+            <LayoutGrid size={16} />
           </button>
           <button
             type="button"
             onClick={() => cambiarVista('list')}
             title="Vista lista"
-            className={`p-2.5 rounded-lg transition-colors ${vistaMode === 'list' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+            className={`p-2 rounded-lg transition-colors ${vistaMode === 'list' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
           >
-            <List size={18} />
+            <List size={16} />
           </button>
         </div>
       </form>
@@ -201,7 +201,7 @@ export default function ClientesView() {
           <p className="font-semibold">Error al cargar los clientes</p>
           <button
             onClick={() => refetch()}
-            className="mt-3 text-base underline text-red-600 hover:text-red-800"
+            className="mt-3 text-sm underline text-red-600 hover:text-red-800"
           >
             Intentar de nuevo
           </button>

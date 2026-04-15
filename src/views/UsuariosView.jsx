@@ -213,7 +213,7 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando }) {
         </button>
       </div>
       {campos.pin.length > 0 && campos.pin.length < 6 && (
-        <p className="text-sm text-slate-500 ml-1">{6 - campos.pin.length} dígitos restantes</p>
+        <p className="text-xs text-slate-400 ml-1">{6 - campos.pin.length} dígitos restantes</p>
       )}
 
       {error && <p className="text-xs text-red-500 font-bold ml-1">{error}</p>}
@@ -316,10 +316,10 @@ function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar })
           <div className="flex items-center gap-2">
             <p className="text-sm font-black text-slate-800 truncate">{usuario.nombre}</p>
             {propio && (
-              <span className="text-xs font-black uppercase tracking-wider bg-sky-100 text-sky-500 px-1.5 py-0.5 rounded-full shrink-0">Tú</span>
+              <span className="text-[8px] font-black uppercase tracking-wider bg-sky-100 text-sky-500 px-1.5 py-0.5 rounded-full shrink-0">Tú</span>
             )}
           </div>
-          <span className={`text-sm font-bold px-2 py-0.5 rounded-full ${conf.bg} ${conf.text}`}>
+          <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${conf.bg} ${conf.text}`}>
             {conf.label}
           </span>
         </div>
@@ -327,23 +327,23 @@ function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar })
         {!propio && (
           <div className="flex items-center gap-1 shrink-0">
             <button onClick={() => onEditar(usuario)} title="Editar"
-              className="px-2.5 py-2 rounded-lg text-slate-500 hover:text-sky-500 hover:bg-sky-50 transition-colors flex items-center gap-1 text-sm">
+              className="p-1.5 rounded-lg text-slate-400 hover:text-sky-500 hover:bg-sky-50 transition-colors flex items-center gap-1 text-sm">
               <Pencil size={14} />
               <span>Editar</span>
             </button>
             <button
               onClick={() => onCambiarActivo(usuario, !usuario.activo)}
               title={usuario.activo ? 'Desactivar' : 'Activar'}
-              className={`px-2.5 py-2 rounded-lg transition-colors flex items-center gap-1 text-sm ${
+              className={`p-1.5 rounded-lg transition-colors flex items-center gap-1 text-sm ${
                 usuario.activo
-                  ? 'text-slate-500 hover:text-primary hover:bg-primary-light'
-                  : 'text-slate-500 hover:text-emerald-500 hover:bg-emerald-50'
+                  ? 'text-slate-400 hover:text-primary hover:bg-primary-light'
+                  : 'text-slate-400 hover:text-emerald-500 hover:bg-emerald-50'
               }`}>
               {usuario.activo ? <UserX size={14} /> : <UserCheck size={14} />}
               <span>{usuario.activo ? 'Desactivar' : 'Activar'}</span>
             </button>
             <button onClick={() => onEliminar(usuario)} title="Eliminar"
-              className="px-2.5 py-2 rounded-lg text-slate-500 hover:text-red-500 hover:bg-red-50 transition-colors flex items-center gap-1 text-sm">
+              className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors flex items-center gap-1 text-sm">
               <Trash2 size={14} />
               <span>Eliminar</span>
             </button>
@@ -352,12 +352,12 @@ function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar })
       </div>
 
       <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-        <span className={`text-sm font-bold px-2 py-0.5 rounded-full ${
-          usuario.activo ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
+        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+          usuario.activo ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'
         }`}>
           {usuario.activo ? 'Activo' : 'Inactivo'}
         </span>
-        <span className="text-sm text-slate-500">
+        <span className="text-xs text-slate-400">
           {new Date(usuario.creado_en).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}
         </span>
       </div>
@@ -470,7 +470,7 @@ export default function UsuariosView() {
         <div className="space-y-6">
           {activos.length > 0 && (
             <div className="space-y-3">
-              <h2 className="text-sm font-black text-slate-500 uppercase tracking-widest">Activos</h2>
+              <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest">Activos</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
                 {activos.map(u => (
                   <UsuarioCard key={u.id} usuario={u}
@@ -486,7 +486,7 @@ export default function UsuariosView() {
 
           {inactivos.length > 0 && (
             <div className="space-y-3">
-              <h2 className="text-sm font-black text-slate-500 uppercase tracking-widest">Inactivos</h2>
+              <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">Inactivos</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
                 {inactivos.map(u => (
                   <UsuarioCard key={u.id} usuario={u}

@@ -207,7 +207,7 @@ function DetalleEntidad({ tipo, id, tasa = 0 }) {
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 text-sm text-slate-500 py-2">
+      <div className="flex items-center gap-2 text-xs text-slate-400 py-2">
         <Loader2 size={12} className="animate-spin" /> Cargando detalle...
       </div>
     )
@@ -215,7 +215,7 @@ function DetalleEntidad({ tipo, id, tasa = 0 }) {
 
   if (error || !data) {
     return (
-      <div className="text-sm text-slate-500 py-2 flex items-center gap-1.5">
+      <div className="text-xs text-slate-400 py-2 flex items-center gap-1.5">
         <Info size={12} />
         {error || 'Sin datos adicionales para esta entidad'}
       </div>
@@ -247,39 +247,39 @@ function DetalleEntidad({ tipo, id, tasa = 0 }) {
         {/* Fila principal: número + estado + total */}
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2.5">
-            <span className="font-bold text-slate-800 font-mono text-base">{numDisplay}</span>
-            <span className={`font-bold px-2 py-0.5 rounded-full text-sm ${ESTADO_COLORS[data.estado] ?? 'bg-slate-100 text-slate-500'}`}>
+            <span className="font-bold text-slate-800 font-mono text-sm">{numDisplay}</span>
+            <span className={`font-bold px-2 py-0.5 rounded-full text-[10px] ${ESTADO_COLORS[data.estado] ?? 'bg-slate-100 text-slate-500'}`}>
               {ESTADO_LABELS[data.estado] ?? data.estado}
             </span>
           </div>
           <div className="text-right">
-            <span className="font-black text-slate-800 text-base">{fmtUsd(data.total_usd)}</span>
+            <span className="font-black text-slate-800 text-sm">{fmtUsd(data.total_usd)}</span>
             {tasa > 0 && data.total_usd > 0 && (
-              <span className="text-sm text-slate-500 ml-1.5">({fmtBs(usdToBs(data.total_usd, tasa))})</span>
+              <span className="text-[11px] text-slate-400 ml-1.5">({fmtBs(usdToBs(data.total_usd, tasa))})</span>
             )}
           </div>
         </div>
 
         {/* Detalles secundarios */}
-        <div className="flex items-center gap-4 flex-wrap text-sm text-slate-500">
+        <div className="flex items-center gap-4 flex-wrap text-xs text-slate-500">
           <span className="flex items-center gap-1">
-            <User size={11} className="text-slate-500" />
+            <User size={11} className="text-slate-400" />
             {data._clienteNombre ?? 'Sin cliente'}
           </span>
           <span className="flex items-center gap-1">
-            <Calendar size={11} className="text-slate-500" />
+            <Calendar size={11} className="text-slate-400" />
             {fmtFecha(data.creado_en)}
           </span>
           {data.valida_hasta && (
             <span className="flex items-center gap-1">
-              <Clock size={11} className="text-slate-500" />
+              <Clock size={11} className="text-slate-400" />
               Válida hasta {fmtFecha(data.valida_hasta)}
             </span>
           )}
         </div>
 
         {data.notas_cliente && (
-          <p className="text-sm text-slate-500 italic border-l-2 border-slate-200 pl-2">{data.notas_cliente}</p>
+          <p className="text-xs text-slate-500 italic border-l-2 border-slate-200 pl-2">{data.notas_cliente}</p>
         )}
       </div>
     )
@@ -289,27 +289,27 @@ function DetalleEntidad({ tipo, id, tasa = 0 }) {
     return (
       <div className="space-y-2">
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <span className="font-bold text-slate-800 text-base">{data.nombre}</span>
-          <span className={`text-sm font-bold px-2 py-0.5 rounded-full ${data.activo ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
+          <span className="font-bold text-slate-800 text-sm">{data.nombre}</span>
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${data.activo ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
             {data.activo ? 'Activo' : 'Inactivo'}
           </span>
         </div>
-        <div className="flex items-center gap-4 flex-wrap text-sm text-slate-500">
+        <div className="flex items-center gap-4 flex-wrap text-xs text-slate-500">
           {data.rif_cedula && (
             <span className="flex items-center gap-1">
-              <Hash size={11} className="text-slate-500" />
+              <Hash size={11} className="text-slate-400" />
               {data.rif_cedula}
             </span>
           )}
           {data.tipo_cliente && (
             <span className="flex items-center gap-1 capitalize">
-              <Info size={11} className="text-slate-500" />
+              <Info size={11} className="text-slate-400" />
               {data.tipo_cliente}
             </span>
           )}
           {data.telefono && (
             <span className="flex items-center gap-1">
-              <User size={11} className="text-slate-500" />
+              <User size={11} className="text-slate-400" />
               {data.telefono}
             </span>
           )}
@@ -323,24 +323,24 @@ function DetalleEntidad({ tipo, id, tasa = 0 }) {
       <div className="space-y-2">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
-            <span className="font-bold text-slate-800 text-base">{data.nombre}</span>
-            {data.codigo && <span className="text-sm font-mono bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded">{data.codigo}</span>}
+            <span className="font-bold text-slate-800 text-sm">{data.nombre}</span>
+            {data.codigo && <span className="text-[10px] font-mono bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded">{data.codigo}</span>}
           </div>
-          <span className={`text-sm font-bold px-2 py-0.5 rounded-full ${data.activo ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${data.activo ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
             {data.activo ? 'Activo' : 'Inactivo'}
           </span>
         </div>
-        <div className="flex items-center gap-4 flex-wrap text-sm text-slate-500">
+        <div className="flex items-center gap-4 flex-wrap text-xs text-slate-500">
           <span className="flex items-center gap-1">
-            <DollarSign size={11} className="text-slate-500" />
+            <DollarSign size={11} className="text-slate-400" />
             <strong className="text-slate-700">{fmtUsd(data.precio_usd)}</strong>
             {tasa > 0 && data.precio_usd > 0 && (
-              <span className="text-slate-500">({fmtBs(usdToBs(data.precio_usd, tasa))})</span>
+              <span className="text-slate-400">({fmtBs(usdToBs(data.precio_usd, tasa))})</span>
             )}
           </span>
           {data.categoria && (
             <span className="flex items-center gap-1">
-              <Package size={11} className="text-slate-500" />
+              <Package size={11} className="text-slate-400" />
               {data.categoria}
             </span>
           )}
@@ -353,14 +353,14 @@ function DetalleEntidad({ tipo, id, tasa = 0 }) {
     return (
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
-          <span className="font-bold text-slate-800 text-base">{data.nombre}</span>
-          <span className={`text-sm font-bold px-1.5 py-0.5 rounded-full ${
+          <span className="font-bold text-slate-800 text-sm">{data.nombre}</span>
+          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
             data.rol === 'supervisor' ? 'bg-sky-100 text-sky-600' : 'bg-emerald-100 text-emerald-600'
           }`}>
             {data.rol === 'supervisor' ? 'Supervisor' : 'Vendedor'}
           </span>
         </div>
-        <span className={`text-sm font-bold px-2 py-0.5 rounded-full ${data.activo ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
+        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${data.activo ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
           {data.activo ? 'Activo' : 'Inactivo'}
         </span>
       </div>
@@ -399,9 +399,9 @@ function ActividadCard({ registro, tasa }) {
         {/* Contenido */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-base font-bold text-slate-800">{usuario}</span>
+            <span className="text-sm font-bold text-slate-800">{usuario}</span>
             {rol && (
-              <span className={`text-sm font-bold px-1.5 py-0.5 rounded-full ${
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
                 rol === 'supervisor' ? 'bg-sky-100 text-sky-600' : 'bg-emerald-100 text-emerald-600'
               }`}>
                 {rol === 'supervisor' ? 'Supervisor' : 'Vendedor'}
@@ -410,20 +410,20 @@ function ActividadCard({ registro, tasa }) {
           </div>
 
           <div className="flex items-center gap-1.5 mt-1">
-            <AccIcon size={12} className="text-slate-500 shrink-0" />
-            <span className="text-base text-slate-600">{accionLabel}</span>
+            <AccIcon size={12} className="text-slate-400 shrink-0" />
+            <span className="text-sm text-slate-600">{accionLabel}</span>
           </div>
 
           {registro.descripcion && (
-            <p className="text-sm text-slate-500 mt-1.5 line-clamp-1">{registro.descripcion}</p>
+            <p className="text-xs text-slate-400 mt-1.5 line-clamp-1">{registro.descripcion}</p>
           )}
 
           <div className="flex items-center gap-2 mt-2 flex-wrap">
-            <span className={`inline-flex items-center gap-1 text-sm font-bold px-2 py-0.5 rounded-full border ${cat.bg} ${cat.text} ${cat.border}`}>
+            <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${cat.bg} ${cat.text} ${cat.border}`}>
               {cat.label}
             </span>
             {tieneEntidad && (
-              <span className="text-sm text-slate-500 font-mono">
+              <span className="text-[10px] text-slate-400 font-mono">
                 #{registro.entidad_id.slice(0, 8)}
               </span>
             )}
@@ -433,10 +433,10 @@ function ActividadCard({ registro, tasa }) {
         {/* Timestamp + flecha */}
         <div className="shrink-0 text-right flex flex-col items-end gap-2">
           <div>
-            <p className="text-sm font-medium text-slate-500">{fmtFechaRelativa(registro.ts)}</p>
-            <p className="text-sm text-slate-500 mt-0.5 hidden sm:block">{fmtFechaCompleta(registro.ts)}</p>
+            <p className="text-xs font-medium text-slate-400">{fmtFechaRelativa(registro.ts)}</p>
+            <p className="text-[10px] text-slate-300 mt-0.5 hidden sm:block">{fmtFechaCompleta(registro.ts)}</p>
           </div>
-          <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${expandido ? 'bg-primary-light text-primary' : 'bg-slate-100 text-slate-400'}`}>
+          <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${expandido ? 'bg-primary-light text-primary' : 'bg-slate-100 text-slate-400'}`}>
             {expandido ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </div>
         </div>
@@ -450,7 +450,7 @@ function ActividadCard({ registro, tasa }) {
             {/* Descripción completa si existe */}
             {registro.descripcion && (
               <div className="bg-slate-50 rounded-xl px-3.5 py-2.5">
-                <p className="text-sm text-slate-600 leading-relaxed">{registro.descripcion}</p>
+                <p className="text-xs text-slate-600 leading-relaxed">{registro.descripcion}</p>
               </div>
             )}
 
@@ -463,7 +463,7 @@ function ActividadCard({ registro, tasa }) {
 
             {!tieneEntidad && !registro.descripcion && (
               <div className="bg-slate-50 rounded-xl px-3.5 py-2.5">
-                <p className="text-sm text-slate-500 italic">No hay datos adicionales para esta acción.</p>
+                <p className="text-xs text-slate-400 italic">No hay datos adicionales para esta acción.</p>
               </div>
             )}
           </div>
@@ -505,7 +505,7 @@ export default function AuditoriaView() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-slate-800">Auditoría</h1>
-            <p className="text-base text-slate-500">
+            <p className="text-sm text-slate-500">
               {isLoading ? 'Cargando...' : `${total.toLocaleString()} registro${total !== 1 ? 's' : ''} de actividad`}
             </p>
           </div>
@@ -518,7 +518,7 @@ export default function AuditoriaView() {
 
       {/* Filtros */}
       <div className="flex flex-wrap gap-3 items-center">
-        <Filter size={14} className="text-slate-500 shrink-0" />
+        <Filter size={14} className="text-slate-400 shrink-0" />
         <div className="min-w-[180px]">
           <CustomSelect
             options={CATEGORIAS_FILTRO.map(({ valor, label }) => ({ value: valor, label }))}
@@ -541,7 +541,7 @@ export default function AuditoriaView() {
         </div>
         {(categoria || usuarioId) && (
           <button onClick={() => { setCategoria(''); setUsuarioId(''); setPagina(0) }}
-            className="text-sm text-slate-500 hover:text-slate-800 underline">
+            className="text-xs text-slate-500 hover:text-slate-800 underline">
             Limpiar filtros
           </button>
         )}
@@ -553,13 +553,13 @@ export default function AuditoriaView() {
       ) : isError ? (
         <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center text-red-700">
           <p className="font-semibold">Error al cargar registros</p>
-          <button onClick={() => refetch()} className="mt-3 text-base underline">Intentar de nuevo</button>
+          <button onClick={() => refetch()} className="mt-3 text-sm underline">Intentar de nuevo</button>
         </div>
       ) : registros.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-500">
+        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400">
           <ClipboardList size={32} className="mx-auto mb-3 opacity-30" />
           <p className="font-medium">Sin actividad registrada</p>
-          <p className="text-base mt-1">No hay registros que coincidan con los filtros.</p>
+          <p className="text-sm mt-1">No hay registros que coincidan con los filtros.</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -572,16 +572,16 @@ export default function AuditoriaView() {
       {/* Paginación */}
       {!isLoading && totalPags > 1 && (
         <div className="flex items-center justify-between bg-white rounded-2xl border border-slate-200 px-5 py-3">
-          <span className="text-base text-slate-500">
+          <span className="text-sm text-slate-500">
             Página <strong>{pagina + 1}</strong> de <strong>{totalPags}</strong>
           </span>
           <div className="flex items-center gap-2">
             <button onClick={() => setPagina(p => p - 1)} disabled={pagina === 0}
-              className="flex items-center gap-1 px-4 py-2.5 rounded-xl border border-slate-200 text-base text-slate-600 hover:bg-slate-50 disabled:opacity-30 transition-colors">
+              className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-30 transition-colors">
               <ChevronLeft size={14} /> Anterior
             </button>
             <button onClick={() => setPagina(p => p + 1)} disabled={pagina >= totalPags - 1}
-              className="flex items-center gap-1 px-4 py-2.5 rounded-xl border border-slate-200 text-base text-slate-600 hover:bg-slate-50 disabled:opacity-30 transition-colors">
+              className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-30 transition-colors">
               Siguiente <ChevronRight size={14} />
             </button>
           </div>
