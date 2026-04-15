@@ -15,10 +15,9 @@ export const CLIENTES_KEY = ['clientes']
 //   supervisor → todos los clientes
 export function useClientes(busqueda = '') {
   const { perfil } = useAuthStore()
-  const esSupervisor = perfil?.rol === 'supervisor'
 
   return useQuery({
-    queryKey: [...CLIENTES_KEY, busqueda, esSupervisor, perfil?.id],
+    queryKey: [...CLIENTES_KEY, busqueda],
     queryFn: async () => {
       let query = supabase
         .from('clientes')
@@ -32,9 +31,6 @@ export function useClientes(busqueda = '') {
         `)
         .eq('activo', true)
         .order('nombre', { ascending: true })
-
-      // Vendedores solo ven sus propios clientes
-      if (!esSupervisor) query = query.eq('vendedor_id', perfil.id)
 
       // Filtro de búsqueda (por nombre o RIF) — sanitizado
       if (busqueda.trim()) {
