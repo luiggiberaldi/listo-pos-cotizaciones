@@ -292,14 +292,15 @@ function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar })
   const vendedorColor = usuario.color || null
 
   return (
-    <div className={`bg-white rounded-2xl border transition-all p-4 flex flex-col gap-3 ${
+    <div className={`group bg-white rounded-2xl border transition-all duration-200 overflow-hidden flex flex-col ${
       usuario.activo
-        ? `${conf.border} hover:shadow-md`
+        ? `${conf.border} hover:shadow-lg hover:shadow-sky-50`
         : 'border-slate-100 opacity-60'
     }`}
       style={vendedorColor && usuario.activo ? { borderLeftWidth: '4px', borderLeftColor: vendedorColor } : undefined}>
-      <div className="flex items-center gap-3">
-        {/* Avatar con inicial */}
+
+      {/* ── Cabecera: avatar + nombre + rol ── */}
+      <div className="px-4 pt-4 pb-2 flex items-center gap-3">
         <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 shadow-sm relative ${!vendedorColor ? `bg-gradient-to-br ${conf.gradient}` : ''}`}
           style={vendedorColor ? { background: `linear-gradient(135deg, ${vendedorColor}, ${vendedorColor}99)` } : undefined}>
           <span className="text-white font-black text-xl">
@@ -323,35 +324,10 @@ function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar })
             {conf.label}
           </span>
         </div>
-
-        {!propio && (
-          <div className="flex items-center gap-1 shrink-0">
-            <button onClick={() => onEditar(usuario)} title="Editar"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-sky-500 hover:bg-sky-50 transition-colors flex items-center gap-1 text-sm">
-              <Pencil size={14} />
-              <span>Editar</span>
-            </button>
-            <button
-              onClick={() => onCambiarActivo(usuario, !usuario.activo)}
-              title={usuario.activo ? 'Desactivar' : 'Activar'}
-              className={`p-1.5 rounded-lg transition-colors flex items-center gap-1 text-sm ${
-                usuario.activo
-                  ? 'text-slate-400 hover:text-primary hover:bg-primary-light'
-                  : 'text-slate-400 hover:text-emerald-500 hover:bg-emerald-50'
-              }`}>
-              {usuario.activo ? <UserX size={14} /> : <UserCheck size={14} />}
-              <span>{usuario.activo ? 'Desactivar' : 'Activar'}</span>
-            </button>
-            <button onClick={() => onEliminar(usuario)} title="Eliminar"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors flex items-center gap-1 text-sm">
-              <Trash2 size={14} />
-              <span>Eliminar</span>
-            </button>
-          </div>
-        )}
       </div>
 
-      <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+      {/* ── Estado + fecha ── */}
+      <div className="px-4 pb-3 flex items-center justify-between">
         <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
           usuario.activo ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'
         }`}>
@@ -361,6 +337,33 @@ function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar })
           {new Date(usuario.creado_en).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}
         </span>
       </div>
+
+      {/* ── Acciones (barra inferior, solo si no es propio) ── */}
+      {!propio && (
+        <div className="mt-auto border-t border-slate-100 px-3 py-2 flex items-center gap-1">
+          <button onClick={() => onEditar(usuario)} title="Editar"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
+            <Pencil size={13} />
+            Editar
+          </button>
+          <button
+            onClick={() => onCambiarActivo(usuario, !usuario.activo)}
+            title={usuario.activo ? 'Desactivar' : 'Activar'}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              usuario.activo
+                ? 'text-slate-600 hover:bg-slate-100 active:bg-slate-200'
+                : 'text-emerald-600 hover:bg-emerald-50 active:bg-emerald-100'
+            }`}>
+            {usuario.activo ? <UserX size={13} /> : <UserCheck size={13} />}
+            {usuario.activo ? 'Desactivar' : 'Activar'}
+          </button>
+          <button onClick={() => onEliminar(usuario)} title="Eliminar"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 active:bg-red-100 transition-colors ml-auto">
+            <Trash2 size={13} />
+            Eliminar
+          </button>
+        </div>
+      )}
     </div>
   )
 }

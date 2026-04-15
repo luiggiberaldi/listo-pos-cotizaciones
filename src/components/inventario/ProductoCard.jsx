@@ -33,7 +33,7 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, tasa = 
   const esSupervisor = perfil?.rol === 'supervisor'
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 hover:border-primary-light hover:shadow-md transition-all flex flex-col gap-3 overflow-hidden">
+    <div className="bg-white rounded-2xl border border-slate-200 hover:border-sky-200 hover:shadow-lg hover:shadow-sky-50 transition-all duration-200 flex flex-col overflow-hidden">
 
       {/* Imagen del producto */}
       <div className="w-full aspect-square bg-slate-50 flex items-center justify-center overflow-hidden">
@@ -47,8 +47,8 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, tasa = 
 
       <div className="px-4 pb-4 flex flex-col gap-3 flex-1">
       {/* Cabecera */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
+      <div>
+        <div className="min-w-0">
           {/* Código */}
           {producto.codigo && (
             <div className="flex items-center gap-1 mb-1">
@@ -68,26 +68,6 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, tasa = 
             </div>
           )}
         </div>
-
-        {/* Acciones (solo supervisor) */}
-        {esSupervisor && (
-          <div className="flex items-center gap-1 shrink-0">
-            <button
-              onClick={() => onEditar(producto)}
-              title="Editar producto"
-              className="p-2 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-light transition-colors"
-            >
-              <Pencil size={16} />
-            </button>
-            <button
-              onClick={() => onDesactivar(producto)}
-              title="Desactivar producto"
-              className="p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-            >
-              <EyeOff size={16} />
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Descripción */}
@@ -134,6 +114,22 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, tasa = 
         </div>
       </div>
       </div>
+
+      {/* Acciones (solo supervisor, barra inferior) */}
+      {esSupervisor && (
+        <div className="mt-auto border-t border-slate-100 px-3 py-2 flex items-center gap-1">
+          <button onClick={() => onEditar(producto)} title="Editar producto"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
+            <Pencil size={13} />
+            Editar
+          </button>
+          <button onClick={() => onDesactivar(producto)} title="Desactivar producto"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 active:bg-red-100 transition-colors ml-auto">
+            <EyeOff size={13} />
+            Desactivar
+          </button>
+        </div>
+      )}
     </div>
   )
 }

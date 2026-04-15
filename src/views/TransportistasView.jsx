@@ -137,37 +137,23 @@ function TransportistaModal({ transportista = null, onClose }) {
 // ─── Tarjeta ──────────────────────────────────────────────────────────────────
 function TransportistaCard({ transportista, esSupervisor, onEditar, onDesactivar }) {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 hover:border-primary-light hover:shadow-md transition-all p-4 flex flex-col gap-3">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 bg-primary-light rounded-xl flex items-center justify-center shrink-0">
-            <Truck size={16} className="text-primary" />
-          </div>
-          <div>
-            <p className="font-bold text-slate-800 text-sm leading-tight">{transportista.nombre}</p>
-            {transportista.rif && (
-              <p className="text-xs text-slate-400 font-mono">{transportista.rif}</p>
-            )}
-          </div>
-        </div>
+    <div className="group bg-white rounded-2xl border border-slate-200 hover:border-sky-200 hover:shadow-lg hover:shadow-sky-50 transition-all duration-200 overflow-hidden flex flex-col">
 
-        {esSupervisor && (
-          <div className="flex items-center gap-1 shrink-0">
-            <button onClick={() => onEditar(transportista)} title="Editar"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-light transition-colors flex items-center gap-1.5">
-              <Pencil size={14} />
-              <span className="text-sm">Editar</span>
-            </button>
-            <button onClick={() => onDesactivar(transportista)} title="Desactivar"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors flex items-center gap-1.5">
-              <Ban size={14} />
-              <span className="text-sm">Eliminar</span>
-            </button>
-          </div>
-        )}
+      {/* ── Cabecera ── */}
+      <div className="px-4 pt-4 pb-2 flex items-center gap-2.5">
+        <div className="w-9 h-9 bg-primary-light rounded-xl flex items-center justify-center shrink-0">
+          <Truck size={16} className="text-primary" />
+        </div>
+        <div className="min-w-0">
+          <p className="font-bold text-slate-800 text-sm leading-tight truncate">{transportista.nombre}</p>
+          {transportista.rif && (
+            <p className="text-xs text-slate-400 font-mono">{transportista.rif}</p>
+          )}
+        </div>
       </div>
 
-      <div className="space-y-1.5">
+      {/* ── Detalles ── */}
+      <div className="px-4 pb-3 space-y-1.5">
         {transportista.telefono && (
           <div className="flex items-center gap-1.5 text-xs text-slate-500">
             <Phone size={11} className="text-slate-400 shrink-0" />
@@ -182,15 +168,29 @@ function TransportistaCard({ transportista, esSupervisor, onEditar, onDesactivar
         )}
       </div>
 
-      <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-        <span className="text-xs text-slate-400">Tarifa base</span>
-        <div className="flex items-center gap-1">
-          <DollarSign size={11} className="text-slate-400" />
-          <span className="font-bold text-slate-800 text-sm">
-            {Number(transportista.tarifa_base || 0).toFixed(2)}
-          </span>
-        </div>
+      {/* ── Tarifa ── */}
+      <div className="mx-4 mb-3 bg-slate-50 rounded-xl px-3.5 py-2.5 flex items-center justify-between">
+        <span className="text-xs font-medium text-slate-500">Tarifa base</span>
+        <span className="text-base font-bold text-slate-800">
+          $ {Number(transportista.tarifa_base || 0).toFixed(2)}
+        </span>
       </div>
+
+      {/* ── Acciones (solo supervisor) ── */}
+      {esSupervisor && (
+        <div className="mt-auto border-t border-slate-100 px-3 py-2 flex items-center gap-1">
+          <button onClick={() => onEditar(transportista)} title="Editar"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
+            <Pencil size={13} />
+            Editar
+          </button>
+          <button onClick={() => onDesactivar(transportista)} title="Desactivar"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 active:bg-red-100 transition-colors ml-auto">
+            <Ban size={13} />
+            Eliminar
+          </button>
+        </div>
+      )}
     </div>
   )
 }
