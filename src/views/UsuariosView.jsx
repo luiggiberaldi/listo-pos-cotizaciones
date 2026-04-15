@@ -338,8 +338,8 @@ function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar })
         </span>
       </div>
 
-      {/* ── Acciones (barra inferior, solo si no es propio) ── */}
-      {!propio && (
+      {/* ── Acciones (barra inferior) ── */}
+      {!propio ? (
         <div className="mt-auto border-t border-slate-100 px-2 py-2 flex items-center gap-0.5">
           <button onClick={() => onEditar(usuario)} title="Editar"
             className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
@@ -360,6 +360,14 @@ function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar })
           <button onClick={() => onEliminar(usuario)} title="Eliminar"
             className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 active:bg-red-100 transition-colors ml-auto">
             <Trash2 size={13} />
+          </button>
+        </div>
+      ) : (
+        <div className="mt-auto border-t border-slate-100 px-2 py-2 flex items-center">
+          <button onClick={() => onEditar(usuario)} title="Cambiar nombre"
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
+            <Pencil size={13} />
+            Cambiar nombre
           </button>
         </div>
       )}
