@@ -340,27 +340,26 @@ function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar })
 
       {/* ── Acciones (barra inferior, solo si no es propio) ── */}
       {!propio && (
-        <div className="mt-auto border-t border-slate-100 px-3 py-2 flex items-center gap-1">
+        <div className="mt-auto border-t border-slate-100 px-2 py-2 flex items-center gap-0.5">
           <button onClick={() => onEditar(usuario)} title="Editar"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
             <Pencil size={13} />
             Editar
           </button>
           <button
             onClick={() => onCambiarActivo(usuario, !usuario.activo)}
             title={usuario.activo ? 'Desactivar' : 'Activar'}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+            className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-colors ${
               usuario.activo
                 ? 'text-slate-600 hover:bg-slate-100 active:bg-slate-200'
                 : 'text-emerald-600 hover:bg-emerald-50 active:bg-emerald-100'
             }`}>
             {usuario.activo ? <UserX size={13} /> : <UserCheck size={13} />}
-            {usuario.activo ? 'Desactivar' : 'Activar'}
+            {usuario.activo ? 'Desact.' : 'Activar'}
           </button>
           <button onClick={() => onEliminar(usuario)} title="Eliminar"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 active:bg-red-100 transition-colors ml-auto">
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 active:bg-red-100 transition-colors ml-auto">
             <Trash2 size={13} />
-            Eliminar
           </button>
         </div>
       )}
