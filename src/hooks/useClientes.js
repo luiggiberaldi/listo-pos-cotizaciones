@@ -10,46 +10,25 @@ import { sanitizePostgrestSearch } from '../utils/format'
 export const CLIENTES_KEY = ['clientes']
 
 // ─── Consulta principal: listar clientes ─────────────────────────────────────
-// RLS filtra automáticamente:
-//   vendedor   → solo sus clientes activos
-//   supervisor → todos los clientes
+// Todos los usuarios ven todos los clientes (via worker API que bypasea RLS)
 export function useClientes(busqueda = '') {
   const { perfil } = useAuthStore()
-  const esSupervisor = perfil?.rol === 'supervisor'
 
   return useQuery({
-    queryKey: [...CLIENTES_KEY, busqueda, esSupervisor, perfil?.id],
+    queryKey: [...CLIENTES_KEY, busqueda],
     queryFn: async () => {
-      let query = supabase
-        .from('clientes')
-        .select(`
-          id, nombre, rif_cedula, telefono, email,
-          direccion, notas, tipo_cliente, activo,
-          vendedor_id, asignado_en,
-          ultima_reasig_por, ultima_reasig_motivo, ultima_reasig_en,
-          creado_en, actualizado_en,
-          vendedor:usuarios!clientes_vendedor_id_fkey(id, nombre)
-        `)
-        .eq('activo', true)
-        .order('nombre', { ascending: true })
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('No autenticado')
 
-      // Vendedores solo ven sus propios clientes
-      if (!esSupervisor) query = query.eq('vendedor_id', perfil.id)
+      const params = new URLSearchParams()
+      if (busqueda.trim()) params.set('busqueda', busqueda.trim())
 
-      // Filtro de búsqueda (por nombre o RIF) — sanitizado
-      if (busqueda.trim()) {
-        const safe = sanitizePostgrestSearch(busqueda)
-        if (safe) {
-          query = query.or(
-            `nombre.ilike.%${safe}%,rif_cedula.ilike.%${safe}%`
-          )
-        }
-      }
+      const res = await fetch(`/api/clientes?${params}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      })
 
-      const { data, error } = await query
-
-      if (error) throw error
-      return data ?? []
+      if (!res.ok) throw new Error('Error al cargar clientes')
+      return await res.json()
     },
     enabled: !!perfil,
   })

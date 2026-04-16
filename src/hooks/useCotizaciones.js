@@ -145,51 +145,35 @@ export function useGuardarBorrador() {
         total_usd:            totalUsd,
       }
 
-      let id = cotizacionId
+      const itemRows = items.map((it, idx) => ({
+        producto_id:     it.productoId || null,
+        codigo_snap:     it.codigoSnap || null,
+        nombre_snap:     it.nombreSnap,
+        unidad_snap:     it.unidadSnap  || 'und',
+        cantidad:        it.cantidad,
+        precio_unit_usd: it.precioUnitUsd,
+        descuento_pct:   it.descuentoPct,
+        total_linea_usd: round2(it.cantidad * it.precioUnitUsd * (1 - it.descuentoPct / 100)),
+        orden:           idx,
+      }))
 
-      if (!id) {
-        // Crear nueva cotización
-        const { data, error } = await supabase
-          .from('cotizaciones')
-          .insert({ ...headerData, estado: 'borrador' })
-          .select('id')
-          .single()
-        if (error) throw error
-        id = data.id
-      } else {
-        // Actualizar header
-        const { error } = await supabase
-          .from('cotizaciones')
-          .update(headerData)
-          .eq('id', id)
-        if (error) throw error
+      // Route through worker API (bypasses RLS for cross-vendor clients)
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/cotizaciones/guardar', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ cotizacionId, headerData, items: itemRows }),
+      })
 
-        // Borrar items anteriores
-        const { error: e2 } = await supabase
-          .from('cotizacion_items')
-          .delete()
-          .eq('cotizacion_id', id)
-        if (e2) throw e2
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Error al guardar cotización')
       }
 
-      // Insertar items
-      if (items.length > 0) {
-        const rows = items.map((it, idx) => ({
-          cotizacion_id:   id,
-          producto_id:     it.productoId || null,
-          codigo_snap:     it.codigoSnap || null,
-          nombre_snap:     it.nombreSnap,
-          unidad_snap:     it.unidadSnap  || 'und',
-          cantidad:        it.cantidad,
-          precio_unit_usd: it.precioUnitUsd,
-          descuento_pct:   it.descuentoPct,
-          total_linea_usd: round2(it.cantidad * it.precioUnitUsd * (1 - it.descuentoPct / 100)),
-          orden:           idx,
-        }))
-        const { error: e3 } = await supabase.from('cotizacion_items').insert(rows)
-        if (e3) throw e3
-      }
-
+      const { id } = await res.json()
       return id
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: COTIZACIONES_KEY }),

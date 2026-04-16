@@ -7,6 +7,16 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    // ── API: listar todos los clientes (bypass RLS para vendedores) ───────
+    if (url.pathname === '/api/clientes' && request.method === 'GET') {
+      return handleListarClientes(request, env);
+    }
+
+    // ── API: guardar cotización (bypass RLS para clientes ajenos) ─────────
+    if (url.pathname === '/api/cotizaciones/guardar' && request.method === 'POST') {
+      return handleGuardarCotizacion(request, env);
+    }
+
     // ── API routes para operaciones admin ──────────────────────────────────
     if (url.pathname.startsWith('/api/admin/')) {
       return handleAdmin(request, env, url);
@@ -556,5 +566,111 @@ function base64urlEncode(buffer) {
   let binary = '';
   arr.forEach(b => binary += String.fromCharCode(b));
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+// ── List all clients (service key bypasses RLS) ────────────────────────────
+async function handleListarClientes(request, env) {
+  const user = await verifyAuth(request, env);
+  if (!user?.id) return jsonError('No autenticado', 401);
+
+  const url = new URL(request.url);
+  const busqueda = url.searchParams.get('busqueda') || '';
+
+  let queryUrl = `${env.SUPABASE_URL}/rest/v1/clientes?activo=eq.true&order=nombre.asc&select=id,nombre,rif_cedula,telefono,email,direccion,notas,tipo_cliente,activo,vendedor_id,asignado_en,ultima_reasig_por,ultima_reasig_motivo,ultima_reasig_en,creado_en,actualizado_en,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color)`;
+
+  if (busqueda.trim()) {
+    const safe = busqueda.replace(/[%_\\]/g, '');
+    queryUrl += `&or=(nombre.ilike.*${safe}*,rif_cedula.ilike.*${safe}*)`;
+  }
+
+  const res = await fetch(queryUrl, {
+    headers: {
+      apikey: env.SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    },
+  });
+
+  const data = await res.json();
+  return new Response(JSON.stringify(data), {
+    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+  });
+}
+
+// ── Save cotización (service key bypasses RLS for cross-vendor clients) ────
+async function handleGuardarCotizacion(request, env) {
+  const user = await verifyAuth(request, env);
+  if (!user?.id) return jsonError('No autenticado', 401);
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido'); }
+
+  const { cotizacionId, headerData, items } = body;
+  if (!headerData || !items) return jsonError('Faltan campos');
+
+  // Force vendedor_id to authenticated user
+  headerData.vendedor_id = user.id;
+
+  const supaHeaders = {
+    apikey: env.SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    'Content-Type': 'application/json',
+    Prefer: 'return=representation',
+  };
+
+  let id = cotizacionId;
+
+  try {
+    if (!id) {
+      // Create new cotización
+      const res = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?select=id`, {
+        method: 'POST',
+        headers: { ...supaHeaders, Prefer: 'return=representation' },
+        body: JSON.stringify({ ...headerData, estado: 'borrador' }),
+      });
+      if (!res.ok) {
+        const err = await res.text();
+        return jsonError(`Error al crear: ${err}`, 500);
+      }
+      const [row] = await res.json();
+      id = row.id;
+    } else {
+      // Update existing
+      const res = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${id}`, {
+        method: 'PATCH',
+        headers: supaHeaders,
+        body: JSON.stringify(headerData),
+      });
+      if (!res.ok) {
+        const err = await res.text();
+        return jsonError(`Error al actualizar: ${err}`, 500);
+      }
+
+      // Delete old items
+      await fetch(`${env.SUPABASE_URL}/rest/v1/cotizacion_items?cotizacion_id=eq.${id}`, {
+        method: 'DELETE',
+        headers: supaHeaders,
+      });
+    }
+
+    // Insert items
+    if (items.length > 0) {
+      const rows = items.map((it, idx) => ({ ...it, cotizacion_id: id, orden: idx }));
+      const res = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizacion_items`, {
+        method: 'POST',
+        headers: supaHeaders,
+        body: JSON.stringify(rows),
+      });
+      if (!res.ok) {
+        const err = await res.text();
+        return jsonError(`Error al insertar items: ${err}`, 500);
+      }
+    }
+
+    return new Response(JSON.stringify({ id }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (e) {
+    return jsonError(e.message || 'Error interno', 500);
+  }
 }
 

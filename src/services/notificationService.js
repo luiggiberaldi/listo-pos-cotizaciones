@@ -11,6 +11,7 @@ export const NOTIF_TYPES = {
   COTIZACION_CREADA:    'cotizacion_creada',
   DESPACHO_CREADO:      'despacho_creado',
   COTIZACION_ANULADA:   'cotizacion_anulada',
+  CLIENTE_AJENO:        'cliente_ajeno',
 }
 
 function readNotifs() {
@@ -119,5 +120,13 @@ export function notifyCotizacionAnulada(numero) {
     NOTIF_TYPES.COTIZACION_ANULADA,
     'Cotización Anulada',
     `Cotización #${numero} fue anulada`,
+  )
+}
+
+export function notifyClienteAjeno(vendedorNombre, clienteNombre, clienteVendedorNombre, numero) {
+  createNotification(
+    NOTIF_TYPES.CLIENTE_AJENO,
+    'Cotización con Cliente Ajeno',
+    `${vendedorNombre} creó cotización #${numero} con el cliente ${clienteNombre} (asignado a ${clienteVendedorNombre})`,
   )
 }

@@ -17,6 +17,9 @@ import { useTransportistas }   from '../../hooks/useTransportistas'
 import { useGuardarBorrador, useEnviarCotizacion } from '../../hooks/useCotizaciones'
 import { useTasaCambio }       from '../../hooks/useTasaCambio'
 import { useConfigNegocio }    from '../../hooks/useConfigNegocio'
+import useAuthStore            from '../../store/useAuthStore'
+import { notifyClienteAjeno }  from '../../services/notificationService'
+import { sendPushNotification } from '../../hooks/usePushNotifications'
 import { compartirPorWhatsApp, generarMensaje } from '../../utils/whatsapp'
 import { round2, round4, mulR } from '../../utils/dinero'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../../utils/format'
@@ -559,7 +562,10 @@ const TIPO_LABELS_SHORT = {
 function ClienteSelector({ clientes, clienteId, onSelect }) {
   const [abierto, setAbierto] = useState(false)
   const [busqueda, setBusqueda] = useState('')
+  const [confirmAjeno, setConfirmAjeno] = useState(null)
   const ref = useRef(null)
+  const { perfil } = useAuthStore()
+  const esSupervisor = perfil?.rol === 'supervisor'
 
   // Cerrar al hacer click fuera
   useEffect(() => {
@@ -580,9 +586,23 @@ function ClienteSelector({ clientes, clienteId, onSelect }) {
     : clientes
 
   function elegir(c) {
+    // Si es vendedor y el cliente pertenece a otro vendedor, pedir confirmación
+    if (!esSupervisor && c.vendedor_id && c.vendedor_id !== perfil?.id) {
+      setConfirmAjeno(c)
+      return
+    }
     onSelect(c.id)
     setAbierto(false)
     setBusqueda('')
+  }
+
+  function confirmarClienteAjeno() {
+    if (confirmAjeno) {
+      onSelect(confirmAjeno.id)
+      setAbierto(false)
+      setBusqueda('')
+      setConfirmAjeno(null)
+    }
   }
 
   function limpiar(e) {
@@ -660,7 +680,10 @@ function ClienteSelector({ clientes, clienteId, onSelect }) {
                 {busqueda ? 'Sin resultados' : 'No hay clientes'}
               </p>
             ) : (
-              filtrados.map(c => (
+              filtrados.map(c => {
+                const esAjeno = !esSupervisor && c.vendedor_id && c.vendedor_id !== perfil?.id
+                const vendedorColor = c.vendedor?.color || null
+                return (
                 <button
                   key={c.id}
                   type="button"
@@ -668,9 +691,11 @@ function ClienteSelector({ clientes, clienteId, onSelect }) {
                   className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-50 ${
                     c.id === clienteId ? 'bg-primary-light/30' : ''
                   }`}
+                  style={vendedorColor ? { borderLeft: `3px solid ${vendedorColor}` } : undefined}
                 >
-                  <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
-                    <User size={14} className="text-slate-500" />
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                    style={vendedorColor ? { backgroundColor: vendedorColor + '20' } : { backgroundColor: '#f1f5f9' }}>
+                    <User size={14} style={vendedorColor ? { color: vendedorColor } : undefined} className={!vendedorColor ? 'text-slate-500' : ''} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-slate-800 text-sm truncate">{c.nombre}</p>
@@ -678,6 +703,11 @@ function ClienteSelector({ clientes, clienteId, onSelect }) {
                       {[c.rif_cedula, c.telefono].filter(Boolean).join(' · ') || 'Sin datos adicionales'}
                     </p>
                   </div>
+                  {esAjeno && c.vendedor && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200 shrink-0 whitespace-nowrap">
+                      {c.vendedor.nombre}
+                    </span>
+                  )}
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${TIPO_COLORS[c.tipo_cliente] ?? TIPO_COLORS.natural}`}>
                     {TIPO_LABELS_SHORT[c.tipo_cliente] ?? 'Particular'}
                   </span>
@@ -685,8 +715,41 @@ function ClienteSelector({ clientes, clienteId, onSelect }) {
                     <CheckCircle size={14} className="text-primary shrink-0" />
                   )}
                 </button>
-              ))
+                )
+              })
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal confirmación cliente ajeno */}
+      {confirmAjeno && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onClick={() => setConfirmAjeno(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                <AlertCircle size={20} className="text-amber-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-800 text-sm">Cliente de otro vendedor</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  <strong>{confirmAjeno.nombre}</strong> está asignado a <strong>{confirmAjeno.vendedor?.nombre || 'otro vendedor'}</strong>
+                </p>
+              </div>
+            </div>
+            <p className="text-sm text-slate-600">
+              Puedes usar este cliente, pero se notificará al supervisor. ¿Deseas continuar?
+            </p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setConfirmAjeno(null)}
+                className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+                Cancelar
+              </button>
+              <button onClick={confirmarClienteAjeno}
+                className="px-4 py-2 text-sm font-bold text-white bg-amber-500 hover:bg-amber-600 rounded-lg transition-colors">
+                Sí, usar cliente
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -697,6 +760,7 @@ function ClienteSelector({ clientes, clienteId, onSelect }) {
 // ─── Componente principal (Wizard) ───────────────────────────────────────────
 export default function CotizacionBuilder({ cotizacionExistente = null, onVolver, onGuardado }) {
   const esEdicion = !!cotizacionExistente
+  const { perfil } = useAuthStore()
 
   // Paso actual del wizard (1-4)
   const [paso, setPaso] = useState(esEdicion ? 2 : 1)
@@ -842,6 +906,24 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
 
       setEnviada(true)
       setPaso(4)
+
+      // Notificar al supervisor si el vendedor usó un cliente ajeno
+      const clienteUsado = clientes.find(c => c.id === clienteId)
+      if (clienteUsado && perfil?.rol !== 'supervisor' && clienteUsado.vendedor_id && clienteUsado.vendedor_id !== perfil?.id) {
+        const numCot = cotEnviada ? String(cotEnviada.numero).padStart(5, '0') : '—'
+        notifyClienteAjeno(
+          perfil?.nombre || 'Vendedor',
+          clienteUsado.nombre,
+          clienteUsado.vendedor?.nombre || 'otro vendedor',
+          numCot
+        )
+        sendPushNotification({
+          title: 'Cliente Ajeno Usado',
+          message: `${perfil?.nombre} creó cotización #${numCot} con ${clienteUsado.nombre} (cliente de ${clienteUsado.vendedor?.nombre || 'otro vendedor'})`,
+          tag: `cliente-ajeno-${numCot}`,
+          url: '/cotizaciones',
+        })
+      }
     } catch (e) {
       setErrorGeneral(e.message ?? 'Error al enviar')
       setModalEnvio(false)
@@ -1019,6 +1101,17 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
                           <span className="flex items-center gap-1.5 col-span-2"><MapPin size={11} className="text-slate-400" /> {clienteSeleccionado.direccion}</span>
                         )}
                       </div>
+                    </div>
+                  )}
+
+                  {/* Alerta: cliente de otro vendedor */}
+                  {clienteSeleccionado && perfil?.rol !== 'supervisor' && clienteSeleccionado.vendedor_id && clienteSeleccionado.vendedor_id !== perfil?.id && (
+                    <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                      <AlertCircle size={16} className="text-amber-500 shrink-0" />
+                      <p className="text-xs text-amber-700">
+                        Este cliente está asignado a <strong>{clienteSeleccionado.vendedor?.nombre || 'otro vendedor'}</strong>.
+                        Puedes continuar, pero se notificará al supervisor al enviar la cotización.
+                      </p>
                     </div>
                   )}
                 </div>

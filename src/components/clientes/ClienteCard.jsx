@@ -29,9 +29,14 @@ const TIPO_COLORS = {
 export default function ClienteCard({ cliente, onEditar, onDesactivar, onReasignar }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
+  const esPropio = cliente.vendedor_id === perfil?.id
+  const vendedorColor = cliente.vendedor?.color || null
 
   return (
-    <div className="group bg-white rounded-2xl border border-slate-200 hover:border-sky-200 hover:shadow-lg hover:shadow-sky-50 transition-all duration-200 overflow-hidden flex flex-col">
+    <div className={`group bg-white rounded-2xl border transition-all duration-200 overflow-hidden flex flex-col ${
+      esPropio ? 'border-slate-200 hover:border-sky-200 hover:shadow-lg hover:shadow-sky-50' : 'border-slate-200 hover:border-slate-300 hover:shadow-md'
+    }`}
+      style={vendedorColor ? { borderLeftWidth: '4px', borderLeftColor: vendedorColor } : undefined}>
 
       {/* ── Cabecera: nombre + tipo ── */}
       <div className="px-4 pt-4 pb-2">
@@ -61,12 +66,18 @@ export default function ClienteCard({ cliente, onEditar, onDesactivar, onReasign
         <Contacto icono={MapPin} valor={cliente.direccion} />
       </div>
 
-      {/* ── Vendedor (solo supervisor) ── */}
-      {esSupervisor && cliente.vendedor && (
+      {/* ── Vendedor asignado (visible para todos) ── */}
+      {cliente.vendedor && (
         <div className="mx-4 mb-3 flex items-center justify-between">
           <span className="text-xs text-slate-400">Vendedor</span>
-          <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">
+          <span className="text-xs font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5"
+            style={vendedorColor
+              ? { backgroundColor: vendedorColor + '18', color: vendedorColor, border: `1px solid ${vendedorColor}30` }
+              : { backgroundColor: '#f1f5f9', color: '#475569' }
+            }>
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: vendedorColor || '#94a3b8' }} />
             {cliente.vendedor.nombre}
+            {esPropio && <span className="text-[9px] opacity-60">(tú)</span>}
           </span>
         </div>
       )}
