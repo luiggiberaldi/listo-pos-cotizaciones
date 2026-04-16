@@ -105,7 +105,7 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
   const canWhatsApp = cotizacion.estado === 'enviada' || cotizacion.estado === 'aceptada'
   const canAcceptReject = esSupervisor && esEnviada
   const canDespachar = esSupervisor && (cotizacion.estado === 'aceptada' || cotizacion.estado === 'enviada') && onDespachar
-  const canAnular = esBorrador || (esSupervisor && cotizacion.estado !== 'anulada')
+  const canAnular = esBorrador || (esSupervisor && (cotizacion.estado === 'enviada' || cotizacion.estado === 'aceptada'))
   const hasSecondaryActions = canAcceptReject || canDespachar || canAnular
 
   return (
