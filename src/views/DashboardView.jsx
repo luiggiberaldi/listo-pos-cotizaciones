@@ -144,11 +144,13 @@ export default function DashboardView() {
             </p>
           </div>
         </div>
+        {!esSupervisor && (
         <button onClick={() => navigate('/cotizaciones?nueva=1')}
           className="flex items-center gap-2 bg-primary hover:bg-primary-hover text-white font-bold text-sm px-5 py-3 rounded-xl transition-colors shadow-md shadow-primary/20 active:scale-[0.98]">
           <Plus size={18} strokeWidth={2.5} />
           Nueva cotización
         </button>
+        )}
       </div>
 
       {/* Métricas principales */}
