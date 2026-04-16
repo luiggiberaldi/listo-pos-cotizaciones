@@ -905,8 +905,9 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
       setModalEnvio(false)
 
       // Obtener número de cotización para mostrar en confirmación
+      const tabla = esSupervisor ? 'cotizaciones' : 'v_cotizaciones_vendedor'
       const { data: cotEnviada } = await supabase
-        .from('cotizaciones').select('numero, version').eq('id', id).single()
+        .from(tabla).select('numero, version').eq('id', id).single()
       if (cotEnviada) {
         const nd = cotEnviada.version > 1
           ? `COT-${String(cotEnviada.numero).padStart(5, '0')} Rev.${cotEnviada.version}`

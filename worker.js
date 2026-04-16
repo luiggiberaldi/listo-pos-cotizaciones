@@ -58,6 +58,8 @@ export default {
         fbHeaders.set('X-Frame-Options', 'DENY')
         fbHeaders.set('Referrer-Policy', 'strict-origin-when-cross-origin')
         fbHeaders.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+        fbHeaders.set('Cache-Control', 'no-cache, no-store, must-revalidate')
+        fbHeaders.set('Pragma', 'no-cache')
         return new Response(fallback.body, {
           status: 200,
           statusText: 'OK',
@@ -71,6 +73,14 @@ export default {
     newHeaders.set('X-Frame-Options', 'DENY');
     newHeaders.set('Referrer-Policy', 'strict-origin-when-cross-origin');
     newHeaders.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+
+    // index.html no debe cachearse para que el browser siempre cargue el JS actualizado
+    const isHtml = response.headers.get('content-type')?.includes('text/html')
+      || url.pathname === '/' || !url.pathname.includes('.')
+    if (isHtml) {
+      newHeaders.set('Cache-Control', 'no-cache, no-store, must-revalidate')
+      newHeaders.set('Pragma', 'no-cache')
+    }
 
     return new Response(response.body, {
       status: response.status,
