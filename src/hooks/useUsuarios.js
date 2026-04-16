@@ -43,7 +43,13 @@ export function useActualizarUsuario() {
     mutationFn: async ({ id, nombre, rol, pin, color }) => {
       await adminAPI.updateUser(id, { nombre, rol, pin, color })
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEY })
+      // Invalidar caches que muestran el color del vendedor
+      qc.invalidateQueries({ queryKey: ['cotizaciones'] })
+      qc.invalidateQueries({ queryKey: ['clientes'] })
+      qc.invalidateQueries({ queryKey: ['despachos'] })
+    },
   })
 }
 
