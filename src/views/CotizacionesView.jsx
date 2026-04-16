@@ -232,7 +232,7 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
 
   async function confirmarAnular() {
     if (!cotizacionAAnular) return
-    await anular.mutateAsync(cotizacionAAnular.id)
+    await anular.mutateAsync({ id: cotizacionAAnular.id, numero: cotizacionAAnular.numero })
     setCotizacionAAnular(null)
   }
 
