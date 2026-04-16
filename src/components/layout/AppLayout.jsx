@@ -279,32 +279,58 @@ export default function AppLayout() {
           )}
 
           {showNotifs && (
-            <div className="absolute bottom-full left-2 right-2 mb-2 bg-white rounded-2xl shadow-2xl border border-slate-100 z-50 overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-                <p className="text-sm font-black text-slate-700 uppercase tracking-wider">Alertas</p>
+            <div className="absolute bottom-full left-2 right-2 mb-2 bg-white rounded-2xl shadow-2xl border border-slate-100 z-50 overflow-hidden max-w-sm">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50/50">
+                <p className="text-xs font-black text-slate-600 uppercase tracking-wider">Alertas</p>
                 {notifications.length > 0 && (
                   <button onClick={() => { clearAll(); setShowNotifs(false) }}
-                    className="text-xs font-bold text-slate-500 hover:text-rose-500 transition-colors">
+                    className="text-[10px] font-bold text-slate-400 hover:text-rose-500 transition-colors px-2 py-1 rounded-lg hover:bg-rose-50">
                     Limpiar todo
                   </button>
                 )}
               </div>
-              <div className="max-h-72 overflow-y-auto">
+              <div className="max-h-80 overflow-y-auto custom-scrollbar divide-y divide-slate-50">
                 {notifications.length === 0 ? (
-                  <p className="text-sm text-slate-500 text-center py-6">Sin alertas recientes</p>
+                  <div className="text-center py-8 px-4">
+                    <Bell size={24} className="text-slate-300 mx-auto mb-2" />
+                    <p className="text-sm text-slate-400">Sin alertas recientes</p>
+                  </div>
                 ) : (
-                  notifications.slice(0, 20).map(n => (
-                    <div key={n.id} className="px-4 py-3 border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors flex gap-3 items-start">
-                      <NotifIcon type={n.type} />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-bold text-slate-700">{n.title}</p>
-                        {n.body && <p className="text-sm text-slate-600 mt-0.5 leading-snug">{n.body}</p>}
-                        <p className="text-xs text-slate-400 mt-1">
-                          {new Date(n.ts).toLocaleString('es-VE', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })}
-                        </p>
+                  notifications.slice(0, 20).map(n => {
+                    const isStockBajo = n.type === NOTIF_TYPES.STOCK_BAJO && n.meta?.productos
+                    return (
+                      <div key={n.id} className="px-4 py-3 hover:bg-slate-50/50 transition-colors">
+                        <div className="flex gap-2.5 items-start">
+                          <NotifIcon type={n.type} />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold text-slate-700 leading-tight">{n.title}</p>
+                            {n.body && !isStockBajo && (
+                              <p className="text-xs text-slate-500 mt-0.5 leading-snug">{n.body}</p>
+                            )}
+                            {/* Renderizar lista de stock bajo como badges */}
+                            {isStockBajo && (
+                              <div className="mt-1.5 flex flex-wrap gap-1">
+                                {n.meta.productos.map((p, i) => (
+                                  <span key={i} className="inline-flex items-center gap-1 text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200 rounded-md px-1.5 py-0.5 leading-tight">
+                                    <span className="truncate max-w-[120px]">{p.nombre}</span>
+                                    <span className="font-bold text-amber-900">{p.stock}</span>
+                                  </span>
+                                ))}
+                                {n.meta.total > 10 && (
+                                  <span className="text-[10px] text-amber-500 font-bold px-1.5 py-0.5">
+                                    +{n.meta.total - 10} más
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            <p className="text-[10px] text-slate-400 mt-1">
+                              {new Date(n.ts).toLocaleString('es-VE', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })}
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    )
+                  })
                 )}
               </div>
             </div>

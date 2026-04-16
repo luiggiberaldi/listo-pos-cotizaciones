@@ -74,21 +74,25 @@ export function notifyStockBajo(productos) {
   const bajos = productos.filter(p => p.stock_actual <= p.stock_minimo)
   if (!bajos.length) return
 
-  if (bajos.length === 1) {
-    const p = bajos[0]
-    createNotification(
-      NOTIF_TYPES.STOCK_BAJO,
-      'Stock Bajo',
-      `${p.nombre} — solo ${p.stock_actual} ${p.unidad || 'und'} (mínimo: ${p.stock_minimo})`,
-      { productoId: p.id }
-    )
-  } else {
-    createNotification(
-      NOTIF_TYPES.STOCK_BAJO,
-      `${bajos.length} Productos con Stock Bajo`,
-      bajos.slice(0, 3).map(p => `${p.nombre}: ${p.stock_actual}`).join(' · ') + (bajos.length > 3 ? '…' : ''),
-    )
-  }
+  // Guardar lista en meta para renderizar mejor en el panel
+  createNotification(
+    NOTIF_TYPES.STOCK_BAJO,
+    bajos.length === 1
+      ? `Stock Bajo: ${bajos[0].nombre}`
+      : `${bajos.length} productos con stock bajo`,
+    bajos.length === 1
+      ? `Solo ${bajos[0].stock_actual} ${bajos[0].unidad || 'und'} (mín: ${bajos[0].stock_minimo})`
+      : null,
+    {
+      productos: bajos.slice(0, 10).map(p => ({
+        nombre: p.nombre,
+        stock: p.stock_actual,
+        unidad: p.unidad || 'und',
+        minimo: p.stock_minimo,
+      })),
+      total: bajos.length,
+    }
+  )
 }
 
 export function notifyCotizacionEnviada(numero, clienteNombre) {
