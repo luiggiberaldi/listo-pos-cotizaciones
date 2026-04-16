@@ -3,9 +3,9 @@
 // — Vendedor: ve y gestiona sus propios clientes
 // — Supervisor: ve todos los clientes + puede reasignar
 import { useState, useMemo } from 'react'
-import { Users, Plus, Search, RefreshCw, X, LayoutGrid, List } from 'lucide-react'
+import { Users, Plus, Search, RefreshCw, X, LayoutGrid, List, Filter } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
-import { useClientes, useDesactivarCliente } from '../hooks/useClientes'
+import { useClientes, useDesactivarCliente, useVendedores } from '../hooks/useClientes'
 import ClienteCard       from '../components/clientes/ClienteCard'
 import ClienteRow        from '../components/clientes/ClienteRow'
 import ClienteForm       from '../components/clientes/ClienteForm'
@@ -37,9 +37,12 @@ function SkeletonClientes() {
 export default function ClientesView() {
   const { perfil } = useAuthStore()
 
-  // Búsqueda
+  // Búsqueda y filtros
   const [busqueda, setBusqueda] = useState('')
   const [textoBusqueda, setTextoBusqueda] = useState('')
+  const [filtroTipo, setFiltroTipo]         = useState('')
+  const [filtroVendedor, setFiltroVendedor] = useState('')
+  const [filtroCiudad, setFiltroCiudad]     = useState('')
   const [vistaMode, setVistaMode] = useState(() => localStorage.getItem('clientes_vista') || 'grid')
   const [pagina, setPagina] = useState(1)
 
@@ -53,14 +56,39 @@ export default function ClientesView() {
 
   // Data + mutations
   const { data: clientes = [], isLoading, isError, refetch } = useClientes(busqueda)
+  const { data: vendedores = [] } = useVendedores()
   const desactivar = useDesactivarCliente()
 
-  // Paginación
-  const totalPaginas = Math.max(1, Math.ceil(clientes.length / ITEMS_POR_PAGINA))
+  // Opciones dinámicas de ciudad
+  const ciudadesDisponibles = useMemo(() =>
+    [...new Set(clientes.map(c => c.ciudad).filter(Boolean))].sort()
+  , [clientes])
+
+  // Filtrado local
+  const clientesFiltrados = useMemo(() => {
+    return clientes.filter(c => {
+      if (filtroTipo     && c.tipo_cliente !== filtroTipo)               return false
+      if (filtroVendedor && c.vendedor_id  !== filtroVendedor)           return false
+      if (filtroCiudad   && (c.ciudad || '').toLowerCase() !== filtroCiudad.toLowerCase()) return false
+      return true
+    })
+  }, [clientes, filtroTipo, filtroVendedor, filtroCiudad])
+
+  const hayFiltros = filtroTipo || filtroVendedor || filtroCiudad
+
+  function limpiarFiltros() {
+    setFiltroTipo('')
+    setFiltroVendedor('')
+    setFiltroCiudad('')
+    setPagina(1)
+  }
+
+  // Paginación (sobre clientes filtrados)
+  const totalPaginas = Math.max(1, Math.ceil(clientesFiltrados.length / ITEMS_POR_PAGINA))
   const clientesPaginados = useMemo(() => {
     const inicio = (pagina - 1) * ITEMS_POR_PAGINA
-    return clientes.slice(inicio, inicio + ITEMS_POR_PAGINA)
-  }, [clientes, pagina])
+    return clientesFiltrados.slice(inicio, inicio + ITEMS_POR_PAGINA)
+  }, [clientesFiltrados, pagina])
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   function handleBuscar(e) {
@@ -122,7 +150,7 @@ export default function ClientesView() {
           <div>
             <h1 className="text-xl font-bold text-slate-800">Clientes</h1>
             <p className="text-sm text-slate-500">
-              {isLoading ? 'Cargando...' : `${clientes.length} cliente${clientes.length !== 1 ? 's' : ''}`}
+              {isLoading ? 'Cargando...' : `${clientesFiltrados.length} cliente${clientesFiltrados.length !== 1 ? 's' : ''}`}
             </p>
           </div>
         </div>
@@ -193,6 +221,62 @@ export default function ClientesView() {
         </div>
       </form>
 
+      {/* ── Filtros ──────────────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+          <Filter size={13} />
+          Filtros:
+        </div>
+
+        {/* Tipo */}
+        <select
+          value={filtroTipo}
+          onChange={e => { setFiltroTipo(e.target.value); setPagina(1) }}
+          className="text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-focus"
+        >
+          <option value="">Todos los tipos</option>
+          <option value="natural">Natural</option>
+          <option value="juridico">Jurídico</option>
+        </select>
+
+        {/* Ciudad */}
+        <select
+          value={filtroCiudad}
+          onChange={e => { setFiltroCiudad(e.target.value); setPagina(1) }}
+          className="text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-focus"
+        >
+          <option value="">Todas las ciudades</option>
+          {ciudadesDisponibles.map(c => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+
+        {/* Vendedor (solo supervisor) */}
+        {perfil?.rol === 'supervisor' && (
+          <select
+            value={filtroVendedor}
+            onChange={e => { setFiltroVendedor(e.target.value); setPagina(1) }}
+            className="text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-focus"
+          >
+            <option value="">Todos los vendedores</option>
+            {vendedores.map(v => (
+              <option key={v.id} value={v.id}>{v.nombre}</option>
+            ))}
+          </select>
+        )}
+
+        {/* Limpiar filtros */}
+        {hayFiltros && (
+          <button
+            onClick={limpiarFiltros}
+            className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 border border-red-200 rounded-lg px-2.5 py-1.5 bg-red-50 hover:bg-red-100 transition-colors"
+          >
+            <X size={12} />
+            Limpiar filtros
+          </button>
+        )}
+      </div>
+
       {/* ── Contenido principal ────────────────────────────────────────────── */}
       {isLoading ? (
         <SkeletonClientes />
@@ -217,6 +301,14 @@ export default function ClientesView() {
           }
           actionLabel={busqueda ? 'Limpiar búsqueda' : 'Nuevo cliente'}
           onAction={busqueda ? limpiarBusqueda : abrirCrear}
+        />
+      ) : clientesFiltrados.length === 0 ? (
+        <EmptyState
+          icon={Filter}
+          title="Sin resultados"
+          description="No hay clientes que coincidan con los filtros aplicados."
+          actionLabel="Limpiar filtros"
+          onAction={limpiarFiltros}
         />
       ) : (
         vistaMode === 'grid' ? (
@@ -247,7 +339,7 @@ export default function ClientesView() {
       )}
 
       {/* ── Paginación ───────────────────────────────────────────────────────── */}
-      {!isLoading && clientes.length > ITEMS_POR_PAGINA && (
+      {!isLoading && clientesFiltrados.length > ITEMS_POR_PAGINA && (
         <Pagination
           paginaActual={pagina}
           totalPaginas={totalPaginas}
