@@ -297,13 +297,11 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
             </p>
           </div>
         </div>
-        {!esSupervisor && (
         <button onClick={onNueva}
           className="flex items-center gap-2 bg-primary hover:bg-primary-hover text-white font-semibold text-base px-5 py-3 rounded-xl transition-colors shadow-sm">
           <Plus size={18} />
           Nueva cotización
         </button>
-        )}
       </div>
 
       {/* Filtros de estado */}
@@ -337,8 +335,8 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
           icon={FileText}
           title={estadoFiltro ? `Sin cotizaciones ${estadoFiltro}s` : 'No hay cotizaciones aún'}
           description={estadoFiltro ? 'Prueba con otro filtro.' : 'Crea tu primera cotización.'}
-          actionLabel={estadoFiltro ? 'Ver todas' : (!esSupervisor ? 'Nueva cotización' : null)}
-          onAction={estadoFiltro ? () => setEstadoFiltro('') : (!esSupervisor ? onNueva : undefined)}
+          actionLabel={estadoFiltro ? 'Ver todas' : 'Nueva cotización'}
+          onAction={estadoFiltro ? () => setEstadoFiltro('') : onNueva}
         />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">

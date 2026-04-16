@@ -134,7 +134,7 @@ export function useGuardarBorrador() {
       const headerData = {
         cliente_id:           campos.clienteId,
         transportista_id:     campos.transportistaId || null,
-        vendedor_id:          perfil.id,
+        vendedor_id:          campos.vendedorId || perfil.id,
         valida_hasta:         campos.validaHasta    || null,
         notas_cliente:        campos.notasCliente?.trim()  || null,
         notas_internas:       campos.notasInternas?.trim() || null,

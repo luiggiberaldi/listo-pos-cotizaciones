@@ -11,7 +11,7 @@ import {
   CheckCircle, FileDown, MessageCircle, StickyNote, Tag, Hash, Phone, Mail, MapPin,
   LayoutGrid, LayoutList,
 } from 'lucide-react'
-import { useClientes }   from '../../hooks/useClientes'
+import { useClientes, useVendedores } from '../../hooks/useClientes'
 import { useInventario, useCategorias } from '../../hooks/useInventario'
 import { useTransportistas }   from '../../hooks/useTransportistas'
 import { useGuardarBorrador, useEnviarCotizacion } from '../../hooks/useCotizaciones'
@@ -767,12 +767,14 @@ function ClienteSelector({ clientes, clienteId, onSelect }) {
 export default function CotizacionBuilder({ cotizacionExistente = null, onVolver, onGuardado }) {
   const esEdicion = !!cotizacionExistente
   const { perfil } = useAuthStore()
+  const esSupervisor = perfil?.rol === 'supervisor'
 
   // Paso actual del wizard (1-4)
   const [paso, setPaso] = useState(esEdicion ? 2 : 1)
   const [showCrearCliente, setShowCrearCliente] = useState(false)
 
   // Estado del formulario
+  const [vendedorId,         setVendedorId]         = useState(cotizacionExistente?.vendedor_id ?? '')
   const [clienteId,          setClienteId]          = useState(cotizacionExistente?.cliente_id ?? '')
   const [transportistaId,    setTransportistaId]    = useState(cotizacionExistente?.transportista_id ?? '')
   const [validaHasta,        setValidaHasta]        = useState(cotizacionExistente?.valida_hasta ?? '')
@@ -805,6 +807,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
 
   const { data: clientes      = [], refetch: refetchClientes } = useClientes()
   const { data: transportistas = [] } = useTransportistas()
+  const { data: vendedores     = [] } = useVendedores()
   const { data: config = {} }  = useConfigNegocio()
   const guardarBorrador  = useGuardarBorrador()
   const enviarCotizacion = useEnviarCotizacion()
@@ -842,6 +845,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
   function siguiente() {
     setErrorGeneral('')
     if (paso === 1) {
+      if (esSupervisor && !esEdicion && !vendedorId) { setErrorGeneral('Selecciona un vendedor para asignar la cotización'); return }
       if (!clienteId) { setErrorGeneral('Selecciona un cliente para continuar'); return }
       setPaso(2)
     } else if (paso === 2) {
@@ -864,7 +868,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
     try {
       const id = await guardarBorrador.mutateAsync({
         cotizacionId,
-        campos: { clienteId, transportistaId, validaHasta, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd },
+        campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, validaHasta, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd },
         items,
       })
       setCotizacionId(id)
@@ -885,7 +889,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
       if (!id) {
         id = await guardarBorrador.mutateAsync({
           cotizacionId,
-          campos: { clienteId, transportistaId, validaHasta, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd },
+          campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, validaHasta, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd },
           items,
         })
         setCotizacionId(id)
@@ -893,7 +897,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
         // Actualizar borrador con datos actuales antes de enviar
         await guardarBorrador.mutateAsync({
           cotizacionId: id,
-          campos: { clienteId, transportistaId, validaHasta, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd },
+          campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, validaHasta, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd },
           items,
         })
       }
@@ -1052,6 +1056,41 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
         {/* ═══════════════════════════════════════════════════════════════ */}
         {paso === 1 && (
           <div className="space-y-4">
+            {/* Selector de vendedor — solo supervisor al crear (no editar) */}
+            {esSupervisor && !esEdicion && (
+              <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+                <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wide flex items-center gap-2">
+                  <Tag size={14} className="text-slate-400" /> Asignar a vendedor
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {vendedores.map(v => {
+                    const sel = vendedorId === v.id
+                    return (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => setVendedorId(v.id)}
+                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 transition-all text-sm font-semibold ${
+                          sel ? 'border-primary bg-primary-light text-primary' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                        }`}
+                      >
+                        <span
+                          className="w-3 h-3 rounded-full shrink-0"
+                          style={{ backgroundColor: v.color || '#94a3b8' }}
+                        />
+                        {v.nombre}
+                      </button>
+                    )
+                  })}
+                </div>
+                {!vendedorId && (
+                  <p className="text-xs text-amber-600 flex items-center gap-1">
+                    <AlertCircle size={11} /> Selecciona a quién se le asignará esta cotización
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wide flex items-center gap-2">
