@@ -15,38 +15,33 @@ function fmtFecha(f) {
   const d = new Date(f)
   return d.toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
-function fmtFechaLarga(f) {
-  if (!f) return '—'
-  const d = new Date(f)
-  return d.toLocaleDateString('es-VE', { day: '2-digit', month: 'long', year: 'numeric' })
+
+// Convierte hex (#RRGGBB) → [R, G, B]
+function hexToRgb(hex) {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+  return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : null
+}
+// Aclara un color RGB en un porcentaje (0-1)
+function lighten(rgb, pct) {
+  return rgb.map(c => Math.min(255, Math.round(c + (255 - c) * pct)))
 }
 
 // ─── Constantes de diseño ─────────────────────────────────────────────────────
-const MARGIN   = 14
-const PAGE_W   = 210
+const MARGIN    = 14
+const PAGE_W    = 210
 const CONTENT_W = PAGE_W - MARGIN * 2
 
-// Paleta CONSTRUACERO CARABOBO — acero + construcción industrial
-// Cabecera oscura (acero/carbón) con acento naranja industrial
+// Paleta base (neutra / fallback cuando no hay color de vendedor)
 const C_STEEL   = [18,  26,  44]   // carbón oscuro (fondo principal)
-const C_STEEL2  = [30,  44,  74]   // azul acero (acento secundario)
-const C_ACCENT  = [210, 74,  20]   // naranja industrial (acento principal)
-const C_ACCENT2 = [234, 105, 54]   // naranja claro
-const C_DARK    = [15,  23,  42]   // texto principal
-const C_MID     = [100, 116, 139]  // texto secundario
-const C_LIGHT   = [226, 232, 240]  // bordes
-const C_SUBTLE  = [248, 250, 252]  // fondos claros
+const C_STEEL2  = [30,  44,  74]   // azul acero
+const C_ACCENT_DEFAULT = [210, 74, 20]  // naranja industrial (fallback)
+const C_DARK    = [15,  23,  42]
+const C_MID     = [100, 116, 139]
+const C_LIGHT   = [226, 232, 240]
+const C_SUBTLE  = [248, 250, 252]
 const C_WHITE   = [255, 255, 255]
 const C_GREEN   = [22,  163, 74]
 const C_RED     = [220,  38,  38]
-
-// Mapa de estado → texto + color
-const ESTADO_MAP = {
-  pendiente:  { label: 'PENDIENTE',  color: C_ACCENT },
-  despachada: { label: 'DESPACHADA', color: C_STEEL2 },
-  entregada:  { label: 'ENTREGADA',  color: C_GREEN },
-  anulada:    { label: 'ANULADA',    color: C_RED },
-}
 
 // ─── Generador principal ──────────────────────────────────────────────────────
 /**
@@ -59,6 +54,18 @@ export async function generarDespachoPDF({ despacho, items = [], config = {} }) 
 
   const logoData = await cargarLogo(config.logo_url)
   let y = 0
+
+  // ── Color de acento: usa el color del vendedor, si no el default ──────────
+  const C_ACCENT  = hexToRgb(despacho.vendedor?.color) || C_ACCENT_DEFAULT
+  const C_ACCENT2 = lighten(C_ACCENT, 0.3)
+
+  // Mapa de estado con el acento dinámico
+  const ESTADO_MAP = {
+    pendiente:  { label: 'PENDIENTE',  color: C_ACCENT },
+    despachada: { label: 'DESPACHADA', color: C_STEEL2 },
+    entregada:  { label: 'ENTREGADA',  color: C_GREEN },
+    anulada:    { label: 'ANULADA',    color: C_RED },
+  }
 
   // ── Números de documento ──────────────────────────────────────────────────
   const numDes = `DES-${String(despacho.numero).padStart(5, '0')}`
@@ -124,7 +131,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {} }) 
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(6.5)
-  doc.setTextColor(255, 220, 190)
+  doc.setTextColor(...lighten(C_ACCENT, 0.5))
   doc.text('NOTA DE DESPACHO', docBlockX + 29, 18, { align: 'center' })
 
   // Badge de estado (debajo del bloque naranja)

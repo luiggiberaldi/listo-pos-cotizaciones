@@ -17,16 +17,25 @@ function fmtFecha(f) {
   })
 }
 
+// Convierte hex (#RRGGBB) → [R, G, B]
+function hexToRgb(hex) {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+  return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : null
+}
+// Aclara un color RGB en un porcentaje (0-1)
+function lighten(rgb, pct) {
+  return rgb.map(c => Math.min(255, Math.round(c + (255 - c) * pct)))
+}
+
 // ─── Paleta ───────────────────────────────────────────────────────────────────
 const PAGE_W    = 210
 const MARGIN    = 14
 const CONTENT_W = PAGE_W - MARGIN * 2
 
-// Paleta CONSTRUACERO CARABOBO — cotización: acero oscuro + azul (diferencia del despacho naranja)
-const C_STEEL   = [18,  26,  44]   // carbón oscuro
-const C_STEEL2  = [30,  44,  74]   // azul acero
-const C_BLUE    = [37,  99, 235]   // azul corporativo (cotización vs naranja de despacho)
-const C_BLUE2   = [96, 165, 250]   // azul claro
+// Paleta base (neutra / fallback)
+const C_STEEL   = [18,  26,  44]
+const C_STEEL2  = [30,  44,  74]
+const C_ACCENT_DEFAULT = [37, 99, 235]  // azul corporativo (fallback)
 const C_DARK    = [15,   23,  42]
 const C_MID     = [100, 116, 139]
 const C_LIGHT   = [226, 232, 240]
@@ -35,21 +44,26 @@ const C_WHITE   = [255, 255, 255]
 const C_GREEN   = [22,  163,  74]
 const C_RED     = [220,  38,  38]
 
-const ESTADO_MAP = {
-  borrador:  { label: 'BORRADOR',  color: C_MID },
-  enviada:   { label: 'ENVIADA',   color: C_BLUE },
-  aceptada:  { label: 'ACEPTADA',  color: C_GREEN },
-  rechazada: { label: 'RECHAZADA', color: C_RED },
-  vencida:   { label: 'VENCIDA',   color: [148, 163, 184] },
-}
-
 // ─── Generador principal ──────────────────────────────────────────────────────
 export async function generarPDF({ cotizacion, items = [], config = {}, returnBlob = false }) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
   let y = 0
 
-  // Cargar logo en paralelo con la generación
+  // Cargar logo
   const logoData = await cargarLogo(config.logo_url)
+
+  // ── Color de acento: usa el color del vendedor, si no el default ──────────
+  const C_ACCENT  = hexToRgb(cotizacion.vendedor?.color) || C_ACCENT_DEFAULT
+  const C_ACCENT2 = lighten(C_ACCENT, 0.3)
+
+  // Mapa de estado con el acento dinámico
+  const ESTADO_MAP = {
+    borrador:  { label: 'BORRADOR',  color: C_MID },
+    enviada:   { label: 'ENVIADA',   color: C_ACCENT },
+    aceptada:  { label: 'ACEPTADA',  color: C_GREEN },
+    rechazada: { label: 'RECHAZADA', color: C_RED },
+    vencida:   { label: 'VENCIDA',   color: [148, 163, 184] },
+  }
 
   const numDisplay = cotizacion.version > 1
     ? `COT-${String(cotizacion.numero).padStart(5, '0')} Rev.${cotizacion.version}`
@@ -64,10 +78,10 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   doc.setFillColor(...C_STEEL)
   doc.rect(0, 0, PAGE_W, 30, 'F')
   // Franja azul de acento (izquierda)
-  doc.setFillColor(...C_BLUE)
+  doc.setFillColor(...C_ACCENT)
   doc.rect(0, 0, 4, 30, 'F')
   // Línea azul inferior
-  doc.setFillColor(...C_BLUE)
+  doc.setFillColor(...C_ACCENT)
   doc.rect(0, 28.5, PAGE_W, 1.5, 'F')
 
   // Logo (negativo blanco sobre fondo oscuro)
@@ -93,10 +107,10 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
 
   // Bloque número (derecha) — fondo azul
   const docBlockX = PAGE_W - MARGIN - 48
-  doc.setFillColor(...C_BLUE)
+  doc.setFillColor(...C_ACCENT)
   doc.roundedRect(docBlockX, 3, 52, 24, 2, 2, 'F')
   // Triángulo decorativo
-  doc.setFillColor(...C_BLUE2)
+  doc.setFillColor(...C_ACCENT2)
   doc.roundedRect(docBlockX, 3, 8, 24, 2, 2, 'F')
   doc.rect(docBlockX + 4, 3, 4, 24, 'F')
 
@@ -107,7 +121,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(6.5)
-  doc.setTextColor(190, 220, 255)
+  doc.setTextColor(...lighten(C_ACCENT, 0.5))
   doc.text('COTIZACIÓN', docBlockX + 29, 18, { align: 'center' })
 
   // Badge de estado
@@ -171,7 +185,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     doc.roundedRect(bx, bY, bW, 5.5, 2, 2, 'F')
     doc.rect(bx, bY + 3, bW, 2.5, 'F')
     // Línea azul debajo del título del bloque
-    doc.setFillColor(...C_BLUE)
+    doc.setFillColor(...C_ACCENT)
     doc.rect(bx, bY + 5.5, bW, 1, 'F')
 
     doc.setFont('helvetica', 'bold')
@@ -211,7 +225,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   doc.setFillColor(...C_STEEL)
   doc.rect(MARGIN, y, CONTENT_W, 7.5, 'F')
   // Acento azul inferior del encabezado
-  doc.setFillColor(...C_BLUE)
+  doc.setFillColor(...C_ACCENT)
   doc.rect(MARGIN, y + 6.5, CONTENT_W, 1, 'F')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7.5)
@@ -242,7 +256,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     doc.setTextColor(...C_MID)
     doc.text(String(idx + 1), COLS[0].x + COLS[0].w / 2, midY, { align: 'center' })
 
-    doc.setTextColor(...C_BLUE)
+    doc.setTextColor(...C_ACCENT)
     doc.setFont('helvetica', 'bold')
     doc.text(item.codigo_snap || '—', COLS[1].x + 2, midY)
 
@@ -287,7 +301,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
       doc.setFillColor(...C_STEEL)
       doc.roundedRect(totX, y - 5, totW, 14, 2, 2, 'F')
       // Borde azul izquierdo del total
-      doc.setFillColor(...C_BLUE)
+      doc.setFillColor(...C_ACCENT)
       doc.roundedRect(totX, y - 5, 4, 14, 2, 2, 'F')
       doc.rect(totX + 2, y - 5, 2, 14, 'F')
       doc.setFont('helvetica', 'bold')
@@ -381,7 +395,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     doc.roundedRect(x, firmaY, firmaW, 5.5, 2, 2, 'F')
     doc.rect(x, firmaY + 3, firmaW, 2.5, 'F')
     // Línea azul inferior del encabezado de firma
-    doc.setFillColor(...C_BLUE)
+    doc.setFillColor(...C_ACCENT)
     doc.rect(x, firmaY + 5.5, firmaW, 0.8, 'F')
 
     doc.setFont('helvetica', 'bold')
@@ -409,10 +423,10 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     doc.setFillColor(...C_STEEL)
     doc.rect(0, ph - 10, PAGE_W, 10, 'F')
     // Franja azul izquierda
-    doc.setFillColor(...C_BLUE)
+    doc.setFillColor(...C_ACCENT)
     doc.rect(0, ph - 10, 4, 10, 'F')
     // Línea superior del pie
-    doc.setFillColor(...C_BLUE)
+    doc.setFillColor(...C_ACCENT)
     doc.rect(0, ph - 10, PAGE_W, 0.8, 'F')
 
     doc.setFont('helvetica', 'normal')
