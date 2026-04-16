@@ -14,8 +14,11 @@ export default function ConfiguracionView() {
   const [showGatePass, setShowGatePass] = useState(false)
   const [backupLoading, setBackupLoading] = useState(false)
   const [backupMsg, setBackupMsg]         = useState(null) // { tipo: 'ok'|'error', texto }
-  const [restoreLoading, setRestoreLoading] = useState(false)
+  const [clearLoading, setClearLoading] = useState(false)
+  const [clearMsg, setClearMsg]         = useState(null)
+  const [confirmClear, setConfirmClear] = useState(false)
   const [restoreMsg, setRestoreMsg]         = useState(null)
+  const [restoreLoading, setRestoreLoading] = useState(false)
   const [confirmRestore, setConfirmRestore] = useState(false)
   const restoreInputRef = useRef(null)
 
@@ -59,8 +62,21 @@ export default function ConfiguracionView() {
     }
   }, [config])
 
+  async function handleClearInventory() {
+    setClearLoading(true)
+    setClearMsg(null)
+    setConfirmClear(false)
+    try {
+      await adminAPI.clearInventory()
+      setClearMsg({ tipo: 'ok', texto: 'Inventario borrado correctamente' })
+    } catch (err) {
+      setClearMsg({ tipo: 'error', texto: err.message || 'Error al borrar' })
+    } finally {
+      setClearLoading(false)
+    }
+  }
+
   async function handleBackup() {
-    setBackupLoading(true)
     setBackupMsg(null)
     try {
       const filename = await adminAPI.downloadBackup()
@@ -426,6 +442,60 @@ export default function ConfiguracionView() {
             <div className={`flex items-center gap-1.5 text-sm font-medium ${restoreMsg.tipo === 'ok' ? 'text-emerald-600' : 'text-red-600'}`}>
               {restoreMsg.tipo === 'ok' ? <CheckCircle size={15} /> : <AlertCircle size={15} />}
               {restoreMsg.texto}
+            </div>
+          )}
+        </div>
+
+        {/* Sección: Zona de peligro — borrar inventario */}
+        <div className="bg-white rounded-2xl border border-red-200 p-5 space-y-4">
+          <h2 className="flex items-center gap-2 text-sm font-bold text-red-700 uppercase tracking-wide">
+            <AlertTriangle size={14} className="text-red-500" />
+            Zona de peligro
+          </h2>
+          <p className="text-xs text-slate-500 -mt-2">
+            Estas acciones son permanentes e irreversibles. Se recomienda descargar un backup antes.
+          </p>
+
+          {!confirmClear ? (
+            <button
+              type="button"
+              onClick={() => setConfirmClear(true)}
+              className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-semibold text-sm px-5 py-2.5 rounded-xl transition-colors shadow-sm"
+            >
+              <AlertTriangle size={15} />Borrar todo el inventario
+            </button>
+          ) : (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-3">
+              <p className="text-sm font-semibold text-red-800">
+                ¿Estás seguro? Esto borrará <strong>todos los productos</strong> permanentemente.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleClearInventory}
+                  disabled={clearLoading}
+                  className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white font-semibold text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {clearLoading
+                    ? <><div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />Borrando...</>
+                    : 'Sí, borrar todo'
+                  }
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmClear(false)}
+                  className="text-sm font-medium text-slate-600 hover:text-slate-800 px-4 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+
+          {clearMsg && (
+            <div className={`flex items-center gap-1.5 text-sm font-medium ${clearMsg.tipo === 'ok' ? 'text-emerald-600' : 'text-red-600'}`}>
+              {clearMsg.tipo === 'ok' ? <CheckCircle size={15} /> : <AlertCircle size={15} />}
+              {clearMsg.texto}
             </div>
           )}
         </div>

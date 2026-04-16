@@ -65,6 +65,10 @@ export const adminAPI = {
     return filename
   },
 
+  async clearInventory() {
+    return adminFetch('clear-inventory', 'DELETE')
+  },
+
   async restoreBackup(file) {
     const token = await getAuthToken()
     if (!token) throw new Error('No autenticado')

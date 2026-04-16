@@ -29,6 +29,9 @@ export default {
     if (url.pathname === '/api/admin/restore' && request.method === 'POST') {
       return handleRestore(request, env);
     }
+    if (url.pathname === '/api/admin/clear-inventory' && request.method === 'DELETE') {
+      return handleClearInventory(request, env);
+    }
 
     // ── API routes para operaciones admin ──────────────────────────────────
     if (url.pathname.startsWith('/api/admin/')) {
@@ -731,6 +734,36 @@ async function handleRestore(request, env) {
   }
 
   return json({ ok: true, resumen });
+}
+
+
+async function handleClearInventory(request, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return jsonError('Server misconfigured', 500);
+
+  const user = await verifyAuth(request, env);
+  if (!user?.id) return jsonError('No autenticado', 401);
+
+  const isSupervisor = await verifySupervisor(user.id, env);
+  if (!isSupervisor) return jsonError('Acceso denegado: solo supervisores', 403);
+
+  const h = {
+    apikey: env.SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    'Content-Type': 'application/json',
+    Prefer: 'return=minimal',
+  };
+
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=neq.00000000-0000-0000-0000-000000000000`, {
+    method: 'DELETE',
+    headers: h,
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    return jsonError(`Error al borrar: ${text}`, 500);
+  }
+
+  return json({ ok: true });
 }
 
 
