@@ -2,8 +2,9 @@
 // Catálogo de productos
 // — Vendedor: solo consulta (sin costo, sin edición)
 // — Supervisor: vista completa + crear/editar/desactivar
-import { useState, useMemo } from 'react'
-import { Package, Plus, Search, RefreshCw, X, Filter, LayoutGrid, List } from 'lucide-react'
+import { useState, useMemo, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { Package, Plus, Search, RefreshCw, X, Filter, LayoutGrid, List, AlertTriangle } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import CustomSelect from '../components/ui/CustomSelect'
@@ -44,12 +45,23 @@ export default function InventarioView() {
   const esSupervisor = perfil?.rol === 'supervisor'
   const { tasaEfectiva } = useTasaCambio()
 
+  // URL params (para navegación desde notificaciones)
+  const [searchParams, setSearchParams] = useSearchParams()
+
   // Filtros
   const [busqueda,      setBusqueda]      = useState('')
   const [textoBusqueda, setTextoBusqueda] = useState('')
   const [categoria,     setCategoria]     = useState('')
+  const [stockBajo,     setStockBajo]     = useState(() => searchParams.get('filtro') === 'stock_bajo')
   const [vistaMode,     setVistaMode]     = useState(() => localStorage.getItem('inventario_vista') || 'grid')
   const [pagina,        setPagina]        = useState(1)
+
+  // Sincronizar URL param con estado
+  useEffect(() => {
+    if (searchParams.get('filtro') === 'stock_bajo' && !stockBajo) {
+      setStockBajo(true)
+    }
+  }, [searchParams])
 
   // Modales
   const [modalFormOpen,    setModalFormOpen]    = useState(false)
@@ -62,12 +74,18 @@ export default function InventarioView() {
   const { data: categorias = [] } = useCategorias()
   const desactivar = useDesactivarProducto()
 
+  // Filtrar por stock bajo (client-side)
+  const productosFiltrados = useMemo(() => {
+    if (!stockBajo) return productos
+    return productos.filter(p => p.stock_actual != null && p.stock_minimo != null && p.stock_actual <= p.stock_minimo)
+  }, [productos, stockBajo])
+
   // Paginación
-  const totalPaginas = Math.max(1, Math.ceil(productos.length / ITEMS_POR_PAGINA))
+  const totalPaginas = Math.max(1, Math.ceil(productosFiltrados.length / ITEMS_POR_PAGINA))
   const productosPaginados = useMemo(() => {
     const inicio = (pagina - 1) * ITEMS_POR_PAGINA
-    return productos.slice(inicio, inicio + ITEMS_POR_PAGINA)
-  }, [productos, pagina])
+    return productosFiltrados.slice(inicio, inicio + ITEMS_POR_PAGINA)
+  }, [productosFiltrados, pagina])
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   function handleBuscar(e) {
@@ -80,6 +98,8 @@ export default function InventarioView() {
     setTextoBusqueda('')
     setBusqueda('')
     setCategoria('')
+    setStockBajo(false)
+    setSearchParams({})
     setPagina(1)
   }
 
@@ -112,7 +132,18 @@ export default function InventarioView() {
     }
   }
 
-  const hayFiltros = busqueda || categoria
+  function toggleStockBajo() {
+    const next = !stockBajo
+    setStockBajo(next)
+    setPagina(1)
+    if (next) {
+      setSearchParams({ filtro: 'stock_bajo' })
+    } else {
+      setSearchParams({})
+    }
+  }
+
+  const hayFiltros = busqueda || categoria || stockBajo
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -127,7 +158,7 @@ export default function InventarioView() {
           <div>
             <h1 className="text-xl font-bold text-slate-800">Inventario</h1>
             <p className="text-sm text-slate-500">
-              {isLoading ? 'Cargando...' : `${productos.length} producto${productos.length !== 1 ? 's' : ''}`}
+              {isLoading ? 'Cargando...' : `${productosFiltrados.length} producto${productosFiltrados.length !== 1 ? 's' : ''}${stockBajo ? ' con stock bajo' : ''}`}
               {!esSupervisor && <span className="ml-1 text-slate-400">(catálogo de precios)</span>}
             </p>
           </div>
@@ -192,6 +223,20 @@ export default function InventarioView() {
             </div>
           )}
 
+          {/* Filtro stock bajo */}
+          <button
+            type="button"
+            onClick={toggleStockBajo}
+            className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-colors border shrink-0 ${
+              stockBajo
+                ? 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100'
+                : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-amber-600'
+            }`}
+          >
+            <AlertTriangle size={14} />
+            <span className="hidden sm:inline">Stock bajo</span>
+          </button>
+
           <div className="flex items-center gap-2 shrink-0 ml-auto">
             <button type="button" onClick={() => refetch()} title="Actualizar"
               className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
@@ -231,7 +276,7 @@ export default function InventarioView() {
             Intentar de nuevo
           </button>
         </div>
-      ) : productos.length === 0 ? (
+      ) : productosFiltrados.length === 0 ? (
         <EmptyState
           icon={Package}
           title={hayFiltros ? 'Sin resultados' : 'Inventario vacío'}
@@ -274,7 +319,7 @@ export default function InventarioView() {
       )}
 
       {/* ── Paginación ───────────────────────────────────────────────────────── */}
-      {!isLoading && productos.length > ITEMS_POR_PAGINA && (
+      {!isLoading && productosFiltrados.length > ITEMS_POR_PAGINA && (
         <Pagination
           paginaActual={pagina}
           totalPaginas={totalPaginas}

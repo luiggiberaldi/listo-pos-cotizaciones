@@ -298,8 +298,12 @@ export default function AppLayout() {
                 ) : (
                   notifications.slice(0, 20).map(n => {
                     const isStockBajo = n.type === NOTIF_TYPES.STOCK_BAJO && n.meta?.productos
+                    const isClickable = isStockBajo
                     return (
-                      <div key={n.id} className="px-4 py-3 hover:bg-slate-50/50 transition-colors">
+                      <div key={n.id}
+                        onClick={isClickable ? () => { navigate('/inventario?filtro=stock_bajo'); setShowNotifs(false) } : undefined}
+                        className={`px-4 py-3 transition-colors ${isClickable ? 'cursor-pointer hover:bg-amber-50/50' : 'hover:bg-slate-50/50'}`}
+                      >
                         <div className="flex gap-2.5 items-start">
                           <NotifIcon type={n.type} />
                           <div className="min-w-0 flex-1">
@@ -321,6 +325,9 @@ export default function AppLayout() {
                                     +{n.meta.total - 10} más
                                   </span>
                                 )}
+                                <span className="text-[10px] text-sky-500 font-bold px-1.5 py-0.5 hover:underline">
+                                  Ver inventario →
+                                </span>
                               </div>
                             )}
                             <p className="text-[10px] text-slate-400 mt-1">
