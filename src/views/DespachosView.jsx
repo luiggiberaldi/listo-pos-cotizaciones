@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import { Package, RefreshCw, Filter, RefreshCcw, AlertTriangle } from 'lucide-react'
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import { useDespachos, useActualizarEstadoDespacho, useReciclarDespacho } from '../hooks/useDespachos'
+import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import DespachoCard from '../components/despachos/DespachoCard'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import EmptyState   from '../components/ui/EmptyState'
@@ -39,6 +40,7 @@ function SkeletonDespachos() {
 export default function DespachosView() {
   const navigate = useNavigate()
   const { tasaEfectiva } = useTasaCambio()
+  const { data: config = {} } = useConfigNegocio()
   const [estadoFiltro, setEstadoFiltro] = useState('')
   const [despachoAAnular, setDespachoAAnular] = useState(null)
   const [despachoAReciclar, setDespachoAReciclar] = useState(null)
@@ -127,6 +129,7 @@ export default function DespachosView() {
               onAnular={setDespachoAAnular}
               onReciclar={setDespachoAReciclar}
               tasa={tasaEfectiva}
+              config={config}
             />
           ))}
         </div>

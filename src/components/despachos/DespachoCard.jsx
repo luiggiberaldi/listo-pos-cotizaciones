@@ -1,13 +1,16 @@
 // src/components/despachos/DespachoCard.jsx
 // Tarjeta de nota de despacho para la vista de lista
-import { FileText, User, Calendar, Truck, CheckCircle, Ban, Package, RefreshCcw } from 'lucide-react'
+import { useState } from 'react'
+import { FileText, User, Calendar, Truck, CheckCircle, Ban, Package, RefreshCcw, Download, Loader2 } from 'lucide-react'
 import EstadoBadge from '../cotizaciones/EstadoBadge'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs } from '../../utils/format'
+import supabase from '../../services/supabase/client'
 
-export default function DespachoCard({ despacho, onCambiarEstado, onAnular, onReciclar, tasa = 0 }) {
+export default function DespachoCard({ despacho, onCambiarEstado, onAnular, onReciclar, tasa = 0, config = {} }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
+  const [pdfLoading, setPdfLoading] = useState(false)
 
   const numDisplay = `DES-${String(despacho.numero).padStart(5, '0')}`
   const vendedorColor = despacho.vendedor?.color || null
@@ -22,6 +25,27 @@ export default function DespachoCard({ despacho, onCambiarEstado, onAnular, onRe
   const canAnular = esSupervisor && (despacho.estado === 'pendiente' || despacho.estado === 'despachada')
   const canReciclar = esSupervisor && despacho.estado === 'anulada' && onReciclar
   const hasActions = canDespachar || canEntregada || canAnular || canReciclar
+
+  async function descargarPDF() {
+    setPdfLoading(true)
+    try {
+      const [{ generarDespachoPDF }, itemsRes] = await Promise.all([
+        import('../../services/pdf/despachoPDF'),
+        supabase
+          .from('cotizacion_items')
+          .select('*')
+          .eq('cotizacion_id', despacho.cotizacion_id)
+          .order('orden'),
+      ])
+      if (itemsRes.error) throw itemsRes.error
+      generarDespachoPDF({ despacho, items: itemsRes.data ?? [], config })
+    } catch (err) {
+      console.error('PDF error:', err)
+      alert('Error al generar PDF: ' + (err.message || 'Error desconocido'))
+    } finally {
+      setPdfLoading(false)
+    }
+  }
 
   return (
     <div className="group bg-white rounded-2xl border border-slate-200 hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-50 transition-all duration-200 overflow-hidden flex flex-col"
@@ -117,6 +141,11 @@ export default function DespachoCard({ despacho, onCambiarEstado, onAnular, onRe
               Reciclar
             </button>
           )}
+          <button onClick={descargarPDF} disabled={pdfLoading} title="Descargar PDF"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-50 active:bg-slate-100 transition-colors disabled:opacity-50">
+            {pdfLoading ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+            PDF
+          </button>
           {canAnular && (
             <button onClick={() => onAnular(despacho)} title="Anular despacho"
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 active:bg-red-100 transition-colors ml-auto">
@@ -124,6 +153,16 @@ export default function DespachoCard({ despacho, onCambiarEstado, onAnular, onRe
               Anular
             </button>
           )}
+        </div>
+      )}
+      {/* PDF para no-supervisores (sin otras acciones) */}
+      {!hasActions && (
+        <div className="mt-auto border-t border-slate-100 px-3 py-2 flex items-center">
+          <button onClick={descargarPDF} disabled={pdfLoading} title="Descargar PDF"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">
+            {pdfLoading ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+            Descargar PDF
+          </button>
         </div>
       )}
     </div>
