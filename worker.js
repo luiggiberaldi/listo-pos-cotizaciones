@@ -17,6 +17,11 @@ export default {
       return handleGuardarCotizacion(request, env);
     }
 
+    // ── API: reciclar cotización (supervisor: crea borrador desde rechazada/anulada/vencida) ──
+    if (url.pathname === '/api/cotizaciones/reciclar' && request.method === 'POST') {
+      return handleReciclarCotizacion(request, env);
+    }
+
     // ── API routes para operaciones admin ──────────────────────────────────
     if (url.pathname.startsWith('/api/admin/')) {
       return handleAdmin(request, env, url);
@@ -671,6 +676,150 @@ async function handleGuardarCotizacion(request, env) {
     });
   } catch (e) {
     return jsonError(e.message || 'Error interno', 500);
+  }
+}
+
+// ── Reciclar cotización (supervisor: crea borrador desde rechazada/anulada/vencida) ──
+async function handleReciclarCotizacion(request, env) {
+  const user = await verifyAuth(request, env);
+  if (!user?.id) return jsonError('No autenticado', 401);
+
+  // Solo supervisores
+  const isSup = await verifySupervisor(user.id, env);
+  if (!isSup) return jsonError('Solo supervisores pueden reciclar cotizaciones', 403);
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido'); }
+
+  const { cotizacionId, vendedorDestinoId } = body;
+  if (!cotizacionId || !vendedorDestinoId) return jsonError('Faltan campos: cotizacionId, vendedorDestinoId');
+
+  const supaHeaders = {
+    apikey: env.SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    'Content-Type': 'application/json',
+    Prefer: 'return=representation',
+  };
+
+  try {
+    // 1. Obtener cotización original
+    const cotRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${cotizacionId}&select=*`,
+      { headers: supaHeaders }
+    );
+    const [cotOrig] = await cotRes.json();
+    if (!cotOrig) return jsonError('Cotización no encontrada', 404);
+
+    // 2. Validar estado
+    if (!['rechazada', 'anulada', 'vencida'].includes(cotOrig.estado)) {
+      return jsonError('Solo se pueden reciclar cotizaciones rechazadas, anuladas o vencidas');
+    }
+
+    // 3. Validar vendedor destino
+    const vendRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${vendedorDestinoId}&activo=eq.true&select=id,nombre,rol`,
+      { headers: supaHeaders }
+    );
+    const [vendDest] = await vendRes.json();
+    if (!vendDest) return jsonError('Vendedor destino no existe o está inactivo');
+
+    // 4. Obtener nombre del vendedor original
+    const vendOrigRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${cotOrig.vendedor_id}&select=nombre`,
+      { headers: supaHeaders }
+    );
+    const [vendOrig] = await vendOrigRes.json();
+
+    // 5. Obtener nombre del supervisor que recicla
+    const supRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${user.id}&select=nombre,rol`,
+      { headers: supaHeaders }
+    );
+    const [supData] = await supRes.json();
+
+    // 6. Crear nueva cotización borrador
+    const nuevaRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?select=id,numero`, {
+      method: 'POST',
+      headers: { ...supaHeaders, Prefer: 'return=representation' },
+      body: JSON.stringify({
+        version: 1,
+        cliente_id: cotOrig.cliente_id,
+        vendedor_id: vendedorDestinoId,
+        transportista_id: cotOrig.transportista_id,
+        estado: 'borrador',
+        subtotal_usd: cotOrig.subtotal_usd,
+        descuento_global_pct: cotOrig.descuento_global_pct,
+        descuento_usd: cotOrig.descuento_usd,
+        costo_envio_usd: cotOrig.costo_envio_usd,
+        total_usd: cotOrig.total_usd,
+        notas_cliente: cotOrig.notas_cliente,
+        notas_internas: cotOrig.notas_internas,
+      }),
+    });
+    if (!nuevaRes.ok) {
+      const err = await nuevaRes.text();
+      return jsonError(`Error al crear cotización: ${err}`, 500);
+    }
+    const [nueva] = await nuevaRes.json();
+
+    // 7. Copiar items
+    const itemsRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/cotizacion_items?cotizacion_id=eq.${cotizacionId}&select=producto_id,codigo_snap,nombre_snap,unidad_snap,cantidad,precio_unit_usd,descuento_pct,total_linea_usd,orden`,
+      { headers: supaHeaders }
+    );
+    const items = await itemsRes.json();
+
+    if (items.length > 0) {
+      const nuevosItems = items.map(it => ({ ...it, cotizacion_id: nueva.id }));
+      const insRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizacion_items`, {
+        method: 'POST',
+        headers: supaHeaders,
+        body: JSON.stringify(nuevosItems),
+      });
+      if (!insRes.ok) {
+        const err = await insRes.text();
+        return jsonError(`Error al copiar items: ${err}`, 500);
+      }
+    }
+
+    // 8. Registrar auditoría
+    const numOrigPad = String(cotOrig.numero).padStart(5, '0');
+    const numNuevoPad = String(nueva.numero).padStart(5, '0');
+    await fetch(`${env.SUPABASE_URL}/rest/v1/auditoria`, {
+      method: 'POST',
+      headers: supaHeaders,
+      body: JSON.stringify({
+        usuario_id: user.id,
+        usuario_nombre: supData?.nombre || 'Supervisor',
+        usuario_rol: supData?.rol || 'supervisor',
+        categoria: 'COTIZACION',
+        accion: 'RECICLAR_COTIZACION',
+        descripcion: `Cotización COT-${numOrigPad} reciclada → COT-${numNuevoPad}. Vendedor: ${vendOrig?.nombre || '—'} → ${vendDest.nombre}`,
+        entidad_tipo: 'cotizacion',
+        entidad_id: nueva.id,
+        meta: {
+          cotizacion_original_id: cotizacionId,
+          cotizacion_original_numero: cotOrig.numero,
+          estado_original: cotOrig.estado,
+          vendedor_origen_id: cotOrig.vendedor_id,
+          vendedor_origen_nombre: vendOrig?.nombre || '—',
+          vendedor_destino_id: vendedorDestinoId,
+          vendedor_destino_nombre: vendDest.nombre,
+          total_usd: cotOrig.total_usd,
+          nuevo_numero: nueva.numero,
+        },
+      }),
+    });
+
+    return new Response(JSON.stringify({
+      id: nueva.id,
+      numero: nueva.numero,
+      vendedorDestino: vendDest.nombre,
+    }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (e) {
+    return jsonError(e.message || 'Error interno al reciclar', 500);
   }
 }
 

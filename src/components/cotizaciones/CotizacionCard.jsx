@@ -1,6 +1,6 @@
 // src/components/cotizaciones/CotizacionCard.jsx
 import { useState } from 'react'
-import { FileText, User, Calendar, Pencil, Ban, CheckCircle, XCircle, FileDown, MessageCircle, Loader2, Truck, ChevronDown, DollarSign } from 'lucide-react'
+import { FileText, User, Calendar, Pencil, Ban, CheckCircle, XCircle, FileDown, MessageCircle, Loader2, Truck, ChevronDown, DollarSign, RefreshCw } from 'lucide-react'
 import EstadoBadge from './EstadoBadge'
 import useAuthStore from '../../store/useAuthStore'
 import supabase from '../../services/supabase/client'
@@ -9,7 +9,7 @@ import { compartirPorWhatsApp, generarMensaje } from '../../utils/whatsapp'
 
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs } from '../../utils/format'
 
-export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambiarEstado, onDespachar, tasa = 0 }) {
+export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambiarEstado, onDespachar, onReciclar, tasa = 0 }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const esBorrador = cotizacion.estado === 'borrador'
@@ -106,7 +106,8 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
   const canAcceptReject = esSupervisor && esEnviada
   const canDespachar = esSupervisor && (cotizacion.estado === 'aceptada' || cotizacion.estado === 'enviada') && onDespachar
   const canAnular = esBorrador || (esSupervisor && (cotizacion.estado === 'enviada' || cotizacion.estado === 'aceptada'))
-  const hasSecondaryActions = canAcceptReject || canDespachar || canAnular
+  const canReciclar = esSupervisor && ['rechazada', 'anulada', 'vencida'].includes(cotizacion.estado)
+  const hasSecondaryActions = canAcceptReject || canDespachar || canAnular || canReciclar
 
   return (
     <div className="group bg-white rounded-2xl border border-slate-200 hover:border-sky-200 hover:shadow-lg hover:shadow-sky-50 transition-all duration-200 overflow-hidden flex flex-col"
@@ -242,6 +243,16 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-500 hover:bg-red-50 transition-colors text-left">
                       <Ban size={14} />
                       Anular
+                    </button>
+                  </>
+                )}
+                {canReciclar && (
+                  <>
+                    {(canAcceptReject || canDespachar || canAnular) && <div className="my-1 border-t border-slate-100" />}
+                    <button onClick={() => { onReciclar(cotizacion); setShowActions(false) }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-emerald-600 hover:bg-emerald-50 transition-colors text-left">
+                      <RefreshCw size={14} />
+                      Reciclar
                     </button>
                   </>
                 )}

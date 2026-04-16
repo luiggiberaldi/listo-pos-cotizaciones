@@ -295,3 +295,35 @@ export function useCrearVersion() {
     onSuccess: () => qc.invalidateQueries({ queryKey: COTIZACIONES_KEY }),
   })
 }
+
+// ─── Reciclar cotización (supervisor: rechazada/anulada/vencida → borrador) ──
+export function useReciclarCotizacion() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ cotizacionId, vendedorDestinoId }) => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('No autenticado')
+
+      const res = await fetch('/api/cotizaciones/reciclar', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ cotizacionId, vendedorDestinoId }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Error al reciclar cotización')
+      }
+      return await res.json()
+    },
+    onSuccess: ({ numero, vendedorDestino }) => {
+      qc.invalidateQueries({ queryKey: COTIZACIONES_KEY })
+      const numPad = String(numero).padStart(5, '0')
+      showToast(`Cotización reciclada → COT-${numPad} asignada a ${vendedorDestino}`, 'success')
+    },
+  })
+}

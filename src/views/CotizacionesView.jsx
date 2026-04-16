@@ -6,14 +6,17 @@ import { useSearchParams } from 'react-router-dom'
 import { FileText, Plus, RefreshCw, Filter, GitBranch, AlertTriangle, PackageCheck, Loader2, X } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { useTasaCambio } from '../hooks/useTasaCambio'
-import { useCotizaciones, useAnularCotizacion, useActualizarEstado, useCrearVersion } from '../hooks/useCotizaciones'
+import { useCotizaciones, useAnularCotizacion, useActualizarEstado, useCrearVersion, useReciclarCotizacion } from '../hooks/useCotizaciones'
 import { useCrearDespacho } from '../hooks/useDespachos'
 import { useCotizacion } from '../hooks/useCotizaciones'
 import CotizacionCard    from '../components/cotizaciones/CotizacionCard'
 import CotizacionBuilder from '../components/cotizaciones/CotizacionBuilder'
 import ConfirmModal      from '../components/ui/ConfirmModal'
+import { Modal }         from '../components/ui/Modal'
 import EmptyState        from '../components/ui/EmptyState'
 import Skeleton          from '../components/ui/Skeleton'
+import { useVendedores } from '../hooks/useClientes'
+import CustomSelect      from '../components/ui/CustomSelect'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../utils/format'
 
 // ─── Filtros de estado ────────────────────────────────────────────────────────
@@ -224,11 +227,15 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
   const [estadoFiltro, setEstadoFiltro] = useState('')
   const [cotizacionAAnular, setCotizacionAAnular] = useState(null)
   const [cotizacionADespachar, setCotizacionADespachar] = useState(null)
+  const [cotizacionAReciclar, setCotizacionAReciclar] = useState(null)
+  const [vendedorReciclar, setVendedorReciclar] = useState('')
 
   const { data: cotizaciones = [], isLoading, isError, refetch } = useCotizaciones({ estado: estadoFiltro })
+  const { data: vendedores = [] } = useVendedores()
   const anular        = useAnularCotizacion()
   const cambiarEstado = useActualizarEstado()
   const crearDespacho = useCrearDespacho()
+  const reciclar      = useReciclarCotizacion()
 
   async function confirmarAnular() {
     if (!cotizacionAAnular) return
@@ -244,6 +251,25 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
     } catch (err) {
       alert(err.message || 'Error al crear despacho')
     }
+  }
+
+  async function confirmarReciclar() {
+    if (!cotizacionAReciclar || !vendedorReciclar) return
+    try {
+      await reciclar.mutateAsync({
+        cotizacionId: cotizacionAReciclar.id,
+        vendedorDestinoId: vendedorReciclar,
+      })
+      setCotizacionAReciclar(null)
+      setVendedorReciclar('')
+    } catch (err) {
+      alert(err.message || 'Error al reciclar cotización')
+    }
+  }
+
+  function abrirReciclar(cot) {
+    setCotizacionAReciclar(cot)
+    setVendedorReciclar(cot.vendedor_id || '')
   }
 
   // Al hacer click en "editar": si es borrador → editar directo; si no → versionar
@@ -324,6 +350,7 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
               onAnular={setCotizacionAAnular}
               onCambiarEstado={(id, estado) => cambiarEstado.mutate({ id, estado })}
               onDespachar={setCotizacionADespachar}
+              onReciclar={abrirReciclar}
               tasa={tasaEfectiva}
             />
           ))}
@@ -349,6 +376,73 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
         cargando={crearDespacho.isPending}
         tasa={tasaEfectiva}
       />
+
+      {/* Modal reciclar cotización */}
+      <Modal
+        isOpen={!!cotizacionAReciclar}
+        onClose={() => { setCotizacionAReciclar(null); setVendedorReciclar('') }}
+        title="Reciclar cotización"
+      >
+        {cotizacionAReciclar && (
+          <div className="space-y-4">
+            {/* Info de la cotización original */}
+            <div className="bg-slate-50 rounded-xl p-4 space-y-2">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Cotización original</p>
+              <p className="text-sm font-bold text-slate-800">
+                COT-{String(cotizacionAReciclar.numero).padStart(5, '0')}
+                <span className="ml-2 text-xs font-normal text-slate-500">({cotizacionAReciclar.estado})</span>
+              </p>
+              <p className="text-sm text-slate-600">{cotizacionAReciclar.cliente?.nombre ?? '—'}</p>
+              <p className="text-sm text-slate-500">
+                Vendedor anterior: <span className="font-semibold text-slate-700">{cotizacionAReciclar.vendedor?.nombre ?? '—'}</span>
+              </p>
+              <p className="text-sm font-bold text-slate-800">${Number(cotizacionAReciclar.total_usd || 0).toFixed(2)} USD</p>
+            </div>
+
+            {/* Selector de vendedor */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-500 ml-1">Asignar a vendedor *</label>
+              <CustomSelect
+                options={vendedores.map(v => ({
+                  value: v.id,
+                  label: `${v.nombre}${v.id === cotizacionAReciclar.vendedor_id ? ' (anterior)' : ''}`,
+                }))}
+                value={vendedorReciclar}
+                onChange={setVendedorReciclar}
+                placeholder="Seleccionar vendedor..."
+              />
+            </div>
+
+            <p className="text-xs text-slate-400">
+              Se creará una nueva cotización en borrador con nuevo número de correlativo, asignada al vendedor seleccionado.
+              La cotización original no se modifica.
+            </p>
+
+            {/* Botones */}
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => { setCotizacionAReciclar(null); setVendedorReciclar('') }}
+                className="flex-1 py-2.5 px-4 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmarReciclar}
+                disabled={!vendedorReciclar || reciclar.isPending}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {reciclar.isPending ? (
+                  <><Loader2 size={16} className="animate-spin" /> Reciclando...</>
+                ) : (
+                  <><RefreshCw size={16} /> Reciclar</>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }
