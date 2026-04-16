@@ -288,11 +288,14 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
               {paginados.map(p => {
                 const yaAgregado = idsAgregados.has(p.id)
                 const sinStock = p.stock_actual != null && p.stock_actual <= 0
+                const sinPrecio = !p.precio_usd || Number(p.precio_usd) <= 0
+                const bloqueado = sinStock || sinPrecio
                 return (
-                  <button key={p.id} type="button" onClick={() => !sinStock && onAgregar(p)}
-                    disabled={sinStock}
+                  <button key={p.id} type="button" onClick={() => !bloqueado && onAgregar(p)}
+                    disabled={bloqueado}
+                    title={sinPrecio ? 'Sin precio — no se puede cotizar' : undefined}
                     className={`bg-white rounded-xl border p-3 text-left transition-all group flex flex-col gap-2 ${
-                      sinStock
+                      bloqueado
                         ? 'opacity-50 cursor-not-allowed border-slate-100'
                         : yaAgregado
                           ? 'border-emerald-200 bg-emerald-50/30 hover:shadow-md'
@@ -342,11 +345,14 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
               {paginados.map(p => {
                 const yaAgregado = idsAgregados.has(p.id)
                 const sinStock = p.stock_actual != null && p.stock_actual <= 0
+                const sinPrecio = !p.precio_usd || Number(p.precio_usd) <= 0
+                const bloqueado = sinStock || sinPrecio
                 return (
-                  <button key={p.id} type="button" onClick={() => !sinStock && onAgregar(p)}
-                    disabled={sinStock}
+                  <button key={p.id} type="button" onClick={() => !bloqueado && onAgregar(p)}
+                    disabled={bloqueado}
+                    title={sinPrecio ? 'Sin precio — no se puede cotizar' : undefined}
                     className={`w-full flex items-center gap-3 px-3.5 py-3 text-left transition-all group ${
-                      sinStock
+                      bloqueado
                         ? 'opacity-50 cursor-not-allowed bg-slate-50'
                         : yaAgregado
                           ? 'bg-emerald-50/30 hover:bg-emerald-50'
