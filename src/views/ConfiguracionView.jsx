@@ -2,8 +2,9 @@
 // Configuración del negocio — solo supervisor
 // Datos usados en el encabezado del PDF y ajustes globales
 import { useState, useEffect } from 'react'
-import { Settings, Building2, Phone, Mail, MapPin, FileText, Save, CheckCircle, Lock, Eye, EyeOff, Accessibility } from 'lucide-react'
+import { Settings, Building2, Phone, Mail, MapPin, FileText, Save, CheckCircle, Lock, Eye, EyeOff, Accessibility, HardDrive, Download, AlertCircle } from 'lucide-react'
 import { useConfigNegocio, useActualizarConfig, hashSHA256 } from '../hooks/useConfigNegocio'
+import { adminAPI } from '../services/supabase/adminClient'
 
 export default function ConfiguracionView() {
   const { data: config = {}, isLoading } = useConfigNegocio()
@@ -11,6 +12,8 @@ export default function ConfiguracionView() {
   const [guardado, setGuardado] = useState(false)
   const [error,    setError]    = useState('')
   const [showGatePass, setShowGatePass] = useState(false)
+  const [backupLoading, setBackupLoading] = useState(false)
+  const [backupMsg, setBackupMsg]         = useState(null) // { tipo: 'ok'|'error', texto }
 
   // Modo accesible (persiste en localStorage de este dispositivo)
   const [modoAccesible, setModoAccesible] = useState(() =>
@@ -51,6 +54,19 @@ export default function ConfiguracionView() {
       })
     }
   }, [config])
+
+  async function handleBackup() {
+    setBackupLoading(true)
+    setBackupMsg(null)
+    try {
+      const filename = await adminAPI.downloadBackup()
+      setBackupMsg({ tipo: 'ok', texto: `Descargado: ${filename}` })
+    } catch (err) {
+      setBackupMsg({ tipo: 'error', texto: err.message || 'Error al generar backup' })
+    } finally {
+      setBackupLoading(false)
+    }
+  }
 
   function cambiar(k, v) {
     setCampos(p => ({ ...p, [k]: v }))
@@ -287,6 +303,40 @@ export default function ConfiguracionView() {
                 modoAccesible ? 'translate-x-5' : 'translate-x-0'
               }`} />
             </button>
+          </div>
+        </div>
+
+        {/* Sección: Copia de seguridad */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+          <h2 className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
+            <HardDrive size={14} className="text-slate-400" />
+            Copia de seguridad
+          </h2>
+          <p className="text-xs text-slate-500 -mt-2">
+            Descarga un archivo JSON con todos los datos del sistema: productos, clientes, cotizaciones,
+            despachos, usuarios y configuración. Guárdalo en un lugar seguro.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={handleBackup}
+              disabled={backupLoading}
+              className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white font-semibold text-sm px-5 py-2.5 rounded-xl transition-colors shadow-sm disabled:opacity-50"
+            >
+              {backupLoading
+                ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Generando backup...</>
+                : <><Download size={15} />Descargar backup</>
+              }
+            </button>
+            {backupMsg && (
+              <div className={`flex items-center gap-1.5 text-sm font-medium ${backupMsg.tipo === 'ok' ? 'text-emerald-600' : 'text-red-600'}`}>
+                {backupMsg.tipo === 'ok'
+                  ? <CheckCircle size={15} />
+                  : <AlertCircle size={15} />
+                }
+                {backupMsg.texto}
+              </div>
+            )}
           </div>
         </div>
 

@@ -297,12 +297,11 @@ export default function AppLayout() {
                   </div>
                 ) : (
                   notifications.slice(0, 20).map(n => {
-                    const isStockBajo = n.type === NOTIF_TYPES.STOCK_BAJO && n.meta?.productos
-                    const isClickable = isStockBajo
+                    const isStockBajo = n.type === NOTIF_TYPES.STOCK_BAJO
                     return (
                       <div key={n.id}
-                        onClick={isClickable ? () => { navigate('/inventario?filtro=stock_bajo'); setShowNotifs(false) } : undefined}
-                        className={`px-4 py-3 transition-colors ${isClickable ? 'cursor-pointer hover:bg-amber-50/50' : 'hover:bg-slate-50/50'}`}
+                        onClick={isStockBajo ? () => { navigate('/inventario?filtro=stock_bajo'); setShowNotifs(false) } : undefined}
+                        className={`px-4 py-3 transition-colors ${isStockBajo ? 'cursor-pointer hover:bg-amber-50/50' : 'hover:bg-slate-50/50'}`}
                       >
                         <div className="flex gap-2.5 items-start">
                           <NotifIcon type={n.type} />
@@ -310,25 +309,6 @@ export default function AppLayout() {
                             <p className="text-xs font-bold text-slate-700 leading-tight">{n.title}</p>
                             {n.body && !isStockBajo && (
                               <p className="text-xs text-slate-500 mt-0.5 leading-snug">{n.body}</p>
-                            )}
-                            {/* Renderizar lista de stock bajo como badges */}
-                            {isStockBajo && (
-                              <div className="mt-1.5 flex flex-wrap gap-1">
-                                {n.meta.productos.map((p, i) => (
-                                  <span key={i} className="inline-flex items-center gap-1 text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200 rounded-md px-1.5 py-0.5 leading-tight">
-                                    <span className="truncate max-w-[120px]">{p.nombre}</span>
-                                    <span className="font-bold text-amber-900">{p.stock}</span>
-                                  </span>
-                                ))}
-                                {n.meta.total > 10 && (
-                                  <span className="text-[10px] text-amber-500 font-bold px-1.5 py-0.5">
-                                    +{n.meta.total - 10} más
-                                  </span>
-                                )}
-                                <span className="text-[10px] text-sky-500 font-bold px-1.5 py-0.5 hover:underline">
-                                  Ver inventario →
-                                </span>
-                              </div>
                             )}
                             <p className="text-[10px] text-slate-400 mt-1">
                               {new Date(n.ts).toLocaleString('es-VE', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })}

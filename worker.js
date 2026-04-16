@@ -22,6 +22,11 @@ export default {
       return handleReciclarCotizacion(request, env);
     }
 
+    // ── API: backup completo del sistema ───────────────────────────────────
+    if (url.pathname === '/api/admin/backup' && request.method === 'GET') {
+      return handleBackup(request, env);
+    }
+
     // ── API routes para operaciones admin ──────────────────────────────────
     if (url.pathname.startsWith('/api/admin/')) {
       return handleAdmin(request, env, url);
@@ -573,7 +578,92 @@ function base64urlEncode(buffer) {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
 
-// ── List all clients (service key bypasses RLS) ────────────────────────────
+// ── Backup completo del sistema ───────────────────────────────────────────
+
+async function handleBackup(request, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) {
+    return jsonError('Server misconfigured', 500);
+  }
+
+  const user = await verifyAuth(request, env);
+  if (!user?.id) return jsonError('No autenticado', 401);
+
+  const isSupervisor = await verifySupervisor(user.id, env);
+  if (!isSupervisor) return jsonError('Acceso denegado: solo supervisores', 403);
+
+  const h = {
+    apikey: env.SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+  };
+
+  async function fetchTable(tabla, query = '') {
+    const res = await fetch(`${env.SUPABASE_URL}/rest/v1/${tabla}?limit=100000${query}`, { headers: h });
+    if (!res.ok) return [];
+    return res.json();
+  }
+
+  const [
+    productos,
+    clientes,
+    cotizaciones,
+    cotizacion_items,
+    notas_despacho,
+    transportistas,
+    usuarios,
+    configuracion_negocio,
+    auditoria,
+  ] = await Promise.all([
+    fetchTable('productos', '&order=codigo.asc'),
+    fetchTable('clientes', '&order=nombre.asc'),
+    fetchTable('cotizaciones', '&order=numero.asc'),
+    fetchTable('cotizacion_items', '&order=cotizacion_id.asc,orden.asc'),
+    fetchTable('notas_despacho', '&order=numero.asc'),
+    fetchTable('transportistas', '&order=nombre.asc'),
+    fetchTable('usuarios', '&order=nombre.asc'),
+    fetchTable('configuracion_negocio'),
+    fetchTable('auditoria', '&order=ts.desc&limit=5000'),
+  ]);
+
+  // Obtener nombre del negocio para el archivo
+  const negocio = configuracion_negocio?.[0]?.nombre_negocio || 'sistema';
+
+  const backup = {
+    version: '1.0',
+    generado_en: new Date().toISOString(),
+    negocio,
+    tablas: {
+      productos,
+      clientes,
+      cotizaciones,
+      cotizacion_items,
+      notas_despacho,
+      transportistas,
+      usuarios,
+      configuracion_negocio,
+      auditoria,
+    },
+    resumen: {
+      productos: productos.length,
+      clientes: clientes.length,
+      cotizaciones: cotizaciones.length,
+      notas_despacho: notas_despacho.length,
+      transportistas: transportistas.length,
+      usuarios: usuarios.length,
+    },
+  };
+
+  const fecha = new Date().toISOString().slice(0, 10);
+  const filename = `backup-${negocio.replace(/[^a-z0-9]/gi, '_').toLowerCase()}-${fecha}.json`;
+
+  return new Response(JSON.stringify(backup, null, 2), {
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+    },
+  });
+}
+
+
 async function handleListarClientes(request, env) {
   const user = await verifyAuth(request, env);
   if (!user?.id) return jsonError('No autenticado', 401);

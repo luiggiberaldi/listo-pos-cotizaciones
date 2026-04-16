@@ -77,7 +77,7 @@ export default function InventarioView() {
   // Filtrar por stock bajo (client-side)
   const productosFiltrados = useMemo(() => {
     if (!stockBajo) return productos
-    return productos.filter(p => p.stock_actual != null && p.stock_minimo != null && p.stock_actual <= p.stock_minimo)
+    return productos.filter(p => p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo)
   }, [productos, stockBajo])
 
   // Paginación

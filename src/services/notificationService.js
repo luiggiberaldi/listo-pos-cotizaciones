@@ -70,11 +70,20 @@ export function clearNotifications() {
 
 // ─── Helpers de alto nivel ─────────────────────────────────────────────────────
 
+const STOCK_BAJO_COOLDOWN_MS = 6 * 60 * 60 * 1000 // 6 horas
+
 export function notifyStockBajo(productos) {
-  const bajos = productos.filter(p => p.stock_actual <= p.stock_minimo)
+  const bajos = productos.filter(p => p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo)
   if (!bajos.length) return
 
-  // Guardar lista en meta para renderizar mejor en el panel
+  // No crear nueva notificación si la última tiene menos de 6 horas y la cantidad no cambió
+  const existing = readNotifs().find(n => n.type === NOTIF_TYPES.STOCK_BAJO)
+  if (existing) {
+    const mismaCantidad = existing.meta?.total === bajos.length
+    const reciente = Date.now() - existing.ts < STOCK_BAJO_COOLDOWN_MS
+    if (mismaCantidad && reciente) return
+  }
+
   createNotification(
     NOTIF_TYPES.STOCK_BAJO,
     bajos.length === 1

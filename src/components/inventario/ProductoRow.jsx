@@ -12,7 +12,7 @@ function fmtUsd(n) {
 export default function ProductoRow({ producto, onEditar, onDesactivar, tasa = 0 }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
-  const stockBajo = producto.stock_actual <= producto.stock_minimo
+  const stockBajo = producto.stock_minimo > 0 && producto.stock_actual <= producto.stock_minimo
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 hover:border-primary-light hover:shadow-sm transition-all px-4 py-3 flex items-center gap-4">
@@ -72,7 +72,7 @@ export default function ProductoRow({ producto, onEditar, onDesactivar, tasa = 0
         {stockBajo ? (
           <span className="flex items-center gap-1 text-xs font-semibold text-orange-600 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full">
             <AlertTriangle size={11} />
-            Stock bajo
+            Stock bajo: {Number(producto.stock_actual).toLocaleString('es-VE')}
           </span>
         ) : (
           <span className="text-xs text-slate-400">

@@ -34,4 +34,34 @@ export const adminAPI = {
   createUser: (data) => adminFetch('users', 'POST', data),
   updateUser: (id, data) => adminFetch(`users/${id}`, 'PUT', data),
   deleteUser: (id) => adminFetch(`users/${id}`, 'DELETE'),
+
+  async downloadBackup() {
+    const token = await getAuthToken()
+    if (!token) throw new Error('No autenticado')
+
+    const res = await fetch('/api/admin/backup', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+
+    if (!res.ok) {
+      const text = await res.text()
+      let data = {}
+      try { data = JSON.parse(text) } catch { /* noop */ }
+      throw new Error(data.error || `Error ${res.status}`)
+    }
+
+    const blob = await res.blob()
+    const disposition = res.headers.get('Content-Disposition') || ''
+    const match = disposition.match(/filename="([^"]+)"/)
+    const filename = match ? match[1] : `backup-${new Date().toISOString().slice(0, 10)}.json`
+
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+
+    return filename
+  },
 }

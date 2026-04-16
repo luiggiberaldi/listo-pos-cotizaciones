@@ -13,11 +13,11 @@ function fmtUsd(n) {
 
 // ─── Badge de stock ───────────────────────────────────────────────────────────
 function BadgeStock({ actual, minimo }) {
-  const bajo = actual <= minimo
+  const bajo = minimo > 0 && actual <= minimo
   if (bajo) return (
     <span className="flex items-center gap-1 text-xs font-semibold text-orange-600 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full">
       <AlertTriangle size={11} />
-      Stock bajo
+      Stock bajo: {Number(actual).toLocaleString('es-VE')}
     </span>
   )
   return (
