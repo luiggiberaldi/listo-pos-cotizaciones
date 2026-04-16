@@ -117,54 +117,45 @@ export default function DespachoCard({ despacho, onCambiarEstado, onAnular, onRe
         </div>
       )}
 
-      {/* ── Acciones (solo supervisor, barra inferior) ── */}
-      {hasActions && (
-        <div className="mt-auto border-t border-slate-100 px-3 py-2 flex items-center gap-1">
-          {canDespachar && (
-            <button onClick={() => onCambiarEstado(despacho.id, 'despachada')} title="Marcar como despachada"
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-indigo-600 hover:bg-indigo-50 active:bg-indigo-100 transition-colors">
-              <Truck size={13} />
-              Despachar
-            </button>
-          )}
-          {canEntregada && (
-            <button onClick={() => onCambiarEstado(despacho.id, 'entregada')} title="Marcar como entregada"
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 active:bg-emerald-100 transition-colors">
-              <CheckCircle size={13} />
-              Entregada
-            </button>
-          )}
-          {canReciclar && (
-            <button onClick={() => onReciclar(despacho)} title="Reciclar como cotización borrador"
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
-              <RefreshCcw size={13} />
-              Reciclar
-            </button>
-          )}
+      {/* ── Acciones (barra inferior) ── */}
+      <div className="mt-auto border-t border-slate-100 px-3 py-2 flex items-center gap-1">
+        {canDespachar && (
+          <button onClick={() => onCambiarEstado(despacho.id, 'despachada')} title="Marcar como despachada"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-indigo-600 hover:bg-indigo-50 active:bg-indigo-100 transition-colors">
+            <Truck size={13} />
+            Despachar
+          </button>
+        )}
+        {canEntregada && (
+          <button onClick={() => onCambiarEstado(despacho.id, 'entregada')} title="Marcar como entregada"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 active:bg-emerald-100 transition-colors">
+            <CheckCircle size={13} />
+            Entregada
+          </button>
+        )}
+        {canReciclar && (
+          <button onClick={() => onReciclar(despacho)} title="Reciclar como cotización borrador"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
+            <RefreshCcw size={13} />
+            Reciclar
+          </button>
+        )}
+
+        {/* PDF + Anular siempre al extremo derecho */}
+        <div className="ml-auto flex items-center gap-1">
           <button onClick={descargarPDF} disabled={pdfLoading} title="Descargar PDF"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-50 active:bg-slate-100 transition-colors disabled:opacity-50">
-            {pdfLoading ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
-            PDF
+            className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-50">
+            {pdfLoading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
           </button>
           {canAnular && (
             <button onClick={() => onAnular(despacho)} title="Anular despacho"
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 active:bg-red-100 transition-colors ml-auto">
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 active:bg-red-100 transition-colors">
               <Ban size={13} />
               Anular
             </button>
           )}
         </div>
-      )}
-      {/* PDF para no-supervisores (sin otras acciones) */}
-      {!hasActions && (
-        <div className="mt-auto border-t border-slate-100 px-3 py-2 flex items-center">
-          <button onClick={descargarPDF} disabled={pdfLoading} title="Descargar PDF"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">
-            {pdfLoading ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
-            Descargar PDF
-          </button>
-        </div>
-      )}
+      </div>
     </div>
   )
 }
