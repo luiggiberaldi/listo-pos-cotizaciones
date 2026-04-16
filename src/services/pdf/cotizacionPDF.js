@@ -11,229 +11,268 @@ function fmtBs(n) {
 }
 function fmtFecha(f) {
   if (!f) return '—'
-  return new Date(f + 'T12:00:00').toLocaleDateString('es-VE', {
+  return new Date(f + (f.includes('T') ? '' : 'T12:00:00')).toLocaleDateString('es-VE', {
     day: '2-digit', month: '2-digit', year: 'numeric',
   })
 }
 
-// ─── Constantes de diseño ─────────────────────────────────────────────────────
-const MARGIN = 14
-const PAGE_W = 210   // A4 mm
+// ─── Paleta ───────────────────────────────────────────────────────────────────
+const PAGE_W    = 210
+const MARGIN    = 14
 const CONTENT_W = PAGE_W - MARGIN * 2
 
-// Paleta
-const COLOR_AMBER  = [245, 158, 11]   // amber-500
-const COLOR_DARK   = [30,  41,  59]   // slate-800
-const COLOR_MID    = [100, 116, 139]  // slate-500
-const COLOR_LIGHT  = [226, 232, 240]  // slate-200
-const COLOR_WHITE  = [255, 255, 255]
-const COLOR_ROW_ALT = [248, 250, 252] // slate-50
+const C_AMBER   = [217, 119,   6]   // amber-600
+const C_AMBER2  = [245, 158,  11]   // amber-500
+const C_DARK    = [15,   23,  42]   // slate-900
+const C_MID     = [100, 116, 139]   // slate-500
+const C_LIGHT   = [226, 232, 240]   // slate-200
+const C_SUBTLE  = [248, 250, 252]   // slate-50
+const C_WHITE   = [255, 255, 255]
+const C_GREEN   = [22,  163,  74]
+const C_RED     = [220,  38,  38]
+
+const ESTADO_MAP = {
+  borrador:  { label: 'BORRADOR',  color: C_MID },
+  enviada:   { label: 'ENVIADA',   color: C_AMBER2 },
+  aceptada:  { label: 'ACEPTADA',  color: C_GREEN },
+  rechazada: { label: 'RECHAZADA', color: C_RED },
+  vencida:   { label: 'VENCIDA',   color: [148, 163, 184] },
+}
 
 // ─── Generador principal ──────────────────────────────────────────────────────
-/**
- * @param {object} opts
- * @param {object} opts.cotizacion   — header de cotización (del hook useCotizacion)
- * @param {Array}  opts.items        — array de cotizacion_items
- * @param {object} [opts.config]     — fila de configuracion_negocio (puede ser {})
- * @returns {void} — llama a doc.save() para descargar el PDF
- */
 export function generarPDF({ cotizacion, items = [], config = {}, returnBlob = false }) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
+  let y = 0
 
-  let y = MARGIN  // cursor vertical
-
-  // ── Número de cotización ──────────────────────────────────────────────────
   const numDisplay = cotizacion.version > 1
     ? `COT-${String(cotizacion.numero).padStart(5, '0')} Rev.${cotizacion.version}`
     : `COT-${String(cotizacion.numero).padStart(5, '0')}`
 
-  // ── CABECERA ──────────────────────────────────────────────────────────────
-  // Franja amber
-  doc.setFillColor(...COLOR_AMBER)
-  doc.rect(0, 0, PAGE_W, 22, 'F')
+  const estadoInfo = ESTADO_MAP[cotizacion.estado] || { label: (cotizacion.estado || 'BORRADOR').toUpperCase(), color: C_MID }
 
-  // Nombre del negocio
+  // ══════════════════════════════════════════════════════════════════════════
+  // CABECERA
+  // ══════════════════════════════════════════════════════════════════════════
+  doc.setFillColor(...C_AMBER)
+  doc.rect(0, 0, PAGE_W, 28, 'F')
+  doc.setFillColor(...C_AMBER2)
+  doc.rect(0, 0, 3, 28, 'F')
+
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(15)
-  doc.setTextColor(...COLOR_WHITE)
-  doc.text(config.nombre_negocio || 'Mi Empresa', MARGIN, 10)
+  doc.setFontSize(16)
+  doc.setTextColor(...C_WHITE)
+  doc.text(config.nombre_negocio || 'Mi Empresa', MARGIN, 11)
 
-  // Subtítulo / RIF
+  const subItems = [
+    config.rif_negocio      ? `RIF: ${config.rif_negocio}` : null,
+    config.telefono_negocio || null,
+    config.direccion_negocio || null,
+  ].filter(Boolean)
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8)
-  const subHeader = [
-    config.rif_negocio     ? `RIF: ${config.rif_negocio}` : null,
-    config.telefono_negocio ? config.telefono_negocio : null,
-  ].filter(Boolean).join('  ·  ')
-  if (subHeader) doc.text(subHeader, MARGIN, 16)
+  doc.setFontSize(7.5)
+  doc.setTextColor(254, 243, 199)
+  doc.text(subItems.join('  ·  '), MARGIN, 17)
 
-  // Número de cotización (esquina derecha)
+  // Bloque número (derecha)
+  const docBlockX = PAGE_W - MARGIN - 46
+  doc.setFillColor(...C_AMBER2)
+  doc.roundedRect(docBlockX, 3, 50, 22, 2, 2, 'F')
+
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
-  doc.text(numDisplay, PAGE_W - MARGIN, 10, { align: 'right' })
+  doc.setFontSize(13)
+  doc.setTextColor(...C_WHITE)
+  doc.text(numDisplay, docBlockX + 25, 12, { align: 'center' })
+
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8)
-  doc.text('COTIZACIÓN', PAGE_W - MARGIN, 16, { align: 'right' })
+  doc.setFontSize(7)
+  doc.setTextColor(254, 243, 199)
+  doc.text('COTIZACIÓN', docBlockX + 25, 18, { align: 'center' })
 
-  y = 30
-
-  // ── BLOQUE: Info cotización + cliente ─────────────────────────────────────
-  // Dos columnas: izquierda = datos cot, derecha = datos cliente
-  const colW = CONTENT_W / 2 - 4
-
-  // Columna izquierda
-  doc.setFillColor(...COLOR_LIGHT)
-  doc.roundedRect(MARGIN, y, colW, 32, 2, 2, 'F')
-
+  doc.setFillColor(...estadoInfo.color)
+  doc.roundedRect(docBlockX + 7, 19.5, 36, 4.5, 1.5, 1.5, 'F')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7.5)
-  doc.setTextColor(...COLOR_MID)
-  doc.text('DATOS DE LA COTIZACIÓN', MARGIN + 3, y + 5)
+  doc.setFontSize(6.5)
+  doc.setTextColor(...C_WHITE)
+  doc.text(estadoInfo.label, docBlockX + 25, 22.8, { align: 'center' })
 
-  doc.setTextColor(...COLOR_DARK)
-  doc.setFontSize(8)
-  const leftRows = [
-    ['Fecha:', fmtFecha(cotizacion.creado_en)],
-    ['Válida hasta:', cotizacion.valida_hasta ? fmtFecha(cotizacion.valida_hasta) : '—'],
-    ['Estado:', (cotizacion.estado || 'borrador').charAt(0).toUpperCase() + (cotizacion.estado || 'borrador').slice(1)],
-  ]
-  leftRows.forEach(([label, value], i) => {
-    doc.setFont('helvetica', 'bold')
-    doc.text(label, MARGIN + 3, y + 11 + i * 6)
-    doc.setFont('helvetica', 'normal')
-    doc.text(value, MARGIN + 28, y + 11 + i * 6)
-  })
+  y = 34
 
-  // Columna derecha
-  const colX2 = MARGIN + colW + 8
-  doc.setFillColor(...COLOR_LIGHT)
-  doc.roundedRect(colX2, y, colW, 32, 2, 2, 'F')
+  // ══════════════════════════════════════════════════════════════════════════
+  // BLOQUES INFO: cliente / cotización / fechas
+  // ══════════════════════════════════════════════════════════════════════════
+  const bW  = (CONTENT_W - 8) / 3
+  const bH  = 34
+  const bY  = y
+  const colX = [MARGIN, MARGIN + bW + 4, MARGIN + (bW + 4) * 2]
 
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7.5)
-  doc.setTextColor(...COLOR_MID)
-  doc.text('CLIENTE', colX2 + 3, y + 5)
-
-  doc.setTextColor(...COLOR_DARK)
-  doc.setFontSize(8)
-  const TIPO_LABELS = {
-    natural: 'Natural', juridico: 'Jurídico',
-  }
   const cliente = cotizacion.cliente || {}
-  const rightRows = [
-    ['Nombre:', cliente.nombre || '—'],
-    ['Tipo:', TIPO_LABELS[cliente.tipo_cliente] || cliente.tipo_cliente || '—'],
-    ['RIF/CI:', cliente.rif_cedula || '—'],
-    ['Teléfono:', cotizacion.cliente?.telefono || '—'],
+
+  const bloques = [
+    {
+      titulo: 'CLIENTE',
+      filas: [
+        ['Nombre:', cliente.nombre || '—'],
+        ['RIF/CI:', cliente.rif_cedula || '—'],
+        ['Teléfono:', cliente.telefono || '—'],
+      ],
+    },
+    {
+      titulo: 'DATOS DE LA COTIZACIÓN',
+      filas: [
+        ['N° Cotización:', numDisplay],
+        ['Vendedor:', cotizacion.vendedor?.nombre || '—'],
+        ['Estado:', estadoInfo.label],
+      ],
+    },
+    {
+      titulo: 'FECHAS',
+      filas: [
+        ['Emisión:', fmtFecha(cotizacion.creado_en)],
+        ['Válida hasta:', cotizacion.valida_hasta ? fmtFecha(cotizacion.valida_hasta) : '—'],
+        ['Tasa BCV:', cotizacion.tasa_bcv_snapshot
+          ? `${Number(cotizacion.tasa_bcv_snapshot).toLocaleString('es-VE', { minimumFractionDigits: 2 })} Bs/$`
+          : '—'],
+      ],
+    },
   ]
-  rightRows.forEach(([label, value], i) => {
+
+  bloques.forEach((b, i) => {
+    const bx = colX[i]
+    doc.setFillColor(...C_SUBTLE)
+    doc.roundedRect(bx, bY, bW, bH, 2, 2, 'F')
+    doc.setDrawColor(...C_LIGHT)
+    doc.setLineWidth(0.3)
+    doc.roundedRect(bx, bY, bW, bH, 2, 2, 'S')
+
+    doc.setFillColor(...C_AMBER2)
+    doc.roundedRect(bx, bY, bW, 5.5, 2, 2, 'F')
+    doc.rect(bx, bY + 3, bW, 2.5, 'F')
+
     doc.setFont('helvetica', 'bold')
-    doc.text(label, colX2 + 3, y + 11 + i * 6)
-    doc.setFont('helvetica', 'normal')
-    // truncar si es muy largo
-    const maxW = colW - 22
-    const truncated = doc.getStringUnitWidth(value) * 8 / doc.internal.scaleFactor > maxW
-      ? value.substring(0, Math.floor(maxW / 2.5)) + '...'
-      : value
-    doc.text(truncated, colX2 + 22, y + 11 + i * 6)
+    doc.setFontSize(6.5)
+    doc.setTextColor(...C_WHITE)
+    doc.text(b.titulo, bx + 3, bY + 4)
+
+    b.filas.forEach(([label, val], j) => {
+      const fy = bY + 10 + j * 7
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(7)
+      doc.setTextColor(...C_MID)
+      doc.text(label, bx + 3, fy)
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(...C_DARK)
+      const lines = doc.splitTextToSize(String(val), bW - 22)
+      doc.text(lines[0], bx + 22, fy)
+    })
   })
 
-  y += 40
+  y = bY + bH + 7
 
-  // ── TABLA DE ITEMS ────────────────────────────────────────────────────────
-  // Encabezado tabla
-  const colsDef = [
-    { label: '#',          x: MARGIN,         w: 8,   align: 'center' },
-    { label: 'Código',     x: MARGIN + 8,     w: 20,  align: 'left'   },
-    { label: 'Descripción',x: MARGIN + 28,    w: 72,  align: 'left'   },
-    { label: 'Cant.',      x: MARGIN + 100,   w: 14,  align: 'center' },
-    { label: 'P. Unit.',   x: MARGIN + 114,   w: 24,  align: 'right'  },
-    { label: 'Desc.',      x: MARGIN + 138,   w: 16,  align: 'right'  },
-    { label: 'Total',      x: MARGIN + 154,   w: 28,  align: 'right'  },
+  // ══════════════════════════════════════════════════════════════════════════
+  // TABLA DE ITEMS
+  // ══════════════════════════════════════════════════════════════════════════
+  const COLS = [
+    { label: '#',           x: MARGIN,        w: 7,   align: 'center' },
+    { label: 'Código',      x: MARGIN + 7,    w: 22,  align: 'left'   },
+    { label: 'Descripción', x: MARGIN + 29,   w: 68,  align: 'left'   },
+    { label: 'Cant.',       x: MARGIN + 97,   w: 14,  align: 'center' },
+    { label: 'P. Unit.',    x: MARGIN + 111,  w: 26,  align: 'right'  },
+    { label: 'Desc.',       x: MARGIN + 137,  w: 14,  align: 'right'  },
+    { label: 'Total',       x: MARGIN + 151,  w: 31,  align: 'right'  },
   ]
+  const ROW_H = 7.5
 
-  // Fila encabezado
-  doc.setFillColor(...COLOR_AMBER)
+  doc.setFillColor(...C_AMBER)
   doc.rect(MARGIN, y, CONTENT_W, 7, 'F')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7.5)
-  doc.setTextColor(...COLOR_WHITE)
-  colsDef.forEach(col => {
-    const textX = col.align === 'right'
+  doc.setTextColor(...C_WHITE)
+
+  COLS.forEach(col => {
+    const tx = col.align === 'right'
       ? col.x + col.w
       : col.align === 'center'
         ? col.x + col.w / 2
-        : col.x + 1.5
-    doc.text(col.label, textX, y + 4.8, { align: col.align })
+        : col.x + 2
+    doc.text(col.label, tx, y + 4.8, { align: col.align })
   })
   y += 7
 
-  // Filas de items
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8)
   items.forEach((item, idx) => {
-    // Nueva página si no alcanza
-    if (y > 250) {
-      doc.addPage()
-      y = MARGIN
-    }
+    if (y > 248) { doc.addPage(); y = MARGIN }
 
-    // Fondo alternado
     if (idx % 2 === 1) {
-      doc.setFillColor(...COLOR_ROW_ALT)
-      doc.rect(MARGIN, y, CONTENT_W, 7, 'F')
+      doc.setFillColor(...C_SUBTLE)
+      doc.rect(MARGIN, y, CONTENT_W, ROW_H, 'F')
     }
 
-    doc.setTextColor(...COLOR_DARK)
-    const rowH = 7
-    const midY = y + rowH / 2 + 1.5
+    const midY = y + ROW_H / 2 + 1.5
 
-    // #
-    doc.text(String(idx + 1), colsDef[0].x + colsDef[0].w / 2, midY, { align: 'center' })
-    // Código
-    doc.text(item.codigo_snap || '—', colsDef[1].x + 1.5, midY)
-    // Descripción (puede hacer wrap)
-    const desc = item.nombre_snap || ''
-    const maxDescW = colsDef[2].w - 2
-    const descLines = doc.splitTextToSize(desc, maxDescW)
-    doc.text(descLines[0], colsDef[2].x + 1.5, midY) // solo primera línea en tabla compacta
-    // Cantidad
-    doc.text(String(item.cantidad), colsDef[3].x + colsDef[3].w / 2, midY, { align: 'center' })
-    // Precio unit
-    doc.text(fmtUsd(item.precio_unit_usd), colsDef[4].x + colsDef[4].w, midY, { align: 'right' })
-    // Descuento
-    doc.text(item.descuento_pct > 0 ? `${item.descuento_pct}%` : '—', colsDef[5].x + colsDef[5].w, midY, { align: 'right' })
-    // Total línea
-    doc.setFont('helvetica', 'bold')
-    doc.text(fmtUsd(item.total_linea_usd), colsDef[6].x + colsDef[6].w, midY, { align: 'right' })
     doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7.5)
+    doc.setTextColor(...C_MID)
+    doc.text(String(idx + 1), COLS[0].x + COLS[0].w / 2, midY, { align: 'center' })
 
-    y += rowH
+    doc.setTextColor(...C_AMBER)
+    doc.setFont('helvetica', 'bold')
+    doc.text(item.codigo_snap || '—', COLS[1].x + 2, midY)
+
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(...C_DARK)
+    const descLines = doc.splitTextToSize(item.nombre_snap || '', COLS[2].w - 2)
+    doc.text(descLines[0], COLS[2].x + 2, midY)
+
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(...C_DARK)
+    doc.text(String(item.cantidad), COLS[3].x + COLS[3].w / 2, midY, { align: 'center' })
+
+    doc.setFont('helvetica', 'normal')
+    doc.text(fmtUsd(item.precio_unit_usd), COLS[4].x + COLS[4].w, midY, { align: 'right' })
+
+    doc.setTextColor(...C_MID)
+    doc.text(item.descuento_pct > 0 ? `${item.descuento_pct}%` : '—', COLS[5].x + COLS[5].w, midY, { align: 'right' })
+
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(...C_DARK)
+    doc.text(fmtUsd(item.total_linea_usd), COLS[6].x + COLS[6].w, midY, { align: 'right' })
+
+    y += ROW_H
   })
 
-  // Línea inferior tabla
-  doc.setDrawColor(...COLOR_LIGHT)
+  doc.setDrawColor(...C_LIGHT)
+  doc.setLineWidth(0.4)
   doc.line(MARGIN, y, MARGIN + CONTENT_W, y)
-  y += 4
+  y += 5
 
-  // ── BLOQUE TOTALES ────────────────────────────────────────────────────────
-  const totX = MARGIN + CONTENT_W - 70  // columna de totales alineada a la derecha
+  // ══════════════════════════════════════════════════════════════════════════
+  // TOTALES
+  // ══════════════════════════════════════════════════════════════════════════
+  if (y > 245) { doc.addPage(); y = MARGIN }
 
-  function totRow(label, value, bold = false, highlight = false) {
-    if (y > 260) { doc.addPage(); y = MARGIN }
+  const totW = 78
+  const totX = MARGIN + CONTENT_W - totW
+
+  function totRow(label, value, highlight = false) {
+    if (y > 258) { doc.addPage(); y = MARGIN }
     if (highlight) {
-      doc.setFillColor(...COLOR_AMBER)
-      doc.rect(totX - 2, y - 4, 72, 7, 'F')
-      doc.setTextColor(...COLOR_WHITE)
+      doc.setFillColor(...C_AMBER)
+      doc.roundedRect(totX, y - 5, totW, 12, 2, 2, 'F')
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8)
+      doc.setTextColor(...C_WHITE)
+      doc.text(label, totX + 5, y + 2)
+      doc.setFontSize(11)
+      doc.text(value, totX + totW - 5, y + 3.5, { align: 'right' })
+      y += 14
     } else {
-      doc.setTextColor(...COLOR_DARK)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(8)
+      doc.setTextColor(...C_MID)
+      doc.text(label, totX + 5, y)
+      doc.setTextColor(...C_DARK)
+      doc.text(value, totX + totW - 5, y, { align: 'right' })
+      y += 6
     }
-    doc.setFont('helvetica', bold ? 'bold' : 'normal')
-    doc.setFontSize(8.5)
-    doc.text(label, totX + 10, y)
-    doc.text(value, MARGIN + CONTENT_W, y, { align: 'right' })
-    if (highlight) doc.setTextColor(...COLOR_DARK)
-    y += 6
   }
 
   totRow('Subtotal:', fmtUsd(cotizacion.subtotal_usd))
@@ -241,81 +280,111 @@ export function generarPDF({ cotizacion, items = [], config = {}, returnBlob = f
     totRow(`Descuento (${cotizacion.descuento_global_pct}%):`, `- ${fmtUsd(cotizacion.descuento_usd)}`)
   }
   if (cotizacion.costo_envio_usd > 0) {
-    totRow('Envío:', fmtUsd(cotizacion.costo_envio_usd))
+    totRow('Costo de envío:', fmtUsd(cotizacion.costo_envio_usd))
   }
-  y += 1
-  totRow('TOTAL USD:', fmtUsd(cotizacion.total_usd), true, true)
+  y += 2
+  totRow('TOTAL USD:', fmtUsd(cotizacion.total_usd), true)
 
-  // Total en Bs si hay tasa snapshot
   if (cotizacion.tasa_bcv_snapshot && cotizacion.total_bs_snapshot) {
-    y += 2
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(7.5)
-    doc.setTextColor(...COLOR_MID)
+    doc.setTextColor(...C_MID)
     doc.text(
       `Equivalente: ${fmtBs(cotizacion.total_bs_snapshot)}  (Tasa BCV: ${Number(cotizacion.tasa_bcv_snapshot).toLocaleString('es-VE', { minimumFractionDigits: 2 })} Bs/$)`,
-      MARGIN + CONTENT_W,
-      y,
-      { align: 'right' }
+      MARGIN + CONTENT_W, y, { align: 'right' }
     )
     y += 6
   }
 
   y += 4
 
-  // ── NOTAS AL CLIENTE ──────────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  // NOTAS
+  // ══════════════════════════════════════════════════════════════════════════
   if (cotizacion.notas_cliente?.trim()) {
     if (y > 255) { doc.addPage(); y = MARGIN }
-    doc.setFillColor(...COLOR_ROW_ALT)
-    doc.roundedRect(MARGIN, y, CONTENT_W, 4, 1, 1, 'F')
+    doc.setFillColor(...C_SUBTLE)
+    doc.roundedRect(MARGIN, y, CONTENT_W, 4.5, 1, 1, 'F')
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7.5)
-    doc.setTextColor(...COLOR_MID)
-    doc.text('NOTAS', MARGIN + 3, y + 2.8)
-    y += 6
+    doc.setFontSize(7)
+    doc.setTextColor(...C_MID)
+    doc.text('NOTAS', MARGIN + 3, y + 3.2)
+    y += 6.5
 
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8)
-    doc.setTextColor(...COLOR_DARK)
-    const notaLines = doc.splitTextToSize(cotizacion.notas_cliente.trim(), CONTENT_W - 6)
-    notaLines.forEach(line => {
-      if (y > 270) { doc.addPage(); y = MARGIN }
+    doc.setFontSize(7.5)
+    doc.setTextColor(...C_DARK)
+    doc.splitTextToSize(cotizacion.notas_cliente.trim(), CONTENT_W - 6).forEach(line => {
+      if (y > 268) { doc.addPage(); y = MARGIN }
       doc.text(line, MARGIN + 3, y)
-      y += 5
+      y += 4.5
     })
-    y += 2
+    y += 3
   }
 
-  // ── PIE DE PÁGINA ─────────────────────────────────────────────────────────
+  y += 5
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ZONA DE FIRMAS
+  // ══════════════════════════════════════════════════════════════════════════
+  const pageH = doc.internal.pageSize.getHeight()
+  if (y > pageH - 45) { doc.addPage(); y = MARGIN + 5 }
+
+  const firmaW = (CONTENT_W - 8) / 2
+  const firmaH = 25
+  const firmaY = y
+
+  ;[
+    { x: MARGIN,              label: 'Elaborado por' },
+    { x: MARGIN + firmaW + 8, label: 'Aceptado por (firma y sello)' },
+  ].forEach(({ x, label }) => {
+    doc.setFillColor(...C_SUBTLE)
+    doc.setDrawColor(...C_LIGHT)
+    doc.setLineWidth(0.3)
+    doc.roundedRect(x, firmaY, firmaW, firmaH, 2, 2, 'FD')
+
+    doc.setFillColor(...C_AMBER2)
+    doc.roundedRect(x, firmaY, firmaW, 5.5, 2, 2, 'F')
+    doc.rect(x, firmaY + 3, firmaW, 2.5, 'F')
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(6.5)
+    doc.setTextColor(...C_WHITE)
+    doc.text(label, x + firmaW / 2, firmaY + 4, { align: 'center' })
+
+    const lineY = firmaY + firmaH - 5
+    doc.setDrawColor(...C_LIGHT)
+    doc.line(x + 4, lineY, x + firmaW - 4, lineY)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(6.5)
+    doc.setTextColor(...C_MID)
+    doc.text('Nombre y C.I.', x + firmaW / 2, lineY + 3.5, { align: 'center' })
+  })
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // PIE DE PÁGINA
+  // ══════════════════════════════════════════════════════════════════════════
   const totalPages = doc.internal.getNumberOfPages()
   for (let p = 1; p <= totalPages; p++) {
     doc.setPage(p)
+    const ph = doc.internal.pageSize.getHeight()
 
-    // Franja inferior
-    const pageH = doc.internal.pageSize.getHeight()
-    doc.setFillColor(...COLOR_LIGHT)
-    doc.rect(0, pageH - 12, PAGE_W, 12, 'F')
+    doc.setFillColor(...C_AMBER)
+    doc.rect(0, ph - 10, PAGE_W, 10, 'F')
+    doc.setFillColor(...C_AMBER2)
+    doc.rect(0, ph - 10, 3, 10, 'F')
 
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(7)
-    doc.setTextColor(...COLOR_MID)
+    doc.setFontSize(6.5)
+    doc.setTextColor(254, 243, 199)
 
-    // Pie personalizado
-    const pieTexto = config.pie_pagina_pdf ||
-      (config.direccion_negocio ? config.direccion_negocio : 'Gracias por su preferencia')
-    doc.text(pieTexto, MARGIN, pageH - 5.5)
-
-    // Paginación
-    doc.text(`Página ${p} de ${totalPages}`, PAGE_W - MARGIN, pageH - 5.5, { align: 'right' })
+    const pieTxt = config.pie_pagina_pdf || config.direccion_negocio || 'Gracias por su preferencia'
+    doc.text(pieTxt, MARGIN, ph - 3.8)
+    doc.text(`${numDisplay}  ·  Pág. ${p}/${totalPages}`, PAGE_W - MARGIN, ph - 3.8, { align: 'right' })
   }
 
-  // ── GUARDAR ───────────────────────────────────────────────────────────────
   const filename = `${numDisplay.replace(/\s+/g, '_')}.pdf`
-
-  if (returnBlob) {
-    return doc.output('blob')
-  }
-
+  if (returnBlob) return doc.output('blob')
   doc.save(filename)
   return null
 }
