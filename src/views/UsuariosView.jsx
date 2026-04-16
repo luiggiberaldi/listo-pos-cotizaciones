@@ -12,6 +12,10 @@ import {
   useCambiarActivoUsuario,
   useEliminarUsuario,
 } from '../hooks/useUsuarios'
+import { COTIZACIONES_KEY } from '../hooks/useCotizaciones'
+import { CLIENTES_KEY } from '../hooks/useClientes'
+import { DESPACHOS_KEY } from '../hooks/useDespachos'
+import { useQueryClient } from '@tanstack/react-query'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import Skeleton    from '../components/ui/Skeleton'
 import EmptyState  from '../components/ui/EmptyState'
@@ -438,6 +442,7 @@ export default function UsuariosView() {
   const cambiarActivo = useCambiarActivoUsuario()
   const actualizarUsuario = useActualizarUsuario()
   const eliminar      = useEliminarUsuario()
+  const qc = useQueryClient()
 
   // Colores ya asignados (para evitar repetidos)
   const coloresUsados = usuarios.filter(u => u.color).map(u => u.color)
@@ -448,6 +453,10 @@ export default function UsuariosView() {
 
   async function cambiarColor(id, color) {
     await actualizarUsuario.mutateAsync({ id, color })
+    // Refrescar cotizaciones, clientes y despachos para que reflejen el nuevo color
+    qc.invalidateQueries({ queryKey: COTIZACIONES_KEY })
+    qc.invalidateQueries({ queryKey: CLIENTES_KEY })
+    qc.invalidateQueries({ queryKey: DESPACHOS_KEY })
   }
 
   async function confirmarCambioActivo() {

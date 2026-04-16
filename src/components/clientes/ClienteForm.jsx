@@ -212,7 +212,7 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
       )}
 
       {/* Botones */}
-      <div className="flex gap-3 pt-2">
+      <div className="flex gap-3 pt-4 pb-4">
         <button
           type="button"
           onClick={onCancel}
