@@ -39,7 +39,7 @@ export const Modal = ({ isOpen, onClose, title, children, className = '' }) => {
 
         {/* Body con Scroll Mejorado */}
         {/* ✅ CAMBIO: max-h-[85vh] para más espacio y pb-10 para margen inferior seguro */}
-        <div className="p-4 sm:p-6 max-h-[calc(100dvh-60px)] sm:max-h-[85vh] overflow-y-auto custom-scrollbar pb-10">
+        <div className="p-4 sm:p-6 max-h-[calc(100dvh-60px)] sm:max-h-[85vh] overflow-y-auto custom-scrollbar pb-16">
           {children}
         </div>
       </div>
