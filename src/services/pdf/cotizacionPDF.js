@@ -22,19 +22,22 @@ const PAGE_W    = 210
 const MARGIN    = 14
 const CONTENT_W = PAGE_W - MARGIN * 2
 
-const C_AMBER   = [217, 119,   6]   // amber-600
-const C_AMBER2  = [245, 158,  11]   // amber-500
-const C_DARK    = [15,   23,  42]   // slate-900
-const C_MID     = [100, 116, 139]   // slate-500
-const C_LIGHT   = [226, 232, 240]   // slate-200
-const C_SUBTLE  = [248, 250, 252]   // slate-50
+// Paleta CONSTRUACERO CARABOBO — cotización: acero oscuro + azul (diferencia del despacho naranja)
+const C_STEEL   = [18,  26,  44]   // carbón oscuro
+const C_STEEL2  = [30,  44,  74]   // azul acero
+const C_BLUE    = [37,  99, 235]   // azul corporativo (cotización vs naranja de despacho)
+const C_BLUE2   = [96, 165, 250]   // azul claro
+const C_DARK    = [15,   23,  42]
+const C_MID     = [100, 116, 139]
+const C_LIGHT   = [226, 232, 240]
+const C_SUBTLE  = [248, 250, 252]
 const C_WHITE   = [255, 255, 255]
 const C_GREEN   = [22,  163,  74]
 const C_RED     = [220,  38,  38]
 
 const ESTADO_MAP = {
   borrador:  { label: 'BORRADOR',  color: C_MID },
-  enviada:   { label: 'ENVIADA',   color: C_AMBER2 },
+  enviada:   { label: 'ENVIADA',   color: C_BLUE },
   aceptada:  { label: 'ACEPTADA',  color: C_GREEN },
   rechazada: { label: 'RECHAZADA', color: C_RED },
   vencida:   { label: 'VENCIDA',   color: [148, 163, 184] },
@@ -57,21 +60,26 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   // ══════════════════════════════════════════════════════════════════════════
   // CABECERA
   // ══════════════════════════════════════════════════════════════════════════
-  doc.setFillColor(...C_AMBER)
-  doc.rect(0, 0, PAGE_W, 28, 'F')
-  doc.setFillColor(...C_AMBER2)
-  doc.rect(0, 0, 3, 28, 'F')
+  // Fondo principal (acero oscuro)
+  doc.setFillColor(...C_STEEL)
+  doc.rect(0, 0, PAGE_W, 30, 'F')
+  // Franja azul de acento (izquierda)
+  doc.setFillColor(...C_BLUE)
+  doc.rect(0, 0, 4, 30, 'F')
+  // Línea azul inferior
+  doc.setFillColor(...C_BLUE)
+  doc.rect(0, 28.5, PAGE_W, 1.5, 'F')
 
-  // Logo (si existe)
+  // Logo (negativo blanco sobre fondo oscuro)
   if (logoData) {
-    try { doc.addImage(logoData, 'PNG', MARGIN, 2, 36, 24) } catch (_) {}
+    try { doc.addImage(logoData, 'PNG', MARGIN + 2, 3, 34, 22) } catch (_) {}
   }
-  const textStartX = logoData ? MARGIN + 40 : MARGIN
+  const textStartX = logoData ? MARGIN + 40 : MARGIN + 8
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(16)
+  doc.setFontSize(15)
   doc.setTextColor(...C_WHITE)
-  doc.text(config.nombre_negocio || 'Mi Empresa', textStartX, 11)
+  doc.text(config.nombre_negocio || 'Mi Empresa', textStartX, 12)
 
   const subItems = [
     config.rif_negocio      ? `RIF: ${config.rif_negocio}` : null,
@@ -79,33 +87,38 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     config.direccion_negocio || null,
   ].filter(Boolean)
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7.5)
-  doc.setTextColor(254, 243, 199)
-  doc.text(subItems.join('  ·  '), textStartX, 17)
+  doc.setFontSize(7)
+  doc.setTextColor(200, 210, 225)
+  doc.text(subItems.join('   ·   '), textStartX, 19)
 
-  // Bloque número (derecha)
-  const docBlockX = PAGE_W - MARGIN - 46
-  doc.setFillColor(...C_AMBER2)
-  doc.roundedRect(docBlockX, 3, 50, 22, 2, 2, 'F')
+  // Bloque número (derecha) — fondo azul
+  const docBlockX = PAGE_W - MARGIN - 48
+  doc.setFillColor(...C_BLUE)
+  doc.roundedRect(docBlockX, 3, 52, 24, 2, 2, 'F')
+  // Triángulo decorativo
+  doc.setFillColor(...C_BLUE2)
+  doc.roundedRect(docBlockX, 3, 8, 24, 2, 2, 'F')
+  doc.rect(docBlockX + 4, 3, 4, 24, 'F')
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(13)
+  doc.setFontSize(12)
   doc.setTextColor(...C_WHITE)
-  doc.text(numDisplay, docBlockX + 25, 12, { align: 'center' })
+  doc.text(numDisplay, docBlockX + 29, 12, { align: 'center' })
 
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7)
-  doc.setTextColor(254, 243, 199)
-  doc.text('COTIZACIÓN', docBlockX + 25, 18, { align: 'center' })
+  doc.setFontSize(6.5)
+  doc.setTextColor(190, 220, 255)
+  doc.text('COTIZACIÓN', docBlockX + 29, 18, { align: 'center' })
 
-  doc.setFillColor(...estadoInfo.color)
-  doc.roundedRect(docBlockX + 7, 19.5, 36, 4.5, 1.5, 1.5, 'F')
+  // Badge de estado
+  doc.setFillColor(...C_STEEL2)
+  doc.roundedRect(docBlockX + 9, 20, 34, 5, 1.5, 1.5, 'F')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(6.5)
-  doc.setTextColor(...C_WHITE)
-  doc.text(estadoInfo.label, docBlockX + 25, 22.8, { align: 'center' })
+  doc.setTextColor(...estadoInfo.color)
+  doc.text(estadoInfo.label, docBlockX + 26, 23.5, { align: 'center' })
 
-  y = 34
+  y = 36
 
   // ══════════════════════════════════════════════════════════════════════════
   // BLOQUES INFO: cliente / cotización / fechas
@@ -154,9 +167,12 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     doc.setLineWidth(0.3)
     doc.roundedRect(bx, bY, bW, bH, 2, 2, 'S')
 
-    doc.setFillColor(...C_AMBER2)
+    doc.setFillColor(...C_STEEL)
     doc.roundedRect(bx, bY, bW, 5.5, 2, 2, 'F')
     doc.rect(bx, bY + 3, bW, 2.5, 'F')
+    // Línea azul debajo del título del bloque
+    doc.setFillColor(...C_BLUE)
+    doc.rect(bx, bY + 5.5, bW, 1, 'F')
 
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(6.5)
@@ -192,8 +208,11 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   ]
   const ROW_H = 7.5
 
-  doc.setFillColor(...C_AMBER)
-  doc.rect(MARGIN, y, CONTENT_W, 7, 'F')
+  doc.setFillColor(...C_STEEL)
+  doc.rect(MARGIN, y, CONTENT_W, 7.5, 'F')
+  // Acento azul inferior del encabezado
+  doc.setFillColor(...C_BLUE)
+  doc.rect(MARGIN, y + 6.5, CONTENT_W, 1, 'F')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7.5)
   doc.setTextColor(...C_WHITE)
@@ -204,9 +223,9 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
       : col.align === 'center'
         ? col.x + col.w / 2
         : col.x + 2
-    doc.text(col.label, tx, y + 4.8, { align: col.align })
+    doc.text(col.label, tx, y + 5.3, { align: col.align })
   })
-  y += 7
+  y += 7.5
 
   items.forEach((item, idx) => {
     if (y > 248) { doc.addPage(); y = MARGIN }
@@ -223,7 +242,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     doc.setTextColor(...C_MID)
     doc.text(String(idx + 1), COLS[0].x + COLS[0].w / 2, midY, { align: 'center' })
 
-    doc.setTextColor(...C_AMBER)
+    doc.setTextColor(...C_BLUE)
     doc.setFont('helvetica', 'bold')
     doc.text(item.codigo_snap || '—', COLS[1].x + 2, midY)
 
@@ -265,15 +284,20 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   function totRow(label, value, highlight = false) {
     if (y > 258) { doc.addPage(); y = MARGIN }
     if (highlight) {
-      doc.setFillColor(...C_AMBER)
-      doc.roundedRect(totX, y - 5, totW, 12, 2, 2, 'F')
+      doc.setFillColor(...C_STEEL)
+      doc.roundedRect(totX, y - 5, totW, 14, 2, 2, 'F')
+      // Borde azul izquierdo del total
+      doc.setFillColor(...C_BLUE)
+      doc.roundedRect(totX, y - 5, 4, 14, 2, 2, 'F')
+      doc.rect(totX + 2, y - 5, 2, 14, 'F')
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(8)
+      doc.setTextColor(200, 210, 225)
+      doc.text(label, totX + 8, y + 2)
+      doc.setFontSize(12)
       doc.setTextColor(...C_WHITE)
-      doc.text(label, totX + 5, y + 2)
-      doc.setFontSize(11)
-      doc.text(value, totX + totW - 5, y + 3.5, { align: 'right' })
-      y += 14
+      doc.text(value, totX + totW - 5, y + 4, { align: 'right' })
+      y += 16
     } else {
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(8)
@@ -353,9 +377,12 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     doc.setLineWidth(0.3)
     doc.roundedRect(x, firmaY, firmaW, firmaH, 2, 2, 'FD')
 
-    doc.setFillColor(...C_AMBER2)
+    doc.setFillColor(...C_STEEL)
     doc.roundedRect(x, firmaY, firmaW, 5.5, 2, 2, 'F')
     doc.rect(x, firmaY + 3, firmaW, 2.5, 'F')
+    // Línea azul inferior del encabezado de firma
+    doc.setFillColor(...C_BLUE)
+    doc.rect(x, firmaY + 5.5, firmaW, 0.8, 'F')
 
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(6.5)
@@ -379,14 +406,18 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     doc.setPage(p)
     const ph = doc.internal.pageSize.getHeight()
 
-    doc.setFillColor(...C_AMBER)
+    doc.setFillColor(...C_STEEL)
     doc.rect(0, ph - 10, PAGE_W, 10, 'F')
-    doc.setFillColor(...C_AMBER2)
-    doc.rect(0, ph - 10, 3, 10, 'F')
+    // Franja azul izquierda
+    doc.setFillColor(...C_BLUE)
+    doc.rect(0, ph - 10, 4, 10, 'F')
+    // Línea superior del pie
+    doc.setFillColor(...C_BLUE)
+    doc.rect(0, ph - 10, PAGE_W, 0.8, 'F')
 
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(6.5)
-    doc.setTextColor(254, 243, 199)
+    doc.setTextColor(200, 210, 225)
 
     const pieTxt = config.pie_pagina_pdf || config.direccion_negocio || 'Gracias por su preferencia'
     doc.text(pieTxt, MARGIN, ph - 3.8)

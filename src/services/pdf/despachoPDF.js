@@ -26,23 +26,26 @@ const MARGIN   = 14
 const PAGE_W   = 210
 const CONTENT_W = PAGE_W - MARGIN * 2
 
-// Paleta indigo — diferencia visualmente la orden de despacho de la cotización (amber)
-const C_INDIGO  = [67,  56, 202]   // indigo-700
-const C_INDIGO2 = [99,  102, 241]  // indigo-500
-const C_DARK    = [15,  23,  42]   // slate-900
-const C_MID     = [100, 116, 139]  // slate-500
-const C_LIGHT   = [226, 232, 240]  // slate-200
-const C_SUBTLE  = [248, 250, 252]  // slate-50
+// Paleta CONSTRUACERO CARABOBO — acero + construcción industrial
+// Cabecera oscura (acero/carbón) con acento naranja industrial
+const C_STEEL   = [18,  26,  44]   // carbón oscuro (fondo principal)
+const C_STEEL2  = [30,  44,  74]   // azul acero (acento secundario)
+const C_ACCENT  = [210, 74,  20]   // naranja industrial (acento principal)
+const C_ACCENT2 = [234, 105, 54]   // naranja claro
+const C_DARK    = [15,  23,  42]   // texto principal
+const C_MID     = [100, 116, 139]  // texto secundario
+const C_LIGHT   = [226, 232, 240]  // bordes
+const C_SUBTLE  = [248, 250, 252]  // fondos claros
 const C_WHITE   = [255, 255, 255]
-const C_GREEN   = [22,  163, 74]   // green-600
-const C_ORANGE  = [234, 88,  12]   // orange-600
+const C_GREEN   = [22,  163, 74]
+const C_RED     = [220,  38,  38]
 
 // Mapa de estado → texto + color
 const ESTADO_MAP = {
-  pendiente:  { label: 'PENDIENTE',  color: C_ORANGE },
-  despachada: { label: 'DESPACHADA', color: C_INDIGO2 },
+  pendiente:  { label: 'PENDIENTE',  color: C_ACCENT },
+  despachada: { label: 'DESPACHADA', color: C_STEEL2 },
   entregada:  { label: 'ENTREGADA',  color: C_GREEN },
-  anulada:    { label: 'ANULADA',    color: [239, 68, 68] },
+  anulada:    { label: 'ANULADA',    color: C_RED },
 }
 
 // ─── Generador principal ──────────────────────────────────────────────────────
@@ -68,25 +71,29 @@ export async function generarDespachoPDF({ despacho, items = [], config = {} }) 
   // ══════════════════════════════════════════════════════════════════════════
   // CABECERA: franja degradada + datos empresa
   // ══════════════════════════════════════════════════════════════════════════
-  // Fondo principal
-  doc.setFillColor(...C_INDIGO)
-  doc.rect(0, 0, PAGE_W, 28, 'F')
+  // Fondo principal (acero oscuro)
+  doc.setFillColor(...C_STEEL)
+  doc.rect(0, 0, PAGE_W, 30, 'F')
 
-  // Acento lateral izquierdo
-  doc.setFillColor(...C_INDIGO2)
-  doc.rect(0, 0, 3, 28, 'F')
+  // Franja naranja de acento (izquierda)
+  doc.setFillColor(...C_ACCENT)
+  doc.rect(0, 0, 4, 30, 'F')
 
-  // Logo (si existe)
+  // Línea naranja inferior de cabecera
+  doc.setFillColor(...C_ACCENT)
+  doc.rect(0, 28.5, PAGE_W, 1.5, 'F')
+
+  // Logo (si existe) — negativo blanco sobre fondo oscuro
   if (logoData) {
-    try { doc.addImage(logoData, 'PNG', MARGIN, 2, 36, 24) } catch (_) {}
+    try { doc.addImage(logoData, 'PNG', MARGIN + 2, 3, 34, 22) } catch (_) {}
   }
-  const textStartX = logoData ? MARGIN + 40 : MARGIN
+  const textStartX = logoData ? MARGIN + 40 : MARGIN + 8
 
   // Nombre empresa
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(16)
+  doc.setFontSize(15)
   doc.setTextColor(...C_WHITE)
-  doc.text(config.nombre_negocio || 'Mi Empresa', textStartX, 11)
+  doc.text(config.nombre_negocio || 'Mi Empresa', textStartX, 12)
 
   // Sub-datos empresa
   const subItems = [
@@ -95,36 +102,40 @@ export async function generarDespachoPDF({ despacho, items = [], config = {} }) 
     config.direccion_negocio || null,
   ].filter(Boolean)
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7.5)
-  doc.setTextColor(199, 210, 254) // indigo-200
-  doc.text(subItems.join('  ·  '), textStartX, 17)
+  doc.setFontSize(7)
+  doc.setTextColor(200, 210, 225)
+  doc.text(subItems.join('   ·   '), textStartX, 19)
 
-  // Bloque número + tipo documento (derecha)
-  const docBlockX = PAGE_W - MARGIN - 46
+  // Bloque número + tipo documento (derecha) — fondo naranja
+  const docBlockX = PAGE_W - MARGIN - 48
 
-  doc.setFillColor(255, 255, 255, 0.12)
-  doc.setFillColor(99, 102, 241)
-  doc.roundedRect(docBlockX, 3, 50, 22, 2, 2, 'F')
+  doc.setFillColor(...C_ACCENT)
+  doc.roundedRect(docBlockX, 3, 52, 24, 2, 2, 'F')
+
+  // Triángulo decorativo izquierdo del bloque
+  doc.setFillColor(...C_ACCENT2)
+  doc.roundedRect(docBlockX, 3, 8, 24, 2, 2, 'F')
+  doc.rect(docBlockX + 4, 3, 4, 24, 'F')
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(13)
+  doc.setFontSize(12)
   doc.setTextColor(...C_WHITE)
-  doc.text(numDes, docBlockX + 25, 12, { align: 'center' })
+  doc.text(numDes, docBlockX + 29, 12, { align: 'center' })
 
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7)
-  doc.setTextColor(199, 210, 254)
-  doc.text('NOTA DE DESPACHO', docBlockX + 25, 18, { align: 'center' })
+  doc.setFontSize(6.5)
+  doc.setTextColor(255, 220, 190)
+  doc.text('NOTA DE DESPACHO', docBlockX + 29, 18, { align: 'center' })
 
-  // Badge de estado
-  doc.setFillColor(...estadoInfo.color)
-  doc.roundedRect(docBlockX + 7, 19.5, 36, 4.5, 1.5, 1.5, 'F')
+  // Badge de estado (debajo del bloque naranja)
+  doc.setFillColor(...C_STEEL2)
+  doc.roundedRect(docBlockX + 9, 20, 34, 5, 1.5, 1.5, 'F')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(6.5)
-  doc.setTextColor(...C_WHITE)
-  doc.text(estadoInfo.label, docBlockX + 25, 22.8, { align: 'center' })
+  doc.setTextColor(...estadoInfo.color)
+  doc.text(estadoInfo.label, docBlockX + 26, 23.5, { align: 'center' })
 
-  y = 34
+  y = 36
 
   // ══════════════════════════════════════════════════════════════════════════
   // BLOQUE INFO: 3 columnas — cliente / despacho / fechas
@@ -173,9 +184,13 @@ export async function generarDespachoPDF({ despacho, items = [], config = {} }) 
     doc.roundedRect(bx, bY, bW, bH, 2, 2, 'S')
 
     // Tira de color en la parte superior del bloque
-    doc.setFillColor(...C_INDIGO2)
+    doc.setFillColor(...C_STEEL)
     doc.roundedRect(bx, bY, bW, 5.5, 2, 2, 'F')
     doc.rect(bx, bY + 3, bW, 2.5, 'F') // elimina redondeo inferior
+
+    // Línea naranja debajo del título del bloque
+    doc.setFillColor(...C_ACCENT)
+    doc.rect(bx, bY + 5.5, bW, 1, 'F')
 
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(6.5)
@@ -214,9 +229,12 @@ export async function generarDespachoPDF({ despacho, items = [], config = {} }) 
 
   const ROW_H = 7.5
 
-  // Encabezado tabla
-  doc.setFillColor(...C_INDIGO)
-  doc.rect(MARGIN, y, CONTENT_W, 7, 'F')
+  // Encabezado tabla (acero oscuro)
+  doc.setFillColor(...C_STEEL)
+  doc.rect(MARGIN, y, CONTENT_W, 7.5, 'F')
+  // Acento naranja en la parte inferior del encabezado
+  doc.setFillColor(...C_ACCENT)
+  doc.rect(MARGIN, y + 6.5, CONTENT_W, 1, 'F')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7.5)
   doc.setTextColor(...C_WHITE)
@@ -227,9 +245,9 @@ export async function generarDespachoPDF({ despacho, items = [], config = {} }) 
       : col.align === 'center'
         ? col.x + col.w / 2
         : col.x + 2
-    doc.text(col.label, tx, y + 4.8, { align: col.align })
+    doc.text(col.label, tx, y + 5.3, { align: col.align })
   })
-  y += 7
+  y += 7.5
 
   // Filas de artículos
   items.forEach((item, idx) => {
@@ -254,8 +272,8 @@ export async function generarDespachoPDF({ despacho, items = [], config = {} }) 
     doc.setTextColor(...C_MID)
     doc.text(String(idx + 1), COLS[0].x + COLS[0].w / 2, midY, { align: 'center' })
 
-    // Código
-    doc.setTextColor(...C_INDIGO2)
+    // Código (naranja de marca)
+    doc.setTextColor(...C_ACCENT)
     doc.setFont('helvetica', 'bold')
     doc.text(item.codigo_snap || '—', COLS[1].x + 2, midY)
 
@@ -303,18 +321,23 @@ export async function generarDespachoPDF({ despacho, items = [], config = {} }) 
   const totX  = MARGIN + CONTENT_W - totW
   const total = Number(despacho.total_usd || 0)
 
-  // Caja total
-  doc.setFillColor(...C_INDIGO)
-  doc.roundedRect(totX, y, totW, 12, 2, 2, 'F')
+  // Caja total (acero oscuro)
+  doc.setFillColor(...C_STEEL)
+  doc.roundedRect(totX, y, totW, 14, 2, 2, 'F')
+  // Borde naranja izquierdo del total
+  doc.setFillColor(...C_ACCENT)
+  doc.roundedRect(totX, y, 4, 14, 2, 2, 'F')
+  doc.rect(totX + 2, y, 2, 14, 'F')
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8)
+  doc.setTextColor(200, 210, 225)
+  doc.text('TOTAL USD', totX + 8, y + 5.5)
+  doc.setFontSize(12)
   doc.setTextColor(...C_WHITE)
-  doc.text('TOTAL USD', totX + 5, y + 5)
-  doc.setFontSize(11)
-  doc.text(fmtUsd(total), totX + totW - 5, y + 8.5, { align: 'right' })
+  doc.text(fmtUsd(total), totX + totW - 5, y + 10, { align: 'right' })
 
-  y += 16
+  y += 18
 
   // Notas del despacho
   if (despacho.notas?.trim()) {
@@ -361,10 +384,13 @@ export async function generarDespachoPDF({ despacho, items = [], config = {} }) 
     doc.setFillColor(...C_SUBTLE)
     doc.roundedRect(fx, firmaY, firmaW, firmaH, 2, 2, 'FD')
 
-    // Etiqueta superior
-    doc.setFillColor(...C_INDIGO2)
+    // Etiqueta superior (acero oscuro)
+    doc.setFillColor(...C_STEEL)
     doc.roundedRect(fx, firmaY, firmaW, 5.5, 2, 2, 'F')
     doc.rect(fx, firmaY + 3, firmaW, 2.5, 'F')
+    // Línea naranja inferior del encabezado de firma
+    doc.setFillColor(...C_ACCENT)
+    doc.rect(fx, firmaY + 5.5, firmaW, 0.8, 'F')
 
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(6.5)
@@ -399,14 +425,18 @@ export async function generarDespachoPDF({ despacho, items = [], config = {} }) 
     doc.setPage(p)
     const ph = doc.internal.pageSize.getHeight()
 
-    doc.setFillColor(...C_INDIGO)
+    doc.setFillColor(...C_STEEL)
     doc.rect(0, ph - 10, PAGE_W, 10, 'F')
-    doc.setFillColor(...C_INDIGO2)
-    doc.rect(0, ph - 10, 3, 10, 'F')
+    // Franja naranja izquierda en pie
+    doc.setFillColor(...C_ACCENT)
+    doc.rect(0, ph - 10, 4, 10, 'F')
+    // Línea superior del pie
+    doc.setFillColor(...C_ACCENT)
+    doc.rect(0, ph - 10, PAGE_W, 0.8, 'F')
 
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(6.5)
-    doc.setTextColor(199, 210, 254)
+    doc.setTextColor(200, 210, 225)
 
     const pieTxt = config.pie_pagina_pdf
       || config.direccion_negocio
