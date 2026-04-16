@@ -126,7 +126,7 @@ export default function ReasignacionModal({ cliente, isOpen, onClose }) {
           <button
             type="submit"
             disabled={cargando || !nuevoVendedorId}
-            className="flex-1 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-semibold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            className="flex-[2] py-2.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-semibold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {cargando
               ? <><Loader2 size={15} className="animate-spin" /> Reasignando...</>
