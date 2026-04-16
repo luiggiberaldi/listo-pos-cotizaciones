@@ -185,7 +185,7 @@ export function useEnviarCotizacion() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ cotizacionId, tasaBcv, numero, clienteNombre }) => {
+    mutationFn: async ({ cotizacionId, tasaBcv }) => {
       const { error } = await supabase.rpc('enviar_cotizacion', {
         p_cotizacion_id: cotizacionId,
         p_tasa_bcv:      Number(tasaBcv),
@@ -197,6 +197,14 @@ export function useEnviarCotizacion() {
           throw new Error('Solo se pueden enviar cotizaciones en borrador')
         throw error
       }
+      // Obtener número y cliente para mostrar en toast/notificación
+      const { data: cot } = await supabase
+        .from('cotizaciones')
+        .select('numero, version, cliente:clientes!cotizaciones_cliente_id_fkey(nombre)')
+        .eq('id', cotizacionId)
+        .single()
+      const numero = cot?.numero ? String(cot.numero).padStart(5, '0') : '—'
+      const clienteNombre = cot?.cliente?.nombre ?? 'cliente'
       return { numero, clienteNombre }
     },
     onSuccess: ({ numero, clienteNombre }) => {
