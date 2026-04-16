@@ -26,6 +26,9 @@ export default {
     if (url.pathname === '/api/admin/backup' && request.method === 'GET') {
       return handleBackup(request, env);
     }
+    if (url.pathname === '/api/admin/restore' && request.method === 'POST') {
+      return handleRestore(request, env);
+    }
 
     // ── API routes para operaciones admin ──────────────────────────────────
     if (url.pathname.startsWith('/api/admin/')) {
@@ -661,6 +664,73 @@ async function handleBackup(request, env) {
       'Content-Disposition': `attachment; filename="${filename}"`,
     },
   });
+}
+
+
+async function handleRestore(request, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) {
+    return jsonError('Server misconfigured', 500);
+  }
+
+  const user = await verifyAuth(request, env);
+  if (!user?.id) return jsonError('No autenticado', 401);
+
+  const isSupervisor = await verifySupervisor(user.id, env);
+  if (!isSupervisor) return jsonError('Acceso denegado: solo supervisores', 403);
+
+  let backup;
+  try {
+    backup = await request.json();
+  } catch {
+    return jsonError('Archivo inválido: no es un JSON válido', 400);
+  }
+
+  if (!backup?.tablas) {
+    return jsonError('Archivo inválido: no parece un backup del sistema', 400);
+  }
+
+  const h = {
+    apikey: env.SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    'Content-Type': 'application/json',
+    Prefer: 'resolution=merge-duplicates',
+  };
+
+  // Tablas a restaurar en orden (respetando FK)
+  const TABLAS_RESTORE = [
+    'configuracion_negocio',
+    'transportistas',
+    'productos',
+    'clientes',
+    'cotizaciones',
+    'cotizacion_items',
+    'notas_despacho',
+  ];
+
+  const resumen = {};
+
+  for (const tabla of TABLAS_RESTORE) {
+    const filas = backup.tablas[tabla];
+    if (!Array.isArray(filas) || filas.length === 0) {
+      resumen[tabla] = 0;
+      continue;
+    }
+
+    // Upsert en lotes de 500
+    let restaurados = 0;
+    for (let i = 0; i < filas.length; i += 500) {
+      const lote = filas.slice(i, i + 500);
+      const res = await fetch(`${env.SUPABASE_URL}/rest/v1/${tabla}`, {
+        method: 'POST',
+        headers: h,
+        body: JSON.stringify(lote),
+      });
+      if (res.ok) restaurados += lote.length;
+    }
+    resumen[tabla] = restaurados;
+  }
+
+  return json({ ok: true, resumen });
 }
 
 

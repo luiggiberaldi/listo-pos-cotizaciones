@@ -64,4 +64,26 @@ export const adminAPI = {
 
     return filename
   },
+
+  async restoreBackup(file) {
+    const token = await getAuthToken()
+    if (!token) throw new Error('No autenticado')
+
+    const text = await file.text()
+    let backup
+    try { backup = JSON.parse(text) } catch { throw new Error('El archivo no es un JSON válido') }
+
+    const res = await fetch('/api/admin/restore', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(backup),
+    })
+
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || `Error ${res.status}`)
+    return data.resumen
+  },
 }

@@ -1,8 +1,8 @@
 // src/views/ConfiguracionView.jsx
 // Configuración del negocio — solo supervisor
 // Datos usados en el encabezado del PDF y ajustes globales
-import { useState, useEffect } from 'react'
-import { Settings, Building2, Phone, Mail, MapPin, FileText, Save, CheckCircle, Lock, Eye, EyeOff, Accessibility, HardDrive, Download, AlertCircle } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { Settings, Building2, Phone, Mail, MapPin, FileText, Save, CheckCircle, Lock, Eye, EyeOff, Accessibility, HardDrive, Download, Upload, AlertCircle, AlertTriangle } from 'lucide-react'
 import { useConfigNegocio, useActualizarConfig, hashSHA256 } from '../hooks/useConfigNegocio'
 import { adminAPI } from '../services/supabase/adminClient'
 
@@ -14,6 +14,10 @@ export default function ConfiguracionView() {
   const [showGatePass, setShowGatePass] = useState(false)
   const [backupLoading, setBackupLoading] = useState(false)
   const [backupMsg, setBackupMsg]         = useState(null) // { tipo: 'ok'|'error', texto }
+  const [restoreLoading, setRestoreLoading] = useState(false)
+  const [restoreMsg, setRestoreMsg]         = useState(null)
+  const [confirmRestore, setConfirmRestore] = useState(false)
+  const restoreInputRef = useRef(null)
 
   // Modo accesible (persiste en localStorage de este dispositivo)
   const [modoAccesible, setModoAccesible] = useState(() =>
@@ -65,6 +69,32 @@ export default function ConfiguracionView() {
       setBackupMsg({ tipo: 'error', texto: err.message || 'Error al generar backup' })
     } finally {
       setBackupLoading(false)
+    }
+  }
+
+  async function handleRestoreFile(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    if (!confirmRestore) {
+      setConfirmRestore(file)
+      return
+    }
+    await doRestore(file)
+  }
+
+  async function doRestore(file) {
+    setRestoreLoading(true)
+    setRestoreMsg(null)
+    setConfirmRestore(false)
+    try {
+      const resumen = await adminAPI.restoreBackup(file)
+      const total = Object.values(resumen).reduce((a, b) => a + b, 0)
+      setRestoreMsg({ tipo: 'ok', texto: `Restaurado: ${total} registros en ${Object.keys(resumen).length} tablas` })
+    } catch (err) {
+      setRestoreMsg({ tipo: 'error', texto: err.message || 'Error al restaurar' })
+    } finally {
+      setRestoreLoading(false)
     }
   }
 
@@ -313,10 +343,13 @@ export default function ConfiguracionView() {
             Copia de seguridad
           </h2>
           <p className="text-xs text-slate-500 -mt-2">
-            Descarga un archivo JSON con todos los datos del sistema: productos, clientes, cotizaciones,
-            despachos, usuarios y configuración. Guárdalo en un lugar seguro.
+            Descarga o importa un archivo JSON con todos los datos del sistema: productos, clientes,
+            cotizaciones, despachos, transportistas y configuración.
           </p>
+
+          {/* Botones */}
           <div className="flex flex-wrap items-center gap-3">
+            {/* Descargar */}
             <button
               type="button"
               onClick={handleBackup}
@@ -324,20 +357,77 @@ export default function ConfiguracionView() {
               className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white font-semibold text-sm px-5 py-2.5 rounded-xl transition-colors shadow-sm disabled:opacity-50"
             >
               {backupLoading
-                ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Generando backup...</>
+                ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Generando...</>
                 : <><Download size={15} />Descargar backup</>
               }
             </button>
-            {backupMsg && (
-              <div className={`flex items-center gap-1.5 text-sm font-medium ${backupMsg.tipo === 'ok' ? 'text-emerald-600' : 'text-red-600'}`}>
-                {backupMsg.tipo === 'ok'
-                  ? <CheckCircle size={15} />
-                  : <AlertCircle size={15} />
-                }
-                {backupMsg.texto}
-              </div>
-            )}
+
+            {/* Importar */}
+            <input
+              ref={restoreInputRef}
+              type="file"
+              accept=".json"
+              className="hidden"
+              onChange={handleRestoreFile}
+            />
+            <button
+              type="button"
+              onClick={() => restoreInputRef.current?.click()}
+              disabled={restoreLoading}
+              className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-sm px-5 py-2.5 rounded-xl transition-colors shadow-sm disabled:opacity-50"
+            >
+              {restoreLoading
+                ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Restaurando...</>
+                : <><Upload size={15} />Importar backup</>
+              }
+            </button>
           </div>
+
+          {/* Confirmación antes de restaurar */}
+          {confirmRestore && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+              <div className="flex items-start gap-2">
+                <AlertTriangle size={16} className="text-amber-600 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-amber-800">¿Confirmar restauración?</p>
+                  <p className="text-xs text-amber-700 mt-0.5">
+                    Esto sobreescribirá los datos existentes con los del archivo <strong>{confirmRestore.name}</strong>.
+                    Esta acción no se puede deshacer.
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => doRestore(confirmRestore)}
+                  className="flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-sm px-4 py-2 rounded-lg transition-colors"
+                >
+                  <Upload size={13} />Sí, restaurar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmRestore(false)}
+                  className="text-sm font-medium text-slate-600 hover:text-slate-800 px-4 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Mensajes */}
+          {backupMsg && (
+            <div className={`flex items-center gap-1.5 text-sm font-medium ${backupMsg.tipo === 'ok' ? 'text-emerald-600' : 'text-red-600'}`}>
+              {backupMsg.tipo === 'ok' ? <CheckCircle size={15} /> : <AlertCircle size={15} />}
+              {backupMsg.texto}
+            </div>
+          )}
+          {restoreMsg && (
+            <div className={`flex items-center gap-1.5 text-sm font-medium ${restoreMsg.tipo === 'ok' ? 'text-emerald-600' : 'text-red-600'}`}>
+              {restoreMsg.tipo === 'ok' ? <CheckCircle size={15} /> : <AlertCircle size={15} />}
+              {restoreMsg.texto}
+            </div>
+          )}
         </div>
 
         {/* Error */}
