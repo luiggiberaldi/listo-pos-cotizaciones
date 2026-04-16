@@ -27,18 +27,12 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
   async function descargarPDF() {
     setPdfLoading(true)
     try {
-      const [{ generarPDF }, headerRes, itemsRes] = await Promise.all([
+      const [{ generarPDF }, itemsRes] = await Promise.all([
         import('../../services/pdf/cotizacionPDF'),
-        supabase.from('cotizaciones').select('*').eq('id', cotizacion.id).single(),
         supabase.from('cotizacion_items').select('*').eq('cotizacion_id', cotizacion.id).order('orden'),
       ])
-      if (headerRes.error) throw headerRes.error
       if (itemsRes.error) throw itemsRes.error
-      await generarPDF({
-        cotizacion: { ...headerRes.data, cliente: cotizacion.cliente },
-        items: itemsRes.data ?? [],
-        config,
-      })
+      await generarPDF({ cotizacion, items: itemsRes.data ?? [], config })
     } catch (err) {
       console.error('PDF error:', err)
       alert('Error al generar PDF: ' + (err.message || 'Error desconocido'))
@@ -51,21 +45,14 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
   async function handleWhatsApp() {
     setWaLoading(true)
     try {
-      const [{ generarPDF }, headerRes, itemsRes] = await Promise.all([
+      const [{ generarPDF }, itemsRes] = await Promise.all([
         import('../../services/pdf/cotizacionPDF'),
-        supabase.from('cotizaciones').select('*').eq('id', cotizacion.id).single(),
         supabase.from('cotizacion_items').select('*').eq('cotizacion_id', cotizacion.id).order('orden'),
       ])
-      if (headerRes.error) throw headerRes.error
       if (itemsRes.error) throw itemsRes.error
 
       // Generar PDF como blob (sin descargar)
-      const pdfBlob = await generarPDF({
-        cotizacion: { ...headerRes.data, cliente: cotizacion.cliente },
-        items: itemsRes.data ?? [],
-        config,
-        returnBlob: true,
-      })
+      const pdfBlob = await generarPDF({ cotizacion, items: itemsRes.data ?? [], config, returnBlob: true })
 
       const mensaje = generarMensaje({
         nombreNegocio: config.nombre_negocio,

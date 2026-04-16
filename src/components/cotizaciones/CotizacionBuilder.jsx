@@ -944,15 +944,17 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
   async function descargarPDF() {
     setPdfLoading(true)
     try {
-      const [{ generarPDF }, headerRes, itemsRes] = await Promise.all([
+      const [{ generarPDF }, itemsRes] = await Promise.all([
         import('../../services/pdf/cotizacionPDF'),
-        supabase.from('cotizaciones').select('*').eq('id', cotizacionId).single(),
         supabase.from('cotizacion_items').select('*').eq('cotizacion_id', cotizacionId).order('orden'),
       ])
-      if (headerRes.error) throw headerRes.error
       if (itemsRes.error) throw itemsRes.error
+      // Construir objeto cotizacion con vendedor (para color) y cliente
+      const vendedor = esSupervisor
+        ? vendedores.find(v => v.id === vendedorId) || null
+        : perfil
       await generarPDF({
-        cotizacion: { ...headerRes.data, cliente: clienteSeleccionado },
+        cotizacion: { ...cotizacionExistente, cliente: clienteSeleccionado, vendedor },
         items: itemsRes.data ?? [],
         config,
       })
@@ -966,16 +968,17 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
   async function handleWhatsApp() {
     setWaLoading(true)
     try {
-      const [{ generarPDF }, headerRes, itemsRes] = await Promise.all([
+      const [{ generarPDF }, itemsRes] = await Promise.all([
         import('../../services/pdf/cotizacionPDF'),
-        supabase.from('cotizaciones').select('*').eq('id', cotizacionId).single(),
         supabase.from('cotizacion_items').select('*').eq('cotizacion_id', cotizacionId).order('orden'),
       ])
-      if (headerRes.error) throw headerRes.error
       if (itemsRes.error) throw itemsRes.error
 
+      const vendedor = esSupervisor
+        ? vendedores.find(v => v.id === vendedorId) || null
+        : perfil
       const pdfBlob = await generarPDF({
-        cotizacion: { ...headerRes.data, cliente: clienteSeleccionado },
+        cotizacion: { ...cotizacionExistente, cliente: clienteSeleccionado, vendedor },
         items: itemsRes.data ?? [],
         config,
         returnBlob: true,
