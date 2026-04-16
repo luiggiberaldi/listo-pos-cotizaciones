@@ -110,8 +110,13 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
   const hasSecondaryActions = canAcceptReject || canDespachar || canAnular || canReciclar
 
   return (
-    <div className="group bg-white rounded-2xl border border-slate-200 hover:border-sky-200 hover:shadow-lg hover:shadow-sky-50 transition-all duration-200 overflow-hidden flex flex-col"
-      style={vendedorColor ? { borderLeftWidth: '4px', borderLeftColor: vendedorColor } : undefined}>
+    <div className="group bg-white rounded-2xl border border-slate-200 hover:shadow-lg transition-all duration-200 overflow-hidden flex flex-col"
+      style={vendedorColor ? { borderColor: vendedorColor + '60' } : undefined}>
+
+      {/* ── Franja de color del vendedor ── */}
+      {vendedorColor && (
+        <div className="h-1.5 w-full" style={{ backgroundColor: vendedorColor }} />
+      )}
 
       {/* ── Cabecera: número + estado ── */}
       <div className="px-4 pt-4 pb-2 flex items-start justify-between gap-2">
