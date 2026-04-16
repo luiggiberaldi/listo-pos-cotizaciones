@@ -38,7 +38,7 @@ export default function DespachoCard({ despacho, onCambiarEstado, onAnular, onRe
           .order('orden'),
       ])
       if (itemsRes.error) throw itemsRes.error
-      generarDespachoPDF({ despacho, items: itemsRes.data ?? [], config })
+      await generarDespachoPDF({ despacho, items: itemsRes.data ?? [], config })
     } catch (err) {
       console.error('PDF error:', err)
       alert('Error al generar PDF: ' + (err.message || 'Error desconocido'))

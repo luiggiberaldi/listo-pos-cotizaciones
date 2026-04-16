@@ -1,6 +1,7 @@
 // src/services/pdf/despachoPDF.js
 // Genera PDF profesional de Nota de Despacho usando jsPDF 4.x
 import { jsPDF } from 'jspdf'
+import { cargarLogo } from './pdfLogo'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function fmtUsd(n) {
@@ -50,9 +51,10 @@ const ESTADO_MAP = {
  * @param {Array}   items      — cotizacion_items[] de la cotización vinculada
  * @param {object}  [config]   — fila de configuracion_negocio
  */
-export function generarDespachoPDF({ despacho, items = [], config = {} }) {
+export async function generarDespachoPDF({ despacho, items = [], config = {} }) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
 
+  const logoData = await cargarLogo(config.logo_url)
   let y = 0
 
   // ── Números de documento ──────────────────────────────────────────────────
@@ -74,11 +76,17 @@ export function generarDespachoPDF({ despacho, items = [], config = {} }) {
   doc.setFillColor(...C_INDIGO2)
   doc.rect(0, 0, 3, 28, 'F')
 
+  // Logo (si existe)
+  if (logoData) {
+    try { doc.addImage(logoData, 'PNG', MARGIN, 2, 36, 24) } catch (_) {}
+  }
+  const textStartX = logoData ? MARGIN + 40 : MARGIN
+
   // Nombre empresa
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(16)
   doc.setTextColor(...C_WHITE)
-  doc.text(config.nombre_negocio || 'Mi Empresa', MARGIN, 11)
+  doc.text(config.nombre_negocio || 'Mi Empresa', textStartX, 11)
 
   // Sub-datos empresa
   const subItems = [
@@ -89,7 +97,7 @@ export function generarDespachoPDF({ despacho, items = [], config = {} }) {
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7.5)
   doc.setTextColor(199, 210, 254) // indigo-200
-  doc.text(subItems.join('  ·  '), MARGIN, 17)
+  doc.text(subItems.join('  ·  '), textStartX, 17)
 
   // Bloque número + tipo documento (derecha)
   const docBlockX = PAGE_W - MARGIN - 46

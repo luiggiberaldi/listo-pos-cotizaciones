@@ -951,7 +951,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
       ])
       if (headerRes.error) throw headerRes.error
       if (itemsRes.error) throw itemsRes.error
-      generarPDF({
+      await generarPDF({
         cotizacion: { ...headerRes.data, cliente: clienteSeleccionado },
         items: itemsRes.data ?? [],
         config,
@@ -974,7 +974,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
       if (headerRes.error) throw headerRes.error
       if (itemsRes.error) throw itemsRes.error
 
-      const pdfBlob = generarPDF({
+      const pdfBlob = await generarPDF({
         cotizacion: { ...headerRes.data, cliente: clienteSeleccionado },
         items: itemsRes.data ?? [],
         config,

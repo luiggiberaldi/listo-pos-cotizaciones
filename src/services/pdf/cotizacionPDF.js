@@ -1,6 +1,7 @@
 // src/services/pdf/cotizacionPDF.js
 // Genera PDF profesional de cotización usando jsPDF 4.x
 import { jsPDF } from 'jspdf'
+import { cargarLogo } from './pdfLogo'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function fmtUsd(n) {
@@ -40,9 +41,12 @@ const ESTADO_MAP = {
 }
 
 // ─── Generador principal ──────────────────────────────────────────────────────
-export function generarPDF({ cotizacion, items = [], config = {}, returnBlob = false }) {
+export async function generarPDF({ cotizacion, items = [], config = {}, returnBlob = false }) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
   let y = 0
+
+  // Cargar logo en paralelo con la generación
+  const logoData = await cargarLogo(config.logo_url)
 
   const numDisplay = cotizacion.version > 1
     ? `COT-${String(cotizacion.numero).padStart(5, '0')} Rev.${cotizacion.version}`
@@ -58,10 +62,16 @@ export function generarPDF({ cotizacion, items = [], config = {}, returnBlob = f
   doc.setFillColor(...C_AMBER2)
   doc.rect(0, 0, 3, 28, 'F')
 
+  // Logo (si existe)
+  if (logoData) {
+    try { doc.addImage(logoData, 'PNG', MARGIN, 2, 36, 24) } catch (_) {}
+  }
+  const textStartX = logoData ? MARGIN + 40 : MARGIN
+
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(16)
   doc.setTextColor(...C_WHITE)
-  doc.text(config.nombre_negocio || 'Mi Empresa', MARGIN, 11)
+  doc.text(config.nombre_negocio || 'Mi Empresa', textStartX, 11)
 
   const subItems = [
     config.rif_negocio      ? `RIF: ${config.rif_negocio}` : null,
@@ -71,7 +81,7 @@ export function generarPDF({ cotizacion, items = [], config = {}, returnBlob = f
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7.5)
   doc.setTextColor(254, 243, 199)
-  doc.text(subItems.join('  ·  '), MARGIN, 17)
+  doc.text(subItems.join('  ·  '), textStartX, 17)
 
   // Bloque número (derecha)
   const docBlockX = PAGE_W - MARGIN - 46

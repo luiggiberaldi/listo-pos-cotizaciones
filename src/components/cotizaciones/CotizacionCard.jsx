@@ -34,7 +34,7 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
       ])
       if (headerRes.error) throw headerRes.error
       if (itemsRes.error) throw itemsRes.error
-      generarPDF({
+      await generarPDF({
         cotizacion: { ...headerRes.data, cliente: cotizacion.cliente },
         items: itemsRes.data ?? [],
         config,
@@ -60,7 +60,7 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
       if (itemsRes.error) throw itemsRes.error
 
       // Generar PDF como blob (sin descargar)
-      const pdfBlob = generarPDF({
+      const pdfBlob = await generarPDF({
         cotizacion: { ...headerRes.data, cliente: cotizacion.cliente },
         items: itemsRes.data ?? [],
         config,
