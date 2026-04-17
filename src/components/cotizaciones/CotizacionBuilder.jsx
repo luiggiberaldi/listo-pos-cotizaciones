@@ -946,6 +946,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
         totalUsd,
         validaHasta,
         nombreVendedor: vendedor?.nombre || perfil?.nombre,
+        items: itemsRes.data ?? [],
       })
 
       await compartirPorWhatsApp({
