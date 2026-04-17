@@ -51,7 +51,7 @@ export const LogoWordmark = ({ className = '' }) => {
         <span className="text-base font-black tracking-tight text-[#334155]">
           LISTO <span className="text-primary">POS</span>
         </span>
-        <span className="text-[8px] font-bold uppercase tracking-[0.25em] text-[#D4A017]">
+        <span className="text-[8px] font-bold uppercase tracking-[0.25em] text-[#B8860B]">
           Lite
         </span>
       </div>

@@ -10,61 +10,61 @@ export default {
       colors: {
 
         // ─────────────────────────────────────────────────────
-        // 🎨 CONSTRUACERO CARABOBO — PALETA OFICIAL
-        // Inspirada en Instagram de la marca (Azul Marino + Dorado)
+        // 🎨 CONSTRUACERO CARABOBO — PALETA PROFESIONAL
+        // Navy Institucional + Dorado Bronce (refinada)
         // ─────────────────────────────────────────────────────
 
-        // 1. PRIMARIO — Azul Marino Cobalt (botones, nav activo, foco)
+        // 1. PRIMARIO — Navy Institucional (botones, nav, foco)
         primary: {
-          DEFAULT: '#1A3A8C', // Cobalt — botón principal
-          hover:   '#152E73', // hover más profundo
-          light:   '#EBF0FF', // fondo suave (badges, highlights)
-          focus:   '#93B4F8', // anillo de foco en inputs
-          dark:    '#0F2461', // pressed / active state
+          DEFAULT: '#1B365D', // Navy profundo — botón principal
+          hover:   '#142A4A', // hover más oscuro
+          light:   '#EDF2F7', // fondo suave (badges, highlights)
+          focus:   '#90B4D2', // anillo de foco en inputs
+          dark:    '#0E1F38', // pressed / active state
         },
 
-        // 2. ACENTO DORADO (énfasis, precios, highlights de marca)
+        // 2. ACENTO DORADO BRONCE (énfasis, precios, CTA secundarios)
         accent: {
-          DEFAULT: '#D4A017', // Dorado cálido
-          hover:   '#B88B12', // hover dorado oscuro
-          light:   '#FEF9E7', // fondo dorado muy suave
-          focus:   '#FDE68A', // anillo dorado
-          dark:    '#8A6410', // dorado profundo
+          DEFAULT: '#B8860B', // Dorado bronce — más sobrio y profesional
+          hover:   '#9A7209', // hover bronce oscuro
+          light:   '#FBF5E6', // fondo dorado muy suave
+          focus:   '#E8D5A3', // anillo dorado suave
+          dark:    '#7A5A07', // bronce profundo
         },
 
         // 3. FONDOS DE PANTALLA
         app: {
-          light: '#F8FAFC', // Blanco hielo — fondo general (modo claro)
-          dark:  '#0C1B3E', // Azul marino profundo — identidad de marca
+          light: '#F7F8FA', // Gris cálido — fondo general
+          dark:  '#0E1A2E', // Navy profundo — modo oscuro
         },
 
         // 4. FONDOS DE TARJETAS / MODALES / SIDEBAR
         surface: {
           light: '#FFFFFF',
-          dark:  '#111E40', // Azul marino panel
+          dark:  '#152238', // Navy panel
         },
 
         // 5. TEXTOS
         content: {
-          main:      '#1A2744', // Navy oscuro — títulos
-          secondary: '#64748B', // Slate-500 — subtítulos
-          inverse:   '#F8FAFC', // Texto claro sobre fondos oscuros
+          main:      '#1A2332', // Navy oscuro — títulos (alta legibilidad)
+          secondary: '#5A6B7F', // Gris azulado — subtítulos
+          inverse:   '#F7F8FA', // Texto claro sobre fondos oscuros
         },
 
         // 6. ESTADOS SEMÁNTICOS
         status: {
-          success:   '#10B981',
+          success:   '#0D9668',
           successBg: '#D1FAE5',
-          danger:    '#F43F5E',
-          dangerBg:  '#FFE4E6',
-          warning:   '#F59E0B',
+          danger:    '#DC2626',
+          dangerBg:  '#FEE2E2',
+          warning:   '#D97706',
           warningBg: '#FEF3C7',
         },
 
         // 7. BORDES Y SEPARADORES
         border: {
-          subtle: '#E2E8F0',
-          focus:  '#1A3A8C', // Navy — borde activo en inputs
+          subtle: '#E2E6EC',
+          focus:  '#1B365D', // Navy — borde activo en inputs
         },
 
         // ─────────────────────────────────────────────────────
@@ -72,82 +72,82 @@ export default {
         // ─────────────────────────────────────────────────────
 
         brand: {
-          light:   '#EBF0FF',
-          DEFAULT: '#1A3A8C',
-          dark:    '#0F2461',
+          light:   '#EDF2F7',
+          DEFAULT: '#1B365D',
+          dark:    '#0E1F38',
         },
 
         background: {
-          light: '#F8FAFC',
-          dark:  '#0C1B3E',
+          light: '#F7F8FA',
+          dark:  '#0E1A2E',
         },
 
-        // blue → navy cobalt
+        // blue → navy institucional
         blue: {
-          50:  '#EBF0FF',
-          100: '#D6E2FF',
-          200: '#ADC5FF',
-          300: '#85A8FF',
-          400: '#5C8AFF',
-          500: '#1A3A8C',
-          600: '#152E73',
-          700: '#0F2461',
-          800: '#0A1A4A',
-          900: '#060F2F',
-          950: '#030820',
+          50:  '#EDF2F7',
+          100: '#D4DEE9',
+          200: '#A8BDD4',
+          300: '#7D9CBE',
+          400: '#517BA9',
+          500: '#1B365D',
+          600: '#142A4A',
+          700: '#0E1F38',
+          800: '#091525',
+          900: '#050B13',
+          950: '#02060A',
         },
 
         // indigo → navy (compatibilidad)
         indigo: {
-          50:  '#EBF0FF',
-          100: '#D6E2FF',
-          200: '#ADC5FF',
-          300: '#85A8FF',
-          400: '#5C8AFF',
-          500: '#1A3A8C',
-          600: '#152E73',
-          700: '#0F2461',
-          800: '#0A1A4A',
-          900: '#060F2F',
-          950: '#030820',
+          50:  '#EDF2F7',
+          100: '#D4DEE9',
+          200: '#A8BDD4',
+          300: '#7D9CBE',
+          400: '#517BA9',
+          500: '#1B365D',
+          600: '#142A4A',
+          700: '#0E1F38',
+          800: '#091525',
+          900: '#050B13',
+          950: '#02060A',
         },
 
-        // sky → cobalt
+        // sky → navy
         sky: {
-          50:  '#EBF0FF',
-          100: '#D6E2FF',
-          200: '#ADC5FF',
-          300: '#85A8FF',
-          400: '#5C8AFF',
-          500: '#1A3A8C',
-          600: '#152E73',
-          700: '#0F2461',
-          800: '#0A1A4A',
-          900: '#060F2F',
+          50:  '#EDF2F7',
+          100: '#D4DEE9',
+          200: '#A8BDD4',
+          300: '#7D9CBE',
+          400: '#517BA9',
+          500: '#1B365D',
+          600: '#142A4A',
+          700: '#0E1F38',
+          800: '#091525',
+          900: '#050B13',
         },
 
         // purple → navy
         purple: {
-          50:  '#EBF0FF',
-          100: '#D6E2FF',
-          400: '#5C8AFF',
-          500: '#1A3A8C',
-          600: '#152E73',
-          700: '#0F2461',
+          50:  '#EDF2F7',
+          100: '#D4DEE9',
+          400: '#517BA9',
+          500: '#1B365D',
+          600: '#142A4A',
+          700: '#0E1F38',
         },
 
-        // teal → accent gold
+        // teal → dorado bronce
         teal: {
-          50:  '#FEF9E7',
-          100: '#FEF3C7',
-          200: '#FDE68A',
-          300: '#FCD34D',
-          400: '#FBBF24',
-          500: '#D4A017',
-          600: '#B88B12',
-          700: '#8A6410',
-          800: '#5C420A',
-          900: '#2E2105',
+          50:  '#FBF5E6',
+          100: '#F5E8C4',
+          200: '#E8D5A3',
+          300: '#DBC282',
+          400: '#CEAF61',
+          500: '#B8860B',
+          600: '#9A7209',
+          700: '#7A5A07',
+          800: '#5B4305',
+          900: '#3B2C03',
         },
 
         // slate (neutros)

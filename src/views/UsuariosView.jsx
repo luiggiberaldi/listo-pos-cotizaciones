@@ -138,7 +138,7 @@ function FormCrear({ onGuardar, onCancelar, cargando }) {
         </button>
         <button type="submit" disabled={cargando}
           className="px-5 py-2 rounded-xl text-white text-sm font-black transition-all shadow-lg shadow-sky-500/20 active:scale-[0.98] disabled:opacity-60"
-          style={{ background: 'linear-gradient(135deg, #1A3A8C, #D4A017)' }}>
+          style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
           {cargando ? 'Creando...' : 'Crear usuario'}
         </button>
       </div>
@@ -224,7 +224,7 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando }) {
         </button>
         <button type="submit" disabled={cargando}
           className="px-5 py-2 rounded-xl text-white text-sm font-black transition-all shadow-lg shadow-sky-500/20 active:scale-[0.98] disabled:opacity-60"
-          style={{ background: 'linear-gradient(135deg, #1A3A8C, #D4A017)' }}>
+          style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
           {cargando ? 'Guardando...' : 'Guardar'}
         </button>
       </div>
@@ -506,7 +506,7 @@ export default function UsuariosView() {
           </button>
           <button onClick={abrirNuevo}
             className="flex items-center gap-2 text-white font-black text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg shadow-sky-500/20 active:scale-[0.98]"
-            style={{ background: 'linear-gradient(135deg, #1A3A8C, #D4A017)' }}>
+            style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
             <Plus size={16} />
             Nuevo usuario
           </button>

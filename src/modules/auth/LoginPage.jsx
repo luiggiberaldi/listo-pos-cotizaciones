@@ -75,9 +75,9 @@ function GateStep({ onSuccess }) {
       style={{ background: 'linear-gradient(135deg, #f0f9ff 0%, #ecfdf5 100%)' }}>
 
       {/* Logo */}
-      <div className="mb-8">
-        <img src="/logo.png" alt="Listo POS Cotizaciones"
-          className="h-44 sm:h-52 w-auto object-contain select-none" draggable={false} />
+      <div className="mb-8 select-none">
+        <img src="/logo.png" alt="Construacero Carabobo"
+          className="h-44 sm:h-52 w-auto object-contain select-none pointer-events-none" draggable={false} />
       </div>
 
       {/* Card */}
@@ -85,9 +85,9 @@ function GateStep({ onSuccess }) {
 
         {/* Destellos decorativos */}
         <div className="absolute top-0 right-0 -mr-12 -mt-12 w-40 h-40 rounded-full blur-3xl pointer-events-none"
-          style={{ background: 'rgba(125,211,252,0.2)' }} />
+          style={{ background: 'rgba(27,54,93,0.1)' }} />
         <div className="absolute bottom-0 left-0 -ml-12 -mb-12 w-40 h-40 rounded-full blur-3xl pointer-events-none"
-          style={{ background: 'rgba(94,234,212,0.15)' }} />
+          style={{ background: 'rgba(184,134,11,0.08)' }} />
 
         <div className="p-6 relative z-10">
           <div className="text-center mb-6">
@@ -150,7 +150,7 @@ function GateStep({ onSuccess }) {
               type="submit"
               disabled={cargando}
               className="w-full py-3.5 text-white text-sm font-black rounded-xl transition-all shadow-lg shadow-sky-500/20 active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-70"
-              style={{ background: 'linear-gradient(135deg, #1A3A8C 0%, #D4A017 100%)' }}
+              style={{ background: 'linear-gradient(135deg, #1B365D 0%, #B8860B 100%)' }}
             >
               {cargando
                 ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -205,9 +205,9 @@ function UserSelectStep({ onBack }) {
       style={{ background: 'linear-gradient(135deg, #f0f9ff 0%, #ecfdf5 100%)' }}>
 
       {/* Logo */}
-      <div className="mb-8">
-        <img src="/logo.png" alt="Listo POS Cotizaciones"
-          className="h-44 w-auto object-contain select-none" draggable={false} />
+      <div className="mb-8 select-none">
+        <img src="/logo.png" alt="Construacero Carabobo"
+          className="h-44 w-auto object-contain select-none pointer-events-none" draggable={false} />
       </div>
 
       {/* Card principal */}
@@ -215,9 +215,9 @@ function UserSelectStep({ onBack }) {
 
         {/* Destellos decorativos */}
         <div className="absolute top-0 right-0 -mr-16 -mt-16 w-48 h-48 rounded-full blur-3xl pointer-events-none"
-          style={{ background: 'rgba(125,211,252,0.2)' }} />
+          style={{ background: 'rgba(27,54,93,0.1)' }} />
         <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-48 h-48 rounded-full blur-3xl pointer-events-none"
-          style={{ background: 'rgba(94,234,212,0.15)' }} />
+          style={{ background: 'rgba(184,134,11,0.08)' }} />
 
         <div className="relative z-10">
           <div className="flex items-center justify-between mb-6">

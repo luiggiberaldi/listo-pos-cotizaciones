@@ -8,6 +8,7 @@ import {
   LayoutDashboard, Settings, LogOut,
   Menu, X, DollarSign, RefreshCw, PackageCheck, Bell, BellOff,
   AlertTriangle, Send, CheckCircle, Ban,
+  PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import LoginAvatar from '../auth/LoginAvatar'
@@ -68,14 +69,15 @@ function BadgeRol({ rol }) {
 }
 
 // ─── Item de navegación ────────────────────────────────────────────────────────
-function NavItem({ path, label, Icono, onClick }) {
+function NavItem({ path, label, Icono, onClick, collapsed }) {
   return (
     <NavLink
       to={path}
       end={path === '/'}
       onClick={onClick}
+      title={collapsed ? label : undefined}
       className={({ isActive }) => `
-        flex items-center gap-3 px-4 py-2.5 rounded-xl
+        flex items-center ${collapsed ? 'justify-center' : 'gap-3'} ${collapsed ? 'px-2' : 'px-4'} py-2.5 rounded-xl
         text-sm font-bold transition-all
         ${isActive
           ? 'text-white shadow-md shadow-sky-500/20'
@@ -83,12 +85,12 @@ function NavItem({ path, label, Icono, onClick }) {
         }
       `}
       style={({ isActive }) => isActive
-        ? { background: 'linear-gradient(135deg, #1A3A8C, #D4A017)' }
+        ? { background: 'linear-gradient(135deg, #1B365D, #B8860B)' }
         : {}
       }
     >
       <Icono size={18} />
-      <span>{label}</span>
+      {!collapsed && <span>{label}</span>}
     </NavLink>
   )
 }
@@ -98,6 +100,7 @@ export default function AppLayout() {
   const { perfil, logout } = useAuthStore()
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const { tasaBcv, tasaEfectiva, modoAuto, setModoAuto, tasaManual, setTasaManual, cargando: tasaCargando, refrescar } = useTasaCambio()
 
   // Realtime: escucha cambios en tablas y refresca cache automáticamente
@@ -191,10 +194,11 @@ export default function AppLayout() {
 
       {/* ── Sidebar / Drawer ─────────────────────────────────────────────── */}
       <aside className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 flex flex-col shrink-0
-        transition-transform duration-300 ease-out
+        fixed inset-y-0 left-0 z-50 bg-white border-r border-slate-200 flex flex-col shrink-0
+        transition-all duration-300 ease-out
         ${menuOpen ? 'translate-x-0' : '-translate-x-full'}
-        md:translate-x-0 md:static md:z-auto md:h-screen md:sticky md:top-0
+        ${sidebarCollapsed ? 'md:w-[72px]' : 'md:w-64'}
+        w-64 md:translate-x-0 md:static md:z-auto md:h-screen md:sticky md:top-0
       `}>
 
         {/* Botón cerrar — solo móvil */}
@@ -207,10 +211,21 @@ export default function AppLayout() {
           </button>
         </div>
 
-        {/* Logo */}
-        <div className="p-5 border-b border-slate-100 flex justify-center">
-          <img src="/logo.png" alt="Listo POS Cotizaciones"
-            className="h-[150px] w-auto object-contain" />
+        {/* Logo + botón colapsar */}
+        <div className="p-5 border-b border-slate-100 flex flex-col items-center relative">
+          <img src="/logo.png" alt="Construacero Carabobo"
+            className={`object-contain transition-all duration-300 ${sidebarCollapsed ? 'h-10 w-10' : 'h-[150px] w-auto'}`} />
+          {/* Botón colapsar — solo desktop */}
+          <button
+            onClick={() => setSidebarCollapsed(c => !c)}
+            className="hidden md:flex absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-white border border-slate-200 shadow-sm items-center justify-center hover:bg-slate-50 transition-colors"
+            title={sidebarCollapsed ? 'Expandir menú' : 'Colapsar menú'}
+          >
+            {sidebarCollapsed
+              ? <PanelLeftOpen size={13} className="text-slate-500" />
+              : <PanelLeftClose size={13} className="text-slate-500" />
+            }
+          </button>
         </div>
 
         {/* Navegación — ocupa el espacio restante, scroll si hace falta */}
@@ -218,19 +233,22 @@ export default function AppLayout() {
 
           {/* Rutas accesibles para todos */}
           {NAV_TODOS.map(({ path, label, icono: Icono }) => (
-            <NavItem key={path} path={path} label={label} Icono={Icono} onClick={cerrarMenu} />
+            <NavItem key={path} path={path} label={label} Icono={Icono} onClick={cerrarMenu} collapsed={sidebarCollapsed} />
           ))}
 
           {/* Rutas solo para supervisor */}
           {esSupervisor && (
             <>
-              <div className="pt-4 pb-1 px-4">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                  Administración
-                </p>
-              </div>
+              {!sidebarCollapsed && (
+                <div className="pt-4 pb-1 px-4">
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    Administración
+                  </p>
+                </div>
+              )}
+              {sidebarCollapsed && <div className="pt-3 border-t border-slate-200 mt-3" />}
               {NAV_SUPERVISOR.map(({ path, label, icono: Icono }) => (
-                <NavItem key={path} path={path} label={label} Icono={Icono} onClick={cerrarMenu} />
+                <NavItem key={path} path={path} label={label} Icono={Icono} onClick={cerrarMenu} collapsed={sidebarCollapsed} />
               ))}
             </>
           )}
@@ -240,21 +258,22 @@ export default function AppLayout() {
         <div className="border-t border-slate-100 px-4 py-3 relative" ref={notifsRef}>
           <button
             onClick={() => { setShowNotifs(v => !v); if (unreadCount > 0) markAllRead() }}
-            className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors"
+            className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'} px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors`}
+            title={sidebarCollapsed ? 'Alertas' : undefined}
           >
             <div className="flex items-center gap-2">
               <Bell size={16} className="text-slate-500" />
-              <span className="text-sm font-bold text-slate-600">Alertas</span>
+              {!sidebarCollapsed && <span className="text-sm font-bold text-slate-600">Alertas</span>}
             </div>
             {unreadCount > 0 && (
-              <span className="min-w-[20px] h-[20px] bg-rose-500 text-white text-xs font-black rounded-full flex items-center justify-center px-1">
+              <span className={`min-w-[20px] h-[20px] bg-rose-500 text-white text-xs font-black rounded-full flex items-center justify-center px-1 ${sidebarCollapsed ? 'absolute -top-1 -right-1' : ''}`}>
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}
           </button>
 
           {/* Botón Push Notifications */}
-          {pushSupported && (
+          {pushSupported && !sidebarCollapsed && (
             <button
               onClick={togglePush}
               disabled={pushLoading}
@@ -326,25 +345,28 @@ export default function AppLayout() {
         {/* Tasa de cambio */}
         <div className="border-t border-slate-100 px-4 py-3">
           <button
-            onClick={() => setShowTasaConfig(!showTasaConfig)}
-            className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors group"
+            onClick={() => !sidebarCollapsed && setShowTasaConfig(!showTasaConfig)}
+            className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'} px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors group`}
+            title={sidebarCollapsed ? `BCV ${tasaEfectiva > 0 ? new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(tasaEfectiva) : '—'} Bs/$` : undefined}
           >
             <div className="flex items-center gap-2">
               <DollarSign size={16} className="text-emerald-500" />
-              <span className="text-sm font-bold text-slate-600">BCV</span>
+              {!sidebarCollapsed && <span className="text-sm font-bold text-slate-600">BCV</span>}
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-base font-black text-emerald-600">
-                {tasaEfectiva > 0
-                  ? new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(tasaEfectiva)
-                  : '—'}
-              </span>
-              <span className="text-xs text-slate-500">Bs/$</span>
-              {!modoAuto && <span className="text-xs bg-primary-light text-primary px-1.5 rounded font-bold">MAN</span>}
-            </div>
+            {!sidebarCollapsed && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-base font-black text-emerald-600">
+                  {tasaEfectiva > 0
+                    ? new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(tasaEfectiva)
+                    : '—'}
+                </span>
+                <span className="text-xs text-slate-500">Bs/$</span>
+                {!modoAuto && <span className="text-xs bg-primary-light text-primary px-1.5 rounded font-bold">MAN</span>}
+              </div>
+            )}
           </button>
 
-          {showTasaConfig && (
+          {showTasaConfig && !sidebarCollapsed && (
             <div className="mt-2 bg-white rounded-xl border border-slate-200 p-3 space-y-2.5 animate-fade-in">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-500 uppercase">Modo</span>
@@ -413,18 +435,23 @@ export default function AppLayout() {
         <div className="border-t border-slate-100 p-4">
           <button
             onClick={handleLogout}
-            className="w-full flex items-center gap-3 p-3 rounded-2xl hover:bg-slate-50 active:scale-[0.98] transition-all group"
+            className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} p-3 rounded-2xl hover:bg-slate-50 active:scale-[0.98] transition-all group`}
+            title={sidebarCollapsed ? `${perfil?.nombre ?? 'Usuario'} — Cerrar sesión` : undefined}
           >
             <LoginAvatar user={perfil} size="sm" />
-            <div className="flex-1 min-w-0 text-left">
-              <p className="text-sm font-black text-slate-800 truncate leading-tight">
-                {perfil?.nombre ?? 'Usuario'}
-              </p>
-              <BadgeRol rol={perfil?.rol} />
-            </div>
-            <div className="shrink-0 w-8 h-8 rounded-xl bg-slate-100 group-hover:bg-red-100 flex items-center justify-center transition-colors">
-              <LogOut size={15} className="text-slate-400 group-hover:text-red-500 transition-colors" />
-            </div>
+            {!sidebarCollapsed && (
+              <>
+                <div className="flex-1 min-w-0 text-left">
+                  <p className="text-sm font-black text-slate-800 truncate leading-tight">
+                    {perfil?.nombre ?? 'Usuario'}
+                  </p>
+                  <BadgeRol rol={perfil?.rol} />
+                </div>
+                <div className="shrink-0 w-8 h-8 rounded-xl bg-slate-100 group-hover:bg-red-100 flex items-center justify-center transition-colors">
+                  <LogOut size={15} className="text-slate-400 group-hover:text-red-500 transition-colors" />
+                </div>
+              </>
+            )}
           </button>
         </div>
 
