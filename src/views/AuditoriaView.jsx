@@ -20,12 +20,12 @@ import PageHeader from '../components/ui/PageHeader'
 
 // ─── Configuración de categorías ────────────────────────────────────────────
 const CATEGORIA_CONFIG = {
-  cotizacion:   { icon: FileText,       bg: 'bg-amber-50',   text: 'text-amber-600',   border: 'border-amber-200',   dot: 'bg-amber-400',   label: 'Cotización' },
-  cliente:      { icon: Users,          bg: 'bg-blue-50',    text: 'text-blue-600',     border: 'border-blue-200',    dot: 'bg-blue-400',    label: 'Cliente' },
-  inventario:   { icon: Package,        bg: 'bg-emerald-50', text: 'text-emerald-600',  border: 'border-emerald-200', dot: 'bg-emerald-400', label: 'Inventario' },
-  usuario:      { icon: UserCog,        bg: 'bg-purple-50',  text: 'text-purple-600',   border: 'border-purple-200',  dot: 'bg-purple-400',  label: 'Usuario' },
-  reasignacion: { icon: ArrowRightLeft, bg: 'bg-orange-50',  text: 'text-orange-600',   border: 'border-orange-200',  dot: 'bg-orange-400',  label: 'Reasignación' },
-  sistema:      { icon: Settings,       bg: 'bg-slate-100',  text: 'text-slate-500',    border: 'border-slate-200',   dot: 'bg-slate-400',   label: 'Sistema' },
+  cotizacion:   { icon: FileText,       bg: 'bg-amber-50',   text: 'text-amber-600',   border: 'border-amber-200',   dot: 'bg-amber-400',   label: 'Cotización',   color: '#d97706' },
+  cliente:      { icon: Users,          bg: 'bg-blue-50',    text: 'text-blue-600',     border: 'border-blue-200',    dot: 'bg-blue-400',    label: 'Cliente',      color: '#2563eb' },
+  inventario:   { icon: Package,        bg: 'bg-emerald-50', text: 'text-emerald-600',  border: 'border-emerald-200', dot: 'bg-emerald-400', label: 'Inventario',   color: '#059669' },
+  usuario:      { icon: UserCog,        bg: 'bg-purple-50',  text: 'text-purple-600',   border: 'border-purple-200',  dot: 'bg-purple-400',  label: 'Usuario',      color: '#9333ea' },
+  reasignacion: { icon: ArrowRightLeft, bg: 'bg-orange-50',  text: 'text-orange-600',   border: 'border-orange-200',  dot: 'bg-orange-400',  label: 'Reasignación', color: '#ea580c' },
+  sistema:      { icon: Settings,       bg: 'bg-slate-100',  text: 'text-slate-500',    border: 'border-slate-200',   dot: 'bg-slate-400',   label: 'Sistema',      color: '#64748b' },
 }
 
 const CATEGORIAS_FILTRO = [
@@ -385,91 +385,103 @@ function ActividadCard({ registro, tasa }) {
   const tieneEntidad = registro.entidad_tipo && registro.entidad_id
 
   return (
-    <div className={`bg-white rounded-2xl border transition-all ${expandido ? 'border-primary-focus shadow-md' : 'border-slate-200 hover:border-slate-300 hover:shadow-sm'}`}>
+    <div className={`bg-white rounded-2xl border overflow-hidden transition-all flex items-stretch ${expandido ? 'shadow-md' : 'hover:shadow-sm'}`}
+      style={{ borderColor: expandido ? cat.color + '50' : undefined }}>
 
-      {/* Contenido principal (siempre visible) */}
-      <button
-        onClick={() => setExpandido(!expandido)}
-        className="w-full p-4 flex gap-4 items-start text-left"
-      >
-        {/* Icono de categoría */}
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${cat.bg} ${cat.text}`}>
-          <CatIcon size={18} />
-        </div>
+      {/* Barra lateral de color */}
+      <div className="w-1 shrink-0" style={{ background: cat.color }} />
 
-        {/* Contenido */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-bold text-slate-800">{usuario}</span>
-            {rol && (
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                rol === 'supervisor' ? 'bg-sky-100 text-sky-600' : 'bg-emerald-100 text-emerald-600'
-              }`}>
-                {rol === 'supervisor' ? 'Supervisor' : 'Vendedor'}
-              </span>
-            )}
+      <div className="flex-1 min-w-0">
+        {/* Contenido principal (siempre visible) */}
+        <button
+          onClick={() => setExpandido(!expandido)}
+          className="w-full p-4 flex gap-4 items-start text-left"
+        >
+          {/* Icono de categoría */}
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+            style={{ background: cat.color + '15', color: cat.color }}>
+            <CatIcon size={18} />
           </div>
 
-          <div className="flex items-center gap-1.5 mt-1">
-            <AccIcon size={12} className="text-slate-400 shrink-0" />
-            <span className="text-sm text-slate-600">{accionLabel}</span>
-          </div>
+          {/* Contenido */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-bold text-slate-800">{usuario}</span>
+              {rol && (
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                  rol === 'supervisor' ? 'bg-sky-100 text-sky-600' : 'bg-emerald-100 text-emerald-600'
+                }`}>
+                  {rol === 'supervisor' ? 'Supervisor' : 'Vendedor'}
+                </span>
+              )}
+            </div>
 
-          {registro.descripcion && (
-            <p className="text-xs text-slate-400 mt-1.5 line-clamp-1">{registro.descripcion}</p>
-          )}
+            <div className="flex items-center gap-1.5 mt-1">
+              <AccIcon size={12} className="text-slate-400 shrink-0" />
+              <span className="text-sm text-slate-600">{accionLabel}</span>
+            </div>
 
-          <div className="flex items-center gap-2 mt-2 flex-wrap">
-            <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${cat.bg} ${cat.text} ${cat.border}`}>
-              {cat.label}
-            </span>
-            {tieneEntidad && (
-              <span className="text-[10px] text-slate-400 font-mono">
-                #{registro.entidad_id.slice(0, 8)}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Timestamp + flecha */}
-        <div className="shrink-0 text-right flex flex-col items-end gap-2">
-          <div>
-            <p className="text-xs font-medium text-slate-400">{fmtFechaRelativa(registro.ts)}</p>
-            <p className="text-[10px] text-slate-300 mt-0.5 hidden sm:block">{fmtFechaCompleta(registro.ts)}</p>
-          </div>
-          <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${expandido ? 'bg-primary-light text-primary' : 'bg-slate-100 text-slate-400'}`}>
-            {expandido ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          </div>
-        </div>
-      </button>
-
-      {/* Panel expandible */}
-      {expandido && (
-        <div className="px-4 pb-4 pt-0 border-t border-slate-100 animate-fade-in">
-          <div className="mt-3 space-y-3">
-
-            {/* Descripción completa si existe */}
             {registro.descripcion && (
-              <div className="bg-slate-50 rounded-xl px-3.5 py-2.5">
-                <p className="text-xs text-slate-600 leading-relaxed">{registro.descripcion}</p>
-              </div>
+              <p className="text-xs text-slate-400 mt-1.5 line-clamp-1">{registro.descripcion}</p>
             )}
 
-            {/* Detalle de la entidad referenciada */}
-            {tieneEntidad && (
-              <div className="bg-slate-50 rounded-xl p-3.5">
-                <DetalleEntidad tipo={registro.entidad_tipo} id={registro.entidad_id} tasa={tasa} />
-              </div>
-            )}
-
-            {!tieneEntidad && !registro.descripcion && (
-              <div className="bg-slate-50 rounded-xl px-3.5 py-2.5">
-                <p className="text-xs text-slate-400 italic">No hay datos adicionales para esta acción.</p>
-              </div>
-            )}
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border"
+                style={{ background: cat.color + '12', color: cat.color, borderColor: cat.color + '30' }}>
+                {cat.label}
+              </span>
+              {tieneEntidad && (
+                <span className="text-[10px] text-slate-400 font-mono">
+                  #{registro.entidad_id.slice(0, 8)}
+                </span>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+
+          {/* Timestamp + flecha */}
+          <div className="shrink-0 text-right flex flex-col items-end gap-2">
+            <div>
+              <p className="text-xs font-medium text-slate-400">{fmtFechaRelativa(registro.ts)}</p>
+              <p className="text-[10px] text-slate-300 mt-0.5 hidden sm:block">{fmtFechaCompleta(registro.ts)}</p>
+            </div>
+            <div className="w-6 h-6 rounded-lg flex items-center justify-center transition-colors"
+              style={expandido
+                ? { background: cat.color + '15', color: cat.color }
+                : { background: '#f1f5f9', color: '#94a3b8' }}>
+              {expandido ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </div>
+          </div>
+        </button>
+
+        {/* Panel expandible */}
+        {expandido && (
+          <div className="px-4 pb-4 pt-0 border-t border-slate-100 animate-fade-in">
+            <div className="mt-3 space-y-3">
+
+              {/* Descripción completa si existe */}
+              {registro.descripcion && (
+                <div className="rounded-xl px-3.5 py-2.5"
+                  style={{ background: cat.color + '08', border: `1px solid ${cat.color}20` }}>
+                  <p className="text-xs text-slate-600 leading-relaxed">{registro.descripcion}</p>
+                </div>
+              )}
+
+              {/* Detalle de la entidad referenciada */}
+              {tieneEntidad && (
+                <div className="bg-slate-50 rounded-xl p-3.5">
+                  <DetalleEntidad tipo={registro.entidad_tipo} id={registro.entidad_id} tasa={tasa} />
+                </div>
+              )}
+
+              {!tieneEntidad && !registro.descripcion && (
+                <div className="bg-slate-50 rounded-xl px-3.5 py-2.5">
+                  <p className="text-xs text-slate-400 italic">No hay datos adicionales para esta acción.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
