@@ -22,6 +22,9 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
     telefono:       inicial.telefono       ?? '',
     zona_cobertura: inicial.zona_cobertura ?? '',
     tarifa_base:    inicial.tarifa_base    ?? '',
+    vehiculo:       inicial.vehiculo       ?? '',
+    placa_chuto:    inicial.placa_chuto    ?? '',
+    placa_batea:    inicial.placa_batea    ?? '',
   })
   const [error, setError] = useState('')
 
@@ -66,6 +69,21 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
           <input type="number" min="0" step="0.01"
             value={campos.tarifa_base} onChange={e => cambiar('tarifa_base', e.target.value)}
             placeholder="0.00" className={inputCls} disabled={cargando} />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-slate-700">Vehículo</label>
+          <input value={campos.vehiculo} onChange={e => cambiar('vehiculo', e.target.value)}
+            placeholder="Ej: Mack Granite 2020" className={inputCls} disabled={cargando} />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-slate-700">Placa chuto</label>
+          <input value={campos.placa_chuto} onChange={e => cambiar('placa_chuto', e.target.value)}
+            placeholder="Ej: AB123CD" className={inputCls} disabled={cargando} />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-slate-700">Placa batea</label>
+          <input value={campos.placa_batea} onChange={e => cambiar('placa_batea', e.target.value)}
+            placeholder="Ej: XY456ZW" className={inputCls} disabled={cargando} />
         </div>
       </div>
 
