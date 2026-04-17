@@ -159,20 +159,37 @@ export default function AppLayout() {
   return (
     <div className="flex min-h-screen" style={{ background: '#f1f5f9' }}>
 
-      {/* ── Barra superior móvil ─────────────────────────────────────────── */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-40 px-4 h-14 flex items-center justify-between"
+      {/* ── Barra superior (móvil + desktop) ────────────────────────────── */}
+      <div className="fixed top-0 left-0 right-0 z-40 px-4 h-14 flex items-center justify-between"
         style={{ background: 'linear-gradient(135deg, #0a1628 0%, #0d1f3c 100%)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+
+        {/* Hamburger — solo móvil */}
         <button
           onClick={() => setMenuOpen(true)}
-          className="p-2 -ml-2 rounded-xl transition-colors text-white/60 hover:text-white hover:bg-white/10"
+          className="md:hidden p-2 -ml-2 rounded-xl transition-colors text-white/60 hover:text-white hover:bg-white/10"
         >
           <Menu size={22} />
         </button>
-        <img src="/logo.png" alt="Listo POS" className="h-8 w-auto object-contain" style={{ filter: 'brightness(1.1)' }} />
-        <div className="relative">
+
+        {/* Logo — solo móvil (desktop lo tiene en el sidebar) */}
+        <img src="/logo.png" alt="Listo POS" className="md:hidden h-8 w-auto object-contain" style={{ filter: 'brightness(1.1)' }} />
+
+        {/* Spacer desktop para empujar campana a la derecha */}
+        <div className="hidden md:block flex-1" />
+
+        {/* Campana con dropdown — siempre visible */}
+        <div className="relative" ref={notifsRef}>
           <button
             onClick={() => { setShowNotifs(v => !v); if (unreadCount > 0) markAllRead() }}
-            className="relative p-2 rounded-xl transition-colors text-white/60 hover:text-white hover:bg-white/10"
+            className="relative p-2 rounded-xl transition-all"
+            style={{
+              color:      unreadCount > 0 ? '#fbbf24' : 'rgba(255,255,255,0.55)',
+              background: unreadCount > 0 ? 'rgba(251,191,36,0.1)' : 'transparent',
+              border:     unreadCount > 0 ? '1px solid rgba(251,191,36,0.2)' : '1px solid transparent',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = unreadCount > 0 ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.08)' }}
+            onMouseLeave={e => { e.currentTarget.style.background = unreadCount > 0 ? 'rgba(251,191,36,0.1)' : 'transparent' }}
+            title="Alertas"
           >
             <Bell size={20} />
             {unreadCount > 0 && (
@@ -181,6 +198,104 @@ export default function AppLayout() {
               </span>
             )}
           </button>
+
+          {/* Dropdown de alertas */}
+          {showNotifs && (
+            <div className="absolute top-full right-0 mt-2 w-80 rounded-2xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+              style={{ background: '#0f1f3c', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+
+              {/* Header del dropdown */}
+              <div className="flex items-center justify-between px-4 py-3"
+                style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)' }}>
+                <div className="flex items-center gap-2">
+                  <Bell size={13} className="text-white/40" />
+                  <p className="text-xs font-black uppercase tracking-wider text-white/60">Alertas</p>
+                  {unreadCount > 0 && (
+                    <span className="text-[10px] font-black bg-rose-500/20 text-rose-400 border border-rose-500/20 px-1.5 py-0.5 rounded-full">
+                      {unreadCount}
+                    </span>
+                  )}
+                </div>
+                {notifications.length > 0 && (
+                  <button onClick={() => { clearAll(); setShowNotifs(false) }}
+                    className="text-[10px] font-bold text-white/30 hover:text-rose-400 transition-colors px-2 py-1 rounded-lg hover:bg-rose-500/10">
+                    Limpiar todo
+                  </button>
+                )}
+              </div>
+
+              {/* Lista de notificaciones */}
+              <div className="max-h-72 overflow-y-auto">
+                {notifications.length === 0 ? (
+                  <div className="text-center py-10 px-4">
+                    <div className="w-12 h-12 rounded-full mx-auto mb-3 flex items-center justify-center"
+                      style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      <Bell size={20} className="text-white/20" />
+                    </div>
+                    <p className="text-sm font-bold text-white/30">Sin alertas recientes</p>
+                    <p className="text-xs text-white/20 mt-1">Las notificaciones aparecerán aquí</p>
+                  </div>
+                ) : (
+                  notifications.slice(0, 20).map((n, idx) => {
+                    const isStockBajo = n.type === NOTIF_TYPES.STOCK_BAJO
+                    return (
+                      <div key={n.id}
+                        onClick={isStockBajo ? () => { navigate('/inventario?filtro=stock_bajo'); setShowNotifs(false) } : undefined}
+                        className={`px-4 py-3 transition-colors ${isStockBajo ? 'cursor-pointer hover:bg-amber-500/5' : ''}`}
+                        style={{ borderBottom: idx < notifications.slice(0,20).length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}
+                      >
+                        <div className="flex gap-3 items-start">
+                          <NotifIcon type={n.type} />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold text-white/80 leading-tight">{n.title}</p>
+                            {n.body && !isStockBajo && (
+                              <p className="text-xs text-white/40 mt-0.5 leading-snug">{n.body}</p>
+                            )}
+                            <p className="text-[10px] text-white/25 mt-1">
+                              {new Date(n.ts).toLocaleString('es-VE', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+
+              {/* Push toggle al pie */}
+              {pushSupported && (
+                <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                  <button
+                    onClick={togglePush}
+                    disabled={pushLoading}
+                    className="w-full flex items-center justify-between px-4 py-3 transition-all group"
+                    style={{
+                      background: pushSubscribed ? 'rgba(59,130,246,0.08)' : 'transparent',
+                      color: pushSubscribed ? '#60a5fa' : 'rgba(255,255,255,0.4)',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = pushSubscribed ? 'rgba(59,130,246,0.14)' : 'rgba(255,255,255,0.04)'}
+                    onMouseLeave={e => e.currentTarget.style.background = pushSubscribed ? 'rgba(59,130,246,0.08)' : 'transparent'}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+                        style={{ background: pushSubscribed ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.06)' }}>
+                        {pushSubscribed ? <Bell size={13} className="text-sky-400" /> : <BellOff size={13} className="text-white/30" />}
+                      </div>
+                      <div className="text-left">
+                        <p className="text-xs font-bold leading-tight">
+                          {pushLoading ? 'Procesando…' : pushSubscribed ? 'Push activado' : 'Activar notificaciones push'}
+                        </p>
+                        <p className="text-[10px] mt-0.5" style={{ color: 'rgba(255,255,255,0.25)' }}>
+                          {pushSubscribed ? 'Toca para desactivar' : 'Recibe alertas en tu dispositivo'}
+                        </p>
+                      </div>
+                    </div>
+                    {pushSubscribed && <span className="w-2 h-2 rounded-full bg-sky-400 animate-pulse shrink-0" />}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -222,29 +337,8 @@ export default function AppLayout() {
           </button>
         </div>
 
-        {/* Logo + botón colapsar + Bell */}
-        <div className="relative z-10 px-4 py-5 flex flex-col items-center" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }} ref={notifsRef}>
-
-          {/* Bell — esquina superior izquierda cuando expandido */}
-          {!sidebarCollapsed && (
-            <button
-              onClick={() => { setShowNotifs(v => !v); if (unreadCount > 0) markAllRead() }}
-              className="absolute top-3 left-3 p-1.5 rounded-xl transition-all"
-              style={{
-                color:      unreadCount > 0 ? '#fbbf24' : 'rgba(255,255,255,0.4)',
-                background: unreadCount > 0 ? 'rgba(251,191,36,0.1)' : 'rgba(255,255,255,0.05)',
-                border:     unreadCount > 0 ? '1px solid rgba(251,191,36,0.2)' : '1px solid rgba(255,255,255,0.06)',
-              }}
-              title="Alertas"
-            >
-              <Bell size={16} />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] bg-rose-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-0.5">
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </span>
-              )}
-            </button>
-          )}
+        {/* Logo + botón colapsar */}
+        <div className="relative z-10 px-4 py-5 flex flex-col items-center" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
 
           <img src="/logo.png" alt="Construacero Carabobo"
             className="object-contain transition-all duration-300 select-none pointer-events-none"
@@ -265,27 +359,6 @@ export default function AppLayout() {
             </div>
           )}
 
-          {/* Bell — icono centrado bajo el logo cuando colapsado */}
-          {sidebarCollapsed && (
-            <button
-              onClick={() => { setShowNotifs(v => !v); if (unreadCount > 0) markAllRead() }}
-              className="relative mt-3 p-1.5 rounded-xl transition-all"
-              style={{
-                color:      unreadCount > 0 ? '#fbbf24' : 'rgba(255,255,255,0.4)',
-                background: unreadCount > 0 ? 'rgba(251,191,36,0.1)' : 'rgba(255,255,255,0.05)',
-                border:     unreadCount > 0 ? '1px solid rgba(251,191,36,0.2)' : '1px solid rgba(255,255,255,0.06)',
-              }}
-              title="Alertas"
-            >
-              <Bell size={16} />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] bg-rose-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-0.5">
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </span>
-              )}
-            </button>
-          )}
-
           {/* Botón colapsar — solo desktop */}
           <button
             onClick={() => setSidebarCollapsed(c => !c)}
@@ -295,77 +368,6 @@ export default function AppLayout() {
           >
             {sidebarCollapsed ? <PanelLeftOpen size={13} /> : <PanelLeftClose size={13} />}
           </button>
-
-          {/* Dropdown de notificaciones — abre hacia abajo */}
-          {showNotifs && (
-            <div className="absolute top-full left-2 right-2 mt-1 rounded-2xl shadow-2xl z-50 overflow-hidden"
-              style={{ background: '#0f1f3c', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
-              <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)' }}>
-                <p className="text-xs font-black uppercase tracking-wider text-white/60">Alertas</p>
-                {notifications.length > 0 && (
-                  <button onClick={() => { clearAll(); setShowNotifs(false) }}
-                    className="text-[10px] font-bold text-white/30 hover:text-rose-400 transition-colors px-2 py-1 rounded-lg hover:bg-rose-500/10">
-                    Limpiar todo
-                  </button>
-                )}
-              </div>
-              <div className="max-h-80 overflow-y-auto divide-y" style={{ divideColor: 'rgba(255,255,255,0.04)' }}>
-                {notifications.length === 0 ? (
-                  <div className="text-center py-8 px-4">
-                    <Bell size={24} className="mx-auto mb-2 opacity-20 text-white" />
-                    <p className="text-sm text-white/30">Sin alertas recientes</p>
-                  </div>
-                ) : (
-                  notifications.slice(0, 20).map(n => {
-                    const isStockBajo = n.type === NOTIF_TYPES.STOCK_BAJO
-                    return (
-                      <div key={n.id}
-                        onClick={isStockBajo ? () => { navigate('/inventario?filtro=stock_bajo'); setShowNotifs(false) } : undefined}
-                        className={`px-4 py-3 transition-colors ${isStockBajo ? 'cursor-pointer hover:bg-amber-500/5' : 'hover:bg-white/3'}`}
-                      >
-                        <div className="flex gap-2.5 items-start">
-                          <NotifIcon type={n.type} />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold text-white/80 leading-tight">{n.title}</p>
-                            {n.body && !isStockBajo && (
-                              <p className="text-xs text-white/40 mt-0.5 leading-snug">{n.body}</p>
-                            )}
-                            <p className="text-[10px] text-white/25 mt-1">
-                              {new Date(n.ts).toLocaleString('es-VE', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })
-                )}
-              </div>
-              {/* Push toggle al pie del dropdown */}
-              {pushSupported && (
-                <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                  <button
-                    onClick={togglePush}
-                    disabled={pushLoading}
-                    className="w-full flex items-center justify-between px-4 py-3 transition-all"
-                    style={{
-                      background: pushSubscribed ? 'rgba(59,130,246,0.08)' : 'transparent',
-                      color: pushSubscribed ? '#60a5fa' : 'rgba(255,255,255,0.35)',
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.background = pushSubscribed ? 'rgba(59,130,246,0.14)' : 'rgba(255,255,255,0.04)'}
-                    onMouseLeave={e => e.currentTarget.style.background = pushSubscribed ? 'rgba(59,130,246,0.08)' : 'transparent'}
-                  >
-                    <div className="flex items-center gap-2">
-                      {pushSubscribed ? <Bell size={13} /> : <BellOff size={13} />}
-                      <span className="text-xs font-bold">
-                        {pushLoading ? 'Procesando…' : pushSubscribed ? 'Push activado' : 'Activar notificaciones push'}
-                      </span>
-                    </div>
-                    {pushSubscribed && <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" />}
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Navegación */}
@@ -516,7 +518,7 @@ export default function AppLayout() {
       </aside>
 
       {/* ── Área de contenido ───────────────────────────────────────────── */}
-      <main className="flex-1 overflow-y-auto pt-14 md:pt-0 min-w-0">
+      <main className="flex-1 overflow-y-auto pt-14 min-w-0">
         <div className="mx-auto max-w-screen-2xl">
           <Outlet />
         </div>
