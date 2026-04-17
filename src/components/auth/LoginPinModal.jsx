@@ -279,7 +279,7 @@ export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
 
         {/* Overlay de carga */}
         {working && (
-          <div className="absolute inset-0 rounded-3xl flex items-center justify-center"
+          <div className="absolute inset-0 z-20 rounded-3xl flex items-center justify-center"
             style={{ background: 'rgba(10,22,40,0.85)', backdropFilter: 'blur(4px)' }}>
             <div className="flex flex-col items-center gap-3">
               <Loader2 className="animate-spin" size={32} style={{ color: userColor }} />
