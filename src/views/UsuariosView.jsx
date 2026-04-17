@@ -24,17 +24,15 @@ import PageHeader  from '../components/ui/PageHeader'
 const ROL_CONFIG = {
   supervisor: {
     label:    'Supervisor',
-    gradient: 'from-sky-500 to-teal-400',
-    bg:       'bg-sky-50',
-    text:     'text-sky-700',
-    border:   'border-sky-200',
+    bg:       'bg-primary-light',
+    text:     'text-primary',
+    border:   'border-primary/20',
   },
   vendedor: {
     label:    'Vendedor',
-    gradient: 'from-emerald-500 to-teal-500',
-    bg:       'bg-emerald-50',
-    text:     'text-emerald-700',
-    border:   'border-emerald-200',
+    bg:       'bg-slate-100',
+    text:     'text-slate-600',
+    border:   'border-slate-200',
   },
 }
 
@@ -290,43 +288,37 @@ function UsuarioModal({ usuario = null, onClose }) {
 function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar, coloresUsados, onCambiarColor }) {
   const conf = ROL_CONFIG[usuario.rol] ?? ROL_CONFIG.vendedor
   const esSupervisor = usuario.rol === 'supervisor'
-  const color = usuario.color || '#3B82F6'
+  const color = usuario.color || '#1B365D'
   const [showColors, setShowColors] = useState(false)
 
   return (
     <div className={`bg-white rounded-2xl border overflow-hidden flex flex-col transition-all duration-200 ${
       usuario.activo ? 'hover:shadow-lg' : 'opacity-60'
     }`}
-      style={{ borderColor: color + '30' }}>
+      style={{ borderColor: color + '30', boxShadow: `0 1px 3px ${color}10` }}>
 
-      {/* ── Strip superior con color ── */}
-      <div className="relative h-20 shrink-0 flex items-end justify-between px-4 pb-3"
-        style={{ background: `linear-gradient(135deg, ${color}ee 0%, ${color}88 100%)` }}>
+      {/* ── Strip superior ── */}
+      <div className="relative h-20 shrink-0 flex items-center justify-center"
+        style={{ background: `linear-gradient(135deg, ${color}ee 0%, ${color}99 100%)` }}>
         {/* Dot pattern */}
         <div className="absolute inset-0 opacity-10 pointer-events-none"
           style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '12px 12px' }} />
 
-        {/* Avatar — clic para cambiar color */}
+        {/* Crown flotante encima del avatar */}
+        {esSupervisor && (
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20">
+            <Crown size={13} className="text-yellow-300 fill-yellow-300 drop-shadow" />
+          </div>
+        )}
+
+        {/* Avatar centrado — clic para cambiar color */}
         <button type="button" onClick={() => setShowColors(!showColors)} title="Cambiar color"
-          className="relative z-10 w-12 h-12 rounded-xl flex items-center justify-center shrink-0 cursor-pointer hover:scale-105 active:scale-95 transition-transform"
-          style={{ background: 'rgba(255,255,255,0.25)', border: '2px solid rgba(255,255,255,0.5)', backdropFilter: 'blur(4px)' }}>
-          <span className="text-white font-black text-xl select-none">
+          className="relative z-10 w-11 h-11 rounded-xl flex items-center justify-center shrink-0 hover:scale-105 active:scale-95 transition-transform"
+          style={{ background: 'rgba(255,255,255,0.22)', border: '2px solid rgba(255,255,255,0.5)', backdropFilter: 'blur(4px)' }}>
+          <span className="text-white font-black text-xl select-none leading-none">
             {(usuario.nombre || 'U')[0].toUpperCase()}
           </span>
-          {esSupervisor && (
-            <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-              <Crown size={14} className="text-yellow-300 fill-yellow-300 drop-shadow" />
-            </div>
-          )}
         </button>
-
-        {/* Chip de rol */}
-        <div className="relative z-10 shrink-0">
-          <span className="text-[10px] font-black px-2.5 py-1 rounded-full"
-            style={{ background: 'rgba(255,255,255,0.25)', color: 'white', border: '1px solid rgba(255,255,255,0.4)', backdropFilter: 'blur(4px)' }}>
-            {conf.label}
-          </span>
-        </div>
       </div>
 
       {/* ── Selector de color expandible ── */}
@@ -353,21 +345,29 @@ function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar, c
         </div>
       )}
 
-      {/* ── Nombre + estado + fecha ── */}
-      <div className="px-4 pt-3 pb-2 flex-1">
-        <div className="flex items-center gap-1.5 flex-wrap">
+      {/* ── Nombre + rol + estado + fecha ── */}
+      <div className="px-4 pt-3 pb-2 flex-1 space-y-2">
+        {/* Nombre */}
+        <div className="flex items-center gap-1.5">
           <p className="text-sm font-black text-slate-800 truncate">{usuario.nombre}</p>
           {propio && (
-            <span className="text-[8px] font-black uppercase tracking-wider bg-sky-100 text-sky-500 px-1.5 py-0.5 rounded-full shrink-0">Tú</span>
+            <span className="text-[8px] font-black uppercase tracking-wider bg-primary-light text-primary px-1.5 py-0.5 rounded-full shrink-0">Tú</span>
           )}
         </div>
-        <div className="flex items-center justify-between mt-2 flex-wrap gap-1">
+
+        {/* Badge de rol */}
+        <span className={`inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full border ${conf.bg} ${conf.text} ${conf.border}`}>
+          {conf.label}
+        </span>
+
+        {/* Estado + fecha */}
+        <div className="flex items-center justify-between gap-1">
           <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
             usuario.activo ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'
           }`}>
             {usuario.activo ? 'Activo' : 'Inactivo'}
           </span>
-          <span className="text-[11px] text-slate-400">
+          <span className="text-[11px] text-slate-400 shrink-0">
             {new Date(usuario.creado_en).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}
           </span>
         </div>
@@ -376,27 +376,27 @@ function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar, c
       {/* ── Acciones ── */}
       {!propio ? (
         <div className="border-t border-slate-100 px-2 py-2 flex items-center gap-0.5">
-          <button onClick={() => onEditar(usuario)} title="Editar"
-            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
+          <button onClick={() => onEditar(usuario)}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-primary hover:bg-primary-light active:bg-primary-light transition-colors whitespace-nowrap">
             <Pencil size={13} />Editar
           </button>
           <button onClick={() => onCambiarActivo(usuario, !usuario.activo)}
-            className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
               usuario.activo ? 'text-slate-600 hover:bg-slate-100' : 'text-emerald-600 hover:bg-emerald-50'
             }`}>
             {usuario.activo ? <UserX size={13} /> : <UserCheck size={13} />}
-            {usuario.activo ? 'Desact.' : 'Activar'}
+            {usuario.activo ? 'Desactivar' : 'Activar'}
           </button>
           <button onClick={() => onEliminar(usuario)} title="Eliminar"
-            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 active:bg-red-100 transition-colors ml-auto">
+            className="ml-auto flex items-center justify-center p-1.5 rounded-lg text-xs font-medium text-red-400 hover:bg-red-50 hover:text-red-600 active:bg-red-100 transition-colors">
             <Trash2 size={13} />
           </button>
         </div>
       ) : (
         <div className="border-t border-slate-100 px-2 py-2 flex items-center">
-          <button onClick={() => onEditar(usuario)} title="Cambiar nombre"
-            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 transition-colors">
-            <Pencil size={13} />Cambiar nombre
+          <button onClick={() => onEditar(usuario)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-primary hover:bg-primary-light transition-colors whitespace-nowrap">
+            <Pencil size={13} />Editar perfil
           </button>
         </div>
       )}
