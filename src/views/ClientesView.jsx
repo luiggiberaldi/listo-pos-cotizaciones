@@ -3,7 +3,7 @@
 // — Vendedor: ve y gestiona sus propios clientes
 // — Supervisor: ve todos los clientes + puede reasignar
 import { useState, useMemo } from 'react'
-import { Users, Plus, Search, RefreshCw, X, LayoutGrid, List, Filter } from 'lucide-react'
+import { Users, Plus, Search, RefreshCw, X, LayoutGrid, List, Filter, ChevronDown } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { useClientes, useDesactivarCliente, useVendedores } from '../hooks/useClientes'
 import ClienteCard       from '../components/clientes/ClienteCard'
@@ -223,56 +223,71 @@ export default function ClientesView() {
 
       {/* ── Filtros ──────────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap gap-2 items-center">
-        <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+        <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-wider">
           <Filter size={13} />
           Filtros:
         </div>
 
         {/* Tipo */}
-        <select
-          value={filtroTipo}
-          onChange={e => { setFiltroTipo(e.target.value); setPagina(1) }}
-          className="text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-focus"
-        >
-          <option value="">Todos los tipos</option>
-          <option value="natural">Natural</option>
-          <option value="juridico">Jurídico</option>
-        </select>
+        <div className="relative">
+          <select
+            value={filtroTipo}
+            onChange={e => { setFiltroTipo(e.target.value); setPagina(1) }}
+            className={`appearance-none text-sm font-semibold border rounded-xl pl-3 pr-8 py-2 cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary ${
+              filtroTipo ? 'bg-primary-light border-primary/30 text-primary' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+            }`}
+          >
+            <option value="">Todos los tipos</option>
+            <option value="natural">Natural</option>
+            <option value="juridico">Jurídico</option>
+          </select>
+          <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
+        </div>
 
         {/* Ciudad */}
-        <select
-          value={filtroCiudad}
-          onChange={e => { setFiltroCiudad(e.target.value); setPagina(1) }}
-          className="text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-focus"
-        >
-          <option value="">Todas las ciudades</option>
-          {ciudadesDisponibles.map(c => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
+        <div className="relative">
+          <select
+            value={filtroCiudad}
+            onChange={e => { setFiltroCiudad(e.target.value); setPagina(1) }}
+            className={`appearance-none text-sm font-semibold border rounded-xl pl-3 pr-8 py-2 cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary ${
+              filtroCiudad ? 'bg-primary-light border-primary/30 text-primary' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+            }`}
+          >
+            <option value="">Todas las ciudades</option>
+            {ciudadesDisponibles.map(c => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+          <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
+        </div>
 
         {/* Vendedor (solo supervisor) */}
         {perfil?.rol === 'supervisor' && (
-          <select
-            value={filtroVendedor}
-            onChange={e => { setFiltroVendedor(e.target.value); setPagina(1) }}
-            className="text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-focus"
-          >
-            <option value="">Todos los vendedores</option>
-            {vendedores.map(v => (
-              <option key={v.id} value={v.id}>{v.nombre}</option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              value={filtroVendedor}
+              onChange={e => { setFiltroVendedor(e.target.value); setPagina(1) }}
+              className={`appearance-none text-sm font-semibold border rounded-xl pl-3 pr-8 py-2 cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary ${
+                filtroVendedor ? 'bg-primary-light border-primary/30 text-primary' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+              }`}
+            >
+              <option value="">Todos los vendedores</option>
+              {vendedores.map(v => (
+                <option key={v.id} value={v.id}>{v.nombre}</option>
+              ))}
+            </select>
+            <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
+          </div>
         )}
 
         {/* Limpiar filtros */}
         {hayFiltros && (
           <button
             onClick={limpiarFiltros}
-            className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 border border-red-200 rounded-lg px-2.5 py-1.5 bg-red-50 hover:bg-red-100 transition-colors"
+            className="flex items-center gap-1.5 text-xs font-bold text-red-500 hover:text-white border border-red-200 hover:border-red-500 rounded-xl px-3 py-2 bg-red-50 hover:bg-red-500 transition-all"
           >
             <X size={12} />
-            Limpiar filtros
+            Limpiar
           </button>
         )}
       </div>
