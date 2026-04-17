@@ -42,9 +42,14 @@ export function useInventario({ busqueda = '', categoria = '' } = {}) {
         }
       }
 
-      // Filtro de categoría
+      // Filtro de categoría (soporta grupos: "TUBOS" filtra TUBOS*)
       if (categoria) {
-        query = query.eq('categoria', categoria)
+        const isGroup = CATEGORY_GROUPS.includes(categoria.toUpperCase().trim())
+        if (isGroup) {
+          query = query.ilike('categoria', `${categoria}%`)
+        } else {
+          query = query.eq('categoria', categoria)
+        }
       }
 
       query = query.order('nombre', { ascending: true })
@@ -65,6 +70,31 @@ export function useInventario({ busqueda = '', categoria = '' } = {}) {
   })
 }
 
+// ─── Agrupación de categorías ────────────────────────────────────────────────
+// Prefijos que se consolidan en una sola categoría padre
+const CATEGORY_GROUPS = [
+  'CONEXIONES',
+  'ELECTRICIDAD',
+  'LAMINAS',
+  'PERFILES',
+  'TUBOS ESTRUCTURALES',
+  'TUBOS GALVANIZADO',
+  'TUBOS PULIDO',
+  'TUBOS PVC',
+  'TUBOS',
+  'VIGAS',
+]
+
+// Dada una categoría raw de la DB, retorna el grupo padre
+function getCategoryGroup(cat) {
+  if (!cat) return cat
+  const upper = cat.toUpperCase().trim()
+  for (const prefix of CATEGORY_GROUPS) {
+    if (upper.startsWith(prefix) && upper !== prefix) return prefix
+  }
+  return cat
+}
+
 // ─── Categorías únicas (para el filtro) ──────────────────────────────────────
 export function useCategorias() {
   const { perfil } = useAuthStore()
@@ -82,13 +112,18 @@ export function useCategorias() {
         .order('categoria', { ascending: true })
 
       if (error) throw error
-      const unicas = [...new Set((data ?? []).map(r => r.categoria).filter(Boolean))]
-      return unicas
+      const rawCats = (data ?? []).map(r => r.categoria).filter(Boolean)
+      // Agrupar y deduplicar
+      const grouped = [...new Set(rawCats.map(getCategoryGroup))].sort()
+      return grouped
     },
     enabled: !!perfil,
     staleTime: 1000 * 60 * 10,
   })
 }
+
+// Exportar para uso en useInventario
+export { getCategoryGroup }
 
 // ─── Mutation: crear producto (solo supervisor) ───────────────────────────────
 export function useCrearProducto() {

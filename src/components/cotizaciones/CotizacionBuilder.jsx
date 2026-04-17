@@ -197,7 +197,7 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
     const coincideTexto = !texto.trim() ||
       p.nombre.toLowerCase().includes(texto.toLowerCase()) ||
       (p.codigo ?? '').toLowerCase().includes(texto.toLowerCase())
-    const coincideCat = !catActiva || p.categoria === catActiva
+    const coincideCat = !catActiva || (p.categoria ?? '').toUpperCase().startsWith(catActiva.toUpperCase())
     return coincideTexto && coincideCat
   })
 
