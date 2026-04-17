@@ -257,41 +257,46 @@ export async function generarDespachoPDF({ despacho, items = [], config = {} }) 
   y += 5
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 4. TOTALES + FORMA DE PAGO (misma fila)
+  // 4. Calcular espacio restante y distribuir secciones
   // ══════════════════════════════════════════════════════════════════════════
+  // Secciones fijas: totales(16) + transporte_header(6) + transporte_fields(2×8=16) + firmas(18) = ~56mm
+  const SECTION_MIN = 56
+  const spaceLeft = MAX_Y - y - SECTION_MIN
+  // Distribuir espacio extra como gaps entre secciones (4 gaps)
+  const extraGap = Math.max(0, Math.min(spaceLeft / 4, 12))
+
+  // ── TOTALES + FORMA DE PAGO ───────────────────────────────────────────────
   const totW = 72
   const totX = PAGE_W - MARGIN - totW
 
   doc.setFillColor(...C_ORANGE)
-  doc.rect(totX, y, totW, 14, 'F')
+  doc.rect(totX, y, totW, 16, 'F')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
-  doc.setTextColor(...C_DARK)
-  doc.text('TOTAL', totX + 4, y + 9)
   doc.setFontSize(12)
-  doc.text(fmtUsd(despacho.total_usd), totX + totW - 4, y + 9, { align: 'right' })
+  doc.setTextColor(...C_DARK)
+  doc.text('TOTAL', totX + 5, y + 10)
+  doc.setFontSize(13)
+  doc.text(fmtUsd(despacho.total_usd), totX + totW - 5, y + 10, { align: 'right' })
 
   // Forma de pago (izquierda)
   doc.setFont('helvetica', 'bold')
+  doc.setFontSize(7.5)
+  doc.setTextColor(...C_DARK)
+  doc.text('FORMA DE PAGO:', MARGIN, y + 5)
+  drawCheck(doc, 'EFECTIVO',   MARGIN,      y + 12)
+  drawCheck(doc, 'ZELLE',      MARGIN + 28, y + 12)
+  drawCheck(doc, 'PAGO MÓVIL', MARGIN + 52, y + 12)
+
+  y += 16 + extraGap
+
+  // ── TRANSPORTE ────────────────────────────────────────────────────────────
+  doc.setFillColor(240, 240, 240)
+  doc.rect(MARGIN, y, CONTENT_W, 6, 'F')
+  doc.setFont('helvetica', 'bold')
   doc.setFontSize(7)
   doc.setTextColor(...C_DARK)
-  doc.text('FORMA DE PAGO:', MARGIN, y + 4)
-  drawCheck(doc, 'EFECTIVO',   MARGIN,      y + 10)
-  drawCheck(doc, 'ZELLE',      MARGIN + 25, y + 10)
-  drawCheck(doc, 'PAGO MÓVIL', MARGIN + 45, y + 10)
-
-  y += 18
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // 5. TRANSPORTE (compacto — 2 filas)
-  // ══════════════════════════════════════════════════════════════════════════
-  doc.setFillColor(240, 240, 240)
-  doc.rect(MARGIN, y, CONTENT_W, 5, 'F')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(6.5)
-  doc.setTextColor(...C_DARK)
-  doc.text('DATOS DE TRANSPORTE', MARGIN + 2, y + 3.5)
-  y += 7
+  doc.text('DATOS DE TRANSPORTE', MARGIN + 2, y + 4)
+  y += 8
 
   const choferNombre = transportista?.nombre || ''
   const choferRif    = transportista?.rif    || ''
@@ -300,16 +305,14 @@ export async function generarDespachoPDF({ despacho, items = [], config = {} }) 
   drawField(doc, 'CHOFER', choferNombre, MARGIN, y, col3W)
   drawField(doc, 'C.I.', choferRif, MARGIN + col3W + 4, y, col3W)
   drawField(doc, 'VEHÍCULO', '', MARGIN + (col3W + 4) * 2, y, col3W)
-  y += FIELD_GAP
+  y += 8
 
   drawField(doc, 'PLACA CHUTO', '', MARGIN, y, col3W)
   drawField(doc, 'PLACA BATEA', '', MARGIN + col3W + 4, y, col3W)
   drawField(doc, 'COLOR / OTROS', '', MARGIN + (col3W + 4) * 2, y, col3W)
-  y += 10
+  y += 8 + extraGap
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // 6. FIRMAS
-  // ══════════════════════════════════════════════════════════════════════════
+  // ── FIRMAS ────────────────────────────────────────────────────────────────
   const firmW = (CONTENT_W - 10) / 3
   const firmas = [
     { label: 'Asesor de Comercialización', val: despacho.vendedor?.nombre || '' },
@@ -320,18 +323,18 @@ export async function generarDespachoPDF({ despacho, items = [], config = {} }) 
   firmas.forEach((f, i) => {
     const fx = MARGIN + i * (firmW + 5)
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(6.5)
+    doc.setFontSize(7)
     doc.setTextColor(...C_GRAY)
-    doc.text(f.label, fx + firmW / 2, y + 6, { align: 'center' })
+    doc.text(f.label, fx + firmW / 2, y + 8, { align: 'center' })
     if (f.val) {
       doc.setFont('helvetica', 'bold')
-      doc.setFontSize(7)
+      doc.setFontSize(7.5)
       doc.setTextColor(...C_DARK)
-      doc.text(f.val, fx + firmW / 2, y + 11, { align: 'center' })
+      doc.text(f.val, fx + firmW / 2, y + 14, { align: 'center' })
     }
     doc.setLineWidth(0.3)
     doc.setDrawColor(...C_DARK)
-    doc.line(fx, y + 14, fx + firmW, y + 14)
+    doc.line(fx, y + 17, fx + firmW, y + 17)
   })
 
   // ══════════════════════════════════════════════════════════════════════════

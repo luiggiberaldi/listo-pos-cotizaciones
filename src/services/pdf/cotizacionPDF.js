@@ -250,7 +250,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   y += 5
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 4. TOTALES LATERAL DERECHO
+  // 4. Calcular espacio restante y distribuir secciones
   // ══════════════════════════════════════════════════════════════════════════
   const totW    = 72
   const totX    = PAGE_W - MARGIN - totW
@@ -265,6 +265,12 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   if (hasDescuento)  boxH += 7
   if (hasEnvio)      boxH += 7
 
+  // Secciones: totales(boxH) + firmas(18) ≈ mínimo fijo
+  const SECTION_MIN = boxH + 18
+  const spaceLeft = MAX_Y - y - SECTION_MIN
+  const extraGap = Math.max(0, Math.min(spaceLeft / 3, 15))
+
+  // ── TOTALES ───────────────────────────────────────────────────────────────
   doc.setFillColor(...C_ORANGE)
   doc.rect(totX, y, totW, boxH, 'F')
 
@@ -304,16 +310,14 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   }
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
-  doc.text('TOTAL', totX + 4, ty)
   doc.setFontSize(12)
+  doc.text('TOTAL', totX + 4, ty)
+  doc.setFontSize(13)
   doc.text(fmtUsd(cotizacion.total_usd), totX + totW - 4, ty, { align: 'right' })
 
-  y += boxH + 8
+  y += boxH + extraGap
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // 5. FIRMAS
-  // ══════════════════════════════════════════════════════════════════════════
+  // ── FIRMAS ────────────────────────────────────────────────────────────────
   const firmW = (CONTENT_W - 10) / 3
   const firmas = [
     { label: 'Asesor de Comercialización', val: cotizacion.vendedor?.nombre || '' },
@@ -324,18 +328,18 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   firmas.forEach((f, i) => {
     const fx = MARGIN + i * (firmW + 5)
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(6.5)
+    doc.setFontSize(7)
     doc.setTextColor(...C_GRAY)
-    doc.text(f.label, fx + firmW / 2, y + 6, { align: 'center' })
+    doc.text(f.label, fx + firmW / 2, y + 8, { align: 'center' })
     if (f.val) {
       doc.setFont('helvetica', 'bold')
-      doc.setFontSize(7)
+      doc.setFontSize(7.5)
       doc.setTextColor(...C_DARK)
-      doc.text(f.val, fx + firmW / 2, y + 11, { align: 'center' })
+      doc.text(f.val, fx + firmW / 2, y + 14, { align: 'center' })
     }
     doc.setLineWidth(0.3)
     doc.setDrawColor(...C_DARK)
-    doc.line(fx, y + 14, fx + firmW, y + 14)
+    doc.line(fx, y + 17, fx + firmW, y + 17)
   })
 
   // ══════════════════════════════════════════════════════════════════════════

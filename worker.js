@@ -7,6 +7,7 @@
 const ALLOWED_ORIGINS = [
   'https://listo-pos-cotizaciones.camelai.app',
   'https://listo-pos-cotizaciones.apps.camelai.dev',
+  'https://listo-pos-cotizaciones.vercel.app',
 ]
 
 function getAllowedOrigin(request) {
@@ -16,6 +17,8 @@ function getAllowedOrigin(request) {
   if (!origin) return null
   // Allow camelai subdomains
   if (origin.endsWith('.camelai.app') || origin.endsWith('.camelai.dev')) return origin
+  // Allow Vercel preview deployments
+  if (origin.endsWith('.vercel.app')) return origin
   return null
 }
 
