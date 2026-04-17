@@ -47,6 +47,7 @@ const NAV_TODOS = [
   { path: '/despachos',      label: 'Despachos',      icono: PackageCheck },
   { path: '/inventario',     label: 'Inventario',     icono: Package },
   { path: '/transportistas', label: 'Transportistas', icono: Truck },
+  { path: '/comisiones',     label: 'Comisiones',     icono: DollarSign },
 ]
 
 const NAV_SUPERVISOR = [

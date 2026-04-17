@@ -41,6 +41,7 @@ const TransportistasView = lazy(() => import('./views/TransportistasView'))
 const UsuariosView      = lazy(() => import('./views/UsuariosView'))
 const AuditoriaView     = lazy(() => import('./views/AuditoriaView'))
 const ConfiguracionView = lazy(() => import('./views/ConfiguracionView'))
+const ComisionesView    = lazy(() => import('./views/ComisionesView'))
 
 // ─── QueryClient (instancia única) ────────────────────────────────────────────
 const queryClient = new QueryClient({
@@ -141,6 +142,7 @@ function AppRoutes() {
             <Route path="/despachos"      element={<DespachosView />} />
             <Route path="/inventario"     element={<InventarioView />} />
             <Route path="/transportistas" element={<TransportistasView />} />
+            <Route path="/comisiones"    element={<ComisionesView />} />
 
             {/* Rutas exclusivas de supervisor */}
             <Route element={<RutaSupervisor />}>

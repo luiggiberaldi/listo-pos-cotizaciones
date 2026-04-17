@@ -7,6 +7,7 @@ import useAuthStore from '../store/useAuthStore'
 import supabase     from '../services/supabase/client'
 import { fmtUsd, fmtBs, usdToBs } from '../utils/format'
 import { useTasaCambio } from '../hooks/useTasaCambio'
+import { useComisionesResumen } from '../hooks/useComisiones'
 import Skeleton     from '../components/ui/Skeleton'
 import PageHeader  from '../components/ui/PageHeader'
 
@@ -154,6 +155,7 @@ export default function DashboardView() {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const { data: m, isLoading } = useMetricas()
+  const { data: comResumen } = useComisionesResumen()
   const { tasaEfectiva } = useTasaCambio()
   const navigate = useNavigate()
 
@@ -347,6 +349,37 @@ export default function DashboardView() {
               <p className="text-sm text-slate-400 text-center">Contacta a tu supervisor para ver más detalles del equipo.</p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Resumen de comisiones */}
+      {!isLoading && comResumen && comResumen.total > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-bold text-slate-700 text-sm uppercase tracking-wide flex items-center gap-2">
+              <DollarSign size={14} />Comisiones
+            </h2>
+            <button onClick={() => navigate('/comisiones')}
+              className="text-xs font-semibold text-sky-600 hover:text-sky-700 flex items-center gap-1 transition-colors">
+              Ver todas <ArrowRight size={12} />
+            </button>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="bg-slate-50 rounded-xl p-3">
+              <p className="text-xs text-slate-400 font-medium">Acumulado</p>
+              <p className="text-lg font-black text-slate-800">{fmtUsd(comResumen.total)}</p>
+            </div>
+            <div className="bg-amber-50 rounded-xl p-3">
+              <p className="text-xs text-amber-600 font-medium">Pendiente</p>
+              <p className="text-lg font-black text-amber-700">{fmtUsd(comResumen.pendiente)}</p>
+              <p className="text-xs text-amber-500">{comResumen.countPendiente} por pagar</p>
+            </div>
+            <div className="bg-emerald-50 rounded-xl p-3">
+              <p className="text-xs text-emerald-600 font-medium">Pagado</p>
+              <p className="text-lg font-black text-emerald-700">{fmtUsd(comResumen.pagado)}</p>
+              <p className="text-xs text-emerald-500">{comResumen.countPagado} pagadas</p>
+            </div>
+          </div>
         </div>
       )}
     </div>

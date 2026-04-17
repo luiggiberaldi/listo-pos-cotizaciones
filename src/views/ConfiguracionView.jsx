@@ -4,20 +4,22 @@ import { useState, useRef, useEffect } from 'react'
 import {
   Settings, Building2, Phone, Mail, MapPin, FileText, Save, CheckCircle,
   Lock, Eye, EyeOff, Accessibility, HardDrive, Download, Upload,
-  AlertCircle, AlertTriangle, Percent, Users, Database, Copy, Check,
+  AlertCircle, AlertTriangle, Percent, Users, Database, Copy, Check, DollarSign,
 } from 'lucide-react'
 import { useConfigNegocio, useActualizarConfig, hashSHA256 } from '../hooks/useConfigNegocio'
+import { fmtUsd } from '../utils/format'
 import { adminAPI } from '../services/supabase/adminClient'
 import UsuariosView from './UsuariosView'
 import PageHeader  from '../components/ui/PageHeader'
 
 // ─── Tabs ───────────────────────────────────────────────────────────────────
 const TABS = [
-  { id: 'negocio',  label: 'Negocio',   icon: Building2 },
-  { id: 'fiscal',   label: 'Fiscal',    icon: Percent   },
-  { id: 'sistema',  label: 'Sistema',   icon: Lock      },
-  { id: 'usuarios', label: 'Usuarios',  icon: Users     },
-  { id: 'datos',    label: 'Datos',     icon: Database  },
+  { id: 'negocio',    label: 'Negocio',    icon: Building2 },
+  { id: 'fiscal',     label: 'Fiscal',     icon: Percent   },
+  { id: 'comisiones', label: 'Comisiones', icon: DollarSign },
+  { id: 'sistema',    label: 'Sistema',    icon: Lock      },
+  { id: 'usuarios',   label: 'Usuarios',   icon: Users     },
+  { id: 'datos',      label: 'Datos',      icon: Database  },
 ]
 
 export default function ConfiguracionView() {
@@ -59,6 +61,9 @@ export default function ConfiguracionView() {
     validez_cotizacion_dias: 15,
     iva_pct:                 0,
     gate_email:              '',
+    comision_pct_cabilla:         2,
+    comision_pct_otros:           3,
+    comision_categoria_cabilla:   'Cabilla',
   })
   const [gatePassword, setGatePassword] = useState('')
 
@@ -74,6 +79,9 @@ export default function ConfiguracionView() {
         validez_cotizacion_dias: config.validez_cotizacion_dias ?? 15,
         iva_pct:                 config.iva_pct                 ?? 0,
         gate_email:              config.gate_email              ?? '',
+        comision_pct_cabilla:       config.comision_pct_cabilla       ?? 2,
+        comision_pct_otros:         config.comision_pct_otros         ?? 3,
+        comision_categoria_cabilla: config.comision_categoria_cabilla ?? 'Cabilla',
       })
     }
   }, [config])
@@ -156,7 +164,7 @@ export default function ConfiguracionView() {
     </div>
   )
   const cargando = actualizar.isPending
-  const esTabForm = ['negocio', 'fiscal', 'sistema'].includes(tab)
+  const esTabForm = ['negocio', 'fiscal', 'sistema', 'comisiones'].includes(tab)
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-4xl space-y-5">
@@ -393,6 +401,63 @@ export default function ConfiguracionView() {
                 </div>
               </div>
             </>
+          )}
+
+          {/* ── Comisiones ────────────────────────────────────────────────── */}
+          {tab === 'comisiones' && (
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-5">
+              <SectionHeader icon={DollarSign}>Tasas de comisión</SectionHeader>
+              <p className="text-xs text-slate-500 -mt-2">
+                Porcentaje de comisión que se calcula al marcar un despacho como entregado.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">
+                    % Comisión cabilla
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input type="number" min="0" max="100" step="0.01"
+                      value={campos.comision_pct_cabilla}
+                      onChange={e => cambiar('comision_pct_cabilla', Math.max(0, Math.min(100, Number(e.target.value))))}
+                      className="w-24 px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus text-right"
+                      disabled={isLoading || cargando} />
+                    <span className="text-lg font-bold text-slate-500">%</span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">
+                    % Comisión otros
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input type="number" min="0" max="100" step="0.01"
+                      value={campos.comision_pct_otros}
+                      onChange={e => cambiar('comision_pct_otros', Math.max(0, Math.min(100, Number(e.target.value))))}
+                      className="w-24 px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus text-right"
+                      disabled={isLoading || cargando} />
+                    <span className="text-lg font-bold text-slate-500">%</span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">
+                    Categoría "cabilla"
+                    <span className="block text-xs text-slate-400 font-normal mt-0.5">Nombre de la categoría en productos</span>
+                  </label>
+                  <input
+                    value={campos.comision_categoria_cabilla}
+                    onChange={e => cambiar('comision_categoria_cabilla', e.target.value)}
+                    placeholder="Cabilla"
+                    className={inputCls}
+                    disabled={isLoading || cargando}
+                  />
+                </div>
+              </div>
+              <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-xs text-blue-700">
+                <strong>Ejemplo:</strong> Una venta de $1,000 en cabilla ({campos.comision_pct_cabilla}%) genera{' '}
+                <strong>{fmtUsd(1000 * campos.comision_pct_cabilla / 100)}</strong> de comisión.
+                Una venta de $1,000 en otros ({campos.comision_pct_otros}%) genera{' '}
+                <strong>{fmtUsd(1000 * campos.comision_pct_otros / 100)}</strong>.
+              </div>
+            </div>
           )}
 
           {/* Error */}

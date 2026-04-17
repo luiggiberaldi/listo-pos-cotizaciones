@@ -5,6 +5,7 @@ import supabase from '../services/supabase/client'
 import useAuthStore from '../store/useAuthStore'
 import { INVENTARIO_KEY } from './useInventario'
 import { COTIZACIONES_KEY } from './useCotizaciones'
+import { COMISIONES_KEY } from './useComisiones'
 import { notifyDespachoCreado } from '../services/notificationService'
 import { showToast } from '../components/ui/Toast'
 import { sendPushNotification } from './usePushNotifications'
@@ -105,6 +106,7 @@ export function useActualizarEstadoDespacho() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: DESPACHOS_KEY })
       qc.invalidateQueries({ queryKey: INVENTARIO_KEY })
+      qc.invalidateQueries({ queryKey: COMISIONES_KEY })
     },
   })
 }

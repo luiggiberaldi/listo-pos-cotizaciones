@@ -8,6 +8,7 @@ import supabase from '../services/supabase/client'
 import useAuthStore from '../store/useAuthStore'
 import { INVENTARIO_KEY } from './useInventario'
 import { DESPACHOS_KEY } from './useDespachos'
+import { COMISIONES_KEY } from './useComisiones'
 
 const COTIZACIONES_KEY = ['cotizaciones']
 const CLIENTES_KEY = ['clientes']
@@ -18,6 +19,7 @@ const TABLAS = [
   { tabla: 'cotizaciones',    keys: [COTIZACIONES_KEY] },
   { tabla: 'clientes',        keys: [CLIENTES_KEY] },
   { tabla: 'notas_despacho',  keys: [DESPACHOS_KEY, INVENTARIO_KEY] },
+  { tabla: 'comisiones',      keys: [COMISIONES_KEY] },
 ]
 
 export function useRealtimeSync() {
