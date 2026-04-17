@@ -26,8 +26,9 @@ export function useDespachos({ estado = '' } = {}) {
           total_usd, notas,
           creado_en, despachada_en, entregada_en,
           cliente_id, vendedor_id, transportista_id,
-          cliente:clientes!notas_despacho_cliente_id_fkey(id, nombre, rif_cedula, telefono),
+          cliente:clientes!notas_despacho_cliente_id_fkey(id, nombre, rif_cedula, telefono, direccion),
           vendedor:usuarios!notas_despacho_vendedor_id_fkey(id, nombre, color),
+          transportista:transportistas!notas_despacho_transportista_id_fkey(id, nombre, rif, telefono),
           cotizacion:cotizaciones!notas_despacho_cotizacion_id_fkey(id, numero, version)
         `)
         .order('creado_en', { ascending: false })
