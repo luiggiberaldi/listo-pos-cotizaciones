@@ -7,6 +7,18 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    // ── CORS preflight para requests cross-origin (ej: desde Vercel) ────
+    if (request.method === 'OPTIONS' && url.pathname.startsWith('/api/')) {
+      return new Response(null, {
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          'Access-Control-Max-Age': '86400',
+        },
+      });
+    }
+
     // ── API: listar todos los clientes (bypass RLS para vendedores) ───────
     if (url.pathname === '/api/clientes' && request.method === 'GET') {
       return handleListarClientes(request, env);
@@ -95,7 +107,10 @@ export default {
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+    },
   });
 }
 
@@ -798,7 +813,14 @@ async function handleListarClientes(request, env) {
     },
   });
 
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error('Error fetching clientes:', res.status, errText);
+    return jsonError(`Error al cargar clientes: ${errText}`, res.status);
+  }
+
   const data = await res.json();
+  console.log('Clientes loaded:', data.length);
   return new Response(JSON.stringify(data), {
     headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
   });

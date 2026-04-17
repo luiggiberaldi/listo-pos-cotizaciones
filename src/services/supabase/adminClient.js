@@ -2,6 +2,7 @@
 // Cliente para operaciones admin — llama al Worker backend en /api/admin/
 // El service_role key NUNCA se expone al frontend.
 import supabase from './client'
+import { apiUrl } from '../apiBase'
 
 async function getAuthToken() {
   const { data } = await supabase.auth.getSession()
@@ -12,7 +13,7 @@ async function adminFetch(path, method = 'POST', body = null) {
   const token = await getAuthToken()
   if (!token) throw new Error('No autenticado')
 
-  const res = await fetch(`/api/admin/${path}`, {
+  const res = await fetch(apiUrl(`/api/admin/${path}`), {
     method,
     headers: {
       'Content-Type': 'application/json',
@@ -39,7 +40,7 @@ export const adminAPI = {
     const token = await getAuthToken()
     if (!token) throw new Error('No autenticado')
 
-    const res = await fetch('/api/admin/backup', {
+    const res = await fetch(apiUrl('/api/admin/backup'), {
       headers: { Authorization: `Bearer ${token}` },
     })
 
@@ -77,7 +78,7 @@ export const adminAPI = {
     let backup
     try { backup = JSON.parse(text) } catch { throw new Error('El archivo no es un JSON válido') }
 
-    const res = await fetch('/api/admin/restore', {
+    const res = await fetch(apiUrl('/api/admin/restore'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

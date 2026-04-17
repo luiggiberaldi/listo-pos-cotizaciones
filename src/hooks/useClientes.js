@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
 import useAuthStore from '../store/useAuthStore'
 import { sanitizePostgrestSearch } from '../utils/format'
+import { apiUrl } from '../services/apiBase'
 
 // ─── Keys de caché ────────────────────────────────────────────────────────────
 export const CLIENTES_KEY = ['clientes']
@@ -23,7 +24,7 @@ export function useClientes(busqueda = '') {
       const params = new URLSearchParams()
       if (busqueda.trim()) params.set('busqueda', busqueda.trim())
 
-      const res = await fetch(`/api/clientes?${params}`, {
+      const res = await fetch(apiUrl(`/api/clientes?${params}`), {
         headers: { Authorization: `Bearer ${session.access_token}` },
       })
 

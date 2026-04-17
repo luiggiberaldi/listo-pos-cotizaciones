@@ -2,6 +2,7 @@
 // Maneja suscripción/desuscripción a Web Push Notifications
 import { useState, useEffect, useCallback } from 'react'
 import supabase from '../services/supabase/client'
+import { apiUrl } from '../services/apiBase'
 
 const SW_PATH = '/sw.js'
 
@@ -15,7 +16,7 @@ export function usePushNotifications() {
 
   // Obtener la clave pública VAPID del servidor
   async function getVapidKey() {
-    const res = await fetch('/api/push/vapid-public-key')
+    const res = await fetch(apiUrl('/api/push/vapid-public-key'))
     if (!res.ok) throw new Error('No se pudo obtener la clave VAPID')
     const { key } = await res.json()
     return key
@@ -70,7 +71,7 @@ export function usePushNotifications() {
       if (!session) throw new Error('No hay sesión activa')
 
       // Enviar suscripción al servidor
-      const res = await fetch('/api/push/subscribe', {
+      const res = await fetch(apiUrl('/api/push/subscribe'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -101,7 +102,7 @@ export function usePushNotifications() {
       if (sub) {
         const { data: { session } } = await supabase.auth.getSession()
         if (session) {
-          await fetch('/api/push/unsubscribe', {
+          await fetch(apiUrl('/api/push/unsubscribe'), {
             method: 'DELETE',
             headers: {
               'Content-Type': 'application/json',
@@ -130,7 +131,7 @@ export async function sendPushNotification({ title, message, url = '/', tag }) {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
 
-    await fetch('/api/push/send', {
+    await fetch(apiUrl('/api/push/send'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

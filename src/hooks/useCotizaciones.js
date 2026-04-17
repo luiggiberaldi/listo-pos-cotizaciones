@@ -3,6 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
 import useAuthStore from '../store/useAuthStore'
+import { apiUrl } from '../services/apiBase'
 import { round2 } from '../utils/dinero'
 import {
   notifyCotizacionEnviada,
@@ -161,7 +162,7 @@ export function useGuardarBorrador() {
 
       // Route through worker API (bypasses RLS for cross-vendor clients)
       const { data: { session } } = await supabase.auth.getSession()
-      const res = await fetch('/api/cotizaciones/guardar', {
+      const res = await fetch(apiUrl('/api/cotizaciones/guardar'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -307,7 +308,7 @@ export function useReciclarCotizacion() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session?.access_token) throw new Error('No autenticado')
 
-      const res = await fetch('/api/cotizaciones/reciclar', {
+      const res = await fetch(apiUrl('/api/cotizaciones/reciclar'), {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${session.access_token}`,
