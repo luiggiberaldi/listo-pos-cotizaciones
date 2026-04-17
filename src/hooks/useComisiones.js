@@ -31,7 +31,8 @@ export function useComisiones({ estado = '', vendedorId = '' } = {}) {
         .order('creado_en', { ascending: false })
 
       if (estado) query = query.eq('estado', estado)
-      if (vendedorId) query = query.eq('vendedor_id', vendedorId)
+      if (!esSupervisor) query = query.eq('vendedor_id', perfil.id)
+      else if (vendedorId) query = query.eq('vendedor_id', vendedorId)
 
       const { data, error } = await query
       if (error) throw error

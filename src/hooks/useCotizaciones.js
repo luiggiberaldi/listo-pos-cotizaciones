@@ -49,10 +49,11 @@ export function useCotizaciones({ estado = '', clienteId = '' } = {}) {
         return data ?? []
       }
 
-      // Vendedor: vista sin FK hints (las vistas no soportan FK joins)
+      // Vendedor: filtrar explícitamente por su propio vendedor_id
       let query = supabase
         .from('v_cotizaciones_vendedor')
         .select('*')
+        .eq('vendedor_id', perfil.id)
         .order('creado_en', { ascending: false })
 
       if (estado) query = query.eq('estado', estado)
