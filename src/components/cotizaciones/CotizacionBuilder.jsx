@@ -945,6 +945,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
         numDisplay,
         totalUsd,
         validaHasta,
+        nombreVendedor: vendedor?.nombre || perfil?.nombre,
       })
 
       await compartirPorWhatsApp({
@@ -961,6 +962,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
         numDisplay,
         totalUsd,
         validaHasta,
+        nombreVendedor: perfil?.nombre,
       })
       window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank', 'noopener')
     } finally {

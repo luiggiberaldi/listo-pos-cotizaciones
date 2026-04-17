@@ -22,12 +22,34 @@ export function formatearTelefono(telefono) {
 /**
  * Genera el mensaje para WhatsApp
  */
-export function generarMensaje({ nombreNegocio, nombreCliente, numDisplay, totalUsd, validaHasta }) {
+export function generarMensaje({ nombreNegocio, nombreCliente, numDisplay, totalUsd, validaHasta, nombreVendedor }) {
   const total = `$${Number(totalUsd || 0).toFixed(2)}`
+  const empresa = nombreNegocio || 'Construacero Carabobo'
+  const saludo = nombreCliente ? `Estimado/a *${nombreCliente}*,` : 'Estimado/a cliente,'
+
   const vencim = validaHasta
-    ? `\nVálida hasta: ${new Date(validaHasta + 'T12:00:00').toLocaleDateString('es-VE')}`
+    ? `📅 *Válida hasta:* ${new Date(validaHasta + 'T12:00:00').toLocaleDateString('es-VE', { day: '2-digit', month: 'long', year: 'numeric' })}`
     : ''
-  return `Hola${nombreCliente ? ` ${nombreCliente}` : ''}, te envío la ${numDisplay} de *${nombreNegocio || 'Cotización'}*.\n\nTotal: *${total}*${vencim}\n\nQuedo a tu disposición para cualquier consulta.`
+
+  const firma = nombreVendedor
+    ? `Atentamente,\n*${nombreVendedor}*\n_${empresa}_`
+    : `Atentamente,\n_${empresa}_`
+
+  return [
+    saludo,
+    '',
+    `Le hacemos llegar la cotización *${numDisplay}* emitida por *${empresa}*.`,
+    '',
+    '📋 *Resumen:*',
+    `• Monto total: *${total}*`,
+    vencim ? `• ${vencim}` : '',
+    '',
+    'Adjunto encontrará el documento en formato PDF para su revisión.',
+    '',
+    'Para confirmar el pedido o consultar cualquier detalle, estamos a su entera disposición.',
+    '',
+    firma,
+  ].filter(l => l !== null && l !== undefined && !(l === '' && false)).join('\n')
 }
 
 /**
