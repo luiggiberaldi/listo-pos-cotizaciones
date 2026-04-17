@@ -3,7 +3,7 @@
 // En Cloudflare Workers las rutas /api/* son locales.
 // En Vercel (u otro host) se redirige al worker de Cloudflare.
 
-const WORKER_ORIGIN = 'https://listo-pos-cotizaciones.camelai.app'
+const WORKER_ORIGIN = 'https://listo-pos-cotizaciones-6q2oib.camelai.app'
 
 function isWorkerHost() {
   const host = window.location.hostname
