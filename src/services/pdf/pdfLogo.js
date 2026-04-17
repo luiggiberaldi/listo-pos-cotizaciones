@@ -1,11 +1,14 @@
 // src/services/pdf/pdfLogo.js
 // Carga el logo de la empresa como base64 para incrustar en PDFs
-// Redimensiona a max 400px para evitar PDFs enormes (logo 4500px → PDF de 77MB)
+// Usa logo embebido como fallback si no hay logo_url configurado
+import { LOGO_CONSTRUACERO } from './logoBase64'
+
 export async function cargarLogo(logoUrl, maxPx = 400) {
-  if (!logoUrl) return null
+  if (!logoUrl) return LOGO_CONSTRUACERO
+
   try {
     const res = await fetch(logoUrl)
-    if (!res.ok) return null
+    if (!res.ok) return LOGO_CONSTRUACERO
     const blob = await res.blob()
 
     return new Promise((resolve) => {
@@ -32,12 +35,12 @@ export async function cargarLogo(logoUrl, maxPx = 400) {
 
       img.onerror = () => {
         URL.revokeObjectURL(objectUrl)
-        resolve(null)
+        resolve(LOGO_CONSTRUACERO)
       }
 
       img.src = objectUrl
     })
   } catch {
-    return null
+    return LOGO_CONSTRUACERO
   }
 }
