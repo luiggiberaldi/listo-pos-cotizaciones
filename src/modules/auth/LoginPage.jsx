@@ -135,10 +135,13 @@ function UserCard({ user, onClick, index }) {
   )
 }
 
+const USUARIOS_CACHE_KEY = 'listo_usuarios_cache'
+
 // ─── Paso 2: Seleccionar usuario ──────────────────────────────────────────────
 function UserSelectStep() {
-  const [usuarios,     setUsuarios]     = useState([])
-  const [cargando,     setCargando]     = useState(true)
+  const cached = (() => { try { return JSON.parse(localStorage.getItem(USUARIOS_CACHE_KEY) || '[]') } catch { return [] } })()
+  const [usuarios,     setUsuarios]     = useState(cached)
+  const [cargando,     setCargando]     = useState(cached.length === 0)
   const [errorLista,   setErrorLista]   = useState(null)
   const [seleccionado, setSeleccionado] = useState(null)
   const [visible,      setVisible]      = useState(false)
@@ -146,21 +149,22 @@ function UserSelectStep() {
   const { login } = useAuthStore()
   const navigate  = useNavigate()
 
-  async function cargarUsuarios() {
-    setCargando(true)
+  async function cargarUsuarios(silencioso = false) {
+    if (!silencioso) setCargando(usuarios.length === 0)
     setErrorLista(null)
     const { data, error } = await supabase.rpc('listar_usuarios_login')
     if (error) {
-      setErrorLista('No se pudo cargar la lista de usuarios')
+      if (usuarios.length === 0) setErrorLista('No se pudo cargar la lista de usuarios')
     } else {
-      setUsuarios(data ?? [])
+      const lista = data ?? []
+      setUsuarios(lista)
+      localStorage.setItem(USUARIOS_CACHE_KEY, JSON.stringify(lista))
     }
     setCargando(false)
   }
 
   useEffect(() => {
-    cargarUsuarios()
-    // Trigger entrada animada
+    cargarUsuarios(cached.length > 0) // silencioso si hay caché
     const t = setTimeout(() => setVisible(true), 50)
     return () => clearTimeout(t)
   }, [])
@@ -263,7 +267,7 @@ function UserSelectStep() {
                 </p>
               </div>
               <button
-                onClick={cargarUsuarios}
+                onClick={cargarUsuarios.bind(null, false)}
                 disabled={cargando}
                 className="p-2 sm:p-2.5 rounded-xl transition-all disabled:opacity-40 shrink-0"
                 style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.5)' }}
