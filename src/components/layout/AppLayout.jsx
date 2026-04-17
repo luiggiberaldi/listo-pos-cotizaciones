@@ -320,7 +320,7 @@ export default function AppLayout() {
       {/* ── Sidebar / Drawer ─────────────────────────────────────────────── */}
       <aside
         className={`
-          fixed inset-y-0 left-0 z-50 flex flex-col shrink-0
+          fixed inset-y-0 left-0 z-50 flex flex-col shrink-0 overflow-hidden
           transition-all duration-300 ease-out
           ${menuOpen ? 'translate-x-0' : '-translate-x-full'}
           ${sidebarCollapsed ? 'md:w-[72px]' : 'md:w-64'}
@@ -348,7 +348,7 @@ export default function AppLayout() {
         </div>
 
         {/* Logo + botón colapsar */}
-        <div className="relative z-10 px-4 py-5 flex flex-col items-center" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="relative z-10 px-4 py-5 flex flex-col items-center shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
 
           <img src="/logo.png" alt="Construacero Carabobo"
             className="object-contain transition-all duration-300 select-none pointer-events-none"
@@ -402,8 +402,8 @@ export default function AppLayout() {
           )}
         </nav>
 
-        {/* Usuario + cerrar sesión */}
-        <div className="relative z-10 p-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+        {/* Usuario + cerrar sesión — siempre visible al fondo */}
+        <div className="relative z-10 p-3 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           <button
             onClick={handleLogout}
             className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} p-3 rounded-2xl active:scale-[0.98] transition-all group`}
