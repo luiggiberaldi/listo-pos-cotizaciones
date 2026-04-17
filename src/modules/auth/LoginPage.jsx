@@ -338,5 +338,10 @@ function UserSelectStep() {
 
 // ─── Vista principal ──────────────────────────────────────────────────────────
 export default function LoginPage() {
+  useEffect(() => {
+    const prev = document.body.style.backgroundColor
+    document.body.style.backgroundColor = '#0a1628'
+    return () => { document.body.style.backgroundColor = prev }
+  }, [])
   return <UserSelectStep />
 }
