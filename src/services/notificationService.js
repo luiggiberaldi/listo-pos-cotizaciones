@@ -104,11 +104,13 @@ export function notifyStockBajo(productos) {
   )
 }
 
-export function notifyCotizacionEnviada(numero, clienteNombre) {
+export function notifyCotizacionEnviada(numero, clienteNombre, vendedorNombre, totalUsd) {
+  const total = totalUsd ? ` — $${Number(totalUsd).toFixed(2)}` : ''
+  const de = vendedorNombre ? ` de ${vendedorNombre}` : ''
   createNotification(
     NOTIF_TYPES.COTIZACION_ENVIADA,
-    'Cotización Enviada',
-    `Cotización #${numero} enviada al cliente ${clienteNombre}`,
+    `COT-${numero} pendiente de aprobación`,
+    `${clienteNombre}${total}${de}`,
   )
 }
 

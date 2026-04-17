@@ -197,25 +197,27 @@ export function useEnviarCotizacion() {
           throw new Error('Solo se pueden enviar cotizaciones en borrador')
         throw error
       }
-      // Obtener número y cliente para mostrar en toast/notificación
+      // Obtener número, cliente, vendedor y total para notificación
       const { data: cot } = await supabase
         .from('cotizaciones')
-        .select('numero, version, cliente:clientes!cotizaciones_cliente_id_fkey(nombre)')
+        .select('numero, version, total_usd, cliente:clientes!cotizaciones_cliente_id_fkey(nombre), vendedor:usuarios!cotizaciones_vendedor_id_fkey(nombre)')
         .eq('id', cotizacionId)
         .single()
-      const numero = cot?.numero ? String(cot.numero).padStart(5, '0') : '—'
+      const numero        = cot?.numero ? String(cot.numero).padStart(5, '0') : '—'
       const clienteNombre = cot?.cliente?.nombre ?? 'cliente'
-      return { numero, clienteNombre }
+      const vendedorNombre = cot?.vendedor?.nombre ?? 'vendedor'
+      const totalUsd      = Number(cot?.total_usd || 0).toFixed(2)
+      return { numero, clienteNombre, vendedorNombre, totalUsd }
     },
-    onSuccess: ({ numero, clienteNombre }) => {
+    onSuccess: ({ numero, clienteNombre, vendedorNombre, totalUsd }) => {
       qc.invalidateQueries({ queryKey: COTIZACIONES_KEY })
       showToast(`Cotización #${numero} enviada`, 'success')
-      notifyCotizacionEnviada(numero, clienteNombre ?? 'cliente')
+      notifyCotizacionEnviada(numero, clienteNombre, vendedorNombre, totalUsd)
       sendPushNotification({
-        title: '📤 Cotización Enviada',
-        message: `Cotización #${numero} enviada a ${clienteNombre ?? 'cliente'}`,
+        title: '🔔 Cotización pendiente de aprobación',
+        message: `${vendedorNombre} envió COT-${numero} para ${clienteNombre} — $${totalUsd}. Requiere tu revisión.`,
         tag: `cotizacion-enviada-${numero}`,
-        url: '/cotizaciones',
+        url: '/cotizaciones?estado=enviada',
       })
     },
   })

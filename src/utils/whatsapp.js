@@ -35,10 +35,14 @@ export function generarMensaje({ nombreNegocio, nombreCliente, numDisplay, total
     ? `Atentamente,\n*${nombreVendedor}*\n_${empresa}_`
     : `Atentamente,\n_${empresa}_`
 
+  const intro = nombreVendedor
+    ? `Le escribe *${nombreVendedor}* de *${empresa}*. A continuación le hacemos llegar la cotización *${numDisplay}*:`
+    : `Le hacemos llegar la cotización *${numDisplay}* emitida por *${empresa}*:`
+
   return [
     saludo,
     '',
-    `Le hacemos llegar la cotización *${numDisplay}* emitida por *${empresa}*.`,
+    intro,
     '',
     '📋 *Resumen:*',
     `• Monto total: *${total}*`,
