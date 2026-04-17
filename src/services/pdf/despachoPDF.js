@@ -140,11 +140,11 @@ export async function generarDespachoPDF({ despacho, items = [], config = {} }) 
   doc.setTextColor(...C_DARK)
   let name = config.nombre_negocio || 'CONSTRUACERO CARABOBO'
   let splitName = name.split(' ')
-  doc.text((splitName[0] || '').toUpperCase(), textX, 16)
+  doc.text((splitName[0] || '').toUpperCase(), textX, 18)
   if (splitName.length > 1) {
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(15)
-    doc.text(splitName.slice(1).join(' ').toUpperCase(), textX, 24)
+    doc.text(splitName.slice(1).join(' ').toUpperCase(), textX, 27)
   }
 
   // "Nota de Despacho"
