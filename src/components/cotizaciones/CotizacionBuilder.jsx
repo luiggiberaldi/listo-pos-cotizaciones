@@ -54,10 +54,13 @@ function StepIndicator({ paso, totalPasos = 4 }) {
         return (
           <div key={step} className="flex items-center gap-1 sm:gap-2">
             <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-bold transition-all ${
-              isActive ? 'bg-primary text-white shadow-sm' :
-              isDone   ? 'bg-emerald-100 text-emerald-700' :
-                         'bg-slate-100 text-slate-400'
-            }`}>
+              isDone ? 'bg-emerald-100 text-emerald-700' : !isActive ? 'bg-slate-100 text-slate-400' : ''
+            }`}
+              style={isActive ? {
+                background: 'linear-gradient(135deg, #1B365D, #B8860B)',
+                color: 'white',
+                boxShadow: '0 2px 8px rgba(27,54,93,0.3)',
+              } : undefined}>
               {isDone ? <CheckCircle size={12} /> : <span>{step}</span>}
               <span className="hidden sm:inline">{STEP_LABELS[i]}</span>
             </div>
@@ -766,6 +769,20 @@ function ClienteSelector({ clientes, clienteId, onSelect }) {
 }
 
 // ─── Componente principal (Wizard) ───────────────────────────────────────────
+
+// Mini header de sección consistente con el resto de la app
+function SectionH3({ icon: Icon, children }) {
+  return (
+    <div className="flex items-center gap-3 mb-1">
+      <div className="w-0.5 self-stretch rounded-full shrink-0" style={{ background: 'linear-gradient(180deg, #B8860B, #1B365D)', minHeight: '18px' }} />
+      <div className="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
+        style={{ background: 'linear-gradient(135deg, rgba(27,54,93,0.08), rgba(184,134,11,0.08))', border: '1px solid rgba(27,54,93,0.1)' }}>
+        {Icon && <Icon size={12} style={{ color: '#1B365D' }} />}
+      </div>
+      <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wide">{children}</h3>
+    </div>
+  )
+}
 export default function CotizacionBuilder({ cotizacionExistente = null, onVolver, onGuardado }) {
   const esEdicion = !!cotizacionExistente
   const { perfil } = useAuthStore()
@@ -1065,9 +1082,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
             {/* Selector de vendedor — solo supervisor al crear (no editar) */}
             {esSupervisor && !esEdicion && (
               <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
-                <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wide flex items-center gap-2">
-                  <Tag size={14} className="text-slate-400" /> Asignar a vendedor
-                </h3>
+                <SectionH3 icon={Tag}>Asignar a vendedor</SectionH3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {vendedores.map(v => {
                     const sel = vendedorId === v.id
@@ -1099,9 +1114,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
 
             <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wide flex items-center gap-2">
-                  <User size={14} className="text-slate-400" /> Seleccionar cliente
-                </h3>
+                <SectionH3 icon={User}>Seleccionar cliente</SectionH3>
                 <button onClick={() => setShowCrearCliente(!showCrearCliente)}
                   className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 hover:text-emerald-700 transition-colors">
                   <UserPlus size={13} /> {showCrearCliente ? 'Cancelar' : 'Nuevo cliente'}
@@ -1172,7 +1185,8 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
             {/* Botón siguiente */}
             <div className="flex justify-end">
               <button onClick={siguiente}
-                className="flex items-center gap-2 px-6 py-3 bg-primary hover:bg-primary-hover text-white font-bold text-sm rounded-xl transition-colors shadow-sm">
+                className="flex items-center gap-2 px-6 py-3 text-white font-bold text-sm rounded-xl transition-all shadow-lg active:scale-[0.98]"
+                style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
                 Siguiente: Productos <ArrowRight size={16} />
               </button>
             </div>
@@ -1194,9 +1208,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
             </div>
 
             <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-              <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wide">
-                Agregar productos
-              </h3>
+              <SectionH3 icon={Package}>Agregar productos</SectionH3>
               <BuscadorProductos onAgregar={agregarProducto} itemsAgregados={items} tasa={tasaHook.tasaEfectiva} />
 
               {items.length > 0 && (
@@ -1259,7 +1271,8 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
                 <ArrowLeft size={16} /> Volver
               </button>
               <button onClick={siguiente}
-                className="flex items-center gap-2 px-6 py-3 bg-primary hover:bg-primary-hover text-white font-bold text-sm rounded-xl transition-colors shadow-sm">
+                className="flex items-center gap-2 px-6 py-3 text-white font-bold text-sm rounded-xl transition-all shadow-lg active:scale-[0.98]"
+                style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
                 Siguiente: Resumen <ArrowRight size={16} />
               </button>
             </div>
@@ -1273,7 +1286,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
           <div className="space-y-4">
             {/* Resumen de cliente + items */}
             <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
-              <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wide">Resumen</h3>
+              <SectionH3 icon={User}>Resumen</SectionH3>
               <div className="flex items-center gap-2 text-sm">
                 <User size={14} className="text-primary" />
                 <span className="font-medium text-slate-700">{clienteSeleccionado?.nombre}</span>
@@ -1286,9 +1299,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
 
             {/* Envío y validez */}
             <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-              <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wide flex items-center gap-2">
-                <Truck size={14} className="text-slate-400" /> Envío y validez
-              </h3>
+              <SectionH3 icon={Truck}>Envío y validez</SectionH3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-slate-700">Transportista</label>
@@ -1319,9 +1330,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
 
             {/* Descuentos y totales */}
             <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-              <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wide">
-                Descuentos y totales
-              </h3>
+              <SectionH3 icon={DollarSign}>Descuentos y totales</SectionH3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div className="space-y-3">
                   <div className="space-y-1.5">
@@ -1390,9 +1399,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
 
             {/* Notas */}
             <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-              <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wide flex items-center gap-2">
-                <StickyNote size={14} className="text-slate-400" /> Notas
-              </h3>
+              <SectionH3 icon={StickyNote}>Notas</SectionH3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-slate-700">
@@ -1427,7 +1434,8 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
                 </button>
                 <button onClick={() => { setErrorGeneral(''); handleEnviar(tasaHook.tasaEfectiva) }}
                   disabled={cargando || tasaHook.tasaEfectiva <= 0}
-                  className="flex items-center gap-2 px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white font-bold text-sm rounded-xl transition-colors shadow-sm disabled:opacity-50">
+                  className="flex items-center gap-2 px-6 py-3 text-white font-bold text-sm rounded-xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50"
+                  style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
                   {enviarCotizacion.isPending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
                   Enviar cotización
                 </button>
@@ -1441,63 +1449,72 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
         {/* ═══════════════════════════════════════════════════════════════ */}
         {paso === 4 && (
           <div className="flex items-center justify-center min-h-[50vh]">
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-lg p-6 sm:p-8 max-w-md w-full text-center space-y-5">
+            <div className="bg-white rounded-2xl border border-emerald-200 shadow-lg overflow-hidden max-w-md w-full">
 
-              {/* Icono de éxito */}
-              <div className="mx-auto w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center">
-                <CheckCircle size={32} className="text-emerald-500" />
-              </div>
-
-              <div>
-                <h3 className="text-xl font-black text-slate-800">Cotización enviada</h3>
-                {numDisplay && (
-                  <p className="text-primary font-bold text-lg font-mono mt-1">{numDisplay}</p>
-                )}
-              </div>
-
-              <div className="bg-slate-50 rounded-xl p-4 space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Cliente</span>
-                  <span className="font-medium text-slate-800">{clienteSeleccionado?.nombre}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Total</span>
-                  <span className="font-bold text-slate-800">{fmtUsd(totalUsd)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Items</span>
-                  <span className="text-slate-700">{items.length} producto{items.length !== 1 ? 's' : ''}</span>
+              {/* Strip de éxito */}
+              <div className="relative h-24 flex flex-col items-center justify-center gap-1"
+                style={{ background: 'linear-gradient(135deg, #065f46ee 0%, #059669aa 100%)' }}>
+                <div className="absolute inset-0 opacity-10 pointer-events-none"
+                  style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '12px 12px' }} />
+                <div className="relative z-10 w-12 h-12 rounded-full flex items-center justify-center"
+                  style={{ background: 'rgba(255,255,255,0.25)', border: '2px solid rgba(255,255,255,0.5)' }}>
+                  <CheckCircle size={24} color="white" />
                 </div>
               </div>
 
-              {/* Acciones */}
-              <div className="space-y-3">
-                <div className="flex gap-3">
-                  <button onClick={descargarPDF} disabled={pdfLoading}
-                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-sm rounded-xl transition-colors disabled:opacity-50">
-                    {pdfLoading
-                      ? <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-                      : <FileDown size={16} />}
-                    Descargar PDF
+              <div className="p-6 sm:p-8 space-y-5 text-center">
+                <div>
+                  <h3 className="text-xl font-black text-slate-800">Cotización enviada</h3>
+                  {numDisplay && (
+                    <p className="font-bold text-lg font-mono mt-1" style={{ color: '#1B365D' }}>{numDisplay}</p>
+                  )}
+                </div>
+
+                <div className="bg-slate-50 rounded-xl p-4 space-y-2 text-sm text-left">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Cliente</span>
+                    <span className="font-medium text-slate-800">{clienteSeleccionado?.nombre}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Total</span>
+                    <span className="font-bold text-slate-800">{fmtUsd(totalUsd)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Items</span>
+                    <span className="text-slate-700">{items.length} producto{items.length !== 1 ? 's' : ''}</span>
+                  </div>
+                </div>
+
+                {/* Acciones */}
+                <div className="space-y-3">
+                  <div className="flex gap-3">
+                    <button onClick={descargarPDF} disabled={pdfLoading}
+                      className="flex-1 flex items-center justify-center gap-2 py-3 bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-sm rounded-xl transition-colors disabled:opacity-50">
+                      {pdfLoading
+                        ? <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                        : <FileDown size={16} />}
+                      Descargar PDF
+                    </button>
+                    <button onClick={handleWhatsApp} disabled={waLoading}
+                      className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-sm rounded-xl transition-colors disabled:opacity-50">
+                      {waLoading
+                        ? <div className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+                        : <MessageCircle size={16} />}
+                      WhatsApp
+                    </button>
+                  </div>
+
+                  <button onClick={onGuardado}
+                    className="w-full py-3 text-white font-bold text-sm rounded-xl transition-all shadow-lg active:scale-[0.98] flex items-center justify-center gap-2"
+                    style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
+                    <Plus size={16} /> Nueva cotización
                   </button>
-                  <button onClick={handleWhatsApp} disabled={waLoading}
-                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-sm rounded-xl transition-colors disabled:opacity-50">
-                    {waLoading
-                      ? <div className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
-                      : <MessageCircle size={16} />}
-                    WhatsApp
+
+                  <button onClick={onVolver}
+                    className="w-full py-2.5 text-slate-500 hover:text-slate-700 font-medium text-sm transition-colors">
+                    Volver a la lista
                   </button>
                 </div>
-
-                <button onClick={onGuardado}
-                  className="w-full py-3 bg-primary hover:bg-primary-hover text-white font-bold text-sm rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2">
-                  <Plus size={16} /> Nueva cotización
-                </button>
-
-                <button onClick={onVolver}
-                  className="w-full py-2.5 text-slate-500 hover:text-slate-700 font-medium text-sm transition-colors">
-                  Volver a la lista
-                </button>
               </div>
             </div>
           </div>
