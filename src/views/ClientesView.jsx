@@ -45,11 +45,11 @@ function Dropdown({ value, onChange, placeholder, options }) {
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-1.5 min-w-[180px] bg-white border border-slate-200 rounded-xl shadow-lg shadow-slate-200/50 py-1 animate-in fade-in slide-in-from-top-1 duration-150">
+        <div className="absolute z-50 mt-1.5 min-w-[180px] bg-white border border-slate-200 rounded-xl shadow-lg shadow-slate-200/50 py-1 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
           <button
             type="button"
             onClick={() => { onChange(''); setOpen(false) }}
-            className={`w-full flex items-center gap-2 text-left text-sm px-3 py-2 transition-colors rounded-lg mx-0 ${
+            className={`w-full flex items-center gap-2 text-left text-sm px-3 py-2 transition-colors ${
               !value ? 'bg-primary-light text-primary font-semibold' : 'text-slate-600 hover:bg-slate-50'
             }`}
           >
@@ -61,7 +61,7 @@ function Dropdown({ value, onChange, placeholder, options }) {
               key={opt.value}
               type="button"
               onClick={() => { onChange(opt.value); setOpen(false) }}
-              className={`w-full flex items-center gap-2 text-left text-sm px-3 py-2 transition-colors rounded-lg ${
+              className={`w-full flex items-center gap-2 text-left text-sm px-3 py-2 transition-colors ${
                 value === opt.value ? 'bg-primary-light text-primary font-semibold' : 'text-slate-700 hover:bg-slate-50'
               }`}
             >
