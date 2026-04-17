@@ -135,26 +135,49 @@ function TransportistaModal({ transportista = null, onClose }) {
   )
 }
 
+// ─── Color determinista por nombre ────────────────────────────────────────────
+const PALETA_TRANSP = [
+  '#1B365D', '#065f46', '#7c3aed', '#be185d',
+  '#0f766e', '#b45309', '#1d4ed8', '#92400e',
+  '#0e7490', '#4f46e5', '#15803d', '#9a3412',
+]
+function colorTransportista(str = '') {
+  let h = 0
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) & 0xffff
+  return PALETA_TRANSP[h % PALETA_TRANSP.length]
+}
+
 // ─── Tarjeta ──────────────────────────────────────────────────────────────────
 function TransportistaCard({ transportista, esSupervisor, onEditar, onDesactivar }) {
-  return (
-    <div className="group bg-white rounded-2xl border border-slate-200 hover:border-sky-200 hover:shadow-lg hover:shadow-sky-50 transition-all duration-200 overflow-hidden flex flex-col">
+  const color = colorTransportista(transportista.nombre)
 
-      {/* ── Cabecera ── */}
-      <div className="px-4 pt-4 pb-2 flex items-center gap-2.5">
-        <div className="w-9 h-9 bg-primary-light rounded-xl flex items-center justify-center shrink-0">
-          <Truck size={16} className="text-primary" />
-        </div>
-        <div className="min-w-0">
-          <p className="font-bold text-slate-800 text-sm leading-tight truncate">{transportista.nombre}</p>
-          {transportista.rif && (
-            <p className="text-xs text-slate-400 font-mono">{transportista.rif}</p>
-          )}
+  return (
+    <div className="bg-white rounded-2xl border overflow-hidden flex flex-col hover:shadow-lg transition-all duration-200"
+      style={{ borderColor: color + '30', boxShadow: `0 1px 3px ${color}10` }}>
+
+      {/* ── Strip superior con color ── */}
+      <div className="relative h-20 shrink-0 flex flex-col items-center justify-center gap-1"
+        style={{ background: `linear-gradient(135deg, ${color}ee 0%, ${color}99 100%)` }}>
+        {/* Dot pattern */}
+        <div className="absolute inset-0 opacity-10 pointer-events-none"
+          style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '12px 12px' }} />
+        {/* Ícono camión */}
+        <div className="relative z-10 w-10 h-10 rounded-xl flex items-center justify-center"
+          style={{ background: 'rgba(255,255,255,0.2)', border: '2px solid rgba(255,255,255,0.4)', backdropFilter: 'blur(4px)' }}>
+          <Truck size={20} color="white" />
         </div>
       </div>
 
+      {/* ── Nombre + RIF ── */}
+      <div className="px-4 pt-3 pb-1 text-center">
+        <p className="font-black text-slate-800 text-sm leading-tight truncate">{transportista.nombre}</p>
+        {transportista.rif && (
+          <p className="text-[11px] text-slate-400 font-mono mt-0.5">{transportista.rif}</p>
+        )}
+      </div>
+
       {/* ── Detalles ── */}
-      <div className="px-4 pb-3 space-y-1.5">
+      <div className="px-4 pb-3 mt-1 space-y-1.5">
         {transportista.telefono && (
           <div className="flex items-center gap-1.5 text-xs text-slate-500">
             <Phone size={11} className="text-slate-400 shrink-0" />
@@ -164,22 +187,23 @@ function TransportistaCard({ transportista, esSupervisor, onEditar, onDesactivar
         {transportista.zona_cobertura && (
           <div className="flex items-center gap-1.5 text-xs text-slate-500">
             <MapPin size={11} className="text-slate-400 shrink-0" />
-            <span>{transportista.zona_cobertura}</span>
+            <span className="truncate">{transportista.zona_cobertura}</span>
           </div>
         )}
       </div>
 
       {/* ── Tarifa ── */}
-      <div className="mx-4 mb-3 bg-slate-50 rounded-xl px-3.5 py-2.5 flex items-center justify-between">
+      <div className="mx-4 mb-3 rounded-xl px-3.5 py-2.5 flex items-center justify-between mt-auto"
+        style={{ background: color + '10', border: `1px solid ${color}25` }}>
         <span className="text-xs font-medium text-slate-500">Tarifa base</span>
-        <span className="text-base font-bold text-slate-800">
+        <span className="text-base font-bold" style={{ color }}>
           $ {Number(transportista.tarifa_base || 0).toFixed(2)}
         </span>
       </div>
 
       {/* ── Acciones (solo supervisor) ── */}
       {esSupervisor && (
-        <div className="mt-auto border-t border-slate-100 px-3 py-2 flex items-center gap-1">
+        <div className="border-t border-slate-100 px-3 py-2 flex items-center gap-1">
           <button onClick={() => onEditar(transportista)} title="Editar"
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
             <Pencil size={13} />
