@@ -16,6 +16,7 @@ import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs } from '../utils/forma
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import CustomSelect from '../components/ui/CustomSelect'
 import Skeleton from '../components/ui/Skeleton'
+import PageHeader from '../components/ui/PageHeader'
 
 // ─── Configuración de categorías ────────────────────────────────────────────
 const CATEGORIA_CONFIG = {
@@ -498,23 +499,16 @@ export default function AuditoriaView() {
     <div className="p-4 md:p-6 lg:p-8 space-y-4 md:space-y-6">
 
       {/* Encabezado */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-primary-light rounded-xl flex items-center justify-center">
-            <ClipboardList size={20} className="text-primary" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-slate-800">Auditoría</h1>
-            <p className="text-sm text-slate-500">
-              {isLoading ? 'Cargando...' : `${total.toLocaleString()} registro${total !== 1 ? 's' : ''} de actividad`}
-            </p>
-          </div>
-        </div>
-        <button onClick={() => refetch()}
-          className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors self-start sm:self-auto">
-          <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
-        </button>
-      </div>
+      <PageHeader
+        icon={ClipboardList}
+        title="Auditoría"
+        subtitle={isLoading ? 'Cargando...' : `${total.toLocaleString()} registro${total !== 1 ? 's' : ''} de actividad`}
+        action={
+          <button onClick={() => refetch()} className="p-2 rounded-xl transition-colors text-slate-400 hover:text-slate-700 hover:bg-slate-100">
+            <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+          </button>
+        }
+      />
 
       {/* Filtros */}
       <div className="flex flex-wrap gap-3 items-center">

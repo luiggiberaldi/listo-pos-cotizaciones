@@ -12,6 +12,7 @@ import {
 import ConfirmModal from '../components/ui/ConfirmModal'
 import Skeleton     from '../components/ui/Skeleton'
 import EmptyState   from '../components/ui/EmptyState'
+import PageHeader  from '../components/ui/PageHeader'
 
 // ─── Formulario ───────────────────────────────────────────────────────────────
 function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
@@ -247,33 +248,24 @@ export default function TransportistasView() {
     <div className="p-4 md:p-6 lg:p-8 space-y-4 md:space-y-6">
 
       {/* Encabezado */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-primary-light rounded-xl flex items-center justify-center">
-            <Truck size={20} className="text-primary" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-slate-800">Transportistas</h1>
-            <p className="text-sm text-slate-500">
-              {isLoading ? 'Cargando...' : `${transportistas.length} activo${transportistas.length !== 1 ? 's' : ''}`}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button onClick={() => refetch()}
-            className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
-            <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
-          </button>
-          {esSupervisor && (
-            <button onClick={abrirNuevo}
-              className="flex items-center gap-2 bg-primary hover:bg-primary-hover text-white font-semibold text-sm px-4 py-2.5 rounded-xl transition-colors shadow-sm">
-              <Plus size={16} />
-              Nuevo transportista
+      <PageHeader
+        icon={Truck}
+        title="Transportistas"
+        subtitle={isLoading ? 'Cargando...' : `${transportistas.length} activo${transportistas.length !== 1 ? 's' : ''}`}
+        action={
+          <div className="flex items-center gap-2">
+            <button onClick={() => refetch()} className="p-2 rounded-xl transition-colors text-slate-400 hover:text-slate-700 hover:bg-slate-100">
+              <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
             </button>
-          )}
-        </div>
-      </div>
+            {esSupervisor && (
+              <button onClick={abrirNuevo} className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98]"
+                style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
+                <Plus size={16} />Nuevo transportista
+              </button>
+            )}
+          </div>
+        }
+      />
 
       {/* Contenido */}
       {isLoading ? (

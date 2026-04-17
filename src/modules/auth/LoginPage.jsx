@@ -1,175 +1,147 @@
 // src/modules/auth/LoginPage.jsx
-// Login en dos pasos:
-// Paso 1: Correo + contraseña compartidos del negocio (gate)
-// Paso 2: Grid de avatares → PIN individual (auth de Supabase)
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { RefreshCw, Mail, Key, Eye, EyeOff, ArrowRight, Loader2, ArrowLeft } from 'lucide-react'
+import { RefreshCw, Mail, Key, Eye, EyeOff, ArrowRight } from 'lucide-react'
 import supabase from '../../services/supabase/client'
 import useAuthStore from '../../store/useAuthStore'
 import LoginAvatar from '../../components/auth/LoginAvatar'
 import LoginPinModal from '../../components/auth/LoginPinModal'
 import { validarGate } from '../../hooks/useConfigNegocio'
+import { CardContainer, CardBody, CardItem } from '../../components/ui/3d-card'
 
 const GATE_SESSION_KEY = 'listo_gate_ok'
 
-// ─── Tarjeta de usuario ────────────────────────────────────────────────────────
-function UserCard({ user, onClick }) {
+// ─── Fondo animado con orbes ─────────────────────────────────────────────────
+function DarkBackground() {
+  return (
+    <div className="fixed inset-0 overflow-hidden pointer-events-none" style={{ background: 'linear-gradient(135deg, #0a1628 0%, #0d1f3c 40%, #0a1a0f 100%)' }}>
+      {/* Orbe azul marino grande */}
+      <div className="absolute -top-[20%] -left-[10%] w-[700px] h-[700px] rounded-full opacity-30"
+        style={{ background: 'radial-gradient(circle, #1B365D 0%, transparent 70%)', filter: 'blur(80px)' }} />
+      {/* Orbe dorado */}
+      <div className="absolute -bottom-[20%] -right-[10%] w-[600px] h-[600px] rounded-full opacity-20"
+        style={{ background: 'radial-gradient(circle, #B8860B 0%, transparent 70%)', filter: 'blur(80px)' }} />
+      {/* Orbe centro sutil */}
+      <div className="absolute top-[30%] left-[50%] -translate-x-1/2 w-[400px] h-[400px] rounded-full opacity-10"
+        style={{ background: 'radial-gradient(circle, #3b82f6 0%, transparent 70%)', filter: 'blur(60px)' }} />
+
+      {/* Malla de puntos decorativa */}
+      <svg className="absolute inset-0 w-full h-full opacity-[0.04]" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <circle cx="1" cy="1" r="1" fill="white" />
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#grid)" />
+      </svg>
+
+      {/* Línea decorativa diagonal */}
+      <div className="absolute top-0 left-[35%] w-px h-full opacity-10"
+        style={{ background: 'linear-gradient(to bottom, transparent 0%, #B8860B 30%, #1B365D 70%, transparent 100%)' }} />
+      <div className="absolute top-0 left-[65%] w-px h-full opacity-5"
+        style={{ background: 'linear-gradient(to bottom, transparent 0%, #3b82f6 50%, transparent 100%)' }} />
+    </div>
+  )
+}
+
+// ─── Colores de acento por rol ────────────────────────────────────────────────
+const ROL_ACCENT = {
+  supervisor: { color: '#3b82f6', glow: 'rgba(59,130,246,0.35)', chip: 'rgba(59,130,246,0.15)', chipBorder: 'rgba(59,130,246,0.3)', label: 'Supervisor' },
+  vendedor:   { color: '#14b8a6', glow: 'rgba(20,184,166,0.3)',  chip: 'rgba(20,184,166,0.12)', chipBorder: 'rgba(20,184,166,0.25)', label: 'Vendedor'   },
+}
+
+// ─── Tarjeta de usuario (Dark Premium) ───────────────────────────────────────
+function UserCard({ user, onClick, index }) {
+  const [hovered, setHovered] = React.useState(false)
+
   const nombre = (user.nombre || 'Usuario')
     .split(' ')
     .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
     .join(' ')
     .split(' ').slice(0, 2).join(' ')
 
+  const rol = user.rol || 'vendedor'
+  const acc = ROL_ACCENT[rol] ?? ROL_ACCENT.vendedor
+
   return (
-    <button
+    <div
       onClick={() => onClick(user)}
-      className="flex flex-col items-center gap-3 p-5 rounded-2xl bg-white/60 hover:bg-white border border-white/80 hover:border-sky-200 hover:shadow-lg hover:shadow-sky-500/10 transition-all active:scale-95 group"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="cursor-pointer outline-none"
+      style={{ animation: `fadeSlideUp 0.5s ease forwards`, animationDelay: `${index * 0.1}s`, opacity: 0 }}
     >
-      <LoginAvatar user={user} className="group-hover:scale-105 transition-transform" />
-      <div className="text-center">
-        <p className="text-sm font-black text-slate-800 leading-tight">{nombre}</p>
-        <p className={`text-[11px] font-bold mt-0.5 ${
-          user.rol === 'supervisor' ? 'text-sky-500' : 'text-teal-500'
-        }`}>
-          {user.rol === 'supervisor' ? 'Supervisor' : 'Vendedor'}
-        </p>
-      </div>
-    </button>
-  )
-}
+      <CardContainer className="inter-var py-0">
+        <CardBody className="relative group/card w-auto h-auto p-0 border-transparent bg-transparent">
 
-// ─── Paso 1: Gate (correo + contraseña del negocio) ───────────────────────────
-function GateStep({ onSuccess }) {
-  const [email, setEmail]       = useState('')
-  const [password, setPassword] = useState('')
-  const [showPass, setShowPass] = useState(false)
-  const [error, setError]       = useState('')
-  const [cargando, setCargando] = useState(false)
-
-  async function handleSubmit(e) {
-    e.preventDefault()
-    setError('')
-
-    if (!email.trim()) { setError('Ingresa el correo del negocio'); return }
-    if (!password)      { setError('Ingresa la contraseña'); return }
-
-    setCargando(true)
-    try {
-      const result = await validarGate(email, password)
-      if (result.ok) {
-        sessionStorage.setItem(GATE_SESSION_KEY, '1')
-        onSuccess()
-      } else {
-        setError(result.error || 'Credenciales incorrectas')
-      }
-    } catch {
-      setError('Error de conexión. Intenta de nuevo.')
-    } finally {
-      setCargando(false)
-    }
-  }
-
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6"
-      style={{ background: 'linear-gradient(135deg, #f0f9ff 0%, #ecfdf5 100%)' }}>
-
-      {/* Logo */}
-      <div className="mb-8 select-none">
-        <img src="/logo.png" alt="Construacero Carabobo"
-          className="h-44 sm:h-52 w-auto object-contain select-none pointer-events-none" draggable={false} />
-      </div>
-
-      {/* Card */}
-      <div className="w-full max-w-sm bg-white rounded-[2rem] shadow-2xl border border-slate-100 overflow-hidden relative">
-
-        {/* Destellos decorativos */}
-        <div className="absolute top-0 right-0 -mr-12 -mt-12 w-40 h-40 rounded-full blur-3xl pointer-events-none"
-          style={{ background: 'rgba(27,54,93,0.1)' }} />
-        <div className="absolute bottom-0 left-0 -ml-12 -mb-12 w-40 h-40 rounded-full blur-3xl pointer-events-none"
-          style={{ background: 'rgba(184,134,11,0.08)' }} />
-
-        <div className="p-6 relative z-10">
-          <div className="text-center mb-6">
-            <h1 className="text-lg font-black text-slate-800">Acceso al sistema</h1>
-            <p className="text-sm text-slate-400 mt-1">Ingresa las credenciales del negocio</p>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-3">
-            {/* Email */}
-            <div>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                  <Mail size={16} className="text-slate-400" />
-                </div>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={e => { setEmail(e.target.value); setError('') }}
-                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 outline-none transition-all"
-                  placeholder="Correo del negocio"
-                  autoComplete="email"
-                  disabled={cargando}
-                  autoFocus
-                />
-              </div>
-            </div>
-
-            {/* Password */}
-            <div>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                  <Key size={16} className="text-slate-400" />
-                </div>
-                <input
-                  type={showPass ? 'text' : 'password'}
-                  value={password}
-                  onChange={e => { setPassword(e.target.value); setError('') }}
-                  className="w-full pl-10 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 outline-none transition-all"
-                  placeholder="Contraseña"
-                  autoComplete="current-password"
-                  disabled={cargando}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPass(!showPass)}
-                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-sky-500 transition-colors"
-                >
-                  {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-            </div>
-
-            {/* Error */}
-            {error && (
-              <p className="text-[11px] text-red-500 font-bold ml-1">{error}</p>
-            )}
-
-            {/* Submit */}
-            <button
-              type="submit"
-              disabled={cargando}
-              className="w-full py-3.5 text-white text-sm font-black rounded-xl transition-all shadow-lg shadow-sky-500/20 active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-70"
-              style={{ background: 'linear-gradient(135deg, #1B365D 0%, #B8860B 100%)' }}
+          <CardItem translateZ="80" className="w-full">
+            {/* Recuadro glassmorphism */}
+            <div
+              className="relative flex flex-col items-center gap-4 px-5 pt-7 pb-5 rounded-2xl transition-all duration-300"
+              style={{
+                background: hovered
+                  ? 'rgba(255,255,255,0.07)'
+                  : 'rgba(255,255,255,0.04)',
+                border: `1px solid ${hovered ? acc.color + '60' : 'rgba(255,255,255,0.08)'}`,
+                boxShadow: hovered
+                  ? `0 0 0 1px ${acc.color}30, 0 20px 60px rgba(0,0,0,0.4), 0 0 30px ${acc.glow}`
+                  : '0 8px 32px rgba(0,0,0,0.3)',
+                backdropFilter: 'blur(10px)',
+              }}
             >
-              {cargando
-                ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                : <>Entrar <ArrowRight size={16} strokeWidth={3} /></>
-              }
-            </button>
-          </form>
-        </div>
-      </div>
+              {/* Línea top de acento */}
+              <div
+                className="absolute top-0 left-[15%] right-[15%] h-px rounded-full transition-opacity duration-300"
+                style={{
+                  background: `linear-gradient(to right, transparent, ${acc.color}, transparent)`,
+                  opacity: hovered ? 0.8 : 0.2,
+                }}
+              />
+
+              {/* Avatar */}
+              <div className="relative">
+                {/* Halo de glow detrás */}
+                <div
+                  className="absolute inset-0 rounded-2xl blur-xl transition-opacity duration-300"
+                  style={{ background: acc.glow, opacity: hovered ? 1 : 0.4, transform: 'scale(1.3)' }}
+                />
+                <LoginAvatar user={user} className="relative z-10" />
+              </div>
+
+              {/* Nombre */}
+              <div className="text-center space-y-2">
+                <p className="text-base font-black text-white leading-tight tracking-tight"
+                  style={{ textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}>
+                  {nombre}
+                </p>
+                {/* Chip de rol */}
+                <span
+                  className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all duration-300"
+                  style={{
+                    background: acc.chip,
+                    border: `1px solid ${acc.chipBorder}`,
+                    color: acc.color,
+                  }}
+                >
+                  {acc.label}
+                </span>
+              </div>
+            </div>
+          </CardItem>
+
+        </CardBody>
+      </CardContainer>
     </div>
   )
 }
 
-// ─── Paso 2: Seleccionar usuario + PIN ────────────────────────────────────────
-function UserSelectStep({ onBack }) {
+// ─── Paso 2: Seleccionar usuario ──────────────────────────────────────────────
+function UserSelectStep() {
   const [usuarios,     setUsuarios]     = useState([])
   const [cargando,     setCargando]     = useState(true)
   const [errorLista,   setErrorLista]   = useState(null)
   const [seleccionado, setSeleccionado] = useState(null)
+  const [visible,      setVisible]      = useState(false)
 
   const { login } = useAuthStore()
   const navigate  = useNavigate()
@@ -186,7 +158,12 @@ function UserSelectStep({ onBack }) {
     setCargando(false)
   }
 
-  useEffect(() => { cargarUsuarios() }, [])
+  useEffect(() => {
+    cargarUsuarios()
+    // Trigger entrada animada
+    const t = setTimeout(() => setVisible(true), 50)
+    return () => clearTimeout(t)
+  }, [])
 
   async function handlePin(pin) {
     if (!seleccionado) return false
@@ -195,78 +172,157 @@ function UserSelectStep({ onBack }) {
     return ok
   }
 
-  function handleBack() {
-    sessionStorage.removeItem(GATE_SESSION_KEY)
-    onBack()
-  }
-
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6"
-      style={{ background: 'linear-gradient(135deg, #f0f9ff 0%, #ecfdf5 100%)' }}>
+    <>
+      <style>{`
+        @keyframes fadeSlideUp {
+          from { opacity: 0; transform: translateY(24px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to   { opacity: 1; }
+        }
+        @keyframes logoReveal {
+          from { opacity: 0; transform: scale(0.85) translateY(-20px); filter: blur(8px); }
+          to   { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
+        }
+      `}</style>
 
-      {/* Logo */}
-      <div className="mb-8 select-none">
-        <img src="/logo.png" alt="Construacero Carabobo"
-          className="h-44 w-auto object-contain select-none pointer-events-none" draggable={false} />
-      </div>
+      <DarkBackground />
 
-      {/* Card principal */}
-      <div className="w-full max-w-2xl bg-white/50 backdrop-blur-sm rounded-[2rem] shadow-xl border border-white/80 p-8 relative overflow-hidden">
+      {/* Layout responsivo: columna en móvil, fila en desktop grande */}
+      <div className="relative z-10 min-h-screen w-full flex flex-col lg:flex-row items-center justify-center px-4 sm:px-6 lg:px-12 py-8 gap-8 lg:gap-16">
 
-        {/* Destellos decorativos */}
-        <div className="absolute top-0 right-0 -mr-16 -mt-16 w-48 h-48 rounded-full blur-3xl pointer-events-none"
-          style={{ background: 'rgba(27,54,93,0.1)' }} />
-        <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-48 h-48 rounded-full blur-3xl pointer-events-none"
-          style={{ background: 'rgba(184,134,11,0.08)' }} />
-
-        <div className="relative z-10">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div>
-                <h1 className="text-lg font-black text-slate-800">¿Quién eres?</h1>
-                <p className="text-sm text-slate-400">Selecciona tu usuario para continuar</p>
-              </div>
-            </div>
-            <button onClick={cargarUsuarios} disabled={cargando}
-              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 transition-colors disabled:opacity-50">
-              <RefreshCw size={16} className={cargando ? 'animate-spin' : ''} />
-            </button>
+        {/* ── LOGO + BRANDING ── */}
+        <div
+          className="flex flex-col items-center lg:items-start gap-4 select-none lg:w-[340px] xl:w-[400px] shrink-0"
+          style={{ animation: 'logoReveal 0.8s ease forwards' }}
+        >
+          {/* Halo dorado */}
+          <div className="relative flex items-center justify-center lg:justify-start">
+            <div className="absolute rounded-full opacity-25 blur-3xl"
+              style={{ width: 'clamp(160px, 30vw, 280px)', height: 'clamp(160px, 30vw, 280px)', background: 'radial-gradient(circle, #B8860B 0%, transparent 70%)' }} />
+            <img
+              src="/logo.png"
+              alt="Construacero Carabobo"
+              className="relative z-10 w-auto object-contain select-none pointer-events-none drop-shadow-2xl"
+              style={{
+                height: 'clamp(160px, 22vw, 300px)',
+                filter: 'drop-shadow(0 0 40px rgba(184,134,11,0.35)) brightness(1.05)',
+              }}
+              draggable={false}
+            />
           </div>
 
-          {/* Estados */}
-          {cargando ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="flex flex-col items-center gap-3 p-5 rounded-2xl bg-white/60 border border-white/80 animate-pulse">
-                  <div className="w-20 h-20 rounded-[1.25rem] bg-slate-200" />
-                  <div className="space-y-1.5 w-full">
-                    <div className="h-3 bg-slate-200 rounded w-3/4 mx-auto" />
-                    <div className="h-2.5 bg-slate-100 rounded w-1/2 mx-auto" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : errorLista ? (
-            <div className="text-center py-8">
-              <p className="text-slate-500 text-sm mb-3">{errorLista}</p>
-              <button onClick={cargarUsuarios}
-                className="text-sky-600 text-sm font-bold hover:underline">
-                Reintentar
+          {/* Separador + texto — visible siempre */}
+          <div className="flex items-center justify-center lg:justify-start gap-3 w-full">
+            <div className="h-px flex-1 max-w-[48px] opacity-40" style={{ background: 'linear-gradient(to right, transparent, #B8860B)' }} />
+            <span className="text-[10px] sm:text-xs font-bold tracking-[0.3em] uppercase whitespace-nowrap" style={{ color: '#B8860B' }}>
+              Sistema de Gestión
+            </span>
+            <div className="h-px flex-1 max-w-[48px] opacity-40" style={{ background: 'linear-gradient(to left, transparent, #B8860B)' }} />
+          </div>
+
+          {/* Tagline — solo en desktop */}
+          <p className="hidden lg:block text-sm leading-relaxed max-w-[280px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
+            Gestión de cotizaciones, inventario y clientes para Construacero Carabobo C.A.
+          </p>
+        </div>
+
+        {/* ── PANEL PRINCIPAL ── */}
+        <div
+          className="w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg xl:max-w-xl relative overflow-hidden rounded-2xl sm:rounded-3xl"
+          style={{
+            background: 'rgba(255,255,255,0.04)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            boxShadow: '0 25px 80px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)',
+            animation: 'fadeSlideUp 0.6s ease 0.2s forwards',
+            opacity: 0,
+          }}
+        >
+          {/* Línea top dorada */}
+          <div className="absolute top-0 left-[10%] right-[10%] h-px"
+            style={{ background: 'linear-gradient(to right, transparent, rgba(184,134,11,0.6), transparent)' }} />
+
+          {/* Destellos internos */}
+          <div className="absolute top-0 right-0 w-64 h-64 -mr-20 -mt-20 rounded-full opacity-10 pointer-events-none"
+            style={{ background: 'radial-gradient(circle, #1B365D 0%, transparent 70%)', filter: 'blur(30px)' }} />
+          <div className="absolute bottom-0 left-0 w-48 h-48 -ml-16 -mb-16 rounded-full pointer-events-none"
+            style={{ background: 'radial-gradient(circle, #B8860B 0%, transparent 70%)', filter: 'blur(30px)', opacity: 0.06 }} />
+
+          <div className="relative z-10 p-5 sm:p-7 lg:p-8">
+
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6 sm:mb-8">
+              <div>
+                <h1 className="text-lg sm:text-xl font-black text-white tracking-tight">¿Quién está operando?</h1>
+                <p className="text-xs sm:text-sm mt-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                  Selecciona tu usuario e ingresa tu PIN
+                </p>
+              </div>
+              <button
+                onClick={cargarUsuarios}
+                disabled={cargando}
+                className="p-2 sm:p-2.5 rounded-xl transition-all disabled:opacity-40 shrink-0"
+                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.5)' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
+              >
+                <RefreshCw size={14} className={cargando ? 'animate-spin' : ''} />
               </button>
             </div>
-          ) : usuarios.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-slate-400 text-sm">No hay usuarios activos en el sistema.</p>
-              <p className="text-slate-400 text-xs mt-1">Contacta al supervisor.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              {usuarios.map(u => (
-                <UserCard key={u.id} user={u} onClick={setSeleccionado} />
-              ))}
-            </div>
-          )}
+
+            {/* Grid usuarios */}
+            {cargando ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-5">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="flex flex-col items-center gap-3 py-5 sm:py-6 animate-pulse">
+                    <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl" style={{ background: 'rgba(255,255,255,0.08)' }} />
+                    <div className="space-y-2 w-full px-2">
+                      <div className="h-2.5 rounded w-3/4 mx-auto" style={{ background: 'rgba(255,255,255,0.08)' }} />
+                      <div className="h-2 rounded w-1/2 mx-auto" style={{ background: 'rgba(255,255,255,0.05)' }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : errorLista ? (
+              <div className="text-center py-10">
+                <p className="text-sm mb-3" style={{ color: 'rgba(255,255,255,0.4)' }}>{errorLista}</p>
+                <button onClick={cargarUsuarios} className="text-sm font-bold text-sky-400 hover:text-sky-300 transition-colors">
+                  Reintentar
+                </button>
+              </div>
+            ) : usuarios.length === 0 ? (
+              <div className="text-center py-10">
+                <p className="text-sm" style={{ color: 'rgba(255,255,255,0.3)' }}>No hay usuarios activos en el sistema.</p>
+                <p className="text-xs mt-1" style={{ color: 'rgba(255,255,255,0.2)' }}>Contacta al supervisor.</p>
+              </div>
+            ) : (
+              <div className={`grid gap-6 sm:gap-8 ${
+                usuarios.length === 1 ? 'grid-cols-1 max-w-[180px] mx-auto' :
+                usuarios.length === 2 ? 'grid-cols-2' :
+                'grid-cols-2 sm:grid-cols-3'
+              }`}>
+                {usuarios.map((u, i) => (
+                  <UserCard key={u.id} user={u} onClick={setSeleccionado} index={i} />
+                ))}
+              </div>
+            )}
+
+          </div>
         </div>
+
+      </div>
+
+      {/* Footer — bottom fijo */}
+      <div className="fixed bottom-4 left-0 right-0 flex justify-center pointer-events-none z-20"
+        style={{ animation: 'fadeIn 1s ease 0.8s forwards', opacity: 0 }}>
+        <p className="text-[10px] tracking-[0.2em] uppercase font-medium px-4 py-1.5 rounded-full"
+          style={{ color: 'rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+          Construacero Carabobo C.A. · Listo POS
+        </p>
       </div>
 
       {/* Modal PIN */}
@@ -276,12 +332,11 @@ function UserSelectStep({ onBack }) {
         onClose={() => setSeleccionado(null)}
         onSubmit={handlePin}
       />
-    </div>
+    </>
   )
 }
 
-// ─── Vista principal ────────────────────────────────────────────────────────────
-// DEMO MODE: se salta el gate (correo/contraseña) y va directo a selección de usuario
+// ─── Vista principal ──────────────────────────────────────────────────────────
 export default function LoginPage() {
-  return <UserSelectStep onBack={() => {}} />
+  return <UserSelectStep />
 }

@@ -17,6 +17,7 @@ import ConfirmModal  from '../components/ui/ConfirmModal'
 import EmptyState    from '../components/ui/EmptyState'
 import Skeleton      from '../components/ui/Skeleton'
 import Pagination    from '../components/ui/Pagination'
+import PageHeader   from '../components/ui/PageHeader'
 
 const ITEMS_POR_PAGINA = 12
 
@@ -150,31 +151,17 @@ export default function InventarioView() {
     <div className="p-4 md:p-6 lg:p-8 space-y-4 md:space-y-6">
 
       {/* ── Encabezado ─────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-primary-light rounded-xl flex items-center justify-center">
-            <Package size={20} className="text-primary" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-slate-800">Inventario</h1>
-            <p className="text-sm text-slate-500">
-              {isLoading ? 'Cargando...' : `${productosFiltrados.length} producto${productosFiltrados.length !== 1 ? 's' : ''}${stockBajo ? ' con stock bajo' : ''}`}
-              {!esSupervisor && <span className="ml-1 text-slate-400">(catálogo de precios)</span>}
-            </p>
-          </div>
-        </div>
-
-        {/* Nuevo producto: solo supervisor */}
-        {esSupervisor && (
-          <button
-            onClick={abrirCrear}
-            className="flex items-center gap-2 bg-primary hover:bg-primary-hover text-white font-semibold text-sm px-4 py-2.5 rounded-xl transition-colors shadow-sm"
-          >
-            <Plus size={16} />
-            Nuevo producto
+      <PageHeader
+        icon={Package}
+        title="Inventario"
+        subtitle={<>{isLoading ? 'Cargando...' : `${productosFiltrados.length} producto${productosFiltrados.length !== 1 ? 's' : ''}${stockBajo ? ' con stock bajo' : ''}`}{!esSupervisor && <span className="ml-1 opacity-60">(catálogo de precios)</span>}</>}
+        action={esSupervisor && (
+          <button onClick={abrirCrear} className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98]"
+            style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
+            <Plus size={16} />Nuevo producto
           </button>
         )}
-      </div>
+      />
 
       {/* ── Filtros ─────────────────────────────────────────────────────────── */}
       <div className="space-y-2">

@@ -19,6 +19,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import Skeleton    from '../components/ui/Skeleton'
 import EmptyState  from '../components/ui/EmptyState'
+import PageHeader  from '../components/ui/PageHeader'
 
 const ROL_CONFIG = {
   supervisor: {
@@ -484,34 +485,23 @@ export default function UsuariosView() {
     <div className="p-4 md:p-6 lg:p-8 space-y-4 md:space-y-6">
 
       {/* Encabezado */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-sky-500 to-teal-400 shadow-sm">
-            <UserCog size={20} className="text-white" />
+      <PageHeader
+        icon={UserCog}
+        title="Usuarios"
+        subtitle={isLoading ? 'Cargando...' : `${activos.length} activo${activos.length !== 1 ? 's' : ''}${inactivos.length > 0 ? ` · ${inactivos.length} inactivo${inactivos.length !== 1 ? 's' : ''}` : ''}`}
+        action={
+          <div className="flex items-center gap-2">
+            <button onClick={() => refetch()} className="p-2 rounded-xl transition-colors text-slate-400 hover:text-slate-700 hover:bg-slate-100">
+              <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+            </button>
+            <button onClick={abrirNuevo}
+              className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98]"
+              style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
+              <Plus size={16} />Nuevo usuario
+            </button>
           </div>
-          <div>
-            <h1 className="text-xl font-black text-slate-800">Usuarios</h1>
-            <p className="text-sm text-slate-500">
-              {isLoading
-                ? 'Cargando...'
-                : `${activos.length} activo${activos.length !== 1 ? 's' : ''}${inactivos.length > 0 ? ` · ${inactivos.length} inactivo${inactivos.length !== 1 ? 's' : ''}` : ''}`
-              }
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => refetch()}
-            className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
-            <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
-          </button>
-          <button onClick={abrirNuevo}
-            className="flex items-center gap-2 text-white font-black text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg shadow-sky-500/20 active:scale-[0.98]"
-            style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
-            <Plus size={16} />
-            Nuevo usuario
-          </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Contenido */}
       {isLoading ? (

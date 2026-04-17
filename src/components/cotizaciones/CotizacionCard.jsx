@@ -6,7 +6,6 @@ import useAuthStore from '../../store/useAuthStore'
 import supabase from '../../services/supabase/client'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import { compartirPorWhatsApp, generarMensaje } from '../../utils/whatsapp'
-
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs } from '../../utils/format'
 
 export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambiarEstado, onDespachar, onReciclar, tasa = 0 }) {
@@ -23,7 +22,6 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
     ? `COT-${String(cotizacion.numero).padStart(5, '0')} Rev.${cotizacion.version}`
     : `COT-${String(cotizacion.numero).padStart(5, '0')}`
 
-  // ── Descargar PDF ──────────────────────────────────────────────────────────
   async function descargarPDF() {
     setPdfLoading(true)
     try {
@@ -41,7 +39,6 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
     }
   }
 
-  // ── Compartir por WhatsApp (con PDF en móvil) ──────────────────────────────
   async function handleWhatsApp() {
     setWaLoading(true)
     try {
@@ -50,10 +47,7 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
         supabase.from('cotizacion_items').select('*').eq('cotizacion_id', cotizacion.id).order('orden'),
       ])
       if (itemsRes.error) throw itemsRes.error
-
-      // Generar PDF como blob (sin descargar)
       const pdfBlob = await generarPDF({ cotizacion, items: itemsRes.data ?? [], config, returnBlob: true })
-
       const mensaje = generarMensaje({
         nombreNegocio: config.nombre_negocio,
         nombreCliente: cotizacion.cliente?.nombre,
@@ -61,7 +55,6 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
         totalUsd: cotizacion.total_usd,
         validaHasta: cotizacion.valida_hasta,
       })
-
       await compartirPorWhatsApp({
         pdfBlob,
         pdfFilename: `${numDisplay.replace(/\s+/g, '_')}.pdf`,
@@ -70,7 +63,6 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
       })
     } catch (err) {
       console.error('WhatsApp error:', err)
-      // Fallback: solo abrir WhatsApp con mensaje de texto
       const texto = generarMensaje({
         nombreNegocio: config.nombre_negocio,
         nombreCliente: cotizacion.cliente?.nombre,
@@ -84,9 +76,7 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
     }
   }
 
-  const vendedorColor = cotizacion.vendedor?.color || null
-
-  // Determinar acciones disponibles
+  const vendedorColor = cotizacion.vendedor?.color || '#64748b'
   const canEdit = esBorrador
   const canPdf = cotizacion.estado !== 'borrador' && cotizacion.estado !== 'anulada'
   const canWhatsApp = cotizacion.estado === 'enviada' || cotizacion.estado === 'aceptada'
@@ -97,30 +87,34 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
   const hasSecondaryActions = canAcceptReject || canDespachar || canAnular || canReciclar
 
   return (
-    <div className="group bg-white rounded-2xl border border-slate-200 hover:shadow-lg transition-all duration-200 overflow-hidden flex flex-col"
-      style={vendedorColor ? { borderColor: vendedorColor + '60' } : undefined}>
+    <div className="group bg-white rounded-2xl border border-slate-200 hover:shadow-lg transition-all duration-200 overflow-hidden flex flex-col">
 
-      {/* ── Franja de color del vendedor ── */}
-      {vendedorColor && (
-        <div className="h-1.5 w-full" style={{ backgroundColor: vendedorColor }} />
-      )}
-
-      {/* ── Cabecera: número + estado ── */}
-      <div className="px-4 pt-4 pb-2 flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-slate-800 text-sm font-mono truncate">{numDisplay}</span>
-          </div>
-          <div className="flex items-center gap-1.5 mt-1.5 text-sm text-slate-700">
-            <User size={13} className="text-slate-400 shrink-0" />
-            <span className="truncate font-medium">{cotizacion.cliente?.nombre ?? '—'}</span>
-          </div>
+      {/* ── Header strip con color del vendedor ── */}
+      <div className="relative h-16 shrink-0 flex items-end justify-between px-4 pb-2"
+        style={{ background: `linear-gradient(135deg, ${vendedorColor}ee 0%, ${vendedorColor}99 100%)` }}>
+        {/* Patrón de puntos */}
+        <div className="absolute inset-0 opacity-10"
+          style={{
+            backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)',
+            backgroundSize: '12px 12px',
+          }} />
+        {/* Número + cliente */}
+        <div className="relative z-10 min-w-0">
+          <p className="font-black text-white text-sm font-mono leading-tight drop-shadow">{numDisplay}</p>
+          {cotizacion.cliente?.nombre && (
+            <p className="text-[11px] font-medium truncate max-w-[160px]" style={{ color: 'rgba(255,255,255,0.75)' }}>
+              {cotizacion.cliente.nombre}
+            </p>
+          )}
         </div>
-        <EstadoBadge estado={cotizacion.estado} />
+        {/* Estado badge adaptado */}
+        <div className="relative z-10 shrink-0">
+          <EstadoBadge estado={cotizacion.estado} />
+        </div>
       </div>
 
       {/* ── Fechas ── */}
-      <div className="px-4 pb-3">
+      <div className="px-4 pt-3 pb-2">
         <div className="flex items-center gap-3 text-xs text-slate-400">
           <span className="flex items-center gap-1">
             <Calendar size={11} />
@@ -129,7 +123,7 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
           {cotizacion.valida_hasta && (
             <>
               <span className="text-slate-300">·</span>
-              <span className={`${new Date(cotizacion.valida_hasta) < new Date() ? 'text-red-400' : 'text-slate-400'}`}>
+              <span className={new Date(cotizacion.valida_hasta) < new Date() ? 'text-red-400' : 'text-slate-400'}>
                 Vence {fmtFecha(cotizacion.valida_hasta)}
               </span>
             </>
@@ -153,79 +147,63 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
         <div className="px-4 pb-3 flex items-center justify-between">
           <span className="text-xs text-slate-400">Vendedor</span>
           <span className="text-xs font-semibold px-2.5 py-1 rounded-full"
-            style={vendedorColor
-              ? { backgroundColor: vendedorColor + '18', color: vendedorColor, border: `1px solid ${vendedorColor}40` }
-              : { backgroundColor: '#f1f5f9', color: '#475569' }
-            }>
+            style={{ backgroundColor: vendedorColor + '18', color: vendedorColor, border: `1px solid ${vendedorColor}40` }}>
             {cotizacion.vendedor.nombre}
           </span>
         </div>
       )}
 
-      {/* ── Acciones principales (siempre visibles) ── */}
+      {/* ── Acciones principales ── */}
       <div className="mt-auto border-t border-slate-100 px-3 py-2 flex items-center gap-1">
         {canEdit && (
-          <button onClick={() => onEditar(cotizacion)} title="Editar borrador"
+          <button onClick={() => onEditar(cotizacion)}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
-            <Pencil size={13} />
-            Editar
+            <Pencil size={13} />Editar
           </button>
         )}
         {canPdf && (
-          <button onClick={descargarPDF} disabled={pdfLoading} title="Descargar PDF"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 active:bg-slate-200 transition-colors disabled:opacity-40">
-            {pdfLoading
-              ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" />
-              : <FileDown size={13} />}
+          <button onClick={descargarPDF} disabled={pdfLoading}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-40">
+            {pdfLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <FileDown size={13} />}
             PDF
           </button>
         )}
         {canWhatsApp && (
-          <button onClick={handleWhatsApp} disabled={waLoading} title="Compartir por WhatsApp"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 active:bg-emerald-100 transition-colors disabled:opacity-40">
-            {waLoading
-              ? <div className="w-3 h-3 border-[1.5px] border-emerald-400 border-t-transparent rounded-full animate-spin" />
-              : <MessageCircle size={13} />}
+          <button onClick={handleWhatsApp} disabled={waLoading}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-40">
+            {waLoading ? <div className="w-3 h-3 border-[1.5px] border-emerald-400 border-t-transparent rounded-full animate-spin" /> : <MessageCircle size={13} />}
             WhatsApp
           </button>
         )}
 
-        {/* Botón "más acciones" para acciones secundarias */}
         {hasSecondaryActions && (
           <div className="relative ml-auto">
             <button
               onClick={() => setShowActions(!showActions)}
               onBlur={() => setTimeout(() => setShowActions(false), 200)}
               className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                showActions
-                  ? 'bg-slate-200 text-slate-700'
-                  : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'
+                showActions ? 'bg-slate-200 text-slate-700' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'
               }`}>
               <ChevronDown size={14} className={`transition-transform ${showActions ? 'rotate-180' : ''}`} />
             </button>
-
-            {/* Dropdown de acciones secundarias */}
             {showActions && (
               <div className="absolute right-0 bottom-full mb-1 w-44 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20">
                 {canAcceptReject && (
                   <>
                     <button onClick={() => { onCambiarEstado(cotizacion.id, 'aceptada'); setShowActions(false) }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-emerald-700 hover:bg-emerald-50 transition-colors text-left">
-                      <CheckCircle size={14} />
-                      Aceptar
+                      <CheckCircle size={14} />Aceptar
                     </button>
                     <button onClick={() => { onCambiarEstado(cotizacion.id, 'rechazada'); setShowActions(false) }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors text-left">
-                      <XCircle size={14} />
-                      Rechazar
+                      <XCircle size={14} />Rechazar
                     </button>
                   </>
                 )}
                 {canDespachar && (
                   <button onClick={() => { onDespachar(cotizacion); setShowActions(false) }}
                     className="w-full flex items-center gap-2 px-3 py-2 text-sm text-indigo-600 hover:bg-indigo-50 transition-colors text-left">
-                    <Truck size={14} />
-                    Despachar
+                    <Truck size={14} />Despachar
                   </button>
                 )}
                 {canAnular && (
@@ -233,8 +211,7 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
                     {(canAcceptReject || canDespachar) && <div className="my-1 border-t border-slate-100" />}
                     <button onClick={() => { onAnular(cotizacion); setShowActions(false) }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-500 hover:bg-red-50 transition-colors text-left">
-                      <Ban size={14} />
-                      Anular
+                      <Ban size={14} />Anular
                     </button>
                   </>
                 )}
@@ -243,8 +220,7 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
                     {(canAcceptReject || canDespachar || canAnular) && <div className="my-1 border-t border-slate-100" />}
                     <button onClick={() => { onReciclar(cotizacion); setShowActions(false) }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-emerald-600 hover:bg-emerald-50 transition-colors text-left">
-                      <RefreshCw size={14} />
-                      Reciclar
+                      <RefreshCw size={14} />Reciclar
                     </button>
                   </>
                 )}

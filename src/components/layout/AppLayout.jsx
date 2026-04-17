@@ -57,12 +57,12 @@ const NAV_SUPERVISOR = [
 // ─── Badge de rol ──────────────────────────────────────────────────────────────
 function BadgeRol({ rol }) {
   const estilos = {
-    supervisor: 'bg-sky-100 text-sky-700',
-    vendedor:   'bg-emerald-100 text-emerald-700',
+    supervisor: 'bg-sky-500/20 text-sky-300 border border-sky-500/30',
+    vendedor:   'bg-teal-500/20 text-teal-300 border border-teal-500/30',
   }
   const textos = { supervisor: 'Supervisor', vendedor: 'Vendedor' }
   return (
-    <span className={`text-sm font-bold px-2.5 py-0.5 rounded-full ${estilos[rol] ?? 'bg-slate-100 text-slate-600'}`}>
+    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${estilos[rol] ?? 'bg-white/10 text-white/50'}`}>
       {textos[rol] ?? rol}
     </span>
   )
@@ -77,15 +77,15 @@ function NavItem({ path, label, Icono, onClick, collapsed }) {
       onClick={onClick}
       title={collapsed ? label : undefined}
       className={({ isActive }) => `
-        flex items-center ${collapsed ? 'justify-center' : 'gap-3'} ${collapsed ? 'px-2' : 'px-4'} py-2.5 rounded-xl
-        text-sm font-bold transition-all
+        flex items-center ${collapsed ? 'justify-center' : 'gap-3'} ${collapsed ? 'px-2' : 'px-3'} py-2.5 rounded-xl
+        text-sm font-bold transition-all duration-200
         ${isActive
-          ? 'text-white shadow-md shadow-sky-500/20'
-          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+          ? 'text-white shadow-lg'
+          : 'text-white/75 hover:text-white hover:bg-white/10'
         }
       `}
       style={({ isActive }) => isActive
-        ? { background: 'linear-gradient(135deg, #1B365D, #B8860B)' }
+        ? { background: 'linear-gradient(135deg, rgba(27,54,93,0.9), rgba(184,134,11,0.7))', boxShadow: '0 4px 15px rgba(184,134,11,0.2)', border: '1px solid rgba(184,134,11,0.25)' }
         : {}
       }
     >
@@ -157,22 +157,22 @@ export default function AppLayout() {
   function cerrarMenu() { setMenuOpen(false) }
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="flex min-h-screen" style={{ background: '#f1f5f9' }}>
 
       {/* ── Barra superior móvil ─────────────────────────────────────────── */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-40 bg-white border-b border-slate-200 px-4 h-14 flex items-center justify-between">
+      <div className="md:hidden fixed top-0 left-0 right-0 z-40 px-4 h-14 flex items-center justify-between"
+        style={{ background: 'linear-gradient(135deg, #0a1628 0%, #0d1f3c 100%)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         <button
           onClick={() => setMenuOpen(true)}
-          className="p-2 -ml-2 rounded-xl hover:bg-slate-100 text-slate-600 transition-colors"
+          className="p-2 -ml-2 rounded-xl transition-colors text-white/60 hover:text-white hover:bg-white/10"
         >
           <Menu size={22} />
         </button>
-        <img src="/logo.png" alt="Listo POS" className="h-8 w-auto object-contain" />
-        {/* Campana móvil */}
+        <img src="/logo.png" alt="Listo POS" className="h-8 w-auto object-contain" style={{ filter: 'brightness(1.1)' }} />
         <div className="relative" ref={null}>
           <button
             onClick={() => { setShowNotifs(v => !v); if (unreadCount > 0) markAllRead() }}
-            className="relative p-2 rounded-xl hover:bg-slate-100 text-slate-600 transition-colors"
+            className="relative p-2 rounded-xl transition-colors text-white/60 hover:text-white hover:bg-white/10"
           >
             <Bell size={20} />
             {unreadCount > 0 && (
@@ -187,66 +187,88 @@ export default function AppLayout() {
       {/* ── Backdrop overlay (móvil) ─────────────────────────────────────── */}
       {menuOpen && (
         <div
-          className="md:hidden fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm transition-opacity"
+          className="md:hidden fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-sm transition-opacity"
           onClick={cerrarMenu}
         />
       )}
 
       {/* ── Sidebar / Drawer ─────────────────────────────────────────────── */}
-      <aside className={`
-        fixed inset-y-0 left-0 z-50 bg-white border-r border-slate-200 flex flex-col shrink-0
-        transition-all duration-300 ease-out
-        ${menuOpen ? 'translate-x-0' : '-translate-x-full'}
-        ${sidebarCollapsed ? 'md:w-[72px]' : 'md:w-64'}
-        w-64 md:translate-x-0 md:static md:z-auto md:h-screen md:sticky md:top-0
-      `}>
+      <aside
+        className={`
+          fixed inset-y-0 left-0 z-50 flex flex-col shrink-0
+          transition-all duration-300 ease-out
+          ${menuOpen ? 'translate-x-0' : '-translate-x-full'}
+          ${sidebarCollapsed ? 'md:w-[72px]' : 'md:w-64'}
+          w-64 md:translate-x-0 md:static md:z-auto md:h-screen md:sticky md:top-0
+        `}
+        style={{
+          background: 'linear-gradient(180deg, #0a1628 0%, #0d1f3c 60%, #0a1a0f 100%)',
+          borderRight: '1px solid rgba(255,255,255,0.06)',
+          boxShadow: '4px 0 24px rgba(0,0,0,0.3)',
+        }}
+      >
+        {/* Malla de puntos decorativa */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-[0.03]">
+          <svg width="100%" height="100%"><defs><pattern id="sdot" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="white"/></pattern></defs><rect width="100%" height="100%" fill="url(#sdot)"/></svg>
+        </div>
+        {/* Orbe decorativo */}
+        <div className="absolute bottom-0 left-0 w-48 h-48 rounded-full pointer-events-none -mb-16 -ml-16 opacity-20"
+          style={{ background: 'radial-gradient(circle, #B8860B 0%, transparent 70%)', filter: 'blur(30px)' }} />
 
         {/* Botón cerrar — solo móvil */}
-        <div className="md:hidden flex justify-end p-3 pb-0">
-          <button
-            onClick={cerrarMenu}
-            className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 transition-colors"
-          >
+        <div className="md:hidden flex justify-end p-3 pb-0 relative z-10">
+          <button onClick={cerrarMenu} className="p-2 rounded-xl text-white/40 hover:text-white hover:bg-white/10 transition-colors">
             <X size={20} />
           </button>
         </div>
 
         {/* Logo + botón colapsar */}
-        <div className="p-5 border-b border-slate-100 flex flex-col items-center relative">
+        <div className="relative z-10 px-4 py-5 flex flex-col items-center" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          {/* Línea dorada decorativa bajo el logo */}
           <img src="/logo.png" alt="Construacero Carabobo"
-            className={`object-contain transition-all duration-300 ${sidebarCollapsed ? 'h-10 w-10' : 'h-[150px] w-auto'}`} />
+            className={`object-contain transition-all duration-300 select-none pointer-events-none`}
+            style={{
+              height: sidebarCollapsed ? '40px' : '140px',
+              width: sidebarCollapsed ? '40px' : 'auto',
+              filter: 'brightness(1.05) drop-shadow(0 0 12px rgba(184,134,11,0.2))',
+            }}
+            draggable={false}
+          />
+          {!sidebarCollapsed && (
+            <div className="mt-3 flex items-center gap-2 w-full justify-center">
+              <div className="h-px flex-1 opacity-20" style={{ background: 'linear-gradient(to right, transparent, #B8860B)' }} />
+              <span className="text-[9px] font-bold tracking-[0.25em] uppercase whitespace-nowrap" style={{ color: 'rgba(184,134,11,0.7)' }}>
+                Sistema de Gestión
+              </span>
+              <div className="h-px flex-1 opacity-20" style={{ background: 'linear-gradient(to left, transparent, #B8860B)' }} />
+            </div>
+          )}
           {/* Botón colapsar — solo desktop */}
           <button
             onClick={() => setSidebarCollapsed(c => !c)}
-            className="hidden md:flex absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-white border border-slate-200 shadow-sm items-center justify-center hover:bg-slate-50 transition-colors"
+            className="hidden md:flex absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full items-center justify-center transition-all hover:scale-110"
+            style={{ background: '#0d1f3c', border: '1px solid rgba(255,255,255,0.15)', boxShadow: '0 2px 8px rgba(0,0,0,0.4)', color: 'rgba(255,255,255,0.5)' }}
             title={sidebarCollapsed ? 'Expandir menú' : 'Colapsar menú'}
           >
-            {sidebarCollapsed
-              ? <PanelLeftOpen size={13} className="text-slate-500" />
-              : <PanelLeftClose size={13} className="text-slate-500" />
-            }
+            {sidebarCollapsed ? <PanelLeftOpen size={13} /> : <PanelLeftClose size={13} />}
           </button>
         </div>
 
-        {/* Navegación — ocupa el espacio restante, scroll si hace falta */}
-        <nav className="flex-1 min-h-0 overflow-y-auto p-4 space-y-1">
-
-          {/* Rutas accesibles para todos */}
+        {/* Navegación */}
+        <nav className="relative z-10 flex-1 min-h-0 overflow-y-auto p-3 space-y-0.5">
           {NAV_TODOS.map(({ path, label, icono: Icono }) => (
             <NavItem key={path} path={path} label={label} Icono={Icono} onClick={cerrarMenu} collapsed={sidebarCollapsed} />
           ))}
-
-          {/* Rutas solo para supervisor */}
           {esSupervisor && (
             <>
               {!sidebarCollapsed && (
-                <div className="pt-4 pb-1 px-4">
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                <div className="pt-4 pb-1.5 px-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'rgba(184,134,11,0.7)' }}>
                     Administración
                   </p>
                 </div>
               )}
-              {sidebarCollapsed && <div className="pt-3 border-t border-slate-200 mt-3" />}
+              {sidebarCollapsed && <div className="pt-3 mt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }} />}
               {NAV_SUPERVISOR.map(({ path, label, icono: Icono }) => (
                 <NavItem key={path} path={path} label={label} Icono={Icono} onClick={cerrarMenu} collapsed={sidebarCollapsed} />
               ))}
@@ -254,16 +276,19 @@ export default function AppLayout() {
           )}
         </nav>
 
-        {/* Campana de notificaciones — sidebar desktop */}
-        <div className="border-t border-slate-100 px-4 py-3 relative" ref={notifsRef}>
+        {/* Alertas */}
+        <div className="relative z-10 px-3 py-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }} ref={notifsRef}>
           <button
             onClick={() => { setShowNotifs(v => !v); if (unreadCount > 0) markAllRead() }}
-            className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'} px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors`}
+            className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'} px-3 py-2.5 rounded-xl transition-all`}
+            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.75)' }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.09)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
             title={sidebarCollapsed ? 'Alertas' : undefined}
           >
             <div className="flex items-center gap-2">
-              <Bell size={16} className="text-slate-500" />
-              {!sidebarCollapsed && <span className="text-sm font-bold text-slate-600">Alertas</span>}
+              <Bell size={15} />
+              {!sidebarCollapsed && <span className="text-sm font-bold">Alertas</span>}
             </div>
             {unreadCount > 0 && (
               <span className={`min-w-[20px] h-[20px] bg-rose-500 text-white text-xs font-black rounded-full flex items-center justify-center px-1 ${sidebarCollapsed ? 'absolute -top-1 -right-1' : ''}`}>
@@ -272,46 +297,44 @@ export default function AppLayout() {
             )}
           </button>
 
-          {/* Botón Push Notifications */}
           {pushSupported && !sidebarCollapsed && (
             <button
               onClick={togglePush}
               disabled={pushLoading}
-              className={`mt-1.5 w-full flex items-center justify-between px-3 py-2 rounded-xl border transition-colors ${
-                pushSubscribed
-                  ? 'bg-sky-50 border-sky-200 hover:bg-sky-100'
-                  : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
-              }`}
+              className="mt-1.5 w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all"
+              style={{
+                background: pushSubscribed ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.04)',
+                border: `1px solid ${pushSubscribed ? 'rgba(59,130,246,0.25)' : 'rgba(255,255,255,0.06)'}`,
+                color: pushSubscribed ? '#60a5fa' : 'rgba(255,255,255,0.35)',
+              }}
             >
               <div className="flex items-center gap-2">
-                {pushSubscribed
-                  ? <Bell size={16} className="text-sky-500" />
-                  : <BellOff size={16} className="text-slate-400" />
-                }
-                <span className={`text-sm font-bold ${pushSubscribed ? 'text-sky-600' : 'text-slate-500'}`}>
+                {pushSubscribed ? <Bell size={14} /> : <BellOff size={14} />}
+                <span className="text-xs font-bold">
                   {pushLoading ? 'Procesando…' : pushSubscribed ? 'Push activado' : 'Activar push'}
                 </span>
               </div>
-              {pushSubscribed && <span className="w-2 h-2 rounded-full bg-sky-500 animate-pulse" />}
+              {pushSubscribed && <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" />}
             </button>
           )}
 
           {showNotifs && (
-            <div className="absolute bottom-full left-2 right-2 mb-2 bg-white rounded-2xl shadow-2xl border border-slate-100 z-50 overflow-hidden max-w-sm">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50/50">
-                <p className="text-xs font-black text-slate-600 uppercase tracking-wider">Alertas</p>
+            <div className="absolute bottom-full left-2 right-2 mb-2 rounded-2xl shadow-2xl z-50 overflow-hidden"
+              style={{ background: '#0f1f3c', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+              <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)' }}>
+                <p className="text-xs font-black uppercase tracking-wider text-white/60">Alertas</p>
                 {notifications.length > 0 && (
                   <button onClick={() => { clearAll(); setShowNotifs(false) }}
-                    className="text-[10px] font-bold text-slate-400 hover:text-rose-500 transition-colors px-2 py-1 rounded-lg hover:bg-rose-50">
+                    className="text-[10px] font-bold text-white/30 hover:text-rose-400 transition-colors px-2 py-1 rounded-lg hover:bg-rose-500/10">
                     Limpiar todo
                   </button>
                 )}
               </div>
-              <div className="max-h-80 overflow-y-auto custom-scrollbar divide-y divide-slate-50">
+              <div className="max-h-80 overflow-y-auto divide-y" style={{ divideColor: 'rgba(255,255,255,0.04)' }}>
                 {notifications.length === 0 ? (
                   <div className="text-center py-8 px-4">
-                    <Bell size={24} className="text-slate-300 mx-auto mb-2" />
-                    <p className="text-sm text-slate-400">Sin alertas recientes</p>
+                    <Bell size={24} className="mx-auto mb-2 opacity-20 text-white" />
+                    <p className="text-sm text-white/30">Sin alertas recientes</p>
                   </div>
                 ) : (
                   notifications.slice(0, 20).map(n => {
@@ -319,16 +342,16 @@ export default function AppLayout() {
                     return (
                       <div key={n.id}
                         onClick={isStockBajo ? () => { navigate('/inventario?filtro=stock_bajo'); setShowNotifs(false) } : undefined}
-                        className={`px-4 py-3 transition-colors ${isStockBajo ? 'cursor-pointer hover:bg-amber-50/50' : 'hover:bg-slate-50/50'}`}
+                        className={`px-4 py-3 transition-colors ${isStockBajo ? 'cursor-pointer hover:bg-amber-500/5' : 'hover:bg-white/3'}`}
                       >
                         <div className="flex gap-2.5 items-start">
                           <NotifIcon type={n.type} />
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold text-slate-700 leading-tight">{n.title}</p>
+                            <p className="text-xs font-bold text-white/80 leading-tight">{n.title}</p>
                             {n.body && !isStockBajo && (
-                              <p className="text-xs text-slate-500 mt-0.5 leading-snug">{n.body}</p>
+                              <p className="text-xs text-white/40 mt-0.5 leading-snug">{n.body}</p>
                             )}
-                            <p className="text-[10px] text-slate-400 mt-1">
+                            <p className="text-[10px] text-white/25 mt-1">
                               {new Date(n.ts).toLocaleString('es-VE', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })}
                             </p>
                           </div>
@@ -343,59 +366,62 @@ export default function AppLayout() {
         </div>
 
         {/* Tasa de cambio */}
-        <div className="border-t border-slate-100 px-4 py-3">
+        <div className="relative z-10 px-3 py-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           <button
             onClick={() => !sidebarCollapsed && setShowTasaConfig(!showTasaConfig)}
-            className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'} px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors group`}
+            className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'} px-3 py-2.5 rounded-xl transition-all`}
+            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.75)' }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.09)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
             title={sidebarCollapsed ? `BCV ${tasaEfectiva > 0 ? new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(tasaEfectiva) : '—'} Bs/$` : undefined}
           >
             <div className="flex items-center gap-2">
-              <DollarSign size={16} className="text-emerald-500" />
-              {!sidebarCollapsed && <span className="text-sm font-bold text-slate-600">BCV</span>}
+              <DollarSign size={15} className="text-emerald-400" />
+              {!sidebarCollapsed && <span className="text-sm font-bold">BCV</span>}
             </div>
             {!sidebarCollapsed && (
-              <div className="flex items-center gap-1.5">
-                <span className="text-base font-black text-emerald-600">
+              <div className="flex items-center gap-1">
+                <span className="text-sm font-black text-emerald-400">
                   {tasaEfectiva > 0
                     ? new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(tasaEfectiva)
                     : '—'}
                 </span>
-                <span className="text-xs text-slate-500">Bs/$</span>
-                {!modoAuto && <span className="text-xs bg-primary-light text-primary px-1.5 rounded font-bold">MAN</span>}
+                <span className="text-xs text-white/30">Bs/$</span>
+                {!modoAuto && <span className="text-[9px] bg-amber-500/20 text-amber-400 px-1.5 rounded font-bold border border-amber-500/20">MAN</span>}
               </div>
             )}
           </button>
 
           {showTasaConfig && !sidebarCollapsed && (
-            <div className="mt-2 bg-white rounded-xl border border-slate-200 p-3 space-y-2.5 animate-fade-in">
+            <div className="mt-2 rounded-xl p-3 space-y-2.5 animate-fade-in"
+              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-500 uppercase">Modo</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-white/30">Modo</span>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold">
-                    {modoAuto ? <span className="text-emerald-600">Auto</span> : <span className="text-primary">Manual</span>}
+                    {modoAuto ? <span className="text-emerald-400">Auto</span> : <span className="text-amber-400">Manual</span>}
                   </span>
                   <button
                     onClick={() => setModoAuto(!modoAuto)}
                     style={{ minHeight: 0 }}
-                    className={`relative w-9 h-5 rounded-full transition-colors ${modoAuto ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                    className={`relative w-9 h-5 rounded-full transition-colors ${modoAuto ? 'bg-emerald-500' : 'bg-white/20'}`}
                   >
                     <span className={`absolute top-0.5 left-0.5 bg-white w-4 h-4 rounded-full transition-transform shadow-sm ${modoAuto ? 'translate-x-4' : 'translate-x-0'}`} />
                   </button>
                 </div>
               </div>
-
               {modoAuto ? (
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-slate-600">{tasaBcv.fuente || 'Cargando...'}</p>
+                    <p className="text-xs text-white/50">{tasaBcv.fuente || 'Cargando...'}</p>
                     {tasaBcv.ultimaActualizacion && (
-                      <p className="text-xs text-slate-500">
+                      <p className="text-[10px] text-white/30">
                         {new Date(tasaBcv.ultimaActualizacion).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}
                       </p>
                     )}
                   </div>
                   <button onClick={refrescar} disabled={tasaCargando}
-                    className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-emerald-600 transition-colors">
+                    className="p-1.5 rounded-lg text-white/30 hover:text-emerald-400 transition-colors hover:bg-white/5">
                     <RefreshCw size={13} className={tasaCargando ? 'animate-spin' : ''} />
                   </button>
                 </div>
@@ -406,7 +432,8 @@ export default function AppLayout() {
                       value={tasaInput}
                       onChange={e => { setTasaInput(e.target.value); setTasaConfirmada(false) }}
                       placeholder="Tasa manual Bs/$"
-                      className="flex-1 min-w-0 px-2.5 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm font-bold text-primary focus:outline-none focus:ring-1 focus:ring-primary-focus"
+                      className="flex-1 min-w-0 px-2.5 py-2 rounded-lg text-sm font-bold text-white/80 focus:outline-none focus:ring-1 focus:ring-amber-500/40"
+                      style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)' }}
                       onKeyDown={e => e.key === 'Enter' && confirmarTasaManual()}
                     />
                     <button
@@ -414,15 +441,17 @@ export default function AppLayout() {
                       disabled={!tasaInput || parseFloat(tasaInput) <= 0 || tasaConfirmada}
                       className={`shrink-0 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
                         tasaConfirmada
-                          ? 'bg-emerald-100 text-emerald-600'
-                          : 'bg-primary text-white hover:bg-primary-hover disabled:opacity-40'
-                      }`}>
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/20'
+                          : 'text-white hover:opacity-90 disabled:opacity-40'
+                      }`}
+                      style={!tasaConfirmada ? { background: 'linear-gradient(135deg, #1B365D, #B8860B)' } : {}}
+                    >
                       {tasaConfirmada ? '✓' : 'OK'}
                     </button>
                   </div>
                   {tasaBcv.precio > 0 && (
-                    <p className="text-xs text-slate-500">
-                      Referencia BCV: {new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(tasaBcv.precio)} Bs/$
+                    <p className="text-[10px] text-white/25">
+                      Ref. BCV: {new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(tasaBcv.precio)} Bs/$
                     </p>
                   )}
                 </div>
@@ -431,24 +460,28 @@ export default function AppLayout() {
           )}
         </div>
 
-        {/* Usuario + botón de cierre de sesión */}
-        <div className="border-t border-slate-100 p-4">
+        {/* Usuario + cerrar sesión */}
+        <div className="relative z-10 p-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           <button
             onClick={handleLogout}
-            className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} p-3 rounded-2xl hover:bg-slate-50 active:scale-[0.98] transition-all group`}
+            className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} p-3 rounded-2xl active:scale-[0.98] transition-all group`}
+            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.04)'}
             title={sidebarCollapsed ? `${perfil?.nombre ?? 'Usuario'} — Cerrar sesión` : undefined}
           >
             <LoginAvatar user={perfil} size="sm" />
             {!sidebarCollapsed && (
               <>
                 <div className="flex-1 min-w-0 text-left">
-                  <p className="text-sm font-black text-slate-800 truncate leading-tight">
+                  <p className="text-sm font-black text-white/90 truncate leading-tight">
                     {perfil?.nombre ?? 'Usuario'}
                   </p>
                   <BadgeRol rol={perfil?.rol} />
                 </div>
-                <div className="shrink-0 w-8 h-8 rounded-xl bg-slate-100 group-hover:bg-red-100 flex items-center justify-center transition-colors">
-                  <LogOut size={15} className="text-slate-400 group-hover:text-red-500 transition-colors" />
+                <div className="shrink-0 w-7 h-7 rounded-xl flex items-center justify-center transition-colors group-hover:bg-rose-500/20"
+                  style={{ background: 'rgba(255,255,255,0.07)' }}>
+                  <LogOut size={14} className="text-white/30 group-hover:text-rose-400 transition-colors" />
                 </div>
               </>
             )}

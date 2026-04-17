@@ -2,7 +2,7 @@
 // Vista principal de notas de despacho
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Package, RefreshCw, Filter, RefreshCcw, AlertTriangle } from 'lucide-react'
+import { Package, PackageCheck, RefreshCw, Filter, RefreshCcw, AlertTriangle } from 'lucide-react'
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import { useDespachos, useActualizarEstadoDespacho, useReciclarDespacho } from '../hooks/useDespachos'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
@@ -10,6 +10,7 @@ import DespachoCard from '../components/despachos/DespachoCard'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import EmptyState   from '../components/ui/EmptyState'
 import Skeleton     from '../components/ui/Skeleton'
+import PageHeader  from '../components/ui/PageHeader'
 
 // ─── Filtros de estado ──────────────────────────────────────────────────────
 const ESTADOS_FILTRO = [
@@ -71,19 +72,11 @@ export default function DespachosView() {
     <div className="p-4 md:p-6 lg:p-8 space-y-4 md:space-y-6">
 
       {/* Encabezado */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center">
-            <Package size={20} className="text-indigo-500" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-slate-800">Notas de Despacho</h1>
-            <p className="text-sm text-slate-500">
-              {isLoading ? 'Cargando...' : `${despachos.length} despacho${despachos.length !== 1 ? 's' : ''}`}
-            </p>
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        icon={PackageCheck}
+        title="Notas de Despacho"
+        subtitle={isLoading ? 'Cargando...' : `${despachos.length} despacho${despachos.length !== 1 ? 's' : ''}`}
+      />
 
       {/* Filtros de estado */}
       <div className="flex items-center gap-2 flex-wrap">

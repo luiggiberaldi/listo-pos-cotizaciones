@@ -18,6 +18,7 @@ import Skeleton          from '../components/ui/Skeleton'
 import { useVendedores } from '../hooks/useClientes'
 import CustomSelect      from '../components/ui/CustomSelect'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../utils/format'
+import PageHeader from '../components/ui/PageHeader'
 
 // ─── Filtros de estado ────────────────────────────────────────────────────────
 const ESTADOS_FILTRO = [
@@ -285,24 +286,17 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
     <div className="p-4 md:p-6 lg:p-8 space-y-4 md:space-y-6">
 
       {/* Encabezado */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-primary-light rounded-xl flex items-center justify-center">
-            <FileText size={20} className="text-primary" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-slate-800">Cotizaciones</h1>
-            <p className="text-base text-slate-600">
-              {isLoading ? 'Cargando...' : `${cotizaciones.length} cotización${cotizaciones.length !== 1 ? 'es' : ''}`}
-            </p>
-          </div>
-        </div>
-        <button onClick={onNueva}
-          className="flex items-center gap-2 bg-primary hover:bg-primary-hover text-white font-semibold text-base px-5 py-3 rounded-xl transition-colors shadow-sm">
-          <Plus size={18} />
-          Nueva cotización
-        </button>
-      </div>
+      <PageHeader
+        icon={FileText}
+        title="Cotizaciones"
+        subtitle={isLoading ? 'Cargando...' : `${cotizaciones.length} cotización${cotizaciones.length !== 1 ? 'es' : ''}`}
+        action={
+          <button onClick={onNueva} className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98]"
+            style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
+            <Plus size={16} />Nueva cotización
+          </button>
+        }
+      />
 
       {/* Filtros de estado */}
       <div className="flex items-center gap-2.5 flex-wrap">

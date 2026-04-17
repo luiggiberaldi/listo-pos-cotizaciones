@@ -15,6 +15,7 @@ import ConfirmModal      from '../components/ui/ConfirmModal'
 import EmptyState        from '../components/ui/EmptyState'
 import Skeleton          from '../components/ui/Skeleton'
 import Pagination        from '../components/ui/Pagination'
+import PageHeader        from '../components/ui/PageHeader'
 
 const ITEMS_POR_PAGINA = 12
 
@@ -199,27 +200,17 @@ export default function ClientesView() {
     <div className="p-4 md:p-6 lg:p-8 space-y-4 md:space-y-6">
 
       {/* ── Encabezado ─────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-primary-light rounded-xl flex items-center justify-center">
-            <Users size={20} className="text-primary" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-slate-800">Clientes</h1>
-            <p className="text-sm text-slate-500">
-              {isLoading ? 'Cargando...' : `${clientesFiltrados.length} cliente${clientesFiltrados.length !== 1 ? 's' : ''}`}
-            </p>
-          </div>
-        </div>
-
-        <button
-          onClick={abrirCrear}
-          className="flex items-center gap-2 bg-primary hover:bg-primary-hover text-white font-semibold text-sm px-4 py-2.5 rounded-xl transition-colors shadow-sm"
-        >
-          <Plus size={16} />
-          Nuevo cliente
-        </button>
-      </div>
+      <PageHeader
+        icon={Users}
+        title="Clientes"
+        subtitle={isLoading ? 'Cargando...' : `${clientesFiltrados.length} cliente${clientesFiltrados.length !== 1 ? 's' : ''}`}
+        action={
+          <button onClick={abrirCrear} className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98]"
+            style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
+            <Plus size={16} />Nuevo cliente
+          </button>
+        }
+      />
 
       {/* ── Barra de búsqueda ──────────────────────────────────────────────── */}
       <form onSubmit={handleBuscar} className="flex gap-2">

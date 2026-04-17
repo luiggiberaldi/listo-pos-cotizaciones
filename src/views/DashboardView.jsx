@@ -8,6 +8,7 @@ import supabase     from '../services/supabase/client'
 import { fmtUsd, fmtBs, usdToBs } from '../utils/format'
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import Skeleton     from '../components/ui/Skeleton'
+import PageHeader  from '../components/ui/PageHeader'
 
 // ─── Colores de estado ────────────────────────────────────────────────────────
 const ESTADO_COLOR = {
@@ -92,23 +93,57 @@ function useMetricas() {
 
 // ─── Tarjeta de métrica ───────────────────────────────────────────────────────
 function MetricCard({ icon: Icon, label, value, sub, color = 'primary' }) {
-  const colors = {
-    primary: 'bg-primary-light text-primary',
-    blue:    'bg-blue-100 text-blue-600',
-    emerald: 'bg-emerald-100 text-emerald-600',
-    slate:   'bg-slate-100 text-slate-500',
+  const themes = {
+    primary: {
+      bg:    'linear-gradient(135deg, #1B365D 0%, #0d1f3c 100%)',
+      icon:  'rgba(255,255,255,0.15)',
+      value: '#ffffff',
+      label: 'rgba(255,255,255,0.65)',
+      sub:   'rgba(255,255,255,0.45)',
+      border:'rgba(255,255,255,0.08)',
+    },
+    emerald: {
+      bg:    'linear-gradient(135deg, #065f46 0%, #047857 100%)',
+      icon:  'rgba(255,255,255,0.15)',
+      value: '#ffffff',
+      label: 'rgba(255,255,255,0.65)',
+      sub:   'rgba(255,255,255,0.45)',
+      border:'rgba(255,255,255,0.1)',
+    },
+    blue: {
+      bg:    'linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%)',
+      icon:  'rgba(255,255,255,0.15)',
+      value: '#ffffff',
+      label: 'rgba(255,255,255,0.65)',
+      sub:   'rgba(255,255,255,0.45)',
+      border:'rgba(255,255,255,0.1)',
+    },
+    gold: {
+      bg:    'linear-gradient(135deg, #92400e 0%, #B8860B 100%)',
+      icon:  'rgba(255,255,255,0.15)',
+      value: '#ffffff',
+      label: 'rgba(255,255,255,0.65)',
+      sub:   'rgba(255,255,255,0.45)',
+      border:'rgba(255,255,255,0.1)',
+    },
   }
+  const t = themes[color] ?? themes.primary
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col gap-3">
-      <div className="flex items-center gap-2.5">
-        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${colors[color]}`}>
-          <Icon size={18} />
+    <div className="relative overflow-hidden rounded-2xl p-4 flex flex-col gap-3"
+      style={{ background: t.bg, border: `1px solid ${t.border}`, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
+      {/* Orbe decorativo */}
+      <div className="absolute -bottom-4 -right-4 w-20 h-20 rounded-full pointer-events-none"
+        style={{ background: 'rgba(255,255,255,0.05)' }} />
+      <div className="flex items-center gap-2.5 relative z-10">
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+          style={{ background: t.icon }}>
+          <Icon size={18} style={{ color: 'white' }} />
         </div>
-        <p className="text-xs text-slate-500 font-medium leading-tight">{label}</p>
+        <p className="text-xs font-medium leading-tight" style={{ color: t.label }}>{label}</p>
       </div>
-      <div>
-        <p className="text-2xl font-black text-slate-800 leading-tight">{value}</p>
-        {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
+      <div className="relative z-10">
+        <p className="text-2xl font-black leading-tight" style={{ color: t.value }}>{value}</p>
+        {sub && <p className="text-xs mt-0.5" style={{ color: t.sub }}>{sub}</p>}
       </div>
     </div>
   )
@@ -132,24 +167,17 @@ export default function DashboardView() {
     <div className="p-4 md:p-6 lg:p-8 space-y-4 md:space-y-6">
 
       {/* Encabezado */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-primary-light rounded-xl flex items-center justify-center">
-            <LayoutDashboard size={20} className="text-primary" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-slate-800">Inicio</h1>
-            <p className="text-sm text-slate-500 capitalize">
-              Bienvenido, {perfil?.nombre?.split(' ')[0] ?? 'usuario'} · {mesActual}
-            </p>
-          </div>
-        </div>
-        <button onClick={() => navigate('/cotizaciones?nueva=1')}
-          className="flex items-center gap-2 bg-primary hover:bg-primary-hover text-white font-bold text-sm px-5 py-3 rounded-xl transition-colors shadow-md shadow-primary/20 active:scale-[0.98]">
-          <Plus size={18} strokeWidth={2.5} />
-          Nueva cotización
-        </button>
-      </div>
+      <PageHeader
+        icon={LayoutDashboard}
+        title="Inicio"
+        subtitle={`Bienvenido, ${perfil?.nombre?.split(' ')[0] ?? 'usuario'} · ${mesActual}`}
+        action={
+          <button onClick={() => navigate('/cotizaciones?nueva=1')} className="flex items-center gap-2 text-white font-bold text-sm px-5 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98]"
+            style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
+            <Plus size={16} strokeWidth={2.5} />Nueva cotización
+          </button>
+        }
+      />
 
       {/* Métricas principales */}
       {isLoading ? (
@@ -196,7 +224,7 @@ export default function DashboardView() {
             label="Tasa de aceptación"
             value={m?.tasaAceptacion !== null ? `${m?.tasaAceptacion}%` : '—'}
             sub={m?.tasaAceptacion !== null ? 'aceptadas vs rechazadas' : 'sin datos suficientes'}
-            color="primary"
+            color="gold"
           />
         </div>
       )}
