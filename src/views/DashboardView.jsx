@@ -2,7 +2,7 @@
 // Panel de inicio — resumen de actividad y métricas clave
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { LayoutDashboard, FileText, Users, DollarSign, TrendingUp, Clock, Plus } from 'lucide-react'
+import { LayoutDashboard, FileText, Users, DollarSign, TrendingUp, Clock, Plus, UserCog, ClipboardList, ArrowRight } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import supabase     from '../services/supabase/client'
 import { fmtUsd, fmtBs, usdToBs } from '../utils/format'
@@ -230,51 +230,57 @@ export default function DashboardView() {
       )}
 
       {/* Desglose por estado */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+      <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
         <h2 className="font-bold text-slate-700 text-sm uppercase tracking-wide">
           Cotizaciones por estado — histórico
         </h2>
 
         {isLoading ? (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <Skeleton className="h-3 w-3 rounded-full" />
-                <Skeleton className="h-3 flex-1 rounded" />
-                <Skeleton className="h-5 w-16 rounded-full" />
+              <div key={i} className="space-y-1.5">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-3 w-3 rounded-full" />
+                  <Skeleton className="h-3 flex-1 rounded" />
+                  <Skeleton className="h-5 w-16 rounded-full" />
+                </div>
+                <Skeleton className="h-2.5 w-full rounded-full ml-6" />
               </div>
             ))}
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {['enviada','borrador','aceptada','rechazada','vencida','anulada']
               .filter(e => m?.porEstado?.[e])
               .map(estado => {
                 const { count, total } = m.porEstado[estado]
                 const pct = m.total > 0 ? Math.round((count / m.total) * 100) : 0
                 const col = ESTADO_COLOR[estado]
+                // Gradientes por estado
+                const gradients = {
+                  aceptada:  'linear-gradient(90deg, #10b981, #059669)',
+                  enviada:   'linear-gradient(90deg, #3b82f6, #2563eb)',
+                  borrador:  'linear-gradient(90deg, #94a3b8, #64748b)',
+                  rechazada: 'linear-gradient(90deg, #ef4444, #dc2626)',
+                  vencida:   'linear-gradient(90deg, #f97316, #ea580c)',
+                  anulada:   'linear-gradient(90deg, #cbd5e1, #94a3b8)',
+                }
                 return (
-                  <div key={estado} className="flex items-center gap-3">
-                    <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${col.dot}`} />
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between mb-0.5">
-                        <span className="text-sm text-slate-700">{ESTADO_LABEL[estado]}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-slate-400">
-                            {fmtUsd(total)}
-                            {tasaEfectiva > 0 && <span className="ml-1">({fmtBs(usdToBs(total, tasaEfectiva))})</span>}
-                          </span>
-                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${col.bg} ${col.text}`}>
-                            {count}
-                          </span>
-                        </div>
+                  <div key={estado}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${col.dot}`} />
+                        <span className="text-sm font-medium text-slate-700">{ESTADO_LABEL[estado]}</span>
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${col.bg} ${col.text}`}>{count}</span>
                       </div>
-                      <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${col.dot}`}
-                          style={{ width: `${pct}%` }}
-                        />
+                      <div className="flex items-center gap-2 text-xs text-slate-400">
+                        <span>{fmtUsd(total)}{tasaEfectiva > 0 && <span className="ml-1 text-slate-300">({fmtBs(usdToBs(total, tasaEfectiva))})</span>}</span>
+                        <span className="font-semibold text-slate-500 w-8 text-right">{pct}%</span>
                       </div>
+                    </div>
+                    <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all duration-700"
+                        style={{ width: `${pct}%`, background: gradients[estado] ?? gradients.borrador }} />
                     </div>
                   </div>
                 )
@@ -286,23 +292,59 @@ export default function DashboardView() {
         )}
       </div>
 
-      {/* Actividad del mes */}
+      {/* Actividad del mes + accesos rápidos */}
       {!isLoading && m && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="bg-primary-light border border-primary-focus rounded-2xl p-5">
-            <p className="text-xs font-bold text-primary-dark uppercase tracking-wide mb-1">Este mes</p>
-            <p className="text-3xl font-black text-primary">{m.delMesCount}</p>
-            <p className="text-sm text-primary-dark mt-1">cotizaciones generadas</p>
+          {/* Este mes */}
+          <div className="relative overflow-hidden rounded-2xl p-5"
+            style={{ background: 'linear-gradient(135deg, #1B365D 0%, #0d1f3c 100%)', border: '1px solid rgba(255,255,255,0.07)' }}>
+            <div className="absolute -bottom-4 -right-4 w-24 h-24 rounded-full" style={{ background: 'rgba(255,255,255,0.04)' }} />
+            <p className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: 'rgba(255,255,255,0.5)' }}>Este mes</p>
+            <p className="text-4xl font-black text-white leading-none">{m.delMesCount}</p>
+            <p className="text-sm mt-1" style={{ color: 'rgba(255,255,255,0.55)' }}>cotizaciones generadas</p>
+            {variacionMes !== null && (
+              <div className="mt-3 inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full"
+                style={{
+                  background: variacionMes >= 0 ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)',
+                  color: variacionMes >= 0 ? '#34d399' : '#f87171',
+                }}>
+                {variacionMes >= 0 ? '↑' : '↓'} {Math.abs(variacionMes)}% vs mes anterior
+              </div>
+            )}
           </div>
-          {esSupervisor && (
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5">
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1 flex items-center gap-1.5">
-                <Users size={12} />
-                Equipo de ventas
+
+          {/* Accesos rápidos (supervisor) / info simple (vendedor) */}
+          {esSupervisor ? (
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 flex flex-col gap-3">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
+                <Users size={12} />Accesos rápidos
               </p>
-              <p className="text-sm text-slate-600 mt-2">
-                Revisa el módulo de <strong>Usuarios</strong> para gestionar el equipo y el módulo de <strong>Auditoría</strong> para ver toda la actividad.
-              </p>
+              <button onClick={() => navigate('/usuarios')}
+                className="flex items-center justify-between w-full px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all group/btn hover:shadow-md"
+                style={{ background: 'linear-gradient(135deg, rgba(27,54,93,0.06), rgba(184,134,11,0.06))', border: '1px solid rgba(27,54,93,0.12)' }}>
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
+                    <UserCog size={13} className="text-white" />
+                  </div>
+                  <span className="text-slate-700">Gestionar usuarios</span>
+                </div>
+                <ArrowRight size={14} className="text-slate-400 group-hover/btn:translate-x-0.5 transition-transform" />
+              </button>
+              <button onClick={() => navigate('/auditoria')}
+                className="flex items-center justify-between w-full px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all group/btn hover:shadow-md"
+                style={{ background: 'linear-gradient(135deg, rgba(27,54,93,0.06), rgba(184,134,11,0.06))', border: '1px solid rgba(27,54,93,0.12)' }}>
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
+                    <ClipboardList size={13} className="text-white" />
+                  </div>
+                  <span className="text-slate-700">Ver auditoría</span>
+                </div>
+                <ArrowRight size={14} className="text-slate-400 group-hover/btn:translate-x-0.5 transition-transform" />
+              </button>
+            </div>
+          ) : (
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex items-center justify-center">
+              <p className="text-sm text-slate-400 text-center">Contacta a tu supervisor para ver más detalles del equipo.</p>
             </div>
           )}
         </div>
