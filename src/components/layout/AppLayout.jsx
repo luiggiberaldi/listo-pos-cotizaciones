@@ -324,7 +324,7 @@ export default function AppLayout() {
           transition-all duration-300 ease-out
           ${menuOpen ? 'translate-x-0' : '-translate-x-full'}
           ${sidebarCollapsed ? 'md:w-[72px]' : 'md:w-64'}
-          w-64 md:translate-x-0 md:static md:z-auto md:h-screen md:sticky md:top-0
+          w-64 md:translate-x-0 md:static md:z-auto md:h-[calc(100vh-3.5rem)] md:sticky md:top-14
         `}
         style={{
           background: 'linear-gradient(180deg, #0a1628 0%, #0d1f3c 60%, #0a1a0f 100%)',
