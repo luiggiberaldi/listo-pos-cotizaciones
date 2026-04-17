@@ -2,8 +2,8 @@
 // Vista principal del módulo de Clientes
 // — Vendedor: ve y gestiona sus propios clientes
 // — Supervisor: ve todos los clientes + puede reasignar
-import { useState, useMemo } from 'react'
-import { Users, Plus, Search, RefreshCw, X, LayoutGrid, List, Filter, ChevronDown } from 'lucide-react'
+import { useState, useMemo, useRef, useEffect } from 'react'
+import { Users, Plus, Search, RefreshCw, X, LayoutGrid, List, Filter, ChevronDown, Check } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { useClientes, useDesactivarCliente, useVendedores } from '../hooks/useClientes'
 import ClienteCard       from '../components/clientes/ClienteCard'
@@ -17,6 +17,63 @@ import Skeleton          from '../components/ui/Skeleton'
 import Pagination        from '../components/ui/Pagination'
 
 const ITEMS_POR_PAGINA = 12
+
+// ─── Dropdown custom (reemplaza <select> nativo) ────────────────────────────
+function Dropdown({ value, onChange, placeholder, options }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  const selected = options.find(o => o.value === value)
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className={`flex items-center gap-2 text-sm font-semibold border rounded-xl pl-3 pr-2.5 py-2 cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary ${
+          value ? 'bg-primary-light border-primary/30 text-primary' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+        }`}
+      >
+        <span>{selected ? selected.label : placeholder}</span>
+        <ChevronDown size={14} className={`text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute z-50 mt-1.5 min-w-[180px] bg-white border border-slate-200 rounded-xl shadow-lg shadow-slate-200/50 py-1 animate-in fade-in slide-in-from-top-1 duration-150">
+          <button
+            type="button"
+            onClick={() => { onChange(''); setOpen(false) }}
+            className={`w-full flex items-center gap-2 text-left text-sm px-3 py-2 transition-colors rounded-lg mx-0 ${
+              !value ? 'bg-primary-light text-primary font-semibold' : 'text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            {!value && <Check size={14} className="text-primary" />}
+            <span className={!value ? '' : 'pl-[22px]'}>{placeholder}</span>
+          </button>
+          {options.map(opt => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => { onChange(opt.value); setOpen(false) }}
+              className={`w-full flex items-center gap-2 text-left text-sm px-3 py-2 transition-colors rounded-lg ${
+                value === opt.value ? 'bg-primary-light text-primary font-semibold' : 'text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              {value === opt.value && <Check size={14} className="text-primary" />}
+              <span className={value === opt.value ? '' : 'pl-[22px]'}>{opt.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 // ─── Skeleton de carga ────────────────────────────────────────────────────────
 function SkeletonClientes() {
@@ -229,55 +286,32 @@ export default function ClientesView() {
         </div>
 
         {/* Tipo */}
-        <div className="relative">
-          <select
-            value={filtroTipo}
-            onChange={e => { setFiltroTipo(e.target.value); setPagina(1) }}
-            className={`appearance-none text-sm font-semibold border rounded-xl pl-3 pr-8 py-2 cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary ${
-              filtroTipo ? 'bg-primary-light border-primary/30 text-primary' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
-            }`}
-          >
-            <option value="">Todos los tipos</option>
-            <option value="natural">Natural</option>
-            <option value="juridico">Jurídico</option>
-          </select>
-          <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
-        </div>
+        <Dropdown
+          value={filtroTipo}
+          onChange={v => { setFiltroTipo(v); setPagina(1) }}
+          placeholder="Todos los tipos"
+          options={[
+            { value: 'natural', label: 'Natural' },
+            { value: 'juridico', label: 'Jurídico' },
+          ]}
+        />
 
         {/* Ciudad */}
-        <div className="relative">
-          <select
-            value={filtroCiudad}
-            onChange={e => { setFiltroCiudad(e.target.value); setPagina(1) }}
-            className={`appearance-none text-sm font-semibold border rounded-xl pl-3 pr-8 py-2 cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary ${
-              filtroCiudad ? 'bg-primary-light border-primary/30 text-primary' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
-            }`}
-          >
-            <option value="">Todas las ciudades</option>
-            {ciudadesDisponibles.map(c => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-          <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
-        </div>
+        <Dropdown
+          value={filtroCiudad}
+          onChange={v => { setFiltroCiudad(v); setPagina(1) }}
+          placeholder="Todas las ciudades"
+          options={ciudadesDisponibles.map(c => ({ value: c, label: c }))}
+        />
 
         {/* Vendedor (solo supervisor) */}
         {perfil?.rol === 'supervisor' && (
-          <div className="relative">
-            <select
-              value={filtroVendedor}
-              onChange={e => { setFiltroVendedor(e.target.value); setPagina(1) }}
-              className={`appearance-none text-sm font-semibold border rounded-xl pl-3 pr-8 py-2 cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary ${
-                filtroVendedor ? 'bg-primary-light border-primary/30 text-primary' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
-              }`}
-            >
-              <option value="">Todos los vendedores</option>
-              {vendedores.map(v => (
-                <option key={v.id} value={v.id}>{v.nombre}</option>
-              ))}
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
-          </div>
+          <Dropdown
+            value={filtroVendedor}
+            onChange={v => { setFiltroVendedor(v); setPagina(1) }}
+            placeholder="Todos los vendedores"
+            options={vendedores.map(v => ({ value: v.id, label: v.nombre }))}
+          />
         )}
 
         {/* Limpiar filtros */}
