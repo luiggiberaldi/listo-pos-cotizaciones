@@ -1,41 +1,71 @@
 import React from 'react';
 
-export default function EmptyState({ 
-  icon: Icon, 
-  title, 
-  description, 
-  actionLabel, 
+export default function EmptyState({
+  icon: Icon,
+  title,
+  description,
+  actionLabel,
   onAction,
   secondaryActionLabel,
   onSecondaryAction
 }) {
   return (
-    <div className="flex flex-col items-center justify-center p-8 text-center bg-white/50 dark:bg-slate-800/50 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 min-h-[300px]">
-      <div className="w-16 h-16 bg-slate-100 dark:bg-slate-900 rounded-full flex items-center justify-center mb-4 shadow-inner">
-        {Icon ? <Icon className="w-8 h-8 text-slate-400 dark:text-slate-500" /> : <div className="w-8 h-8 bg-slate-300 dark:bg-slate-600 rounded-full" />}
+    <div className="flex flex-col items-center justify-center p-10 text-center rounded-2xl min-h-[300px] relative overflow-hidden"
+      style={{
+        background: 'linear-gradient(135deg, rgba(27,54,93,0.03) 0%, rgba(184,134,11,0.03) 100%)',
+        border: '1.5px dashed rgba(27,54,93,0.15)',
+      }}>
+
+      {/* Dot grid background */}
+      <div className="absolute inset-0 opacity-[0.03] pointer-events-none"
+        style={{
+          backgroundImage: 'radial-gradient(circle, #1B365D 1px, transparent 1px)',
+          backgroundSize: '20px 20px',
+        }} />
+
+      {/* Icon container */}
+      <div className="relative mb-5">
+        {/* Outer glow ring */}
+        <div className="w-20 h-20 rounded-full absolute inset-0"
+          style={{ background: 'linear-gradient(135deg, rgba(27,54,93,0.08), rgba(184,134,11,0.08))' }} />
+        {/* Inner container */}
+        <div className="relative w-20 h-20 rounded-full flex items-center justify-center"
+          style={{
+            background: 'linear-gradient(135deg, rgba(27,54,93,0.10) 0%, rgba(184,134,11,0.10) 100%)',
+            border: '1.5px solid rgba(27,54,93,0.12)',
+            boxShadow: 'inset 0 2px 4px rgba(27,54,93,0.06)',
+          }}>
+          {Icon
+            ? <Icon size={32} style={{ color: '#1B365D', opacity: 0.5 }} />
+            : <div className="w-8 h-8 rounded-full" style={{ background: 'rgba(27,54,93,0.2)' }} />
+          }
+        </div>
       </div>
-      <h3 className="text-xl font-bold text-slate-800 dark:text-slate-200 mb-2">
+
+      <h3 className="text-lg font-bold mb-1.5" style={{ color: '#1B365D' }}>
         {title}
       </h3>
-      <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm mb-6">
+      <p className="text-sm text-slate-500 max-w-xs mb-7 leading-relaxed">
         {description}
       </p>
-      
-      <div className="flex flex-col sm:flex-row gap-3">
+
+      <div className="flex flex-col sm:flex-row gap-3 relative">
         {actionLabel && onAction && (
           <button
             onClick={onAction}
-            className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-medium rounded-xl shadow-lg shadow-emerald-500/20 active:scale-95 transition-all outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900"
-          >
+            className="px-6 py-2.5 text-white font-semibold rounded-xl active:scale-95 transition-all shadow-lg"
+            style={{
+              background: 'linear-gradient(135deg, #1B365D, #B8860B)',
+              boxShadow: '0 4px 12px rgba(27,54,93,0.25)',
+            }}>
             {actionLabel}
           </button>
         )}
-        
+
         {secondaryActionLabel && onSecondaryAction && (
           <button
             onClick={onSecondaryAction}
-            className="px-6 py-2.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium rounded-xl border border-slate-200 dark:border-slate-700 active:scale-95 transition-all outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900"
-          >
+            className="px-6 py-2.5 bg-white hover:bg-slate-50 text-slate-600 font-semibold rounded-xl border border-slate-200 active:scale-95 transition-all">
             {secondaryActionLabel}
           </button>
         )}
