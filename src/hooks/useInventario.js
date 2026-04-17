@@ -12,12 +12,12 @@ import { showToast } from '../components/ui/Toast'
 export const INVENTARIO_KEY = ['inventario']
 
 // ─── Lista de productos ───────────────────────────────────────────────────────
-export function useInventario({ busqueda = '', categoria = '' } = {}) {
+export function useInventario({ busqueda = '', categoria = '', page = 0, pageSize = 100 } = {}) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
 
   return useQuery({
-    queryKey: [...INVENTARIO_KEY, busqueda, categoria, esSupervisor],
+    queryKey: [...INVENTARIO_KEY, busqueda, categoria, esSupervisor, page, pageSize],
     queryFn: async () => {
       // Supervisor: tabla directa (con costo_usd)
       // Vendedor: vista sin costo_usd
@@ -29,7 +29,7 @@ export function useInventario({ busqueda = '', categoria = '' } = {}) {
 
       let query = supabase
         .from(tabla)
-        .select(columnas)
+        .select(columnas, { count: 'exact' })
         .eq('activo', true)
 
       // Búsqueda sanitizada
@@ -52,19 +52,21 @@ export function useInventario({ busqueda = '', categoria = '' } = {}) {
         }
       }
 
-      query = query.order('nombre', { ascending: true })
+      query = query
+        .order('nombre', { ascending: true })
+        .range(page * pageSize, (page + 1) * pageSize - 1)
 
-      const { data, error } = await query
+      const { data, error, count } = await query
       if (error) throw error
       const productos = data ?? []
 
-      // Verificar stock bajo al cargar (solo supervisor, solo sin filtros activos)
-      if (esSupervisor && !busqueda && !categoria) {
+      // Verificar stock bajo al cargar (solo supervisor, solo sin filtros activos, solo primera página)
+      if (esSupervisor && !busqueda && !categoria && page === 0) {
         const bajos = productos.filter(p => p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo)
         if (bajos.length > 0) notifyStockBajo(bajos)
       }
 
-      return productos
+      return { productos, totalCount: count ?? productos.length }
     },
     enabled: !!perfil,
   })

@@ -22,6 +22,7 @@ import { notifyClienteAjeno }  from '../../services/notificationService'
 import { sendPushNotification } from '../../hooks/usePushNotifications'
 import { compartirPorWhatsApp, generarMensaje } from '../../utils/whatsapp'
 import { round2, round4, mulR } from '../../utils/dinero'
+import { calcTotales } from '../../utils/calcTotales'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../../utils/format'
 import { getLocalISODate }     from '../../utils/dateHelpers'
 import supabase from '../../services/supabase/client'
@@ -30,16 +31,6 @@ import ClienteForm from '../clientes/ClienteForm'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 let _itemCounter = 0
-
-function calcTotales(items, descGlobalPct, costoEnvio, ivaPct = 0) {
-  const subtotal     = round2(items.reduce((s, it) =>
-    round2(s + round2(it.cantidad * it.precioUnitUsd * (1 - it.descuentoPct / 100))), 0))
-  const descuentoUsd = round2(subtotal * (Number(descGlobalPct) || 0) / 100)
-  const baseAnteIva  = round2(subtotal - descuentoUsd)
-  const ivaUsd       = round2(baseAnteIva * (Number(ivaPct) || 0) / 100)
-  const totalUsd     = round2(baseAnteIva + ivaUsd + (Number(costoEnvio) || 0))
-  return { subtotal, descuentoUsd, ivaUsd, totalUsd }
-}
 
 const STEP_LABELS = ['Cliente', 'Productos', 'Resumen', 'Enviada']
 
@@ -192,7 +183,8 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
   const [catActiva, setCatActiva] = useState('')
   const [vistaGrid, setVistaGrid] = useState(true)
   const [pagina, setPagina] = useState(0)
-  const { data: todosProductos = [], isLoading } = useInventario({})
+  const { data: inventarioData, isLoading } = useInventario({})
+  const todosProductos = inventarioData?.productos ?? inventarioData ?? []
   const { data: categorias = [] } = useCategorias()
 
   // Filtrar localmente para búsqueda instantánea

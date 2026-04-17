@@ -71,7 +71,8 @@ export default function InventarioView() {
   const [confirmDesactOpen,setConfirmDesactOpen]= useState(false)
 
   // Data
-  const { data: productos = [], isLoading, isError, refetch } = useInventario({ busqueda, categoria })
+  const { data: inventarioData, isLoading, isError, refetch } = useInventario({ busqueda, categoria })
+  const productos = inventarioData?.productos ?? inventarioData ?? []
   const { data: categorias = [] } = useCategorias()
   const desactivar = useDesactivarProducto()
 

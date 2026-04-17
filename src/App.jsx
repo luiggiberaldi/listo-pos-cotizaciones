@@ -12,6 +12,7 @@ import {
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import useAuthStore from './store/useAuthStore'
 import { ToastProvider } from './components/ui/Toast'
+import { ErrorBoundary } from './components/ui/ErrorBoundary'
 
 // Layout (se carga siempre con las rutas protegidas)
 import AppLayout from './components/layout/AppLayout'
@@ -19,8 +20,19 @@ import AppLayout from './components/layout/AppLayout'
 // Auth (se carga siempre en /login)
 import LoginPage from './modules/auth/LoginPage'
 
+// Dashboard — preloaded since it's the default route
+const DashboardView = lazy(() => import('./views/DashboardView'))
+// Preload Dashboard chunk in idle time
+if (typeof window !== 'undefined') {
+  const preloadDashboard = () => import('./views/DashboardView')
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(preloadDashboard)
+  } else {
+    setTimeout(preloadDashboard, 200)
+  }
+}
+
 // Views — lazy loading para que solo se descarguen al navegar
-const DashboardView     = lazy(() => import('./views/DashboardView'))
 const ClientesView      = lazy(() => import('./views/ClientesView'))
 const CotizacionesView  = lazy(() => import('./views/CotizacionesView'))
 const DespachosView     = lazy(() => import('./views/DespachosView'))
@@ -150,12 +162,14 @@ function AppRoutes() {
 // ─── Componente raíz con providers ────────────────────────────────────────────
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <ToastProvider>
-          <AppRoutes />
-        </ToastProvider>
-      </BrowserRouter>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <ToastProvider>
+            <AppRoutes />
+          </ToastProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
+    </ErrorBoundary>
   )
 }

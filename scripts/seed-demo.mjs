@@ -2,8 +2,13 @@
 // Seed script — datos realistas de ferretería venezolana para demo
 // Ejecutar: node scripts/seed-demo.mjs
 
-const SUPABASE_URL = 'https://oyfyuszgjwcepjpngclv.supabase.co'
-const SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im95Znl1c3pnandjZXBqcG5nY2x2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTQyOTQ0MywiZXhwIjoyMDkxMDA1NDQzfQ.YoMbefzmBd7gbhRQeVNCagSXte_87OQIeYkwCasD8wk'
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://oyfyuszgjwcepjpngclv.supabase.co'
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY
+if (!SUPABASE_SERVICE_KEY) {
+  console.error('✗ Falta variable de entorno SUPABASE_SERVICE_KEY')
+  console.error('  Ejecutar: SUPABASE_SERVICE_KEY=... node scripts/seed-demo.mjs')
+  process.exit(1)
+}
 
 const headers = {
   apikey: SUPABASE_SERVICE_KEY,

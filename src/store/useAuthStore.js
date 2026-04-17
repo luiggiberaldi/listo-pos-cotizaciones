@@ -139,7 +139,10 @@ const useAuthStore = create((set, get) => ({
 
   // ─── Login ─────────────────────────────────────────────────────────────────
   login: async (email, password) => {
-    set({ loading: true, error: null })
+    // Prevent concurrent login attempts
+    if (get().loading) return { ok: false }
+
+    set({ loading: true, error: null, _cargandoPerfil: true })
 
     const { data, error } = await supabase.auth.signInWithPassword({
       email: email.trim().toLowerCase(),
@@ -147,20 +150,19 @@ const useAuthStore = create((set, get) => ({
     })
 
     if (error) {
-      set({ loading: false, error: traducirError(error.message) })
+      set({ loading: false, error: traducirError(error.message), _cargandoPerfil: false })
       return { ok: false }
     }
 
-    // El perfil se carga vía onAuthStateChange (SIGNED_IN)
-    // pero lo cargamos también aquí para no depender del timing del evento
-    // Flag para que el handler SIGNED_IN no duplique la llamada
-    set({ _cargandoPerfil: true })
+    // Cargar perfil directamente (el flag _cargandoPerfil ya está en true
+    // para que el handler SIGNED_IN no duplique la llamada)
     try {
       await get()._cargarPerfil(data.user)
     } catch (_) {
       // Si falla la carga del perfil, el error ya fue seteado en _cargarPerfil
+    } finally {
+      set({ loading: false, _cargandoPerfil: false })
     }
-    set({ loading: false, _cargandoPerfil: false })
     // Solo ok:true si el perfil se cargó correctamente
     return get().perfil ? { ok: true } : { ok: false }
   },

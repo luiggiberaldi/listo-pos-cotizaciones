@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
 import useAuthStore from '../store/useAuthStore'
 import { apiUrl } from '../services/apiBase'
+import { calcTotales } from '../utils/calcTotales'
 import { round2 } from '../utils/dinero'
 import {
   notifyCotizacionEnviada,
@@ -125,14 +126,9 @@ export function useGuardarBorrador() {
   return useMutation({
     mutationFn: async ({ cotizacionId = null, campos, items }) => {
       // Calcular totales
-      const subtotal = round2(
-        items.reduce((s, it) =>
-          round2(s + round2(it.cantidad * it.precioUnitUsd * (1 - it.descuentoPct / 100))), 0)
+      const { subtotal, descuentoUsd, ivaUsd, totalUsd } = calcTotales(
+        items, campos.descuentoGlobalPct, campos.costoEnvioUsd, campos.ivaPct
       )
-      const descuentoUsd = round2(subtotal * (Number(campos.descuentoGlobalPct) || 0) / 100)
-      const baseAnteIva  = round2(subtotal - descuentoUsd)
-      const ivaUsd       = round2(baseAnteIva * (Number(campos.ivaPct) || 0) / 100)
-      const totalUsd     = round2(baseAnteIva + ivaUsd + (Number(campos.costoEnvioUsd) || 0))
 
       const headerData = {
         cliente_id:           campos.clienteId,
