@@ -145,6 +145,16 @@ export default function ConfiguracionView() {
   }
 
   const inputCls = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400'
+  const SectionHeader = ({ icon: Icon, children }) => (
+    <div className="flex items-center gap-3 mb-1">
+      <div className="w-0.5 self-stretch rounded-full shrink-0" style={{ background: 'linear-gradient(180deg, #B8860B, #1B365D)', minHeight: '20px' }} />
+      <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+        style={{ background: 'linear-gradient(135deg, rgba(27,54,93,0.08), rgba(184,134,11,0.08))', border: '1px solid rgba(27,54,93,0.1)' }}>
+        <Icon size={13} style={{ color: '#1B365D' }} />
+      </div>
+      <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wide">{children}</h2>
+    </div>
+  )
   const cargando = actualizar.isPending
   const esTabForm = ['negocio', 'fiscal', 'sistema'].includes(tab)
 
@@ -167,13 +177,19 @@ export default function ConfiguracionView() {
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-all flex-1 justify-center ${
-                active
-                  ? 'bg-white text-slate-800 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-700'
+              className={`relative flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-all flex-1 justify-center overflow-hidden ${
+                active ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
               }`}
             >
-              <Icon size={15} />
+              {active && (
+                <span className="absolute bottom-0 left-[20%] right-[20%] h-0.5 rounded-full"
+                  style={{ background: 'linear-gradient(to right, #1B365D, #B8860B)' }} />
+              )}
+              <span className={`flex items-center justify-center w-5 h-5 rounded-md transition-all ${
+                active ? 'text-[#1B365D]' : ''
+              }`}>
+                <Icon size={14} />
+              </span>
               <span className="hidden sm:inline">{t.label}</span>
             </button>
           )
@@ -188,9 +204,7 @@ export default function ConfiguracionView() {
           {tab === 'negocio' && (
             <>
               <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-                <h2 className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
-                  <Building2 size={14} className="text-slate-400" /> Identidad del negocio
-                </h2>
+                <SectionHeader icon={Building2}>Identidad del negocio</SectionHeader>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5 sm:col-span-2">
                     <label className="text-sm font-medium text-slate-700">Nombre del negocio *</label>
@@ -206,9 +220,7 @@ export default function ConfiguracionView() {
               </div>
 
               <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-                <h2 className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
-                  <Phone size={14} className="text-slate-400" /> Contacto
-                </h2>
+                <SectionHeader icon={Phone}>Contacto</SectionHeader>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
@@ -240,9 +252,7 @@ export default function ConfiguracionView() {
           {tab === 'fiscal' && (
             <>
               <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-5">
-                <h2 className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
-                  <Percent size={14} className="text-slate-400" /> Impuestos
-                </h2>
+                <SectionHeader icon={Percent}>Impuestos</SectionHeader>
 
                 {ivaMissing ? (
                   <div className="space-y-3">
@@ -299,9 +309,7 @@ export default function ConfiguracionView() {
               </div>
 
               <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-                <h2 className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
-                  <FileText size={14} className="text-slate-400" /> Cotizaciones
-                </h2>
+                <SectionHeader icon={FileText}>Cotizaciones</SectionHeader>
                 <div className="space-y-4">
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-slate-700">
@@ -332,9 +340,7 @@ export default function ConfiguracionView() {
           {tab === 'sistema' && (
             <>
               <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-                <h2 className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
-                  <Lock size={14} className="text-slate-400" /> Acceso al sistema
-                </h2>
+                <SectionHeader icon={Lock}>Acceso al sistema</SectionHeader>
                 <p className="text-xs text-slate-500 -mt-2">
                   Credenciales compartidas en todos los dispositivos. Cada vendedor se identifica después con su PIN.
                 </p>
@@ -371,9 +377,7 @@ export default function ConfiguracionView() {
               </div>
 
               <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-                <h2 className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
-                  <Accessibility size={14} className="text-slate-400" /> Modo lectura fácil
-                </h2>
+                <SectionHeader icon={Accessibility}>Modo lectura fácil</SectionHeader>
                 <p className="text-xs text-slate-500 -mt-2">
                   Textos y botones más grandes. Solo aplica en este dispositivo.
                 </p>
@@ -409,7 +413,8 @@ export default function ConfiguracionView() {
               </div>
             )}
             <button type="submit" disabled={isLoading || cargando}
-              className="flex items-center gap-2 bg-primary hover:bg-primary-hover text-white font-semibold text-sm px-5 py-2.5 rounded-xl transition-colors shadow-sm disabled:opacity-50">
+              className="flex items-center gap-2 text-white font-bold text-sm px-5 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50"
+              style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
               {cargando
                 ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Guardando...</>
                 : <><Save size={15} />Guardar cambios</>
@@ -426,9 +431,7 @@ export default function ConfiguracionView() {
       {tab === 'datos' && (
         <div className="space-y-5">
           <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
-              <HardDrive size={14} className="text-slate-400" /> Copia de seguridad
-            </h2>
+                <SectionHeader icon={HardDrive}>Copia de seguridad</SectionHeader>
             <p className="text-xs text-slate-500 -mt-2">
               Descarga o importa un archivo JSON con todos los datos del sistema.
             </p>
@@ -487,9 +490,13 @@ export default function ConfiguracionView() {
           </div>
 
           <div className="bg-white rounded-2xl border border-red-200 p-5 space-y-4">
-            <h2 className="flex items-center gap-2 text-sm font-bold text-red-700 uppercase tracking-wide">
-              <AlertTriangle size={14} className="text-red-500" /> Zona de peligro
-            </h2>
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-0.5 self-stretch rounded-full shrink-0 bg-red-400" style={{ minHeight: '20px' }} />
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-red-50 border border-red-200">
+                <AlertTriangle size={13} className="text-red-500" />
+              </div>
+              <h2 className="text-sm font-bold text-red-700 uppercase tracking-wide">Zona de peligro</h2>
+            </div>
             <p className="text-xs text-slate-500 -mt-2">Acciones permanentes e irreversibles. Descarga un backup antes.</p>
             {!confirmClear ? (
               <button type="button" onClick={() => setConfirmClear(true)}
