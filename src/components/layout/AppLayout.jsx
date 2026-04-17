@@ -1,7 +1,7 @@
 // src/components/layout/AppLayout.jsx
 // Layout principal: sidebar fijo en desktop, drawer en móvil
 import { useState, useRef, useEffect } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import {
   Users, FileText, Package, Truck,
   UserCog, ClipboardList,
@@ -139,6 +139,25 @@ export default function AppLayout() {
   const [showTasaConfig, setShowTasaConfig] = useState(false)
   const [tasaInput, setTasaInput] = useState(tasaManual)
   const [tasaConfirmada, setTasaConfirmada] = useState(!!tasaManual)
+  const bcvRef = useRef(null)
+
+  // Página actual para título en topbar
+  const location = useLocation()
+  const allNavItems = [...NAV_TODOS, ...NAV_SUPERVISOR]
+  const currentPage = allNavItems.find(item =>
+    item.path === '/' ? location.pathname === '/' : location.pathname.startsWith(item.path)
+  )
+
+  // Cerrar BCV popover al hacer click fuera
+  useEffect(() => {
+    function handleClickOutsideBcv(e) {
+      if (bcvRef.current && !bcvRef.current.contains(e.target)) {
+        setShowTasaConfig(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutsideBcv)
+    return () => document.removeEventListener('mousedown', handleClickOutsideBcv)
+  }, [])
 
   function confirmarTasaManual() {
     if (parseFloat(tasaInput) > 0) {
@@ -160,7 +179,7 @@ export default function AppLayout() {
     <div className="flex min-h-screen pt-14" style={{ background: '#f1f5f9' }}>
 
       {/* ── Barra superior (móvil + desktop) ────────────────────────────── */}
-      <div className="fixed top-0 left-0 right-0 z-40 px-4 h-14 flex items-center justify-between"
+      <div className="fixed top-0 left-0 right-0 z-40 px-4 h-14 flex items-center justify-between gap-4"
         style={{ background: 'linear-gradient(135deg, #0a1628 0%, #0d1f3c 100%)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
 
         {/* Hamburger — solo móvil */}
@@ -171,11 +190,121 @@ export default function AppLayout() {
           <Menu size={22} />
         </button>
 
-        {/* Logo — solo móvil (desktop lo tiene en el sidebar) */}
+        {/* Logo — solo móvil */}
         <img src="/logo.png" alt="Listo POS" className="md:hidden h-8 w-auto object-contain" style={{ filter: 'brightness(1.1)' }} />
 
-        {/* Spacer desktop para empujar campana a la derecha */}
-        <div className="hidden md:block flex-1" />
+        {/* Título de página — solo desktop */}
+        {currentPage && (
+          <div className="hidden md:flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center"
+              style={{ background: 'linear-gradient(135deg, rgba(27,54,93,0.8), rgba(184,134,11,0.5))', border: '1px solid rgba(184,134,11,0.2)' }}>
+              <currentPage.icono size={16} className="text-white/80" />
+            </div>
+            <span className="text-sm font-black tracking-wide text-white/90">{currentPage.label}</span>
+          </div>
+        )}
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Widget BCV — solo desktop */}
+        <div className="hidden md:block relative" ref={bcvRef}>
+          <button
+            onClick={() => setShowTasaConfig(v => !v)}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-xl transition-all"
+            style={{
+              background: showTasaConfig ? 'rgba(52,211,153,0.12)' : 'rgba(255,255,255,0.05)',
+              border: `1px solid ${showTasaConfig ? 'rgba(52,211,153,0.3)' : 'rgba(255,255,255,0.08)'}`,
+            }}
+            onMouseEnter={e => { if (!showTasaConfig) e.currentTarget.style.background = 'rgba(255,255,255,0.09)' }}
+            onMouseLeave={e => { if (!showTasaConfig) e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
+          >
+            <DollarSign size={13} className="text-emerald-400 shrink-0" />
+            <span className="text-xs font-black text-white/70">BCV</span>
+            <span className="text-sm font-black text-emerald-400">
+              {tasaEfectiva > 0
+                ? new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(tasaEfectiva)
+                : '—'}
+            </span>
+            <span className="text-[10px] text-white/35 font-medium">Bs/$</span>
+            {!modoAuto && (
+              <span className="text-[9px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded font-bold border border-amber-500/20">MAN</span>
+            )}
+          </button>
+
+          {/* Popover BCV */}
+          {showTasaConfig && (
+            <div className="absolute top-full right-0 mt-2 w-64 rounded-2xl shadow-2xl z-50 p-4 space-y-3 animate-in fade-in zoom-in-95 duration-150"
+              style={{ background: '#0f1f3c', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <DollarSign size={14} className="text-emerald-400" />
+                  <span className="text-xs font-black uppercase tracking-wider text-white/60">Tasa BCV</span>
+                </div>
+                {tasaBcv.precio > 0 && (
+                  <span className="text-[10px] text-white/30">
+                    Ref: {new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(tasaBcv.precio)}
+                  </span>
+                )}
+              </div>
+              {/* Modo Auto/Manual */}
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-white/30">Modo</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold">
+                    {modoAuto ? <span className="text-emerald-400">Auto</span> : <span className="text-amber-400">Manual</span>}
+                  </span>
+                  <button
+                    onClick={() => setModoAuto(!modoAuto)}
+                    className={`relative w-9 h-5 rounded-full transition-colors ${modoAuto ? 'bg-emerald-500' : 'bg-white/20'}`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 bg-white w-4 h-4 rounded-full transition-transform shadow-sm ${modoAuto ? 'translate-x-4' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+              </div>
+              {modoAuto ? (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-white/50">{tasaBcv.fuente || 'Cargando...'}</p>
+                    {tasaBcv.ultimaActualizacion && (
+                      <p className="text-[10px] text-white/30">
+                        {new Date(tasaBcv.ultimaActualizacion).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    )}
+                  </div>
+                  <button onClick={refrescar} disabled={tasaCargando}
+                    className="p-1.5 rounded-lg text-white/30 hover:text-emerald-400 transition-colors hover:bg-white/5">
+                    <RefreshCw size={13} className={tasaCargando ? 'animate-spin' : ''} />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-1.5 items-center">
+                  <input type="number" min="0.01" step="0.01"
+                    value={tasaInput}
+                    onChange={e => { setTasaInput(e.target.value); setTasaConfirmada(false) }}
+                    placeholder="Tasa manual Bs/$"
+                    className="flex-1 min-w-0 px-2.5 py-2 rounded-lg text-sm font-bold text-white/80 focus:outline-none focus:ring-1 focus:ring-amber-500/40"
+                    style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)' }}
+                    onKeyDown={e => e.key === 'Enter' && confirmarTasaManual()}
+                  />
+                  <button
+                    onClick={confirmarTasaManual}
+                    disabled={!tasaInput || parseFloat(tasaInput) <= 0 || tasaConfirmada}
+                    className={`shrink-0 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                      tasaConfirmada
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/20'
+                        : 'text-white hover:opacity-90 disabled:opacity-40'
+                    }`}
+                    style={!tasaConfirmada ? { background: 'linear-gradient(135deg, #1B365D, #B8860B)' } : {}}
+                  >
+                    {tasaConfirmada ? '✓' : 'OK'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Campana con dropdown — siempre visible */}
         <div className="relative" ref={notifsRef}>
@@ -391,101 +520,6 @@ export default function AppLayout() {
             </>
           )}
         </nav>
-
-        {/* Tasa de cambio */}
-        <div className="relative z-10 px-3 py-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-          <button
-            onClick={() => !sidebarCollapsed && setShowTasaConfig(!showTasaConfig)}
-            className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'} px-3 py-2.5 rounded-xl transition-all`}
-            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.75)' }}
-            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.09)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
-            title={sidebarCollapsed ? `BCV ${tasaEfectiva > 0 ? new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(tasaEfectiva) : '—'} Bs/$` : undefined}
-          >
-            <div className="flex items-center gap-2">
-              <DollarSign size={15} className="text-emerald-400" />
-              {!sidebarCollapsed && <span className="text-sm font-bold">BCV</span>}
-            </div>
-            {!sidebarCollapsed && (
-              <div className="flex items-center gap-1">
-                <span className="text-sm font-black text-emerald-400">
-                  {tasaEfectiva > 0
-                    ? new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(tasaEfectiva)
-                    : '—'}
-                </span>
-                <span className="text-xs text-white/30">Bs/$</span>
-                {!modoAuto && <span className="text-[9px] bg-amber-500/20 text-amber-400 px-1.5 rounded font-bold border border-amber-500/20">MAN</span>}
-              </div>
-            )}
-          </button>
-
-          {showTasaConfig && !sidebarCollapsed && (
-            <div className="mt-2 rounded-xl p-3 space-y-2.5 animate-fade-in"
-              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-white/30">Modo</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold">
-                    {modoAuto ? <span className="text-emerald-400">Auto</span> : <span className="text-amber-400">Manual</span>}
-                  </span>
-                  <button
-                    onClick={() => setModoAuto(!modoAuto)}
-                    style={{ minHeight: 0 }}
-                    className={`relative w-9 h-5 rounded-full transition-colors ${modoAuto ? 'bg-emerald-500' : 'bg-white/20'}`}
-                  >
-                    <span className={`absolute top-0.5 left-0.5 bg-white w-4 h-4 rounded-full transition-transform shadow-sm ${modoAuto ? 'translate-x-4' : 'translate-x-0'}`} />
-                  </button>
-                </div>
-              </div>
-              {modoAuto ? (
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-white/50">{tasaBcv.fuente || 'Cargando...'}</p>
-                    {tasaBcv.ultimaActualizacion && (
-                      <p className="text-[10px] text-white/30">
-                        {new Date(tasaBcv.ultimaActualizacion).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    )}
-                  </div>
-                  <button onClick={refrescar} disabled={tasaCargando}
-                    className="p-1.5 rounded-lg text-white/30 hover:text-emerald-400 transition-colors hover:bg-white/5">
-                    <RefreshCw size={13} className={tasaCargando ? 'animate-spin' : ''} />
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <div className="flex gap-1.5 items-center">
-                    <input type="number" min="0.01" step="0.01"
-                      value={tasaInput}
-                      onChange={e => { setTasaInput(e.target.value); setTasaConfirmada(false) }}
-                      placeholder="Tasa manual Bs/$"
-                      className="flex-1 min-w-0 px-2.5 py-2 rounded-lg text-sm font-bold text-white/80 focus:outline-none focus:ring-1 focus:ring-amber-500/40"
-                      style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)' }}
-                      onKeyDown={e => e.key === 'Enter' && confirmarTasaManual()}
-                    />
-                    <button
-                      onClick={confirmarTasaManual}
-                      disabled={!tasaInput || parseFloat(tasaInput) <= 0 || tasaConfirmada}
-                      className={`shrink-0 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
-                        tasaConfirmada
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/20'
-                          : 'text-white hover:opacity-90 disabled:opacity-40'
-                      }`}
-                      style={!tasaConfirmada ? { background: 'linear-gradient(135deg, #1B365D, #B8860B)' } : {}}
-                    >
-                      {tasaConfirmada ? '✓' : 'OK'}
-                    </button>
-                  </div>
-                  {tasaBcv.precio > 0 && (
-                    <p className="text-[10px] text-white/25">
-                      Ref. BCV: {new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(tasaBcv.precio)} Bs/$
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
 
         {/* Usuario + cerrar sesión */}
         <div className="relative z-10 p-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
