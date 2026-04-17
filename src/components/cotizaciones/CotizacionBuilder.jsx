@@ -765,16 +765,23 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
 
   // ── Agregar producto ─────────────────────────────────────────────────────
   function agregarProducto(p) {
-    setItems(prev => [...prev, {
-      _key:          `item-${++_itemCounter}`,
-      productoId:    p.id,
-      codigoSnap:    p.codigo ?? '',
-      nombreSnap:    p.nombre,
-      unidadSnap:    p.unidad ?? 'und',
-      cantidad:      1,
-      precioUnitUsd: Number(p.precio_usd),
-      descuentoPct:  0,
-    }])
+    setItems(prev => {
+      const idx = prev.findIndex(it => it.productoId === p.id)
+      if (idx !== -1) {
+        // Ya existe → sumar 1 a la cantidad
+        return prev.map((it, i) => i === idx ? { ...it, cantidad: it.cantidad + 1 } : it)
+      }
+      return [...prev, {
+        _key:          `item-${++_itemCounter}`,
+        productoId:    p.id,
+        codigoSnap:    p.codigo ?? '',
+        nombreSnap:    p.nombre,
+        unidadSnap:    p.unidad ?? 'und',
+        cantidad:      1,
+        precioUnitUsd: Number(p.precio_usd),
+        descuentoPct:  0,
+      }]
+    })
   }
 
   function cambiarItem(idx, campo, valor) {
