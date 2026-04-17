@@ -1,132 +1,121 @@
 // src/components/inventario/ProductoCard.jsx
-// Tarjeta de producto para el catálogo
-// costo_usd solo se muestra si el dato existe (supervisores)
 import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle, Package } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtBs, usdToBs } from '../../utils/format'
 
-// ─── Formateador de precio ────────────────────────────────────────────────────
 function fmtUsd(n) {
   if (n == null) return '—'
   return `$${Number(n).toFixed(2)}`
 }
 
-// ─── Badge de stock ───────────────────────────────────────────────────────────
+// Color determinista basado en la cadena de categoría
+const PALETA = [
+  ['#1e40af','#dbeafe'], ['#065f46','#d1fae5'], ['#92400e','#fef3c7'],
+  ['#7c3aed','#ede9fe'], ['#be185d','#fce7f3'], ['#0f766e','#ccfbf1'],
+  ['#b45309','#fef9c3'], ['#1d4ed8','#eff6ff'], ['#166534','#dcfce7'],
+]
+function colorCategoria(str = '') {
+  let h = 0
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) & 0xffff
+  const [fg, bg] = PALETA[h % PALETA.length]
+  return { fg, bg }
+
+}
+
 function BadgeStock({ actual, minimo }) {
   const bajo = minimo > 0 && actual <= minimo
   if (bajo) return (
-    <span className="flex items-center gap-1 text-xs font-semibold text-orange-600 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full">
-      <AlertTriangle size={11} />
-      Stock bajo: {Number(actual).toLocaleString('es-VE')}
+    <span className="flex items-center gap-1 text-[10px] font-semibold text-orange-600 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded-full">
+      <AlertTriangle size={9} />
+      {Number(actual).toLocaleString('es-VE')}
     </span>
   )
-  return (
-    <span className="text-xs text-slate-400">
-      Stock: {Number(actual).toLocaleString('es-VE')}
-    </span>
-  )
+  return <span className="text-[10px] text-slate-400">Stock: {Number(actual).toLocaleString('es-VE')}</span>
 }
 
-// ─── Componente principal ─────────────────────────────────────────────────────
 export default function ProductoCard({ producto, onEditar, onDesactivar, tasa = 0 }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
+  const { fg, bg } = colorCategoria(producto.categoria || '')
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 hover:border-sky-200 hover:shadow-lg hover:shadow-sky-50 transition-all duration-200 flex flex-col overflow-hidden">
 
-      {/* Imagen del producto */}
-      <div className="w-full aspect-square bg-slate-50 flex items-center justify-center overflow-hidden">
+      {/* Imagen reducida — 80px fijo */}
+      <div className="w-full h-20 flex items-center justify-center overflow-hidden shrink-0"
+        style={{ background: producto.imagen_url ? '#f8fafc' : bg }}>
         {producto.imagen_url ? (
           <img src={producto.imagen_url} alt={producto.nombre}
             className="w-full h-full object-cover" loading="lazy" />
         ) : (
-          <Package size={36} className="text-slate-200" />
+          <Package size={28} style={{ color: fg, opacity: 0.7 }} />
         )}
       </div>
 
-      <div className="px-4 pb-4 flex flex-col gap-3 flex-1">
-      {/* Cabecera */}
-      <div>
-        <div className="min-w-0">
-          {/* Código */}
+      {/* Contenido */}
+      <div className="px-3 pt-2.5 pb-3 flex flex-col gap-2 flex-1">
+
+        {/* Código + nombre + categoría */}
+        <div>
           {producto.codigo && (
-            <div className="flex items-center gap-1 mb-1">
-              <Hash size={11} className="text-slate-400" />
-              <span className="text-xs text-slate-400 font-mono">{producto.codigo}</span>
+            <div className="flex items-center gap-1 mb-0.5">
+              <Hash size={9} className="text-slate-400" />
+              <span className="text-[10px] text-slate-400 font-mono truncate">{producto.codigo}</span>
             </div>
           )}
-          {/* Nombre */}
-          <h3 className="font-bold text-slate-800 text-sm leading-snug line-clamp-2">
-            {producto.nombre}
-          </h3>
-          {/* Categoría */}
+          <h3 className="font-bold text-slate-800 text-xs leading-snug line-clamp-2">{producto.nombre}</h3>
           {producto.categoria && (
-            <div className="flex items-center gap-1 mt-1">
-              <Tag size={11} className="text-slate-400" />
-              <span className="text-xs text-slate-500">{producto.categoria}</span>
-            </div>
+            <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+              style={{ background: bg, color: fg }}>
+              <Tag size={8} />{producto.categoria}
+            </span>
           )}
         </div>
-      </div>
 
-      {/* Descripción */}
-      {producto.descripcion && (
-        <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
-          {producto.descripcion}
-        </p>
-      )}
-
-      {/* Precios y stock */}
-      <div className="pt-2 border-t border-slate-100 space-y-2">
-
-        {/* Precio de venta */}
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-slate-500">Precio venta</span>
-          <div className="text-right">
-            <span className="font-bold text-slate-800 text-sm">{fmtUsd(producto.precio_usd)}</span>
-            {tasa > 0 && producto.precio_usd != null && (
-              <div className="text-[11px] text-slate-400">{fmtBs(usdToBs(producto.precio_usd, tasa))}</div>
-            )}
-          </div>
-        </div>
-
-        {/* Costo (solo supervisor) */}
-        {esSupervisor && producto.costo_usd != null && (
+        {/* Precios y stock */}
+        <div className="pt-2 border-t border-slate-100 space-y-1.5 mt-auto">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-400">Costo</span>
+            <span className="text-[10px] text-slate-500">Precio venta</span>
             <div className="text-right">
-              <span className="text-xs text-slate-500">{fmtUsd(producto.costo_usd)}</span>
-              {tasa > 0 && (
-                <div className="text-[10px] text-slate-400">{fmtBs(usdToBs(producto.costo_usd, tasa))}</div>
+              <span className="font-bold text-slate-800 text-xs">{fmtUsd(producto.precio_usd)}</span>
+              {tasa > 0 && producto.precio_usd != null && (
+                <div className="text-[9px] text-slate-400">{fmtBs(usdToBs(producto.precio_usd, tasa))}</div>
               )}
             </div>
           </div>
-        )}
 
-        {/* Unidad + Stock */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1">
-            <Layers size={11} className="text-slate-400" />
-            <span className="text-xs text-slate-400">{producto.unidad}</span>
+          {esSupervisor && producto.costo_usd != null && (
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-slate-400">Costo</span>
+              <div className="text-right">
+                <span className="text-[10px] text-slate-500">{fmtUsd(producto.costo_usd)}</span>
+                {tasa > 0 && (
+                  <div className="text-[9px] text-slate-400">{fmtBs(usdToBs(producto.costo_usd, tasa))}</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1">
+              <Layers size={9} className="text-slate-400" />
+              <span className="text-[10px] text-slate-400">{producto.unidad}</span>
+            </div>
+            <BadgeStock actual={producto.stock_actual} minimo={producto.stock_minimo} />
           </div>
-          <BadgeStock actual={producto.stock_actual} minimo={producto.stock_minimo} />
         </div>
       </div>
-      </div>
 
-      {/* Acciones (solo supervisor, barra inferior) */}
+      {/* Acciones */}
       {esSupervisor && (
-        <div className="mt-auto border-t border-slate-100 px-3 py-2 flex items-center gap-1">
-          <button onClick={() => onEditar(producto)} title="Editar producto"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
-            <Pencil size={13} />
-            Editar
+        <div className="border-t border-slate-100 px-2 py-1.5 flex items-center gap-1">
+          <button onClick={() => onEditar(producto)}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-sky-600 hover:bg-sky-50 transition-colors">
+            <Pencil size={11} />Editar
           </button>
-          <button onClick={() => onDesactivar(producto)} title="Desactivar producto"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 active:bg-red-100 transition-colors ml-auto">
-            <EyeOff size={13} />
-            Desactivar
+          <button onClick={() => onDesactivar(producto)}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-red-500 hover:bg-red-50 transition-colors ml-auto">
+            <EyeOff size={11} />Desactivar
           </button>
         </div>
       )}
