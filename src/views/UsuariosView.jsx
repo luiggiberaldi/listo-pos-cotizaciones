@@ -290,104 +290,99 @@ function UsuarioModal({ usuario = null, onClose }) {
 function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar, coloresUsados, onCambiarColor }) {
   const conf = ROL_CONFIG[usuario.rol] ?? ROL_CONFIG.vendedor
   const esSupervisor = usuario.rol === 'supervisor'
-  const vendedorColor = usuario.color || null
+  const color = usuario.color || '#3B82F6'
   const [showColors, setShowColors] = useState(false)
 
   return (
-    <div className={`group bg-white rounded-2xl border transition-all duration-200 overflow-hidden flex flex-col ${
-      usuario.activo
-        ? `${conf.border} hover:shadow-lg hover:shadow-sky-50`
-        : 'border-slate-100 opacity-60'
+    <div className={`bg-white rounded-2xl border overflow-hidden flex flex-col transition-all duration-200 ${
+      usuario.activo ? 'hover:shadow-lg' : 'opacity-60'
     }`}
-      style={vendedorColor && usuario.activo ? { borderLeftWidth: '4px', borderLeftColor: vendedorColor } : undefined}>
+      style={{ borderColor: color + '30' }}>
 
-      {/* ── Cabecera: avatar + nombre + rol ── */}
-      <div className="px-4 pt-4 pb-2 flex items-center gap-3">
-        <button
-          type="button"
-          onClick={() => setShowColors(!showColors)}
-          title="Cambiar color"
-          className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 shadow-sm relative cursor-pointer ring-offset-2 transition-all hover:ring-2 hover:ring-slate-300 ${!vendedorColor ? `bg-gradient-to-br ${conf.gradient}` : ''}`}
-          style={vendedorColor ? { background: `linear-gradient(135deg, ${vendedorColor}, ${vendedorColor}99)` } : undefined}>
-          <span className="text-white font-black text-xl">
+      {/* ── Strip superior con color ── */}
+      <div className="relative h-20 shrink-0 flex items-end justify-between px-4 pb-3"
+        style={{ background: `linear-gradient(135deg, ${color}ee 0%, ${color}88 100%)` }}>
+        {/* Dot pattern */}
+        <div className="absolute inset-0 opacity-10 pointer-events-none"
+          style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '12px 12px' }} />
+
+        {/* Avatar — clic para cambiar color */}
+        <button type="button" onClick={() => setShowColors(!showColors)} title="Cambiar color"
+          className="relative z-10 w-12 h-12 rounded-xl flex items-center justify-center shrink-0 cursor-pointer hover:scale-105 active:scale-95 transition-transform"
+          style={{ background: 'rgba(255,255,255,0.25)', border: '2px solid rgba(255,255,255,0.5)', backdropFilter: 'blur(4px)' }}>
+          <span className="text-white font-black text-xl select-none">
             {(usuario.nombre || 'U')[0].toUpperCase()}
           </span>
           {esSupervisor && (
-            <div className="absolute -top-2 left-1/2 -translate-x-1/2">
-              <Crown size={13} className="text-yellow-400 fill-yellow-400 drop-shadow-sm" />
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+              <Crown size={14} className="text-yellow-300 fill-yellow-300 drop-shadow" />
             </div>
           )}
         </button>
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="text-sm font-black text-slate-800 truncate">{usuario.nombre}</p>
-            {propio && (
-              <span className="text-[8px] font-black uppercase tracking-wider bg-sky-100 text-sky-500 px-1.5 py-0.5 rounded-full shrink-0">Tú</span>
-            )}
-          </div>
-          <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${conf.bg} ${conf.text}`}>
+        {/* Chip de rol */}
+        <div className="relative z-10 shrink-0">
+          <span className="text-[10px] font-black px-2.5 py-1 rounded-full"
+            style={{ background: 'rgba(255,255,255,0.25)', color: 'white', border: '1px solid rgba(255,255,255,0.4)', backdropFilter: 'blur(4px)' }}>
             {conf.label}
           </span>
         </div>
       </div>
 
-      {/* ── Selector de color (expandible) ── */}
+      {/* ── Selector de color expandible ── */}
       {showColors && (
-        <div className="px-4 pb-3">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Color</p>
+        <div className="px-4 pt-3 pb-1 border-b border-slate-100">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Cambiar color</p>
           <div className="flex flex-wrap gap-1.5">
             {COLORES_VENDEDOR.map(c => {
               const enUso = coloresUsados.includes(c) && c !== usuario.color
               return (
-                <button
-                  key={c}
-                  type="button"
-                  disabled={enUso}
+                <button key={c} type="button" disabled={enUso}
                   onClick={() => { onCambiarColor(usuario.id, c); setShowColors(false) }}
                   className={`w-7 h-7 rounded-lg transition-all ${
                     c === usuario.color
                       ? 'ring-2 ring-offset-1 ring-slate-500 scale-110'
-                      : enUso
-                        ? 'opacity-20 cursor-not-allowed'
-                        : 'hover:scale-110'
+                      : enUso ? 'opacity-20 cursor-not-allowed'
+                      : 'hover:scale-110'
                   }`}
                   style={{ backgroundColor: c }}
-                  title={enUso ? 'En uso por otro usuario' : c === usuario.color ? 'Color actual' : 'Seleccionar'}
-                />
+                  title={enUso ? 'En uso por otro usuario' : c === usuario.color ? 'Color actual' : 'Seleccionar'} />
               )
             })}
           </div>
         </div>
       )}
 
-      {/* ── Estado + fecha ── */}
-      <div className="px-4 pb-3 flex items-center justify-between">
-        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-          usuario.activo ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'
-        }`}>
-          {usuario.activo ? 'Activo' : 'Inactivo'}
-        </span>
-        <span className="text-xs text-slate-400">
-          {new Date(usuario.creado_en).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}
-        </span>
+      {/* ── Nombre + estado + fecha ── */}
+      <div className="px-4 pt-3 pb-2 flex-1">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <p className="text-sm font-black text-slate-800 truncate">{usuario.nombre}</p>
+          {propio && (
+            <span className="text-[8px] font-black uppercase tracking-wider bg-sky-100 text-sky-500 px-1.5 py-0.5 rounded-full shrink-0">Tú</span>
+          )}
+        </div>
+        <div className="flex items-center justify-between mt-2 flex-wrap gap-1">
+          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+            usuario.activo ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'
+          }`}>
+            {usuario.activo ? 'Activo' : 'Inactivo'}
+          </span>
+          <span className="text-[11px] text-slate-400">
+            {new Date(usuario.creado_en).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}
+          </span>
+        </div>
       </div>
 
-      {/* ── Acciones (barra inferior) ── */}
+      {/* ── Acciones ── */}
       {!propio ? (
-        <div className="mt-auto border-t border-slate-100 px-2 py-2 flex items-center gap-0.5">
+        <div className="border-t border-slate-100 px-2 py-2 flex items-center gap-0.5">
           <button onClick={() => onEditar(usuario)} title="Editar"
             className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
-            <Pencil size={13} />
-            Editar
+            <Pencil size={13} />Editar
           </button>
-          <button
-            onClick={() => onCambiarActivo(usuario, !usuario.activo)}
-            title={usuario.activo ? 'Desactivar' : 'Activar'}
+          <button onClick={() => onCambiarActivo(usuario, !usuario.activo)}
             className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              usuario.activo
-                ? 'text-slate-600 hover:bg-slate-100 active:bg-slate-200'
-                : 'text-emerald-600 hover:bg-emerald-50 active:bg-emerald-100'
+              usuario.activo ? 'text-slate-600 hover:bg-slate-100' : 'text-emerald-600 hover:bg-emerald-50'
             }`}>
             {usuario.activo ? <UserX size={13} /> : <UserCheck size={13} />}
             {usuario.activo ? 'Desact.' : 'Activar'}
@@ -398,11 +393,10 @@ function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar, c
           </button>
         </div>
       ) : (
-        <div className="mt-auto border-t border-slate-100 px-2 py-2 flex items-center">
+        <div className="border-t border-slate-100 px-2 py-2 flex items-center">
           <button onClick={() => onEditar(usuario)} title="Cambiar nombre"
-            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
-            <Pencil size={13} />
-            Cambiar nombre
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 transition-colors">
+            <Pencil size={13} />Cambiar nombre
           </button>
         </div>
       )}
