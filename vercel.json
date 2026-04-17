@@ -3,7 +3,7 @@
   "outputDirectory": "dist",
   "framework": null,
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://listo-pos-cotizaciones.camelai.app/api/:path*" },
+    { "source": "/api/:path*", "destination": "https://listo-pos-cotizaciones-0vkhnd.camelai.app/api/:path*" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
