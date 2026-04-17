@@ -306,16 +306,17 @@ export async function generarDespachoPDF({ despacho, items = [], config = {} }) 
 
   const choferNombre = transportista?.nombre || ''
   const choferRif    = transportista?.rif    || ''
+  const choferTelf   = transportista?.telefono || ''
   const col3W = (CONTENT_W - 8) / 3
 
   drawField(doc, 'CHOFER', choferNombre, MARGIN, y, col3W)
   drawField(doc, 'C.I.', choferRif, MARGIN + col3W + 4, y, col3W)
-  drawField(doc, 'VEHÍCULO', '', MARGIN + (col3W + 4) * 2, y, col3W)
+  drawField(doc, 'TELÉFONO', choferTelf, MARGIN + (col3W + 4) * 2, y, col3W)
   y += 8
 
-  drawField(doc, 'PLACA CHUTO', '', MARGIN, y, col3W)
-  drawField(doc, 'PLACA BATEA', '', MARGIN + col3W + 4, y, col3W)
-  drawField(doc, 'COLOR / OTROS', '', MARGIN + (col3W + 4) * 2, y, col3W)
+  drawField(doc, 'VEHÍCULO', '', MARGIN, y, col3W)
+  drawField(doc, 'PLACA CHUTO', '', MARGIN + col3W + 4, y, col3W)
+  drawField(doc, 'PLACA BATEA', '', MARGIN + (col3W + 4) * 2, y, col3W)
   y += 8 + extraGap
 
   // ── FIRMAS ────────────────────────────────────────────────────────────────
