@@ -316,8 +316,8 @@ function UserSelectStep() {
 
       </div>
 
-      {/* Footer — bottom fijo */}
-      <div className="fixed bottom-4 left-0 right-0 flex justify-center pointer-events-none z-20"
+      {/* Footer — bottom fijo, solo desktop */}
+      <div className="hidden md:flex fixed bottom-4 left-0 right-0 justify-center pointer-events-none z-20"
         style={{ animation: 'fadeIn 1s ease 0.8s forwards', opacity: 0 }}>
         <p className="text-[10px] tracking-[0.2em] uppercase font-medium px-4 py-1.5 rounded-full"
           style={{ color: 'rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
