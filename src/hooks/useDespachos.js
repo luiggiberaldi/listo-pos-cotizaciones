@@ -72,11 +72,16 @@ export function useCrearDespacho() {
       if (formaPago && data) {
         await supabase.from('notas_despacho').update({ forma_pago: formaPago }).eq('id', data)
       }
+      // Calcular comisión automáticamente al crear el despacho
+      if (data) {
+        await supabase.rpc('calcular_comision_despacho', { p_despacho_id: data })
+      }
       return { id: data, numeroCotizacion, clienteNombre }
     },
     onSuccess: ({ numeroCotizacion, clienteNombre }) => {
       qc.invalidateQueries({ queryKey: DESPACHOS_KEY })
       qc.invalidateQueries({ queryKey: INVENTARIO_KEY })
+      qc.invalidateQueries({ queryKey: COMISIONES_KEY })
       showToast('Nota de despacho creada', 'success')
       notifyDespachoCreado(numeroCotizacion ?? '—', clienteNombre ?? 'cliente')
       sendPushNotification({
