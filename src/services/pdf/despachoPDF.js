@@ -296,7 +296,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {} }) 
   doc.setFontSize(7)
   doc.setTextColor(...C_DARK)
   doc.text('DATOS DE TRANSPORTE', MARGIN + 2, y + 4)
-  y += 8
+  y += 10
 
   const choferNombre = transportista?.nombre || ''
   const choferRif    = transportista?.rif    || ''
