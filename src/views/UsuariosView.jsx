@@ -53,8 +53,9 @@ const COLORES_VENDEDOR = [
 ]
 
 // ─── Formulario crear usuario ─────────────────────────────────────────────────
-function FormCrear({ onGuardar, onCancelar, cargando }) {
-  const [campos, setCampos] = useState({ nombre: '', password: '', rol: 'vendedor', color: COLORES_VENDEDOR[0] })
+function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
+  const primerColorLibre = COLORES_VENDEDOR.find(c => !coloresUsados.includes(c)) ?? COLORES_VENDEDOR[0]
+  const [campos, setCampos] = useState({ nombre: '', password: '', rol: 'vendedor', color: primerColorLibre })
   const [mostrarPass, setMostrarPass] = useState(false)
   const [error, setError] = useState('')
 
@@ -72,6 +73,7 @@ function FormCrear({ onGuardar, onCancelar, cargando }) {
     e.preventDefault()
     if (!campos.nombre.trim())                   { setError('El nombre es obligatorio'); return }
     if (!/^\d{6}$/.test(campos.password))        { setError('El PIN debe ser exactamente 6 dígitos numéricos'); return }
+    if (coloresUsados.includes(campos.color))    { setError('Ese color ya está en uso por otro usuario'); return }
     const email = generarEmail(campos.nombre)
     onGuardar({ ...campos, email, color: campos.color })
   }
@@ -120,11 +122,19 @@ function FormCrear({ onGuardar, onCancelar, cargando }) {
       <div className="space-y-1.5">
         <label className="text-xs font-bold text-slate-500 ml-1">Color del usuario</label>
         <div className="flex flex-wrap gap-2">
-          {COLORES_VENDEDOR.map(c => (
-            <button key={c} type="button" onClick={() => cambiar('color', c)}
-              className={`w-8 h-8 rounded-lg transition-all ${campos.color === c ? 'ring-2 ring-offset-2 ring-slate-400 scale-110' : 'hover:scale-105'}`}
-              style={{ backgroundColor: c }} />
-          ))}
+          {COLORES_VENDEDOR.map(c => {
+            const enUso = coloresUsados.includes(c)
+            return (
+              <button key={c} type="button" onClick={() => !enUso && cambiar('color', c)} disabled={enUso}
+                className={`w-8 h-8 rounded-lg transition-all ${
+                  campos.color === c ? 'ring-2 ring-offset-2 ring-slate-400 scale-110'
+                  : enUso ? 'opacity-20 cursor-not-allowed'
+                  : 'hover:scale-105'
+                }`}
+                style={{ backgroundColor: c }}
+                title={enUso ? 'En uso por otro usuario' : 'Seleccionar'} />
+            )
+          })}
         </div>
       </div>
 
@@ -146,7 +156,7 @@ function FormCrear({ onGuardar, onCancelar, cargando }) {
 }
 
 // ─── Formulario editar usuario ────────────────────────────────────────────────
-function FormEditar({ usuario, onGuardar, onCancelar, cargando }) {
+function FormEditar({ usuario, onGuardar, onCancelar, cargando, coloresUsados = [] }) {
   const [campos, setCampos] = useState({ nombre: usuario.nombre, rol: usuario.rol, pin: '', color: usuario.color || COLORES_VENDEDOR[0] })
   const [mostrarPin, setMostrarPin] = useState(false)
   const [error, setError] = useState('')
@@ -156,6 +166,12 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando }) {
     if (!campos.nombre.trim()) { setError('El nombre es obligatorio'); return }
     if (campos.pin && !/^\d{6}$/.test(campos.pin)) {
       setError('El PIN debe ser exactamente 6 dígitos numéricos')
+      return
+    }
+    // Color en uso por otro usuario (excluir el color actual del propio usuario)
+    const otrosColores = coloresUsados.filter(c => c !== usuario.color)
+    if (otrosColores.includes(campos.color)) {
+      setError('Ese color ya está en uso por otro usuario')
       return
     }
     onGuardar({ nombre: campos.nombre, rol: campos.rol, pin: campos.pin || undefined, color: campos.color })
@@ -187,11 +203,20 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando }) {
       <div className="space-y-1.5">
         <label className="text-xs font-bold text-slate-500 ml-1">Color del usuario</label>
         <div className="flex flex-wrap gap-2">
-          {COLORES_VENDEDOR.map(c => (
-            <button key={c} type="button" onClick={() => setCampos(p => ({ ...p, color: c }))}
-              className={`w-8 h-8 rounded-lg transition-all ${campos.color === c ? 'ring-2 ring-offset-2 ring-slate-400 scale-110' : 'hover:scale-105'}`}
-              style={{ backgroundColor: c }} />
-          ))}
+          {COLORES_VENDEDOR.map(c => {
+            const enUso = coloresUsados.filter(x => x !== usuario.color).includes(c)
+            return (
+              <button key={c} type="button"
+                onClick={() => !enUso && setCampos(p => ({ ...p, color: c }))} disabled={enUso}
+                className={`w-8 h-8 rounded-lg transition-all ${
+                  campos.color === c ? 'ring-2 ring-offset-2 ring-slate-400 scale-110'
+                  : enUso ? 'opacity-20 cursor-not-allowed'
+                  : 'hover:scale-105'
+                }`}
+                style={{ backgroundColor: c }}
+                title={enUso ? 'En uso por otro usuario' : campos.color === c ? 'Color actual' : 'Seleccionar'} />
+            )
+          })}
         </div>
       </div>
 
@@ -232,7 +257,7 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando }) {
 }
 
 // ─── Modal crear/editar ───────────────────────────────────────────────────────
-function UsuarioModal({ usuario = null, onClose }) {
+function UsuarioModal({ usuario = null, onClose, coloresUsados = [] }) {
   const crear      = useCrearUsuario()
   const actualizar = useActualizarUsuario()
   const esEdicion  = !!usuario
@@ -275,8 +300,8 @@ function UsuarioModal({ usuario = null, onClose }) {
           )}
 
           {esEdicion
-            ? <FormEditar usuario={usuario} onGuardar={guardar} onCancelar={onClose} cargando={cargando} />
-            : <FormCrear  onGuardar={guardar} onCancelar={onClose} cargando={cargando} />
+            ? <FormEditar usuario={usuario} onGuardar={guardar} onCancelar={onClose} cargando={cargando} coloresUsados={coloresUsados} />
+            : <FormCrear  onGuardar={guardar} onCancelar={onClose} cargando={cargando} coloresUsados={coloresUsados} />
           }
         </div>
       </div>
@@ -547,7 +572,7 @@ export default function UsuariosView() {
         </div>
       )}
 
-      {modalAbierto && <UsuarioModal usuario={editando} onClose={cerrarModal} />}
+      {modalAbierto && <UsuarioModal usuario={editando} onClose={cerrarModal} coloresUsados={coloresUsados} />}
 
       <ConfirmModal
         isOpen={!!confirmCambio}
