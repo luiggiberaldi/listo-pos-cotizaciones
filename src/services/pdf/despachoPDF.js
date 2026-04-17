@@ -22,6 +22,9 @@ function hexToRgb(hex) {
   return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : null
 }
 // Aclara un color RGB en un porcentaje (0-1)
+function darken(rgb, pct) {
+  return rgb.map(c => Math.max(0, Math.round(c * (1 - pct))))
+}
 function lighten(rgb, pct) {
   return rgb.map(c => Math.min(255, Math.round(c + (255 - c) * pct)))
 }
