@@ -133,11 +133,17 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   doc.setTextColor(...C_DARK)
   let name = config.nombre_negocio || 'CONSTRUACERO CARABOBO'
   let splitName = name.split(' ')
-  doc.text((splitName[0] || '').toUpperCase(), textX, 18)
+  doc.text((splitName[0] || '').toUpperCase(), textX, 16)
   if (splitName.length > 1) {
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(15)
-    doc.text(splitName.slice(1).join(' ').toUpperCase(), textX, 27)
+    doc.text(splitName.slice(1).join(' ').toUpperCase(), textX, 24)
+  }
+  // RIF
+  if (config.rif_negocio) {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8)
+    doc.text(`RIF: ${config.rif_negocio}`, textX, 30)
   }
 
   // "Cotización" + número
