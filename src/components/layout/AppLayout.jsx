@@ -169,7 +169,7 @@ export default function AppLayout() {
           <Menu size={22} />
         </button>
         <img src="/logo.png" alt="Listo POS" className="h-8 w-auto object-contain" style={{ filter: 'brightness(1.1)' }} />
-        <div className="relative" ref={null}>
+        <div className="relative">
           <button
             onClick={() => { setShowNotifs(v => !v); if (unreadCount > 0) markAllRead() }}
             className="relative p-2 rounded-xl transition-colors text-white/60 hover:text-white hover:bg-white/10"
@@ -222,11 +222,32 @@ export default function AppLayout() {
           </button>
         </div>
 
-        {/* Logo + botón colapsar */}
-        <div className="relative z-10 px-4 py-5 flex flex-col items-center" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-          {/* Línea dorada decorativa bajo el logo */}
+        {/* Logo + botón colapsar + Bell */}
+        <div className="relative z-10 px-4 py-5 flex flex-col items-center" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }} ref={notifsRef}>
+
+          {/* Bell — esquina superior izquierda cuando expandido */}
+          {!sidebarCollapsed && (
+            <button
+              onClick={() => { setShowNotifs(v => !v); if (unreadCount > 0) markAllRead() }}
+              className="absolute top-3 left-3 p-1.5 rounded-xl transition-all"
+              style={{
+                color:      unreadCount > 0 ? '#fbbf24' : 'rgba(255,255,255,0.4)',
+                background: unreadCount > 0 ? 'rgba(251,191,36,0.1)' : 'rgba(255,255,255,0.05)',
+                border:     unreadCount > 0 ? '1px solid rgba(251,191,36,0.2)' : '1px solid rgba(255,255,255,0.06)',
+              }}
+              title="Alertas"
+            >
+              <Bell size={16} />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] bg-rose-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-0.5">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </button>
+          )}
+
           <img src="/logo.png" alt="Construacero Carabobo"
-            className={`object-contain transition-all duration-300 select-none pointer-events-none`}
+            className="object-contain transition-all duration-300 select-none pointer-events-none"
             style={{
               height: sidebarCollapsed ? '40px' : '140px',
               width: sidebarCollapsed ? '40px' : 'auto',
@@ -243,6 +264,28 @@ export default function AppLayout() {
               <div className="h-px flex-1 opacity-20" style={{ background: 'linear-gradient(to left, transparent, #B8860B)' }} />
             </div>
           )}
+
+          {/* Bell — icono centrado bajo el logo cuando colapsado */}
+          {sidebarCollapsed && (
+            <button
+              onClick={() => { setShowNotifs(v => !v); if (unreadCount > 0) markAllRead() }}
+              className="relative mt-3 p-1.5 rounded-xl transition-all"
+              style={{
+                color:      unreadCount > 0 ? '#fbbf24' : 'rgba(255,255,255,0.4)',
+                background: unreadCount > 0 ? 'rgba(251,191,36,0.1)' : 'rgba(255,255,255,0.05)',
+                border:     unreadCount > 0 ? '1px solid rgba(251,191,36,0.2)' : '1px solid rgba(255,255,255,0.06)',
+              }}
+              title="Alertas"
+            >
+              <Bell size={16} />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] bg-rose-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-0.5">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </button>
+          )}
+
           {/* Botón colapsar — solo desktop */}
           <button
             onClick={() => setSidebarCollapsed(c => !c)}
@@ -252,74 +295,10 @@ export default function AppLayout() {
           >
             {sidebarCollapsed ? <PanelLeftOpen size={13} /> : <PanelLeftClose size={13} />}
           </button>
-        </div>
 
-        {/* Navegación */}
-        <nav className="relative z-10 flex-1 min-h-0 overflow-y-auto p-3 space-y-0.5">
-          {NAV_TODOS.map(({ path, label, icono: Icono }) => (
-            <NavItem key={path} path={path} label={label} Icono={Icono} onClick={cerrarMenu} collapsed={sidebarCollapsed} />
-          ))}
-          {esSupervisor && (
-            <>
-              {!sidebarCollapsed && (
-                <div className="pt-4 pb-1.5 px-3">
-                  <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'rgba(184,134,11,0.7)' }}>
-                    Administración
-                  </p>
-                </div>
-              )}
-              {sidebarCollapsed && <div className="pt-3 mt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }} />}
-              {NAV_SUPERVISOR.map(({ path, label, icono: Icono }) => (
-                <NavItem key={path} path={path} label={label} Icono={Icono} onClick={cerrarMenu} collapsed={sidebarCollapsed} />
-              ))}
-            </>
-          )}
-        </nav>
-
-        {/* Alertas */}
-        <div className="relative z-10 px-3 py-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }} ref={notifsRef}>
-          <button
-            onClick={() => { setShowNotifs(v => !v); if (unreadCount > 0) markAllRead() }}
-            className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'} px-3 py-2.5 rounded-xl transition-all`}
-            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.75)' }}
-            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.09)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
-            title={sidebarCollapsed ? 'Alertas' : undefined}
-          >
-            <div className="flex items-center gap-2">
-              <Bell size={15} />
-              {!sidebarCollapsed && <span className="text-sm font-bold">Alertas</span>}
-            </div>
-            {unreadCount > 0 && (
-              <span className={`min-w-[20px] h-[20px] bg-rose-500 text-white text-xs font-black rounded-full flex items-center justify-center px-1 ${sidebarCollapsed ? 'absolute -top-1 -right-1' : ''}`}>
-                {unreadCount > 9 ? '9+' : unreadCount}
-              </span>
-            )}
-          </button>
-
-          {pushSupported && !sidebarCollapsed && (
-            <button
-              onClick={togglePush}
-              disabled={pushLoading}
-              className="mt-1.5 w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all"
-              style={{
-                background: pushSubscribed ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.04)',
-                border: `1px solid ${pushSubscribed ? 'rgba(59,130,246,0.25)' : 'rgba(255,255,255,0.06)'}`,
-                color: pushSubscribed ? '#60a5fa' : 'rgba(255,255,255,0.35)',
-              }}
-            >
-              <div className="flex items-center gap-2">
-                {pushSubscribed ? <Bell size={14} /> : <BellOff size={14} />}
-                <span className="text-xs font-bold">
-                  {pushLoading ? 'Procesando…' : pushSubscribed ? 'Push activado' : 'Activar push'}
-                </span>
-              </div>
-              {pushSubscribed && <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" />}
-            </button>
-          )}
-
+          {/* Dropdown de notificaciones — abre hacia abajo */}
           {showNotifs && (
-            <div className="absolute bottom-full left-2 right-2 mb-2 rounded-2xl shadow-2xl z-50 overflow-hidden"
+            <div className="absolute top-full left-2 right-2 mt-1 rounded-2xl shadow-2xl z-50 overflow-hidden"
               style={{ background: '#0f1f3c', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
               <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)' }}>
                 <p className="text-xs font-black uppercase tracking-wider text-white/60">Alertas</p>
@@ -361,9 +340,55 @@ export default function AppLayout() {
                   })
                 )}
               </div>
+              {/* Push toggle al pie del dropdown */}
+              {pushSupported && (
+                <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                  <button
+                    onClick={togglePush}
+                    disabled={pushLoading}
+                    className="w-full flex items-center justify-between px-4 py-3 transition-all"
+                    style={{
+                      background: pushSubscribed ? 'rgba(59,130,246,0.08)' : 'transparent',
+                      color: pushSubscribed ? '#60a5fa' : 'rgba(255,255,255,0.35)',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = pushSubscribed ? 'rgba(59,130,246,0.14)' : 'rgba(255,255,255,0.04)'}
+                    onMouseLeave={e => e.currentTarget.style.background = pushSubscribed ? 'rgba(59,130,246,0.08)' : 'transparent'}
+                  >
+                    <div className="flex items-center gap-2">
+                      {pushSubscribed ? <Bell size={13} /> : <BellOff size={13} />}
+                      <span className="text-xs font-bold">
+                        {pushLoading ? 'Procesando…' : pushSubscribed ? 'Push activado' : 'Activar notificaciones push'}
+                      </span>
+                    </div>
+                    {pushSubscribed && <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" />}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
+
+        {/* Navegación */}
+        <nav className="relative z-10 flex-1 min-h-0 overflow-y-auto p-3 space-y-0.5">
+          {NAV_TODOS.map(({ path, label, icono: Icono }) => (
+            <NavItem key={path} path={path} label={label} Icono={Icono} onClick={cerrarMenu} collapsed={sidebarCollapsed} />
+          ))}
+          {esSupervisor && (
+            <>
+              {!sidebarCollapsed && (
+                <div className="pt-4 pb-1.5 px-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'rgba(184,134,11,0.7)' }}>
+                    Administración
+                  </p>
+                </div>
+              )}
+              {sidebarCollapsed && <div className="pt-3 mt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }} />}
+              {NAV_SUPERVISOR.map(({ path, label, icono: Icono }) => (
+                <NavItem key={path} path={path} label={label} Icono={Icono} onClick={cerrarMenu} collapsed={sidebarCollapsed} />
+              ))}
+            </>
+          )}
+        </nav>
 
         {/* Tasa de cambio */}
         <div className="relative z-10 px-3 py-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
