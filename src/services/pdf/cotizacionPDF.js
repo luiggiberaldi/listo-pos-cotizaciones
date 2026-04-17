@@ -139,12 +139,6 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     doc.setFontSize(15)
     doc.text(splitName.slice(1).join(' ').toUpperCase(), textX, 24)
   }
-  // RIF
-  if (config.rif_negocio) {
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
-    doc.text(`RIF: ${config.rif_negocio}`, textX, 30)
-  }
 
   // "Cotización" + número
   doc.setFont('helvetica', 'bold')
