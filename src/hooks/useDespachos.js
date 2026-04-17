@@ -52,7 +52,7 @@ export function useCrearDespacho() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ cotizacionId, notas = null, numeroCotizacion, clienteNombre }) => {
+    mutationFn: async ({ cotizacionId, notas = null, formaPago = null, numeroCotizacion, clienteNombre }) => {
       const { data, error } = await supabase.rpc('crear_nota_despacho', {
         p_cotizacion_id: cotizacionId,
         p_notas: notas || null,
@@ -67,6 +67,10 @@ export function useCrearDespacho() {
         if (error.message.includes('ACCESO_DENEGADO'))
           throw new Error('Solo supervisores pueden crear notas de despacho')
         throw error
+      }
+      // Guardar forma de pago si se indicó
+      if (formaPago && data) {
+        await supabase.from('notas_despacho').update({ forma_pago: formaPago }).eq('id', data)
       }
       return { id: data, numeroCotizacion, clienteNombre }
     },

@@ -49,8 +49,11 @@ function SkeletonCotizaciones() {
 }
 
 // ─── Modal de resumen para despachar ────────────────────────────────────────
+const FORMAS_PAGO = ['Efectivo', 'Zelle', 'Pago Móvil', 'USDT']
+
 function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 }) {
   const { data: detalle } = useCotizacion(cotizacion?.id)
+  const [formaPago, setFormaPago] = useState('')
   if (!cotizacion) return null
 
   const items = detalle?.items ?? []
@@ -162,13 +165,31 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
           </div>
         </div>
 
-        {/* Botones */}
+        {/* Forma de pago */}
+        <div className="space-y-2">
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Forma de pago</p>
+          <div className="flex flex-wrap gap-2">
+            {FORMAS_PAGO.map(fp => (
+              <button key={fp} type="button"
+                onClick={() => setFormaPago(fp === formaPago ? '' : fp)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                  formaPago === fp
+                    ? 'bg-indigo-500 text-white border-indigo-500 shadow-sm'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600'
+                }`}>
+                {fp}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Botones — despachar */}
         <div className="flex flex-col-reverse sm:flex-row gap-3 pt-1">
           <button onClick={onCancel} disabled={cargando}
             className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-700 font-semibold text-base hover:bg-slate-50 transition-colors disabled:opacity-50">
             Cancelar
           </button>
-          <button onClick={onConfirm} disabled={cargando || items.length === 0}
+          <button onClick={() => onConfirm(formaPago)} disabled={cargando || items.length === 0}
             className="flex-1 py-3 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-semibold text-base transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20">
             {cargando
               ? <><Loader2 size={16} className="animate-spin" />Procesando...</>
@@ -244,10 +265,13 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
     setCotizacionAAnular(null)
   }
 
-  async function confirmarDespachar() {
+  async function confirmarDespachar(formaPago = '') {
     if (!cotizacionADespachar) return
     try {
-      await crearDespacho.mutateAsync({ cotizacionId: cotizacionADespachar.id })
+      await crearDespacho.mutateAsync({
+        cotizacionId: cotizacionADespachar.id,
+        formaPago: formaPago || null,
+      })
       setCotizacionADespachar(null)
     } catch (err) {
       alert(err.message || 'Error al crear despacho')

@@ -48,11 +48,19 @@ function drawField(doc, label, val, x, y, w) {
   doc.line(x, y + 1.5, x + w, y + 1.5)
 }
 
-function drawCheck(doc, label, x, y) {
+function drawCheck(doc, label, x, y, checked = false) {
   doc.setLineWidth(0.3)
   doc.setDrawColor(...C_DARK)
   doc.rect(x, y - 2.5, 3, 3, 'S')
-  doc.setFont('helvetica', 'normal')
+  if (checked) {
+    // Cruz de verificación dentro del cuadro
+    doc.setDrawColor(...C_DARK)
+    doc.setLineWidth(0.5)
+    doc.line(x + 0.4, y - 1.2, x + 1.5, y + 0.2)
+    doc.line(x + 1.5, y + 0.2, x + 2.8, y - 2.2)
+    doc.setLineWidth(0.3)
+  }
+  doc.setFont('helvetica', checked ? 'bold' : 'normal')
   doc.setFontSize(7)
   doc.setTextColor(...C_DARK)
   doc.text(label, x + 4.5, y)
@@ -92,7 +100,7 @@ function drawFooter(doc, config) {
   }
 }
 
-export async function generarDespachoPDF({ despacho, items = [], config = {} }) {
+export async function generarDespachoPDF({ despacho, items = [], config = {}, formaPago = '' }) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
 
   const logoData = await cargarLogo(config.logo_url)
@@ -283,9 +291,11 @@ export async function generarDespachoPDF({ despacho, items = [], config = {} }) 
   doc.setFontSize(7.5)
   doc.setTextColor(...C_DARK)
   doc.text('FORMA DE PAGO:', MARGIN, y + 5)
-  drawCheck(doc, 'EFECTIVO',   MARGIN,      y + 12)
-  drawCheck(doc, 'ZELLE',      MARGIN + 28, y + 12)
-  drawCheck(doc, 'PAGO MÓVIL', MARGIN + 52, y + 12)
+  const fp = (formaPago || despacho.forma_pago || '').toLowerCase()
+  drawCheck(doc, 'EFECTIVO',   MARGIN,      y + 12, fp === 'efectivo')
+  drawCheck(doc, 'ZELLE',      MARGIN + 28, y + 12, fp === 'zelle')
+  drawCheck(doc, 'PAGO MÓVIL', MARGIN + 52, y + 12, fp === 'pago movil' || fp === 'pago móvil')
+  drawCheck(doc, 'USDT',       MARGIN + 80, y + 12, fp === 'usdt')
 
   y += 16 + extraGap
 

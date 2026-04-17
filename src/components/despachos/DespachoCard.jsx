@@ -33,7 +33,7 @@ export default function DespachoCard({ despacho, onCambiarEstado, onAnular, onRe
         supabase.from('cotizacion_items').select('*').eq('cotizacion_id', despacho.cotizacion_id).order('orden'),
       ])
       if (itemsRes.error) throw itemsRes.error
-      await generarDespachoPDF({ despacho, items: itemsRes.data ?? [], config })
+      await generarDespachoPDF({ despacho, items: itemsRes.data ?? [], config, formaPago: despacho.forma_pago || '' })
     } catch (err) {
       console.error('PDF error:', err)
       alert('Error al generar PDF: ' + (err.message || 'Error desconocido'))
