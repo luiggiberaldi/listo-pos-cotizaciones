@@ -129,7 +129,9 @@ export function useGuardarBorrador() {
           round2(s + round2(it.cantidad * it.precioUnitUsd * (1 - it.descuentoPct / 100))), 0)
       )
       const descuentoUsd = round2(subtotal * (Number(campos.descuentoGlobalPct) || 0) / 100)
-      const totalUsd = round2(subtotal - descuentoUsd + (Number(campos.costoEnvioUsd) || 0))
+      const baseAnteIva  = round2(subtotal - descuentoUsd)
+      const ivaUsd       = round2(baseAnteIva * (Number(campos.ivaPct) || 0) / 100)
+      const totalUsd     = round2(baseAnteIva + ivaUsd + (Number(campos.costoEnvioUsd) || 0))
 
       const headerData = {
         cliente_id:           campos.clienteId,

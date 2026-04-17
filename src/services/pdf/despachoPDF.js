@@ -223,7 +223,8 @@ export async function generarDespachoPDF({ despacho, items = [], config = {} }) 
   // Firmas a la izquierda del total
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7)
-  
+  doc.setTextColor(...C_DARK)
+
   doc.text('Elaborado/Entregado por', MARGIN + 25, y + 8, { align: 'center' })
   doc.setLineWidth(0.3)
   doc.setDrawColor(...C_DARK)
@@ -262,13 +263,17 @@ export async function generarDespachoPDF({ despacho, items = [], config = {} }) 
     doc.setTextColor(...C_DARK)
     
     const lineAddress = config.direccion_negocio || 'VÍA FLOR AMARILLO VALENCIA EDO CARABOBO'
-    doc.text(lineAddress, PAGE_W/2, ph - 16, { align: 'center' })
-    
+    const addrLines = doc.splitTextToSize(lineAddress, CONTENT_W)
+    const addrStartY = addrLines.length > 1 ? ph - 21 : ph - 16
+    addrLines.slice(0, 2).forEach((line, i) => {
+      doc.text(line, PAGE_W/2, addrStartY + i * 5, { align: 'center' })
+    })
+
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(7.5)
     const extraContacts = [config.telefono_negocio, config.email_negocio].filter(Boolean).join('   |   ')
     if (extraContacts) {
-      doc.text(extraContacts, PAGE_W/2, ph - 11, { align: 'center' })
+      doc.text(extraContacts, PAGE_W/2, ph - 9, { align: 'center' })
     }
   }
 

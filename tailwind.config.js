@@ -10,114 +10,147 @@ export default {
       colors: {
 
         // ─────────────────────────────────────────────────────
-        // 🎨 LISTO POS LITE — PALETA SEMÁNTICA OFICIAL
-        // Extraída del gradiente del logo (sky-blue → teal)
+        // 🎨 CONSTRUACERO CARABOBO — PALETA OFICIAL
+        // Inspirada en Instagram de la marca (Azul Marino + Dorado)
         // ─────────────────────────────────────────────────────
 
-        // 1. LA MARCA (Acción, Foco, Botones principales)
+        // 1. PRIMARIO — Azul Marino Cobalt (botones, nav activo, foco)
         primary: {
-          DEFAULT: '#0EA5E9', // sky-500 — color central del logo
-          hover:   '#0284C7', // sky-600 — hover states
-          light:   '#E0F2FE', // sky-100 — fondos suaves, badges
-          focus:   '#BAE6FD', // sky-200 — anillo de foco en inputs
-          dark:    '#0369A1', // sky-700 — pressed/active states
+          DEFAULT: '#1A3A8C', // Cobalt — botón principal
+          hover:   '#152E73', // hover más profundo
+          light:   '#EBF0FF', // fondo suave (badges, highlights)
+          focus:   '#93B4F8', // anillo de foco en inputs
+          dark:    '#0F2461', // pressed / active state
         },
 
-        // 2. FONDOS DE PANTALLA
+        // 2. ACENTO DORADO (énfasis, precios, highlights de marca)
+        accent: {
+          DEFAULT: '#D4A017', // Dorado cálido
+          hover:   '#B88B12', // hover dorado oscuro
+          light:   '#FEF9E7', // fondo dorado muy suave
+          focus:   '#FDE68A', // anillo dorado
+          dark:    '#8A6410', // dorado profundo
+        },
+
+        // 3. FONDOS DE PANTALLA
         app: {
-          light: '#F8FAFC', // Gris Hielo — fondo general
-          dark:  '#0F172A', // Azul Noche — modo oscuro (alias, no activo)
+          light: '#F8FAFC', // Blanco hielo — fondo general (modo claro)
+          dark:  '#0C1B3E', // Azul marino profundo — identidad de marca
         },
 
-        // 3. FONDOS DE TARJETAS / MODALES / SIDEBAR
+        // 4. FONDOS DE TARJETAS / MODALES / SIDEBAR
         surface: {
-          light: '#FFFFFF', // Blanco Puro
-          dark:  '#1E293B', // Slate-800 modo oscuro
+          light: '#FFFFFF',
+          dark:  '#111E40', // Azul marino panel
         },
 
-        // 4. TEXTOS (Legibilidad)
+        // 5. TEXTOS
         content: {
-          main:      '#334155', // Slate-700 — Títulos, precios
-          secondary: '#64748B', // Slate-500 — Subtítulos, etiquetas
-          inverse:   '#F8FAFC', // Texto claro para fondos oscuros
+          main:      '#1A2744', // Navy oscuro — títulos
+          secondary: '#64748B', // Slate-500 — subtítulos
+          inverse:   '#F8FAFC', // Texto claro sobre fondos oscuros
         },
 
-        // 5. ESTADOS SEMÁNTICOS
+        // 6. ESTADOS SEMÁNTICOS
         status: {
-          success:   '#10B981', // Emerald-500 — Venta OK
-          successBg: '#D1FAE5', // Emerald-100
-          danger:    '#F43F5E', // Rose-500 — Error, borrar, anular
-          dangerBg:  '#FFE4E6', // Rose-100
-          warning:   '#F59E0B', // Amber-500 — Alerta
-          warningBg: '#FEF3C7', // Amber-100
+          success:   '#10B981',
+          successBg: '#D1FAE5',
+          danger:    '#F43F5E',
+          dangerBg:  '#FFE4E6',
+          warning:   '#F59E0B',
+          warningBg: '#FEF3C7',
         },
 
-        // 6. BORDES Y SEPARADORES
+        // 7. BORDES Y SEPARADORES
         border: {
-          subtle: '#E2E8F0', // Slate-200 — líneas finas
-          focus:  '#0EA5E9', // sky-500 — borde activo en inputs
+          subtle: '#E2E8F0',
+          focus:  '#1A3A8C', // Navy — borde activo en inputs
         },
 
         // ─────────────────────────────────────────────────────
-        // 🔄 ALIASES RETROACTIVOS (Compatibilidad con código existente)
-        // Redirigen las clases viejas al nuevo sistema semántico.
-        // Efecto visual: toda la app cambia automáticamente.
+        // 🔄 ALIASES — Compatibilidad con código existente
         // ─────────────────────────────────────────────────────
 
-        // brand (viejo token de color primario)
         brand: {
-          light:   '#E0F2FE',
-          DEFAULT: '#0EA5E9',
-          dark:    '#0284C7',
+          light:   '#EBF0FF',
+          DEFAULT: '#1A3A8C',
+          dark:    '#0F2461',
         },
 
-        // background (viejo token de fondo)
         background: {
           light: '#F8FAFC',
-          dark:  '#0F172A',
+          dark:  '#0C1B3E',
         },
 
-        // blue → sky (todo bg-blue-* se vuelve sky automáticamente)
+        // blue → navy cobalt
         blue: {
-          50:  '#F0F9FF',
-          100: '#E0F2FE',
-          200: '#BAE6FD',
-          300: '#7DD3FC',
-          400: '#38BDF8',
-          500: '#0EA5E9',
-          600: '#0284C7',
-          700: '#0369A1',
-          800: '#075985',
-          900: '#0C4A6E',
-          950: '#082F49',
+          50:  '#EBF0FF',
+          100: '#D6E2FF',
+          200: '#ADC5FF',
+          300: '#85A8FF',
+          400: '#5C8AFF',
+          500: '#1A3A8C',
+          600: '#152E73',
+          700: '#0F2461',
+          800: '#0A1A4A',
+          900: '#060F2F',
+          950: '#030820',
         },
 
-        // indigo → sky (compatibilidad con CloudAuthModal, spinner, etc)
+        // indigo → navy (compatibilidad)
         indigo: {
-          50:  '#F0F9FF',
-          100: '#E0F2FE',
-          200: '#BAE6FD',
-          300: '#7DD3FC',
-          400: '#38BDF8',
-          500: '#0EA5E9',
-          600: '#0284C7',
-          700: '#0369A1',
-          800: '#075985',
-          900: '#0C4A6E',
-          950: '#082F49',
+          50:  '#EBF0FF',
+          100: '#D6E2FF',
+          200: '#ADC5FF',
+          300: '#85A8FF',
+          400: '#5C8AFF',
+          500: '#1A3A8C',
+          600: '#152E73',
+          700: '#0F2461',
+          800: '#0A1A4A',
+          900: '#060F2F',
+          950: '#030820',
         },
 
-        // purple → sky (activos de nav, badges)
+        // sky → cobalt
+        sky: {
+          50:  '#EBF0FF',
+          100: '#D6E2FF',
+          200: '#ADC5FF',
+          300: '#85A8FF',
+          400: '#5C8AFF',
+          500: '#1A3A8C',
+          600: '#152E73',
+          700: '#0F2461',
+          800: '#0A1A4A',
+          900: '#060F2F',
+        },
+
+        // purple → navy
         purple: {
-          50:  '#F0F9FF',
-          100: '#E0F2FE',
-          400: '#38BDF8',
-          500: '#0EA5E9',
-          600: '#0284C7',
-          700: '#0369A1',
+          50:  '#EBF0FF',
+          100: '#D6E2FF',
+          400: '#5C8AFF',
+          500: '#1A3A8C',
+          600: '#152E73',
+          700: '#0F2461',
         },
 
-        // slate (neutros — sin cambios, son la base del sistema)
+        // teal → accent gold
+        teal: {
+          50:  '#FEF9E7',
+          100: '#FEF3C7',
+          200: '#FDE68A',
+          300: '#FCD34D',
+          400: '#FBBF24',
+          500: '#D4A017',
+          600: '#B88B12',
+          700: '#8A6410',
+          800: '#5C420A',
+          900: '#2E2105',
+        },
+
+        // slate (neutros)
         slate: {
           50:  '#F8FAFC',
           100: '#F1F5F9',
@@ -132,7 +165,7 @@ export default {
           950: '#020617',
         },
 
-        // emerald → success (ventas OK, stock disponible)
+        // emerald — success
         emerald: {
           50:  '#ECFDF5',
           100: '#D1FAE5',
@@ -142,7 +175,7 @@ export default {
           900: '#064E3B',
         },
 
-        // red → danger (errores, borrar)
+        // red — danger
         red: {
           50:  '#FFF1F2',
           100: '#FFE4E6',
@@ -152,7 +185,7 @@ export default {
           900: '#881337',
         },
 
-        // amber → warning (alertas)
+        // amber — warning
         amber: {
           50:  '#FFFBEB',
           100: '#FEF3C7',
@@ -160,6 +193,15 @@ export default {
           500: '#F59E0B',
           600: '#D97706',
           900: '#78350F',
+        },
+
+        // rose → danger (compatibilidad)
+        rose: {
+          50:  '#FFF1F2',
+          100: '#FFE4E6',
+          400: '#FB7185',
+          500: '#F43F5E',
+          600: '#E11D48',
         },
       },
 
@@ -169,57 +211,39 @@ export default {
       },
 
       animation: {
-        'fade-in':   'fadeIn 0.3s ease-out',
-        'slide-up':  'slideUp 0.4s ease-out',
-        'spin-slow': 'spin 1s linear infinite',
-        'slide-in-left': 'slideInLeft 0.3s ease-out',
+        'fade-in':        'fadeIn 0.3s ease-out',
+        'slide-up':       'slideUp 0.4s ease-out',
+        'spin-slow':      'spin 1s linear infinite',
+        'slide-in-left':  'slideInLeft 0.3s ease-out',
         'slide-out-left': 'slideOutLeft 0.2s ease-in forwards',
       },
 
       keyframes: {
-        fadeIn: {
-          '0%':   { opacity: '0' },
-          '100%': { opacity: '1' },
-        },
-        slideUp: {
-          '0%':   { transform: 'translateY(10px)', opacity: '0' },
-          '100%': { transform: 'translateY(0)',    opacity: '1' },
-        },
-        slideInLeft: {
-          '0%': { transform: 'translateX(-100%)' },
-          '100%': { transform: 'translateX(0)' },
-        },
-        slideOutLeft: {
-          '0%': { transform: 'translateX(0)' },
-          '100%': { transform: 'translateX(-100%)' },
-        },
+        fadeIn:       { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+        slideUp:      { '0%': { transform: 'translateY(10px)', opacity: '0' }, '100%': { transform: 'translateY(0)', opacity: '1' } },
+        slideInLeft:  { '0%': { transform: 'translateX(-100%)' }, '100%': { transform: 'translateX(0)' } },
+        slideOutLeft: { '0%': { transform: 'translateX(0)' }, '100%': { transform: 'translateX(-100%)' } },
       },
     },
   },
   plugins: [
     function ({ addUtilities }) {
       addUtilities({
-        // Tabular nums para precios y tablas financieras
         '.font-numbers': {
           'font-variant-numeric': 'tabular-nums',
           'letter-spacing': '-0.02em',
         },
-        // Ocultar scrollbar
         '.scrollbar-hide': {
           '-ms-overflow-style': 'none',
           'scrollbar-width': 'none',
           '&::-webkit-scrollbar': { display: 'none' },
         },
-        // Scrollbar personalizado fino
         '.custom-scrollbar': {
           '&::-webkit-scrollbar': { width: '4px', height: '4px' },
           '&::-webkit-scrollbar-track': { backgroundColor: 'transparent' },
-          '&::-webkit-scrollbar-thumb': {
-            backgroundColor: '#CBD5E1',
-            borderRadius: '2px',
-          },
+          '&::-webkit-scrollbar-thumb': { backgroundColor: '#CBD5E1', borderRadius: '2px' },
         },
-      });
+      })
     },
   ],
 }

@@ -132,7 +132,7 @@ function AppRoutes() {
 
             {/* Rutas exclusivas de supervisor */}
             <Route element={<RutaSupervisor />}>
-              <Route path="/usuarios"      element={<UsuariosView />} />
+              <Route path="/usuarios"      element={<Navigate to="/configuracion" replace />} />
               <Route path="/auditoria"     element={<AuditoriaView />} />
               <Route path="/configuracion" element={<ConfiguracionView />} />
             </Route>

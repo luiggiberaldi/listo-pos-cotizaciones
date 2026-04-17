@@ -31,12 +31,14 @@ import ClienteForm from '../clientes/ClienteForm'
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 let _itemCounter = 0
 
-function calcTotales(items, descGlobalPct, costoEnvio) {
-  const subtotal    = round2(items.reduce((s, it) =>
+function calcTotales(items, descGlobalPct, costoEnvio, ivaPct = 0) {
+  const subtotal     = round2(items.reduce((s, it) =>
     round2(s + round2(it.cantidad * it.precioUnitUsd * (1 - it.descuentoPct / 100))), 0))
   const descuentoUsd = round2(subtotal * (Number(descGlobalPct) || 0) / 100)
-  const totalUsd     = round2(subtotal - descuentoUsd + (Number(costoEnvio) || 0))
-  return { subtotal, descuentoUsd, totalUsd }
+  const baseAnteIva  = round2(subtotal - descuentoUsd)
+  const ivaUsd       = round2(baseAnteIva * (Number(ivaPct) || 0) / 100)
+  const totalUsd     = round2(baseAnteIva + ivaUsd + (Number(costoEnvio) || 0))
+  return { subtotal, descuentoUsd, ivaUsd, totalUsd }
 }
 
 const STEP_LABELS = ['Cliente', 'Productos', 'Resumen', 'Enviada']
@@ -813,7 +815,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
   const enviarCotizacion = useEnviarCotizacion()
   const tasaHook         = useTasaCambio()
 
-  const { subtotal, descuentoUsd, totalUsd } = calcTotales(items, descuentoGlobalPct, costoEnvioUsd)
+  const { subtotal, descuentoUsd, ivaUsd, totalUsd } = calcTotales(items, descuentoGlobalPct, costoEnvioUsd, config.iva_pct ?? 0)
   const totalBs = tasaHook.tasaEfectiva > 0 ? mulR(totalUsd, tasaHook.tasaEfectiva) : 0
 
   // Cliente seleccionado (para mostrar datos)
@@ -868,7 +870,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
     try {
       const id = await guardarBorrador.mutateAsync({
         cotizacionId,
-        campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, validaHasta, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd },
+        campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, validaHasta, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd, ivaPct: config.iva_pct ?? 0 },
         items,
       })
       setCotizacionId(id)
@@ -889,7 +891,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
       if (!id) {
         id = await guardarBorrador.mutateAsync({
           cotizacionId,
-          campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, validaHasta, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd },
+          campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, validaHasta, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd, ivaPct: config.iva_pct ?? 0 },
           items,
         })
         setCotizacionId(id)
@@ -897,7 +899,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
         // Actualizar borrador con datos actuales antes de enviar
         await guardarBorrador.mutateAsync({
           cotizacionId: id,
-          campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, validaHasta, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd },
+          campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, validaHasta, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd, ivaPct: config.iva_pct ?? 0 },
           items,
         })
       }
@@ -1353,6 +1355,12 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
                     <div className="flex justify-between text-sm text-emerald-600">
                       <span>Descuento ({descuentoGlobalPct}%)</span>
                       <span>-{fmtUsd(descuentoUsd)}</span>
+                    </div>
+                  )}
+                  {ivaUsd > 0 && (
+                    <div className="flex justify-between text-sm text-blue-600">
+                      <span>IVA ({config.iva_pct}%)</span>
+                      <span>+{fmtUsd(ivaUsd)}</span>
                     </div>
                   )}
                   {costoEnvioUsd > 0 && (

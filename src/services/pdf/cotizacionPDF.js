@@ -204,26 +204,50 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
 
   if (y > PAGE_H - 100) { doc.addPage(); y = MARGIN }
 
+  const ivaPct    = Number(config.iva_pct || 0)
+  const ivaBase   = Number(cotizacion.subtotal_usd || 0) - Number(cotizacion.descuento_usd || 0)
+  const ivaUsd    = ivaPct > 0 ? Math.round(ivaBase * ivaPct) / 100 : 0
+  const boxH      = ivaPct > 0 ? 34 : 25
+
   doc.setFillColor(...C_ORANGE)
-  doc.rect(totX, y, totW, 25, 'F')
-  
+  doc.rect(totX, y, totW, boxH, 'F')
+
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(9)
   doc.setTextColor(...C_DARK)
-  doc.text('Subtotal', totX + 5, y + 8)
-  doc.setFontSize(13)
-  doc.text('TOTAL', totX + 5, y + 18)
-  
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(10)
-  doc.text(fmtUsd(cotizacion.subtotal_usd), totX + totW - 5, y + 8, { align: 'right' })
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(14)
-  doc.text(fmtUsd(cotizacion.total_usd), totX + totW - 5, y + 18, { align: 'right' })
+
+  if (ivaPct > 0) {
+    doc.text('Subtotal', totX + 5, y + 7)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.text(fmtUsd(cotizacion.subtotal_usd), totX + totW - 5, y + 7, { align: 'right' })
+
+    doc.setFont('helvetica', 'bold')
+    doc.text(`IVA (${ivaPct}%)`, totX + 5, y + 16)
+    doc.setFont('helvetica', 'normal')
+    doc.text(fmtUsd(ivaUsd), totX + totW - 5, y + 16, { align: 'right' })
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(13)
+    doc.text('TOTAL', totX + 5, y + 27)
+    doc.setFontSize(14)
+    doc.text(fmtUsd(cotizacion.total_usd), totX + totW - 5, y + 27, { align: 'right' })
+  } else {
+    doc.text('Subtotal', totX + 5, y + 8)
+    doc.setFontSize(13)
+    doc.text('TOTAL', totX + 5, y + 18)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(10)
+    doc.text(fmtUsd(cotizacion.subtotal_usd), totX + totW - 5, y + 8, { align: 'right' })
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(14)
+    doc.text(fmtUsd(cotizacion.total_usd), totX + totW - 5, y + 18, { align: 'right' })
+  }
 
   // Firmas a la izquierda del total
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7)
+  doc.setTextColor(...C_DARK)
   doc.text('Elaborado por', MARGIN + 25, y + 10, { align: 'center' })
   doc.setLineWidth(0.3)
   doc.setDrawColor(...C_DARK)
@@ -262,13 +286,17 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     doc.setTextColor(...C_DARK)
     
     const lineAddress = config.direccion_negocio || 'VÍA FLOR AMARILLO VALENCIA EDO CARABOBO'
-    doc.text(lineAddress, PAGE_W/2, ph - 16, { align: 'center' })
-    
+    const addrLines = doc.splitTextToSize(lineAddress, CONTENT_W)
+    const addrStartY = addrLines.length > 1 ? ph - 21 : ph - 16
+    addrLines.slice(0, 2).forEach((line, i) => {
+      doc.text(line, PAGE_W/2, addrStartY + i * 5, { align: 'center' })
+    })
+
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(7.5)
     const extraContacts = [config.telefono_negocio, config.email_negocio].filter(Boolean).join('   |   ')
     if (extraContacts) {
-      doc.text(extraContacts, PAGE_W/2, ph - 11, { align: 'center' })
+      doc.text(extraContacts, PAGE_W/2, ph - 9, { align: 'center' })
     }
   }
 

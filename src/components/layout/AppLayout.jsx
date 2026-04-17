@@ -49,7 +49,6 @@ const NAV_TODOS = [
 ]
 
 const NAV_SUPERVISOR = [
-  { path: '/usuarios',      label: 'Usuarios',      icono: UserCog },
   { path: '/auditoria',     label: 'Auditoría',     icono: ClipboardList },
   { path: '/configuracion', label: 'Configuración', icono: Settings },
 ]
@@ -84,7 +83,7 @@ function NavItem({ path, label, Icono, onClick }) {
         }
       `}
       style={({ isActive }) => isActive
-        ? { background: 'linear-gradient(135deg, #0EA5E9, #5EEAD4)' }
+        ? { background: 'linear-gradient(135deg, #1A3A8C, #D4A017)' }
         : {}
       }
     >
@@ -211,7 +210,7 @@ export default function AppLayout() {
         {/* Logo */}
         <div className="p-5 border-b border-slate-100 flex justify-center">
           <img src="/logo.png" alt="Listo POS Cotizaciones"
-            className="h-[55px] md:h-[55px] w-auto object-contain" />
+            className="h-[150px] w-auto object-contain" />
         </div>
 
         {/* Navegación — ocupa el espacio restante, scroll si hace falta */}

@@ -88,7 +88,7 @@ const useAuthStore = create((set, get) => ({
   _cargarPerfil: async (authUser) => {
     const queryPromise = supabase
       .from('usuarios')
-      .select('id, nombre, rol, activo')
+      .select('id, nombre, rol, activo, color')
       .eq('id', authUser.id)
       .single()
 
@@ -129,6 +129,7 @@ const useAuthStore = create((set, get) => ({
         email: authUser.email,
         rol: data.rol,       // 'supervisor' | 'vendedor'
         activo: data.activo,
+        color: data.color ?? null,
       },
       error: null,
     })

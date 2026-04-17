@@ -77,7 +77,7 @@ function GateStep({ onSuccess }) {
       {/* Logo */}
       <div className="mb-8">
         <img src="/logo.png" alt="Listo POS Cotizaciones"
-          className="h-28 sm:h-32 w-auto object-contain select-none" draggable={false} />
+          className="h-44 sm:h-52 w-auto object-contain select-none" draggable={false} />
       </div>
 
       {/* Card */}
@@ -150,7 +150,7 @@ function GateStep({ onSuccess }) {
               type="submit"
               disabled={cargando}
               className="w-full py-3.5 text-white text-sm font-black rounded-xl transition-all shadow-lg shadow-sky-500/20 active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-70"
-              style={{ background: 'linear-gradient(135deg, #0EA5E9 0%, #5EEAD4 100%)' }}
+              style={{ background: 'linear-gradient(135deg, #1A3A8C 0%, #D4A017 100%)' }}
             >
               {cargando
                 ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -207,7 +207,7 @@ function UserSelectStep({ onBack }) {
       {/* Logo */}
       <div className="mb-8">
         <img src="/logo.png" alt="Listo POS Cotizaciones"
-          className="h-28 w-auto object-contain select-none" draggable={false} />
+          className="h-44 w-auto object-contain select-none" draggable={false} />
       </div>
 
       {/* Card principal */}
