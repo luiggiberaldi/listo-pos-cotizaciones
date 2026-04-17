@@ -26,6 +26,7 @@ const useAuthStore = create((set, get) => ({
   loading: false,
   error: null,
   initialized: false,  // true una vez que se verificó la sesión inicial
+  _cargandoPerfil: false, // flag para evitar doble carga en login
 
   // ─── Inicializar: suscribirse a cambios de auth ────────────────────────────
   // Llamar UNA sola vez en el arranque de la app (App.jsx useEffect)
@@ -59,7 +60,8 @@ const useAuthStore = create((set, get) => ({
 
         // SIGNED_IN = login exitoso
         if (event === 'SIGNED_IN' && session?.user) {
-          if (!get().perfil || get().perfil.id !== session.user.id) {
+          // Si login() ya está cargando el perfil, no duplicar la llamada
+          if (!get()._cargandoPerfil && (!get().perfil || get().perfil.id !== session.user.id)) {
             await get()._cargarPerfil(session.user)
           }
         }
@@ -93,7 +95,7 @@ const useAuthStore = create((set, get) => ({
       .single()
 
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('timeout_perfil')), 3000)
+      setTimeout(() => reject(new Error('timeout_perfil')), 8000)
     )
 
     const { data, error } = await Promise.race([queryPromise, timeoutPromise])
@@ -151,12 +153,14 @@ const useAuthStore = create((set, get) => ({
 
     // El perfil se carga vía onAuthStateChange (SIGNED_IN)
     // pero lo cargamos también aquí para no depender del timing del evento
+    // Flag para que el handler SIGNED_IN no duplique la llamada
+    set({ _cargandoPerfil: true })
     try {
       await get()._cargarPerfil(data.user)
     } catch (_) {
       // Si falla la carga del perfil, el error ya fue seteado en _cargarPerfil
     }
-    set({ loading: false })
+    set({ loading: false, _cargandoPerfil: false })
     // Solo ok:true si el perfil se cargó correctamente
     return get().perfil ? { ok: true } : { ok: false }
   },
