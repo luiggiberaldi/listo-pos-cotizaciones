@@ -32,13 +32,13 @@ const PAGE_W    = 210
 const CONTENT_W = PAGE_W - MARGIN * 2
 
 // Paleta base (neutra / fallback cuando no hay color de vendedor)
-const C_STEEL   = [18,  26,  44]   // carbón oscuro (fondo principal)
-const C_STEEL2  = [30,  44,  74]   // azul acero
-const C_ACCENT_DEFAULT = [210, 74, 20]  // naranja industrial (fallback)
-const C_DARK    = [15,  23,  42]
-const C_MID     = [100, 116, 139]
-const C_LIGHT   = [226, 232, 240]
-const C_SUBTLE  = [248, 250, 252]
+const C_STEEL   = [20,  20,  20]   // Negro profundo
+const C_STEEL2  = [40,  40,  40]   // Gris oscuro
+const C_ACCENT_DEFAULT = [250, 204, 21] // Amarillo (#FACC15)
+const C_DARK    = [30,  30,  30]
+const C_MID     = [100, 100, 100]
+const C_LIGHT   = [230, 230, 230]
+const C_SUBTLE  = [249, 249, 249]
 const C_WHITE   = [255, 255, 255]
 const C_GREEN   = [22,  163, 74]
 const C_RED     = [220,  38,  38]
@@ -56,8 +56,8 @@ export async function generarDespachoPDF({ despacho, items = [], config = {} }) 
   let y = 0
 
   // ── Color de acento: usa el color del vendedor, si no el default ──────────
-  const C_ACCENT  = hexToRgb(despacho.vendedor?.color) || C_ACCENT_DEFAULT
-  const C_ACCENT2 = lighten(C_ACCENT, 0.3)
+  const C_ACCENT  = C_ACCENT_DEFAULT // Forzamos amarillo según la plantilla
+  const C_ACCENT2 = darken(C_ACCENT, 0.15) // Versión oscura para triángulos
 
   // Mapa de estado con el acento dinámico
   const ESTADO_MAP = {
@@ -126,12 +126,12 @@ export async function generarDespachoPDF({ despacho, items = [], config = {} }) 
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(12)
-  doc.setTextColor(...C_WHITE)
+  doc.setTextColor(...C_DARK)
   doc.text(numDes, docBlockX + 29, 12, { align: 'center' })
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(6.5)
-  doc.setTextColor(...lighten(C_ACCENT, 0.5))
+  doc.setTextColor(...C_DARK)
   doc.text('NOTA DE DESPACHO', docBlockX + 29, 18, { align: 'center' })
 
   // Badge de estado (debajo del bloque naranja)
@@ -201,7 +201,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {} }) 
 
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(6.5)
-    doc.setTextColor(...C_WHITE)
+    doc.setTextColor(...C_ACCENT)
     doc.text(b.titulo, bx + 3, bY + 4)
 
     b.filas.forEach(([label, val], j) => {
@@ -338,7 +338,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {} }) 
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8)
-  doc.setTextColor(200, 210, 225)
+  doc.setTextColor(...C_ACCENT)
   doc.text('TOTAL USD', totX + 8, y + 5.5)
   doc.setFontSize(12)
   doc.setTextColor(...C_WHITE)
@@ -401,7 +401,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {} }) 
 
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(6.5)
-    doc.setTextColor(...C_WHITE)
+    doc.setTextColor(...C_ACCENT)
     doc.text(firmaLabels[i], fx + firmaW / 2, firmaY + 4, { align: 'center' })
 
     // Campos internos

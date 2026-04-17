@@ -29,12 +29,12 @@ const PAGE_H    = 297
 const MARGIN    = 14
 const CONTENT_W = PAGE_W - MARGIN * 2
 
-const C_ACCENT_DEFAULT = [37, 99, 235]
-const C_DARK    = [22,  28,  36]
-const C_TEXT    = [40,  40,  50]
-const C_MID     = [110, 115, 130]
-const C_LIGHT   = [220, 225, 232]
-const C_SUBTLE  = [247, 248, 251]
+const C_ACCENT_DEFAULT = [250, 204, 21] // Amarillo (#FACC15)
+const C_DARK    = [20,  20,  20]       // Negro/Gris muy oscuro (#141414)
+const C_TEXT    = [30,  30,  30]
+const C_MID     = [100, 100, 100]
+const C_LIGHT   = [230, 230, 230]
+const C_SUBTLE  = [249, 249, 249]
 const C_WHITE   = [255, 255, 255]
 const C_GREEN   = [22,  163,  74]
 const C_RED     = [220,  38,  38]
@@ -45,13 +45,13 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   let y = 0
 
   const logoData = await cargarLogo(config.logo_url)
-  const A  = hexToRgb(cotizacion.vendedor?.color) || C_ACCENT_DEFAULT
-  const AD = darken(A, 0.35)   // versión oscura para el fondo del header
-  const AL = lighten(A, 0.88)  // versión muy clara para filas alternas
+  const A  = C_ACCENT_DEFAULT // Forzamos amarillo según la plantilla
+  const AD = C_DARK           // Forzamos fondo negro
+  const AL = [252, 250, 240]  // Amarillo muy sutil para franjas alternas
 
   const ESTADO_MAP = {
-    borrador:  { label: 'BORRADOR',  color: C_MID },
-    enviada:   { label: 'ENVIADA',   color: A },
+    borrador:  { label: 'BORRADOR',  color: C_DARK },
+    enviada:   { label: 'ENVIADA',   color: [22, 110, 220] },
     aceptada:  { label: 'ACEPTADA',  color: C_GREEN },
     rechazada: { label: 'RECHAZADA', color: C_RED },
     vencida:   { label: 'VENCIDA',   color: [148, 163, 184] },
@@ -110,38 +110,38 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   const boxX = PAGE_W - MARGIN - boxW
   const boxY = 5
 
-  // Fondo de la caja: color vendedor
+  // Fondo de la caja: color vendedor (Amarillo)
   doc.setFillColor(...A)
   doc.roundedRect(boxX, boxY, boxW, boxH, 3, 3, 'F')
 
-  // Franja superior más oscura dentro de la caja
-  doc.setFillColor(...darken(A, 0.2))
+  // Franja superior más oscura dentro de la caja (Naranja sutil)
+  doc.setFillColor(...darken(A, 0.15))
   doc.roundedRect(boxX, boxY, boxW, 10, 3, 3, 'F')
   doc.rect(boxX, boxY + 6, boxW, 4, 'F')
 
   // Label "COTIZACIÓN"
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(6.5)
-  doc.setTextColor(...lighten(A, 0.6))
+  doc.setTextColor(...C_DARK)
   doc.text('COTIZACIÓN', boxX + boxW / 2, boxY + 7, { align: 'center' })
 
   // Número grande
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(13)
-  doc.setTextColor(...C_WHITE)
+  doc.setTextColor(...C_DARK)
   doc.text(numDisplay, boxX + boxW / 2, boxY + 21, { align: 'center' })
 
   // Vendedor
   if (cotizacion.vendedor?.nombre) {
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(6.5)
-    doc.setTextColor(...lighten(A, 0.7))
+    doc.setTextColor(...darken(A, 0.6))
     doc.text(cotizacion.vendedor.nombre, boxX + boxW / 2, boxY + 29, { align: 'center' })
   }
 
   // Badge estado
   const badgeY = boxY + boxH - 9
-  doc.setFillColor(...lighten(estadoInfo.color, 0.85))
+  doc.setFillColor(...C_WHITE)
   doc.roundedRect(boxX + 6, badgeY, boxW - 12, 7, 2, 2, 'F')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7)
@@ -194,14 +194,17 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     doc.setLineWidth(0.35)
     doc.roundedRect(bx, bY, bW, bH, 2, 2, 'FD')
 
-    // Franja superior del color vendedor
-    doc.setFillColor(...A)
+    // Franja superior: Negra
+    doc.setFillColor(...C_DARK)
     doc.roundedRect(bx, bY, bW, 7, 2, 2, 'F')
     doc.rect(bx, bY + 4, bW, 3, 'F')
+    // Linea amarilla muy fina
+    doc.setFillColor(...A)
+    doc.rect(bx, bY + 7, bW, 0.8, 'F')
 
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(6.5)
-    doc.setTextColor(...C_WHITE)
+    doc.setTextColor(...A) // Texto amarillo
     doc.text(b.titulo, bx + 4, bY + 5.2)
 
     b.filas.forEach(([label, val], j) => {
@@ -311,10 +314,10 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
       doc.roundedRect(totX, y - 5, totW, 14, 2, 2, 'F')
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(8)
-      doc.setTextColor(...lighten(A, 0.65))
+      doc.setTextColor(...C_DARK)
       doc.text(label, totX + 6, y + 2)
       doc.setFontSize(14)
-      doc.setTextColor(...C_WHITE)
+      doc.setTextColor(...C_DARK)
       doc.text(value, totX + totW - 4, y + 5.5, { align: 'right' })
       y += 17
     } else {
@@ -385,13 +388,16 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     doc.setLineWidth(0.35)
     doc.roundedRect(x, firmaY, firmaW, firmaH, 2, 2, 'FD')
 
-    doc.setFillColor(...A)
+    doc.setFillColor(...C_DARK)
     doc.roundedRect(x, firmaY, firmaW, 7, 2, 2, 'F')
     doc.rect(x, firmaY + 4, firmaW, 3, 'F')
+    // Linea sutil amarilla
+    doc.setFillColor(...A)
+    doc.rect(x, firmaY + 7, firmaW, 0.8, 'F')
 
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(6.5)
-    doc.setTextColor(...C_WHITE)
+    doc.setTextColor(...A)
     doc.text(label, x + firmaW / 2, firmaY + 5, { align: 'center' })
 
     const lineY = firmaY + firmaH - 5
