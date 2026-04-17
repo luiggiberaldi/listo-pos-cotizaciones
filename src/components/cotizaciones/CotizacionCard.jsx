@@ -1,21 +1,23 @@
 // src/components/cotizaciones/CotizacionCard.jsx
 import { useState } from 'react'
-import { FileText, User, Calendar, Pencil, Ban, CheckCircle, XCircle, FileDown, MessageCircle, Loader2, Truck, ChevronDown, DollarSign, RefreshCw } from 'lucide-react'
+import { FileText, User, Calendar, Pencil, Ban, CheckCircle, XCircle, FileDown, MessageCircle, Loader2, Truck, ChevronDown, DollarSign, RefreshCw, Eye } from 'lucide-react'
 import EstadoBadge from './EstadoBadge'
 import useAuthStore from '../../store/useAuthStore'
 import supabase from '../../services/supabase/client'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import { compartirPorWhatsApp, generarMensaje } from '../../utils/whatsapp'
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs } from '../../utils/format'
+import DetalleModal from '../ui/DetalleModal'
 
 export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambiarEstado, onDespachar, onReciclar, tasa = 0 }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const esBorrador = cotizacion.estado === 'borrador'
   const esEnviada  = cotizacion.estado === 'enviada'
-  const [pdfLoading, setPdfLoading] = useState(false)
-  const [waLoading, setWaLoading]   = useState(false)
+  const [pdfLoading, setPdfLoading]   = useState(false)
+  const [waLoading, setWaLoading]     = useState(false)
   const [showActions, setShowActions] = useState(false)
+  const [showDetalle, setShowDetalle] = useState(false)
   const { data: config = {} } = useConfigNegocio()
 
   const numDisplay = cotizacion.version > 1
@@ -155,6 +157,11 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
 
       {/* ── Acciones principales ── */}
       <div className="mt-auto border-t border-slate-100 px-3 py-2 flex items-center gap-1">
+        {/* Ver detalle — siempre visible */}
+        <button onClick={() => setShowDetalle(true)}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-primary hover:bg-primary-light transition-colors">
+          <Eye size={13} />Ver
+        </button>
         {canEdit && (
           <button onClick={() => onEditar(cotizacion)}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
@@ -229,6 +236,14 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
           </div>
         )}
       </div>
+
+      <DetalleModal
+        isOpen={showDetalle}
+        onClose={() => setShowDetalle(false)}
+        tipo="cotizacion"
+        registro={cotizacion}
+        tasa={tasa}
+      />
     </div>
   )
 }

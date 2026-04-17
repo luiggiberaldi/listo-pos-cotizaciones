@@ -1,15 +1,17 @@
 // src/components/despachos/DespachoCard.jsx
 import { useState } from 'react'
-import { FileText, User, Calendar, Truck, CheckCircle, Ban, Package, RefreshCcw, Download, Loader2 } from 'lucide-react'
+import { FileText, User, Calendar, Truck, CheckCircle, Ban, Package, RefreshCcw, Download, Loader2, Eye } from 'lucide-react'
 import EstadoBadge from '../cotizaciones/EstadoBadge'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs } from '../../utils/format'
 import supabase from '../../services/supabase/client'
+import DetalleModal from '../ui/DetalleModal'
 
 export default function DespachoCard({ despacho, onCambiarEstado, onAnular, onReciclar, tasa = 0, config = {} }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
-  const [pdfLoading, setPdfLoading] = useState(false)
+  const [pdfLoading, setPdfLoading]   = useState(false)
+  const [showDetalle, setShowDetalle] = useState(false)
 
   const numDisplay = `DES-${String(despacho.numero).padStart(5, '0')}`
   const vendedorColor = despacho.vendedor?.color || '#64748b'
@@ -110,6 +112,11 @@ export default function DespachoCard({ despacho, onCambiarEstado, onAnular, onRe
 
       {/* ── Acciones ── */}
       <div className="mt-auto border-t border-slate-100 px-3 py-2 flex items-center gap-1">
+        {/* Ver detalle — siempre visible */}
+        <button onClick={() => setShowDetalle(true)}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-primary hover:bg-primary-light transition-colors">
+          <Eye size={13} />Ver
+        </button>
         {canDespachar && (
           <button onClick={() => onCambiarEstado(despacho.id, 'despachada')}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-indigo-600 hover:bg-indigo-50 transition-colors">
@@ -141,6 +148,14 @@ export default function DespachoCard({ despacho, onCambiarEstado, onAnular, onRe
           )}
         </div>
       </div>
+
+      <DetalleModal
+        isOpen={showDetalle}
+        onClose={() => setShowDetalle(false)}
+        tipo="despacho"
+        registro={despacho}
+        tasa={tasa}
+      />
     </div>
   )
 }
