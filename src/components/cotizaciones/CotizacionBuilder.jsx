@@ -72,47 +72,49 @@ function ItemLinea({ item, idx, onChange, onDelete, tasa = 0 }) {
   const lineTotal = round2(item.cantidad * item.precioUnitUsd * (1 - item.descuentoPct / 100))
 
   return (
-    <tr className="border-b border-slate-100 hover:bg-slate-50/50">
-      <td className="py-2 px-3 text-sm text-slate-800 max-w-[180px]">
-        <div className="font-medium truncate">{item.nombreSnap}</div>
-        {item.codigoSnap && <div className="text-xs text-slate-400 font-mono">{item.codigoSnap}</div>}
+    <tr className="border-b border-slate-100 hover:bg-slate-50/60 group">
+      <td className="py-3 px-3 max-w-[200px]">
+        <div className="font-semibold text-sm text-slate-800 truncate">{item.nombreSnap}</div>
+        {item.codigoSnap && <div className="text-[11px] text-slate-400 font-mono mt-0.5">{item.codigoSnap}</div>}
       </td>
-      <td className="py-2 px-2 text-xs text-slate-400">{item.unidadSnap}</td>
-      <td className="py-2 px-2">
+      <td className="py-3 px-2">
+        <span className="text-[11px] font-medium bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{item.unidadSnap}</span>
+      </td>
+      <td className="py-3 px-2">
         <input type="number" min="0.01" step="0.01"
           value={item.cantidad}
           onChange={e => onChange(idx, 'cantidad', Math.max(0.01, Number(e.target.value)))}
           onFocus={e => e.target.select()}
-          className="w-20 px-2 py-1 text-sm text-right border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-focus bg-white"
+          className="w-20 px-2 py-1.5 text-sm text-right border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary bg-white transition-all"
         />
       </td>
-      <td className="py-2 px-2">
+      <td className="py-3 px-2">
         <input type="number" min="0" step="0.01"
           value={item.precioUnitUsd}
           onChange={e => onChange(idx, 'precioUnitUsd', Math.max(0, Number(e.target.value)))}
           onFocus={e => e.target.select()}
-          className="w-24 px-2 py-1 text-sm text-right border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-focus bg-white"
+          className="w-24 px-2 py-1.5 text-sm text-right border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary bg-white transition-all"
         />
-        {tasa > 0 && <p className="text-[10px] text-slate-400 text-right pr-1">{fmtBs(usdToBs(item.precioUnitUsd, tasa))}</p>}
+        {tasa > 0 && <p className="text-[10px] text-slate-400 text-right pr-1 mt-0.5">{fmtBs(usdToBs(item.precioUnitUsd, tasa))}</p>}
       </td>
-      <td className="py-2 px-2">
-        <div className="flex items-center">
+      <td className="py-3 px-2">
+        <div className="flex items-center gap-1">
           <input type="number" min="0" max="100" step="0.5"
             value={item.descuentoPct}
             onChange={e => onChange(idx, 'descuentoPct', Math.min(100, Math.max(0, Number(e.target.value))))}
             onFocus={e => e.target.select()}
-            className="w-16 px-2 py-1 text-sm text-right border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-focus bg-white"
+            className="w-14 px-2 py-1.5 text-sm text-right border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary bg-white transition-all"
           />
-          <span className="ml-1 text-xs text-slate-400">%</span>
+          <span className="text-xs text-slate-400">%</span>
         </div>
       </td>
-      <td className="py-2 px-2 text-right">
-        <p className="text-sm font-semibold text-slate-800">{fmtUsd(lineTotal)}</p>
+      <td className="py-3 px-3 text-right">
+        <p className="text-sm font-black text-slate-800">{fmtUsd(lineTotal)}</p>
         {tasa > 0 && <p className="text-[10px] text-slate-400">{fmtBs(usdToBs(lineTotal, tasa))}</p>}
       </td>
-      <td className="py-2 px-2">
+      <td className="py-3 px-2">
         <button onClick={() => onDelete(idx)}
-          className="p-1 rounded text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors">
+          className="p-1.5 rounded-lg text-slate-200 hover:text-red-500 hover:bg-red-50 group-hover:text-slate-300 transition-all">
           <Trash2 size={14} />
         </button>
       </td>
@@ -181,13 +183,11 @@ const PRODUCTOS_POR_PAGINA = 12
 function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
   const [texto, setTexto] = useState('')
   const [catActiva, setCatActiva] = useState('')
-  const [vistaGrid, setVistaGrid] = useState(true)
   const [pagina, setPagina] = useState(0)
   const { data: inventarioData, isLoading } = useInventario({})
   const todosProductos = inventarioData?.productos ?? inventarioData ?? []
   const { data: categorias = [] } = useCategorias()
 
-  // Filtrar localmente para búsqueda instantánea
   const filtrados = todosProductos.filter(p => {
     const coincideTexto = !texto.trim() ||
       p.nombre.toLowerCase().includes(texto.toLowerCase()) ||
@@ -196,210 +196,152 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
     return coincideTexto && coincideCat
   })
 
-  // IDs ya agregados para marcar visualmente
   const idsAgregados = new Set(itemsAgregados.map(it => it.productoId))
-
-  // Paginación
   const totalPags = Math.ceil(filtrados.length / PRODUCTOS_POR_PAGINA)
   const paginados = filtrados.slice(pagina * PRODUCTOS_POR_PAGINA, (pagina + 1) * PRODUCTOS_POR_PAGINA)
 
-  // Reset página al cambiar filtros
   function cambiarTexto(val) { setTexto(val); setPagina(0) }
-  function cambiarCat(val) { setCatActiva(val); setPagina(0) }
+  function cambiarCat(val)   { setCatActiva(val); setPagina(0) }
 
   return (
     <div className="space-y-3">
-      {/* Barra superior: búsqueda + toggle vista */}
-      <div className="flex gap-2">
-        <div className="relative flex-1">
-          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-          <input
-            type="text"
-            value={texto}
-            onChange={e => cambiarTexto(e.target.value)}
-            placeholder="Buscar por nombre o código..."
-          className="w-full pl-10 pr-10 py-3 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400 transition-all"
+
+      {/* Barra de búsqueda */}
+      <div className="relative">
+        <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+        <input
+          type="text"
+          value={texto}
+          onChange={e => cambiarTexto(e.target.value)}
+          placeholder="Buscar por nombre o código..."
+          className="w-full pl-10 pr-10 py-3 text-sm border border-slate-200 rounded-xl bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400 transition-all"
           autoFocus
         />
         {texto && (
           <button type="button" onClick={() => cambiarTexto('')}
-            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
+            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-600 transition-colors">
             <X size={14} />
           </button>
         )}
       </div>
-      {/* Toggle vista cuadrícula / lista */}
-      <div className="flex bg-slate-100 rounded-lg p-0.5">
-        <button type="button" onClick={() => setVistaGrid(true)}
-          className={`p-2 rounded-md transition-all ${vistaGrid ? 'bg-white shadow-sm text-primary' : 'text-slate-400 hover:text-slate-600'}`}
-          title="Cuadrícula">
-          <LayoutGrid size={16} />
-        </button>
-        <button type="button" onClick={() => setVistaGrid(false)}
-          className={`p-2 rounded-md transition-all ${!vistaGrid ? 'bg-white shadow-sm text-primary' : 'text-slate-400 hover:text-slate-600'}`}
-          title="Lista">
-          <LayoutList size={16} />
-        </button>
-      </div>
-      </div>
 
-      {/* Chips de categoría */}
+      {/* Chips de categoría — scroll horizontal sin wrap */}
       {categorias.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          <button type="button" onClick={() => cambiarCat('')}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-              !catActiva
-                ? 'bg-primary text-white shadow-sm'
-                : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-            }`}>
-            Todos
-          </button>
-          {categorias.map(cat => (
-            <button key={cat} type="button" onClick={() => cambiarCat(catActiva === cat ? '' : cat)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                catActiva === cat
-                  ? 'bg-primary text-white shadow-sm'
-                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+        <div className="overflow-x-auto scrollbar-hide -mx-1 px-1">
+          <div className="flex gap-1.5 py-0.5 w-max">
+            <button type="button" onClick={() => cambiarCat('')}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap ${
+                !catActiva ? 'bg-primary text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
               }`}>
-              {cat}
+              Todos
             </button>
-          ))}
+            {categorias.map(cat => (
+              <button key={cat} type="button" onClick={() => cambiarCat(catActiva === cat ? '' : cat)}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap ${
+                  catActiva === cat ? 'bg-primary text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                }`}>
+                {cat}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* Estado de carga */}
+      {/* Cargando */}
       {isLoading && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {[1,2,3,4].map(i => (
-            <div key={i} className="h-20 bg-slate-100 rounded-xl animate-pulse" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2">
+          {[1,2,3,4,5,6].map(i => (
+            <div key={i} className="rounded-xl border border-slate-100 overflow-hidden">
+              <div className="h-14 bg-slate-100 animate-pulse" />
+              <div className="p-2.5 space-y-1.5">
+                <div className="h-2.5 bg-slate-100 rounded animate-pulse w-3/4" />
+                <div className="h-2 bg-slate-100 rounded animate-pulse w-1/2" />
+                <div className="h-4 bg-slate-100 rounded animate-pulse w-2/3" />
+              </div>
+            </div>
           ))}
         </div>
       )}
 
-      {/* Resultados */}
+      {/* Grid de productos */}
       {!isLoading && paginados.length > 0 && (
         <>
-          {vistaGrid ? (
-            /* ── Vista cuadrícula ── */
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2">
-              {paginados.map(p => {
-                const yaAgregado = idsAgregados.has(p.id)
-                const sinStock = p.stock_actual != null && p.stock_actual <= 0
-                const sinPrecio = !p.precio_usd || Number(p.precio_usd) <= 0
-                const bloqueado = sinStock || sinPrecio
-                return (
-                  <button key={p.id} type="button" onClick={() => !bloqueado && onAgregar(p)}
-                    disabled={bloqueado}
-                    title={sinPrecio ? 'Sin precio — no se puede cotizar' : undefined}
-                    className={`bg-white rounded-xl border p-3 text-left transition-all group flex flex-col gap-2 ${
-                      bloqueado
-                        ? 'opacity-50 cursor-not-allowed border-slate-100'
-                        : yaAgregado
-                          ? 'border-emerald-200 bg-emerald-50/30 hover:shadow-md'
-                          : 'border-slate-200 hover:border-primary hover:shadow-md active:scale-[0.98]'
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2">
+            {paginados.map(p => {
+              const yaAgregado = idsAgregados.has(p.id)
+              const sinStock   = p.stock_actual != null && p.stock_actual <= 0
+              const sinPrecio  = !p.precio_usd || Number(p.precio_usd) <= 0
+              const bloqueado  = sinStock || sinPrecio
+              return (
+                <button key={p.id} type="button"
+                  onClick={() => !bloqueado && onAgregar(p)}
+                  disabled={bloqueado}
+                  title={sinPrecio ? 'Sin precio — no se puede cotizar' : sinStock ? 'Sin stock' : undefined}
+                  className={`relative bg-white rounded-xl border text-left transition-all flex flex-col overflow-hidden ${
+                    bloqueado
+                      ? 'opacity-40 cursor-not-allowed border-slate-100'
+                      : yaAgregado
+                        ? 'border-emerald-300 shadow-sm shadow-emerald-100/80'
+                        : 'border-slate-200 hover:border-primary/50 hover:shadow-md active:scale-[0.97]'
+                  }`}>
+
+                  {/* Zona imagen */}
+                  <div className={`relative flex items-center justify-center h-14 transition-colors ${
+                    yaAgregado ? 'bg-emerald-50' : 'bg-slate-50 group-hover:bg-primary-light/30'
+                  }`}>
+                    {p.imagen_url
+                      ? <img src={p.imagen_url} alt="" className="h-full w-full object-cover" loading="lazy" />
+                      : <div className={`transition-colors ${yaAgregado ? 'text-emerald-400' : 'text-slate-300'}`}>
+                          {yaAgregado ? <CheckCircle size={20} /> : <Package size={20} />}
+                        </div>
+                    }
+                    {/* Badge stock */}
+                    {p.stock_actual != null && (
+                      <span className={`absolute top-1.5 right-1.5 text-[9px] font-black px-1.5 py-0.5 rounded-full leading-none ${
+                        sinStock
+                          ? 'bg-red-500 text-white'
+                          : p.stock_actual <= (p.stock_minimo ?? 0)
+                            ? 'bg-amber-400 text-white'
+                            : 'bg-emerald-500 text-white'
+                      }`}>
+                        {sinStock ? 'Ago.' : p.stock_actual}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Info */}
+                  <div className="p-2.5 flex flex-col gap-0.5 flex-1">
+                    <p className={`text-[11px] font-bold line-clamp-2 leading-tight ${
+                      yaAgregado ? 'text-emerald-700' : 'text-slate-800'
                     }`}>
-                    {/* Imagen/icono + badge */}
-                    <div className="flex items-center justify-between">
-                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center overflow-hidden ${
-                        yaAgregado ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400 group-hover:bg-primary-light group-hover:text-primary'
-                      } transition-colors`}>
-                        {p.imagen_url ? (
-                          <img src={p.imagen_url} alt="" className="w-full h-full object-cover" loading="lazy" />
-                        ) : yaAgregado ? <CheckCircle size={16} /> : <Package size={16} />}
-                      </div>
-                      {p.stock_actual != null && (
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                          sinStock ? 'bg-red-100 text-red-600' :
-                          p.stock_actual <= (p.stock_minimo ?? 0) ? 'bg-amber-100 text-amber-600' :
-                          'bg-emerald-100 text-emerald-600'
-                        }`}>
-                          {sinStock ? 'Agotado' : p.stock_actual}
-                        </span>
-                      )}
-                    </div>
-                    {/* Nombre */}
-                    <p className="text-xs font-semibold text-slate-800 line-clamp-2 leading-tight group-hover:text-primary transition-colors">
                       {p.nombre}
                     </p>
-                    {/* Código + unidad */}
-                    <div className="flex items-center gap-1 mt-auto">
-                      {p.codigo && <span className="text-[10px] font-mono text-slate-400 truncate">{p.codigo}</span>}
-                      <span className="text-[10px] text-slate-300">·</span>
-                      <span className="text-[10px] text-slate-400">{p.unidad}</span>
-                    </div>
-                    {/* Precio */}
-                    <div>
-                      <p className="text-sm font-bold text-slate-800">{fmtUsd(p.precio_usd)}</p>
-                      {tasa > 0 && <p className="text-[10px] text-slate-400">{fmtBs(usdToBs(p.precio_usd, tasa))}</p>}
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-          ) : (
-            /* ── Vista lista ── */
-            <div className="rounded-xl border border-slate-200 overflow-hidden divide-y divide-slate-100">
-              {paginados.map(p => {
-                const yaAgregado = idsAgregados.has(p.id)
-                const sinStock = p.stock_actual != null && p.stock_actual <= 0
-                const sinPrecio = !p.precio_usd || Number(p.precio_usd) <= 0
-                const bloqueado = sinStock || sinPrecio
-                return (
-                  <button key={p.id} type="button" onClick={() => !bloqueado && onAgregar(p)}
-                    disabled={bloqueado}
-                    title={sinPrecio ? 'Sin precio — no se puede cotizar' : undefined}
-                    className={`w-full flex items-center gap-3 px-3.5 py-3 text-left transition-all group ${
-                      bloqueado
-                        ? 'opacity-50 cursor-not-allowed bg-slate-50'
-                        : yaAgregado
-                          ? 'bg-emerald-50/30 hover:bg-emerald-50'
-                          : 'bg-white hover:bg-primary-light/40 active:scale-[0.995]'
-                    }`}>
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 overflow-hidden ${
-                      yaAgregado ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'
-                    }`}>
-                      {p.imagen_url ? (
-                        <img src={p.imagen_url} alt="" className="w-full h-full object-cover" loading="lazy" />
-                      ) : yaAgregado ? <CheckCircle size={16} /> : <Package size={16} />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-slate-800 truncate group-hover:text-primary transition-colors">{p.nombre}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        {p.codigo && <span className="text-[11px] font-mono text-slate-400">{p.codigo}</span>}
-                        <span className="text-[11px] text-slate-400">· {p.unidad}</span>
-                        {p.categoria && <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">{p.categoria}</span>}
-                      </div>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-sm font-bold text-slate-800">{fmtUsd(p.precio_usd)}</p>
-                      {tasa > 0 && <p className="text-[10px] text-slate-400">{fmtBs(usdToBs(p.precio_usd, tasa))}</p>}
-                      {p.stock_actual != null && (
-                        <p className={`text-[10px] font-medium ${
-                          sinStock ? 'text-red-500' :
-                          p.stock_actual <= (p.stock_minimo ?? 0) ? 'text-amber-500' :
-                          'text-emerald-600'
-                        }`}>
-                          {sinStock ? 'Agotado' : `Stock: ${p.stock_actual}`}
-                        </p>
-                      )}
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-          )}
+                    {p.codigo && (
+                      <p className="text-[10px] font-mono text-slate-400 truncate mt-auto pt-1">{p.codigo} · {p.unidad}</p>
+                    )}
+                    <p className={`text-sm font-black mt-1 ${yaAgregado ? 'text-emerald-600' : 'text-slate-800'}`}>
+                      {fmtUsd(p.precio_usd)}
+                    </p>
+                    {tasa > 0 && (
+                      <p className="text-[10px] text-slate-400 -mt-0.5">{fmtBs(usdToBs(p.precio_usd, tasa))}</p>
+                    )}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
 
-          {/* Paginación */}
-          {totalPags > 1 && (
-            <div className="flex items-center justify-between">
-              <p className="text-[11px] text-slate-400">
-                {filtrados.length} producto{filtrados.length !== 1 ? 's' : ''}
-                {' · '}Pág. {pagina + 1}/{totalPags}
-              </p>
+          {/* Paginación + contador */}
+          <div className="flex items-center justify-between pt-1">
+            <p className="text-[11px] text-slate-400">
+              {filtrados.length} producto{filtrados.length !== 1 ? 's' : ''}
+              {totalPags > 1 && ` · pág. ${pagina + 1}/${totalPags}`}
+            </p>
+            {totalPags > 1 && (
               <div className="flex items-center gap-1">
                 <button type="button" onClick={() => setPagina(p => p - 1)} disabled={pagina === 0}
-                  className="px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30 transition-colors">
-                  <ArrowLeft size={13} />
+                  className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30 transition-colors">
+                  <ArrowLeft size={12} />
                 </button>
                 {Array.from({ length: Math.min(totalPags, 5) }).map((_, i) => {
                   let num
@@ -409,50 +351,41 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
                   else num = pagina - 2 + i
                   return (
                     <button key={num} type="button" onClick={() => setPagina(num)}
-                      className={`w-8 h-8 text-xs font-semibold rounded-lg transition-all ${
-                        num === pagina
-                          ? 'bg-primary text-white shadow-sm'
-                          : 'text-slate-500 hover:bg-slate-100'
+                      className={`w-7 h-7 text-xs font-bold rounded-lg transition-all ${
+                        num === pagina ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100'
                       }`}>
                       {num + 1}
                     </button>
                   )
                 })}
                 <button type="button" onClick={() => setPagina(p => p + 1)} disabled={pagina >= totalPags - 1}
-                  className="px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30 transition-colors">
-                  <ArrowRight size={13} />
+                  className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30 transition-colors">
+                  <ArrowRight size={12} />
                 </button>
               </div>
-            </div>
-          )}
-
-          {/* Contador solo si 1 página */}
-          {totalPags <= 1 && (
-            <p className="text-[11px] text-slate-400 text-right">
-              {filtrados.length} producto{filtrados.length !== 1 ? 's' : ''}
-            </p>
-          )}
+            )}
+          </div>
         </>
       )}
 
       {/* Sin resultados */}
       {!isLoading && filtrados.length === 0 && (texto || catActiva) && (
-        <div className="text-center py-8">
-          <Search size={24} className="mx-auto text-slate-300 mb-2" />
-          <p className="text-sm text-slate-400 font-medium">Sin resultados</p>
+        <div className="text-center py-10">
+          <Search size={28} className="mx-auto text-slate-200 mb-3" />
+          <p className="text-sm font-bold text-slate-400">Sin resultados</p>
           <p className="text-xs text-slate-300 mt-1">Prueba con otro término o categoría</p>
           <button type="button" onClick={() => { cambiarTexto(''); cambiarCat('') }}
-            className="text-xs text-primary hover:underline mt-2">
+            className="text-xs text-primary font-semibold hover:underline mt-3 block mx-auto">
             Limpiar filtros
           </button>
         </div>
       )}
 
-      {/* Estado vacío inicial */}
+      {/* Sin inventario */}
       {!isLoading && filtrados.length === 0 && !texto && !catActiva && (
-        <div className="text-center py-8">
-          <Package size={24} className="mx-auto text-slate-300 mb-2" />
-          <p className="text-sm text-slate-400 font-medium">No hay productos en el inventario</p>
+        <div className="text-center py-10">
+          <Package size={28} className="mx-auto text-slate-200 mb-3" />
+          <p className="text-sm font-bold text-slate-400">No hay productos en el inventario</p>
         </div>
       )}
     </div>
@@ -956,17 +889,18 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
   async function descargarPDF() {
     setPdfLoading(true)
     try {
-      const [{ generarPDF }, itemsRes] = await Promise.all([
+      const [{ generarPDF }, itemsRes, cotRes] = await Promise.all([
         import('../../services/pdf/cotizacionPDF'),
         supabase.from('cotizacion_items').select('*').eq('cotizacion_id', cotizacionId).order('orden'),
+        supabase.from('cotizaciones').select('*').eq('id', cotizacionId).single(),
       ])
       if (itemsRes.error) throw itemsRes.error
-      // Construir objeto cotizacion con vendedor (para color) y cliente
+      if (cotRes.error) throw cotRes.error
       const vendedor = esSupervisor
         ? vendedores.find(v => v.id === vendedorId) || null
         : perfil
       await generarPDF({
-        cotizacion: { ...cotizacionExistente, cliente: clienteSeleccionado, vendedor },
+        cotizacion: { ...cotRes.data, cliente: clienteSeleccionado, vendedor },
         items: itemsRes.data ?? [],
         config,
       })
@@ -980,17 +914,19 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
   async function handleWhatsApp() {
     setWaLoading(true)
     try {
-      const [{ generarPDF }, itemsRes] = await Promise.all([
+      const [{ generarPDF }, itemsRes, cotRes] = await Promise.all([
         import('../../services/pdf/cotizacionPDF'),
         supabase.from('cotizacion_items').select('*').eq('cotizacion_id', cotizacionId).order('orden'),
+        supabase.from('cotizaciones').select('*').eq('id', cotizacionId).single(),
       ])
       if (itemsRes.error) throw itemsRes.error
+      if (cotRes.error) throw cotRes.error
 
       const vendedor = esSupervisor
         ? vendedores.find(v => v.id === vendedorId) || null
         : perfil
       const pdfBlob = await generarPDF({
-        cotizacion: { ...cotizacionExistente, cliente: clienteSeleccionado, vendedor },
+        cotizacion: { ...cotRes.data, cliente: clienteSeleccionado, vendedor },
         items: itemsRes.data ?? [],
         config,
         returnBlob: true,
@@ -1205,28 +1141,39 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
 
               {items.length > 0 && (
                 <>
-                  {/* Desktop: tabla */}
-                  <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-100">
-                    <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-slate-50 text-xs text-slate-500 uppercase tracking-wide">
-                        <th className="text-left py-2 px-3">Producto</th>
-                        <th className="text-left py-2 px-2">Unidad</th>
-                        <th className="text-right py-2 px-2">Cantidad</th>
-                        <th className="text-right py-2 px-2">Precio USD</th>
-                        <th className="text-right py-2 px-2">Desc.</th>
-                        <th className="text-right py-2 px-2">Total</th>
-                        <th className="py-2 px-2"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {items.map((it, idx) => (
-                        <ItemLinea key={it._key} item={it} idx={idx}
-                          onChange={cambiarItem} onDelete={eliminarItem} tasa={tasaHook.tasaEfectiva} />
-                      ))}
-                    </tbody>
-                  </table>
+                  {/* Separador con contador */}
+                  <div className="flex items-center gap-3">
+                    <div className="h-px bg-slate-100 flex-1" />
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <CheckCircle size={11} className="text-emerald-500" />
+                      {items.length} producto{items.length !== 1 ? 's' : ''} agregado{items.length !== 1 ? 's' : ''}
+                    </span>
+                    <div className="h-px bg-slate-100 flex-1" />
                   </div>
+
+                  {/* Desktop: tabla */}
+                  <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-200">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                          <th className="text-left py-3 px-3">Producto</th>
+                          <th className="text-left py-3 px-2">Unidad</th>
+                          <th className="text-right py-3 px-2">Cantidad</th>
+                          <th className="text-right py-3 px-2">Precio USD</th>
+                          <th className="text-right py-3 px-2">Desc.</th>
+                          <th className="text-right py-3 px-3">Total</th>
+                          <th className="py-3 px-2"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {items.map((it, idx) => (
+                          <ItemLinea key={it._key} item={it} idx={idx}
+                            onChange={cambiarItem} onDelete={eliminarItem} tasa={tasaHook.tasaEfectiva} />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
                   {/* Móvil: cards */}
                   <div className="md:hidden space-y-3">
                     {items.map((it, idx) => (
@@ -1235,15 +1182,17 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
                     ))}
                   </div>
 
-                  {/* Total parcial */}
+                  {/* Subtotal */}
                   <div className="flex justify-end">
-                    <div className="bg-slate-50 rounded-xl px-4 py-2 text-sm">
-                      <span className="text-slate-500">Subtotal: </span>
-                      <span className="font-bold text-slate-800">{fmtUsd(subtotal)}</span>
-                      {tasaHook.tasaEfectiva > 0 && (
-                        <span className="text-slate-400 ml-1 text-xs">({fmtBs(usdToBs(subtotal, tasaHook.tasaEfectiva))})</span>
-                      )}
-                      <span className="text-slate-400 ml-2">({items.length} item{items.length !== 1 ? 's' : ''})</span>
+                    <div className="rounded-xl border border-primary/15 px-5 py-3 bg-primary-light/50">
+                      <div className="flex items-baseline gap-3 flex-wrap">
+                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Subtotal</span>
+                        <span className="text-xl font-black text-slate-800">{fmtUsd(subtotal)}</span>
+                        {tasaHook.tasaEfectiva > 0 && (
+                          <span className="text-sm text-slate-400">{fmtBs(usdToBs(subtotal, tasaHook.tasaEfectiva))}</span>
+                        )}
+                        <span className="text-xs text-slate-400">· {items.length} item{items.length !== 1 ? 's' : ''}</span>
+                      </div>
                     </div>
                   </div>
                 </>
