@@ -283,6 +283,9 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   doc.setFontSize(14)
   doc.text(fmtUsd(cotizacion.total_usd), totX + totW - 5, ty, { align: 'right' })
 
+  // Avanzar y debajo del bloque de totales
+  y += boxH + 10
+
   // ══════════════════════════════════════════════════════════════════════════
   // 5. FIRMAS: ASESOR / APROBADO / ACEPTA CONFORME
   // ══════════════════════════════════════════════════════════════════════════
