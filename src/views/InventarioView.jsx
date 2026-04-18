@@ -89,13 +89,16 @@ export default function InventarioView() {
     return productosFiltrados.slice(inicio, inicio + ITEMS_POR_PAGINA)
   }, [productosFiltrados, pagina])
 
-  // ── Handlers ────────────────────────────────────────────────────────────────
-  function handleBuscar(e) {
-    e.preventDefault()
-    setBusqueda(textoBusqueda)
-    setPagina(1)
-  }
+  // Debounce: actualizar búsqueda real 300ms después de dejar de teclear
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setBusqueda(textoBusqueda)
+      setPagina(1)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [textoBusqueda])
 
+  // ── Handlers ────────────────────────────────────────────────────────────────
   function limpiarFiltros() {
     setTextoBusqueda('')
     setBusqueda('')
@@ -167,7 +170,7 @@ export default function InventarioView() {
       {/* ── Filtros ─────────────────────────────────────────────────────────── */}
       <div className="space-y-2">
         {/* Fila 1: Búsqueda */}
-        <form onSubmit={handleBuscar} className="flex gap-2">
+        <form onSubmit={e => { e.preventDefault(); setBusqueda(textoBusqueda); setPagina(1) }} className="flex gap-2">
           <div className="relative flex-1">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             <input
@@ -184,10 +187,6 @@ export default function InventarioView() {
               </button>
             )}
           </div>
-          <button type="submit"
-            className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm rounded-xl transition-colors shrink-0">
-            Buscar
-          </button>
         </form>
 
         {/* Fila 2: Categoría + controles */}

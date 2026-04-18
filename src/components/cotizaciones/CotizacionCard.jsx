@@ -88,7 +88,7 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
   const canDespachar = esSupervisor && (cotizacion.estado === 'aceptada' || cotizacion.estado === 'enviada') && onDespachar && !despacho
   const canAnular = esBorrador || (esSupervisor && (cotizacion.estado === 'enviada' || cotizacion.estado === 'aceptada'))
   const canReciclar = esSupervisor && ['rechazada', 'anulada', 'vencida'].includes(cotizacion.estado)
-  const hasSecondaryActions = canAcceptReject || canDespachar || canAnular || canReciclar
+  const hasSecondaryActions = canAcceptReject || canDespachar || canAnular
 
   return (
     <div className="group bg-white rounded-2xl border border-slate-200 hover:shadow-lg transition-all duration-200 overflow-hidden flex flex-col">
@@ -197,6 +197,14 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
             <span className="hidden sm:inline">WhatsApp</span><span className="sm:hidden">WA</span>
           </button>
         )}
+        {canReciclar && (
+          <button onClick={() => onReciclar(cotizacion)}
+            title="Crear nueva cotización basada en esta"
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 transition-colors">
+            <RefreshCw size={13} />
+            <span className="hidden sm:inline">Reutilizar</span>
+          </button>
+        )}
 
         {hasSecondaryActions && (
           <div className="relative ml-auto">
@@ -235,15 +243,6 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
                     <button onClick={() => { onAnular(cotizacion); setShowActions(false) }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-500 hover:bg-red-50 transition-colors text-left">
                       <Ban size={14} />Anular
-                    </button>
-                  </>
-                )}
-                {canReciclar && (
-                  <>
-                    {(canAcceptReject || canDespachar || canAnular) && <div className="my-1 border-t border-slate-100" />}
-                    <button onClick={() => { onReciclar(cotizacion); setShowActions(false) }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-emerald-600 hover:bg-emerald-50 transition-colors text-left">
-                      <RefreshCw size={14} />Reciclar
                     </button>
                   </>
                 )}

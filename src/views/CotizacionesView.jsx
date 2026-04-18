@@ -3,7 +3,7 @@
 // El builder reemplaza la lista in-page (sin navegación adicional)
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { FileText, Plus, RefreshCw, Filter, GitBranch, AlertTriangle, PackageCheck, Loader2, X, AlertCircle } from 'lucide-react'
+import { FileText, Plus, RefreshCw, Filter, Copy, AlertTriangle, PackageCheck, Loader2, X, AlertCircle } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import supabase from '../services/supabase/client'
 import { useTasaCambio } from '../hooks/useTasaCambio'
@@ -274,17 +274,15 @@ function ModalVersionar({ cotizacion, onConfirm, onCancel, cargando }) {
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-sm p-4 sm:p-6 space-y-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-primary-light rounded-xl flex items-center justify-center">
-            <GitBranch size={20} className="text-primary" />
+            <Copy size={20} className="text-primary" />
           </div>
-          <h3 className="font-black text-slate-800 text-lg">Crear nueva versión</h3>
+          <h3 className="font-black text-slate-800 text-lg">Crear copia editable</h3>
         </div>
 
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-2.5">
           <AlertTriangle size={15} className="text-amber-600 shrink-0 mt-0.5" />
           <p className="text-sm text-amber-800">
-            <strong>{num}</strong> ya fue enviada y no se puede modificar directamente.
-            Se creará un <strong>Rev.{(cotizacion.version ?? 1) + 1}</strong> como borrador
-            copiando los items actuales.
+            <strong>{num}</strong> ya fue enviada y no se puede modificar. Se creará una <strong>copia editable</strong> (versión {(cotizacion.version ?? 1) + 1}) con los mismos productos y precios.
           </p>
         </div>
 
@@ -297,7 +295,7 @@ function ModalVersionar({ cotizacion, onConfirm, onCancel, cargando }) {
             className="flex-1 py-3 rounded-xl bg-primary hover:bg-primary-hover text-white font-semibold text-base transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
             {cargando
               ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Creando...</>
-              : <><GitBranch size={16} />Crear Rev.{(cotizacion.version ?? 1) + 1}</>}
+              : <><Copy size={16} />Crear copia editable</>}
           </button>
         </div>
       </div>
