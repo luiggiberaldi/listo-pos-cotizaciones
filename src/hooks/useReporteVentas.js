@@ -57,6 +57,9 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
       ])
 
       if (despachosRes.error) throw despachosRes.error
+      if (prevDespachosRes.error) throw prevDespachosRes.error
+      if (comisionesRes.error) throw comisionesRes.error
+      if (prevComisionesRes.error) throw prevComisionesRes.error
       const despachos = despachosRes.data ?? []
       const prevDespachos = prevDespachosRes.data ?? []
       const comisiones = comisionesRes.data ?? []

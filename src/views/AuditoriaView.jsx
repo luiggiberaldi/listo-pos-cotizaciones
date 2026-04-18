@@ -1,7 +1,7 @@
 // src/views/AuditoriaView.jsx
 // Historial de actividad del sistema — solo supervisor
 // Vista estilo timeline con detalle expandible
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   ClipboardList, RefreshCw, ChevronLeft, ChevronRight, Filter,
   FileText, Users, Package, UserCog, ArrowRightLeft, Settings,
@@ -145,7 +145,7 @@ function DetalleEntidad({ tipo, id, tasa = 0 }) {
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState(null)
 
-  useState(() => {
+  useEffect(() => {
     if (!tipo || !id) { setLoading(false); return }
 
     async function cargar() {
@@ -204,7 +204,7 @@ function DetalleEntidad({ tipo, id, tasa = 0 }) {
       }
     }
     cargar()
-  })
+  }, [tipo, id])
 
   if (loading) {
     return (

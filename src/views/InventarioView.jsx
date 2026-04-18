@@ -181,7 +181,7 @@ export default function InventarioView() {
               className="w-full pl-9 pr-9 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400"
             />
             {textoBusqueda && (
-              <button type="button" onClick={limpiarFiltros}
+              <button type="button" onClick={() => setTextoBusqueda('')}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
                 <X size={14} />
               </button>

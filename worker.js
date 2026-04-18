@@ -57,6 +57,12 @@ function isValidEmail(email) {
   return typeof email === 'string' && EMAIL_RE.test(email.trim())
 }
 
+// UUID v4 format validation
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+function isValidUuid(str) {
+  return typeof str === 'string' && UUID_RE.test(str)
+}
+
 // ── Sanitize search input for PostgREST ilike ─────────────────────────────────
 function sanitizeSearch(input) {
   if (typeof input !== 'string') return ''
@@ -315,6 +321,7 @@ async function handleAdmin(request, env, url) {
   // ── Actualizar usuario (nombre, rol, PIN, color) ──────────────────────
   if (route.startsWith('users/') && request.method === 'PUT') {
     const userId = route.replace('users/', '');
+    if (!isValidUuid(userId)) return jsonError('ID de usuario inválido', 400, request);
     const { nombre, rol, pin, color } = body;
 
     // Validate rol if provided
@@ -368,6 +375,7 @@ async function handleAdmin(request, env, url) {
   // ── Eliminar usuario ──────────────────────────────────────────────────
   if (route.startsWith('users/') && request.method === 'DELETE') {
     const userId = route.replace('users/', '');
+    if (!isValidUuid(userId)) return jsonError('ID de usuario inválido', 400, request);
 
     // Eliminar de public.usuarios primero
     await fetch(
@@ -1034,6 +1042,7 @@ async function handleReciclarCotizacion(request, env) {
 
   const { cotizacionId, vendedorDestinoId } = body;
   if (!cotizacionId || !vendedorDestinoId) return jsonError('Faltan campos: cotizacionId, vendedorDestinoId', 400, request);
+  if (!isValidUuid(cotizacionId) || !isValidUuid(vendedorDestinoId)) return jsonError('IDs inválidos', 400, request);
 
   const supaHeaders = {
     apikey: env.SUPABASE_SERVICE_KEY,

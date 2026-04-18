@@ -28,7 +28,7 @@ export function fmtFechaLarga(f) {
   if (!f) return '—'
   const d = new Date(f)
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
-  return d.toLocaleDateString('es-VE', {
+  return d.toLocaleString('es-VE', {
     day: '2-digit', month: 'short', year: 'numeric',
     hour: '2-digit', minute: '2-digit'
   }) + ` (${tz})`
