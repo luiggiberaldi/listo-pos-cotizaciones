@@ -82,6 +82,7 @@ export function useCrearDespacho() {
       qc.invalidateQueries({ queryKey: DESPACHOS_KEY })
       qc.invalidateQueries({ queryKey: INVENTARIO_KEY })
       qc.invalidateQueries({ queryKey: COMISIONES_KEY })
+      qc.invalidateQueries({ queryKey: COTIZACIONES_KEY })
       showToast('Nota de despacho creada', 'success')
       notifyDespachoCreado(numeroCotizacion ?? '—', clienteNombre ?? 'cliente')
       sendPushNotification({

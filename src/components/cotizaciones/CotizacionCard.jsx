@@ -80,11 +80,12 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
   }
 
   const vendedorColor = cotizacion.vendedor?.color || '#64748b'
+  const despacho = cotizacion.despacho   // { id, estado } si existe
   const canEdit = esBorrador
   const canPdf = cotizacion.estado !== 'borrador' && cotizacion.estado !== 'anulada'
   const canWhatsApp = cotizacion.estado === 'enviada' || cotizacion.estado === 'aceptada'
   const canAcceptReject = esSupervisor && esEnviada
-  const canDespachar = esSupervisor && (cotizacion.estado === 'aceptada' || cotizacion.estado === 'enviada') && onDespachar
+  const canDespachar = esSupervisor && (cotizacion.estado === 'aceptada' || cotizacion.estado === 'enviada') && onDespachar && !despacho
   const canAnular = esBorrador || (esSupervisor && (cotizacion.estado === 'enviada' || cotizacion.estado === 'aceptada'))
   const canReciclar = esSupervisor && ['rechazada', 'anulada', 'vencida'].includes(cotizacion.estado)
   const hasSecondaryActions = canAcceptReject || canDespachar || canAnular || canReciclar
@@ -111,8 +112,21 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
           )}
         </div>
         {/* Estado badge adaptado */}
-        <div className="relative z-10 shrink-0">
+        <div className="relative z-10 shrink-0 flex flex-col items-end gap-1">
           <EstadoBadge estado={cotizacion.estado} />
+          {despacho && (
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+              despacho.estado === 'entregada' ? 'bg-emerald-500 text-white' :
+              despacho.estado === 'despachada' ? 'bg-blue-500 text-white' :
+              despacho.estado === 'anulada' ? 'bg-red-400 text-white' :
+              'bg-indigo-500 text-white'
+            }`}>
+              {despacho.estado === 'pendiente' ? '🚚 Despacho pendiente' :
+               despacho.estado === 'despachada' ? '🚚 En camino' :
+               despacho.estado === 'entregada' ? '✓ Entregada' :
+               despacho.estado === 'anulada' ? 'Despacho anulado' : despacho.estado}
+            </span>
+          )}
         </div>
       </div>
 
