@@ -178,12 +178,12 @@ function ItemCard({ item, idx, onChange, onDelete, tasa = 0 }) {
 }
 
 // ─── Buscador de productos ────────────────────────────────────────────────────
-const PRODUCTOS_POR_PAGINA = 12
+const PRODUCTOS_POR_PAGINA = 30
 
 function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
   const [texto, setTexto] = useState('')
   const [catActiva, setCatActiva] = useState('')
-  const [pagina, setPagina] = useState(0)
+  const [visibleCount, setVisibleCount] = useState(PRODUCTOS_POR_PAGINA)
   const { data: inventarioData, isLoading } = useInventario({})
   const todosProductos = inventarioData?.productos ?? inventarioData ?? []
   const { data: categorias = [] } = useCategorias()
@@ -197,11 +197,11 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
   })
 
   const idsAgregados = new Set(itemsAgregados.map(it => it.productoId))
-  const totalPags = Math.ceil(filtrados.length / PRODUCTOS_POR_PAGINA)
-  const paginados = filtrados.slice(pagina * PRODUCTOS_POR_PAGINA, (pagina + 1) * PRODUCTOS_POR_PAGINA)
+  const visibles = filtrados.slice(0, visibleCount)
+  const hasMore = filtrados.length > visibleCount
 
-  function cambiarTexto(val) { setTexto(val); setPagina(0) }
-  function cambiarCat(val)   { setCatActiva(val); setPagina(0) }
+  function cambiarTexto(val) { setTexto(val); setVisibleCount(PRODUCTOS_POR_PAGINA) }
+  function cambiarCat(val)   { setCatActiva(val); setVisibleCount(PRODUCTOS_POR_PAGINA) }
 
   return (
     <div className="space-y-3">
@@ -214,7 +214,7 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
           value={texto}
           onChange={e => cambiarTexto(e.target.value)}
           placeholder="Buscar por nombre o código..."
-          className="w-full pl-10 pr-10 py-3 text-sm border border-slate-200 rounded-xl bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400 transition-all"
+          className="w-full pl-10 pr-10 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 shadow-inner focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400 transition-all"
           autoFocus
         />
         {texto && (
@@ -253,25 +253,24 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
 
       {/* Cargando */}
       {isLoading && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
           {[1,2,3,4,5,6].map(i => (
             <div key={i} className="rounded-xl border border-slate-100 overflow-hidden">
-              <div className="h-16 bg-slate-100 animate-pulse" />
-              <div className="p-2.5 space-y-1.5">
+              <div className="h-10 bg-slate-100 animate-pulse" />
+              <div className="p-2 space-y-1">
                 <div className="h-2.5 bg-slate-100 rounded animate-pulse w-3/4" />
-                <div className="h-2 bg-slate-100 rounded animate-pulse w-1/2" />
-                <div className="h-4 bg-slate-100 rounded animate-pulse w-2/3" />
+                <div className="h-3 bg-slate-100 rounded animate-pulse w-1/2" />
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Grid de productos — ajustado para panel angosto */}
-      {!isLoading && paginados.length > 0 && (
+      {/* Grid de productos */}
+      {!isLoading && visibles.length > 0 && (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2">
-            {paginados.map(p => {
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+            {visibles.map(p => {
               const yaAgregado = idsAgregados.has(p.id)
               const sinStock   = p.stock_actual != null && p.stock_actual <= 0
               const sinPrecio  = !p.precio_usd || Number(p.precio_usd) <= 0
@@ -281,90 +280,62 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
                   onClick={() => !bloqueado && onAgregar(p)}
                   disabled={bloqueado}
                   title={sinPrecio ? 'Sin precio — no se puede cotizar' : sinStock ? 'Sin stock' : undefined}
-                  className={`relative bg-white rounded-xl border text-left transition-all flex flex-col overflow-hidden ${
+                  className={`relative bg-white rounded-xl border p-2 flex flex-col items-center text-center transition-all active:scale-95 hover:shadow-sm ${
                     bloqueado
                       ? 'opacity-40 cursor-not-allowed border-slate-100'
                       : yaAgregado
                         ? 'border-emerald-300 shadow-sm shadow-emerald-100/80'
-                        : 'border-slate-200 hover:border-primary/50 hover:shadow-md active:scale-[0.97]'
+                        : 'border-slate-200 hover:border-primary/50'
                   }`}>
 
-                  {/* Zona imagen */}
-                  <div className={`relative flex items-center justify-center h-14 transition-colors ${
-                    yaAgregado ? 'bg-emerald-50' : 'bg-slate-50 group-hover:bg-primary-light/30'
+                  {/* Icono / imagen */}
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-1.5 overflow-hidden ${
+                    yaAgregado ? 'bg-emerald-50' : 'bg-slate-50'
                   }`}>
                     {p.imagen_url
-                      ? <img src={p.imagen_url} alt="" className="h-full w-full object-cover" loading="lazy" />
-                      : <div className={`transition-colors ${yaAgregado ? 'text-emerald-400' : 'text-slate-300'}`}>
-                          {yaAgregado ? <CheckCircle size={20} /> : <Package size={20} />}
+                      ? <img src={p.imagen_url} alt="" className="h-full w-full object-contain" loading="lazy" />
+                      : <div className={yaAgregado ? 'text-emerald-400' : 'text-slate-300'}>
+                          {yaAgregado ? <CheckCircle size={18} /> : <Package size={18} />}
                         </div>
                     }
-                    {/* Badge stock */}
-                    {p.stock_actual != null && (
-                      <span className={`absolute top-1.5 right-1.5 text-[9px] font-black px-1.5 py-0.5 rounded-full leading-none ${
-                        sinStock
-                          ? 'bg-red-500 text-white'
-                          : p.stock_actual <= (p.stock_minimo ?? 0)
-                            ? 'bg-amber-400 text-white'
-                            : 'bg-emerald-500 text-white'
-                      }`}>
-                        {sinStock ? 'Ago.' : p.stock_actual}
-                      </span>
-                    )}
                   </div>
 
-                  {/* Info */}
-                  <div className="p-2.5 flex flex-col gap-0.5 flex-1">
-                    <p className={`text-[11px] font-bold line-clamp-2 leading-tight ${
-                      yaAgregado ? 'text-emerald-700' : 'text-slate-800'
-                    }`}>
-                      {p.nombre}
-                    </p>
-                    {p.codigo && (
-                      <p className="text-[10px] font-mono text-slate-400 truncate mt-auto pt-1">{p.codigo} · {p.unidad}</p>
-                    )}
-                    <p className={`text-sm font-black mt-1 ${yaAgregado ? 'text-emerald-600' : 'text-slate-800'}`}>
-                      {fmtUsd(p.precio_usd)}
-                    </p>
-                    {tasa > 0 && (
-                      <p className="text-[10px] text-slate-400 -mt-0.5">{fmtBs(usdToBs(p.precio_usd, tasa))}</p>
-                    )}
-                  </div>
+                  {/* Nombre */}
+                  <p className={`text-[11px] font-bold leading-tight line-clamp-2 mb-1 ${
+                    yaAgregado ? 'text-emerald-700' : 'text-slate-700'
+                  }`}>
+                    {p.nombre}
+                  </p>
+
+                  {/* Precio */}
+                  <p className={`text-[11px] font-black ${yaAgregado ? 'text-emerald-600' : 'text-slate-800'}`}>
+                    {fmtUsd(p.precio_usd)}
+                  </p>
+                  {tasa > 0 && (
+                    <p className="text-[9px] text-slate-400 leading-tight">{fmtBs(usdToBs(p.precio_usd, tasa))}</p>
+                  )}
+
+                  {/* Stock badge */}
+                  <p className="text-[9px] text-slate-400 font-medium mt-0.5">
+                    {sinStock ? 'Agotado' : `${p.stock_actual ?? 0} disp.`}
+                  </p>
                 </button>
               )
             })}
           </div>
 
-          {/* Paginación + contador */}
-          <div className="flex items-center justify-between pt-1">
-            <p className="text-[11px] text-slate-400">
+          {/* Contador + Load More */}
+          <div className="pt-1 space-y-2">
+            <p className="text-[11px] text-slate-400 text-center">
               {filtrados.length} producto{filtrados.length !== 1 ? 's' : ''}
-              {totalPags > 1 && ` · pág. ${pagina + 1}/${totalPags}`}
             </p>
-            {totalPags > 1 && (
-              <div className="flex items-center gap-1">
-                <button type="button" onClick={() => setPagina(p => p - 1)} disabled={pagina === 0}
-                  className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30 transition-colors">
-                  <ArrowLeft size={12} />
-                </button>
-                {Array.from({ length: Math.min(totalPags, 5) }).map((_, i) => {
-                  let num
-                  if (totalPags <= 5) num = i
-                  else if (pagina < 3) num = i
-                  else if (pagina > totalPags - 4) num = totalPags - 5 + i
-                  else num = pagina - 2 + i
-                  return (
-                    <button key={num} type="button" onClick={() => setPagina(num)}
-                      className={`w-7 h-7 text-xs font-bold rounded-lg transition-all ${
-                        num === pagina ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100'
-                      }`}>
-                      {num + 1}
-                    </button>
-                  )
-                })}
-                <button type="button" onClick={() => setPagina(p => p + 1)} disabled={pagina >= totalPags - 1}
-                  className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30 transition-colors">
-                  <ArrowRight size={12} />
+            {hasMore && (
+              <div className="flex justify-center">
+                <button type="button"
+                  onClick={() => setVisibleCount(prev => prev + PRODUCTOS_POR_PAGINA)}
+                  className="flex items-center gap-1.5 px-5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-500 hover:border-primary hover:text-primary transition-all active:scale-95 shadow-sm">
+                  <ChevronDown size={14} />
+                  Cargar más ({filtrados.length - visibleCount} restantes)
                 </button>
               </div>
             )}
@@ -713,165 +684,172 @@ function SectionH3({ icon: Icon, children }) {
   )
 }
 // ─── Panel de cesta (lado derecho del paso 2) ────────────────────────────────
+// Inspirado en PreciosAlDia: FAB + bottom sheet en móvil, panel lateral en desktop
 function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente, onAnterior }) {
-  const [expandido, setExpandido] = useState(false)
+  const [sheetOpen, setSheetOpen] = useState(false)
 
-  // En móvil: barra sticky + drawer expandible
-  // En desktop (lg+): panel completo lateral
+  const totalItems = items.reduce((s, it) => s + it.cantidad, 0)
+
+  // Contenido compartido de la lista de items (usado en bottom sheet y desktop)
+  const listaItems = (
+    <div className="divide-y divide-slate-50">
+      {items.length === 0 && (
+        <div className="p-8 text-center text-slate-400">
+          <ShoppingCart size={36} className="mx-auto mb-3 opacity-30" />
+          <p className="text-sm font-bold">Cesta vacía</p>
+          <p className="text-xs text-slate-300 mt-1">Selecciona productos del catálogo</p>
+        </div>
+      )}
+      {items.map((it, idx) => {
+        const linea = mulR(it.cantidad, mulR(it.precioUnitUsd, 1 - it.descuentoPct / 100))
+        return (
+          <div key={it._key} className="px-3 sm:px-4 py-2.5 flex items-center gap-2 sm:gap-3 group relative">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-slate-50 flex items-center justify-center shrink-0">
+              <Package size={16} className="text-slate-300" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs sm:text-sm font-bold text-slate-700 leading-tight truncate">{it.nombreSnap}</p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="text-[10px] sm:text-[11px] font-bold text-emerald-600 bg-emerald-50 px-1 rounded">{fmtUsd(it.precioUnitUsd)}</span>
+                <span className="text-[10px] text-slate-400">{it.unidadSnap}</span>
+                {it.descuentoPct > 0 && <span className="text-[10px] text-amber-500 font-semibold">-{it.descuentoPct}%</span>}
+              </div>
+            </div>
+            <div className="flex flex-col items-end gap-1.5 shrink-0">
+              <span className="text-xs sm:text-sm font-black text-slate-800">{fmtUsd(linea)}</span>
+              <div className="flex items-center bg-slate-50 rounded-lg p-0.5 border border-slate-100">
+                <button type="button"
+                  onClick={() => it.cantidad <= 1 ? onEliminar(idx) : onCambiar(idx, 'cantidad', Math.max(0.01, it.cantidad - 1))}
+                  className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors rounded-l-md active:bg-slate-200">
+                  <Minus size={12} strokeWidth={3} />
+                </button>
+                <input
+                  type="number" min="0.01" step="0.01"
+                  value={it.cantidad}
+                  onChange={e => { const v = parseFloat(e.target.value); if (!isNaN(v) && v > 0) onCambiar(idx, 'cantidad', v) }}
+                  className="w-10 sm:w-12 h-7 text-center text-xs font-black text-slate-700 bg-white border-x border-slate-100 outline-none"
+                />
+                <button type="button"
+                  onClick={() => onCambiar(idx, 'cantidad', it.cantidad + 1)}
+                  className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-emerald-500 transition-colors rounded-r-md active:bg-slate-200">
+                  <Plus size={12} strokeWidth={3} />
+                </button>
+              </div>
+            </div>
+            <button type="button" onClick={() => onEliminar(idx)}
+              className="absolute -top-1 -right-1 sm:top-1 sm:right-1 p-1 bg-red-50 text-red-500 sm:bg-transparent sm:text-slate-300 sm:hover:text-red-500 opacity-80 sm:opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
+              <X size={12} />
+            </button>
+          </div>
+        )
+      })}
+    </div>
+  )
+
+  // Footer compartido (totales + botones)
+  const footerContent = (
+    <div className="border-t border-slate-200 p-3 sm:p-4 space-y-2 sm:space-y-3 bg-white">
+      {items.length > 0 && (
+        <div className="flex justify-between items-end px-1">
+          <div>
+            <span className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider">Subtotal</span>
+            {tasa > 0 && <p className="text-[11px] text-slate-400 mt-0.5">{fmtBs(usdToBs(subtotal, tasa))}</p>}
+          </div>
+          <span className="text-xl sm:text-2xl font-black text-slate-800">{fmtUsd(subtotal)}</span>
+        </div>
+      )}
+      <button type="button" onClick={onSiguiente} disabled={items.length === 0}
+        className="w-full flex items-center justify-center gap-2 py-3 sm:py-3.5 text-white font-bold text-sm sm:text-base rounded-xl sm:rounded-2xl transition-all disabled:opacity-40 active:scale-[0.98] shadow-lg"
+        style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
+        <ArrowRight size={16} /> Continuar al resumen
+      </button>
+      <button type="button" onClick={onAnterior}
+        className="w-full py-2 sm:py-2.5 border border-slate-200 text-slate-500 font-semibold text-sm rounded-xl hover:bg-slate-50 transition-colors">
+        Volver
+      </button>
+    </div>
+  )
+
   return (
     <>
-      {/* ── Móvil: barra inferior sticky ── */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-slate-200 shadow-lg">
-        {/* Drawer expandido */}
-        {expandido && (
-          <div className="border-b border-slate-100 max-h-[50vh] overflow-y-auto divide-y divide-slate-50">
-            {items.length === 0 && (
-              <p className="text-xs text-slate-400 text-center py-4">Sin productos todavía</p>
-            )}
-            {items.map((it, idx) => {
-              const linea = mulR(it.cantidad, mulR(it.precioUnitUsd, 1 - it.descuentoPct / 100))
-              return (
-                <div key={it._key} className="px-4 py-2.5 flex items-center gap-2">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-slate-700 truncate">{it.nombreSnap}</p>
-                    <p className="text-[11px] text-slate-400">{fmtUsd(it.precioUnitUsd)} · {it.unidadSnap}</p>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button type="button"
-                      onClick={() => it.cantidad <= 1 ? onEliminar(idx) : onCambiar(idx, 'cantidad', it.cantidad - 1)}
-                      className="w-6 h-6 rounded-full bg-slate-100 hover:bg-red-100 text-slate-500 hover:text-red-500 flex items-center justify-center transition-colors">
-                      <Minus size={10} />
-                    </button>
-                    <span className="w-6 text-center text-xs font-bold">{it.cantidad}</span>
-                    <button type="button"
-                      onClick={() => onCambiar(idx, 'cantidad', it.cantidad + 1)}
-                      className="w-6 h-6 rounded-full bg-slate-100 hover:bg-emerald-100 text-slate-500 hover:text-emerald-600 flex items-center justify-center transition-colors">
-                      <Plus size={10} />
-                    </button>
-                  </div>
-                  <span className="text-xs font-bold text-slate-800 w-14 text-right shrink-0">{fmtUsd(linea)}</span>
-                  <button type="button" onClick={() => onEliminar(idx)} className="text-slate-300 hover:text-red-400 transition-colors">
-                    <X size={12} />
+      {/* ── Móvil: FAB flotante + Bottom Sheet (estilo PreciosAlDia) ── */}
+      <div className="lg:hidden">
+        {/* FAB: solo visible cuando hay items y el sheet está cerrado */}
+        {items.length > 0 && !sheetOpen && (
+          <button type="button"
+            onClick={() => setSheetOpen(true)}
+            className="fixed bottom-4 left-3 right-3 z-30 p-3.5 rounded-2xl shadow-xl flex items-center justify-between active:scale-[0.97] transition-all"
+            style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)', boxShadow: '0 8px 30px rgba(27,54,93,0.35)' }}>
+            <div className="flex items-center gap-3">
+              <div className="bg-white/20 p-2 rounded-xl">
+                <ShoppingCart size={18} className="text-white" />
+              </div>
+              <div className="text-left">
+                <div className="text-[10px] font-bold text-white/70 uppercase tracking-wider">Ver Cesta</div>
+                <div className="text-white font-black text-sm">{items.length} producto{items.length !== 1 ? 's' : ''}</div>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-xl font-black text-white leading-none">{fmtUsd(subtotal)}</div>
+              {tasa > 0 && <div className="text-[10px] font-bold text-white/70 mt-0.5">{fmtBs(usdToBs(subtotal, tasa))}</div>}
+            </div>
+          </button>
+        )}
+
+        {/* Bottom Sheet Overlay */}
+        {sheetOpen && (
+          <div className="fixed inset-0 z-50 flex flex-col justify-end bg-slate-900/60 backdrop-blur-sm"
+            onClick={() => setSheetOpen(false)}>
+            <div className="bg-white w-full rounded-t-3xl shadow-2xl flex flex-col max-h-[85vh]"
+              onClick={e => e.stopPropagation()}>
+              {/* Handle */}
+              <div className="shrink-0 flex justify-center pt-3 pb-2" onClick={() => setSheetOpen(false)}>
+                <div className="w-12 h-1.5 bg-slate-300 rounded-full cursor-pointer" />
+              </div>
+              {/* Header */}
+              <div className="shrink-0 px-4 pb-3 flex items-center justify-between border-b border-slate-200">
+                <h3 className="font-black text-slate-800 text-lg flex items-center gap-2">
+                  <ShoppingCart size={18} className="text-primary" /> Cesta
+                </h3>
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${items.length > 0 ? 'bg-primary text-white' : 'bg-slate-100 text-slate-400'}`}>
+                    {items.length} items
+                  </span>
+                  <button type="button" onClick={() => setSheetOpen(false)} className="p-1.5 text-slate-400 hover:text-slate-600 transition-colors">
+                    <X size={18} />
                   </button>
                 </div>
-              )
-            })}
+              </div>
+              {/* Items scrollable */}
+              <div className="flex-1 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
+                {listaItems}
+              </div>
+              {/* Footer */}
+              {footerContent}
+            </div>
           </div>
         )}
-        {/* Barra compacta */}
-        <div className="px-4 py-3 flex items-center gap-3">
-          <button type="button" onClick={() => setExpandido(v => !v)}
-            className="flex items-center gap-2 flex-1 min-w-0">
-            <ShoppingCart size={16} className="text-primary shrink-0" />
-            <span className="text-sm font-bold text-slate-700">
-              {items.length} {items.length === 1 ? 'item' : 'items'}
-            </span>
-            {items.length > 0 && (
-              <span className="text-sm font-black text-slate-800 ml-1">{fmtUsd(subtotal)}</span>
-            )}
-            <ChevronDown size={14} className={`text-slate-400 ml-auto transition-transform ${expandido ? 'rotate-180' : ''}`} />
-          </button>
-          <button type="button" onClick={onSiguiente} disabled={items.length === 0}
-            className="flex items-center gap-1.5 px-4 py-2 text-white font-bold text-sm rounded-xl disabled:opacity-40 shrink-0"
-            style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
-            Continuar <ArrowRight size={14} />
-          </button>
-        </div>
       </div>
-      {/* Spacer para que el contenido no quede detrás de la barra */}
-      <div className="lg:hidden h-24" />
 
       {/* ── Desktop: panel lateral completo ── */}
       <div className="hidden lg:flex bg-white rounded-2xl border border-slate-200 flex-col overflow-hidden">
         {/* Header */}
-        <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-          <span className="font-bold text-slate-700 text-sm flex items-center gap-2">
+        <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50 rounded-t-2xl">
+          <span className="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-2">
             <ShoppingCart size={14} className="text-primary" /> Cesta
           </span>
           <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${items.length > 0 ? 'bg-primary text-white' : 'bg-slate-100 text-slate-400'}`}>
-            {items.length} {items.length === 1 ? 'item' : 'items'}
+            {items.length} items
           </span>
         </div>
 
         {/* Lista de items */}
-        <div className="flex-1 overflow-y-auto divide-y divide-slate-50" style={{ maxHeight: 'calc(100vh - 360px)', minHeight: '120px' }}>
-          {items.length === 0 && (
-            <div className="p-8 text-center text-slate-400">
-              <ShoppingCart size={28} className="mx-auto mb-2 opacity-20" />
-              <p className="text-xs">Sin productos todavía</p>
-              <p className="text-[11px] text-slate-300 mt-1">Haz clic en un producto del catálogo</p>
-            </div>
-          )}
-          {items.map((it, idx) => {
-            const linea = mulR(it.cantidad, mulR(it.precioUnitUsd, 1 - it.descuentoPct / 100))
-            return (
-              <div key={it._key} className="px-3 py-2.5 flex items-start gap-2 hover:bg-slate-50/50 transition-colors group">
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-slate-700 leading-snug line-clamp-2">{it.nombreSnap}</p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">{fmtUsd(it.precioUnitUsd)} · {it.unidadSnap}</p>
-                  {it.descuentoPct > 0 && (
-                    <p className="text-[10px] text-amber-500 font-semibold mt-0.5">Desc. {it.descuentoPct}%</p>
-                  )}
-                </div>
-                <div className="flex items-center gap-1 shrink-0 mt-0.5">
-                  <button type="button"
-                    onClick={() => it.cantidad <= 1 ? onEliminar(idx) : onCambiar(idx, 'cantidad', Math.max(0.01, it.cantidad - 1))}
-                    className="w-5 h-5 rounded-full bg-slate-100 hover:bg-red-100 text-slate-500 hover:text-red-500 flex items-center justify-center transition-colors">
-                    <Minus size={9} />
-                  </button>
-                  <input
-                    type="number" min="0.01" step="0.01"
-                    value={it.cantidad}
-                    onChange={e => { const v = parseFloat(e.target.value); if (!isNaN(v) && v > 0) onCambiar(idx, 'cantidad', v) }}
-                    className="w-10 text-center text-xs font-bold border border-slate-200 rounded-lg py-0.5 focus:outline-none focus:ring-1 focus:ring-primary-focus bg-white"
-                  />
-                  <button type="button"
-                    onClick={() => onCambiar(idx, 'cantidad', it.cantidad + 1)}
-                    className="w-5 h-5 rounded-full bg-slate-100 hover:bg-emerald-100 text-slate-500 hover:text-emerald-600 flex items-center justify-center transition-colors">
-                    <Plus size={9} />
-                  </button>
-                </div>
-                <div className="flex flex-col items-end gap-1 shrink-0">
-                  <span className="text-xs font-bold text-slate-800">{fmtUsd(linea)}</span>
-                  <button type="button" onClick={() => onEliminar(idx)}
-                    className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-all">
-                    <X size={11} />
-                  </button>
-                </div>
-              </div>
-            )
-          })}
+        <div className="flex-1 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 360px)', minHeight: '120px' }}>
+          {listaItems}
         </div>
 
-        {/* Totales */}
-        {items.length > 0 && (
-          <div className="border-t border-slate-100 px-4 py-3 space-y-1.5">
-            <div className="flex justify-between items-baseline">
-              <span className="text-xs text-slate-500">Subtotal</span>
-              <span className="text-base font-black text-slate-800">{fmtUsd(subtotal)}</span>
-            </div>
-            {tasa > 0 && (
-              <div className="flex justify-between items-baseline">
-                <span className="text-[11px] text-slate-400">En Bs</span>
-                <span className="text-xs text-slate-400">{fmtBs(usdToBs(subtotal, tasa))}</span>
-              </div>
-            )}
-            <p className="text-[10px] text-slate-300">* Descuentos y envío en el siguiente paso</p>
-          </div>
-        )}
-
-        {/* Botones */}
-        <div className="border-t border-slate-100 p-3 space-y-2">
-          <button type="button" onClick={onSiguiente} disabled={items.length === 0}
-            className="w-full flex items-center justify-center gap-2 py-2.5 text-white font-bold text-sm rounded-xl transition-all disabled:opacity-40 active:scale-[0.98]"
-            style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
-            Continuar al resumen <ArrowRight size={14} />
-          </button>
-          <button type="button" onClick={onAnterior}
-            className="w-full py-2 border border-slate-200 text-slate-500 font-semibold text-sm rounded-xl hover:bg-slate-50 transition-colors">
-            Volver
-          </button>
-        </div>
+        {/* Footer */}
+        {footerContent}
       </div>
     </>
   )
@@ -1144,10 +1122,10 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
   const inputCls = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400'
 
   return (
-    <div className="min-h-full bg-slate-50">
+    <div className={`bg-slate-50 ${paso === 2 ? 'h-full flex flex-col' : 'min-h-full'}`}>
 
       {/* ── Header ────────────────────────────────────────────────────────── */}
-      <div className="bg-white border-b border-slate-200 px-3 sm:px-4 md:px-6 py-2.5 sm:py-3 md:py-4 sticky top-0 z-10">
+      <div className="bg-white border-b border-slate-200 px-3 sm:px-4 md:px-6 py-2.5 sm:py-3 md:py-4 sticky top-0 z-10 shrink-0">
         <div className="flex items-center justify-between gap-2 max-w-6xl mx-auto">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             {paso < 4 && (
@@ -1171,7 +1149,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
       </div>
 
       {/* ── Contenido por paso ─────────────────────────────────────────── */}
-      <div className="p-3 sm:p-4 md:p-6 lg:p-8 max-w-6xl mx-auto space-y-3 sm:space-y-4 md:space-y-6">
+      <div className={`p-3 sm:p-4 md:p-6 lg:p-8 max-w-6xl mx-auto w-full ${paso === 2 ? 'flex-1 min-h-0 flex flex-col' : 'space-y-3 sm:space-y-4 md:space-y-6'}`}>
 
         {/* Error general */}
         {errorGeneral && (
@@ -1304,23 +1282,27 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
         {/* PASO 2: Agregar productos                                      */}
         {/* ═══════════════════════════════════════════════════════════════ */}
         {paso === 2 && (
-          <div className="space-y-4">
+          <div className="flex-1 min-h-0 flex flex-col">
             {/* Mini resumen del cliente */}
-            <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 flex items-center gap-2 text-sm">
+            <div className="shrink-0 bg-white rounded-xl border border-slate-200 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center gap-2 text-sm mb-3 sm:mb-4">
               <User size={14} className="text-primary shrink-0" />
-              <span className="font-medium text-slate-700">{clienteSeleccionado?.nombre ?? 'Sin cliente'}</span>
+              <span className="font-medium text-slate-700 truncate">{clienteSeleccionado?.nombre ?? 'Sin cliente'}</span>
               {clienteSeleccionado?.tipo_cliente && (
-                <span className="text-xs text-slate-400 capitalize">· {clienteSeleccionado.tipo_cliente}</span>
+                <span className="text-xs text-slate-400 capitalize hidden xs:inline">· {clienteSeleccionado.tipo_cliente}</span>
               )}
             </div>
 
             {/* Split: catálogo izquierda + cesta derecha */}
-            <div className="flex flex-col lg:flex-row gap-4 items-start">
+            <div className="flex-1 min-h-0 flex flex-col lg:flex-row lg:gap-4">
 
               {/* ── Catálogo de productos ── */}
-              <div className="flex-1 min-w-0 bg-white rounded-2xl border border-slate-200 p-3 sm:p-5 space-y-3 sm:space-y-4">
-                <SectionH3 icon={Package}>Agregar productos</SectionH3>
-                <BuscadorProductos onAgregar={agregarProducto} itemsAgregados={items} tasa={tasaHook.tasaEfectiva} />
+              <div className="flex-1 min-h-0 min-w-0 flex flex-col bg-white rounded-2xl border border-slate-200 p-3 sm:p-5 overflow-hidden">
+                <div className="shrink-0 mb-3 sm:mb-4">
+                  <SectionH3 icon={Package}>Agregar productos</SectionH3>
+                </div>
+                <div className="flex-1 min-h-0 overflow-y-auto pb-20 lg:pb-0">
+                  <BuscadorProductos onAgregar={agregarProducto} itemsAgregados={items} tasa={tasaHook.tasaEfectiva} />
+                </div>
               </div>
 
               {/* ── Cesta flotante ── */}
