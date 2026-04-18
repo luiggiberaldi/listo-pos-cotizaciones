@@ -215,7 +215,7 @@ export default function ConfiguracionView() {
                 <SectionHeader icon={Building2}>Identidad del negocio</SectionHeader>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5 sm:col-span-2">
-                    <label className="text-sm font-medium text-slate-700">Nombre del negocio *</label>
+                    <label className="text-sm font-medium text-slate-700">Nombre del negocio <span className="text-red-500">*</span></label>
                     <input value={campos.nombre_negocio} onChange={e => cambiar('nombre_negocio', e.target.value)}
                       placeholder="Ej: Ferretería El Tornillo C.A." className={inputCls} disabled={isLoading || cargando} />
                   </div>

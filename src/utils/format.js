@@ -24,6 +24,16 @@ export function fmtFecha(f) {
   return new Date(f).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
+export function fmtFechaLarga(f) {
+  if (!f) return '—'
+  const d = new Date(f)
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+  return d.toLocaleDateString('es-VE', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  }) + ` (${tz})`
+}
+
 // Sanitiza una cadena de búsqueda para uso seguro en filtros PostgREST .or()
 export function sanitizePostgrestSearch(str) {
   if (!str) return ''

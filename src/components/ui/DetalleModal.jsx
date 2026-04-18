@@ -1,7 +1,7 @@
 // src/components/ui/DetalleModal.jsx
 // Modal genérico de detalle para cotizaciones y despachos
 import { useEffect, useState } from 'react'
-import { X, Package, Loader2 } from 'lucide-react'
+import { X, Package, Loader2, Calendar, Clock, User, FileText } from 'lucide-react'
 import supabase from '../../services/supabase/client'
 import { fmtUsdSimple as fmtUsd, fmtFecha } from '../../utils/format'
 
@@ -13,19 +13,43 @@ function ItemRow({ item, tasa = 0 }) {
 
   return (
     <tr className="border-b border-slate-100 last:border-0">
-      <td className="py-2.5 pr-3">
+      <td className="py-3 pr-3">
         <p className="text-sm font-medium text-slate-800 leading-tight">{item.nombre_snap}</p>
         {item.codigo_snap && <p className="text-[11px] text-slate-400 font-mono mt-0.5">{item.codigo_snap}</p>}
       </td>
-      <td className="py-2.5 px-2 text-center text-sm text-slate-600 whitespace-nowrap">
+      <td className="py-3 px-3 text-center text-sm text-slate-600 whitespace-nowrap">
         {cant} <span className="text-slate-400 text-[11px]">{item.unidad_snap || 'und'}</span>
       </td>
-      <td className="py-2.5 px-2 text-right text-sm text-slate-600 whitespace-nowrap">{fmtUsd(precio)}</td>
-      <td className="py-2.5 px-2 text-center text-sm text-slate-500 whitespace-nowrap">
+      <td className="py-3 px-3 text-right text-sm text-slate-600 whitespace-nowrap">{fmtUsd(precio)}</td>
+      <td className="py-3 px-3 text-center text-sm text-slate-500 whitespace-nowrap hidden sm:table-cell">
         {desc > 0 ? `${desc}%` : <span className="text-slate-300">—</span>}
       </td>
-      <td className="py-2.5 pl-2 text-right text-sm font-bold text-slate-800 whitespace-nowrap">{fmtUsd(total)}</td>
+      <td className="py-3 pl-3 text-right text-sm font-bold text-slate-800 whitespace-nowrap">{fmtUsd(total)}</td>
     </tr>
+  )
+}
+
+function ItemCard({ item }) {
+  const cant     = Number(item.cantidad || 1)
+  const precio   = Number(item.precio_unit_usd || 0)
+  const desc     = Number(item.descuento_pct || 0)
+  const total    = Number(item.total_linea_usd || cant * precio * (1 - desc / 100))
+
+  return (
+    <div className="py-3 border-b border-slate-100 last:border-0">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-slate-800 leading-tight">{item.nombre_snap}</p>
+          {item.codigo_snap && <p className="text-[11px] text-slate-400 font-mono mt-0.5">{item.codigo_snap}</p>}
+        </div>
+        <span className="text-sm font-bold text-slate-800 shrink-0">{fmtUsd(total)}</span>
+      </div>
+      <div className="flex gap-3 mt-1 text-xs text-slate-500">
+        <span>{cant} {item.unidad_snap || 'und'}</span>
+        <span>× {fmtUsd(precio)}</span>
+        {desc > 0 && <span className="text-emerald-600">-{desc}%</span>}
+      </div>
+    </div>
   )
 }
 
@@ -69,7 +93,7 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] sm:max-h-[90vh] flex flex-col overflow-hidden pb-[env(safe-area-inset-bottom)]">
 
         {/* Header */}
         <div className="relative h-16 shrink-0 flex items-end justify-between px-5 pb-3"
@@ -91,15 +115,15 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
 
         {/* Meta info */}
         <div className="px-5 py-3 border-b border-slate-100 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500">
-          <span>📅 Creada: <strong className="text-slate-700">{fmtFecha(registro.creado_en)}</strong></span>
+          <span className="inline-flex items-center gap-1"><Calendar size={12} className="text-slate-400" /> Creada: <strong className="text-slate-700">{fmtFecha(registro.creado_en)}</strong></span>
           {registro.valida_hasta && (
-            <span>⏳ Válida hasta: <strong className={new Date(registro.valida_hasta) < new Date() ? 'text-red-500' : 'text-slate-700'}>{fmtFecha(registro.valida_hasta)}</strong></span>
+            <span className="inline-flex items-center gap-1"><Clock size={12} className="text-slate-400" /> Válida hasta: <strong className={new Date(registro.valida_hasta) < new Date() ? 'text-red-500' : 'text-slate-700'}>{fmtFecha(registro.valida_hasta)}</strong></span>
           )}
           {registro.vendedor?.nombre && (
-            <span>👤 Vendedor: <strong style={{ color: vendedorColor }}>{registro.vendedor.nombre}</strong></span>
+            <span className="inline-flex items-center gap-1"><User size={12} className="text-slate-400" /> Vendedor: <strong style={{ color: vendedorColor }}>{registro.vendedor.nombre}</strong></span>
           )}
           {!esCot && registro.cotizacion && (
-            <span>📄 Ref: <strong className="font-mono text-slate-700">
+            <span className="inline-flex items-center gap-1"><FileText size={12} className="text-slate-400" /> Ref: <strong className="font-mono text-slate-700">
               COT-{String(registro.cotizacion.numero).padStart(5, '0')}{registro.cotizacion.version > 1 ? ` Rev.${registro.cotizacion.version}` : ''}
             </strong></span>
           )}
@@ -118,22 +142,29 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
           ) : items.length === 0 ? (
             <p className="text-sm text-slate-400 text-center py-8">Sin productos registrados</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b-2 border-slate-200 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                    <th className="pb-2 text-left pr-3">Producto</th>
-                    <th className="pb-2 text-center px-2">Cant.</th>
-                    <th className="pb-2 text-right px-2">Precio</th>
-                    <th className="pb-2 text-center px-2">Desc.</th>
-                    <th className="pb-2 text-right pl-2">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map(it => <ItemRow key={it.id} item={it} tasa={tasa} />)}
-                </tbody>
-              </table>
-            </div>
+            <>
+              {/* Desktop table */}
+              <div className="overflow-x-auto hidden sm:block">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b-2 border-slate-200 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                      <th className="pb-2 text-left pr-3">Producto</th>
+                      <th className="pb-2 text-center px-3">Cant.</th>
+                      <th className="pb-2 text-right px-3">Precio</th>
+                      <th className="pb-2 text-center px-3">Desc.</th>
+                      <th className="pb-2 text-right pl-3">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map(it => <ItemRow key={it.id} item={it} tasa={tasa} />)}
+                  </tbody>
+                </table>
+              </div>
+              {/* Mobile card layout */}
+              <div className="sm:hidden">
+                {items.map(it => <ItemCard key={it.id} item={it} />)}
+              </div>
+            </>
           )}
 
           {/* Notas */}

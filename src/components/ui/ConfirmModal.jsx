@@ -71,7 +71,7 @@ export default function ConfirmModal({
 
   return (
     <div
-      className="fixed inset-0 z-[200] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+      className="fixed inset-0 z-[200] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200 pb-[env(safe-area-inset-bottom)]"
       onClick={onClose}>
       <div
         className="relative bg-white rounded-[1.5rem] max-w-sm w-full shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"

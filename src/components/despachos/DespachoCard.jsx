@@ -52,6 +52,7 @@ export default function DespachoCard({ despacho, onCambiarEstado, onAnular, onRe
 
       {/* ── Header strip con color del vendedor ── */}
       <div className="relative h-16 shrink-0 flex items-end justify-between px-4 pb-2"
+        title={despacho.vendedor?.nombre ? `Vendedor: ${despacho.vendedor.nombre}` : undefined}
         style={{ background: `linear-gradient(135deg, ${vendedorColor}ee 0%, ${vendedorColor}99 100%)` }}>
         {/* Patrón de puntos */}
         <div className="absolute inset-0 opacity-10"
@@ -116,41 +117,45 @@ export default function DespachoCard({ despacho, onCambiarEstado, onAnular, onRe
       )}
 
       {/* ── Acciones ── */}
-      <div className="mt-auto border-t border-slate-100 px-3 py-2 flex items-center gap-1">
+      <div className="mt-auto border-t border-slate-100 px-3 py-2 flex items-center gap-2 sm:gap-1">
         {/* Ver detalle — siempre visible */}
         <button onClick={() => setShowDetalle(true)}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-primary hover:bg-primary-light transition-colors">
-          <Eye size={13} />Ver
+          className="flex items-center gap-1.5 px-3 py-2.5 sm:px-2.5 sm:py-1.5 rounded-lg text-xs font-medium text-primary hover:bg-primary-light transition-colors">
+          <Eye size={15} className="sm:w-[13px] sm:h-[13px]" />Ver
         </button>
         {canDespachar && (
           <button onClick={() => setAccionPendiente({ id: despacho.id, estado: 'despachada', label: 'Despachar' })}
             disabled={estadoCambiando}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-50">
-            {estadoCambiando ? <Loader2 size={13} className="animate-spin" /> : <Truck size={13} />}Despachar
+            title={estadoCambiando ? 'Procesando cambio...' : undefined}
+            className="flex items-center gap-1.5 px-3 py-2.5 sm:px-2.5 sm:py-1.5 rounded-lg text-xs font-medium text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-50">
+            {estadoCambiando ? <Loader2 size={15} className="animate-spin sm:w-[13px] sm:h-[13px]" /> : <Truck size={15} className="sm:w-[13px] sm:h-[13px]" />}Despachar
           </button>
         )}
         {canEntregada && (
           <button onClick={() => setAccionPendiente({ id: despacho.id, estado: 'entregada', label: 'Entregada' })}
             disabled={estadoCambiando}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-50">
-            {estadoCambiando ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle size={13} />}Entregada
+            title={estadoCambiando ? 'Procesando cambio...' : undefined}
+            className="flex items-center gap-1.5 px-3 py-2.5 sm:px-2.5 sm:py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-50">
+            {estadoCambiando ? <Loader2 size={15} className="animate-spin sm:w-[13px] sm:h-[13px]" /> : <CheckCircle size={15} className="sm:w-[13px] sm:h-[13px]" />}Entregada
           </button>
         )}
         {canReciclar && (
           <button onClick={() => onReciclar(despacho)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 transition-colors">
-            <RefreshCcw size={13} />Reciclar
+            title="Crear nueva cotización basada en este despacho"
+            className="flex items-center gap-1.5 px-3 py-2.5 sm:px-2.5 sm:py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 transition-colors">
+            <RefreshCcw size={15} className="sm:w-[13px] sm:h-[13px]" />Reutilizar
           </button>
         )}
         <div className="ml-auto flex items-center gap-1">
           <button onClick={descargarPDF} disabled={pdfLoading}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-50">
-            {pdfLoading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+            title={pdfLoading ? 'Generando PDF...' : 'Descargar PDF'}
+            className="p-2.5 sm:p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-50">
+            {pdfLoading ? <Loader2 size={15} className="animate-spin sm:w-[14px] sm:h-[14px]" /> : <Download size={15} className="sm:w-[14px] sm:h-[14px]" />}
           </button>
           {canAnular && (
             <button onClick={() => onAnular(despacho)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 transition-colors">
-              <Ban size={13} />Anular
+              className="flex items-center gap-1.5 px-3 py-2.5 sm:px-2.5 sm:py-1.5 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 transition-colors">
+              <Ban size={15} className="sm:w-[13px] sm:h-[13px]" />Anular
             </button>
           )}
         </div>

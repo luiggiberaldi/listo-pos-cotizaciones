@@ -95,6 +95,7 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
 
       {/* ── Header strip con color del vendedor ── */}
       <div className="relative h-16 shrink-0 flex items-end justify-between px-4 pb-2"
+        title={cotizacion.vendedor?.nombre ? `Vendedor: ${cotizacion.vendedor.nombre}` : undefined}
         style={{ background: `linear-gradient(135deg, ${vendedorColor}ee 0%, ${vendedorColor}99 100%)` }}>
         {/* Patrón de puntos */}
         <div className="absolute inset-0 opacity-10"
@@ -171,37 +172,39 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
       )}
 
       {/* ── Acciones principales ── */}
-      <div className="mt-auto border-t border-slate-100 px-2 sm:px-3 py-2 flex items-center gap-0.5 sm:gap-1 flex-wrap">
+      <div className="mt-auto border-t border-slate-100 px-2 sm:px-3 py-2 flex items-center gap-1.5 sm:gap-1 flex-wrap">
         {/* Ver detalle — siempre visible */}
         <button onClick={() => setShowDetalle(true)}
-          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-primary hover:bg-primary-light transition-colors">
-          <Eye size={13} /><span className="hidden xs:inline">Ver</span>
+          className="flex items-center gap-1 px-3 py-2.5 sm:px-2 sm:py-1.5 rounded-lg text-xs font-medium text-primary hover:bg-primary-light transition-colors">
+          <Eye size={15} className="sm:w-[13px] sm:h-[13px]" /><span className="hidden xs:inline">Ver</span>
         </button>
         {canEdit && (
           <button onClick={() => onEditar(cotizacion)}
-            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
-            <Pencil size={13} /><span className="hidden xs:inline">Editar</span>
+            className="flex items-center gap-1 px-3 py-2.5 sm:px-2 sm:py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
+            <Pencil size={15} className="sm:w-[13px] sm:h-[13px]" /><span className="hidden xs:inline">Editar</span>
           </button>
         )}
         {canPdf && (
           <button onClick={descargarPDF} disabled={pdfLoading}
-            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-40">
-            {pdfLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <FileDown size={13} />}
+            title={pdfLoading ? 'Generando PDF...' : 'Descargar PDF'}
+            className="flex items-center gap-1 px-3 py-2.5 sm:px-2 sm:py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-40">
+            {pdfLoading ? <div className="w-3.5 h-3.5 sm:w-3 sm:h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <FileDown size={15} className="sm:w-[13px] sm:h-[13px]" />}
             PDF
           </button>
         )}
         {canWhatsApp && (
           <button onClick={handleWhatsApp} disabled={waLoading}
-            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-40">
-            {waLoading ? <div className="w-3 h-3 border-[1.5px] border-emerald-400 border-t-transparent rounded-full animate-spin" /> : <MessageCircle size={13} />}
+            title={waLoading ? 'Preparando...' : 'Enviar por WhatsApp'}
+            className="flex items-center gap-1 px-3 py-2.5 sm:px-2 sm:py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-40">
+            {waLoading ? <div className="w-3.5 h-3.5 sm:w-3 sm:h-3 border-[1.5px] border-emerald-400 border-t-transparent rounded-full animate-spin" /> : <MessageCircle size={15} className="sm:w-[13px] sm:h-[13px]" />}
             <span className="hidden sm:inline">WhatsApp</span><span className="sm:hidden">WA</span>
           </button>
         )}
         {canReciclar && (
           <button onClick={() => onReciclar(cotizacion)}
             title="Crear nueva cotización basada en esta"
-            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 transition-colors">
-            <RefreshCw size={13} />
+            className="flex items-center gap-1 px-3 py-2.5 sm:px-2 sm:py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 transition-colors">
+            <RefreshCw size={15} className="sm:w-[13px] sm:h-[13px]" />
             <span className="hidden sm:inline">Reutilizar</span>
           </button>
         )}
