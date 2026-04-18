@@ -9,7 +9,7 @@ import {
   User, Truck, Search, Plus, Trash2, UserPlus, ChevronDown, X, Package,
   Save, Send, ArrowLeft, ArrowRight, Loader2, AlertCircle, DollarSign, RefreshCw,
   CheckCircle, FileDown, MessageCircle, StickyNote, Tag, Hash, Phone, Mail, MapPin,
-  LayoutGrid, LayoutList,
+  LayoutGrid, LayoutList, ShoppingCart, Minus,
 } from 'lucide-react'
 import { useClientes, useVendedores } from '../../hooks/useClientes'
 import { useInventario, useCategorias } from '../../hooks/useInventario'
@@ -708,6 +708,105 @@ function SectionH3({ icon: Icon, children }) {
     </div>
   )
 }
+// ─── Panel de cesta (lado derecho del paso 2) ────────────────────────────────
+function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente, onAnterior }) {
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 flex flex-col overflow-hidden">
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+        <span className="font-bold text-slate-700 text-sm flex items-center gap-2">
+          <ShoppingCart size={14} className="text-primary" /> Cesta
+        </span>
+        <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${items.length > 0 ? 'bg-primary text-white' : 'bg-slate-100 text-slate-400'}`}>
+          {items.length} {items.length === 1 ? 'item' : 'items'}
+        </span>
+      </div>
+
+      {/* Lista de items */}
+      <div className="flex-1 overflow-y-auto divide-y divide-slate-50" style={{ maxHeight: 'calc(100vh - 360px)', minHeight: '120px' }}>
+        {items.length === 0 && (
+          <div className="p-8 text-center text-slate-400">
+            <ShoppingCart size={28} className="mx-auto mb-2 opacity-20" />
+            <p className="text-xs">Sin productos todavía</p>
+            <p className="text-[11px] text-slate-300 mt-1">Haz clic en un producto del catálogo</p>
+          </div>
+        )}
+        {items.map((it, idx) => {
+          const linea = mulR(it.cantidad, mulR(it.precioUnitUsd, 1 - it.descuentoPct / 100))
+          return (
+            <div key={it._key} className="px-3 py-2.5 flex items-start gap-2 hover:bg-slate-50/50 transition-colors group">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-slate-700 leading-snug line-clamp-2">{it.nombreSnap}</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">{fmtUsd(it.precioUnitUsd)} · {it.unidadSnap}</p>
+                {it.descuentoPct > 0 && (
+                  <p className="text-[10px] text-amber-500 font-semibold mt-0.5">Desc. {it.descuentoPct}%</p>
+                )}
+              </div>
+              {/* Controles cantidad */}
+              <div className="flex items-center gap-1 shrink-0 mt-0.5">
+                <button type="button"
+                  onClick={() => it.cantidad <= 1 ? onEliminar(idx) : onCambiar(idx, 'cantidad', Math.max(0.01, it.cantidad - 1))}
+                  className="w-5 h-5 rounded-full bg-slate-100 hover:bg-red-100 text-slate-500 hover:text-red-500 flex items-center justify-center transition-colors">
+                  <Minus size={9} />
+                </button>
+                <input
+                  type="number" min="0.01" step="0.01"
+                  value={it.cantidad}
+                  onChange={e => { const v = parseFloat(e.target.value); if (!isNaN(v) && v > 0) onCambiar(idx, 'cantidad', v) }}
+                  className="w-10 text-center text-xs font-bold border border-slate-200 rounded-lg py-0.5 focus:outline-none focus:ring-1 focus:ring-primary-focus bg-white"
+                />
+                <button type="button"
+                  onClick={() => onCambiar(idx, 'cantidad', it.cantidad + 1)}
+                  className="w-5 h-5 rounded-full bg-slate-100 hover:bg-emerald-100 text-slate-500 hover:text-emerald-600 flex items-center justify-center transition-colors">
+                  <Plus size={9} />
+                </button>
+              </div>
+              {/* Total línea + eliminar */}
+              <div className="flex flex-col items-end gap-1 shrink-0">
+                <span className="text-xs font-bold text-slate-800">{fmtUsd(linea)}</span>
+                <button type="button" onClick={() => onEliminar(idx)}
+                  className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-all">
+                  <X size={11} />
+                </button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Totales */}
+      {items.length > 0 && (
+        <div className="border-t border-slate-100 px-4 py-3 space-y-1.5">
+          <div className="flex justify-between items-baseline">
+            <span className="text-xs text-slate-500">Subtotal</span>
+            <span className="text-base font-black text-slate-800">{fmtUsd(subtotal)}</span>
+          </div>
+          {tasa > 0 && (
+            <div className="flex justify-between items-baseline">
+              <span className="text-[11px] text-slate-400">En Bs</span>
+              <span className="text-xs text-slate-400">{fmtBs(usdToBs(subtotal, tasa))}</span>
+            </div>
+          )}
+          <p className="text-[10px] text-slate-300">* Descuentos y envío en el siguiente paso</p>
+        </div>
+      )}
+
+      {/* Botones */}
+      <div className="border-t border-slate-100 p-3 space-y-2">
+        <button type="button" onClick={onSiguiente} disabled={items.length === 0}
+          className="w-full flex items-center justify-center gap-2 py-2.5 text-white font-bold text-sm rounded-xl transition-all disabled:opacity-40 active:scale-[0.98]"
+          style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
+          Continuar al resumen <ArrowRight size={14} />
+        </button>
+        <button type="button" onClick={onAnterior}
+          className="w-full py-2 border border-slate-200 text-slate-500 font-semibold text-sm rounded-xl hover:bg-slate-50 transition-colors">
+          Volver
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function CotizacionBuilder({ cotizacionExistente = null, onVolver, onGuardado }) {
   const esEdicion = !!cotizacionExistente
   const { perfil } = useAuthStore()
@@ -1145,87 +1244,27 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
               )}
             </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-              <SectionH3 icon={Package}>Agregar productos</SectionH3>
-              <BuscadorProductos onAgregar={agregarProducto} itemsAgregados={items} tasa={tasaHook.tasaEfectiva} />
+            {/* Split: catálogo izquierda + cesta derecha */}
+            <div className="flex flex-col lg:flex-row gap-4 items-start">
 
-              {items.length > 0 && (
-                <>
-                  {/* Separador con contador */}
-                  <div className="flex items-center gap-3">
-                    <div className="h-px bg-slate-100 flex-1" />
-                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <CheckCircle size={11} className="text-emerald-500" />
-                      {items.length} producto{items.length !== 1 ? 's' : ''} agregado{items.length !== 1 ? 's' : ''}
-                    </span>
-                    <div className="h-px bg-slate-100 flex-1" />
-                  </div>
+              {/* ── Catálogo de productos ── */}
+              <div className="flex-1 min-w-0 bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+                <SectionH3 icon={Package}>Agregar productos</SectionH3>
+                <BuscadorProductos onAgregar={agregarProducto} itemsAgregados={items} tasa={tasaHook.tasaEfectiva} />
+              </div>
 
-                  {/* Desktop: tabla */}
-                  <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-200">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                          <th className="text-left py-3 px-3">Producto</th>
-                          <th className="text-left py-3 px-2">Unidad</th>
-                          <th className="text-right py-3 px-2">Cantidad</th>
-                          <th className="text-right py-3 px-2">Precio USD</th>
-                          <th className="text-right py-3 px-2">Desc.</th>
-                          <th className="text-right py-3 px-3">Total</th>
-                          <th className="py-3 px-2"></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {items.map((it, idx) => (
-                          <ItemLinea key={it._key} item={it} idx={idx}
-                            onChange={cambiarItem} onDelete={eliminarItem} tasa={tasaHook.tasaEfectiva} />
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Móvil: cards */}
-                  <div className="md:hidden space-y-3">
-                    {items.map((it, idx) => (
-                      <ItemCard key={it._key} item={it} idx={idx}
-                        onChange={cambiarItem} onDelete={eliminarItem} tasa={tasaHook.tasaEfectiva} />
-                    ))}
-                  </div>
-
-                  {/* Subtotal */}
-                  <div className="flex justify-end">
-                    <div className="rounded-xl border border-primary/15 px-5 py-3 bg-primary-light/50">
-                      <div className="flex items-baseline gap-3 flex-wrap">
-                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Subtotal</span>
-                        <span className="text-xl font-black text-slate-800">{fmtUsd(subtotal)}</span>
-                        {tasaHook.tasaEfectiva > 0 && (
-                          <span className="text-sm text-slate-400">{fmtBs(usdToBs(subtotal, tasaHook.tasaEfectiva))}</span>
-                        )}
-                        <span className="text-xs text-slate-400">· {items.length} item{items.length !== 1 ? 's' : ''}</span>
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {items.length === 0 && (
-                <p className="text-sm text-slate-400 text-center py-4">
-                  Busca y agrega productos a la cotización
-                </p>
-              )}
-            </div>
-
-            {/* Navegación */}
-            <div className="flex justify-between gap-3">
-              <button onClick={anterior}
-                className="flex items-center gap-2 px-5 py-3 border border-slate-200 text-slate-600 font-semibold text-sm rounded-xl hover:bg-slate-50 transition-colors">
-                <ArrowLeft size={16} /> Volver
-              </button>
-              <button onClick={siguiente}
-                className="flex items-center gap-2 px-6 py-3 text-white font-bold text-sm rounded-xl transition-all shadow-lg active:scale-[0.98]"
-                style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
-                Siguiente: Resumen <ArrowRight size={16} />
-              </button>
+              {/* ── Cesta flotante ── */}
+              <div className="w-full lg:w-80 shrink-0 lg:sticky lg:top-[73px]">
+                <CestaPanel
+                  items={items}
+                  onCambiar={cambiarItem}
+                  onEliminar={eliminarItem}
+                  subtotal={subtotal}
+                  tasa={tasaHook.tasaEfectiva}
+                  onSiguiente={siguiente}
+                  onAnterior={anterior}
+                />
+              </div>
             </div>
           </div>
         )}

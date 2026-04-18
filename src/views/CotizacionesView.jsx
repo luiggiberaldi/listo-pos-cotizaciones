@@ -18,6 +18,7 @@ import Skeleton          from '../components/ui/Skeleton'
 import { useVendedores } from '../hooks/useClientes'
 import CustomSelect      from '../components/ui/CustomSelect'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../utils/format'
+import { showToast } from '../components/ui/Toast'
 import PageHeader from '../components/ui/PageHeader'
 
 // ─── Filtros de estado ────────────────────────────────────────────────────────
@@ -274,7 +275,7 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
       })
       setCotizacionADespachar(null)
     } catch (err) {
-      alert(err.message || 'Error al crear despacho')
+      showToast(err.message || 'Error al crear despacho', 'error')
     }
   }
 
@@ -288,7 +289,7 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
       setCotizacionAReciclar(null)
       setVendedorReciclar('')
     } catch (err) {
-      alert(err.message || 'Error al reciclar cotización')
+      showToast(err.message || 'Error al reciclar cotización', 'error')
     }
   }
 

@@ -8,6 +8,7 @@ import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import { compartirPorWhatsApp, generarMensaje } from '../../utils/whatsapp'
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs } from '../../utils/format'
 import DetalleModal from '../ui/DetalleModal'
+import { showToast } from '../ui/Toast'
 
 export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambiarEstado, onDespachar, onReciclar, tasa = 0 }) {
   const { perfil } = useAuthStore()
@@ -35,7 +36,7 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
       await generarPDF({ cotizacion, items: itemsRes.data ?? [], config })
     } catch (err) {
       console.error('PDF error:', err)
-      alert('Error al generar PDF: ' + (err.message || 'Error desconocido'))
+      showToast('Error al generar PDF: ' + (err.message || 'Error desconocido'), 'error')
     } finally {
       setPdfLoading(false)
     }

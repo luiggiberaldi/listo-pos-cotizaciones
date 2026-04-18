@@ -24,7 +24,7 @@ export function useDespachos({ estado = '' } = {}) {
         .from('notas_despacho')
         .select(`
           id, numero, cotizacion_id, estado,
-          total_usd, notas,
+          total_usd, notas, forma_pago,
           creado_en, despachada_en, entregada_en,
           cliente_id, vendedor_id, transportista_id,
           cliente:clientes!notas_despacho_cliente_id_fkey(id, nombre, rif_cedula, telefono, direccion),

@@ -106,7 +106,8 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const logoData = await cargarLogo(config.logo_url)
   let y = 0
 
-  const numDes = `N°- ${String(despacho.numero).padStart(5, '0')}`
+  const cotNum = despacho.cotizacion?.numero ?? despacho.numero
+  const numDes = `N°- ${String(cotNum).padStart(5, '0')}`
   const cliente = despacho.cliente || {}
   const transportista = despacho.transportista || null
 
@@ -142,17 +143,18 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   }
   const textX = MARGIN + 45
 
-  // Nombre negocio
+  // Nombre negocio — centrado entre logo y sección derecha
+  const centerX = (MARGIN + 45 + (PAGE_W - MARGIN - 40)) / 2
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(22)
   doc.setTextColor(...C_DARK)
   let name = config.nombre_negocio || 'CONSTRUACERO CARABOBO'
   let splitName = name.split(' ')
-  doc.text((splitName[0] || '').toUpperCase(), textX, 18)
+  doc.text((splitName[0] || '').toUpperCase(), centerX, 18, { align: 'center' })
   if (splitName.length > 1) {
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(15)
-    doc.text(splitName.slice(1).join(' ').toUpperCase(), textX, 27)
+    doc.text(splitName.slice(1).join(' ').toUpperCase(), centerX, 27, { align: 'center' })
   }
 
   // "Nota de Despacho"

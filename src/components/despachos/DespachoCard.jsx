@@ -6,6 +6,7 @@ import useAuthStore from '../../store/useAuthStore'
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs } from '../../utils/format'
 import supabase from '../../services/supabase/client'
 import DetalleModal from '../ui/DetalleModal'
+import { showToast } from '../ui/Toast'
 
 export default function DespachoCard({ despacho, onCambiarEstado, onAnular, onReciclar, tasa = 0, config = {} }) {
   const { perfil } = useAuthStore()
@@ -13,7 +14,9 @@ export default function DespachoCard({ despacho, onCambiarEstado, onAnular, onRe
   const [pdfLoading, setPdfLoading]   = useState(false)
   const [showDetalle, setShowDetalle] = useState(false)
 
-  const numDisplay = `DES-${String(despacho.numero).padStart(5, '0')}`
+  const numDisplay = despacho.cotizacion
+    ? `DES-${String(despacho.cotizacion.numero).padStart(5, '0')}`
+    : `DES-${String(despacho.numero).padStart(5, '0')}`
   const vendedorColor = despacho.vendedor?.color || '#64748b'
 
   const cotNum = despacho.cotizacion
@@ -36,7 +39,7 @@ export default function DespachoCard({ despacho, onCambiarEstado, onAnular, onRe
       await generarDespachoPDF({ despacho, items: itemsRes.data ?? [], config, formaPago: despacho.forma_pago || '' })
     } catch (err) {
       console.error('PDF error:', err)
-      alert('Error al generar PDF: ' + (err.message || 'Error desconocido'))
+      showToast('Error al generar PDF: ' + (err.message || 'Error desconocido'), 'error')
     } finally {
       setPdfLoading(false)
     }

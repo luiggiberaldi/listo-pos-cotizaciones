@@ -11,6 +11,7 @@ import ConfirmModal from '../components/ui/ConfirmModal'
 import EmptyState   from '../components/ui/EmptyState'
 import Skeleton     from '../components/ui/Skeleton'
 import PageHeader  from '../components/ui/PageHeader'
+import { showToast } from '../components/ui/Toast'
 
 // ─── Filtros de estado ──────────────────────────────────────────────────────
 const ESTADOS_FILTRO = [
@@ -64,7 +65,7 @@ export default function DespachosView() {
       // Navegar a cotizaciones para que vea el nuevo borrador
       navigate('/cotizaciones')
     } catch (err) {
-      alert(err.message || 'Error al reciclar despacho')
+      showToast(err.message || 'Error al reciclar despacho', 'error')
     }
   }
 
