@@ -1,4 +1,4 @@
-# Listo POS Cotizaciones — Arquitectura del Sistema
+# Construacero Carabobo — Arquitectura del Sistema
 
 > Documento maestro de arquitectura, base de datos y reglas de negocio.
 > **Versión 1.2** — Actualización con gate login, tipo_cliente y WhatsApp (14/04/2026).

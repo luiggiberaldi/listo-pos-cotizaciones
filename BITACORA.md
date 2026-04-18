@@ -1,4 +1,4 @@
-# Bitácora de Proyecto — Listo POS Cotizaciones
+# Bitácora de Proyecto — Construacero Carabobo
 
 > Registro cronológico de decisiones, avance y errores.
 > Actualizar en cada sesión de trabajo.
@@ -11,6 +11,7 @@
 
 El proyecto fue clonado del repositorio `https://github.com/luiggiberaldi/listo_pos_lite-`
 que corresponde al sistema **Listo POS Lite** — un punto de venta completo para abastos/bodegas.
+El sistema fue transformado en **Construacero Carabobo** — un cotizador comercial para ferretería.
 
 **¿Qué era Listo POS Lite?**
 - Sistema POS offline-first con caja, ventas, inventario, clientes y reportes
@@ -42,7 +43,7 @@ que corresponde al sistema **Listo POS Lite** — un punto de venta completo par
 
 ## OBJETIVO DEL NUEVO SISTEMA
 
-**Nombre:** Listo POS Cotizaciones
+**Nombre:** Construacero Carabobo
 **Tipo:** Cotizador comercial para ferretería
 **Usuarios:** Supervisor (1+) y Vendedores (múltiples)
 
@@ -312,7 +313,7 @@ function formatearNumeroCotizacion(cotizacion, numeroRaiz) {
 **Archivos y configuración actualizados:**
 | Archivo | Cambio |
 |---|---|
-| `package.json` | `name: listo-pos-cotizaciones`, eliminadas deps: Capacitor x4, groq-sdk, vite-plugin-pwa. Agregada: @tanstack/react-query |
+| `package.json` | `name: construacero-carabobo`, eliminadas deps: Capacitor x4, groq-sdk, vite-plugin-pwa. Agregada: @tanstack/react-query |
 | `vite.config.js` | Eliminado VitePWA plugin y chunk de 'ai' (Groq) |
 | `index.html` | Limpio: nuevo título, sin meta PWA, sin OG tags |
 | `.env.example` | Solo VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY |
@@ -546,7 +547,7 @@ Ambas ejecutadas vía Supabase Management API (`POST /v1/projects/{id}/database/
 | `src/views/ConfiguracionView.jsx` | Sección "Acceso al sistema" para configurar gate_email + contraseña |
 
 **Diseño del gate:**
-- Inspirado en CloudAuthModal de Listo POS Lite
+- Inspirado en CloudAuthModal del proyecto original
 - Fondo degradado sky→teal, logo centrado, card con blur
 - Inputs con iconos (Mail, Key), toggle ver/ocultar contraseña
 - Validación SHA-256 contra `configuracion_negocio.gate_password_hash`

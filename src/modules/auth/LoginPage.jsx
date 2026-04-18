@@ -9,7 +9,7 @@ import LoginPinModal from '../../components/auth/LoginPinModal'
 import { validarGate } from '../../hooks/useConfigNegocio'
 import { CardContainer, CardBody, CardItem } from '../../components/ui/3d-card'
 
-const GATE_SESSION_KEY = 'listo_gate_ok'
+const GATE_SESSION_KEY = 'construacero_gate_ok'
 
 // ─── Fondo animado con orbes ─────────────────────────────────────────────────
 function DarkBackground() {
@@ -135,7 +135,7 @@ function UserCard({ user, onClick, index }) {
   )
 }
 
-const USUARIOS_CACHE_KEY = 'listo_usuarios_cache'
+const USUARIOS_CACHE_KEY = 'construacero_usuarios_cache'
 
 // ─── Paso 2: Seleccionar usuario ──────────────────────────────────────────────
 function UserSelectStep() {
@@ -325,7 +325,7 @@ function UserSelectStep() {
         style={{ animation: 'fadeIn 1s ease 0.8s forwards', opacity: 0 }}>
         <p className="text-[10px] tracking-[0.2em] uppercase font-medium px-4 py-1.5 rounded-full"
           style={{ color: 'rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-          Construacero Carabobo C.A. · Listo POS
+          Construacero Carabobo C.A. · Sistema de Gestión
         </p>
       </div>
 

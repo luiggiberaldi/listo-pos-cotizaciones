@@ -1,7 +1,7 @@
 // src/services/notificationService.js
-// Sistema de alertas internas — adaptado de Listo POS Lite
+// Sistema de alertas internas — Construacero Carabobo
 
-const NOTIF_KEY = 'listo_cotizaciones_notifications_v1'
+const NOTIF_KEY = 'construacero_notifications_v1'
 const MAX_NOTIFS = 100
 
 export const NOTIF_TYPES = {
@@ -41,7 +41,7 @@ export function createNotification(type, title, body, meta = null) {
   if (notifs.length > MAX_NOTIFS) notifs.length = MAX_NOTIFS
   saveNotifs(notifs)
 
-  window.dispatchEvent(new CustomEvent('listo-notification', { detail: notif }))
+  window.dispatchEvent(new CustomEvent('construacero-notification', { detail: notif }))
   return notif
 }
 
@@ -55,17 +55,17 @@ export function getUnreadCount() {
 
 export function markAllRead() {
   saveNotifs(readNotifs().map(n => ({ ...n, read: true })))
-  window.dispatchEvent(new CustomEvent('listo-notification-read'))
+  window.dispatchEvent(new CustomEvent('construacero-notification-read'))
 }
 
 export function markRead(id) {
   saveNotifs(readNotifs().map(n => n.id === id ? { ...n, read: true } : n))
-  window.dispatchEvent(new CustomEvent('listo-notification-read'))
+  window.dispatchEvent(new CustomEvent('construacero-notification-read'))
 }
 
 export function clearNotifications() {
   saveNotifs([])
-  window.dispatchEvent(new CustomEvent('listo-notification-read'))
+  window.dispatchEvent(new CustomEvent('construacero-notification-read'))
 }
 
 // ─── Helpers de alto nivel ─────────────────────────────────────────────────────

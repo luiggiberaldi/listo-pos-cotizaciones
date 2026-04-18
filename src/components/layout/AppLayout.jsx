@@ -170,7 +170,7 @@ export default function AppLayout() {
         </button>
 
         {/* Logo — solo móvil */}
-        <img src="/logo.png" alt="Listo POS" className="md:hidden h-8 w-auto object-contain" style={{ filter: 'brightness(1.1)' }} />
+        <img src="/logo.png" alt="Construacero Carabobo" className="md:hidden h-8 w-auto object-contain" style={{ filter: 'brightness(1.1)' }} />
 
         {/* Título de página — solo desktop */}
         {currentPage && (

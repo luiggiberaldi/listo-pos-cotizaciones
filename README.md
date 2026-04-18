@@ -1,4 +1,4 @@
-# Listo POS Cotizaciones
+# Construacero Carabobo
 
 Sistema de cotizaciones comerciales para ferretería. Permite a los vendedores registrar clientes, construir cotizaciones con el inventario disponible y generar PDFs profesionales para compartir por WhatsApp.
 

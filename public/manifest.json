@@ -1,6 +1,6 @@
 {
-  "name": "Listo POS Cotizaciones",
-  "short_name": "Listo POS",
+  "name": "Construacero Carabobo",
+  "short_name": "Construacero",
   "description": "Sistema de cotizaciones y despachos",
   "start_url": "/",
   "display": "standalone",

@@ -18,11 +18,11 @@ export function useAdminAlerts() {
   }, [])
 
   useEffect(() => {
-    window.addEventListener('listo-notification', refresh)
-    window.addEventListener('listo-notification-read', refresh)
+    window.addEventListener('construacero-notification', refresh)
+    window.addEventListener('construacero-notification-read', refresh)
     return () => {
-      window.removeEventListener('listo-notification', refresh)
-      window.removeEventListener('listo-notification-read', refresh)
+      window.removeEventListener('construacero-notification', refresh)
+      window.removeEventListener('construacero-notification-read', refresh)
     }
   }, [refresh])
 

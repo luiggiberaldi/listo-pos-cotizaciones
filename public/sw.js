@@ -1,4 +1,4 @@
-// Service Worker — Listo POS Cotizaciones
+// Service Worker — Construacero Carabobo
 // Maneja Push Notifications en background
 
 self.addEventListener('install', () => self.skipWaiting())
@@ -12,7 +12,7 @@ self.addEventListener('push', (event) => {
   try {
     payload = event.data.json()
   } catch {
-    payload = { title: 'Listo POS', body: event.data.text() }
+    payload = { title: 'Construacero', body: event.data.text() }
   }
 
   const options = {
@@ -26,7 +26,7 @@ self.addEventListener('push', (event) => {
   }
 
   event.waitUntil(
-    self.registration.showNotification(payload.title || 'Listo POS', options)
+    self.registration.showNotification(payload.title || 'Construacero', options)
   )
 })
 

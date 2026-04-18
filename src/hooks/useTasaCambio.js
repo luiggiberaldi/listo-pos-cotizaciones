@@ -1,9 +1,9 @@
 // src/hooks/useTasaCambio.js
 // Hook de tasa de cambio BCV — auto-fetch + modo manual
-// Adaptado de Listo POS Lite (useRates.js)
+// Construacero Carabobo
 import { useState, useEffect, useCallback, useRef } from 'react'
 
-const STORAGE_KEY = 'listo_tasa_v1'
+const STORAGE_KEY = 'construacero_tasa_v1'
 const UPDATE_INTERVAL = 15 * 60 * 1000 // 15 minutos
 
 const DEFAULT_RATE = {
@@ -40,13 +40,13 @@ export function useTasaCambio() {
 
   // Modo auto vs manual
   const [modoAuto, setModoAuto] = useState(() => {
-    const saved = localStorage.getItem('listo_tasa_modo_auto')
+    const saved = localStorage.getItem('construacero_tasa_modo_auto')
     return saved !== null ? JSON.parse(saved) : true
   })
 
   // Tasa manual
   const [tasaManual, setTasaManual] = useState(() => {
-    const saved = localStorage.getItem('listo_tasa_manual')
+    const saved = localStorage.getItem('construacero_tasa_manual')
     return saved && parseFloat(saved) > 0 ? saved : ''
   })
 
@@ -61,11 +61,11 @@ export function useTasaCambio() {
   }, [tasaBcv])
 
   useEffect(() => {
-    localStorage.setItem('listo_tasa_modo_auto', JSON.stringify(modoAuto))
+    localStorage.setItem('construacero_tasa_modo_auto', JSON.stringify(modoAuto))
   }, [modoAuto])
 
   useEffect(() => {
-    localStorage.setItem('listo_tasa_manual', tasaManual)
+    localStorage.setItem('construacero_tasa_manual', tasaManual)
   }, [tasaManual])
 
   // Tasa efectiva

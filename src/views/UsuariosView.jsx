@@ -1,6 +1,6 @@
 // src/views/UsuariosView.jsx
 // Gestión de usuarios — solo supervisores
-// Estilo: Listo POS Lite (sky/teal, avatares con inicial, Crown para supervisor)
+// Construacero Carabobo (avatares con inicial, Crown para supervisor)
 import { useState } from 'react'
 import { UserCog, Plus, Pencil, UserCheck, UserX, RefreshCw, Crown, Eye, EyeOff, Trash2 } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
@@ -66,7 +66,7 @@ function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
     const slug = nombre.trim().toLowerCase()
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
       .replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '')
-    return slug ? `${slug}.${Date.now()}@listo.internal` : ''
+    return slug ? `${slug}.${Date.now()}@construacero.internal` : ''
   }
 
   function submit(e) {
