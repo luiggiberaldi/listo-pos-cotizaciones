@@ -2,6 +2,7 @@
 // Panel de inicio — resumen de actividad y métricas clave
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import { memo, useMemo } from 'react'
 import { LayoutDashboard, FileText, Users, DollarSign, TrendingUp, Clock, Plus, UserCog, ClipboardList, ArrowRight } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import supabase     from '../services/supabase/client'
@@ -93,7 +94,7 @@ function useMetricas() {
 }
 
 // ─── Tarjeta de métrica ───────────────────────────────────────────────────────
-function MetricCard({ icon: Icon, label, value, sub, color = 'primary' }) {
+const MetricCard = memo(function MetricCard({ icon: Icon, label, value, sub, color = 'primary' }) {
   const themes = {
     primary: {
       bg:    'linear-gradient(135deg, #1B365D 0%, #0d1f3c 100%)',
@@ -148,7 +149,7 @@ function MetricCard({ icon: Icon, label, value, sub, color = 'primary' }) {
       </div>
     </div>
   )
-}
+})
 
 // ─── Vista principal ──────────────────────────────────────────────────────────
 export default function DashboardView() {
@@ -161,9 +162,9 @@ export default function DashboardView() {
 
   const mesActual = new Date().toLocaleDateString('es-VE', { month: 'long', year: 'numeric' })
 
-  const variacionMes = m && m.totalMesAntUsd > 0
+  const variacionMes = useMemo(() => m && m.totalMesAntUsd > 0
     ? Math.round(((m.totalMesUsd - m.totalMesAntUsd) / m.totalMesAntUsd) * 100)
-    : null
+    : null, [m?.totalMesUsd, m?.totalMesAntUsd])
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-4 md:space-y-6">

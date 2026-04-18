@@ -1,5 +1,5 @@
 // src/components/cotizaciones/CotizacionCard.jsx
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import { FileText, User, Calendar, Pencil, Ban, CheckCircle, XCircle, FileDown, MessageCircle, Loader2, Truck, ChevronDown, DollarSign, RefreshCw, Eye } from 'lucide-react'
 import EstadoBadge from './EstadoBadge'
 import useAuthStore from '../../store/useAuthStore'
@@ -10,7 +10,7 @@ import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs } from '../../utils/fo
 import DetalleModal from '../ui/DetalleModal'
 import { showToast } from '../ui/Toast'
 
-export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambiarEstado, onDespachar, onReciclar, tasa = 0 }) {
+export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, onCambiarEstado, onDespachar, onReciclar, tasa = 0 }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const esBorrador = cotizacion.estado === 'borrador'
@@ -264,4 +264,4 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
       />
     </div>
   )
-}
+})

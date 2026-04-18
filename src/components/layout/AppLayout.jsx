@@ -1,6 +1,6 @@
 // src/components/layout/AppLayout.jsx
 // Layout principal: sidebar fijo en desktop, drawer en móvil
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, memo } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import {
   Users, FileText, Package, Truck,
@@ -71,7 +71,7 @@ function BadgeRol({ rol }) {
 }
 
 // ─── Item de navegación ────────────────────────────────────────────────────────
-function NavItem({ path, label, Icono, onClick, collapsed }) {
+const NavItem = memo(function NavItem({ path, label, Icono, onClick, collapsed }) {
   return (
     <NavLink
       to={path}
@@ -95,7 +95,7 @@ function NavItem({ path, label, Icono, onClick, collapsed }) {
       {!collapsed && <span>{label}</span>}
     </NavLink>
   )
-}
+})
 
 // ─── Layout principal ──────────────────────────────────────────────────────────
 export default function AppLayout() {

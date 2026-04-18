@@ -1,5 +1,5 @@
 // src/components/despachos/DespachoCard.jsx
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import { FileText, User, Calendar, Truck, CheckCircle, Ban, Package, RefreshCcw, Download, Loader2, Eye } from 'lucide-react'
 import EstadoBadge from '../cotizaciones/EstadoBadge'
 import ConfirmModal from '../ui/ConfirmModal'
@@ -9,7 +9,7 @@ import supabase from '../../services/supabase/client'
 import DetalleModal from '../ui/DetalleModal'
 import { showToast } from '../ui/Toast'
 
-export default function DespachoCard({ despacho, onCambiarEstado, onAnular, onReciclar, tasa = 0, config = {}, estadoCambiando = false }) {
+export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular, onReciclar, tasa = 0, config = {}, estadoCambiando = false }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const [pdfLoading, setPdfLoading]   = useState(false)
@@ -187,4 +187,4 @@ export default function DespachoCard({ despacho, onCambiarEstado, onAnular, onRe
       />
     </div>
   )
-}
+})
