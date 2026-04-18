@@ -6,7 +6,7 @@
 // Paso 4: Confirmación (post-envío) con PDF y WhatsApp
 import { useState, useEffect, useRef } from 'react'
 import {
-  User, Truck, Search, Plus, Trash2, UserPlus, ChevronDown, X, Package,
+  User, Truck, Search, Plus, Trash2, UserPlus, ChevronDown, ChevronLeft, ChevronRight, X, Package,
   Save, Send, ArrowLeft, ArrowRight, Loader2, AlertCircle, DollarSign, RefreshCw,
   CheckCircle, FileDown, MessageCircle, StickyNote, Tag, Hash, Phone, Mail, MapPin,
   LayoutGrid, LayoutList, ShoppingCart, Minus,
@@ -184,9 +184,34 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
   const [texto, setTexto] = useState('')
   const [catActiva, setCatActiva] = useState('')
   const [visibleCount, setVisibleCount] = useState(PRODUCTOS_POR_PAGINA)
-  const { data: inventarioData, isLoading } = useInventario({})
+  const [canScrollLeft, setCanScrollLeft]   = useState(false)
+  const [canScrollRight, setCanScrollRight] = useState(false)
+  const scrollRef = useRef(null)
+  const { data: inventarioData, isLoading } = useInventario({ pageSize: 1000 })
   const todosProductos = inventarioData?.productos ?? inventarioData ?? []
   const { data: categorias = [] } = useCategorias()
+
+  // Detectar si hay scroll disponible
+  function checkScroll() {
+    const el = scrollRef.current
+    if (!el) return
+    setCanScrollLeft(el.scrollLeft > 4)
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4)
+  }
+
+  useEffect(() => {
+    checkScroll()
+    const el = scrollRef.current
+    if (!el) return
+    el.addEventListener('scroll', checkScroll, { passive: true })
+    const ro = new ResizeObserver(checkScroll)
+    ro.observe(el)
+    return () => { el.removeEventListener('scroll', checkScroll); ro.disconnect() }
+  }, [categorias])
+
+  function scrollBy(dir) {
+    scrollRef.current?.scrollBy({ left: dir * 200, behavior: 'smooth' })
+  }
 
   const filtrados = todosProductos.filter(p => {
     const coincideTexto = !texto.trim() ||
@@ -225,13 +250,18 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
         )}
       </div>
 
-      {/* Chips de categoría — scroll horizontal con fade indicador */}
+      {/* Chips de categoría — scroll horizontal con flechas */}
       {categorias.length > 0 && (
-        <div className="relative -mx-3 sm:-mx-5">
-          {/* Fade derecho para indicar que hay más */}
-          <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-white to-transparent z-10" />
-          <div className="overflow-x-auto scrollbar-hide px-3 sm:px-5 pb-1">
-            <div className="flex gap-1.5 py-0.5 w-max pr-8">
+        <div className="relative flex items-center gap-1">
+          {/* Flecha izquierda */}
+          <button type="button" onClick={() => scrollBy(-1)}
+            className={`shrink-0 p-1 rounded-full border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 transition-all ${canScrollLeft ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+            <ChevronLeft size={14} />
+          </button>
+
+          {/* Contenedor scrollable */}
+          <div ref={scrollRef} className="flex-1 overflow-x-auto scrollbar-hide">
+            <div className="flex gap-1.5 py-0.5 w-max">
               <button type="button" onClick={() => cambiarCat('')}
                 className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap ${
                   !catActiva ? 'bg-primary text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
@@ -248,6 +278,12 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
               ))}
             </div>
           </div>
+
+          {/* Flecha derecha */}
+          <button type="button" onClick={() => scrollBy(1)}
+            className={`shrink-0 p-1 rounded-full border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 transition-all ${canScrollRight ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+            <ChevronRight size={14} />
+          </button>
         </div>
       )}
 
