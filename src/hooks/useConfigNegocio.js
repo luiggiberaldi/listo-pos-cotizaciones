@@ -1,9 +1,14 @@
 // src/hooks/useConfigNegocio.js
 // Configuración del negocio para header del PDF y ajustes globales
+// — select explícito SIN gate_password_hash
+// — gate se valida server-side vía RPCs SECURITY DEFINER
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
 
 const KEY = ['config_negocio']
+
+// Columnas seguras (excluye gate_password_hash)
+const CONFIG_COLUMNS = 'id, nombre_negocio, rif_negocio, telefono_negocio, direccion_negocio, email_negocio, logo_url, moneda_principal, validez_cotizacion_dias, pie_pagina_pdf, tasa_bcv_manual, iva_pct, gate_email, comision_pct_cabilla, comision_pct_otros, comision_categoria_cabilla, creado_en, actualizado_en'
 
 export function useConfigNegocio() {
   return useQuery({
@@ -11,7 +16,7 @@ export function useConfigNegocio() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('configuracion_negocio')
-        .select('*')
+        .select(CONFIG_COLUMNS)
         .eq('id', 1)
         .single()
 
@@ -39,11 +44,8 @@ export function useActualizarConfig() {
   })
 }
 
-// ─── Validar gate de acceso (paso 1 del login) ────────────────────────────────
-// Lee gate_email y gate_password_hash de configuracion_negocio
-// Compara email + SHA-256 del password ingresado contra lo almacenado
-// Usa la anon key (no requiere sesión autenticada) — la tabla permite SELECT
-// público para estos campos específicos
+// ─── Validar gate de acceso (server-side via RPC) ──────────────────────────────
+// El hash NUNCA sale de la BD — se compara server-side
 
 async function hashSHA256(text) {
   const encoder = new TextEncoder()
@@ -55,30 +57,28 @@ async function hashSHA256(text) {
 }
 
 export async function validarGate(emailInput, passwordInput) {
-  const { data, error } = await supabase
-    .from('configuracion_negocio')
-    .select('gate_email, gate_password_hash')
-    .eq('id', 1)
-    .single()
+  const inputHash = await hashSHA256(passwordInput)
+  const { data, error } = await supabase.rpc('validar_gate_acceso', {
+    p_email: emailInput.trim(),
+    p_password_hash: inputHash,
+  })
 
-  if (error || !data) {
+  if (error) {
     return { ok: false, error: 'No se pudo verificar el acceso' }
   }
 
-  // Si no hay gate configurado, dejar pasar (primera vez)
-  if (!data.gate_email || !data.gate_password_hash) {
-    return { ok: true }
-  }
-
-  const emailOk = emailInput.trim().toLowerCase() === data.gate_email.trim().toLowerCase()
-  const inputHash = await hashSHA256(passwordInput)
-  const passOk = inputHash === data.gate_password_hash
-
-  if (!emailOk || !passOk) {
+  // data es boolean: true = acceso permitido
+  if (!data) {
     return { ok: false, error: 'Correo o contraseña incorrectos' }
   }
 
   return { ok: true }
+}
+
+export async function tieneGateConfigurado() {
+  const { data, error } = await supabase.rpc('tiene_gate_configurado')
+  if (error) return false
+  return !!data
 }
 
 export { hashSHA256 }

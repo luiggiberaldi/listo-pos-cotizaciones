@@ -1082,7 +1082,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
       const [{ generarPDF }, itemsRes, cotRes] = await Promise.all([
         import('../../services/pdf/cotizacionPDF'),
         supabase.from('cotizacion_items').select('*').eq('cotizacion_id', cotizacionId).order('orden'),
-        supabase.from('cotizaciones').select('*').eq('id', cotizacionId).single(),
+        supabase.from('cotizaciones').select('id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en').eq('id', cotizacionId).single(),
       ])
       if (itemsRes.error) throw itemsRes.error
       if (cotRes.error) throw cotRes.error
@@ -1107,7 +1107,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
       const [{ generarPDF }, itemsRes, cotRes] = await Promise.all([
         import('../../services/pdf/cotizacionPDF'),
         supabase.from('cotizacion_items').select('*').eq('cotizacion_id', cotizacionId).order('orden'),
-        supabase.from('cotizaciones').select('*').eq('id', cotizacionId).single(),
+        supabase.from('cotizaciones').select('id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en').eq('id', cotizacionId).single(),
       ])
       if (itemsRes.error) throw itemsRes.error
       if (cotRes.error) throw cotRes.error

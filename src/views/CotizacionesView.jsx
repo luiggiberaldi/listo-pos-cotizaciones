@@ -66,7 +66,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
     if (items.length === 0) return
     const productIds = [...new Set(items.map(i => i.producto_id).filter(Boolean))]
     if (productIds.length === 0) return
-    supabase.from('productos').select('id, stock_actual, nombre').in('id', productIds)
+    supabase.rpc('obtener_stock_productos', { p_ids: productIds })
       .then(({ data }) => {
         if (data) setStockMap(Object.fromEntries(data.map(p => [p.id, p.stock_actual])))
       })

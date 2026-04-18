@@ -1,6 +1,6 @@
 // src/hooks/useInventario.js
 // Queries y mutations para productos
-// — Vendedor usa la vista v_productos_vendedor (sin costo_usd)
+// — Vendedor usa RPCs SECURITY DEFINER (sin costo_usd)
 // — Supervisor usa la tabla productos directa (con costo_usd)
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
@@ -19,54 +19,53 @@ export function useInventario({ busqueda = '', categoria = '', page = 0, pageSiz
   return useQuery({
     queryKey: [...INVENTARIO_KEY, busqueda, categoria, esSupervisor, page, pageSize],
     queryFn: async () => {
-      // Supervisor: tabla directa (con costo_usd)
-      // Vendedor: vista sin costo_usd
-      const tabla = esSupervisor ? 'productos' : 'v_productos_vendedor'
+      if (esSupervisor) {
+        // Supervisor: tabla directa (con costo_usd)
+        let query = supabase
+          .from('productos')
+          .select('id, codigo, nombre, descripcion, categoria, unidad, precio_usd, costo_usd, stock_actual, stock_minimo, activo, imagen_url, creado_en, actualizado_en', { count: 'exact' })
+          .eq('activo', true)
 
-      const columnas = esSupervisor
-        ? 'id, codigo, nombre, descripcion, categoria, unidad, precio_usd, costo_usd, stock_actual, stock_minimo, activo, imagen_url, creado_en, actualizado_en'
-        : 'id, codigo, nombre, descripcion, categoria, unidad, precio_usd, stock_actual, stock_minimo, activo, imagen_url'
-
-      let query = supabase
-        .from(tabla)
-        .select(columnas, { count: 'exact' })
-        .eq('activo', true)
-
-      // Búsqueda sanitizada
-      if (busqueda.trim()) {
-        const safe = sanitizePostgrestSearch(busqueda)
-        if (safe) {
-          query = query.or(
-            `nombre.ilike.%${safe}%,codigo.ilike.%${safe}%`
-          )
+        if (busqueda.trim()) {
+          const safe = sanitizePostgrestSearch(busqueda)
+          if (safe) query = query.or(`nombre.ilike.%${safe}%,codigo.ilike.%${safe}%`)
         }
+
+        if (categoria) {
+          const isGroup = CATEGORY_GROUPS.includes(categoria.toUpperCase().trim())
+          if (isGroup) query = query.ilike('categoria', `${categoria}%`)
+          else query = query.eq('categoria', categoria)
+        }
+
+        query = query.order('nombre', { ascending: true }).range(page * pageSize, (page + 1) * pageSize - 1)
+
+        const { data, error, count } = await query
+        if (error) throw error
+        const productos = data ?? []
+
+        // Stock bajo (solo supervisor, sin filtros, primera página)
+        if (!busqueda && !categoria && page === 0) {
+          const bajos = productos.filter(p => p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo)
+          if (bajos.length > 0) notifyStockBajo(bajos)
+        }
+
+        return { productos, totalCount: count ?? productos.length }
       }
 
-      // Filtro de categoría (soporta grupos: "TUBOS" filtra TUBOS*)
-      if (categoria) {
-        const isGroup = CATEGORY_GROUPS.includes(categoria.toUpperCase().trim())
-        if (isGroup) {
-          query = query.ilike('categoria', `${categoria}%`)
-        } else {
-          query = query.eq('categoria', categoria)
-        }
-      }
-
-      query = query
-        .order('nombre', { ascending: true })
-        .range(page * pageSize, (page + 1) * pageSize - 1)
-
-      const { data, error, count } = await query
+      // Vendedor: RPC segura (excluye costo_usd, SECURITY DEFINER)
+      const isGroup = categoria ? CATEGORY_GROUPS.includes(categoria.toUpperCase().trim()) : false
+      const { data, error } = await supabase.rpc('obtener_productos_vendedor', {
+        p_busqueda: busqueda.trim(),
+        p_categoria: categoria || '',
+        p_categoria_grupo: isGroup,
+        p_limit: pageSize,
+        p_offset: page * pageSize,
+      })
       if (error) throw error
-      const productos = data ?? []
-
-      // Verificar stock bajo al cargar (solo supervisor, solo sin filtros activos, solo primera página)
-      if (esSupervisor && !busqueda && !categoria && page === 0) {
-        const bajos = productos.filter(p => p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo)
-        if (bajos.length > 0) notifyStockBajo(bajos)
-      }
-
-      return { productos, totalCount: count ?? productos.length }
+      const rows = data ?? []
+      const totalCount = rows.length > 0 ? Number(rows[0].total_count) : 0
+      const productos = rows.map(({ total_count, ...rest }) => rest)
+      return { productos, totalCount }
     },
     enabled: !!perfil,
   })
@@ -105,17 +104,23 @@ export function useCategorias() {
   return useQuery({
     queryKey: [...INVENTARIO_KEY, 'categorias'],
     queryFn: async () => {
-      const tabla = esSupervisor ? 'productos' : 'v_productos_vendedor'
-      const { data, error } = await supabase
-        .from(tabla)
-        .select('categoria')
-        .eq('activo', true)
-        .not('categoria', 'is', null)
-        .order('categoria', { ascending: true })
+      if (esSupervisor) {
+        const { data, error } = await supabase
+          .from('productos')
+          .select('categoria')
+          .eq('activo', true)
+          .not('categoria', 'is', null)
+          .order('categoria', { ascending: true })
+        if (error) throw error
+        const rawCats = (data ?? []).map(r => r.categoria).filter(Boolean)
+        const grouped = [...new Set(rawCats.map(getCategoryGroup))].sort()
+        return grouped
+      }
 
+      // Vendedor: RPC segura (SECURITY DEFINER)
+      const { data, error } = await supabase.rpc('obtener_categorias_vendedor')
       if (error) throw error
       const rawCats = (data ?? []).map(r => r.categoria).filter(Boolean)
-      // Agrupar y deduplicar
       const grouped = [...new Set(rawCats.map(getCategoryGroup))].sort()
       return grouped
     },

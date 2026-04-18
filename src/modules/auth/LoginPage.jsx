@@ -6,7 +6,7 @@ import supabase from '../../services/supabase/client'
 import useAuthStore from '../../store/useAuthStore'
 import LoginAvatar from '../../components/auth/LoginAvatar'
 import LoginPinModal from '../../components/auth/LoginPinModal'
-import { validarGate } from '../../hooks/useConfigNegocio'
+import { validarGate, tieneGateConfigurado } from '../../hooks/useConfigNegocio'
 import { CardContainer, CardBody, CardItem } from '../../components/ui/3d-card'
 
 const GATE_SESSION_KEY = 'construacero_gate_ok'
@@ -136,6 +136,147 @@ function UserCard({ user, onClick, index }) {
 }
 
 const USUARIOS_CACHE_KEY = 'construacero_usuarios_cache'
+
+// ─── Paso 1: Gate de acceso ──────────────────────────────────────────────────
+function GateStep({ onPass }) {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [showPass, setShowPass] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!email.trim() || !password) return
+    setLoading(true)
+    setError(null)
+    const result = await validarGate(email, password)
+    setLoading(false)
+    if (result.ok) {
+      sessionStorage.setItem(GATE_SESSION_KEY, '1')
+      onPass()
+    } else {
+      setError(result.error || 'Acceso denegado')
+    }
+  }
+
+  return (
+    <>
+      <DarkBackground />
+      <div className="relative z-10 min-h-screen w-full flex flex-col items-center justify-center px-4 sm:px-6 py-8">
+        {/* Logo */}
+        <div className="flex flex-col items-center gap-4 mb-8 select-none" style={{ animation: 'logoReveal 0.8s ease forwards' }}>
+          <div className="relative flex items-center justify-center">
+            <div className="absolute rounded-full opacity-25 blur-3xl"
+              style={{ width: '200px', height: '200px', background: 'radial-gradient(circle, #B8860B 0%, transparent 70%)' }} />
+            <img src="/logo.png" alt="Construacero Carabobo"
+              className="relative z-10 w-auto object-contain select-none pointer-events-none drop-shadow-2xl"
+              style={{ height: '140px', filter: 'drop-shadow(0 0 40px rgba(184,134,11,0.35)) brightness(1.05)' }}
+              draggable={false} />
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="h-px w-12 opacity-40" style={{ background: 'linear-gradient(to right, transparent, #B8860B)' }} />
+            <span className="text-[10px] font-bold tracking-[0.3em] uppercase" style={{ color: '#B8860B' }}>Acceso al Sistema</span>
+            <div className="h-px w-12 opacity-40" style={{ background: 'linear-gradient(to left, transparent, #B8860B)' }} />
+          </div>
+        </div>
+
+        {/* Formulario gate */}
+        <form
+          onSubmit={handleSubmit}
+          className="w-full max-w-sm rounded-2xl p-6 sm:p-8"
+          style={{
+            background: 'rgba(255,255,255,0.04)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            boxShadow: '0 25px 80px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)',
+            animation: 'fadeSlideUp 0.6s ease 0.2s forwards',
+            opacity: 0,
+          }}
+        >
+          <div className="absolute top-0 left-[10%] right-[10%] h-px"
+            style={{ background: 'linear-gradient(to right, transparent, rgba(184,134,11,0.6), transparent)' }} />
+
+          <h2 className="text-lg font-black text-white mb-1">Verificación de acceso</h2>
+          <p className="text-xs mb-6" style={{ color: 'rgba(255,255,255,0.4)' }}>Ingresa las credenciales del negocio</p>
+
+          {/* Email */}
+          <div className="mb-4">
+            <label className="block text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: 'rgba(255,255,255,0.5)' }}>Correo</label>
+            <div className="relative">
+              <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'rgba(255,255,255,0.3)' }} />
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl text-sm text-white placeholder-white/20 outline-none transition-colors"
+                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+                onFocus={e => e.target.style.borderColor = 'rgba(184,134,11,0.5)'}
+                onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+                placeholder="correo@empresa.com"
+                autoComplete="email"
+                required
+              />
+            </div>
+          </div>
+
+          {/* Password */}
+          <div className="mb-5">
+            <label className="block text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: 'rgba(255,255,255,0.5)' }}>Contraseña</label>
+            <div className="relative">
+              <Key size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'rgba(255,255,255,0.3)' }} />
+              <input
+                type={showPass ? 'text' : 'password'}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                className="w-full pl-10 pr-10 py-2.5 rounded-xl text-sm text-white placeholder-white/20 outline-none transition-colors"
+                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+                onFocus={e => e.target.style.borderColor = 'rgba(184,134,11,0.5)'}
+                onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+                placeholder="••••••••"
+                required
+              />
+              <button type="button" onClick={() => setShowPass(!showPass)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </div>
+
+          {/* Error */}
+          {error && (
+            <p className="text-xs text-red-400 mb-4 text-center">{error}</p>
+          )}
+
+          {/* Submit */}
+          <button
+            type="submit"
+            disabled={loading || !email.trim() || !password}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-40"
+            style={{
+              background: 'linear-gradient(135deg, #B8860B 0%, #8B6914 100%)',
+              boxShadow: '0 4px 20px rgba(184,134,11,0.3)',
+            }}
+          >
+            {loading ? <RefreshCw size={16} className="animate-spin" /> : <ArrowRight size={16} />}
+            {loading ? 'Verificando...' : 'Acceder'}
+          </button>
+        </form>
+      </div>
+
+      <style>{`
+        @keyframes fadeSlideUp {
+          from { opacity: 0; transform: translateY(24px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes logoReveal {
+          from { opacity: 0; transform: scale(0.85) translateY(-20px); filter: blur(8px); }
+          to   { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
+        }
+      `}</style>
+    </>
+  )
+}
 
 // ─── Paso 2: Seleccionar usuario ──────────────────────────────────────────────
 function UserSelectStep() {
@@ -342,10 +483,39 @@ function UserSelectStep() {
 
 // ─── Vista principal ──────────────────────────────────────────────────────────
 export default function LoginPage() {
+  const [gateChecked, setGateChecked] = useState(false)
+  const [needsGate, setNeedsGate] = useState(false)
+  const [gatePassed, setGatePassed] = useState(false)
+
   useEffect(() => {
     const prev = document.body.style.backgroundColor
     document.body.style.backgroundColor = '#0a1628'
     return () => { document.body.style.backgroundColor = prev }
   }, [])
+
+  useEffect(() => {
+    // Si ya pasó el gate en esta sesión, saltar
+    if (sessionStorage.getItem(GATE_SESSION_KEY)) {
+      setGatePassed(true)
+      setGateChecked(true)
+      return
+    }
+    // Verificar si hay gate configurado
+    tieneGateConfigurado().then(tiene => {
+      setNeedsGate(tiene)
+      if (!tiene) setGatePassed(true)
+      setGateChecked(true)
+    })
+  }, [])
+
+  if (!gateChecked) {
+    // Cargando check de gate — mostrar fondo oscuro sin flash
+    return <DarkBackground />
+  }
+
+  if (needsGate && !gatePassed) {
+    return <GateStep onPass={() => setGatePassed(true)} />
+  }
+
   return <UserSelectStep />
 }
