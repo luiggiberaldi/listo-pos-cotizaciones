@@ -227,10 +227,10 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
 
       {/* Chips de categoría — scroll horizontal con fade indicador */}
       {categorias.length > 0 && (
-        <div className="relative -mx-5">
+        <div className="relative -mx-3 sm:-mx-5">
           {/* Fade derecho para indicar que hay más */}
           <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-white to-transparent z-10" />
-          <div className="overflow-x-auto scrollbar-hide px-5 pb-1">
+          <div className="overflow-x-auto scrollbar-hide px-3 sm:px-5 pb-1">
             <div className="flex gap-1.5 py-0.5 w-max pr-8">
               <button type="button" onClick={() => cambiarCat('')}
                 className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap ${
