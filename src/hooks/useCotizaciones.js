@@ -77,8 +77,8 @@ export function useCotizaciones({ estado = '', clienteId = '' } = {}) {
           : { data: [] },
       ])
 
-      const clientesMap  = Object.fromEntries((clientesRes.data ?? []).map(c => [c.id, c]))
-      const vendedoresMap = Object.fromEntries((vendedoresRes.data ?? []).map(v => [v.id, v]))
+      const clientesMap  = Object.fromEntries((clientesRes.error ? [] : clientesRes.data ?? []).map(c => [c.id, c]))
+      const vendedoresMap = Object.fromEntries((vendedoresRes.error ? [] : vendedoresRes.data ?? []).map(v => [v.id, v]))
 
       return rows.map(r => ({
         ...r,
