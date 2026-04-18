@@ -177,7 +177,7 @@ export default function ConfiguracionView() {
       />
 
       {/* Tabs */}
-      <div className="flex overflow-x-auto gap-1 bg-slate-100 p-1 rounded-2xl">
+      <div className="flex overflow-x-auto gap-1 bg-slate-100 p-1 rounded-2xl scrollbar-hide">
         {TABS.map(t => {
           const Icon = t.icon
           const active = tab === t.id
@@ -185,7 +185,7 @@ export default function ConfiguracionView() {
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`relative flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-all flex-1 justify-center overflow-hidden ${
+              className={`relative flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-all sm:flex-1 justify-center overflow-hidden ${
                 active ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
               }`}
             >

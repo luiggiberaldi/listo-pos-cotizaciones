@@ -121,12 +121,12 @@ function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
       {/* Color del usuario */}
       <div className="space-y-1.5">
         <label className="text-xs font-bold text-slate-500 ml-1">Color del usuario</label>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5 sm:gap-2">
           {COLORES_VENDEDOR.map(c => {
             const enUso = coloresUsados.includes(c)
             return (
               <button key={c} type="button" onClick={() => !enUso && cambiar('color', c)} disabled={enUso}
-                className={`w-8 h-8 rounded-lg transition-all ${
+                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg transition-all ${
                   campos.color === c ? 'ring-2 ring-offset-2 ring-slate-400 scale-110'
                   : enUso ? 'opacity-20 cursor-not-allowed'
                   : 'hover:scale-105'

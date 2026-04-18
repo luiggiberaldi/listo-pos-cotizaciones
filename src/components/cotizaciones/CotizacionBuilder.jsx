@@ -305,7 +305,7 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
       {/* Grid de productos */}
       {!isLoading && visibles.length > 0 && (
         <>
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+          <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
             {visibles.map(p => {
               const yaAgregado = idsAgregados.has(p.id)
               const sinStock   = p.stock_actual != null && p.stock_actual <= 0

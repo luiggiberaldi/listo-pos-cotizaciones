@@ -213,7 +213,7 @@ export default function AppLayout() {
 
           {/* Dropdown de alertas */}
           {showNotifs && (
-            <div className="absolute top-full right-0 mt-2 w-80 rounded-2xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+            <div className="absolute top-full right-0 mt-2 w-[calc(100vw-2rem)] sm:w-80 max-w-80 rounded-2xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150"
               style={{ background: '#0f1f3c', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
 
               {/* Header del dropdown */}

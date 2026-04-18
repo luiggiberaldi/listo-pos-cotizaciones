@@ -21,20 +21,22 @@ function Badge({ pct }) {
 
 function KpiCard({ icon: Icon, label, value, sub, badge, gradient, border }) {
   return (
-    <div className="relative overflow-hidden rounded-2xl p-4 flex flex-col gap-2.5"
+    <div className="relative overflow-hidden rounded-2xl p-3 sm:p-4 flex flex-col gap-2 sm:gap-2.5 min-w-0"
       style={{ background: gradient, border: `1px solid ${border}`, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
       <div className="absolute -bottom-4 -right-4 w-20 h-20 rounded-full pointer-events-none"
         style={{ background: 'rgba(255,255,255,0.05)' }} />
-      <div className="flex items-center gap-2 relative z-10">
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+      <div className="flex items-start gap-1.5 sm:gap-2 relative z-10 min-w-0">
+        <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center shrink-0"
           style={{ background: 'rgba(255,255,255,0.15)' }}>
-          <Icon size={16} className="text-white" />
+          <Icon size={14} className="text-white sm:w-4 sm:h-4" />
         </div>
-        <p className="text-[11px] font-medium" style={{ color: 'rgba(255,255,255,0.6)' }}>{label}</p>
-        {badge}
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] sm:text-[11px] font-medium leading-tight" style={{ color: 'rgba(255,255,255,0.6)' }}>{label}</p>
+          {badge && <div className="mt-0.5">{badge}</div>}
+        </div>
       </div>
-      <p className="text-2xl font-black leading-tight text-white relative z-10">{value}</p>
-      {sub && <p className="text-[11px] relative z-10" style={{ color: 'rgba(255,255,255,0.4)' }}>{sub}</p>}
+      <p className="text-xl sm:text-2xl font-black leading-tight text-white relative z-10">{value}</p>
+      {sub && <p className="text-[10px] sm:text-[11px] relative z-10" style={{ color: 'rgba(255,255,255,0.4)' }}>{sub}</p>}
     </div>
   )
 }

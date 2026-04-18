@@ -139,7 +139,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                   {items.map((item, i) => (
                     <tr key={item.id || i} className="border-b border-slate-50">
                       <td className="py-2 pr-2">
-                        <p className="font-medium text-slate-700 truncate max-w-[200px]">{item.nombre_snap}</p>
+                        <p className="font-medium text-slate-700 truncate max-w-[120px] sm:max-w-[200px]">{item.nombre_snap}</p>
                         {item.codigo_snap && (
                           <p className="text-xs text-slate-500 font-mono">{item.codigo_snap}</p>
                         )}

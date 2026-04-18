@@ -61,14 +61,14 @@ export default function DateRangeSelector({ value, onChange }) {
         Personalizado
       </button>
       {showCustom && (
-        <div className="flex items-center gap-2 ml-1">
+        <div className="flex items-center gap-2 ml-1 w-full sm:w-auto">
           <input type="date" value={value.from}
             onChange={e => handleCustom('from', e.target.value)}
-            className="text-xs px-2 py-1.5 rounded-lg border border-slate-200 text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-focus" />
-          <span className="text-xs text-slate-400">a</span>
+            className="text-xs px-2 py-1.5 rounded-lg border border-slate-200 text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-focus flex-1 min-w-0" />
+          <span className="text-xs text-slate-400 shrink-0">a</span>
           <input type="date" value={value.to}
             onChange={e => handleCustom('to', e.target.value)}
-            className="text-xs px-2 py-1.5 rounded-lg border border-slate-200 text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-focus" />
+            className="text-xs px-2 py-1.5 rounded-lg border border-slate-200 text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-focus flex-1 min-w-0" />
         </div>
       )}
     </div>

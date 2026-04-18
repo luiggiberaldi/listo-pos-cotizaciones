@@ -130,15 +130,15 @@ function MetricCard({ icon: Icon, label, value, sub, color = 'primary' }) {
   }
   const t = themes[color] ?? themes.primary
   return (
-    <div className="relative overflow-hidden rounded-2xl p-4 flex flex-col gap-3"
+    <div className="relative overflow-hidden rounded-2xl p-3 sm:p-4 flex flex-col gap-2.5 sm:gap-3"
       style={{ background: t.bg, border: `1px solid ${t.border}`, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
       {/* Orbe decorativo */}
       <div className="absolute -bottom-4 -right-4 w-20 h-20 rounded-full pointer-events-none"
         style={{ background: 'rgba(255,255,255,0.05)' }} />
-      <div className="flex items-center gap-2.5 relative z-10">
-        <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+      <div className="flex items-center gap-2 sm:gap-2.5 relative z-10">
+        <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center shrink-0"
           style={{ background: t.icon }}>
-          <Icon size={18} style={{ color: 'white' }} />
+          <Icon size={16} className="sm:w-[18px] sm:h-[18px]" style={{ color: 'white' }} />
         </div>
         <p className="text-xs font-medium leading-tight" style={{ color: t.label }}>{label}</p>
       </div>
@@ -275,8 +275,8 @@ export default function DashboardView() {
                         <span className="text-sm font-medium text-slate-700">{ESTADO_LABEL[estado]}</span>
                         <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${col.bg} ${col.text}`}>{count}</span>
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-slate-400">
-                        <span>{fmtUsd(total)}{tasaEfectiva > 0 && <span className="ml-1 text-slate-300">({fmtBs(usdToBs(total, tasaEfectiva))})</span>}</span>
+                      <div className="flex items-center gap-2 text-xs text-slate-400 shrink-0">
+                        <span className="truncate max-w-[100px] sm:max-w-none">{fmtUsd(total)}{tasaEfectiva > 0 && <span className="ml-1 text-slate-300 hidden sm:inline">({fmtBs(usdToBs(total, tasaEfectiva))})</span>}</span>
                         <span className="font-semibold text-slate-500 w-8 text-right">{pct}%</span>
                       </div>
                     </div>

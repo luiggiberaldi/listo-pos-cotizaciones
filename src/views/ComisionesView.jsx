@@ -229,7 +229,7 @@ function ModalDetalleVendedor({ vendedor, comisiones, onClose, esSupervisor, onM
                   </div>
 
                   {/* Row 2: Desglose inline */}
-                  <div className="flex items-center gap-3 text-xs mb-2">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 text-xs mb-2">
                     <div className="flex-1 bg-slate-50 rounded-lg px-2.5 py-1.5 border border-slate-100">
                       <span className="text-slate-400">Cabilla ({c.pct_cabilla}%)</span>
                       <span className="ml-1.5 font-bold text-slate-600">{fmtUsd(c.monto_cabilla)}</span>
