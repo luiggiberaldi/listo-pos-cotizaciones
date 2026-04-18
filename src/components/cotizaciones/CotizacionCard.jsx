@@ -105,7 +105,7 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
         <div className="relative z-10 min-w-0">
           <p className="font-black text-white text-sm font-mono leading-tight drop-shadow">{numDisplay}</p>
           {cotizacion.cliente?.nombre && (
-            <p className="text-[11px] font-medium truncate max-w-[160px]" style={{ color: 'rgba(255,255,255,0.75)' }}>
+            <p className="text-[11px] font-medium truncate max-w-[120px] sm:max-w-[160px]" style={{ color: 'rgba(255,255,255,0.75)' }}>
               {cotizacion.cliente.nombre}
             </p>
           )}
@@ -157,30 +157,30 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
       )}
 
       {/* ── Acciones principales ── */}
-      <div className="mt-auto border-t border-slate-100 px-3 py-2 flex items-center gap-1">
+      <div className="mt-auto border-t border-slate-100 px-2 sm:px-3 py-2 flex items-center gap-0.5 sm:gap-1 flex-wrap">
         {/* Ver detalle — siempre visible */}
         <button onClick={() => setShowDetalle(true)}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-primary hover:bg-primary-light transition-colors">
-          <Eye size={13} />Ver
+          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-primary hover:bg-primary-light transition-colors">
+          <Eye size={13} /><span className="hidden xs:inline">Ver</span>
         </button>
         {canEdit && (
           <button onClick={() => onEditar(cotizacion)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
-            <Pencil size={13} />Editar
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
+            <Pencil size={13} /><span className="hidden xs:inline">Editar</span>
           </button>
         )}
         {canPdf && (
           <button onClick={descargarPDF} disabled={pdfLoading}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-40">
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-40">
             {pdfLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <FileDown size={13} />}
             PDF
           </button>
         )}
         {canWhatsApp && (
           <button onClick={handleWhatsApp} disabled={waLoading}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-40">
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-40">
             {waLoading ? <div className="w-3 h-3 border-[1.5px] border-emerald-400 border-t-transparent rounded-full animate-spin" /> : <MessageCircle size={13} />}
-            WhatsApp
+            <span className="hidden sm:inline">WhatsApp</span><span className="sm:hidden">WA</span>
           </button>
         )}
 

@@ -105,33 +105,56 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
               <div className="w-5 h-5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
             </div>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-sm text-slate-500 uppercase border-b border-slate-100">
-                  <th className="text-left py-2 font-semibold">Producto</th>
-                  <th className="text-center py-2 font-semibold w-16">Cant.</th>
-                  <th className="text-right py-2 font-semibold w-24">P. Unit.</th>
-                  <th className="text-right py-2 font-semibold w-24">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item, i) => (
-                  <tr key={item.id || i} className="border-b border-slate-50">
-                    <td className="py-2 pr-2">
-                      <p className="font-medium text-slate-700 truncate max-w-[200px]">{item.nombre_snap}</p>
-                      {item.codigo_snap && (
-                        <p className="text-xs text-slate-500 font-mono">{item.codigo_snap}</p>
-                      )}
-                    </td>
-                    <td className="py-2 text-center text-slate-600">
-                      {Number(item.cantidad).toLocaleString('es-VE')} {item.unidad_snap}
-                    </td>
-                    <td className="py-2 text-right text-slate-600">{fmtUsd(item.precio_unit_usd)}</td>
-                    <td className="py-2 text-right font-bold text-slate-700">{fmtUsd(item.total_linea_usd)}</td>
+            <>
+              {/* Desktop table */}
+              <table className="w-full text-sm hidden sm:table">
+                <thead>
+                  <tr className="text-sm text-slate-500 uppercase border-b border-slate-100">
+                    <th className="text-left py-2 font-semibold">Producto</th>
+                    <th className="text-center py-2 font-semibold w-16">Cant.</th>
+                    <th className="text-right py-2 font-semibold w-24">P. Unit.</th>
+                    <th className="text-right py-2 font-semibold w-24">Total</th>
                   </tr>
+                </thead>
+                <tbody>
+                  {items.map((item, i) => (
+                    <tr key={item.id || i} className="border-b border-slate-50">
+                      <td className="py-2 pr-2">
+                        <p className="font-medium text-slate-700 truncate max-w-[200px]">{item.nombre_snap}</p>
+                        {item.codigo_snap && (
+                          <p className="text-xs text-slate-500 font-mono">{item.codigo_snap}</p>
+                        )}
+                      </td>
+                      <td className="py-2 text-center text-slate-600">
+                        {Number(item.cantidad).toLocaleString('es-VE')} {item.unidad_snap}
+                      </td>
+                      <td className="py-2 text-right text-slate-600">{fmtUsd(item.precio_unit_usd)}</td>
+                      <td className="py-2 text-right font-bold text-slate-700">{fmtUsd(item.total_linea_usd)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {/* Mobile cards */}
+              <div className="sm:hidden divide-y divide-slate-100">
+                {items.map((item, i) => (
+                  <div key={item.id || i} className="py-2.5 px-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-slate-700 text-sm truncate">{item.nombre_snap}</p>
+                        {item.codigo_snap && (
+                          <p className="text-xs text-slate-500 font-mono">{item.codigo_snap}</p>
+                        )}
+                      </div>
+                      <span className="text-sm font-bold text-slate-700 shrink-0">{fmtUsd(item.total_linea_usd)}</span>
+                    </div>
+                    <div className="flex gap-3 mt-1 text-xs text-slate-500">
+                      <span>{Number(item.cantidad).toLocaleString('es-VE')} {item.unidad_snap}</span>
+                      <span>× {fmtUsd(item.precio_unit_usd)}</span>
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            </>
           )}
         </div>
 
@@ -324,19 +347,23 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
       />
 
       {/* Filtros de estado */}
-      <div className="flex items-center gap-2.5 flex-wrap">
-        <Filter size={16} className="text-slate-500 shrink-0" />
-        {ESTADOS_FILTRO.map(({ valor, label }) => (
-          <button key={valor} onClick={() => setEstadoFiltro(valor)}
-            className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors border ${
-              estadoFiltro === valor
-                ? 'bg-primary text-white border-primary'
-                : 'bg-white text-slate-700 border-slate-200 hover:border-primary-focus'
-            }`}>
-            {label}
-          </button>
-        ))}
-        <button onClick={() => refetch()} title="Recargar" className="ml-auto p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
+      <div className="flex items-center gap-2">
+        <Filter size={16} className="text-slate-500 shrink-0 hidden sm:block" />
+        <div className="flex-1 min-w-0 overflow-x-auto scrollbar-hide">
+          <div className="flex items-center gap-1.5 sm:gap-2.5 w-max pb-1 sm:flex-wrap sm:w-auto">
+            {ESTADOS_FILTRO.map(({ valor, label }) => (
+              <button key={valor} onClick={() => setEstadoFiltro(valor)}
+                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-semibold transition-colors border whitespace-nowrap ${
+                  estadoFiltro === valor
+                    ? 'bg-primary text-white border-primary'
+                    : 'bg-white text-slate-700 border-slate-200 hover:border-primary-focus'
+                }`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <button onClick={() => refetch()} title="Recargar" className="p-2 sm:p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors shrink-0">
           <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
         </button>
       </div>
