@@ -195,7 +195,8 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
               <ChevronDown size={14} className={`transition-transform ${showActions ? 'rotate-180' : ''}`} />
             </button>
             {showActions && (
-              <div className="absolute right-0 bottom-full mb-1 w-44 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20">
+              <div className="absolute right-0 bottom-full mb-1 w-44 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
+                onMouseDown={e => e.preventDefault()}>
                 {canAcceptReject && (
                   <>
                     <button onClick={() => { onCambiarEstado(cotizacion.id, 'aceptada'); setShowActions(false) }}
