@@ -220,10 +220,60 @@ export async function generarDespachoPDF({ despacho, items = [], config = {} }) 
   doc.setFontSize(14)
   doc.text(fmtUsd(total), totX + totW - 5, y + 10, { align: 'right' })
 
-  // Firmas a la izquierda del total
+  // ── DATOS DE TRANSPORTE ───────────────────────────────────────────────────
+  y += 20
+  const transportista = despacho.transportista || null
+  const col3W = (CONTENT_W - 8) / 3
+
+  // Cabecera gris
+  doc.setFillColor(240, 240, 240)
+  doc.rect(MARGIN, y, CONTENT_W, 6, 'F')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(7)
+  doc.setTextColor(...C_DARK)
+  doc.text('DATOS DE TRANSPORTE', MARGIN + 2, y + 4)
+  y += 10
+
+  // Fila 1: Chofer / C.I. / Teléfono
+  const fields1 = [
+    { label: 'CHOFER',    val: transportista?.nombre   || '' },
+    { label: 'C.I.',      val: transportista?.rif      || '' },
+    { label: 'TELÉFONO',  val: transportista?.telefono || '' },
+  ]
+  fields1.forEach((f, i) => {
+    const fx = MARGIN + i * (col3W + 4)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7)
+    doc.setTextColor(...C_DARK)
+    doc.text(`${f.label}: `, fx, y)
+    const lw = doc.getTextWidth(`${f.label}: `)
+    doc.setFont('helvetica', 'normal')
+    if (f.val) doc.text(f.val, fx + lw + 0.5, y)
+    doc.setLineWidth(0.2)
+    doc.setDrawColor(...C_YELLOW)
+    doc.line(fx, y + 1.5, fx + col3W, y + 1.5)
+  })
+  y += 8
+
+  // Fila 2: Vehículo / Placa chuto / Placa batea (campos vacíos para llenar a mano)
+  const fields2 = ['VEHÍCULO', 'PLACA CHUTO', 'PLACA BATEA']
+  fields2.forEach((label, i) => {
+    const fx = MARGIN + i * (col3W + 4)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7)
+    doc.setTextColor(...C_DARK)
+    doc.text(`${label}: `, fx, y)
+    doc.setLineWidth(0.2)
+    doc.setDrawColor(...C_YELLOW)
+    doc.line(fx, y + 1.5, fx + col3W, y + 1.5)
+  })
+  y += 12
+
+  // Firmas
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7)
-  
+  doc.setTextColor(...C_DARK)
+
   doc.text('Elaborado/Entregado por', MARGIN + 25, y + 8, { align: 'center' })
   doc.setLineWidth(0.3)
   doc.setDrawColor(...C_DARK)
