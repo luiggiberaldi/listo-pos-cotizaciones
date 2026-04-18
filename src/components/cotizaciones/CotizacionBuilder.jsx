@@ -1361,165 +1361,233 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
         {/* PASO 3: Resumen, descuentos, notas y envío                     */}
         {/* ═══════════════════════════════════════════════════════════════ */}
         {paso === 3 && (
-          <div className="space-y-4">
-            {/* Resumen de cliente + items */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 space-y-3">
-              <SectionH3 icon={User}>Resumen</SectionH3>
-              <div className="flex items-center gap-2 text-sm">
-                <User size={14} className="text-primary" />
-                <span className="font-medium text-slate-700">{clienteSeleccionado?.nombre}</span>
-                <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full capitalize">{clienteSeleccionado?.tipo_cliente}</span>
-              </div>
-              <div className="text-xs text-slate-500">
-                {items.length} producto{items.length !== 1 ? 's' : ''} · Subtotal: <strong>{fmtUsd(subtotal)}</strong>
-              </div>
-            </div>
+          <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 items-start">
 
-            {/* Envío y validez */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 space-y-4">
-              <SectionH3 icon={Truck}>Envío y validez</SectionH3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-slate-700">Transportista</label>
-                  <CustomSelect
-                    options={[
-                      { value: '', label: 'Sin transportista' },
-                      ...transportistas.map(t => ({
-                        value: t.id,
-                        label: t.nombre,
-                        sub: [t.zona_cobertura, t.tarifa_base > 0 ? `$${Number(t.tarifa_base).toFixed(2)}` : ''].filter(Boolean).join(' · ') || undefined,
-                      })),
-                    ]}
-                    value={transportistaId}
-                    onChange={val => setTransportistaId(val)}
-                    placeholder="Sin transportista"
-                    icon={Truck}
-                    disabled={cargando}
-                    clearable
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-slate-700">Válida hasta</label>
-                  <input type="date" value={validaHasta} onChange={e => setValidaHasta(e.target.value)}
-                    min={getLocalISODate()} className={inputCls} disabled={cargando} />
+            {/* ── Columna izquierda: formularios ── */}
+            <div className="flex-1 min-w-0 space-y-4">
+
+              {/* Envío y validez */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 space-y-4">
+                <SectionH3 icon={Truck}>Envío y validez</SectionH3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Transportista</label>
+                    <CustomSelect
+                      options={[
+                        { value: '', label: 'Sin transportista' },
+                        ...transportistas.map(t => ({
+                          value: t.id,
+                          label: t.nombre,
+                          sub: [t.zona_cobertura, t.tarifa_base > 0 ? `$${Number(t.tarifa_base).toFixed(2)}` : ''].filter(Boolean).join(' · ') || undefined,
+                        })),
+                      ]}
+                      value={transportistaId}
+                      onChange={val => setTransportistaId(val)}
+                      placeholder="Sin transportista"
+                      icon={Truck}
+                      disabled={cargando}
+                      clearable
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Válida hasta</label>
+                    <input type="date" value={validaHasta} onChange={e => setValidaHasta(e.target.value)}
+                      min={getLocalISODate()} className={inputCls} disabled={cargando} />
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Descuentos y totales */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 space-y-4">
-              <SectionH3 icon={DollarSign}>Descuentos y totales</SectionH3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              {/* Descuentos */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 space-y-4">
+                <SectionH3 icon={DollarSign}>Ajustes de precio</SectionH3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Descuento global (%)</label>
+                    <div className="relative">
+                      <input type="number" min="0" max="100" step="0.5"
+                        value={descuentoGlobalPct}
+                        onChange={e => setDescuentoGlobalPct(Math.min(100, Math.max(0, Number(e.target.value))))}
+                        onFocus={e => e.target.select()}
+                        className={inputCls} disabled={cargando} />
+                      {descuentoGlobalPct > 0 && (
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-emerald-600">
+                          -{fmtUsd(descuentoUsd)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Costo de envío (USD)</label>
+                    <div className="relative">
+                      <input type="number" min="0" step="0.01"
+                        value={costoEnvioUsd}
+                        onChange={e => setCostoEnvioUsd(Math.max(0, Number(e.target.value)))}
+                        onFocus={e => e.target.select()}
+                        className={inputCls} disabled={cargando} />
+                      {costoEnvioUsd > 0 && (
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500">
+                          +{fmtUsd(costoEnvioUsd)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Notas */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 space-y-4">
+                <SectionH3 icon={StickyNote}>Notas</SectionH3>
                 <div className="space-y-3">
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-slate-700">Descuento global (%)</label>
-                    <input type="number" min="0" max="100" step="0.5"
-                      value={descuentoGlobalPct}
-                      onChange={e => setDescuentoGlobalPct(Math.min(100, Math.max(0, Number(e.target.value))))}
-                      onFocus={e => e.target.select()}
-                      className={inputCls} disabled={cargando} />
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
+                      Para el cliente
+                      <span className="font-normal normal-case text-slate-400 text-[11px]">· aparece en PDF</span>
+                    </label>
+                    <textarea value={notasCliente} onChange={e => setNotasCliente(e.target.value)}
+                      rows={3} placeholder="Ej: Precios válidos por 15 días, sujetos a disponibilidad de stock..."
+                      className={`${inputCls} resize-none`} disabled={cargando} />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-slate-700">Costo de envío (USD)</label>
-                    <input type="number" min="0" step="0.01"
-                      value={costoEnvioUsd}
-                      onChange={e => setCostoEnvioUsd(Math.max(0, Number(e.target.value)))}
-                      onFocus={e => e.target.select()}
-                      className={inputCls} disabled={cargando} />
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
+                      Notas internas
+                      <span className="font-normal normal-case text-slate-400 text-[11px]">· no aparece en PDF</span>
+                    </label>
+                    <textarea value={notasInternas} onChange={e => setNotasInternas(e.target.value)}
+                      rows={2} placeholder="Observaciones internas..."
+                      className={`${inputCls} resize-none`} disabled={cargando} />
                   </div>
-                </div>
-
-                {/* Resumen numérico */}
-                <div className="bg-slate-50 rounded-xl p-4 space-y-2">
-                  <div className="flex justify-between text-sm text-slate-600">
-                    <span>Subtotal</span>
-                    <div className="text-right">
-                      <span className="font-medium">{fmtUsd(subtotal)}</span>
-                      {tasaHook.tasaEfectiva > 0 && <p className="text-[10px] text-slate-400">{fmtBs(usdToBs(subtotal, tasaHook.tasaEfectiva))}</p>}
-                    </div>
-                  </div>
-                  {descuentoUsd > 0 && (
-                    <div className="flex justify-between text-sm text-emerald-600">
-                      <span>Descuento ({descuentoGlobalPct}%)</span>
-                      <span>-{fmtUsd(descuentoUsd)}</span>
-                    </div>
-                  )}
-                  {ivaUsd > 0 && (
-                    <div className="flex justify-between text-sm text-blue-600">
-                      <span>IVA ({config.iva_pct}%)</span>
-                      <span>+{fmtUsd(ivaUsd)}</span>
-                    </div>
-                  )}
-                  {costoEnvioUsd > 0 && (
-                    <div className="flex justify-between text-sm text-slate-600">
-                      <span>Envío</span>
-                      <span>{fmtUsd(costoEnvioUsd)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between font-bold text-slate-800 text-lg border-t border-slate-200 pt-2 mt-2">
-                    <span>TOTAL</span>
-                    <span>{fmtUsd(totalUsd)}</span>
-                  </div>
-                  {tasaHook.tasaEfectiva > 0 && totalUsd > 0 && (
-                    <div className="flex justify-between text-sm text-slate-500 pt-1">
-                      <span className="flex items-center gap-1">
-                        <DollarSign size={12} className="text-slate-400" />
-                        Equiv. Bs
-                      </span>
-                      <span className="font-semibold text-slate-700">
-                        Bs {new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(totalBs)}
-                      </span>
-                    </div>
-                  )}
                 </div>
               </div>
-            </div>
 
-            {/* Notas */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 space-y-4">
-              <SectionH3 icon={StickyNote}>Notas</SectionH3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-slate-700">
-                    Notas para el cliente <span className="text-slate-400">(aparece en PDF)</span>
-                  </label>
-                  <textarea value={notasCliente} onChange={e => setNotasCliente(e.target.value)}
-                    rows={3} placeholder="Ej: Precios válidos por 15 días..."
-                    className={`${inputCls} resize-none`} disabled={cargando} />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-slate-700">
-                    Notas internas <span className="text-slate-400">(no aparece en PDF)</span>
-                  </label>
-                  <textarea value={notasInternas} onChange={e => setNotasInternas(e.target.value)}
-                    rows={3} placeholder="Observaciones internas..."
-                    className={`${inputCls} resize-none`} disabled={cargando} />
-                </div>
-              </div>
-            </div>
-
-            {/* Navegación paso 3 */}
-            <div className="flex flex-col gap-3 pb-8">
-              {/* Botones de acción principales — arriba en móvil */}
-              <div className="flex flex-col sm:flex-row gap-3 order-1 sm:order-2">
-                <button onClick={handleGuardar} disabled={cargando}
-                  className="flex items-center justify-center gap-2 px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm rounded-xl transition-colors disabled:opacity-50 w-full sm:w-auto">
-                  {guardarBorrador.isPending ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-                  Guardar borrador
-                </button>
+              {/* Navegación — solo visible en móvil (lg la mueve al panel derecho) */}
+              <div className="flex flex-col gap-3 pb-4 lg:hidden">
                 <button onClick={() => { setErrorGeneral(''); handleEnviar(tasaHook.tasaEfectiva) }}
                   disabled={cargando || tasaHook.tasaEfectiva <= 0}
-                  className="flex items-center justify-center gap-2 px-6 py-3 text-white font-bold text-sm rounded-xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 w-full sm:w-auto"
+                  className="flex items-center justify-center gap-2 w-full px-6 py-3.5 text-white font-bold text-sm rounded-xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50"
                   style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
                   {enviarCotizacion.isPending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
                   Enviar cotización
                 </button>
+                <div className="flex gap-2">
+                  <button onClick={anterior} disabled={cargando}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-slate-200 text-slate-600 font-semibold text-sm rounded-xl hover:bg-slate-50 transition-colors disabled:opacity-50">
+                    <ArrowLeft size={15} /> Volver
+                  </button>
+                  <button onClick={handleGuardar} disabled={cargando}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm rounded-xl transition-colors disabled:opacity-50">
+                    {guardarBorrador.isPending ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+                    Guardar
+                  </button>
+                </div>
               </div>
-              <button onClick={anterior} disabled={cargando}
-                className="flex items-center justify-center gap-2 px-5 py-3 border border-slate-200 text-slate-600 font-semibold text-sm rounded-xl hover:bg-slate-50 transition-colors disabled:opacity-50 order-2 sm:order-1 sm:self-start">
-                <ArrowLeft size={16} /> Volver
-              </button>
             </div>
+
+            {/* ── Columna derecha: panel sticky de resumen ── */}
+            <div className="w-full lg:w-80 xl:w-96 shrink-0 lg:sticky lg:top-[73px] space-y-3">
+
+              {/* Cliente */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                    <User size={16} className="text-primary" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-bold text-slate-800 text-sm truncate">{clienteSeleccionado?.nombre}</p>
+                    {clienteSeleccionado?.tipo_cliente && (
+                      <p className="text-xs text-slate-400 capitalize">{clienteSeleccionado.tipo_cliente}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Lista de productos */}
+              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+                  <span className="text-xs font-black text-slate-400 uppercase tracking-wider">
+                    {items.length} producto{items.length !== 1 ? 's' : ''}
+                  </span>
+                  <button onClick={anterior} className="text-xs text-primary font-semibold hover:underline">
+                    Editar
+                  </button>
+                </div>
+                <div className="divide-y divide-slate-50 max-h-52 overflow-y-auto">
+                  {items.map((it, i) => {
+                    const lineTotal = round2(it.cantidad * it.precioUnitUsd * (1 - it.descuentoPct / 100))
+                    return (
+                      <div key={it._id ?? i} className="px-4 py-2.5 flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-semibold text-slate-700 leading-tight truncate">{it.nombreSnap}</p>
+                          <p className="text-[11px] text-slate-400 mt-0.5">
+                            {it.cantidad} {it.unidadSnap}
+                            {it.descuentoPct > 0 && <span className="text-emerald-500 ml-1">· -{it.descuentoPct}%</span>}
+                          </p>
+                        </div>
+                        <span className="text-xs font-bold text-slate-700 shrink-0">{fmtUsd(lineTotal)}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Totales */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-2">
+                <div className="flex justify-between text-sm text-slate-500">
+                  <span>Subtotal</span>
+                  <span className="font-medium text-slate-700">{fmtUsd(subtotal)}</span>
+                </div>
+                {descuentoUsd > 0 && (
+                  <div className="flex justify-between text-sm text-emerald-600">
+                    <span>Descuento ({descuentoGlobalPct}%)</span>
+                    <span className="font-medium">−{fmtUsd(descuentoUsd)}</span>
+                  </div>
+                )}
+                {ivaUsd > 0 && (
+                  <div className="flex justify-between text-sm text-blue-600">
+                    <span>IVA ({config.iva_pct}%)</span>
+                    <span className="font-medium">+{fmtUsd(ivaUsd)}</span>
+                  </div>
+                )}
+                {costoEnvioUsd > 0 && (
+                  <div className="flex justify-between text-sm text-slate-500">
+                    <span>Envío</span>
+                    <span className="font-medium text-slate-700">+{fmtUsd(costoEnvioUsd)}</span>
+                  </div>
+                )}
+
+                <div className="border-t border-slate-100 pt-3 mt-1">
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-sm font-bold text-slate-500 uppercase tracking-wide">Total</span>
+                    <span className="text-2xl font-black text-slate-900">{fmtUsd(totalUsd)}</span>
+                  </div>
+                  {tasaHook.tasaEfectiva > 0 && totalUsd > 0 && (
+                    <p className="text-right text-xs text-slate-400 mt-0.5 font-mono">
+                      Bs {new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(totalBs)}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Botones — solo desktop */}
+              <div className="hidden lg:flex flex-col gap-2">
+                <button onClick={() => { setErrorGeneral(''); handleEnviar(tasaHook.tasaEfectiva) }}
+                  disabled={cargando || tasaHook.tasaEfectiva <= 0}
+                  className="flex items-center justify-center gap-2 w-full px-6 py-3.5 text-white font-bold text-sm rounded-xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50"
+                  style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
+                  {enviarCotizacion.isPending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+                  Enviar cotización
+                </button>
+                <button onClick={handleGuardar} disabled={cargando}
+                  className="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm rounded-xl transition-colors disabled:opacity-50">
+                  {guardarBorrador.isPending ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+                  Guardar borrador
+                </button>
+                <button onClick={anterior} disabled={cargando}
+                  className="flex items-center justify-center gap-2 w-full px-4 py-2.5 border border-slate-200 text-slate-600 font-semibold text-sm rounded-xl hover:bg-slate-50 transition-colors disabled:opacity-50">
+                  <ArrowLeft size={15} /> Volver a productos
+                </button>
+              </div>
+            </div>
+
           </div>
         )}
 
