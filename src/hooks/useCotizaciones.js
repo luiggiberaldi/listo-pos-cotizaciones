@@ -103,21 +103,22 @@ export function useCotizacion(id) {
     queryKey: [...COTIZACIONES_KEY, id],
     queryFn: async () => {
       const tabla = esSupervisor ? 'cotizaciones' : 'v_cotizaciones_vendedor'
-      const { data: cot, error: e1 } = await supabase
-        .from(tabla)
-        .select('id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en')
-        .eq('id', id)
-        .single()
-      if (e1) throw e1
+      const [cotRes, itemsRes] = await Promise.all([
+        supabase
+          .from(tabla)
+          .select('id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en')
+          .eq('id', id)
+          .single(),
+        supabase
+          .from('cotizacion_items')
+          .select('producto_id, codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, descuento_pct, total_linea_usd, orden')
+          .eq('cotizacion_id', id)
+          .order('orden'),
+      ])
+      if (cotRes.error) throw cotRes.error
+      if (itemsRes.error) throw itemsRes.error
 
-      const { data: items, error: e2 } = await supabase
-        .from('cotizacion_items')
-        .select('producto_id, codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, descuento_pct, total_linea_usd, orden')
-        .eq('cotizacion_id', id)
-        .order('orden')
-      if (e2) throw e2
-
-      return { ...cot, items: items ?? [] }
+      return { ...cotRes.data, items: itemsRes.data ?? [] }
     },
     enabled: !!id && !!perfil,
   })

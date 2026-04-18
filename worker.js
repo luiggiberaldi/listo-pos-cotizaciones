@@ -151,6 +151,12 @@ export default {
     if (isHtml) {
       newHeaders.set('Cache-Control', 'no-cache, no-store, must-revalidate')
       newHeaders.set('Pragma', 'no-cache')
+    } else {
+      // Versioned assets (Vite hashed filenames) → immutable 1 year cache
+      const isVersionedAsset = /\/assets\/.*-[a-zA-Z0-9]{8,}\.(js|css|woff2?|png|jpg|webp|ico)$/i.test(url.pathname)
+      if (isVersionedAsset) {
+        newHeaders.set('Cache-Control', 'public, max-age=31536000, immutable')
+      }
     }
 
     return new Response(response.body, {
