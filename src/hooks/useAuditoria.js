@@ -33,5 +33,7 @@ export function useAuditoria({ pagina = 0, porPagina = 50, usuarioId = '', categ
       return { registros: data ?? [], total: count ?? 0 }
     },
     enabled: perfil?.rol === 'supervisor',
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 10,
   })
 }

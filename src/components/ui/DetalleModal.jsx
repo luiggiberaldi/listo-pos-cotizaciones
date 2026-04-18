@@ -65,7 +65,7 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
     setCargando(true)
     supabase
       .from('cotizacion_items')
-      .select('*')
+      .select('producto_id, codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, descuento_pct, total_linea_usd, orden')
       .eq('cotizacion_id', cotizacionId)
       .order('orden')
       .then(({ data }) => {

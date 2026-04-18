@@ -32,6 +32,8 @@ export function useClientes(busqueda = '') {
       return await res.json()
     },
     enabled: !!perfil,
+    staleTime: 1000 * 60 * 3,
+    gcTime: 1000 * 60 * 10,
   })
 }
 
@@ -195,5 +197,6 @@ export function useVendedores() {
       return data ?? []
     },
     staleTime: 1000 * 60 * 10, // 10 minutos
+    gcTime: 1000 * 60 * 30,
   })
 }

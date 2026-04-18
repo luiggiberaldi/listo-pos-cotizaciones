@@ -33,6 +33,7 @@ export function useDespachos({ estado = '' } = {}) {
           cotizacion:cotizaciones!notas_despacho_cotizacion_id_fkey(id, numero, version)
         `)
         .order('creado_en', { ascending: false })
+        .limit(200)
 
       if (estado) query = query.eq('estado', estado)
 
@@ -44,6 +45,8 @@ export function useDespachos({ estado = '' } = {}) {
       return data ?? []
     },
     enabled: !!perfil,
+    staleTime: 1000 * 60 * 3,
+    gcTime: 1000 * 60 * 10,
   })
 }
 

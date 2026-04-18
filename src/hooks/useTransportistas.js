@@ -23,6 +23,7 @@ export function useTransportistas({ soloActivos = true } = {}) {
     },
     enabled: !!perfil,
     staleTime: 1000 * 60 * 10,
+    gcTime: 1000 * 60 * 30, // transportistas rarely change
   })
 }
 

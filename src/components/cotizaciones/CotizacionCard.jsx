@@ -30,7 +30,7 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
     try {
       const [{ generarPDF }, itemsRes] = await Promise.all([
         import('../../services/pdf/cotizacionPDF'),
-        supabase.from('cotizacion_items').select('*').eq('cotizacion_id', cotizacion.id).order('orden'),
+        supabase.from('cotizacion_items').select('cantidad, nombre_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacion.id).order('orden'),
       ])
       if (itemsRes.error) throw itemsRes.error
       await generarPDF({ cotizacion, items: itemsRes.data ?? [], config })
@@ -47,7 +47,7 @@ export default function CotizacionCard({ cotizacion, onEditar, onAnular, onCambi
     try {
       const [{ generarPDF }, itemsRes] = await Promise.all([
         import('../../services/pdf/cotizacionPDF'),
-        supabase.from('cotizacion_items').select('*').eq('cotizacion_id', cotizacion.id).order('orden'),
+        supabase.from('cotizacion_items').select('cantidad, nombre_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacion.id).order('orden'),
       ])
       if (itemsRes.error) throw itemsRes.error
       const pdfBlob = await generarPDF({ cotizacion, items: itemsRes.data ?? [], config, returnBlob: true })

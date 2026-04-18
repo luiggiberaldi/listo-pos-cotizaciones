@@ -41,6 +41,7 @@ export function useCotizaciones({ estado = '', clienteId = '' } = {}) {
             despacho:notas_despacho!notas_despacho_cotizacion_id_fkey(id, estado)
           `)
           .order('creado_en', { ascending: false })
+          .limit(200)
 
         if (estado) query = query.eq('estado', estado)
         if (clienteId) query = query.eq('cliente_id', clienteId)
@@ -53,9 +54,10 @@ export function useCotizaciones({ estado = '', clienteId = '' } = {}) {
       // Vendedor: filtrar explícitamente por su propio vendedor_id
       let query = supabase
         .from('v_cotizaciones_vendedor')
-        .select('*')
+        .select('id, numero, version, cliente_id, vendedor_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, notas_cliente, creado_en, enviada_en')
         .eq('vendedor_id', perfil.id)
         .order('creado_en', { ascending: false })
+        .limit(200)
 
       if (estado) query = query.eq('estado', estado)
       if (clienteId) query = query.eq('cliente_id', clienteId)
@@ -87,6 +89,8 @@ export function useCotizaciones({ estado = '', clienteId = '' } = {}) {
       }))
     },
     enabled: !!perfil,
+    staleTime: 1000 * 60 * 3,
+    gcTime: 1000 * 60 * 10,
   })
 }
 
@@ -101,14 +105,14 @@ export function useCotizacion(id) {
       const tabla = esSupervisor ? 'cotizaciones' : 'v_cotizaciones_vendedor'
       const { data: cot, error: e1 } = await supabase
         .from(tabla)
-        .select('*')
+        .select('id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en')
         .eq('id', id)
         .single()
       if (e1) throw e1
 
       const { data: items, error: e2 } = await supabase
         .from('cotizacion_items')
-        .select('*')
+        .select('producto_id, codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, descuento_pct, total_linea_usd, orden')
         .eq('cotizacion_id', id)
         .order('orden')
       if (e2) throw e2

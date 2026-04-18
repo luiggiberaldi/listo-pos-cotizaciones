@@ -200,6 +200,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
       }
     },
     enabled: !!perfil && !!from && !!to,
-    staleTime: 1000 * 60 * 2,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 15,
   })
 }

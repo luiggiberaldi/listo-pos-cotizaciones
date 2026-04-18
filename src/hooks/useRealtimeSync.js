@@ -38,9 +38,11 @@ export function useRealtimeSync() {
         'postgres_changes',
         { event: '*', schema: 'public', table: tabla },
         () => {
-          // Solo invalidar cache — React Query re-fetcha automáticamente
+          // Mark data as stale without immediately refetching
+          // Data will be refetched when the user navigates to the view
+          // This saves significant egress vs refetching on every change
           for (const key of keys) {
-            qc.invalidateQueries({ queryKey: key })
+            qc.invalidateQueries({ queryKey: key, refetchType: 'none' })
           }
         }
       )

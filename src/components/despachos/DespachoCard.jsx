@@ -35,7 +35,7 @@ export default function DespachoCard({ despacho, onCambiarEstado, onAnular, onRe
     try {
       const [{ generarDespachoPDF }, itemsRes] = await Promise.all([
         import('../../services/pdf/despachoPDF'),
-        supabase.from('cotizacion_items').select('*').eq('cotizacion_id', despacho.cotizacion_id).order('orden'),
+        supabase.from('cotizacion_items').select('codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, total_linea_usd, orden').eq('cotizacion_id', despacho.cotizacion_id).order('orden'),
       ])
       if (itemsRes.error) throw itemsRes.error
       await generarDespachoPDF({ despacho, items: itemsRes.data ?? [], config, formaPago: despacho.forma_pago || '' })

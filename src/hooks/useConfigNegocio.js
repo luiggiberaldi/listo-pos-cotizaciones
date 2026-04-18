@@ -27,6 +27,7 @@ export function useConfigNegocio() {
       return data ?? {}
     },
     staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000, // config rarely changes, keep in cache 30 min
   })
 }
 

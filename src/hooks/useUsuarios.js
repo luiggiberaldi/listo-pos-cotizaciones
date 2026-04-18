@@ -22,6 +22,8 @@ export function useUsuarios() {
       return data ?? []
     },
     enabled: perfil?.rol === 'supervisor',
+    staleTime: 1000 * 60 * 10,
+    gcTime: 1000 * 60 * 15,
   })
 }
 
@@ -42,13 +44,16 @@ export function useActualizarUsuario() {
   return useMutation({
     mutationFn: async ({ id, nombre, rol, pin, color }) => {
       await adminAPI.updateUser(id, { nombre, rol, pin, color })
+      return { color }
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: KEY })
-      // Invalidar caches que muestran el color del vendedor
-      qc.invalidateQueries({ queryKey: ['cotizaciones'] })
-      qc.invalidateQueries({ queryKey: ['clientes'] })
-      qc.invalidateQueries({ queryKey: ['despachos'] })
+      // Only invalidate dependent caches when color changed (vendedor badge color)
+      if (result?.color !== undefined) {
+        qc.invalidateQueries({ queryKey: ['cotizaciones'] })
+        qc.invalidateQueries({ queryKey: ['clientes'] })
+        qc.invalidateQueries({ queryKey: ['despachos'] })
+      }
     },
   })
 }

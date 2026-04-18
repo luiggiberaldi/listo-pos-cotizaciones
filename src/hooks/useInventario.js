@@ -68,6 +68,8 @@ export function useInventario({ busqueda = '', categoria = '', page = 0, pageSiz
       return { productos, totalCount }
     },
     enabled: !!perfil,
+    staleTime: 1000 * 60 * 3,
+    gcTime: 1000 * 60 * 10,
   })
 }
 
