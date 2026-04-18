@@ -59,7 +59,7 @@ function PantallaCarga() {
     <div className="min-h-screen flex items-center justify-center"
       style={{ background: 'linear-gradient(135deg, #f0f9ff 0%, #ecfdf5 100%)' }}>
       <div className="flex flex-col items-center gap-4">
-        <img src="/logo.png" alt="Listo POS" className="h-24 w-auto object-contain opacity-90" />
+        <img src="/logo-dark.png" alt="Listo POS" className="h-24 w-auto object-contain opacity-90" />
         <div className="w-8 h-8 border-[3px] border-sky-300 border-t-sky-500 rounded-full animate-spin" />
       </div>
     </div>

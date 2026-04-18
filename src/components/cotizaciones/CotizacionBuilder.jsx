@@ -225,34 +225,38 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
         )}
       </div>
 
-      {/* Chips de categoría — scroll horizontal sin wrap */}
+      {/* Chips de categoría — scroll horizontal con fade indicador */}
       {categorias.length > 0 && (
-        <div className="overflow-x-auto scrollbar-hide -mx-1 px-1">
-          <div className="flex gap-1.5 py-0.5 w-max">
-            <button type="button" onClick={() => cambiarCat('')}
-              className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap ${
-                !catActiva ? 'bg-primary text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-              }`}>
-              Todos
-            </button>
-            {categorias.map(cat => (
-              <button key={cat} type="button" onClick={() => cambiarCat(catActiva === cat ? '' : cat)}
+        <div className="relative -mx-5">
+          {/* Fade derecho para indicar que hay más */}
+          <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-white to-transparent z-10" />
+          <div className="overflow-x-auto scrollbar-hide px-5 pb-1">
+            <div className="flex gap-1.5 py-0.5 w-max pr-8">
+              <button type="button" onClick={() => cambiarCat('')}
                 className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap ${
-                  catActiva === cat ? 'bg-primary text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                  !catActiva ? 'bg-primary text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                 }`}>
-                {cat}
+                Todos
               </button>
-            ))}
+              {categorias.map(cat => (
+                <button key={cat} type="button" onClick={() => cambiarCat(catActiva === cat ? '' : cat)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap ${
+                    catActiva === cat ? 'bg-primary text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                  }`}>
+                  {cat}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
 
       {/* Cargando */}
       {isLoading && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">
           {[1,2,3,4,5,6].map(i => (
             <div key={i} className="rounded-xl border border-slate-100 overflow-hidden">
-              <div className="h-14 bg-slate-100 animate-pulse" />
+              <div className="h-16 bg-slate-100 animate-pulse" />
               <div className="p-2.5 space-y-1.5">
                 <div className="h-2.5 bg-slate-100 rounded animate-pulse w-3/4" />
                 <div className="h-2 bg-slate-100 rounded animate-pulse w-1/2" />
@@ -263,10 +267,10 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
         </div>
       )}
 
-      {/* Grid de productos */}
+      {/* Grid de productos — ajustado para panel angosto */}
       {!isLoading && paginados.length > 0 && (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2">
             {paginados.map(p => {
               const yaAgregado = idsAgregados.has(p.id)
               const sinStock   = p.stock_actual != null && p.stock_actual <= 0
@@ -710,100 +714,166 @@ function SectionH3({ icon: Icon, children }) {
 }
 // ─── Panel de cesta (lado derecho del paso 2) ────────────────────────────────
 function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente, onAnterior }) {
-  return (
-    <div className="bg-white rounded-2xl border border-slate-200 flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-        <span className="font-bold text-slate-700 text-sm flex items-center gap-2">
-          <ShoppingCart size={14} className="text-primary" /> Cesta
-        </span>
-        <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${items.length > 0 ? 'bg-primary text-white' : 'bg-slate-100 text-slate-400'}`}>
-          {items.length} {items.length === 1 ? 'item' : 'items'}
-        </span>
-      </div>
+  const [expandido, setExpandido] = useState(false)
 
-      {/* Lista de items */}
-      <div className="flex-1 overflow-y-auto divide-y divide-slate-50" style={{ maxHeight: 'calc(100vh - 360px)', minHeight: '120px' }}>
-        {items.length === 0 && (
-          <div className="p-8 text-center text-slate-400">
-            <ShoppingCart size={28} className="mx-auto mb-2 opacity-20" />
-            <p className="text-xs">Sin productos todavía</p>
-            <p className="text-[11px] text-slate-300 mt-1">Haz clic en un producto del catálogo</p>
+  // En móvil: barra sticky + drawer expandible
+  // En desktop (lg+): panel completo lateral
+  return (
+    <>
+      {/* ── Móvil: barra inferior sticky ── */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-slate-200 shadow-lg">
+        {/* Drawer expandido */}
+        {expandido && (
+          <div className="border-b border-slate-100 max-h-[50vh] overflow-y-auto divide-y divide-slate-50">
+            {items.length === 0 && (
+              <p className="text-xs text-slate-400 text-center py-4">Sin productos todavía</p>
+            )}
+            {items.map((it, idx) => {
+              const linea = mulR(it.cantidad, mulR(it.precioUnitUsd, 1 - it.descuentoPct / 100))
+              return (
+                <div key={it._key} className="px-4 py-2.5 flex items-center gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-slate-700 truncate">{it.nombreSnap}</p>
+                    <p className="text-[11px] text-slate-400">{fmtUsd(it.precioUnitUsd)} · {it.unidadSnap}</p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button type="button"
+                      onClick={() => it.cantidad <= 1 ? onEliminar(idx) : onCambiar(idx, 'cantidad', it.cantidad - 1)}
+                      className="w-6 h-6 rounded-full bg-slate-100 hover:bg-red-100 text-slate-500 hover:text-red-500 flex items-center justify-center transition-colors">
+                      <Minus size={10} />
+                    </button>
+                    <span className="w-6 text-center text-xs font-bold">{it.cantidad}</span>
+                    <button type="button"
+                      onClick={() => onCambiar(idx, 'cantidad', it.cantidad + 1)}
+                      className="w-6 h-6 rounded-full bg-slate-100 hover:bg-emerald-100 text-slate-500 hover:text-emerald-600 flex items-center justify-center transition-colors">
+                      <Plus size={10} />
+                    </button>
+                  </div>
+                  <span className="text-xs font-bold text-slate-800 w-14 text-right shrink-0">{fmtUsd(linea)}</span>
+                  <button type="button" onClick={() => onEliminar(idx)} className="text-slate-300 hover:text-red-400 transition-colors">
+                    <X size={12} />
+                  </button>
+                </div>
+              )
+            })}
           </div>
         )}
-        {items.map((it, idx) => {
-          const linea = mulR(it.cantidad, mulR(it.precioUnitUsd, 1 - it.descuentoPct / 100))
-          return (
-            <div key={it._key} className="px-3 py-2.5 flex items-start gap-2 hover:bg-slate-50/50 transition-colors group">
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-slate-700 leading-snug line-clamp-2">{it.nombreSnap}</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">{fmtUsd(it.precioUnitUsd)} · {it.unidadSnap}</p>
-                {it.descuentoPct > 0 && (
-                  <p className="text-[10px] text-amber-500 font-semibold mt-0.5">Desc. {it.descuentoPct}%</p>
-                )}
-              </div>
-              {/* Controles cantidad */}
-              <div className="flex items-center gap-1 shrink-0 mt-0.5">
-                <button type="button"
-                  onClick={() => it.cantidad <= 1 ? onEliminar(idx) : onCambiar(idx, 'cantidad', Math.max(0.01, it.cantidad - 1))}
-                  className="w-5 h-5 rounded-full bg-slate-100 hover:bg-red-100 text-slate-500 hover:text-red-500 flex items-center justify-center transition-colors">
-                  <Minus size={9} />
-                </button>
-                <input
-                  type="number" min="0.01" step="0.01"
-                  value={it.cantidad}
-                  onChange={e => { const v = parseFloat(e.target.value); if (!isNaN(v) && v > 0) onCambiar(idx, 'cantidad', v) }}
-                  className="w-10 text-center text-xs font-bold border border-slate-200 rounded-lg py-0.5 focus:outline-none focus:ring-1 focus:ring-primary-focus bg-white"
-                />
-                <button type="button"
-                  onClick={() => onCambiar(idx, 'cantidad', it.cantidad + 1)}
-                  className="w-5 h-5 rounded-full bg-slate-100 hover:bg-emerald-100 text-slate-500 hover:text-emerald-600 flex items-center justify-center transition-colors">
-                  <Plus size={9} />
-                </button>
-              </div>
-              {/* Total línea + eliminar */}
-              <div className="flex flex-col items-end gap-1 shrink-0">
-                <span className="text-xs font-bold text-slate-800">{fmtUsd(linea)}</span>
-                <button type="button" onClick={() => onEliminar(idx)}
-                  className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-all">
-                  <X size={11} />
-                </button>
-              </div>
-            </div>
-          )
-        })}
+        {/* Barra compacta */}
+        <div className="px-4 py-3 flex items-center gap-3">
+          <button type="button" onClick={() => setExpandido(v => !v)}
+            className="flex items-center gap-2 flex-1 min-w-0">
+            <ShoppingCart size={16} className="text-primary shrink-0" />
+            <span className="text-sm font-bold text-slate-700">
+              {items.length} {items.length === 1 ? 'item' : 'items'}
+            </span>
+            {items.length > 0 && (
+              <span className="text-sm font-black text-slate-800 ml-1">{fmtUsd(subtotal)}</span>
+            )}
+            <ChevronDown size={14} className={`text-slate-400 ml-auto transition-transform ${expandido ? 'rotate-180' : ''}`} />
+          </button>
+          <button type="button" onClick={onSiguiente} disabled={items.length === 0}
+            className="flex items-center gap-1.5 px-4 py-2 text-white font-bold text-sm rounded-xl disabled:opacity-40 shrink-0"
+            style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
+            Continuar <ArrowRight size={14} />
+          </button>
+        </div>
       </div>
+      {/* Spacer para que el contenido no quede detrás de la barra */}
+      <div className="lg:hidden h-20" />
 
-      {/* Totales */}
-      {items.length > 0 && (
-        <div className="border-t border-slate-100 px-4 py-3 space-y-1.5">
-          <div className="flex justify-between items-baseline">
-            <span className="text-xs text-slate-500">Subtotal</span>
-            <span className="text-base font-black text-slate-800">{fmtUsd(subtotal)}</span>
-          </div>
-          {tasa > 0 && (
-            <div className="flex justify-between items-baseline">
-              <span className="text-[11px] text-slate-400">En Bs</span>
-              <span className="text-xs text-slate-400">{fmtBs(usdToBs(subtotal, tasa))}</span>
+      {/* ── Desktop: panel lateral completo ── */}
+      <div className="hidden lg:flex bg-white rounded-2xl border border-slate-200 flex-col overflow-hidden">
+        {/* Header */}
+        <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+          <span className="font-bold text-slate-700 text-sm flex items-center gap-2">
+            <ShoppingCart size={14} className="text-primary" /> Cesta
+          </span>
+          <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${items.length > 0 ? 'bg-primary text-white' : 'bg-slate-100 text-slate-400'}`}>
+            {items.length} {items.length === 1 ? 'item' : 'items'}
+          </span>
+        </div>
+
+        {/* Lista de items */}
+        <div className="flex-1 overflow-y-auto divide-y divide-slate-50" style={{ maxHeight: 'calc(100vh - 360px)', minHeight: '120px' }}>
+          {items.length === 0 && (
+            <div className="p-8 text-center text-slate-400">
+              <ShoppingCart size={28} className="mx-auto mb-2 opacity-20" />
+              <p className="text-xs">Sin productos todavía</p>
+              <p className="text-[11px] text-slate-300 mt-1">Haz clic en un producto del catálogo</p>
             </div>
           )}
-          <p className="text-[10px] text-slate-300">* Descuentos y envío en el siguiente paso</p>
+          {items.map((it, idx) => {
+            const linea = mulR(it.cantidad, mulR(it.precioUnitUsd, 1 - it.descuentoPct / 100))
+            return (
+              <div key={it._key} className="px-3 py-2.5 flex items-start gap-2 hover:bg-slate-50/50 transition-colors group">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-slate-700 leading-snug line-clamp-2">{it.nombreSnap}</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">{fmtUsd(it.precioUnitUsd)} · {it.unidadSnap}</p>
+                  {it.descuentoPct > 0 && (
+                    <p className="text-[10px] text-amber-500 font-semibold mt-0.5">Desc. {it.descuentoPct}%</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 shrink-0 mt-0.5">
+                  <button type="button"
+                    onClick={() => it.cantidad <= 1 ? onEliminar(idx) : onCambiar(idx, 'cantidad', Math.max(0.01, it.cantidad - 1))}
+                    className="w-5 h-5 rounded-full bg-slate-100 hover:bg-red-100 text-slate-500 hover:text-red-500 flex items-center justify-center transition-colors">
+                    <Minus size={9} />
+                  </button>
+                  <input
+                    type="number" min="0.01" step="0.01"
+                    value={it.cantidad}
+                    onChange={e => { const v = parseFloat(e.target.value); if (!isNaN(v) && v > 0) onCambiar(idx, 'cantidad', v) }}
+                    className="w-10 text-center text-xs font-bold border border-slate-200 rounded-lg py-0.5 focus:outline-none focus:ring-1 focus:ring-primary-focus bg-white"
+                  />
+                  <button type="button"
+                    onClick={() => onCambiar(idx, 'cantidad', it.cantidad + 1)}
+                    className="w-5 h-5 rounded-full bg-slate-100 hover:bg-emerald-100 text-slate-500 hover:text-emerald-600 flex items-center justify-center transition-colors">
+                    <Plus size={9} />
+                  </button>
+                </div>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <span className="text-xs font-bold text-slate-800">{fmtUsd(linea)}</span>
+                  <button type="button" onClick={() => onEliminar(idx)}
+                    className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-all">
+                    <X size={11} />
+                  </button>
+                </div>
+              </div>
+            )
+          })}
         </div>
-      )}
 
-      {/* Botones */}
-      <div className="border-t border-slate-100 p-3 space-y-2">
-        <button type="button" onClick={onSiguiente} disabled={items.length === 0}
-          className="w-full flex items-center justify-center gap-2 py-2.5 text-white font-bold text-sm rounded-xl transition-all disabled:opacity-40 active:scale-[0.98]"
-          style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
-          Continuar al resumen <ArrowRight size={14} />
-        </button>
-        <button type="button" onClick={onAnterior}
-          className="w-full py-2 border border-slate-200 text-slate-500 font-semibold text-sm rounded-xl hover:bg-slate-50 transition-colors">
-          Volver
-        </button>
+        {/* Totales */}
+        {items.length > 0 && (
+          <div className="border-t border-slate-100 px-4 py-3 space-y-1.5">
+            <div className="flex justify-between items-baseline">
+              <span className="text-xs text-slate-500">Subtotal</span>
+              <span className="text-base font-black text-slate-800">{fmtUsd(subtotal)}</span>
+            </div>
+            {tasa > 0 && (
+              <div className="flex justify-between items-baseline">
+                <span className="text-[11px] text-slate-400">En Bs</span>
+                <span className="text-xs text-slate-400">{fmtBs(usdToBs(subtotal, tasa))}</span>
+              </div>
+            )}
+            <p className="text-[10px] text-slate-300">* Descuentos y envío en el siguiente paso</p>
+          </div>
+        )}
+
+        {/* Botones */}
+        <div className="border-t border-slate-100 p-3 space-y-2">
+          <button type="button" onClick={onSiguiente} disabled={items.length === 0}
+            className="w-full flex items-center justify-center gap-2 py-2.5 text-white font-bold text-sm rounded-xl transition-all disabled:opacity-40 active:scale-[0.98]"
+            style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
+            Continuar al resumen <ArrowRight size={14} />
+          </button>
+          <button type="button" onClick={onAnterior}
+            className="w-full py-2 border border-slate-200 text-slate-500 font-semibold text-sm rounded-xl hover:bg-slate-50 transition-colors">
+            Volver
+          </button>
+        </div>
       </div>
-    </div>
+    </>
   )
 }
 
