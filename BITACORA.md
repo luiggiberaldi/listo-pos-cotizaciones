@@ -596,6 +596,74 @@ Ambas ejecutadas vía Supabase Management API (`POST /v1/projects/{id}/database/
 
 ---
 
+### SESIÓN 9 — 18/04/2026
+
+**Objetivo de la sesión:** Auditoría de seguridad completa + rebrand visual.
+
+#### Parte 1: Rebrand "Listo POS" → "Construacero Carabobo"
+- Se actualizaron 15 archivos con referencias al nombre anterior
+- Títulos, meta tags, textos en la UI, nombres de claves de storage
+
+#### Parte 2: Auditoría de seguridad (5 brechas corregidas)
+
+Una auditoría externa identificó 5 vulnerabilidades reales en el sistema. Todas fueron corregidas.
+
+**Brecha 1 — `productos.costo_usd` visible para vendedores**
+- Problema: la política RLS `productos_todos_leen` permitía a cualquier usuario autenticado leer todas las columnas, incluyendo el costo. RLS no puede filtrar columnas, solo filas.
+- Solución: se eliminó esa política y se creó `productos_supervisor_select` que solo permite lectura a supervisores. Los vendedores ahora acceden vía 3 RPCs `SECURITY DEFINER` que excluyen `costo_usd`:
+  - `obtener_productos_vendedor()` — lista paginada con búsqueda
+  - `obtener_categorias_vendedor()` — categorías únicas
+  - `obtener_stock_productos()` — check de stock por IDs
+
+**Brecha 2 — `cotizaciones.notas_internas` visible para vendedores**
+- Problema: las consultas del frontend usaban `select('*')` que traía todas las columnas incluyendo notas internas.
+- Solución: se reemplazó por listas explícitas de columnas que excluyen `notas_internas`.
+
+**Brecha 3 — `gate_password_hash` expuesto al navegador**
+- Problema: la validación del gate traía el hash de la contraseña al browser y comparaba client-side. Cualquiera podía ver el hash en Network tab.
+- Solución: se crearon 2 RPCs `SECURITY DEFINER` llamables por `anon`:
+  - `validar_gate_acceso(email, hash)` — compara server-side, retorna boolean
+  - `tiene_gate_configurado()` — retorna boolean
+  - El hash NUNCA sale de la base de datos.
+
+**Brecha 4 — `configuracion_negocio` accesible sin autenticación**
+- Problema: la política `config_todos_leen USING (true)` permitía que usuarios no autenticados leyeran toda la configuración.
+- Solución: se reemplazó por `config_autenticados_leen USING (auth.uid() IS NOT NULL)`.
+
+**Brecha 5 — Gate login era código muerto**
+- Problema: `validarGate` estaba importado en `LoginPage.jsx` pero nunca se ejecutaba. La constante `GATE_SESSION_KEY` estaba definida pero no se usaba.
+- Solución: se re-implementó el componente `GateStep` con estilo dark premium coherente con el login. Si hay gate configurado, pide email + contraseña antes de mostrar la selección de usuarios. Si no hay gate, salta directo.
+
+#### Archivos modificados
+
+| Archivo | Cambio |
+|---------|--------|
+| `supabase/migrations/039_seguridad_datos_y_gate.sql` | **NUEVO** — 5 RPCs + políticas restrictivas |
+| `src/hooks/useInventario.js` | Vendedor usa RPCs en vez de vista/tabla directa |
+| `src/hooks/useConfigNegocio.js` | Gate por RPC, select explícito sin `gate_password_hash` |
+| `src/views/CotizacionesView.jsx` | Stock check vía RPC `obtener_stock_productos` |
+| `src/components/cotizaciones/CotizacionBuilder.jsx` | Select explícito sin `notas_internas` |
+| `src/modules/auth/LoginPage.jsx` | GateStep re-implementado con validación server-side |
+
+#### Decisiones técnicas
+- RPCs `SECURITY DEFINER` es la única forma de ocultar columnas en Supabase (RLS no filtra columnas)
+- Las vistas `v_productos_vendedor` y `v_cotizaciones_vendedor` tienen `security_invoker = on`, así que no sirven si la tabla base está restringida — por eso se usan RPCs
+- El gate se valida con `sessionStorage` para que expire al cerrar pestaña (decisión de Sesión 8 se mantiene)
+- El hash SHA-256 se calcula en el cliente y se envía al RPC — nunca se envía la contraseña en texto plano por el wire, y nunca se trae el hash almacenado al browser
+
+#### Verificación
+- Vendedor no puede acceder a `costo_usd` ni por frontend ni por query directa
+- Vendedor no recibe `notas_internas` en las consultas de cotizaciones
+- `gate_password_hash` no aparece en ninguna respuesta del API al frontend
+- Usuarios no autenticados no pueden leer `configuracion_negocio`
+- Gate funcional: pide credenciales si está configurado, salta si no
+
+#### Pendiente
+- La nota de Sesión 8 sobre RLS de `configuracion_negocio` para lectura anónima queda **RESUELTA** — ahora se usa RPCs callable por `anon` que solo retornan boolean
+- Fase 6: Transportistas + Historial + Versioning (única fase funcional pendiente)
+
+---
+
 ## GLOSARIO
 
 | Término | Significado |
