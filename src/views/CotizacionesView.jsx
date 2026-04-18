@@ -3,8 +3,9 @@
 // El builder reemplaza la lista in-page (sin navegación adicional)
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { FileText, Plus, RefreshCw, Filter, GitBranch, AlertTriangle, PackageCheck, Loader2, X } from 'lucide-react'
+import { FileText, Plus, RefreshCw, Filter, GitBranch, AlertTriangle, PackageCheck, Loader2, X, AlertCircle } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
+import supabase from '../services/supabase/client'
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import { useCotizaciones, useAnularCotizacion, useActualizarEstado, useCrearVersion, useReciclarCotizacion } from '../hooks/useCotizaciones'
 import { useCrearDespacho } from '../hooks/useDespachos'
@@ -55,9 +56,27 @@ const FORMAS_PAGO = ['Efectivo', 'Zelle', 'Pago Móvil', 'USDT']
 function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 }) {
   const { data: detalle } = useCotizacion(cotizacion?.id)
   const [formaPago, setFormaPago] = useState('')
+  const [stockMap, setStockMap] = useState({})
   if (!cotizacion) return null
 
   const items = detalle?.items ?? []
+
+  // Fetch stock for items when they load
+  useEffect(() => {
+    if (items.length === 0) return
+    const productIds = [...new Set(items.map(i => i.producto_id).filter(Boolean))]
+    if (productIds.length === 0) return
+    supabase.from('productos').select('id, stock_actual, nombre').in('id', productIds)
+      .then(({ data }) => {
+        if (data) setStockMap(Object.fromEntries(data.map(p => [p.id, p.stock_actual])))
+      })
+  }, [items])
+
+  const stockIssues = items.filter(i => {
+    const stock = stockMap[i.producto_id]
+    return stock !== undefined && stock < Number(i.cantidad)
+  })
+
   const numDisplay = cotizacion.version > 1
     ? `COT-${String(cotizacion.numero).padStart(5, '0')} Rev.${cotizacion.version}`
     : `COT-${String(cotizacion.numero).padStart(5, '0')}`
@@ -157,6 +176,21 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
             </>
           )}
         </div>
+
+        {/* Stock warnings */}
+        {stockIssues.length > 0 && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-3 space-y-1">
+            <div className="flex items-center gap-2 text-red-700 font-semibold text-sm">
+              <AlertCircle size={15} className="shrink-0" />
+              Stock insuficiente
+            </div>
+            {stockIssues.map(item => (
+              <p key={item.id} className="text-xs text-red-600 ml-5">
+                <span className="font-medium">{item.nombre_snap}</span>: necesita {Number(item.cantidad)} — disponible {stockMap[item.producto_id] ?? 0}
+              </p>
+            ))}
+          </div>
+        )}
 
         {/* Totales */}
         <div className="border-t border-slate-200 pt-3 space-y-1">

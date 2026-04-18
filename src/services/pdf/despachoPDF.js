@@ -237,14 +237,14 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.text(fmtUsd(total), totX + totW - 5, y + 10, { align: 'right' })
 
   // Forma de pago (izquierda del total)
-  const fp = (formaPago || despacho.forma_pago || '').toLowerCase()
+  const fp = (formaPago || despacho.forma_pago || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7.5)
   doc.setTextColor(...C_DARK)
   doc.text('FORMA DE PAGO:', MARGIN, y + 5)
   drawCheck(doc, 'EFECTIVO',   MARGIN,      y + 13, fp === 'efectivo')
   drawCheck(doc, 'ZELLE',      MARGIN + 28, y + 13, fp === 'zelle')
-  drawCheck(doc, 'PAGO MÓVIL', MARGIN + 52, y + 13, fp === 'pago movil' || fp === 'pago móvil')
+  drawCheck(doc, 'PAGO MÓVIL', MARGIN + 52, y + 13, fp === 'pago movil')
   drawCheck(doc, 'USDT',       MARGIN + 82, y + 13, fp === 'usdt')
 
   // ── DATOS DE TRANSPORTE ───────────────────────────────────────────────────

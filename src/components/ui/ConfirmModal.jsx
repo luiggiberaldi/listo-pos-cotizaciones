@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AlertTriangle, Trash2, ShoppingCart, X, Loader2, CheckCircle } from 'lucide-react';
+import { showToast } from './Toast';
 
 const VARIANTS = {
   danger: {
@@ -62,6 +63,7 @@ export default function ConfirmModal({
       onClose();
     } catch (err) {
       console.error('ConfirmModal error:', err);
+      showToast(err.message || 'Ocurrió un error inesperado', 'error');
     } finally {
       setLoading(false);
     }

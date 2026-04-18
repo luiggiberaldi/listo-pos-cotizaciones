@@ -20,8 +20,26 @@ import AppLayout from './components/layout/AppLayout'
 // Auth (se carga siempre en /login)
 import LoginPage from './modules/auth/LoginPage'
 
+// ─── Lazy import con retry automático para chunks obsoletos ──────────────────
+function lazyRetry(importFn) {
+  return lazy(() =>
+    importFn().catch((err) => {
+      // Si falla la carga de un módulo dinámico (chunks viejos tras un deploy),
+      // recargar la página una sola vez para obtener los chunks nuevos
+      const key = 'lazy_retry_reload'
+      const lastReload = sessionStorage.getItem(key)
+      const now = Date.now()
+      if (!lastReload || now - Number(lastReload) > 10000) {
+        sessionStorage.setItem(key, String(now))
+        window.location.reload()
+      }
+      throw err
+    })
+  )
+}
+
 // Dashboard — preloaded since it's the default route
-const DashboardView = lazy(() => import('./views/DashboardView'))
+const DashboardView = lazyRetry(() => import('./views/DashboardView'))
 // Preload Dashboard chunk in idle time
 if (typeof window !== 'undefined') {
   const preloadDashboard = () => import('./views/DashboardView')
@@ -33,15 +51,16 @@ if (typeof window !== 'undefined') {
 }
 
 // Views — lazy loading para que solo se descarguen al navegar
-const ClientesView      = lazy(() => import('./views/ClientesView'))
-const CotizacionesView  = lazy(() => import('./views/CotizacionesView'))
-const DespachosView     = lazy(() => import('./views/DespachosView'))
-const InventarioView    = lazy(() => import('./views/InventarioView'))
-const TransportistasView = lazy(() => import('./views/TransportistasView'))
-const UsuariosView      = lazy(() => import('./views/UsuariosView'))
-const AuditoriaView     = lazy(() => import('./views/AuditoriaView'))
-const ConfiguracionView = lazy(() => import('./views/ConfiguracionView'))
-const ComisionesView    = lazy(() => import('./views/ComisionesView'))
+const ClientesView      = lazyRetry(() => import('./views/ClientesView'))
+const CotizacionesView  = lazyRetry(() => import('./views/CotizacionesView'))
+const DespachosView     = lazyRetry(() => import('./views/DespachosView'))
+const InventarioView    = lazyRetry(() => import('./views/InventarioView'))
+const TransportistasView = lazyRetry(() => import('./views/TransportistasView'))
+const UsuariosView      = lazyRetry(() => import('./views/UsuariosView'))
+const AuditoriaView     = lazyRetry(() => import('./views/AuditoriaView'))
+const ConfiguracionView = lazyRetry(() => import('./views/ConfiguracionView'))
+const ComisionesView    = lazyRetry(() => import('./views/ComisionesView'))
+const ReportesView      = lazyRetry(() => import('./views/ReportesView'))
 
 // ─── QueryClient (instancia única) ────────────────────────────────────────────
 const queryClient = new QueryClient({
@@ -147,6 +166,7 @@ function AppRoutes() {
             {/* Rutas exclusivas de supervisor */}
             <Route element={<RutaSupervisor />}>
               <Route path="/usuarios"      element={<Navigate to="/configuracion" replace />} />
+              <Route path="/reportes"      element={<ReportesView />} />
               <Route path="/auditoria"     element={<AuditoriaView />} />
               <Route path="/configuracion" element={<ConfiguracionView />} />
             </Route>

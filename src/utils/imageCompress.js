@@ -5,7 +5,7 @@
 /**
  * Comprime un File de imagen a WebP
  * @param {File} file - archivo de imagen original
- * @returns {Promise<{ blob: Blob, dataUrl: string }>}
+ * @returns {Promise<{ blob: Blob, dataUrl: string, revoke: () => void }>}
  */
 export function comprimirImagen(file, { maxSize = 300, quality = 0.55 } = {}) {
   return new Promise((resolve, reject) => {
@@ -33,7 +33,7 @@ export function comprimirImagen(file, { maxSize = 300, quality = 0.55 } = {}) {
         (blob) => {
           if (!blob) return reject(new Error('Error al comprimir imagen'))
           const dataUrl = URL.createObjectURL(blob)
-          resolve({ blob, dataUrl })
+          resolve({ blob, dataUrl, revoke: () => URL.revokeObjectURL(dataUrl) })
         },
         'image/webp',
         quality

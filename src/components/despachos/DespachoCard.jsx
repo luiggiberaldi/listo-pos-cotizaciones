@@ -2,17 +2,19 @@
 import { useState } from 'react'
 import { FileText, User, Calendar, Truck, CheckCircle, Ban, Package, RefreshCcw, Download, Loader2, Eye } from 'lucide-react'
 import EstadoBadge from '../cotizaciones/EstadoBadge'
+import ConfirmModal from '../ui/ConfirmModal'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs } from '../../utils/format'
 import supabase from '../../services/supabase/client'
 import DetalleModal from '../ui/DetalleModal'
 import { showToast } from '../ui/Toast'
 
-export default function DespachoCard({ despacho, onCambiarEstado, onAnular, onReciclar, tasa = 0, config = {} }) {
+export default function DespachoCard({ despacho, onCambiarEstado, onAnular, onReciclar, tasa = 0, config = {}, estadoCambiando = false }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const [pdfLoading, setPdfLoading]   = useState(false)
   const [showDetalle, setShowDetalle] = useState(false)
+  const [accionPendiente, setAccionPendiente] = useState(null) // { id, estado, label }
 
   const numDisplay = despacho.cotizacion
     ? `DES-${String(despacho.cotizacion.numero).padStart(5, '0')}`
@@ -121,15 +123,17 @@ export default function DespachoCard({ despacho, onCambiarEstado, onAnular, onRe
           <Eye size={13} />Ver
         </button>
         {canDespachar && (
-          <button onClick={() => onCambiarEstado(despacho.id, 'despachada')}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-indigo-600 hover:bg-indigo-50 transition-colors">
-            <Truck size={13} />Despachar
+          <button onClick={() => setAccionPendiente({ id: despacho.id, estado: 'despachada', label: 'Despachar' })}
+            disabled={estadoCambiando}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-50">
+            {estadoCambiando ? <Loader2 size={13} className="animate-spin" /> : <Truck size={13} />}Despachar
           </button>
         )}
         {canEntregada && (
-          <button onClick={() => onCambiarEstado(despacho.id, 'entregada')}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 transition-colors">
-            <CheckCircle size={13} />Entregada
+          <button onClick={() => setAccionPendiente({ id: despacho.id, estado: 'entregada', label: 'Entregada' })}
+            disabled={estadoCambiando}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-50">
+            {estadoCambiando ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle size={13} />}Entregada
           </button>
         )}
         {canReciclar && (
@@ -151,6 +155,23 @@ export default function DespachoCard({ despacho, onCambiarEstado, onAnular, onRe
           )}
         </div>
       </div>
+
+      {/* Confirm despachar / entregada */}
+      <ConfirmModal
+        isOpen={!!accionPendiente}
+        onClose={() => setAccionPendiente(null)}
+        onConfirm={async () => {
+          if (!accionPendiente) return
+          await onCambiarEstado(accionPendiente.id, accionPendiente.estado)
+          setAccionPendiente(null)
+        }}
+        title={accionPendiente?.estado === 'despachada' ? '¿Marcar como despachada?' : '¿Marcar como entregada?'}
+        message={accionPendiente?.estado === 'despachada'
+          ? `El despacho ${numDisplay} se marcará como despachado.`
+          : `El despacho ${numDisplay} se marcará como entregado al cliente.`}
+        confirmText={accionPendiente?.estado === 'despachada' ? 'Sí, despachar' : 'Sí, entregada'}
+        variant={accionPendiente?.estado === 'entregada' ? 'success' : 'default'}
+      />
 
       <DetalleModal
         isOpen={showDetalle}

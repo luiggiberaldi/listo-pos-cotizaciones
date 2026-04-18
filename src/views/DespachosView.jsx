@@ -119,11 +119,12 @@ export default function DespachosView() {
             <DespachoCard
               key={d.id}
               despacho={d}
-              onCambiarEstado={(id, estado) => cambiarEstado.mutate({ despachoId: id, nuevoEstado: estado })}
+              onCambiarEstado={(id, estado) => cambiarEstado.mutateAsync({ despachoId: id, nuevoEstado: estado })}
               onAnular={setDespachoAAnular}
               onReciclar={setDespachoAReciclar}
               tasa={tasaEfectiva}
               config={config}
+              estadoCambiando={cambiarEstado.isPending}
             />
           ))}
         </div>

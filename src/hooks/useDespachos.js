@@ -70,11 +70,13 @@ export function useCrearDespacho() {
       }
       // Guardar forma de pago si se indicó
       if (formaPago && data) {
-        await supabase.from('notas_despacho').update({ forma_pago: formaPago }).eq('id', data)
+        const { error: fpError } = await supabase.from('notas_despacho').update({ forma_pago: formaPago }).eq('id', data)
+        if (fpError) console.warn('Error guardando forma de pago:', fpError.message)
       }
       // Calcular comisión automáticamente al crear el despacho
       if (data) {
-        await supabase.rpc('calcular_comision_despacho', { p_despacho_id: data })
+        const { error: comError } = await supabase.rpc('calcular_comision_despacho', { p_despacho_id: data })
+        if (comError) console.warn('Error calculando comisión:', comError.message)
       }
       return { id: data, numeroCotizacion, clienteNombre }
     },
@@ -96,6 +98,8 @@ export function useCrearDespacho() {
 }
 
 // ─── Actualizar estado de despacho (RPC) ────────────────────────────────────
+const ESTADO_LABELS = { pendiente: 'Pendiente', despachada: 'Despachada', entregada: 'Entregada', anulada: 'Anulada' }
+
 export function useActualizarEstadoDespacho() {
   const qc = useQueryClient()
 
@@ -107,16 +111,22 @@ export function useActualizarEstadoDespacho() {
       })
       if (error) {
         if (error.message.includes('TRANSICION_INVALIDA'))
-          throw new Error('Transición de estado no permitida')
+          throw new Error(`No se puede cambiar a "${ESTADO_LABELS[nuevoEstado] || nuevoEstado}". Verifique el estado actual del despacho.`)
         if (error.message.includes('ACCESO_DENEGADO'))
           throw new Error('Solo supervisores pueden actualizar despachos')
         throw error
       }
+      return nuevoEstado
     },
-    onSuccess: () => {
+    onSuccess: (nuevoEstado) => {
       qc.invalidateQueries({ queryKey: DESPACHOS_KEY })
       qc.invalidateQueries({ queryKey: INVENTARIO_KEY })
       qc.invalidateQueries({ queryKey: COMISIONES_KEY })
+      qc.invalidateQueries({ queryKey: COTIZACIONES_KEY })
+      showToast(`Despacho marcado como ${ESTADO_LABELS[nuevoEstado] || nuevoEstado}`, 'success')
+    },
+    onError: (error) => {
+      showToast(error.message || 'Error al cambiar estado del despacho', 'error')
     },
   })
 }

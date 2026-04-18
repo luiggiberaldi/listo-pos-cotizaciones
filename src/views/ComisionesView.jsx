@@ -1,11 +1,11 @@
 // src/views/ComisionesView.jsx
 // Vista de comisiones por despacho entregado
-import { useState } from 'react'
-import { DollarSign, CheckCircle, Clock, Filter, TrendingUp } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { DollarSign, CheckCircle, Clock, Filter, TrendingUp, Eye, X, FileText, ArrowLeft } from 'lucide-react'
 import { useComisiones, useComisionesResumen, useMarcarComisionPagada } from '../hooks/useComisiones'
 import { useVendedores } from '../hooks/useClientes'
 import useAuthStore from '../store/useAuthStore'
-import { fmtUsd } from '../utils/format'
+import { fmtUsd, fmtFecha } from '../utils/format'
 import PageHeader    from '../components/ui/PageHeader'
 import Skeleton      from '../components/ui/Skeleton'
 import EmptyState    from '../components/ui/EmptyState'
@@ -35,7 +35,7 @@ function ResumenCard({ icon: Icon, label, value, sub, gradient, border }) {
 }
 
 // ─── Tarjeta de comisión ──────────────────────────────────────────────────────
-function ComisionCard({ comision, esSupervisor, onMarcarPagada, marcando }) {
+function ComisionCard({ comision, esSupervisor, onMarcarPagada, marcando, onVerDetalle }) {
   const esPendiente = comision.estado === 'pendiente'
 
   return (
@@ -86,18 +86,28 @@ function ComisionCard({ comision, esSupervisor, onMarcarPagada, marcando }) {
           <p className="text-xs text-slate-400 font-medium">Total comisión</p>
           <p className="text-xl font-black text-slate-800">{fmtUsd(comision.total_comision)}</p>
         </div>
-        {esSupervisor && esPendiente && (
-          <button
-            onClick={() => onMarcarPagada(comision)}
-            disabled={marcando}
-            className="flex items-center gap-1.5 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all active:scale-[0.98] disabled:opacity-50 shadow-md"
-            style={{ background: 'linear-gradient(135deg, #065f46, #047857)' }}
-          >
-            <CheckCircle size={13} />
-            Marcar pagada
-          </button>
-        )}
-        {comision.estado === 'pagada' && comision.pagada_en && (
+        <div className="flex items-center gap-2">
+          {onVerDetalle && (
+            <button
+              onClick={() => onVerDetalle(comision.vendedor)}
+              className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+            >
+              <Eye size={13} />Ver detalle
+            </button>
+          )}
+          {esSupervisor && esPendiente && (
+            <button
+              onClick={() => onMarcarPagada(comision)}
+              disabled={marcando}
+              className="flex items-center gap-1.5 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all active:scale-[0.98] disabled:opacity-50 shadow-md"
+              style={{ background: 'linear-gradient(135deg, #065f46, #047857)' }}
+            >
+              <CheckCircle size={13} />
+              Marcar pagada
+            </button>
+          )}
+        </div>
+        {!esPendiente && !onVerDetalle && comision.estado === 'pagada' && comision.pagada_en && (
           <p className="text-xs text-slate-400">
             {new Date(comision.pagada_en).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}
           </p>
@@ -134,6 +144,134 @@ function SkeletonComisiones() {
   )
 }
 
+// ─── Modal detalle de comisiones por vendedor ────────────────────────────────
+function ModalDetalleVendedor({ vendedor, comisiones, onClose, esSupervisor, onMarcarPagada, marcando }) {
+  if (!vendedor) return null
+
+  const comisionesVendedor = comisiones.filter(c => c.vendedor_id === vendedor.id)
+  const pendientes = comisionesVendedor.filter(c => c.estado === 'pendiente')
+  const pagadas = comisionesVendedor.filter(c => c.estado === 'pagada')
+
+  const totalPendiente = pendientes.reduce((s, c) => s + Number(c.total_comision || 0), 0)
+  const totalPagado = pagadas.reduce((s, c) => s + Number(c.total_comision || 0), 0)
+  const totalGeneral = totalPendiente + totalPagado
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
+      onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
+        onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="relative h-20 shrink-0 flex items-center gap-4 px-6"
+          style={{ background: `linear-gradient(135deg, ${vendedor.color || '#1B365D'}ee, ${vendedor.color || '#1B365D'}99)` }}>
+          <div className="absolute inset-0 opacity-10 pointer-events-none"
+            style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '12px 12px' }} />
+          <div className="relative z-10 w-12 h-12 rounded-full bg-white/20 border border-white/30 flex items-center justify-center text-white text-lg font-black backdrop-blur-sm">
+            {(vendedor.nombre || '?')[0].toUpperCase()}
+          </div>
+          <div className="relative z-10 flex-1 min-w-0">
+            <h3 className="text-lg font-black text-white truncate">{vendedor.nombre}</h3>
+            <p className="text-xs text-white/60">{comisionesVendedor.length} comisión{comisionesVendedor.length !== 1 ? 'es' : ''}</p>
+          </div>
+          <button onClick={onClose}
+            className="relative z-10 p-2 rounded-full bg-white/15 border border-white/25 text-white hover:bg-white/25 transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Resumen del vendedor */}
+        <div className="grid grid-cols-3 gap-3 px-6 py-4 bg-slate-50 border-b border-slate-100">
+          <div className="text-center">
+            <p className="text-xs text-slate-400 font-medium">Total</p>
+            <p className="text-lg font-black text-slate-800">{fmtUsd(totalGeneral)}</p>
+          </div>
+          <div className="text-center">
+            <p className="text-xs text-amber-500 font-medium">Pendiente</p>
+            <p className="text-lg font-black text-amber-600">{fmtUsd(totalPendiente)}</p>
+            <p className="text-[10px] text-slate-400">{pendientes.length} por pagar</p>
+          </div>
+          <div className="text-center">
+            <p className="text-xs text-emerald-500 font-medium">Pagado</p>
+            <p className="text-lg font-black text-emerald-600">{fmtUsd(totalPagado)}</p>
+            <p className="text-[10px] text-slate-400">{pagadas.length} pagada{pagadas.length !== 1 ? 's' : ''}</p>
+          </div>
+        </div>
+
+        {/* Lista de comisiones */}
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+          {comisionesVendedor.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-8">Sin comisiones registradas</p>
+          ) : (
+            comisionesVendedor.map(c => {
+              const esPendiente = c.estado === 'pendiente'
+              return (
+                <div key={c.id} className="bg-white rounded-xl border border-slate-200 p-3.5 hover:shadow-sm transition-all">
+                  {/* Row 1: Despacho + estado + fecha */}
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText size={13} className="text-slate-400 shrink-0" />
+                      <span className="text-xs font-mono text-slate-500">
+                        Despacho #{c.despacho?.numero ?? '—'} · Cot. #{c.cotizacion?.numero ?? '—'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[11px] text-slate-400">{fmtFecha(c.creado_en)}</span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                        esPendiente
+                          ? 'bg-amber-50 text-amber-700 border-amber-200'
+                          : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      }`}>
+                        {esPendiente ? 'Pendiente' : 'Pagada'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Row 2: Desglose inline */}
+                  <div className="flex items-center gap-3 text-xs mb-2">
+                    <div className="flex-1 bg-slate-50 rounded-lg px-2.5 py-1.5 border border-slate-100">
+                      <span className="text-slate-400">Cabilla ({c.pct_cabilla}%)</span>
+                      <span className="ml-1.5 font-bold text-slate-600">{fmtUsd(c.monto_cabilla)}</span>
+                      <span className="ml-1 font-black text-emerald-600">→ {fmtUsd(c.comision_cabilla)}</span>
+                    </div>
+                    <div className="flex-1 bg-slate-50 rounded-lg px-2.5 py-1.5 border border-slate-100">
+                      <span className="text-slate-400">Otros ({c.pct_otros}%)</span>
+                      <span className="ml-1.5 font-bold text-slate-600">{fmtUsd(c.monto_otros)}</span>
+                      <span className="ml-1 font-black text-emerald-600">→ {fmtUsd(c.comision_otros)}</span>
+                    </div>
+                  </div>
+
+                  {/* Row 3: Total + acción */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-base font-black text-slate-800">{fmtUsd(c.total_comision)}</span>
+                    <div className="flex items-center gap-2">
+                      {c.estado === 'pagada' && c.pagada_en && (
+                        <span className="text-[11px] text-slate-400">
+                          Pagada {new Date(c.pagada_en).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        </span>
+                      )}
+                      {esSupervisor && esPendiente && (
+                        <button
+                          onClick={() => onMarcarPagada(c)}
+                          disabled={marcando}
+                          className="flex items-center gap-1 text-white font-bold text-[11px] px-3 py-1.5 rounded-lg transition-all active:scale-[0.98] disabled:opacity-50"
+                          style={{ background: 'linear-gradient(135deg, #065f46, #047857)' }}
+                        >
+                          <CheckCircle size={11} />Pagada
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Vista principal ──────────────────────────────────────────────────────────
 export default function ComisionesView() {
   const { perfil } = useAuthStore()
@@ -142,6 +280,7 @@ export default function ComisionesView() {
   const [filtroEstado,   setFiltroEstado]   = useState('')
   const [filtroVendedor, setFiltroVendedor] = useState('')
   const [comisionAPagar, setComisionAPagar] = useState(null)
+  const [vendedorDetalle, setVendedorDetalle] = useState(null)
 
   const { data: comisiones = [], isLoading } = useComisiones({
     estado:     filtroEstado,
@@ -243,6 +382,7 @@ export default function ComisionesView() {
               esSupervisor={esSupervisor}
               onMarcarPagada={(comision) => setComisionAPagar(comision)}
               marcando={marcar.isPending}
+              onVerDetalle={(vendedor) => setVendedorDetalle(vendedor)}
             />
           ))}
         </div>
@@ -258,6 +398,15 @@ export default function ComisionesView() {
           : ''}
         confirmText="Sí, marcar como pagada"
         variant="success"
+      />
+
+      <ModalDetalleVendedor
+        vendedor={vendedorDetalle}
+        comisiones={comisiones}
+        onClose={() => setVendedorDetalle(null)}
+        esSupervisor={esSupervisor}
+        onMarcarPagada={(comision) => { setVendedorDetalle(null); setComisionAPagar(comision) }}
+        marcando={marcar.isPending}
       />
     </div>
   )
