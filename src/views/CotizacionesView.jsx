@@ -225,7 +225,9 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
 
         {/* Forma de pago */}
         <div className="space-y-2">
-          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Forma de pago</p>
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+            Forma de pago <span className="text-red-500">*</span>
+          </p>
           <div className="flex flex-wrap gap-2">
             {FORMAS_PAGO.map(fp => (
               <button key={fp} type="button"
@@ -239,6 +241,9 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
               </button>
             ))}
           </div>
+          {!formaPago && (
+            <p className="text-xs text-slate-400">Selecciona una forma de pago para continuar</p>
+          )}
         </div>
 
         {/* Botones — despachar */}
@@ -247,7 +252,8 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
             className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-700 font-semibold text-base hover:bg-slate-50 transition-colors disabled:opacity-50">
             Cancelar
           </button>
-          <button onClick={() => onConfirm(formaPago)} disabled={cargando || items.length === 0}
+          <button onClick={() => onConfirm(formaPago)} disabled={cargando || items.length === 0 || !formaPago}
+            title={!formaPago ? 'Selecciona una forma de pago' : undefined}
             className="flex-1 py-3 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-semibold text-base transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20">
             {cargando
               ? <><Loader2 size={16} className="animate-spin" />Procesando...</>

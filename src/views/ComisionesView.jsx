@@ -1,6 +1,7 @@
 // src/views/ComisionesView.jsx
 // Vista de comisiones por despacho entregado
 import { useState, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { DollarSign, CheckCircle, Clock, Filter, TrendingUp, Eye, X, FileText, ArrowLeft } from 'lucide-react'
 import { useComisiones, useComisionesResumen, useMarcarComisionPagada } from '../hooks/useComisiones'
 import { useVendedores } from '../hooks/useClientes'
@@ -14,8 +15,8 @@ import ConfirmModal  from '../components/ui/ConfirmModal'
 // ─── Tarjeta de resumen ───────────────────────────────────────────────────────
 function ResumenCard({ icon: Icon, label, value, sub, gradient, border }) {
   return (
-    <div className="relative overflow-hidden rounded-2xl p-4 flex flex-col gap-3"
-      style={{ background: gradient, border: `1px solid ${border}`, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
+    <div className="relative overflow-hidden rounded-2xl p-4 flex flex-col gap-3 cursor-default"
+      style={{ background: gradient, border: `1px solid ${border}`, boxShadow: '0 2px 8px rgba(0,0,0,0.10)' }}>
       {/* Orbe decorativo */}
       <div className="absolute -bottom-4 -right-4 w-20 h-20 rounded-full pointer-events-none"
         style={{ background: 'rgba(255,255,255,0.05)' }} />
@@ -274,6 +275,7 @@ function ModalDetalleVendedor({ vendedor, comisiones, onClose, esSupervisor, onM
 
 // ─── Vista principal ──────────────────────────────────────────────────────────
 export default function ComisionesView() {
+  const navigate = useNavigate()
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
 
@@ -372,6 +374,8 @@ export default function ComisionesView() {
           icon={DollarSign}
           title="Sin comisiones"
           description="Las comisiones se generan automáticamente al marcar un despacho como entregado."
+          actionLabel="Ir a despachos"
+          onAction={() => navigate('/despachos')}
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">

@@ -116,17 +116,38 @@ export function useActualizarEstadoDespacho() {
           throw new Error('Solo supervisores pueden actualizar despachos')
         throw error
       }
-      return nuevoEstado
+      return { nuevoEstado }
     },
-    onSuccess: (nuevoEstado) => {
+    // Optimistic update: reflect state change immediately in UI
+    onMutate: async ({ despachoId, nuevoEstado }) => {
+      await qc.cancelQueries({ queryKey: DESPACHOS_KEY })
+      const previousQueries = qc.getQueriesData({ queryKey: DESPACHOS_KEY })
+      qc.setQueriesData({ queryKey: DESPACHOS_KEY }, (old) => {
+        if (!Array.isArray(old)) return old
+        return old.map(d => d.id === despachoId ? {
+          ...d,
+          estado: nuevoEstado,
+          ...(nuevoEstado === 'despachada' ? { despachada_en: new Date().toISOString() } : {}),
+          ...(nuevoEstado === 'entregada' ? { entregada_en: new Date().toISOString() } : {}),
+        } : d)
+      })
+      return { previousQueries }
+    },
+    onError: (error, _vars, context) => {
+      // Rollback on error
+      if (context?.previousQueries) {
+        context.previousQueries.forEach(([key, data]) => qc.setQueryData(key, data))
+      }
+      showToast(error.message || 'Error al cambiar estado del despacho', 'error')
+    },
+    onSuccess: ({ nuevoEstado }) => {
+      showToast(`Despacho marcado como ${ESTADO_LABELS[nuevoEstado] || nuevoEstado}`, 'success')
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: DESPACHOS_KEY })
       qc.invalidateQueries({ queryKey: INVENTARIO_KEY })
       qc.invalidateQueries({ queryKey: COMISIONES_KEY })
       qc.invalidateQueries({ queryKey: COTIZACIONES_KEY })
-      showToast(`Despacho marcado como ${ESTADO_LABELS[nuevoEstado] || nuevoEstado}`, 'success')
-    },
-    onError: (error) => {
-      showToast(error.message || 'Error al cambiar estado del despacho', 'error')
     },
   })
 }

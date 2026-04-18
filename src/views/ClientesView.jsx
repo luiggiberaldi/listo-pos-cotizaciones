@@ -148,13 +148,16 @@ export default function ClientesView() {
     return clientesFiltrados.slice(inicio, inicio + ITEMS_POR_PAGINA)
   }, [clientesFiltrados, pagina])
 
-  // ── Handlers ────────────────────────────────────────────────────────────────
-  function handleBuscar(e) {
-    e.preventDefault()
-    setBusqueda(textoBusqueda)
-    setPagina(1)
-  }
+  // Debounce: actualizar búsqueda real 300ms después de dejar de teclear
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setBusqueda(textoBusqueda)
+      setPagina(1)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [textoBusqueda])
 
+  // ── Handlers ────────────────────────────────────────────────────────────────
   function limpiarBusqueda() {
     setTextoBusqueda('')
     setBusqueda('')
@@ -213,7 +216,7 @@ export default function ClientesView() {
       />
 
       {/* ── Barra de búsqueda ──────────────────────────────────────────────── */}
-      <form onSubmit={handleBuscar} className="flex gap-2">
+      <form onSubmit={e => { e.preventDefault(); setBusqueda(textoBusqueda); setPagina(1) }} className="flex gap-2">
         <div className="relative flex-1">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           <input
@@ -233,12 +236,6 @@ export default function ClientesView() {
             </button>
           )}
         </div>
-        <button
-          type="submit"
-          className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm rounded-xl transition-colors"
-        >
-          Buscar
-        </button>
         <button
           type="button"
           onClick={() => refetch()}
@@ -268,6 +265,18 @@ export default function ClientesView() {
           </button>
         </div>
       </form>
+
+      {/* Chip de búsqueda activa */}
+      {busqueda && (
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary-light text-primary text-xs font-semibold border border-primary/20">
+            Buscando: "{busqueda}"
+            <button onClick={limpiarBusqueda} className="hover:text-primary/70 transition-colors">
+              <X size={12} />
+            </button>
+          </span>
+        </div>
+      )}
 
       {/* ── Filtros ──────────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap gap-2 items-center">

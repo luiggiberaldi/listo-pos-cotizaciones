@@ -114,7 +114,9 @@ export default function ReportesView() {
         <EmptyState
           icon={BarChart3}
           title="Sin despachos entregados"
-          description="No hay despachos entregados en el período seleccionado. Prueba con otro rango de fechas."
+          description="No hay despachos entregados en el período seleccionado."
+          actionLabel="Cambiar rango de fechas"
+          onAction={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
         />
       ) : (
         <div className="space-y-4">
