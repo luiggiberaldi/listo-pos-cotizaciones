@@ -23,6 +23,13 @@ const VARIANTS = {
     stripEnd: '#475569',
     btnStyle: { background: 'linear-gradient(135deg, #334155, #1e293b)', boxShadow: '0 4px 12px rgba(51,65,85,0.3)' },
   },
+  success: {
+    icon: CheckCircle,
+    iconColor: '#059669',
+    stripStart: '#6ee7b7',
+    stripEnd: '#059669',
+    btnStyle: { background: 'linear-gradient(135deg, #065f46, #047857)', boxShadow: '0 4px 12px rgba(5,150,105,0.3)' },
+  },
   default: {
     icon: CheckCircle,
     iconColor: '#1B365D',

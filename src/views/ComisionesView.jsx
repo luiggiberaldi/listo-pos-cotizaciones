@@ -6,9 +6,10 @@ import { useComisiones, useComisionesResumen, useMarcarComisionPagada } from '..
 import { useVendedores } from '../hooks/useClientes'
 import useAuthStore from '../store/useAuthStore'
 import { fmtUsd } from '../utils/format'
-import PageHeader  from '../components/ui/PageHeader'
-import Skeleton    from '../components/ui/Skeleton'
-import EmptyState  from '../components/ui/EmptyState'
+import PageHeader    from '../components/ui/PageHeader'
+import Skeleton      from '../components/ui/Skeleton'
+import EmptyState    from '../components/ui/EmptyState'
+import ConfirmModal  from '../components/ui/ConfirmModal'
 
 // ─── Tarjeta de resumen ───────────────────────────────────────────────────────
 function ResumenCard({ icon: Icon, label, value, sub, gradient, border }) {
@@ -87,7 +88,7 @@ function ComisionCard({ comision, esSupervisor, onMarcarPagada, marcando }) {
         </div>
         {esSupervisor && esPendiente && (
           <button
-            onClick={() => onMarcarPagada(comision.id)}
+            onClick={() => onMarcarPagada(comision)}
             disabled={marcando}
             className="flex items-center gap-1.5 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all active:scale-[0.98] disabled:opacity-50 shadow-md"
             style={{ background: 'linear-gradient(135deg, #065f46, #047857)' }}
@@ -140,6 +141,7 @@ export default function ComisionesView() {
 
   const [filtroEstado,   setFiltroEstado]   = useState('')
   const [filtroVendedor, setFiltroVendedor] = useState('')
+  const [comisionAPagar, setComisionAPagar] = useState(null)
 
   const { data: comisiones = [], isLoading } = useComisiones({
     estado:     filtroEstado,
@@ -239,12 +241,24 @@ export default function ComisionesView() {
               key={c.id}
               comision={c}
               esSupervisor={esSupervisor}
-              onMarcarPagada={(id) => marcar.mutate(id)}
+              onMarcarPagada={(comision) => setComisionAPagar(comision)}
               marcando={marcar.isPending}
             />
           ))}
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={!!comisionAPagar}
+        onConfirm={() => { marcar.mutate(comisionAPagar.id); setComisionAPagar(null) }}
+        onClose={() => setComisionAPagar(null)}
+        title="¿Marcar comisión como pagada?"
+        message={comisionAPagar
+          ? `Se registrará el pago de ${fmtUsd(comisionAPagar.total_comision)} a ${comisionAPagar.vendedor?.nombre ?? 'el vendedor'}. Esta acción no se puede deshacer.`
+          : ''}
+        confirmText="Sí, marcar como pagada"
+        variant="success"
+      />
     </div>
   )
 }
