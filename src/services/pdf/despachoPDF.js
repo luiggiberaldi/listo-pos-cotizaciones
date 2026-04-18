@@ -24,7 +24,23 @@ const C_ORANGE = [245, 158, 11] // Naranja-amarillo cabeceras
 const C_DARK   = [20,  20,  20] // Negro/Gris muy oscuro
 const C_WHITE  = [255, 255, 255]
 
-export async function generarDespachoPDF({ despacho, items = [], config = {} }) {
+function drawCheck(doc, label, x, y, checked = false) {
+  doc.setLineWidth(0.3)
+  doc.setDrawColor(...C_DARK)
+  doc.rect(x, y - 2.5, 3, 3, 'S')
+  if (checked) {
+    doc.setLineWidth(0.5)
+    doc.line(x + 0.4, y - 1.2, x + 1.5, y + 0.2)
+    doc.line(x + 1.5, y + 0.2, x + 2.8, y - 2.2)
+    doc.setLineWidth(0.3)
+  }
+  doc.setFont('helvetica', checked ? 'bold' : 'normal')
+  doc.setFontSize(7)
+  doc.setTextColor(...C_DARK)
+  doc.text(label, x + 4.5, y)
+}
+
+export async function generarDespachoPDF({ despacho, items = [], config = {}, formaPago = '' }) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
 
   const logoData = await cargarLogo(config.logo_url)
@@ -219,6 +235,17 @@ export async function generarDespachoPDF({ despacho, items = [], config = {} }) 
   
   doc.setFontSize(14)
   doc.text(fmtUsd(total), totX + totW - 5, y + 10, { align: 'right' })
+
+  // Forma de pago (izquierda del total)
+  const fp = (formaPago || despacho.forma_pago || '').toLowerCase()
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(7.5)
+  doc.setTextColor(...C_DARK)
+  doc.text('FORMA DE PAGO:', MARGIN, y + 5)
+  drawCheck(doc, 'EFECTIVO',   MARGIN,      y + 13, fp === 'efectivo')
+  drawCheck(doc, 'ZELLE',      MARGIN + 28, y + 13, fp === 'zelle')
+  drawCheck(doc, 'PAGO MÓVIL', MARGIN + 52, y + 13, fp === 'pago movil' || fp === 'pago móvil')
+  drawCheck(doc, 'USDT',       MARGIN + 82, y + 13, fp === 'usdt')
 
   // ── DATOS DE TRANSPORTE ───────────────────────────────────────────────────
   y += 20
