@@ -1,7 +1,7 @@
 // src/views/CotizacionesView.jsx
 // Vista principal: lista de cotizaciones + builder integrado
 // El builder reemplaza la lista in-page (sin navegación adicional)
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { FileText, Plus, RefreshCw, Filter, Copy, AlertTriangle, PackageCheck, Loader2, X, AlertCircle } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
@@ -21,6 +21,7 @@ import CustomSelect      from '../components/ui/CustomSelect'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../utils/format'
 import { showToast } from '../components/ui/Toast'
 import PageHeader from '../components/ui/PageHeader'
+import Pagination from '../components/ui/Pagination'
 
 // ─── Filtros de estado ────────────────────────────────────────────────────────
 const ESTADOS_FILTRO = [
@@ -309,6 +310,7 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
   const esSupervisor = perfil?.rol === 'supervisor'
   const { tasaEfectiva } = useTasaCambio()
   const [estadoFiltro, setEstadoFiltro] = useState('')
+  const [pagina, setPagina] = useState(1)
   const [cotizacionAAnular, setCotizacionAAnular] = useState(null)
   const [cotizacionADespachar, setCotizacionADespachar] = useState(null)
   const [cotizacionAReciclar, setCotizacionAReciclar] = useState(null)
@@ -316,6 +318,17 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
 
   const { data: cotizaciones = [], isLoading, isError, refetch } = useCotizaciones({ estado: estadoFiltro })
   const { data: vendedores = [] } = useVendedores()
+
+  const ITEMS_POR_PAGINA = 12
+  const totalPaginas = Math.max(1, Math.ceil(cotizaciones.length / ITEMS_POR_PAGINA))
+  const cotizacionesPaginadas = useMemo(() => {
+    const inicio = (pagina - 1) * ITEMS_POR_PAGINA
+    return cotizaciones.slice(inicio, inicio + ITEMS_POR_PAGINA)
+  }, [cotizaciones, pagina])
+
+  // Reset página al cambiar filtro
+  useEffect(() => { setPagina(1) }, [estadoFiltro])
+
   const anular        = useAnularCotizacion()
   const cambiarEstado = useActualizarEstado()
   const crearDespacho = useCrearDespacho()
@@ -423,8 +436,9 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
           onAction={estadoFiltro ? () => setEstadoFiltro('') : onNueva}
         />
       ) : (
+        <>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
-          {cotizaciones.map(c => (
+          {cotizacionesPaginadas.map(c => (
             <CotizacionCard
               key={c.id}
               cotizacion={c}
@@ -437,6 +451,10 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
             />
           ))}
         </div>
+        {totalPaginas > 1 && (
+          <Pagination paginaActual={pagina} totalPaginas={totalPaginas} onCambiarPagina={setPagina} />
+        )}
+        </>
       )}
 
       {/* Confirm anular */}

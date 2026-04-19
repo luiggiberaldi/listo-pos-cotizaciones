@@ -1,6 +1,6 @@
 // src/views/DespachosView.jsx
 // Vista principal de notas de despacho
-import { useState } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Package, PackageCheck, RefreshCw, Filter, RefreshCcw, AlertTriangle } from 'lucide-react'
 import { useTasaCambio } from '../hooks/useTasaCambio'
@@ -11,6 +11,7 @@ import ConfirmModal from '../components/ui/ConfirmModal'
 import EmptyState   from '../components/ui/EmptyState'
 import Skeleton     from '../components/ui/Skeleton'
 import PageHeader  from '../components/ui/PageHeader'
+import Pagination  from '../components/ui/Pagination'
 import { showToast } from '../components/ui/Toast'
 
 // ─── Filtros de estado ──────────────────────────────────────────────────────
@@ -44,12 +45,23 @@ export default function DespachosView() {
   const { tasaEfectiva } = useTasaCambio()
   const { data: config = {} } = useConfigNegocio()
   const [estadoFiltro, setEstadoFiltro] = useState('')
+  const [pagina, setPagina] = useState(1)
   const [despachoAAnular, setDespachoAAnular] = useState(null)
   const [despachoAReciclar, setDespachoAReciclar] = useState(null)
 
   const { data: despachos = [], isLoading, isError, refetch } = useDespachos({ estado: estadoFiltro })
   const cambiarEstado = useActualizarEstadoDespacho()
   const reciclar = useReciclarDespacho()
+
+  const ITEMS_POR_PAGINA = 12
+  const totalPaginas = Math.max(1, Math.ceil(despachos.length / ITEMS_POR_PAGINA))
+  const despachosPaginados = useMemo(() => {
+    const inicio = (pagina - 1) * ITEMS_POR_PAGINA
+    return despachos.slice(inicio, inicio + ITEMS_POR_PAGINA)
+  }, [despachos, pagina])
+
+  // Reset página al cambiar filtro
+  useEffect(() => { setPagina(1) }, [estadoFiltro])
 
   async function confirmarAnular() {
     if (!despachoAAnular) return
@@ -114,8 +126,9 @@ export default function DespachosView() {
           onAction={estadoFiltro ? () => setEstadoFiltro('') : undefined}
         />
       ) : (
+        <>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
-          {despachos.map(d => (
+          {despachosPaginados.map(d => (
             <DespachoCard
               key={d.id}
               despacho={d}
@@ -128,6 +141,10 @@ export default function DespachosView() {
             />
           ))}
         </div>
+        {totalPaginas > 1 && (
+          <Pagination paginaActual={pagina} totalPaginas={totalPaginas} onCambiarPagina={setPagina} />
+        )}
+        </>
       )}
 
       {/* Confirm anular */}

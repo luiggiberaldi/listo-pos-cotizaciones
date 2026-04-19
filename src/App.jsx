@@ -61,6 +61,7 @@ const AuditoriaView     = lazyRetry(() => import('./views/AuditoriaView'))
 const ConfiguracionView = lazyRetry(() => import('./views/ConfiguracionView'))
 const ComisionesView    = lazyRetry(() => import('./views/ComisionesView'))
 const ReportesView      = lazyRetry(() => import('./views/ReportesView'))
+const TesterView        = lazyRetry(() => import('./views/TesterView'))
 
 // ─── QueryClient (instancia única) ────────────────────────────────────────────
 const queryClient = new QueryClient({
@@ -171,6 +172,7 @@ function AppRoutes() {
               <Route path="/reportes"      element={<ReportesView />} />
               <Route path="/auditoria"     element={<AuditoriaView />} />
               <Route path="/configuracion" element={<ConfiguracionView />} />
+              <Route path="/tester"        element={<TesterView />} />
             </Route>
           </Route>
         </Route>

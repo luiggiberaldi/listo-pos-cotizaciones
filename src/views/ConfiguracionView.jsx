@@ -5,11 +5,13 @@ import {
   Settings, Building2, Phone, Mail, MapPin, FileText, Save, CheckCircle,
   Lock, Eye, EyeOff, Accessibility, HardDrive, Download, Upload,
   AlertCircle, AlertTriangle, Percent, Users, Database, Copy, Check, DollarSign,
+  FlaskConical,
 } from 'lucide-react'
 import { useConfigNegocio, useActualizarConfig, hashSHA256 } from '../hooks/useConfigNegocio'
 import { fmtUsd } from '../utils/format'
 import { adminAPI } from '../services/supabase/adminClient'
 import UsuariosView from './UsuariosView'
+import TesterPanel from '../components/tester/TesterPanel'
 import PageHeader  from '../components/ui/PageHeader'
 
 // ─── Tabs ───────────────────────────────────────────────────────────────────
@@ -20,6 +22,7 @@ const TABS = [
   { id: 'sistema',    label: 'Sistema',    icon: Lock      },
   { id: 'usuarios',   label: 'Usuarios',   icon: Users     },
   { id: 'datos',      label: 'Datos',      icon: Database  },
+  { id: 'tester',     label: 'Tester',     icon: FlaskConical },
 ]
 
 export default function ConfiguracionView() {
@@ -597,6 +600,9 @@ export default function ConfiguracionView() {
           </div>
         </div>
       )}
+
+      {/* ── Tab Tester ───────────────────────────────────────────────────── */}
+      {tab === 'tester' && <TesterPanel />}
     </div>
   )
 }
