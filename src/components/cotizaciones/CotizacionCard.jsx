@@ -231,11 +231,11 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
                 onMouseDown={e => e.preventDefault()}>
                 {canAcceptReject && (
                   <>
-                    <button onClick={() => { onCambiarEstado(cotizacion.id, 'aceptada'); setShowActions(false) }}
+                    <button onClick={() => { onCambiarEstado(cotizacion.id, 'aceptada', cotizacion.numero, cotizacion.cliente?.nombre, cotizacion.total_usd); setShowActions(false) }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-emerald-700 hover:bg-emerald-50 transition-colors text-left">
                       <CheckCircle size={14} />Aceptar
                     </button>
-                    <button onClick={() => { onCambiarEstado(cotizacion.id, 'rechazada'); setShowActions(false) }}
+                    <button onClick={() => { onCambiarEstado(cotizacion.id, 'rechazada', cotizacion.numero); setShowActions(false) }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors text-left">
                       <XCircle size={14} />Rechazar
                     </button>

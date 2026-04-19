@@ -447,7 +447,7 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
               cotizacion={c}
               onEditar={handleEditar}
               onAnular={setCotizacionAAnular}
-              onCambiarEstado={(id, estado) => cambiarEstado.mutate({ id, estado })}
+              onCambiarEstado={(id, estado, numero, clienteNombre, totalUsd) => cambiarEstado.mutate({ id, estado, numero, clienteNombre, totalUsd })}
               onDespachar={setCotizacionADespachar}
               onReciclar={abrirReciclar}
               tasa={tasaEfectiva}
