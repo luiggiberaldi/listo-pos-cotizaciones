@@ -197,23 +197,49 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   y += 10
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 4. TOTALES LATERAL DERECHO
+  // 4. NOTA DE CONDICIONES DE ENTREGA (franja completa antes de totales)
+  // ══════════════════════════════════════════════════════════════════════════
+  if (y > PAGE_H - 110) { doc.addPage(); y = MARGIN }
+
+  doc.setFillColor(255, 251, 235)
+  doc.setDrawColor(...C_ORANGE)
+  doc.setLineWidth(0.4)
+  doc.roundedRect(MARGIN, y, CONTENT_W, 14, 2, 2, 'FD')
+  doc.setFillColor(...C_ORANGE)
+  doc.rect(MARGIN, y, 3, 14, 'F')
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(7.5)
+  doc.setTextColor(...C_ORANGE)
+  doc.text('CONDICIONES DE ENTREGA:', MARGIN + 7, y + 5.5)
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.5)
+  doc.setTextColor(...C_DARK)
+  const lblW2 = doc.getTextWidth('CONDICIONES DE ENTREGA:') + 4
+  doc.text(
+    'Construacero Carabobo corre con el costo del flete. El cliente se encarga de descargar la mercancía.',
+    MARGIN + 7 + lblW2, y + 5.5
+  )
+
+  y += 18
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 5. TOTALES LATERAL DERECHO + FIRMA
   // ══════════════════════════════════════════════════════════════════════════
   const totW = 75
   const totX = PAGE_W - MARGIN - totW
 
-  if (y > PAGE_H - 100) { doc.addPage(); y = MARGIN }
-
   doc.setFillColor(...C_ORANGE)
   doc.rect(totX, y, totW, 25, 'F')
-  
+
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(9)
   doc.setTextColor(...C_DARK)
   doc.text('Subtotal', totX + 5, y + 8)
   doc.setFontSize(13)
   doc.text('TOTAL', totX + 5, y + 18)
-  
+
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(10)
   doc.text(fmtUsd(cotizacion.subtotal_usd), totX + totW - 5, y + 8, { align: 'right' })
@@ -221,9 +247,10 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   doc.setFontSize(14)
   doc.text(fmtUsd(cotizacion.total_usd), totX + totW - 5, y + 18, { align: 'right' })
 
-  // Firmas a la izquierda del total
+  // Firma a la izquierda del total
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7)
+  doc.setTextColor(...C_DARK)
   doc.text('Elaborado por', MARGIN + 25, y + 10, { align: 'center' })
   doc.setLineWidth(0.3)
   doc.setDrawColor(...C_DARK)
@@ -233,7 +260,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 5. FOOTER CON FRANJA DE PRECAUCIÓN
+  // 6. FOOTER CON FRANJA DE PRECAUCIÓN
   // ══════════════════════════════════════════════════════════════════════════
   const totalPages = doc.internal.getNumberOfPages()
   for (let p = 1; p <= totalPages; p++) {

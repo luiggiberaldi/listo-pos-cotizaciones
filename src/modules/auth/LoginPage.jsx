@@ -1,7 +1,7 @@
 // src/modules/auth/LoginPage.jsx
 import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { RefreshCw, Mail, Key, Eye, EyeOff, ArrowRight } from 'lucide-react'
+import { RefreshCw, Mail, Key, Eye, EyeOff, ArrowRight, Download } from 'lucide-react'
 import supabase from '../../services/supabase/client'
 import useAuthStore from '../../store/useAuthStore'
 import LoginAvatar from '../../components/auth/LoginAvatar'
@@ -136,6 +136,44 @@ function UserCard({ user, onClick, index }) {
 }
 
 const USUARIOS_CACHE_KEY = 'construacero_usuarios_cache'
+
+// ─── Botón de instalación PWA ─────────────────────────────────────────────────
+function PwaInstallButton() {
+  const [prompt, setPrompt] = useState(null)
+  const [installed, setInstalled] = useState(false)
+
+  useEffect(() => {
+    const handler = (e) => { e.preventDefault(); setPrompt(e) }
+    window.addEventListener('beforeinstallprompt', handler)
+    window.addEventListener('appinstalled', () => setInstalled(true))
+    return () => window.removeEventListener('beforeinstallprompt', handler)
+  }, [])
+
+  if (installed || !prompt) return null
+
+  async function handleInstall() {
+    prompt.prompt()
+    const { outcome } = await prompt.userChoice
+    if (outcome === 'accepted') setInstalled(true)
+    setPrompt(null)
+  }
+
+  return (
+    <button
+      onClick={handleInstall}
+      className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all hover:scale-105 active:scale-95"
+      style={{
+        background: 'rgba(184,134,11,0.15)',
+        border: '1px solid rgba(184,134,11,0.4)',
+        color: '#B8860B',
+        backdropFilter: 'blur(8px)',
+      }}
+    >
+      <Download size={15} />
+      Instalar App
+    </button>
+  )
+}
 
 // ─── Paso 1: Gate de acceso ──────────────────────────────────────────────────
 function GateStep({ onPass }) {
@@ -462,12 +500,23 @@ function UserSelectStep() {
       </div>
 
       {/* Footer — bottom fijo, solo desktop */}
-      <div className="hidden md:flex fixed bottom-4 left-0 right-0 justify-center pointer-events-none z-20"
+      <div className="hidden md:flex fixed bottom-4 left-0 right-0 justify-center items-center gap-4 pointer-events-none z-20"
         style={{ animation: 'fadeIn 1s ease 0.8s forwards', opacity: 0 }}>
+        <div className="pointer-events-auto">
+          <PwaInstallButton />
+        </div>
         <p className="text-[10px] tracking-[0.2em] uppercase font-medium px-4 py-1.5 rounded-full"
           style={{ color: 'rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
           Construacero Carabobo C.A. · Sistema de Gestión
         </p>
+      </div>
+
+      {/* Botón instalar PWA en móvil */}
+      <div className="md:hidden fixed bottom-4 left-0 right-0 flex justify-center z-20 pointer-events-none"
+        style={{ animation: 'fadeIn 1s ease 0.8s forwards', opacity: 0 }}>
+        <div className="pointer-events-auto">
+          <PwaInstallButton />
+        </div>
       </div>
 
       {/* Modal PIN */}
