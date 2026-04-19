@@ -979,7 +979,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
   function siguiente() {
     setErrorGeneral('')
     if (paso === 1) {
-      if (esSupervisor && !esEdicion && !vendedorId) { setErrorGeneral('Selecciona un vendedor para asignar la cotización'); return }
+      // vendedorId se asigna automáticamente al perfil actual si está vacío
       if (!clienteId) { setErrorGeneral('Selecciona un cliente para continuar'); return }
       setPaso(2)
     } else if (paso === 2) {

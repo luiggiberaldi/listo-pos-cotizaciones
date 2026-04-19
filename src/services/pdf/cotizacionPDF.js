@@ -107,7 +107,8 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     { label: 'TELÉFONO', val: cliente.telefono || '—' },
     { label: 'E-MAIL/RIF', val: cliente.rif_cedula || '—' },
     { label: 'VENDEDOR', val: cotizacion.vendedor?.nombre || '—' },
-    { label: 'FECHA DE EMISIÓN', val: fmtFecha(cotizacion.creado_en) }
+    { label: 'FECHA DE EMISIÓN', val: fmtFecha(cotizacion.creado_en) },
+    { label: 'FECHA DE VENCIMIENTO', val: fmtFecha(cotizacion.valida_hasta) }
   ]
   
   doc.setFontSize(8)
