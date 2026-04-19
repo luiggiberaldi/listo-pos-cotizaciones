@@ -78,7 +78,7 @@ export function useTasaCambio() {
     if (!esAutoUpdate) setCargando(true)
     setError('')
 
-    const fetchConTimeout = async (url, timeout = 8000) => {
+    const fetchConTimeout = async (url, timeout = 5000) => {
       const controller = new AbortController()
       const id = setTimeout(() => controller.abort(), timeout)
       try {
@@ -139,8 +139,11 @@ export function useTasaCambio() {
   }, [])
 
   // Auto-fetch al montar + intervalo de 15 min
+  // Si ya hay tasa en cache (localStorage), hacer el primer fetch en background
+  // para no bloquear la UI con el spinner
   useEffect(() => {
-    fetchTasa(false)
+    const hasCachedRate = tasaRef.current?.precio > 0
+    fetchTasa(hasCachedRate) // esAutoUpdate=true si hay cache → no muestra spinner
     const intervalId = setInterval(() => fetchTasa(true), UPDATE_INTERVAL)
     return () => clearInterval(intervalId)
   }, [fetchTasa])

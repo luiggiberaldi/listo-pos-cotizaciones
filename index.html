@@ -26,7 +26,16 @@
 </head>
 
 <body>
-  <div id="root"></div>
+  <div id="root">
+    <!-- Splash screen CSS puro — visible instantáneamente mientras React carga -->
+    <div id="splash" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#f0f9ff 0%,#ecfdf5 100%)">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:1rem">
+        <img src="/logo-dark.png" alt="Construacero" style="height:96px;width:auto;opacity:.9" />
+        <div style="width:32px;height:32px;border:3px solid #7dd3fc;border-top-color:#0ea5e9;border-radius:50%;animation:sp .7s linear infinite"></div>
+      </div>
+    </div>
+    <style>#splash{transition:opacity .2s}@keyframes sp{to{transform:rotate(360deg)}}</style>
+  </div>
   <script type="module" src="/src/main.jsx"></script>
 </body>
 

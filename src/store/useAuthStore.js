@@ -31,12 +31,12 @@ const useAuthStore = create((set, get) => ({
   // ─── Inicializar: suscribirse a cambios de auth ────────────────────────────
   // Llamar UNA sola vez en el arranque de la app (App.jsx useEffect)
   initialize: () => {
-    // Timeout de seguridad: si en 3 segundos no se inicializó, forzar login
+    // Timeout de seguridad: si en 2 segundos no se inicializó, forzar login
     const timeoutId = setTimeout(() => {
       if (!get().initialized) {
         set({ initialized: true, user: null, perfil: null })
       }
-    }, 3000)
+    }, 2000)
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
@@ -46,7 +46,7 @@ const useAuthStore = create((set, get) => ({
             if (session?.user) {
               const perfilPromise = get()._cargarPerfil(session.user)
               const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('timeout')), 2500)
+                setTimeout(() => reject(new Error('timeout')), 1800)
               )
               await Promise.race([perfilPromise, timeoutPromise])
             }
@@ -95,7 +95,7 @@ const useAuthStore = create((set, get) => ({
       .single()
 
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('timeout_perfil')), 8000)
+      setTimeout(() => reject(new Error('timeout_perfil')), 5000)
     )
 
     const { data, error } = await Promise.race([queryPromise, timeoutPromise])
