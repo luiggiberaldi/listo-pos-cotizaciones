@@ -66,7 +66,7 @@ export function useCrearDespacho() {
         if (error.message.includes('DESPACHO_EXISTENTE'))
           throw new Error('Ya existe una nota de despacho para esta cotización')
         if (error.message.includes('ESTADO_INVALIDO'))
-          throw new Error('La cotización debe estar enviada o aceptada para despachar')
+          throw new Error('La cotización debe estar aceptada para despachar')
         if (error.message.includes('ACCESO_DENEGADO'))
           throw new Error('Solo supervisores pueden crear notas de despacho')
         throw error
