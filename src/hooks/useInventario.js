@@ -208,6 +208,25 @@ export function useActualizarProducto() {
   })
 }
 
+// ─── Mutation: borrar producto (hard delete) ──────────────────────────────────
+export function useBorrarProducto() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (id) => {
+      const { error } = await supabase
+        .from('productos')
+        .delete()
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: INVENTARIO_KEY })
+      showToast('Producto eliminado', 'success')
+    },
+  })
+}
+
 // ─── Mutation: desactivar producto (soft delete) ──────────────────────────────
 export function useDesactivarProducto() {
   const qc = useQueryClient()

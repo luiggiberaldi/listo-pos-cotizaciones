@@ -54,7 +54,6 @@ const NAV_SUPERVISOR = [
   { path: '/reportes',      label: 'Reportes',      icono: BarChart3 },
   { path: '/auditoria',     label: 'Auditoría',     icono: ClipboardList },
   { path: '/configuracion', label: 'Configuración', icono: Settings },
-  { path: '/tester',        label: 'Tester',        icono: FlaskConical },
 ]
 
 // ─── Badge de rol ──────────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 // src/components/inventario/ProductoRow.jsx
 // Fila compacta de producto para vista de lista
-import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle, Package } from 'lucide-react'
+import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle, Package, Trash2 } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtBs, usdToBs } from '../../utils/format'
 
@@ -22,7 +22,7 @@ function colorCategoria(str = '') {
   return fg
 }
 
-export default function ProductoRow({ producto, onEditar, onDesactivar, tasa = 0 }) {
+export default function ProductoRow({ producto, onEditar, onDesactivar, onBorrar, tasa = 0 }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const stockBajo = producto.stock_minimo > 0 && producto.stock_actual <= producto.stock_minimo
@@ -105,8 +105,12 @@ export default function ProductoRow({ producto, onEditar, onDesactivar, tasa = 0
             <Pencil size={15} />
           </button>
           <button onClick={() => onDesactivar(producto)} title="Desactivar producto"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+            className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 transition-colors">
             <EyeOff size={15} />
+          </button>
+          <button onClick={() => onBorrar(producto)} title="Borrar producto"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+            <Trash2 size={15} />
           </button>
         </div>
       )}

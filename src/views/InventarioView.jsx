@@ -8,7 +8,7 @@ import { Package, Plus, Search, RefreshCw, X, Filter, LayoutGrid, List, AlertTri
 import useAuthStore from '../store/useAuthStore'
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import CustomSelect from '../components/ui/CustomSelect'
-import { useInventario, useCategorias, useDesactivarProducto } from '../hooks/useInventario'
+import { useInventario, useCategorias, useDesactivarProducto, useBorrarProducto } from '../hooks/useInventario'
 import ProductoCard  from '../components/inventario/ProductoCard'
 import ProductoRow   from '../components/inventario/ProductoRow'
 import ProductoForm  from '../components/inventario/ProductoForm'
@@ -69,12 +69,15 @@ export default function InventarioView() {
   const [productoEditando, setProductoEditando] = useState(null)
   const [productoADesact,  setProductoADesact]  = useState(null)
   const [confirmDesactOpen,setConfirmDesactOpen]= useState(false)
+  const [productoABorrar,  setProductoABorrar]  = useState(null)
+  const [confirmBorrarOpen,setConfirmBorrarOpen]= useState(false)
 
   // Data
-  const { data: inventarioData, isLoading, isError, refetch } = useInventario({ busqueda, categoria })
+  const { data: inventarioData, isLoading, isError, refetch } = useInventario({ busqueda, categoria, pageSize: 1000 })
   const productos = inventarioData?.productos ?? inventarioData ?? []
   const { data: categorias = [] } = useCategorias()
   const desactivar = useDesactivarProducto()
+  const borrar = useBorrarProducto()
 
   // Filtrar por stock bajo (client-side)
   const productosFiltrados = useMemo(() => {
@@ -121,6 +124,20 @@ export default function InventarioView() {
   function abrirEditar(producto) {
     setProductoEditando(producto)
     setModalFormOpen(true)
+  }
+
+  function abrirBorrar(producto) {
+    setProductoABorrar(producto)
+    setConfirmBorrarOpen(true)
+  }
+
+  async function confirmarBorrar() {
+    if (!productoABorrar) return
+    try {
+      await borrar.mutateAsync(productoABorrar.id)
+    } finally {
+      setProductoABorrar(null)
+    }
   }
 
   function abrirDesactivar(producto) {
@@ -286,6 +303,7 @@ export default function InventarioView() {
                 producto={p}
                 onEditar={abrirEditar}
                 onDesactivar={abrirDesactivar}
+                onBorrar={abrirBorrar}
                 tasa={tasaEfectiva}
               />
             ))}
@@ -298,6 +316,7 @@ export default function InventarioView() {
                 producto={p}
                 onEditar={abrirEditar}
                 onDesactivar={abrirDesactivar}
+                onBorrar={abrirBorrar}
                 tasa={tasaEfectiva}
               />
             ))}
@@ -338,6 +357,17 @@ export default function InventarioView() {
         title="¿Desactivar producto?"
         message={`"${productoADesact?.nombre}" dejará de aparecer en el catálogo.`}
         confirmText="Sí, desactivar"
+        variant="danger"
+      />
+
+      {/* ── Confirm: Borrar ──────────────────────────────────────────────────── */}
+      <ConfirmModal
+        isOpen={confirmBorrarOpen}
+        onClose={() => { setConfirmBorrarOpen(false); setProductoABorrar(null) }}
+        onConfirm={confirmarBorrar}
+        title="¿Borrar producto?"
+        message={`Esta acción eliminará permanentemente "${productoABorrar?.nombre}" y no se puede deshacer.`}
+        confirmText="Sí, borrar"
         variant="danger"
       />
     </div>

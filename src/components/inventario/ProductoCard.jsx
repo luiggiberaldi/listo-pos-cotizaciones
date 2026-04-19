@@ -1,5 +1,5 @@
 // src/components/inventario/ProductoCard.jsx
-import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle, Package } from 'lucide-react'
+import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle, Package, Trash2 } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtBs, usdToBs } from '../../utils/format'
 
@@ -33,7 +33,7 @@ function BadgeStock({ actual, minimo }) {
   return <span className="text-[10px] text-slate-400">Stock: {Number(actual).toLocaleString('es-VE')}</span>
 }
 
-export default function ProductoCard({ producto, onEditar, onDesactivar, tasa = 0 }) {
+export default function ProductoCard({ producto, onEditar, onDesactivar, onBorrar, tasa = 0 }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const { fg, bg } = colorCategoria(producto.categoria || '')
@@ -114,8 +114,12 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, tasa = 
             <Pencil size={11} />Editar
           </button>
           <button onClick={() => onDesactivar(producto)}
-            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-red-500 hover:bg-red-50 transition-colors ml-auto">
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-amber-500 hover:bg-amber-50 transition-colors ml-auto">
             <EyeOff size={11} />Desactivar
+          </button>
+          <button onClick={() => onBorrar(producto)}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-red-500 hover:bg-red-50 transition-colors">
+            <Trash2 size={11} />Borrar
           </button>
         </div>
       )}

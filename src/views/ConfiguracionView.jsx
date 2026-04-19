@@ -22,7 +22,6 @@ const TABS = [
   { id: 'sistema',    label: 'Sistema',    icon: Lock      },
   { id: 'usuarios',   label: 'Usuarios',   icon: Users     },
   { id: 'datos',      label: 'Datos',      icon: Database  },
-  { id: 'tester',     label: 'Tester',     icon: FlaskConical },
 ]
 
 export default function ConfiguracionView() {
