@@ -37,8 +37,8 @@ function useMetricas() {
     queryFn: async () => {
       const tabla = esSupervisor ? 'cotizaciones' : 'v_cotizaciones_vendedor'
 
-      // Todas las cotizaciones del usuario (o todas si supervisor)
-      let q = supabase.from(tabla).select('estado, total_usd, creado_en, vendedor_id')
+      // Todas las cotizaciones del usuario (o todas si supervisor) — solo columnas necesarias
+      let q = supabase.from(tabla).select('estado, total_usd, creado_en').limit(1000)
       if (!esSupervisor) q = q.eq('vendedor_id', perfil.id)
       const { data: todas, error } = await q
       if (error) throw error
@@ -89,7 +89,8 @@ function useMetricas() {
       }
     },
     enabled: !!perfil,
-    staleTime: 2 * 60 * 1000,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 15,
   })
 }
 

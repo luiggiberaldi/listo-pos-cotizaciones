@@ -67,8 +67,8 @@ const TesterView        = lazyRetry(() => import('./views/TesterView'))
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5,  // 5 minutos
-      gcTime: 1000 * 60 * 10,    // 10 min garbage collection (default was 5)
+      staleTime: 1000 * 60 * 5,  // 5 minutos — datos frescos sin refetch
+      gcTime: 1000 * 60 * 15,    // 15 min garbage collection
       retry: 1,
       refetchOnWindowFocus: false, // don't refetch on tab switch — save egress
     },

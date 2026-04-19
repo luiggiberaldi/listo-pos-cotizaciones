@@ -29,6 +29,7 @@ export function useComisiones({ estado = '', vendedorId = '' } = {}) {
           cotizacion:cotizaciones!comisiones_cotizacion_id_fkey(id, numero)
         `)
         .order('creado_en', { ascending: false })
+        .limit(500)
 
       if (estado) query = query.eq('estado', estado)
       if (!esSupervisor) query = query.eq('vendedor_id', perfil.id)
@@ -39,8 +40,8 @@ export function useComisiones({ estado = '', vendedorId = '' } = {}) {
       return data ?? []
     },
     enabled: !!perfil,
-    staleTime: 1000 * 60 * 3,
-    gcTime: 1000 * 60 * 10,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 15,
   })
 }
 
@@ -55,6 +56,7 @@ export function useComisionesResumen() {
       let query = supabase
         .from('comisiones')
         .select('total_comision, estado')
+        .limit(1000)
 
       // Vendedores solo ven sus propias comisiones
       if (!esSupervisor) query = query.eq('vendedor_id', perfil.id)
@@ -79,8 +81,8 @@ export function useComisionesResumen() {
       }
     },
     enabled: !!perfil,
-    staleTime: 1000 * 60 * 3,
-    gcTime: 1000 * 60 * 10,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 15,
   })
 }
 
