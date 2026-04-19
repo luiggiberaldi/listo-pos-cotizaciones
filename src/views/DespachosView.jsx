@@ -2,11 +2,13 @@
 // Vista principal de notas de despacho
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Package, PackageCheck, RefreshCw, Filter, RefreshCcw, AlertTriangle } from 'lucide-react'
+import { Package, PackageCheck, RefreshCw, Filter, RefreshCcw, AlertTriangle, LayoutGrid, List } from 'lucide-react'
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import { useDespachos, useActualizarEstadoDespacho, useReciclarDespacho } from '../hooks/useDespachos'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import DespachoCard from '../components/despachos/DespachoCard'
+import DespachoRow  from '../components/despachos/DespachoRow'
+import DetalleModal from '../components/ui/DetalleModal'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import EmptyState   from '../components/ui/EmptyState'
 import Skeleton     from '../components/ui/Skeleton'
@@ -46,8 +48,10 @@ export default function DespachosView() {
   const { data: config = {} } = useConfigNegocio()
   const [estadoFiltro, setEstadoFiltro] = useState('')
   const [pagina, setPagina] = useState(1)
+  const [vistaMode, setVistaMode] = useState(() => localStorage.getItem('despachos_vista') || 'grid')
   const [despachoAAnular, setDespachoAAnular] = useState(null)
   const [despachoAReciclar, setDespachoAReciclar] = useState(null)
+  const [despachoDetalle, setDespachoDetalle] = useState(null)
 
   const { data: despachos = [], isLoading, isError, refetch } = useDespachos({ estado: estadoFiltro })
   const cambiarEstado = useActualizarEstadoDespacho()
@@ -104,9 +108,21 @@ export default function DespachosView() {
             {label}
           </button>
         ))}
-        <button onClick={() => refetch()} className="ml-auto p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
-          <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
-        </button>
+        <div className="flex items-center gap-1.5 ml-auto shrink-0">
+          <div className="flex bg-slate-100 rounded-xl p-0.5">
+            <button type="button" onClick={() => { setVistaMode('grid'); localStorage.setItem('despachos_vista', 'grid') }} title="Vista cuadrícula"
+              className={`p-2 rounded-lg transition-colors ${vistaMode === 'grid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+              <LayoutGrid size={16} />
+            </button>
+            <button type="button" onClick={() => { setVistaMode('list'); localStorage.setItem('despachos_vista', 'list') }} title="Vista lista"
+              className={`p-2 rounded-lg transition-colors ${vistaMode === 'list' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+              <List size={16} />
+            </button>
+          </div>
+          <button onClick={() => refetch()} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
+            <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+          </button>
+        </div>
       </div>
 
       {/* Contenido */}
@@ -127,25 +143,47 @@ export default function DespachosView() {
         />
       ) : (
         <>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
-          {despachosPaginados.map(d => (
-            <DespachoCard
-              key={d.id}
-              despacho={d}
-              onCambiarEstado={(id, estado) => cambiarEstado.mutateAsync({ despachoId: id, nuevoEstado: estado })}
-              onAnular={setDespachoAAnular}
-              onReciclar={setDespachoAReciclar}
-              tasa={tasaEfectiva}
-              config={config}
-              estadoCambiando={cambiarEstado.isPending}
-            />
-          ))}
-        </div>
+        {vistaMode === 'grid' ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+            {despachosPaginados.map(d => (
+              <DespachoCard
+                key={d.id}
+                despacho={d}
+                onCambiarEstado={(id, estado) => cambiarEstado.mutateAsync({ despachoId: id, nuevoEstado: estado })}
+                onAnular={setDespachoAAnular}
+                onReciclar={setDespachoAReciclar}
+                tasa={tasaEfectiva}
+                config={config}
+                estadoCambiando={cambiarEstado.isPending}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {despachosPaginados.map(d => (
+              <DespachoRow
+                key={d.id}
+                despacho={d}
+                onVer={setDespachoDetalle}
+                tasa={tasaEfectiva}
+              />
+            ))}
+          </div>
+        )}
         {totalPaginas > 1 && (
           <Pagination paginaActual={pagina} totalPaginas={totalPaginas} onCambiarPagina={setPagina} />
         )}
         </>
       )}
+
+      {/* Detalle modal para vista lista */}
+      <DetalleModal
+        isOpen={!!despachoDetalle}
+        onClose={() => setDespachoDetalle(null)}
+        tipo="despacho"
+        registro={despachoDetalle}
+        tasa={tasaEfectiva}
+      />
 
       {/* Confirm anular */}
       <ConfirmModal

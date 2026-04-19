@@ -3,7 +3,7 @@
 // El builder reemplaza la lista in-page (sin navegación adicional)
 import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { FileText, Plus, RefreshCw, Filter, Copy, AlertTriangle, PackageCheck, Loader2, X, AlertCircle } from 'lucide-react'
+import { FileText, Plus, RefreshCw, Filter, Copy, AlertTriangle, PackageCheck, Loader2, X, AlertCircle, LayoutGrid, List } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import supabase from '../services/supabase/client'
 import { useTasaCambio } from '../hooks/useTasaCambio'
@@ -11,6 +11,8 @@ import { useCotizaciones, useAnularCotizacion, useActualizarEstado, useCrearVers
 import { useCrearDespacho } from '../hooks/useDespachos'
 import { useCotizacion } from '../hooks/useCotizaciones'
 import CotizacionCard    from '../components/cotizaciones/CotizacionCard'
+import CotizacionRow     from '../components/cotizaciones/CotizacionRow'
+import DetalleModal      from '../components/ui/DetalleModal'
 import CotizacionBuilder from '../components/cotizaciones/CotizacionBuilder'
 import ConfirmModal      from '../components/ui/ConfirmModal'
 import { Modal }         from '../components/ui/Modal'
@@ -314,10 +316,12 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
   const { tasaEfectiva } = useTasaCambio()
   const [estadoFiltro, setEstadoFiltro] = useState('')
   const [pagina, setPagina] = useState(1)
+  const [vistaMode, setVistaMode] = useState(() => localStorage.getItem('cotizaciones_vista') || 'grid')
   const [cotizacionAAnular, setCotizacionAAnular] = useState(null)
   const [cotizacionADespachar, setCotizacionADespachar] = useState(null)
   const [cotizacionAReciclar, setCotizacionAReciclar] = useState(null)
   const [vendedorReciclar, setVendedorReciclar] = useState('')
+  const [cotizacionDetalle, setCotizacionDetalle] = useState(null)
 
   const { data: cotizaciones = [], isLoading, isError, refetch } = useCotizaciones({ estado: estadoFiltro })
   const { data: vendedores = [] } = useVendedores()
@@ -417,9 +421,21 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
             ))}
           </div>
         </div>
-        <button onClick={() => refetch()} title="Recargar" className="p-2 sm:p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors shrink-0">
-          <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
-        </button>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex bg-slate-100 rounded-xl p-0.5">
+            <button type="button" onClick={() => { setVistaMode('grid'); localStorage.setItem('cotizaciones_vista', 'grid') }} title="Vista cuadrícula"
+              className={`p-2 rounded-lg transition-colors ${vistaMode === 'grid' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+              <LayoutGrid size={16} />
+            </button>
+            <button type="button" onClick={() => { setVistaMode('list'); localStorage.setItem('cotizaciones_vista', 'list') }} title="Vista lista"
+              className={`p-2 rounded-lg transition-colors ${vistaMode === 'list' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+              <List size={16} />
+            </button>
+          </div>
+          <button onClick={() => refetch()} title="Recargar" className="p-2 sm:p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
+            <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
+          </button>
+        </div>
       </div>
 
       {/* Contenido */}
@@ -440,25 +456,48 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
         />
       ) : (
         <>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
-          {cotizacionesPaginadas.map(c => (
-            <CotizacionCard
-              key={c.id}
-              cotizacion={c}
-              onEditar={handleEditar}
-              onAnular={setCotizacionAAnular}
-              onCambiarEstado={(id, estado, numero, clienteNombre, totalUsd) => cambiarEstado.mutate({ id, estado, numero, clienteNombre, totalUsd })}
-              onDespachar={setCotizacionADespachar}
-              onReciclar={abrirReciclar}
-              tasa={tasaEfectiva}
-            />
-          ))}
-        </div>
+        {vistaMode === 'grid' ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+            {cotizacionesPaginadas.map(c => (
+              <CotizacionCard
+                key={c.id}
+                cotizacion={c}
+                onEditar={handleEditar}
+                onAnular={setCotizacionAAnular}
+                onCambiarEstado={(id, estado, numero, clienteNombre, totalUsd) => cambiarEstado.mutate({ id, estado, numero, clienteNombre, totalUsd })}
+                onDespachar={setCotizacionADespachar}
+                onReciclar={abrirReciclar}
+                tasa={tasaEfectiva}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {cotizacionesPaginadas.map(c => (
+              <CotizacionRow
+                key={c.id}
+                cotizacion={c}
+                onEditar={handleEditar}
+                onVer={setCotizacionDetalle}
+                tasa={tasaEfectiva}
+              />
+            ))}
+          </div>
+        )}
         {totalPaginas > 1 && (
           <Pagination paginaActual={pagina} totalPaginas={totalPaginas} onCambiarPagina={setPagina} />
         )}
         </>
       )}
+
+      {/* Detalle modal para vista lista */}
+      <DetalleModal
+        isOpen={!!cotizacionDetalle}
+        onClose={() => setCotizacionDetalle(null)}
+        tipo="cotizacion"
+        registro={cotizacionDetalle}
+        tasa={tasaEfectiva}
+      />
 
       {/* Confirm anular */}
       <ConfirmModal
