@@ -117,7 +117,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       )}
 
       {/* ── Acciones ── */}
-      <div className="mt-auto border-t border-slate-100 px-3 py-2 flex items-center gap-2 sm:gap-1">
+      <div className="mt-auto border-t border-slate-100 px-3 py-2 flex items-center flex-wrap gap-2 sm:gap-1">
         {/* Ver detalle — siempre visible */}
         <button onClick={() => setShowDetalle(true)}
           className="flex items-center gap-1.5 px-3 py-2.5 sm:px-2.5 sm:py-1.5 rounded-lg text-xs font-medium text-primary hover:bg-primary-light transition-colors">

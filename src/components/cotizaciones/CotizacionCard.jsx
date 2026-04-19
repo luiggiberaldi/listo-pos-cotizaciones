@@ -1,6 +1,6 @@
 // src/components/cotizaciones/CotizacionCard.jsx
 import { useState, memo } from 'react'
-import { FileText, User, Calendar, Pencil, Ban, CheckCircle, XCircle, FileDown, MessageCircle, Loader2, Truck, ChevronDown, DollarSign, RefreshCw, Eye } from 'lucide-react'
+import { FileText, User, Calendar, Pencil, Ban, CheckCircle, XCircle, FileDown, MessageCircle, Loader2, Truck, ChevronDown, DollarSign, RefreshCw, Eye, Clock, PackageCheck } from 'lucide-react'
 import EstadoBadge from './EstadoBadge'
 import useAuthStore from '../../store/useAuthStore'
 import supabase from '../../services/supabase/client'
@@ -30,7 +30,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
     try {
       const [{ generarPDF }, itemsRes] = await Promise.all([
         import('../../services/pdf/cotizacionPDF'),
-        supabase.from('cotizacion_items').select('cantidad, nombre_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacion.id).order('orden'),
+        supabase.from('cotizacion_items').select('cantidad, codigo_snap, nombre_snap, unidad_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacion.id).order('orden'),
       ])
       if (itemsRes.error) throw itemsRes.error
       await generarPDF({ cotizacion, items: itemsRes.data ?? [], config })
@@ -47,7 +47,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
     try {
       const [{ generarPDF }, itemsRes] = await Promise.all([
         import('../../services/pdf/cotizacionPDF'),
-        supabase.from('cotizacion_items').select('cantidad, nombre_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacion.id).order('orden'),
+        supabase.from('cotizacion_items').select('cantidad, codigo_snap, nombre_snap, unidad_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacion.id).order('orden'),
       ])
       if (itemsRes.error) throw itemsRes.error
       const pdfBlob = await generarPDF({ cotizacion, items: itemsRes.data ?? [], config, returnBlob: true })
@@ -116,16 +116,16 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         <div className="relative z-10 shrink-0 flex flex-col items-end gap-1">
           <EstadoBadge estado={cotizacion.estado} />
           {despacho && (
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+            <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
               despacho.estado === 'entregada' ? 'bg-emerald-500 text-white' :
               despacho.estado === 'despachada' ? 'bg-blue-500 text-white' :
               despacho.estado === 'anulada' ? 'bg-red-400 text-white' :
               'bg-indigo-500 text-white'
             }`}>
-              {despacho.estado === 'pendiente' ? '🚚 Despacho pendiente' :
-               despacho.estado === 'despachada' ? '🚚 En camino' :
-               despacho.estado === 'entregada' ? '✓ Entregada' :
-               despacho.estado === 'anulada' ? 'Despacho anulado' : despacho.estado}
+              {despacho.estado === 'pendiente' ? <><Clock size={10} /> Despacho pendiente</> :
+               despacho.estado === 'despachada' ? <><Truck size={10} /> En camino</> :
+               despacho.estado === 'entregada' ? <><PackageCheck size={10} /> Entregada</> :
+               despacho.estado === 'anulada' ? <><XCircle size={10} /> Despacho anulado</> : despacho.estado}
             </span>
           )}
         </div>

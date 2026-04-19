@@ -24,6 +24,12 @@ const C_ORANGE = [245, 158, 11] // Naranja-amarillo cabeceras
 const C_DARK   = [20, 20, 20]   // Negro/Gris muy oscuro
 const C_WHITE  = [255, 255, 255]
 
+function hexToRgb(hex) {
+  const h = (hex || '').replace('#', '')
+  if (h.length !== 6) return C_DARK
+  return [parseInt(h.substring(0,2),16), parseInt(h.substring(2,4),16), parseInt(h.substring(4,6),16)]
+}
+
 export async function generarPDF({ cotizacion, items = [], config = {}, returnBlob = false }) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
   let y = 0
@@ -41,8 +47,9 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   doc.setFillColor(...C_YELLOW)
   doc.rect(0, 0, PAGE_W, HDR_H, 'F')
   
-  // Decoraciones: Cuadrícula de puntos a la izquierda
-  doc.setFillColor(...C_DARK)
+  // Decoraciones: Cuadrícula de puntos a la izquierda (color del vendedor)
+  const vendedorColor = hexToRgb(cotizacion.vendedor?.color)
+  doc.setFillColor(...vendedorColor)
   for(let i = 0; i < 4; i++) {
     for(let j = 0; j < 8; j++) {
       doc.circle(MARGIN + i * 2.5, 6 + j * 2.5, 0.4, 'F')
@@ -96,10 +103,10 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   // ══════════════════════════════════════════════════════════════════════════
   const cliente = cotizacion.cliente || {}
   const itemsCliente = [
-    { label: 'NOMBRE', val: cliente.nombre || '—' },
+    { label: 'NOMBRE CLIENTE', val: cliente.nombre || '—' },
     { label: 'TELÉFONO', val: cliente.telefono || '—' },
     { label: 'E-MAIL/RIF', val: cliente.rif_cedula || '—' },
-    { label: 'DIRECCIÓN', val: cliente.direccion || config.direccion_cliente || '—' },
+    { label: 'VENDEDOR', val: cotizacion.vendedor?.nombre || '—' },
     { label: 'FECHA DE EMISIÓN', val: fmtFecha(cotizacion.creado_en) }
   ]
   
@@ -127,9 +134,11 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   // ══════════════════════════════════════════════════════════════════════════
   const COLS = [
     { label: 'CANT.',       x: MARGIN,        w: 16,  align: 'center' },
-    { label: 'DESCRIPCIÓN', x: MARGIN + 16,   w: 92,  align: 'left'   },
-    { label: 'P. UNIT.',    x: MARGIN + 108,  w: 36,  align: 'right'  },
-    { label: 'TOTAL',       x: MARGIN + 144,  w: 38,  align: 'right'  },
+    { label: 'CÓD.',        x: MARGIN + 16,   w: 24,  align: 'center' },
+    { label: 'DESCRIPCIÓN', x: MARGIN + 40,   w: 68,  align: 'left'   },
+    { label: 'UNID.',       x: MARGIN + 108,  w: 16,  align: 'center' },
+    { label: 'PRECIO',      x: MARGIN + 124,  w: 26,  align: 'right'  },
+    { label: 'TOTAL',       x: MARGIN + 150,  w: 32,  align: 'right'  },
   ]
   const ROW_H = 8
 
@@ -166,10 +175,14 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     doc.setTextColor(...C_DARK)
     
     doc.text(String(item.cantidad), COLS[0].x + COLS[0].w / 2, midY, { align: 'center' })
-    const descLines = doc.splitTextToSize(item.nombre_snap || '', COLS[1].w - 4)
-    doc.text(descLines[0], COLS[1].x + 2, midY)
-    doc.text(fmtUsd(item.precio_unit_usd), COLS[2].x + COLS[2].w - 2, midY, { align: 'right' })
-    doc.text(fmtUsd(item.total_linea_usd), COLS[3].x + COLS[3].w - 2, midY, { align: 'right' })
+    doc.text(item.codigo_snap || '—', COLS[1].x + COLS[1].w / 2, midY, { align: 'center' })
+    const descLines = doc.splitTextToSize(item.nombre_snap || '', COLS[2].w - 4)
+    doc.text(descLines[0], COLS[2].x + 2, midY)
+    doc.text(item.unidad_snap || '—', COLS[3].x + COLS[3].w / 2, midY, { align: 'center' })
+    doc.text(fmtUsd(item.precio_unit_usd), COLS[4].x + COLS[4].w - 2, midY, { align: 'right' })
+
+    doc.setFont('helvetica', 'bold')
+    doc.text(fmtUsd(item.total_linea_usd), COLS[5].x + COLS[5].w - 2, midY, { align: 'right' })
     
     y += ROW_H
   })

@@ -58,7 +58,6 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
   const { data: detalle } = useCotizacion(cotizacion?.id)
   const [formaPago, setFormaPago] = useState('')
   const [stockMap, setStockMap] = useState({})
-  if (!cotizacion) return null
 
   const items = detalle?.items ?? []
 
@@ -67,11 +66,15 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
     if (items.length === 0) return
     const productIds = [...new Set(items.map(i => i.producto_id).filter(Boolean))]
     if (productIds.length === 0) return
+    let cancelled = false
     supabase.rpc('obtener_stock_productos', { p_ids: productIds })
       .then(({ data }) => {
-        if (data) setStockMap(Object.fromEntries(data.map(p => [p.id, p.stock_actual])))
+        if (!cancelled && data) setStockMap(Object.fromEntries(data.map(p => [p.id, p.stock_actual])))
       })
-  }, [items])
+    return () => { cancelled = true }
+  }, [detalle])
+
+  if (!cotizacion) return null
 
   const stockIssues = items.filter(i => {
     const stock = stockMap[i.producto_id]

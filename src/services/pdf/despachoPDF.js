@@ -13,6 +13,12 @@ function fmtFecha(f) {
   return d.toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
+function hexToRgb(hex) {
+  const h = (hex || '').replace('#', '')
+  if (h.length !== 6) return C_DARK
+  return [parseInt(h.substring(0,2),16), parseInt(h.substring(2,4),16), parseInt(h.substring(4,6),16)]
+}
+
 // ─── Constantes de diseño ─────────────────────────────────────────────────────
 const MARGIN    = 14
 const PAGE_W    = 210
@@ -55,8 +61,9 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.setFillColor(...C_YELLOW)
   doc.rect(0, 0, PAGE_W, HDR_H, 'F')
   
-  // Decoraciones: Cuadrícula de puntos a la izquierda
-  doc.setFillColor(...C_DARK)
+  // Decoraciones: Cuadrícula de puntos a la izquierda (color del vendedor)
+  const vendedorColor = hexToRgb(despacho.vendedor?.color)
+  doc.setFillColor(...vendedorColor)
   for(let i = 0; i < 4; i++) {
     for(let j = 0; j < 8; j++) {
       doc.circle(MARGIN + i * 2.5, 6 + j * 2.5, 0.4, 'F')
@@ -215,6 +222,34 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   }
 
   y += 10
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 3b. NOTA DE CONDICIONES DE ENTREGA
+  // ══════════════════════════════════════════════════════════════════════════
+  if (y > PAGE_H - 110) { doc.addPage(); y = MARGIN }
+
+  doc.setFillColor(255, 251, 235)
+  doc.setDrawColor(...C_ORANGE)
+  doc.setLineWidth(0.4)
+  doc.roundedRect(MARGIN, y, CONTENT_W, 14, 2, 2, 'FD')
+  doc.setFillColor(...C_ORANGE)
+  doc.rect(MARGIN, y, 3, 14, 'F')
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(7.5)
+  doc.setTextColor(...C_ORANGE)
+  doc.text('CONDICIONES DE ENTREGA:', MARGIN + 7, y + 5.5)
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.5)
+  doc.setTextColor(...C_DARK)
+  const lblW2 = doc.getTextWidth('CONDICIONES DE ENTREGA:') + 4
+  doc.text(
+    'Construacero Carabobo corre con el costo del flete. El cliente se encarga de descargar la mercancía.',
+    MARGIN + 7 + lblW2, y + 5.5
+  )
+
+  y += 18
 
   // ══════════════════════════════════════════════════════════════════════════
   // 4. TOTALES LATERAL DERECHO

@@ -189,7 +189,7 @@ export function useVendedores() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('usuarios')
-        .select('id, nombre, rol')
+        .select('id, nombre, rol, color')
         .eq('activo', true)
         .order('nombre', { ascending: true })
 

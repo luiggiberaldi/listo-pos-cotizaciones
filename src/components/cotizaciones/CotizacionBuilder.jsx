@@ -1081,7 +1081,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
     try {
       const [{ generarPDF }, itemsRes, cotRes] = await Promise.all([
         import('../../services/pdf/cotizacionPDF'),
-        supabase.from('cotizacion_items').select('cantidad, nombre_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacionId).order('orden'),
+        supabase.from('cotizacion_items').select('cantidad, codigo_snap, nombre_snap, unidad_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacionId).order('orden'),
         supabase.from('cotizaciones').select('id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en').eq('id', cotizacionId).single(),
       ])
       if (itemsRes.error) throw itemsRes.error
@@ -1106,7 +1106,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
     try {
       const [{ generarPDF }, itemsRes, cotRes] = await Promise.all([
         import('../../services/pdf/cotizacionPDF'),
-        supabase.from('cotizacion_items').select('cantidad, nombre_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacionId).order('orden'),
+        supabase.from('cotizacion_items').select('cantidad, codigo_snap, nombre_snap, unidad_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacionId).order('orden'),
         supabase.from('cotizaciones').select('id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en').eq('id', cotizacionId).single(),
       ])
       if (itemsRes.error) throw itemsRes.error
@@ -1200,8 +1200,8 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
         {/* ═══════════════════════════════════════════════════════════════ */}
         {paso === 1 && (
           <div className="space-y-4">
-            {/* Selector de vendedor — solo supervisor al crear (no editar) */}
-            {esSupervisor && !esEdicion && (
+            {/* Selector de vendedor — oculto, cotizaciones quedan a nombre del usuario */}
+            {false && esSupervisor && !esEdicion && (
               <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 space-y-3">
                 <SectionH3 icon={Tag}>Asignar a vendedor</SectionH3>
                 <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 gap-2">
@@ -1596,54 +1596,57 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
         {/* ═══════════════════════════════════════════════════════════════ */}
         {paso === 4 && (
           <div className="flex items-center justify-center min-h-[50vh] px-2">
-            <div className="bg-white rounded-2xl border border-emerald-200 shadow-lg overflow-hidden max-w-md w-full">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden max-w-md w-full">
 
-              {/* Strip de éxito */}
-              <div className="relative h-20 sm:h-24 flex flex-col items-center justify-center gap-1"
-                style={{ background: 'linear-gradient(135deg, #065f46ee 0%, #059669aa 100%)' }}>
-                <div className="absolute inset-0 opacity-10 pointer-events-none"
-                  style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '12px 12px' }} />
-                <div className="relative z-10 w-12 h-12 rounded-full flex items-center justify-center"
-                  style={{ background: 'rgba(255,255,255,0.25)', border: '2px solid rgba(255,255,255,0.5)' }}>
-                  <CheckCircle size={24} color="white" />
+              {/* Header de éxito con animación sutil */}
+              <div className="relative h-28 sm:h-32 flex flex-col items-center justify-center"
+                style={{ background: 'linear-gradient(135deg, #1B365D 0%, #2d5a8e 50%, #B8860B 100%)' }}>
+                <div className="absolute inset-0 opacity-[0.07] pointer-events-none"
+                  style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '14px 14px' }} />
+                <div className="relative z-10 w-14 h-14 rounded-full flex items-center justify-center bg-white/20 backdrop-blur-sm border-2 border-white/40 shadow-lg">
+                  <CheckCircle size={28} color="white" strokeWidth={2.5} />
                 </div>
+                <p className="relative z-10 text-white/80 text-xs font-medium mt-2 tracking-wide uppercase">Enviada exitosamente</p>
               </div>
 
-              <div className="p-5 sm:p-6 md:p-8 space-y-4 sm:space-y-5 text-center">
+              <div className="p-5 sm:p-6 md:p-8 space-y-5 text-center">
+                {/* Número de cotización destacado */}
                 <div>
-                  <h3 className="text-xl font-black text-slate-800">Cotización enviada</h3>
+                  <h3 className="text-lg font-bold text-slate-800">Cotización enviada</h3>
                   {numDisplay && (
-                    <p className="font-bold text-lg font-mono mt-1" style={{ color: '#1B365D' }}>{numDisplay}</p>
+                    <p className="font-black text-2xl font-mono mt-1 tracking-tight" style={{ color: '#1B365D' }}>{numDisplay}</p>
                   )}
                 </div>
 
-                <div className="bg-slate-50 rounded-xl p-4 space-y-2 text-sm text-left">
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Cliente</span>
-                    <span className="font-medium text-slate-800">{clienteSeleccionado?.nombre}</span>
+                {/* Resumen con separadores */}
+                <div className="bg-slate-50 rounded-xl p-4 divide-y divide-slate-100">
+                  <div className="flex justify-between py-2.5 first:pt-0">
+                    <span className="text-xs font-medium text-slate-400 uppercase tracking-wide">Cliente</span>
+                    <span className="font-semibold text-slate-800 text-sm">{clienteSeleccionado?.nombre}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Total</span>
-                    <span className="font-bold text-slate-800">{fmtUsd(totalUsd)}</span>
+                  <div className="flex justify-between py-2.5">
+                    <span className="text-xs font-medium text-slate-400 uppercase tracking-wide">Total</span>
+                    <span className="font-bold text-slate-900 text-base">{fmtUsd(totalUsd)}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Items</span>
-                    <span className="text-slate-700">{items.length} producto{items.length !== 1 ? 's' : ''}</span>
+                  <div className="flex justify-between py-2.5 last:pb-0">
+                    <span className="text-xs font-medium text-slate-400 uppercase tracking-wide">Items</span>
+                    <span className="font-medium text-slate-700 text-sm">{items.length} producto{items.length !== 1 ? 's' : ''}</span>
                   </div>
                 </div>
 
                 {/* Acciones */}
-                <div className="space-y-3">
+                <div className="space-y-3 pt-1">
                   <div className="flex flex-col xs:flex-row gap-2 sm:gap-3">
                     <button onClick={descargarPDF} disabled={pdfLoading}
-                      className="flex-1 flex items-center justify-center gap-2 py-3 bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-sm rounded-xl transition-colors disabled:opacity-50">
+                      className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all active:scale-[0.98] disabled:opacity-50"
+                      style={{ backgroundColor: '#1B365D10', color: '#1B365D' }}>
                       {pdfLoading
-                        ? <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                        ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                         : <FileDown size={16} />}
                       Descargar PDF
                     </button>
                     <button onClick={handleWhatsApp} disabled={waLoading}
-                      className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-sm rounded-xl transition-colors disabled:opacity-50">
+                      className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-sm rounded-xl transition-all active:scale-[0.98] disabled:opacity-50">
                       {waLoading
                         ? <div className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
                         : <MessageCircle size={16} />}
@@ -1652,13 +1655,13 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
                   </div>
 
                   <button onClick={onGuardado}
-                    className="w-full py-3 text-white font-bold text-sm rounded-xl transition-all shadow-lg active:scale-[0.98] flex items-center justify-center gap-2"
+                    className="w-full py-3.5 text-white font-bold text-sm rounded-xl transition-all shadow-lg hover:shadow-xl active:scale-[0.98] flex items-center justify-center gap-2"
                     style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
                     <Plus size={16} /> Nueva cotización
                   </button>
 
                   <button onClick={onVolver}
-                    className="w-full py-2.5 text-slate-500 hover:text-slate-700 font-medium text-sm transition-colors">
+                    className="w-full py-2.5 text-slate-400 hover:text-slate-600 font-medium text-xs transition-colors uppercase tracking-wide">
                     Volver a la lista
                   </button>
                 </div>
