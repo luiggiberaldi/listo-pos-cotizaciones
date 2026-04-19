@@ -82,6 +82,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
   const vendedorColor = cotizacion.vendedor?.color || '#64748b'
   const despacho = cotizacion.despacho   // { id, estado } si existe
   const canEdit = esBorrador
+  const canVersion = !esBorrador && ['enviada', 'aceptada', 'rechazada'].includes(cotizacion.estado)
   const canPdf = cotizacion.estado !== 'borrador' && cotizacion.estado !== 'anulada'
   const canWhatsApp = cotizacion.estado === 'enviada' || cotizacion.estado === 'aceptada'
   const canAcceptReject = esSupervisor && esEnviada
@@ -182,6 +183,12 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
           <button onClick={() => onEditar(cotizacion)}
             className="flex items-center gap-1 px-3 py-2.5 sm:px-2 sm:py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
             <Pencil size={15} className="sm:w-[13px] sm:h-[13px]" /><span className="hidden xs:inline">Editar</span>
+          </button>
+        )}
+        {canVersion && (
+          <button onClick={() => onEditar(cotizacion)}
+            className="flex items-center gap-1 px-3 py-2.5 sm:px-2 sm:py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
+            <Pencil size={15} className="sm:w-[13px] sm:h-[13px]" /><span className="hidden xs:inline">Revisar</span>
           </button>
         )}
         {canPdf && (

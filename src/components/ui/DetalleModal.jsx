@@ -1,9 +1,10 @@
 // src/components/ui/DetalleModal.jsx
 // Modal genérico de detalle para cotizaciones y despachos
 import { useEffect, useState } from 'react'
-import { X, Package, Loader2, Calendar, Clock, User, FileText } from 'lucide-react'
+import { X, Package, Loader2, Calendar, Clock, User, FileText, History } from 'lucide-react'
 import supabase from '../../services/supabase/client'
 import { fmtUsdSimple as fmtUsd, fmtFecha } from '../../utils/format'
+import useAuthStore from '../../store/useAuthStore'
 
 function ItemRow({ item, tasa = 0 }) {
   const cant     = Number(item.cantidad || 1)
@@ -56,6 +57,9 @@ function ItemCard({ item }) {
 export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', registro, tasa = 0 }) {
   const [items, setItems]       = useState([])
   const [cargando, setCargando] = useState(false)
+  const [versiones, setVersiones] = useState([])
+  const { perfil } = useAuthStore()
+  const esSupervisor = perfil?.rol === 'supervisor'
 
   useEffect(() => {
     if (!isOpen || !registro) return
@@ -72,6 +76,20 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
         setItems(data ?? [])
         setCargando(false)
       })
+
+    // Cargar historial de versiones para supervisor
+    if (esSupervisor && tipo === 'cotizacion' && registro.numero) {
+      supabase
+        .from('cotizaciones')
+        .select('id, version, estado, total_usd, creado_en, vendedor:usuarios!cotizaciones_vendedor_id_fkey(nombre)')
+        .eq('numero', registro.numero)
+        .order('version', { ascending: true })
+        .then(({ data }) => {
+          setVersiones(data && data.length > 1 ? data : [])
+        })
+    } else {
+      setVersiones([])
+    }
   }, [isOpen, registro?.id, registro?.cotizacion_id])
 
   if (!isOpen || !registro) return null
@@ -172,6 +190,45 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
             <div className="mt-4 p-3 bg-amber-50 border border-amber-100 rounded-xl text-sm text-amber-800">
               <p className="text-[11px] font-bold text-amber-500 uppercase tracking-wider mb-1">Notas</p>
               {notas}
+            </div>
+          )}
+
+          {/* Historial de versiones (solo supervisor, solo cotizaciones con >1 versión) */}
+          {versiones.length > 0 && (
+            <div className="mt-4">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                <History size={12} />Historial de revisiones
+              </p>
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                {versiones.map((v, i) => {
+                  const esCurrent = v.id === registro.id
+                  const estadoLabel = { borrador: 'Borrador', enviada: 'Enviada', aceptada: 'Aceptada', rechazada: 'Rechazada', anulada: 'Anulada', vencida: 'Vencida' }
+                  return (
+                    <div key={v.id} className={`px-3 py-2 flex items-center justify-between text-xs ${i > 0 ? 'border-t border-slate-100' : ''} ${esCurrent ? 'bg-primary-light/50' : ''}`}>
+                      <div className="flex items-center gap-2">
+                        <span className={`font-bold ${esCurrent ? 'text-primary' : 'text-slate-600'}`}>
+                          Rev.{v.version}
+                        </span>
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                          v.estado === 'enviada' ? 'bg-blue-100 text-blue-700' :
+                          v.estado === 'aceptada' ? 'bg-emerald-100 text-emerald-700' :
+                          v.estado === 'rechazada' ? 'bg-red-100 text-red-700' :
+                          v.estado === 'anulada' ? 'bg-slate-200 text-slate-500' :
+                          v.estado === 'borrador' ? 'bg-amber-100 text-amber-700' :
+                          'bg-slate-100 text-slate-500'
+                        }`}>
+                          {estadoLabel[v.estado] || v.estado}
+                        </span>
+                        {v.vendedor?.nombre && <span className="text-slate-400">{v.vendedor.nombre}</span>}
+                      </div>
+                      <div className="flex items-center gap-3 text-slate-500">
+                        <span>{fmtFecha(v.creado_en)}</span>
+                        <span className="font-medium text-slate-700">{fmtUsd(v.total_usd)}</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           )}
         </div>
