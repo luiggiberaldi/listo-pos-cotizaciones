@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { memo, useMemo } from 'react'
-import { LayoutDashboard, FileText, Users, DollarSign, TrendingUp, Clock, Plus, UserCog, ClipboardList, ArrowRight } from 'lucide-react'
+import { LayoutDashboard, FileText, Users, DollarSign, TrendingUp, Clock, Plus, UserCog, ClipboardList, ArrowRight, Zap } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import supabase     from '../services/supabase/client'
 import { fmtUsd, fmtBs, usdToBs } from '../utils/format'
@@ -11,6 +11,7 @@ import { useTasaCambio } from '../hooks/useTasaCambio'
 import { useComisionesResumen } from '../hooks/useComisiones'
 import Skeleton     from '../components/ui/Skeleton'
 import PageHeader  from '../components/ui/PageHeader'
+import OnboardingTip from '../components/ui/OnboardingTooltip'
 
 // ─── Colores de estado ────────────────────────────────────────────────────────
 const ESTADO_COLOR = {
@@ -170,16 +171,27 @@ export default function DashboardView() {
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-4 md:space-y-6">
 
+      {/* Tip de onboarding */}
+      <OnboardingTip tipId="dashboard_intro">
+        ¡Bienvenido! Usa el botón <strong>"Rápida"</strong> para crear cotizaciones al instante, o <strong>"Nueva"</strong> para el asistente paso a paso. En móvil, el botón dorado flotante ⚡ te lleva directo a cotizar.
+      </OnboardingTip>
+
       {/* Encabezado */}
       <PageHeader
         icon={LayoutDashboard}
         title="Inicio"
         subtitle={`Bienvenido, ${perfil?.nombre?.split(' ')[0] ?? 'usuario'} · ${mesActual}`}
         action={
-          <button onClick={() => navigate('/cotizaciones?nueva=1')} className="flex items-center gap-2 text-white font-bold text-sm px-5 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98]"
-            style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
-            <Plus size={16} strokeWidth={2.5} />Nueva cotización
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => navigate('/cotizaciones?rapida=1')} className="flex items-center gap-1.5 font-bold text-sm px-4 py-2.5 rounded-xl transition-all active:scale-[0.98] border-2 border-slate-300 text-slate-700 bg-white hover:bg-slate-50 shadow-sm">
+              <Zap size={14} className="text-amber-600" />
+              <span>Rápida</span>
+            </button>
+            <button onClick={() => navigate('/cotizaciones?nueva=1')} className="flex items-center gap-2 text-white font-bold text-sm px-5 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98]"
+              style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
+              <Plus size={16} strokeWidth={2.5} />Nueva
+            </button>
+          </div>
         }
       />
 

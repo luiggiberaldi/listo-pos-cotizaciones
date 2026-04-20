@@ -13,6 +13,9 @@ import {
 import useAuthStore from '../../store/useAuthStore'
 import LoginAvatar from '../auth/LoginAvatar'
 import BcvWidget from './BcvWidget'
+import BottomNav from './BottomNav'
+import Breadcrumbs from '../ui/Breadcrumbs'
+import QuickQuoteFAB from '../cotizaciones/QuickQuoteFAB'
 import { useRealtimeSync } from '../../hooks/useRealtimeSync'
 import { useAdminAlerts } from '../../hooks/useAdminAlerts'
 import { usePushNotifications } from '../../hooks/usePushNotifications'
@@ -186,8 +189,8 @@ export default function AppLayout() {
         {/* Spacer */}
         <div className="flex-1" />
 
-        {/* Widget BCV — solo desktop (extracted to prevent re-renders) */}
-        <BcvWidget />
+        {/* Widget BCV — supervisor puede configurar, vendedor solo ve la tasa */}
+        <BcvWidget soloLectura={!esSupervisor} />
 
         {/* Campana con dropdown — siempre visible */}
         <div className="relative" ref={notifsRef}>
@@ -322,7 +325,7 @@ export default function AppLayout() {
       {/* ── Sidebar / Drawer ─────────────────────────────────────────────── */}
       <aside
         className={`
-          fixed inset-y-0 left-0 z-50 flex flex-col shrink-0 overflow-hidden
+          fixed inset-y-0 left-0 z-50 flex flex-col shrink-0
           transition-all duration-300 ease-out
           ${menuOpen ? 'translate-x-0' : '-translate-x-full'}
           ${sidebarCollapsed ? 'md:w-[72px]' : 'md:w-64'}
@@ -350,19 +353,17 @@ export default function AppLayout() {
         </div>
 
         {/* Logo + botón colapsar */}
-        <div className="relative z-10 px-4 py-5 flex flex-col items-center shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="relative z-10 px-4 py-3 md:py-5 flex flex-col items-center shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
 
           <img src="/logo.png" alt="Construacero Carabobo"
-            className="object-contain transition-all duration-300 select-none pointer-events-none"
-            style={{
-              height: sidebarCollapsed ? '40px' : '140px',
-              width: sidebarCollapsed ? '40px' : 'auto',
-              filter: 'brightness(1.05) drop-shadow(0 0 12px rgba(184,134,11,0.2))',
-            }}
+            className={`object-contain transition-all duration-300 select-none pointer-events-none ${
+              sidebarCollapsed ? 'h-[40px] w-[40px]' : 'h-[70px] md:h-[140px]'
+            }`}
+            style={{ filter: 'brightness(1.05) drop-shadow(0 0 12px rgba(184,134,11,0.2))' }}
             draggable={false}
           />
           {!sidebarCollapsed && (
-            <div className="mt-3 flex items-center gap-2 w-full justify-center">
+            <div className="mt-2 md:mt-3 hidden md:flex items-center gap-2 w-full justify-center">
               <div className="h-px flex-1 opacity-20" style={{ background: 'linear-gradient(to right, transparent, #B8860B)' }} />
               <span className="text-[9px] font-bold tracking-[0.25em] uppercase whitespace-nowrap" style={{ color: 'rgba(184,134,11,0.7)' }}>
                 Sistema de Gestión
@@ -405,7 +406,7 @@ export default function AppLayout() {
         </nav>
 
         {/* Usuario + cerrar sesión — siempre visible al fondo */}
-        <div className="relative z-10 p-3 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="relative z-10 p-3 pb-20 md:pb-3 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           <button
             onClick={handleLogout}
             className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} p-3 rounded-2xl active:scale-[0.98] transition-all group`}
@@ -435,11 +436,20 @@ export default function AppLayout() {
       </aside>
 
       {/* ── Área de contenido ───────────────────────────────────────────── */}
-      <main className="flex-1 overflow-y-auto min-w-0">
+      <main className="flex-1 overflow-y-auto min-w-0 pb-20 md:pb-0">
         <div className="mx-auto max-w-screen-2xl">
+          <div className="px-4 pt-1 md:px-6">
+            <Breadcrumbs />
+          </div>
           <Outlet />
         </div>
       </main>
+
+      {/* ── Bottom Navigation — solo móvil ──────────────────────────────── */}
+      <BottomNav esSupervisor={esSupervisor} />
+
+      {/* ── FAB Cotización Rápida — solo móvil ─────────────────────────── */}
+      <QuickQuoteFAB />
 
     </div>
   )

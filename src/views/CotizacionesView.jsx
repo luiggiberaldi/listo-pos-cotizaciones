@@ -3,7 +3,7 @@
 // El builder reemplaza la lista in-page (sin navegación adicional)
 import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { FileText, Plus, RefreshCw, Filter, Copy, AlertTriangle, PackageCheck, Loader2, X, AlertCircle, LayoutGrid, List } from 'lucide-react'
+import { FileText, Plus, RefreshCw, Filter, Copy, AlertTriangle, PackageCheck, Loader2, X, AlertCircle, LayoutGrid, List, Zap } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import supabase from '../services/supabase/client'
 import { useTasaCambio } from '../hooks/useTasaCambio'
@@ -14,6 +14,7 @@ import CotizacionCard    from '../components/cotizaciones/CotizacionCard'
 import CotizacionRow     from '../components/cotizaciones/CotizacionRow'
 import DetalleModal      from '../components/ui/DetalleModal'
 import CotizacionBuilder from '../components/cotizaciones/CotizacionBuilder'
+import CotizacionRapida  from '../components/cotizaciones/CotizacionRapida'
 import ConfirmModal      from '../components/ui/ConfirmModal'
 import { Modal }         from '../components/ui/Modal'
 import EmptyState        from '../components/ui/EmptyState'
@@ -310,7 +311,7 @@ function ModalVersionar({ cotizacion, onConfirm, onCancel, cargando }) {
 }
 
 // ─── Vista lista ──────────────────────────────────────────────────────────────
-function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
+function ListaCotizaciones({ onNueva, onRapida, onEditar, onVersionar }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const { tasaEfectiva } = useTasaCambio()
@@ -397,10 +398,16 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
         title="Cotizaciones"
         subtitle={isLoading ? 'Cargando...' : `${cotizaciones.length} cotización${cotizaciones.length !== 1 ? 'es' : ''}`}
         action={
-          <button onClick={onNueva} className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98]"
-            style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
-            <Plus size={16} />Nueva cotización
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={onRapida} className="flex items-center gap-1.5 bg-white border border-slate-200 text-slate-700 font-bold text-sm px-3 py-2.5 rounded-xl transition-all hover:border-primary/50 hover:text-primary active:scale-[0.98]">
+              <Zap size={14} />
+              <span className="hidden sm:inline">Rápida</span>
+            </button>
+            <button onClick={onNueva} className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98]"
+              style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
+              <Plus size={16} />Nueva
+            </button>
+          </div>
         }
       />
 
@@ -449,10 +456,12 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
       ) : cotizaciones.length === 0 ? (
         <EmptyState
           icon={FileText}
-          title={estadoFiltro ? `Sin cotizaciones ${estadoFiltro}s` : 'No hay cotizaciones aún'}
-          description={estadoFiltro ? 'Prueba con otro filtro.' : 'Crea tu primera cotización.'}
-          actionLabel={estadoFiltro ? 'Ver todas' : 'Nueva cotización'}
-          onAction={estadoFiltro ? () => setEstadoFiltro('') : onNueva}
+          title={estadoFiltro ? `Sin cotizaciones ${estadoFiltro}s` : '¡Aún no tienes cotizaciones!'}
+          description={estadoFiltro ? 'Prueba con otro filtro.' : 'Crea tu primera cotización para empezar a vender. Usa "Rápida" para cotizar al instante.'}
+          actionLabel={estadoFiltro ? 'Ver todas' : 'Cotización Rápida'}
+          onAction={estadoFiltro ? () => setEstadoFiltro('') : onRapida}
+          secondaryActionLabel={estadoFiltro ? undefined : 'Asistente completo'}
+          onSecondaryAction={estadoFiltro ? undefined : onNueva}
         />
       ) : (
         <>
@@ -592,15 +601,18 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
 // ─── Vista raíz ───────────────────────────────────────────────────────────────
 export default function CotizacionesView() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const [modo,      setModo]      = useState('lista')           // 'lista' | 'builder'
+  const [modo,      setModo]      = useState('lista')           // 'lista' | 'builder' | 'rapida'
   const [editandoId, setEditandoId] = useState(null)            // ID del borrador a editar
-  const [versionandoCot, setVersionandoCot] = useState(null)   // cotizacion no-borrador para versionar
 
   // Si viene ?nueva=1 del dashboard, abrir wizard directamente
+  // Si viene ?rapida=1, abrir cotización rápida
   useEffect(() => {
     if (searchParams.get('nueva') === '1') {
       setEditandoId(null)
       setModo('builder')
+      setSearchParams({}, { replace: true })
+    } else if (searchParams.get('rapida') === '1') {
+      setModo('rapida')
       setSearchParams({}, { replace: true })
     }
   }, [searchParams, setSearchParams])
@@ -623,22 +635,25 @@ export default function CotizacionesView() {
     setEditandoId(null)
   }
 
-  // Cuando el usuario quiere "editar" una cotización NO borrador
-  function iniciarVersionado(cot) {
-    setVersionandoCot(cot)
-  }
-
-  async function confirmarVersionar() {
-    if (!versionandoCot) return
+  // Cuando el usuario quiere "editar" una cotización NO borrador → crear versión automáticamente
+  async function iniciarVersionado(cot) {
     try {
-      const nuevoId = await crearVersion.mutateAsync(versionandoCot.id)
-      setVersionandoCot(null)
-      // Abrir el nuevo borrador en el builder
+      const nuevoId = await crearVersion.mutateAsync(cot.id)
+      showToast(`Se creó Rev.${(cot.version || 1) + 1} como borrador editable`, 'success')
       setEditandoId(nuevoId)
       setModo('builder')
     } catch (e) {
-      setVersionandoCot(null)
+      showToast(e.message || 'Error al crear versión', 'error')
     }
+  }
+
+  if (modo === 'rapida') {
+    return (
+      <CotizacionRapida
+        onVolver={volver}
+        onGuardado={volver}
+      />
+    )
   }
 
   if (modo === 'builder') {
@@ -664,17 +679,11 @@ export default function CotizacionesView() {
     <>
       <ListaCotizaciones
         onNueva={abrirNueva}
+        onRapida={() => setModo('rapida')}
         onEditar={abrirEditar}
         onVersionar={iniciarVersionado}
       />
 
-      {/* Modal de versionado */}
-      <ModalVersionar
-        cotizacion={versionandoCot}
-        onConfirm={confirmarVersionar}
-        onCancel={() => setVersionandoCot(null)}
-        cargando={crearVersion.isPending}
-      />
     </>
   )
 }

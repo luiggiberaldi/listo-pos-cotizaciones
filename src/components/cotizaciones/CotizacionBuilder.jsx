@@ -28,6 +28,8 @@ import { getLocalISODate }     from '../../utils/dateHelpers'
 import supabase from '../../services/supabase/client'
 import CustomSelect from '../ui/CustomSelect'
 import ClienteForm from '../clientes/ClienteForm'
+import ProductoAutocomplete from './ProductoAutocomplete'
+import ProductosRecientes, { guardarProductoReciente } from './ProductosRecientes'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 let _itemCounter = 0
@@ -183,6 +185,7 @@ const PRODUCTOS_POR_PAGINA = 30
 function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
   const [texto, setTexto] = useState('')
   const [catActiva, setCatActiva] = useState('')
+  const { perfil } = useAuthStore()
   const [visibleCount, setVisibleCount] = useState(PRODUCTOS_POR_PAGINA)
   const [canScrollLeft, setCanScrollLeft]   = useState(false)
   const [canScrollRight, setCanScrollRight] = useState(false)
@@ -222,6 +225,13 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
   })
 
   const idsAgregados = new Set(itemsAgregados.map(it => it.productoId))
+
+  // Wrapper que también guarda en recientes
+  function agregarConReciente(p) {
+    guardarProductoReciente(perfil?.id, p)
+    onAgregar(p)
+  }
+
   const visibles = filtrados.slice(0, visibleCount)
   const hasMore = filtrados.length > visibleCount
 
@@ -231,7 +241,23 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
   return (
     <div className="space-y-3">
 
-      {/* Barra de búsqueda */}
+      {/* Autocomplete de búsqueda rápida */}
+      <ProductoAutocomplete
+        productos={todosProductos}
+        onAgregar={agregarConReciente}
+        idsAgregados={idsAgregados}
+        placeholder="Búsqueda rápida por nombre o código..."
+      />
+
+      {/* Productos recientes */}
+      <ProductosRecientes
+        userId={perfil?.id}
+        productosCompletos={todosProductos}
+        onAgregar={agregarConReciente}
+        idsAgregados={idsAgregados}
+      />
+
+      {/* Barra de búsqueda para filtrar grid */}
       <div className="relative">
         <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
         <input
@@ -313,7 +339,7 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
               const bloqueado  = sinStock || sinPrecio
               return (
                 <button key={p.id} type="button"
-                  onClick={() => !bloqueado && onAgregar(p)}
+                  onClick={() => !bloqueado && agregarConReciente(p)}
                   disabled={bloqueado}
                   title={sinPrecio ? 'Sin precio — no se puede cotizar' : sinStock ? 'Sin stock' : undefined}
                   className={`relative bg-white rounded-xl border p-2 flex flex-col items-center text-center transition-all active:scale-95 hover:shadow-sm ${
@@ -351,8 +377,11 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
                     <p className="text-[9px] text-slate-400 leading-tight">{fmtBs(usdToBs(p.precio_usd, tasa))}</p>
                   )}
 
-                  {/* Stock badge */}
-                  <p className="text-[9px] text-slate-400 font-medium mt-0.5">
+                  {/* Stock badge — color-coded */}
+                  <p className={`text-[9px] font-medium mt-0.5 ${
+                    sinStock ? 'text-red-500' :
+                    (p.stock_actual <= (p.stock_minimo || 5)) ? 'text-amber-500' : 'text-emerald-500'
+                  }`}>
                     {sinStock ? 'Agotado' : `${p.stock_actual ?? 0} disp.`}
                   </p>
                 </button>
@@ -1179,6 +1208,12 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
                   : `Editar borrador`
                 : 'Nueva cotización'}
             </h2>
+            {esEdicion && cotizacionExistente.numero && (
+              <span className="text-[10px] font-mono font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full shrink-0">
+                COT-{String(cotizacionExistente.numero).padStart(5, '0')}
+                {cotizacionExistente.version > 1 && ` Rev.${cotizacionExistente.version}`}
+              </span>
+            )}
           </div>
 
           {paso < 4 && <StepIndicator paso={paso} />}
@@ -1566,6 +1601,31 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
                     </p>
                   )}
                 </div>
+
+                {/* Tasa BCV visible */}
+                {tasaHook.tasaEfectiva > 0 && (
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-50 mt-2">
+                    <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                      <DollarSign size={10} /> Tasa BCV: {new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(tasaHook.tasaEfectiva)} Bs/$
+                    </span>
+                    <button type="button" onClick={tasaHook.refrescar}
+                      className="p-1 text-slate-300 hover:text-primary transition-colors rounded">
+                      <RefreshCw size={11} className={tasaHook.cargando ? 'animate-spin' : ''} />
+                    </button>
+                  </div>
+                )}
+
+                {/* Comisión estimada (solo vendedor) */}
+                {!esSupervisor && totalUsd > 0 && config.comision_pct > 0 && (
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-50 mt-2">
+                    <span className="text-[11px] text-emerald-600 font-semibold">
+                      Comisión estimada
+                    </span>
+                    <span className="text-[11px] font-bold text-emerald-600">
+                      ~{fmtUsd(round2(totalUsd * (config.comision_pct / 100)))}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Botones — solo desktop */}
