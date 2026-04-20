@@ -27,6 +27,7 @@ const useAuthStore = create((set, get) => ({
   error: null,
   initialized: false,  // true una vez que se verificó la sesión inicial
   _cargandoPerfil: false, // flag para evitar doble carga en login
+  _logoutManual: false,  // flag para distinguir logout manual de sesión expirada
 
   // ─── Inicializar: suscribirse a cambios de auth ────────────────────────────
   // Llamar UNA sola vez en el arranque de la app (App.jsx useEffect)
@@ -68,7 +69,13 @@ const useAuthStore = create((set, get) => ({
 
         // SIGNED_OUT = logout
         if (event === 'SIGNED_OUT') {
-          set({ user: null, perfil: null, error: null })
+          // Detect unexpected session expiration (not manual logout)
+          const wasLoggedIn = get().user !== null && !get()._logoutManual
+          set({ user: null, perfil: null, error: null, _logoutManual: false })
+          if (wasLoggedIn) {
+            // Session expired unexpectedly — notify user
+            set({ error: 'Tu sesión ha expirado. Inicia sesión nuevamente para no perder tu trabajo.' })
+          }
         }
 
         // TOKEN_REFRESHED = solo actualizar el objeto user
@@ -177,8 +184,9 @@ const useAuthStore = create((set, get) => ({
 
   // ─── Logout ────────────────────────────────────────────────────────────────
   logout: async () => {
+    set({ _logoutManual: true })
     await supabase.auth.signOut()
-    set({ user: null, perfil: null, error: null })
+    set({ user: null, perfil: null, error: null, _logoutManual: false })
   },
 
   // ─── Limpiar error manualmente ─────────────────────────────────────────────

@@ -84,9 +84,21 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
   function validar() {
     const errs = {}
     if (!campos.nombre.trim()) errs.nombre = 'El nombre es obligatorio'
-    if (!campos.rif_cedula.trim()) errs.rif_cedula = 'El RIF/Cédula es obligatorio para proteger la asignación del cliente'
+    if (campos.nombre.trim() && campos.nombre.trim().length < 3) errs.nombre = 'El nombre debe tener al menos 3 caracteres'
+    if (!campos.rif_cedula.trim()) {
+      errs.rif_cedula = 'El RIF/Cédula es obligatorio para proteger la asignación del cliente'
+    } else {
+      const rif = campos.rif_cedula.trim().toUpperCase()
+      // Formatos válidos: V12345678, J-12345678-9, E-12345678, G-20000001-0
+      if (!/^[VJEGP]-?\d{6,9}(-\d)?$/.test(rif)) {
+        errs.rif_cedula = 'Formato inválido. Ej: V-12345678, J-12345678-9'
+      }
+    }
     if (campos.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(campos.email.trim())) {
       errs.email = 'Correo inválido'
+    }
+    if (campos.telefono && !/^[\d+\-() ]{7,20}$/.test(campos.telefono.trim())) {
+      errs.telefono = 'Teléfono inválido'
     }
     return errs
   }

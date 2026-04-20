@@ -139,11 +139,15 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
     setError('')
     setGuardando(true)
     try {
-      await guardarBorrador.mutateAsync({
-        cotizacionId: null,
-        campos: { clienteId, descuentoGlobalPct, costoEnvioUsd: 0, ivaPct: config.iva_pct ?? 0 },
-        items,
-      })
+      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('La operación tardó demasiado. Verifica tu conexión e intenta de nuevo.')), 30000))
+      await Promise.race([
+        guardarBorrador.mutateAsync({
+          cotizacionId: null,
+          campos: { clienteId, descuentoGlobalPct, costoEnvioUsd: 0, ivaPct: config.iva_pct ?? 0 },
+          items,
+        }),
+        timeout,
+      ])
       showToast('Borrador guardado exitosamente', 'success')
       onGuardado?.()
     } catch (e) {
@@ -158,12 +162,19 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
     setError('')
     setEnviando(true)
     try {
-      const id = await guardarBorrador.mutateAsync({
-        cotizacionId: null,
-        campos: { clienteId, descuentoGlobalPct, costoEnvioUsd: 0, ivaPct: config.iva_pct ?? 0 },
-        items,
-      })
-      await enviarCotizacion.mutateAsync({ cotizacionId: id, tasaBcv: tasa })
+      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('La operación tardó demasiado. Verifica tu conexión e intenta de nuevo.')), 30000))
+      const id = await Promise.race([
+        guardarBorrador.mutateAsync({
+          cotizacionId: null,
+          campos: { clienteId, descuentoGlobalPct, costoEnvioUsd: 0, ivaPct: config.iva_pct ?? 0 },
+          items,
+        }),
+        timeout,
+      ])
+      await Promise.race([
+        enviarCotizacion.mutateAsync({ cotizacionId: id, tasaBcv: tasa }),
+        timeout,
+      ])
       showToast('Cotización enviada exitosamente', 'success')
       onGuardado?.()
     } catch (e) {
@@ -397,7 +408,7 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
                   yaAgregado ? 'bg-emerald-50' : 'bg-slate-50'
                 }`}>
                   {p.imagen_url
-                    ? <img src={p.imagen_url} alt="" className="h-full w-full object-contain" loading="lazy" />
+                    ? <img src={p.imagen_url} alt="" className="h-full w-full object-contain" loading="lazy" onError={e => { e.target.style.display = 'none'; e.target.parentElement.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-300"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>' }} />
                     : yaAgregado ? <CheckCircle size={14} className="text-emerald-400" /> : <Package size={14} className="text-slate-300" />
                   }
                 </div>
@@ -468,14 +479,14 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
                   <div className="flex items-center bg-slate-50 rounded-lg border border-slate-100 overflow-hidden">
                     <button type="button"
                       onClick={() => it.cantidad <= 1 ? eliminarItem(idx) : cambiarItem(idx, 'cantidad', it.cantidad - 1)}
-                      className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors active:scale-90">
-                      <Minus size={11} strokeWidth={3} />
+                      className="min-w-[44px] min-h-[44px] w-11 h-11 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors active:scale-90">
+                      <Minus size={14} strokeWidth={3} />
                     </button>
-                    <span className="w-7 sm:w-8 text-center text-[11px] sm:text-xs font-black text-slate-700 border-x border-slate-100 py-1">{it.cantidad}</span>
+                    <span className="w-8 sm:w-9 text-center text-xs font-black text-slate-700 border-x border-slate-100 py-1">{it.cantidad}</span>
                     <button type="button"
                       onClick={() => cambiarItem(idx, 'cantidad', it.cantidad + 1)}
-                      className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 transition-colors active:scale-90">
-                      <Plus size={11} strokeWidth={3} />
+                      className="min-w-[44px] min-h-[44px] w-11 h-11 flex items-center justify-center text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 transition-colors active:scale-90">
+                      <Plus size={14} strokeWidth={3} />
                     </button>
                   </div>
                 </div>
@@ -499,9 +510,10 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
         </div>
         <div className="flex items-center gap-1.5">
           <input
-            type="number" min="0" max="100" step="1"
+            type="number" inputMode="decimal" min="0" max="100" step="1"
             value={descuentoGlobalPct || ''}
             onChange={e => setDescuentoGlobalPct(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
+            onBlur={e => setDescuentoGlobalPct(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
             className="w-12 sm:w-14 px-1.5 sm:px-2 py-1 text-[11px] sm:text-xs text-center font-bold border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-focus bg-slate-50"
             placeholder="0"
           />
@@ -542,7 +554,10 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
         {tasa > 0 && (
           <div className="flex items-center justify-between pt-1">
             <span className="text-[9px] sm:text-[10px] text-slate-400 flex items-center gap-1">
-              <DollarSign size={8} /> Tasa: {fmtRate(tasa)} Bs/$
+              <DollarSign size={8} /> BCV: {fmtRate(tasa)} Bs/$
+              {tasaHook.tasaUsdt?.precio > 0 && (
+                <> · <span className="text-indigo-500">USDT: {fmtRate(tasaHook.tasaUsdt.precio)}</span></>
+              )}
             </span>
             <button type="button" onClick={tasaHook.refrescar}
               className="p-1 text-slate-300 hover:text-primary transition-colors">
@@ -626,8 +641,11 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
       {error && (
         <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-xl mb-3">
           <AlertCircle size={14} className="text-red-500 shrink-0" />
-          <p className="text-xs text-red-600 font-medium">{error}</p>
-          <button type="button" onClick={() => setError('')} className="ml-auto shrink-0 text-red-300 hover:text-red-500">
+          <p className="text-xs text-red-600 font-medium flex-1">{error}</p>
+          <button type="button" onClick={handleGuardar} className="shrink-0 text-xs font-bold text-red-600 hover:text-red-800 px-2 py-1 rounded-lg hover:bg-red-100 transition-colors">
+            Reintentar
+          </button>
+          <button type="button" onClick={() => setError('')} className="shrink-0 text-red-300 hover:text-red-500">
             <X size={12} />
           </button>
         </div>

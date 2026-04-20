@@ -434,7 +434,7 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
 
 // ─── Modal de envío (con tasa auto/manual) ──────────────────────────────────
 function ModalEnvio({ isOpen, onConfirm, onCancel, cargando, tasaHook }) {
-  const { tasaBcv, tasaEfectiva, modoAuto, setModoAuto, tasaManual, setTasaManual, cargando: tasaCargando, refrescar } = tasaHook
+  const { tasaBcv, tasaUsdt, tasaEfectiva, modoTasa, setModoTasa, tasaManual, setTasaManual, cargando: tasaCargando, refrescar } = tasaHook
   const [error, setError] = useState('')
 
   if (!isOpen) return null
@@ -457,27 +457,34 @@ function ModalEnvio({ isOpen, onConfirm, onCancel, cargando, tasaHook }) {
           Confirma la tasa de cambio para registrar el equivalente en bolívares.
         </p>
 
-        {/* Toggle auto/manual */}
+        {/* Selector de modo: BCV / USDT / Manual */}
         <div className="bg-slate-50 rounded-xl border border-slate-200 p-3 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-500">Tasa de cambio</span>
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-bold">
-                {modoAuto
-                  ? <span className="text-emerald-600">Auto BCV</span>
-                  : <span className="text-primary">Manual</span>}
-              </span>
-              <button
-                onClick={() => setModoAuto(!modoAuto)}
-                style={{ minHeight: 0 }}
-                className={`relative w-10 h-6 rounded-full transition-colors ${modoAuto ? 'bg-emerald-500' : 'bg-slate-300'}`}
-              >
-                <span className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform shadow-sm ${modoAuto ? 'translate-x-4' : 'translate-x-0'}`} />
-              </button>
-            </div>
+            <button onClick={refrescar} disabled={tasaCargando}
+              className="p-1.5 rounded-lg hover:bg-white text-slate-400 hover:text-emerald-600 transition-colors">
+              <RefreshCw size={14} className={tasaCargando ? 'animate-spin' : ''} />
+            </button>
           </div>
 
-          {modoAuto ? (
+          {/* 3 botones de modo */}
+          <div className="flex gap-1.5 p-1 rounded-xl bg-slate-100 border border-slate-200">
+            <button onClick={() => setModoTasa('bcv')}
+              className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${modoTasa === 'bcv' ? 'bg-white text-emerald-600 shadow-sm border border-emerald-200' : 'text-slate-400 hover:text-slate-600'}`}>
+              BCV
+            </button>
+            <button onClick={() => setModoTasa('usdt')}
+              className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${modoTasa === 'usdt' ? 'bg-white text-indigo-600 shadow-sm border border-indigo-200' : 'text-slate-400 hover:text-slate-600'}`}>
+              USDT
+            </button>
+            <button onClick={() => setModoTasa('manual')}
+              className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${modoTasa === 'manual' ? 'bg-white text-amber-600 shadow-sm border border-amber-200' : 'text-slate-400 hover:text-slate-600'}`}>
+              Manual
+            </button>
+          </div>
+
+          {/* Info del modo activo */}
+          {modoTasa === 'bcv' && (
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-lg font-black text-emerald-600">{fmtBs(tasaBcv.precio)} <span className="text-xs font-medium text-slate-400">Bs/$</span></p>
@@ -486,12 +493,22 @@ function ModalEnvio({ isOpen, onConfirm, onCancel, cargando, tasaHook }) {
                   {tasaBcv.ultimaActualizacion && ` · ${new Date(tasaBcv.ultimaActualizacion).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}`}
                 </p>
               </div>
-              <button onClick={refrescar} disabled={tasaCargando}
-                className="p-2 rounded-xl hover:bg-white text-slate-400 hover:text-emerald-600 transition-colors">
-                <RefreshCw size={16} className={tasaCargando ? 'animate-spin' : ''} />
-              </button>
             </div>
-          ) : (
+          )}
+
+          {modoTasa === 'usdt' && (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-lg font-black text-indigo-600">{fmtBs(tasaUsdt?.precio || 0)} <span className="text-xs font-medium text-slate-400">Bs/$</span></p>
+                <p className="text-[10px] text-slate-400">
+                  {tasaUsdt?.fuente || 'Sin datos'}
+                  {tasaUsdt?.ultimaActualizacion && ` · ${new Date(tasaUsdt.ultimaActualizacion).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}`}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {modoTasa === 'manual' && (
             <div className="space-y-1.5">
               <input type="number" min="0.01" step="0.01"
                 value={tasaManual}
@@ -500,11 +517,10 @@ function ModalEnvio({ isOpen, onConfirm, onCancel, cargando, tasaHook }) {
                 className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-primary focus:outline-none focus:ring-2 focus:ring-primary-focus"
                 autoFocus
               />
-              {tasaBcv.precio > 0 && (
-                <p className="text-[10px] text-slate-400">
-                  Referencia BCV: {fmtBs(tasaBcv.precio)} Bs/$
-                </p>
-              )}
+              <div className="flex gap-3 text-[10px] text-slate-400">
+                {tasaBcv.precio > 0 && <span>BCV: {fmtBs(tasaBcv.precio)}</span>}
+                {tasaUsdt?.precio > 0 && <span>USDT: {fmtBs(tasaUsdt.precio)}</span>}
+              </div>
             </div>
           )}
         </div>
@@ -785,18 +801,18 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
               <div className="flex items-center bg-slate-50 rounded-lg p-0.5 border border-slate-100">
                 <button type="button"
                   onClick={() => it.cantidad <= 1 ? onEliminar(idx) : onCambiar(idx, 'cantidad', Math.max(0.01, it.cantidad - 1))}
-                  className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors rounded-l-md active:bg-slate-200">
-                  <Minus size={12} strokeWidth={3} />
+                  className="min-w-[44px] min-h-[44px] w-11 h-11 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors rounded-l-md active:bg-slate-200">
+                  <Minus size={14} strokeWidth={3} />
                 </button>
                 <input
                   type="number" min="0.01" step="0.01"
                   value={it.cantidad}
                   onChange={e => { const v = parseFloat(e.target.value); if (!isNaN(v) && v > 0) onCambiar(idx, 'cantidad', v) }}
-                  className="w-10 sm:w-12 h-7 text-center text-xs font-black text-slate-700 bg-white border-x border-slate-100 outline-none"
+                  className="w-10 sm:w-12 h-11 text-center text-xs font-black text-slate-700 bg-white border-x border-slate-100 outline-none"
                 />
                 <button type="button"
                   onClick={() => onCambiar(idx, 'cantidad', it.cantidad + 1)}
-                  className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-emerald-500 transition-colors rounded-r-md active:bg-slate-200">
+                  className="min-w-[44px] min-h-[44px] w-11 h-11 flex items-center justify-center text-slate-400 hover:text-emerald-500 transition-colors rounded-r-md active:bg-slate-200">
                   <Plus size={12} strokeWidth={3} />
                 </button>
               </div>
@@ -1440,9 +1456,10 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Descuento global (%)</label>
                     <div className="relative">
-                      <input type="number" min="0" max="100" step="0.5"
+                      <input type="number" inputMode="decimal" min="0" max="100" step="0.5"
                         value={descuentoGlobalPct}
                         onChange={e => setDescuentoGlobalPct(Math.min(100, Math.max(0, Number(e.target.value))))}
+                        onBlur={e => setDescuentoGlobalPct(Math.min(100, Math.max(0, Number(e.target.value))))}
                         onFocus={e => e.target.select()}
                         className={inputCls} disabled={cargando} />
                       {descuentoGlobalPct > 0 && (
@@ -1606,7 +1623,10 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
                 {tasaHook.tasaEfectiva > 0 && (
                   <div className="flex items-center justify-between pt-2 border-t border-slate-50 mt-2">
                     <span className="text-[11px] text-slate-400 flex items-center gap-1">
-                      <DollarSign size={10} /> Tasa BCV: {new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(tasaHook.tasaEfectiva)} Bs/$
+                      <DollarSign size={10} /> BCV: {new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(tasaHook.tasaEfectiva)} Bs/$
+                      {tasaHook.tasaUsdt?.precio > 0 && (
+                        <> · <span className="text-indigo-500">USDT: {new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(tasaHook.tasaUsdt.precio)}</span></>
+                      )}
                     </span>
                     <button type="button" onClick={tasaHook.refrescar}
                       className="p-1 text-slate-300 hover:text-primary transition-colors rounded">

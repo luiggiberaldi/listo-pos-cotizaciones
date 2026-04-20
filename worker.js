@@ -1004,7 +1004,16 @@ async function handleGuardarCotizacion(request, env) {
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
 
   const { cotizacionId, headerData, items } = body;
-  if (!headerData || !items) return jsonError('Faltan campos', 400, request);
+  if (!headerData || !items || !Array.isArray(items)) return jsonError('Faltan campos', 400, request);
+
+  // Validate items
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    if (!it.nombre_snap) return jsonError(`Item ${i + 1}: nombre requerido`, 400, request);
+    if (typeof it.cantidad !== 'number' || it.cantidad <= 0) return jsonError(`Item ${i + 1}: cantidad debe ser > 0`, 400, request);
+    if (typeof it.precio_unit_usd !== 'number' || it.precio_unit_usd < 0) return jsonError(`Item ${i + 1}: precio inválido`, 400, request);
+    if (it.descuento_pct != null && (it.descuento_pct < 0 || it.descuento_pct > 100)) return jsonError(`Item ${i + 1}: descuento debe estar entre 0 y 100`, 400, request);
+  }
 
   // Force vendedor_id to authenticated user
   headerData.vendedor_id = user.id;
@@ -1033,6 +1042,20 @@ async function handleGuardarCotizacion(request, env) {
       const [row] = await res.json();
       id = row.id;
     } else {
+      // Verify ownership: cotización must belong to the authenticated user
+      const checkRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${id}&select=vendedor_id,estado`, {
+        headers: { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}` },
+      });
+      if (!checkRes.ok) return jsonError('Error al verificar cotización', 500, request);
+      const [existing] = await checkRes.json();
+      if (!existing) return jsonError('Cotización no encontrada', 404, request);
+      if (existing.vendedor_id !== user.id) {
+        // Check if user is supervisor (supervisors can edit any cotización)
+        const isSupervisor = await verifySupervisor(user.id, env);
+        if (!isSupervisor) return jsonError('No tienes permiso para editar esta cotización', 403, request);
+      }
+      if (existing.estado !== 'borrador') return jsonError('Solo se pueden editar cotizaciones en borrador', 400, request);
+
       // Update existing
       const res = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${id}`, {
         method: 'PATCH',

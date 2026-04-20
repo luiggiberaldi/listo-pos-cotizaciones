@@ -79,7 +79,11 @@ export function useCrearDespacho() {
       // Calcular comisión automáticamente al crear el despacho
       if (data) {
         const { error: comError } = await supabase.rpc('calcular_comision_despacho', { p_despacho_id: data })
-        if (comError) console.warn('Error calculando comisión:', comError.message)
+        if (comError) {
+          // No fallar el despacho, pero notificar al usuario para que reintente
+          console.error('Error calculando comisión:', comError.message)
+          setTimeout(() => showToast('Despacho creado, pero la comisión no se calculó. Contacta al supervisor.', 'warning'), 500)
+        }
       }
       return { id: data, numeroCotizacion, clienteNombre }
     },

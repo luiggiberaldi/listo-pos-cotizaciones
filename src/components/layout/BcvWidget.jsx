@@ -1,13 +1,19 @@
 // src/components/layout/BcvWidget.jsx
-// Widget de tasa BCV — visible en desktop y móvil con UX adaptada
+// Widget de tasa de cambio — BCV / USDT / Manual
 import { useState, useRef, useEffect } from 'react'
 import { DollarSign, RefreshCw, X } from 'lucide-react'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
 
 const fmtRate = n => new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
 
+const MODO_CONFIG = {
+  bcv:    { label: 'BCV',    color: 'emerald' },
+  usdt:   { label: 'USDT',   color: 'indigo' },
+  manual: { label: 'Manual', color: 'amber' },
+}
+
 export default function BcvWidget({ soloLectura = false }) {
-  const { tasaBcv, tasaEfectiva, modoAuto, setModoAuto, tasaManual, setTasaManual, cargando: tasaCargando, refrescar } = useTasaCambio()
+  const { tasaBcv, tasaUsdt, tasaEfectiva, modoTasa, setModoTasa, tasaManual, setTasaManual, cargando: tasaCargando, refrescar } = useTasaCambio()
 
   const [showConfig, setShowConfig] = useState(false)
   const [tasaInput, setTasaInput] = useState(tasaManual)
@@ -42,38 +48,51 @@ export default function BcvWidget({ soloLectura = false }) {
     }
   }
 
+  const modoActual = MODO_CONFIG[modoTasa] || MODO_CONFIG.bcv
+
+  // Colores del botón trigger según modo activo
+  const triggerColors = {
+    bcv: { text: 'text-emerald-400', bg: 'rgba(52,211,153,0.12)', border: 'rgba(52,211,153,0.3)' },
+    usdt: { text: 'text-indigo-400', bg: 'rgba(99,102,241,0.12)', border: 'rgba(99,102,241,0.3)' },
+    manual: { text: 'text-amber-400', bg: 'rgba(251,191,36,0.12)', border: 'rgba(251,191,36,0.3)' },
+  }[modoTasa]
+
   // Panel de configuración compartido
   const configPanel = (
     <div className="space-y-4">
       {/* Tasa actual grande */}
       <div className="text-center py-2">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-white/30 mb-1">Tasa actual</p>
-        <p className="text-3xl font-black text-emerald-400 leading-none">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-white/30 mb-1">Tasa activa ({modoActual.label})</p>
+        <p className={`text-3xl font-black leading-none ${triggerColors.text}`}>
           {tasaEfectiva > 0 ? fmtRate(tasaEfectiva) : '—'}
         </p>
         <p className="text-xs text-white/40 mt-1">Bs por dólar</p>
       </div>
 
-      {/* Toggle Auto/Manual */}
-      <div className="flex items-center justify-between p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-        <div>
-          <p className="text-xs font-bold text-white/70">
-            Modo {modoAuto ? <span className="text-emerald-400">automático</span> : <span className="text-amber-400">manual</span>}
-          </p>
-          <p className="text-[10px] text-white/30 mt-0.5">
-            {modoAuto ? 'Se actualiza desde el BCV cada 15 min' : 'Tú defines la tasa'}
-          </p>
-        </div>
-        <button
-          onClick={() => setModoAuto(!modoAuto)}
-          className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${modoAuto ? 'bg-emerald-500' : 'bg-white/20'}`}
-        >
-          <span className={`absolute top-0.5 left-0.5 bg-white w-5 h-5 rounded-full transition-transform shadow-sm ${modoAuto ? 'translate-x-5' : 'translate-x-0'}`} />
-        </button>
+      {/* Selector de modo — 3 botones */}
+      <div className="flex gap-1.5 p-1 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+        {Object.entries(MODO_CONFIG).map(([key, cfg]) => (
+          <button
+            key={key}
+            onClick={() => setModoTasa(key)}
+            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
+              modoTasa === key
+                ? `bg-${cfg.color}-500/20 text-${cfg.color}-400 border border-${cfg.color}-500/30`
+                : 'text-white/40 hover:text-white/60 hover:bg-white/5 border border-transparent'
+            }`}
+            style={modoTasa === key ? {
+              background: key === 'bcv' ? 'rgba(52,211,153,0.15)' : key === 'usdt' ? 'rgba(99,102,241,0.15)' : 'rgba(251,191,36,0.15)',
+              borderColor: key === 'bcv' ? 'rgba(52,211,153,0.3)' : key === 'usdt' ? 'rgba(99,102,241,0.3)' : 'rgba(251,191,36,0.3)',
+              color: key === 'bcv' ? '#34d399' : key === 'usdt' ? '#818cf8' : '#fbbf24',
+            } : {}}
+          >
+            {cfg.label}
+          </button>
+        ))}
       </div>
 
       {/* Contenido según modo */}
-      {modoAuto ? (
+      {modoTasa === 'bcv' && (
         <div className="p-3 rounded-xl space-y-2" style={{ background: 'rgba(52,211,153,0.06)', border: '1px solid rgba(52,211,153,0.12)' }}>
           <div className="flex items-center justify-between">
             <div>
@@ -95,8 +114,37 @@ export default function BcvWidget({ soloLectura = false }) {
               {fmtRate(tasaBcv.precio)} <span className="text-xs font-medium text-white/30">Bs/$</span>
             </p>
           )}
+          <p className="text-[10px] text-white/25">Se actualiza automáticamente cada 15 min</p>
         </div>
-      ) : (
+      )}
+
+      {modoTasa === 'usdt' && (
+        <div className="p-3 rounded-xl space-y-2" style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)' }}>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold text-indigo-400">USDT Binance P2P</p>
+              <p className="text-[10px] text-white/40">
+                {tasaUsdt.fuente || 'Cargando...'}
+                {tasaUsdt.ultimaActualizacion && (
+                  <> · {new Date(tasaUsdt.ultimaActualizacion).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}</>
+                )}
+              </p>
+            </div>
+            <button onClick={refrescar} disabled={tasaCargando}
+              className="p-2.5 rounded-xl text-indigo-400/60 hover:text-indigo-400 hover:bg-indigo-500/10 transition-all active:scale-90">
+              <RefreshCw size={16} className={tasaCargando ? 'animate-spin' : ''} />
+            </button>
+          </div>
+          {tasaUsdt.precio > 0 && (
+            <p className="text-lg font-black text-indigo-400">
+              {fmtRate(tasaUsdt.precio)} <span className="text-xs font-medium text-white/30">Bs/$</span>
+            </p>
+          )}
+          <p className="text-[10px] text-white/25">Promedio ask/bid de Binance P2P Venezuela</p>
+        </div>
+      )}
+
+      {modoTasa === 'manual' && (
         <div className="p-3 rounded-xl space-y-3" style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.12)' }}>
           <p className="text-xs font-bold text-amber-400">Tasa manual</p>
           <div className="flex gap-2 items-center">
@@ -124,11 +172,10 @@ export default function BcvWidget({ soloLectura = false }) {
               {tasaConfirmada ? 'Listo' : 'Aplicar'}
             </button>
           </div>
-          {tasaBcv.precio > 0 && (
-            <p className="text-[10px] text-white/30">
-              Referencia BCV: {fmtRate(tasaBcv.precio)} Bs/$
-            </p>
-          )}
+          <div className="flex gap-3 text-[10px] text-white/30">
+            {tasaBcv.precio > 0 && <span>BCV: {fmtRate(tasaBcv.precio)}</span>}
+            {tasaUsdt.precio > 0 && <span>USDT: {fmtRate(tasaUsdt.precio)}</span>}
+          </div>
         </div>
       )}
     </div>
@@ -139,9 +186,9 @@ export default function BcvWidget({ soloLectura = false }) {
     return (
       <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 rounded-xl"
         style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
-        <DollarSign size={13} className="text-emerald-400 shrink-0" />
-        <span className="hidden sm:inline text-xs font-black text-white/70">BCV</span>
-        <span className="text-sm font-black text-emerald-400">
+        <DollarSign size={13} className={`${triggerColors.text} shrink-0`} />
+        <span className="hidden sm:inline text-xs font-black text-white/70">{modoActual.label}</span>
+        <span className={`text-sm font-black ${triggerColors.text}`}>
           {tasaEfectiva > 0 ? fmtRate(tasaEfectiva) : '—'}
         </span>
         <span className="hidden sm:inline text-[10px] text-white/35 font-medium">Bs/$</span>
@@ -151,32 +198,32 @@ export default function BcvWidget({ soloLectura = false }) {
 
   return (
     <div className="relative" ref={bcvRef}>
-      {/* ── Botón trigger — adaptado a desktop y móvil ── */}
+      {/* ── Botón trigger ── */}
       <button
         onClick={() => setShowConfig(v => !v)}
         className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 rounded-xl transition-all"
         style={{
-          background: showConfig ? 'rgba(52,211,153,0.12)' : 'rgba(255,255,255,0.05)',
-          border: `1px solid ${showConfig ? 'rgba(52,211,153,0.3)' : 'rgba(255,255,255,0.08)'}`,
+          background: showConfig ? triggerColors.bg : 'rgba(255,255,255,0.05)',
+          border: `1px solid ${showConfig ? triggerColors.border : 'rgba(255,255,255,0.08)'}`,
         }}
         onMouseEnter={e => { if (!showConfig) e.currentTarget.style.background = 'rgba(255,255,255,0.09)' }}
         onMouseLeave={e => { if (!showConfig) e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
-        aria-label="Tasa BCV"
+        aria-label="Configurar tasa"
       >
-        <DollarSign size={13} className="text-emerald-400 shrink-0" />
-        <span className="hidden sm:inline text-xs font-black text-white/70">BCV</span>
-        <span className="text-sm font-black text-emerald-400">
+        <DollarSign size={13} className={`${triggerColors.text} shrink-0`} />
+        <span className={`hidden sm:inline text-xs font-black ${triggerColors.text}`}>{modoActual.label}</span>
+        <span className={`text-sm font-black ${triggerColors.text}`}>
           {tasaEfectiva > 0 ? fmtRate(tasaEfectiva) : '—'}
         </span>
         <span className="hidden sm:inline text-[10px] text-white/35 font-medium">Bs/$</span>
-        {!modoAuto && (
+        {modoTasa === 'manual' && (
           <span className="text-[8px] sm:text-[9px] bg-amber-500/20 text-amber-400 px-1 sm:px-1.5 py-0.5 rounded font-bold border border-amber-500/20">MAN</span>
         )}
       </button>
 
       {/* ── Desktop: popover dropdown ── */}
       {showConfig && (
-        <div className="hidden md:block absolute top-full right-0 mt-2 w-72 rounded-2xl shadow-2xl z-50 p-4 animate-in fade-in zoom-in-95 duration-150"
+        <div className="hidden md:block absolute top-full right-0 mt-2 w-80 rounded-2xl shadow-2xl z-50 p-4 animate-in fade-in zoom-in-95 duration-150"
           style={{ background: '#0f1f3c', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
           {configPanel}
         </div>
