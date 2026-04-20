@@ -324,6 +324,12 @@ function UserSelectStep() {
   const [errorLista,   setErrorLista]   = useState(null)
   const [seleccionado, setSeleccionado] = useState(null)
   const [visible,      setVisible]      = useState(false)
+  const [modoEmail,    setModoEmail]    = useState(false)
+  const [emailLogin,   setEmailLogin]   = useState('')
+  const [passLogin,    setPassLogin]    = useState('')
+  const [showPassLogin, setShowPassLogin] = useState(false)
+  const [loginLoading, setLoginLoading] = useState(false)
+  const [loginError,   setLoginError]   = useState(null)
 
   const { login } = useAuthStore()
   const navigate  = useNavigate()
@@ -353,6 +359,20 @@ function UserSelectStep() {
     const { ok } = await login(seleccionado.email, pin)
     if (ok) navigate('/', { replace: true })
     return ok
+  }
+
+  async function handleEmailLogin(e) {
+    e.preventDefault()
+    if (!emailLogin.trim() || !passLogin) return
+    setLoginLoading(true)
+    setLoginError(null)
+    const { ok, error } = await login(emailLogin.trim(), passLogin)
+    setLoginLoading(false)
+    if (ok) {
+      navigate('/', { replace: true })
+    } else {
+      setLoginError(error || 'Correo o contraseña incorrectos')
+    }
   }
 
   return (
@@ -440,25 +460,100 @@ function UserSelectStep() {
             {/* Header */}
             <div className="flex items-center justify-between mb-6 sm:mb-8">
               <div>
-                <h1 className="text-lg sm:text-xl font-black text-white tracking-tight">¿Quién está operando?</h1>
+                <h1 className="text-lg sm:text-xl font-black text-white tracking-tight">
+                  {modoEmail ? 'Iniciar sesión' : '¿Quién está operando?'}
+                </h1>
                 <p className="text-xs sm:text-sm mt-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                  Selecciona tu usuario e ingresa tu PIN
+                  {modoEmail ? 'Ingresa tu correo y contraseña' : 'Selecciona tu usuario e ingresa tu PIN'}
                 </p>
               </div>
-              <button
-                onClick={cargarUsuarios.bind(null, false)}
-                disabled={cargando}
-                className="p-2 sm:p-2.5 rounded-xl transition-all disabled:opacity-40 shrink-0"
-                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.5)' }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
-              >
-                <RefreshCw size={14} className={cargando ? 'animate-spin' : ''} />
-              </button>
+              {!modoEmail && (
+                <button
+                  onClick={cargarUsuarios.bind(null, false)}
+                  disabled={cargando}
+                  className="p-2 sm:p-2.5 rounded-xl transition-all disabled:opacity-40 shrink-0"
+                  style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.5)' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
+                >
+                  <RefreshCw size={14} className={cargando ? 'animate-spin' : ''} />
+                </button>
+              )}
             </div>
 
-            {/* Grid usuarios */}
-            {cargando ? (
+            {/* ── Modo email: formulario directo ── */}
+            {modoEmail ? (
+              <form onSubmit={handleEmailLogin} className="space-y-4">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: 'rgba(255,255,255,0.5)' }}>Correo</label>
+                  <div className="relative">
+                    <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'rgba(255,255,255,0.3)' }} />
+                    <input
+                      type="email"
+                      value={emailLogin}
+                      onChange={e => setEmailLogin(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 rounded-xl text-sm text-white placeholder-white/20 outline-none transition-colors"
+                      style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+                      onFocus={e => e.target.style.borderColor = 'rgba(184,134,11,0.5)'}
+                      onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+                      placeholder="tu@correo.com"
+                      autoComplete="email"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: 'rgba(255,255,255,0.5)' }}>Contraseña</label>
+                  <div className="relative">
+                    <Key size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'rgba(255,255,255,0.3)' }} />
+                    <input
+                      type={showPassLogin ? 'text' : 'password'}
+                      value={passLogin}
+                      onChange={e => setPassLogin(e.target.value)}
+                      className="w-full pl-10 pr-10 py-2.5 rounded-xl text-sm text-white placeholder-white/20 outline-none transition-colors"
+                      style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+                      onFocus={e => e.target.style.borderColor = 'rgba(184,134,11,0.5)'}
+                      onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+                      placeholder="••••••••"
+                      required
+                    />
+                    <button type="button" onClick={() => setShowPassLogin(!showPassLogin)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                      {showPassLogin ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+
+                {loginError && (
+                  <p className="text-xs text-red-400 text-center">{loginError}</p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loginLoading || !emailLogin.trim() || !passLogin}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-40"
+                  style={{
+                    background: 'linear-gradient(135deg, #B8860B 0%, #8B6914 100%)',
+                    boxShadow: '0 4px 20px rgba(184,134,11,0.3)',
+                  }}
+                >
+                  {loginLoading ? <RefreshCw size={16} className="animate-spin" /> : <ArrowRight size={16} />}
+                  {loginLoading ? 'Ingresando...' : 'Iniciar sesión'}
+                </button>
+
+                <div className="text-center pt-2">
+                  <button type="button" onClick={() => { setModoEmail(false); setLoginError(null) }}
+                    className="text-xs font-semibold transition-colors hover:underline"
+                    style={{ color: 'rgba(255,255,255,0.4)' }}>
+                    ← Volver a selección de usuario
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <>
+                {/* Grid usuarios */}
+                {cargando ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-5">
                 {Array.from({ length: 3 }).map((_, i) => (
                   <div key={i} className="flex flex-col items-center gap-3 py-5 sm:py-6 animate-pulse">
@@ -492,6 +587,18 @@ function UserSelectStep() {
                   <UserCard key={u.id} user={u} onClick={setSeleccionado} index={i} />
                 ))}
               </div>
+            )}
+
+                {/* Link para iniciar con correo */}
+                <div className="text-center pt-5 mt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                  <button onClick={() => setModoEmail(true)}
+                    className="inline-flex items-center gap-2 text-xs font-semibold transition-colors hover:underline"
+                    style={{ color: 'rgba(255,255,255,0.4)' }}>
+                    <Mail size={13} />
+                    Iniciar sesión con correo y contraseña
+                  </button>
+                </div>
+              </>
             )}
 
           </div>

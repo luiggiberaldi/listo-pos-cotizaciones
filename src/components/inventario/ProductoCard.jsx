@@ -2,6 +2,7 @@
 import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle, Package, Trash2 } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtBs, usdToBs } from '../../utils/format'
+import StockComprometidoDetalle from './StockComprometidoDetalle'
 
 function fmtUsd(n) {
   if (n == null) return '—'
@@ -22,18 +23,38 @@ function colorCategoria(str = '') {
 
 }
 
-function BadgeStock({ actual, minimo }) {
+function BadgeStock({ actual, minimo, comprometido = 0, productoId }) {
   const bajo = minimo > 0 && actual <= minimo
-  if (bajo) return (
-    <span className="flex items-center gap-1 text-[10px] font-semibold text-orange-600 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded-full">
-      <AlertTriangle size={9} />
-      {Number(actual).toLocaleString('es-VE')}
-    </span>
+  const disponible = actual - comprometido
+  const sobrecomprometido = comprometido > 0 && disponible < 0
+
+  if (sobrecomprometido) return (
+    <div className="text-right">
+      <span className="flex items-center gap-1 text-[10px] font-semibold text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-full">
+        <AlertTriangle size={9} />
+        {Number(actual).toLocaleString('es-VE')}
+      </span>
+      <StockComprometidoDetalle productoId={productoId} comprometido={comprometido} />
+    </div>
   )
-  return <span className="text-[10px] text-slate-400">Stock: {Number(actual).toLocaleString('es-VE')}</span>
+  if (bajo) return (
+    <div className="text-right">
+      <span className="flex items-center gap-1 text-[10px] font-semibold text-orange-600 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded-full">
+        <AlertTriangle size={9} />
+        {Number(actual).toLocaleString('es-VE')}
+      </span>
+      {comprometido > 0 && <StockComprometidoDetalle productoId={productoId} comprometido={comprometido} />}
+    </div>
+  )
+  return (
+    <div className="text-right">
+      <span className="text-[10px] text-slate-400">Stock: {Number(actual).toLocaleString('es-VE')}</span>
+      {comprometido > 0 && <div><StockComprometidoDetalle productoId={productoId} comprometido={comprometido} /></div>}
+    </div>
+  )
 }
 
-export default function ProductoCard({ producto, onEditar, onDesactivar, onBorrar, tasa = 0 }) {
+export default function ProductoCard({ producto, onEditar, onDesactivar, onBorrar, tasa = 0, comprometido = 0 }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const { fg, bg } = colorCategoria(producto.categoria || '')
@@ -101,7 +122,7 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, onBorra
               <Layers size={9} className="text-slate-400" />
               <span className="text-[10px] text-slate-400">{producto.unidad}</span>
             </div>
-            <BadgeStock actual={producto.stock_actual} minimo={producto.stock_minimo} />
+            <BadgeStock actual={producto.stock_actual} minimo={producto.stock_minimo} comprometido={comprometido} productoId={producto.id} />
           </div>
         </div>
       </div>

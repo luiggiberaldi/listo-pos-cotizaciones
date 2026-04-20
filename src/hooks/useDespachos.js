@@ -6,6 +6,7 @@ import useAuthStore from '../store/useAuthStore'
 import { INVENTARIO_KEY } from './useInventario'
 import { COTIZACIONES_KEY } from './useCotizaciones'
 import { COMISIONES_KEY } from './useComisiones'
+import { STOCK_COMPROMETIDO_KEY } from './useStockComprometido'
 import { notifyDespachoCreado } from '../services/notificationService'
 import { showToast } from '../components/ui/Toast'
 import { sendPushNotification } from './usePushNotifications'
@@ -92,6 +93,7 @@ export function useCrearDespacho() {
       qc.invalidateQueries({ queryKey: INVENTARIO_KEY })
       qc.invalidateQueries({ queryKey: COMISIONES_KEY })
       qc.invalidateQueries({ queryKey: COTIZACIONES_KEY })
+      qc.invalidateQueries({ queryKey: STOCK_COMPROMETIDO_KEY })
       showToast('Nota de despacho creada', 'success')
       notifyDespachoCreado(numeroCotizacion ?? '—', clienteNombre ?? 'cliente')
       sendPushNotification({
@@ -156,6 +158,7 @@ export function useActualizarEstadoDespacho() {
       qc.invalidateQueries({ queryKey: INVENTARIO_KEY })
       qc.invalidateQueries({ queryKey: COMISIONES_KEY })
       qc.invalidateQueries({ queryKey: COTIZACIONES_KEY })
+      qc.invalidateQueries({ queryKey: STOCK_COMPROMETIDO_KEY })
     },
   })
 }

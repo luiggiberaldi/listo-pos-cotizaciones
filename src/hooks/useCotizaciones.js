@@ -13,6 +13,7 @@ import {
 } from '../services/notificationService'
 import { showToast } from '../components/ui/Toast'
 import { sendPushNotification } from './usePushNotifications'
+import { STOCK_COMPROMETIDO_KEY } from './useStockComprometido'
 
 export const COTIZACIONES_KEY = ['cotizaciones']
 
@@ -217,6 +218,7 @@ export function useEnviarCotizacion() {
     },
     onSuccess: ({ numero, clienteNombre, vendedorNombre, totalUsd }) => {
       qc.invalidateQueries({ queryKey: COTIZACIONES_KEY })
+      qc.invalidateQueries({ queryKey: STOCK_COMPROMETIDO_KEY })
       showToast(`Cotización #${numero} enviada`, 'success')
       notifyCotizacionEnviada(numero, clienteNombre, vendedorNombre, totalUsd)
       sendPushNotification({
@@ -245,6 +247,7 @@ export function useAnularCotizacion() {
     },
     onSuccess: ({ numero }) => {
       qc.invalidateQueries({ queryKey: COTIZACIONES_KEY })
+      qc.invalidateQueries({ queryKey: STOCK_COMPROMETIDO_KEY })
       showToast(`Cotización #${numero} anulada`, 'warning')
       notifyCotizacionAnulada(numero)
     },
@@ -266,6 +269,7 @@ export function useActualizarEstado() {
     },
     onSuccess: ({ estado, numero, clienteNombre, totalUsd, vendedorId }) => {
       qc.invalidateQueries({ queryKey: COTIZACIONES_KEY })
+      qc.invalidateQueries({ queryKey: STOCK_COMPROMETIDO_KEY })
       if (estado === 'aceptada') {
         showToast(`Cotización #${numero} aceptada`, 'success')
         notifyCotizacionAceptada(numero, clienteNombre ?? 'cliente', totalUsd ?? 0)

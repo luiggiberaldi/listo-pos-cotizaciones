@@ -22,10 +22,11 @@ function colorCategoria(str = '') {
   return fg
 }
 
-export default function ProductoRow({ producto, onEditar, onDesactivar, onBorrar, tasa = 0 }) {
+export default function ProductoRow({ producto, onEditar, onDesactivar, onBorrar, tasa = 0, comprometido = 0 }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const stockBajo = producto.stock_minimo > 0 && producto.stock_actual <= producto.stock_minimo
+  const sobrecomprometido = comprometido > 0 && (producto.stock_actual - comprometido) < 0
   const catColor = colorCategoria(producto.categoria || '')
 
   return (
@@ -85,15 +86,29 @@ export default function ProductoRow({ producto, onEditar, onDesactivar, onBorrar
           <span className="text-xs text-slate-400">{producto.unidad}</span>
         </div>
 
-        {stockBajo ? (
-          <span className="flex items-center gap-1 text-xs font-semibold text-orange-600 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full">
-            <AlertTriangle size={11} />
-            Stock bajo: {Number(producto.stock_actual).toLocaleString('es-VE')}
-          </span>
+        {sobrecomprometido ? (
+          <div className="text-right">
+            <span className="flex items-center gap-1 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">
+              <AlertTriangle size={11} />
+              Stock: {Number(producto.stock_actual).toLocaleString('es-VE')}
+            </span>
+            <span className="text-[10px] text-amber-600 font-medium">{Number(comprometido).toLocaleString('es-VE')} comprometidas</span>
+          </div>
+        ) : stockBajo ? (
+          <div className="text-right">
+            <span className="flex items-center gap-1 text-xs font-semibold text-orange-600 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full">
+              <AlertTriangle size={11} />
+              Stock bajo: {Number(producto.stock_actual).toLocaleString('es-VE')}
+            </span>
+            {comprometido > 0 && <span className="text-[10px] text-amber-600 font-medium">{Number(comprometido).toLocaleString('es-VE')} comprometidas</span>}
+          </div>
         ) : (
-          <span className="text-xs text-slate-400">
-            Stock: {Number(producto.stock_actual).toLocaleString('es-VE')}
-          </span>
+          <div className="text-right">
+            <span className="text-xs text-slate-400">
+              Stock: {Number(producto.stock_actual).toLocaleString('es-VE')}
+            </span>
+            {comprometido > 0 && <div className="text-[10px] text-amber-600 font-medium">{Number(comprometido).toLocaleString('es-VE')} comprometidas</div>}
+          </div>
         )}
       </div>
 

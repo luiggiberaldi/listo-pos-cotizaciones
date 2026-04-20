@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { useClientes, useVendedores } from '../../hooks/useClientes'
 import { useInventario, useCategorias } from '../../hooks/useInventario'
+import { useStockComprometido } from '../../hooks/useStockComprometido'
 import { useTransportistas }   from '../../hooks/useTransportistas'
 import { useGuardarBorrador, useEnviarCotizacion } from '../../hooks/useCotizaciones'
 import { useTasaCambio }       from '../../hooks/useTasaCambio'
@@ -193,6 +194,7 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
   const { data: inventarioData, isLoading } = useInventario({ pageSize: 1000 })
   const todosProductos = inventarioData?.productos ?? inventarioData ?? []
   const { data: categorias = [] } = useCategorias()
+  const { data: stockComprometido = {} } = useStockComprometido()
 
   // Detectar si hay scroll disponible
   function checkScroll() {
@@ -247,6 +249,7 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
         onAgregar={agregarConReciente}
         idsAgregados={idsAgregados}
         placeholder="Búsqueda rápida por nombre o código..."
+        stockComprometido={stockComprometido}
       />
 
       {/* Productos recientes */}
@@ -337,17 +340,21 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
               const sinStock   = p.stock_actual != null && p.stock_actual <= 0
               const sinPrecio  = !p.precio_usd || Number(p.precio_usd) <= 0
               const bloqueado  = sinStock || sinPrecio
+              const comprometido = stockComprometido[p.id] || 0
+              const disponibleReal = (p.stock_actual ?? 0) - comprometido
               return (
                 <button key={p.id} type="button"
                   onClick={() => !bloqueado && agregarConReciente(p)}
                   disabled={bloqueado}
-                  title={sinPrecio ? 'Sin precio — no se puede cotizar' : sinStock ? 'Sin stock' : undefined}
+                  title={sinPrecio ? 'Sin precio — no se puede cotizar' : sinStock ? 'Sin stock' : comprometido > 0 ? `${comprometido} comprometidas en cotizaciones activas` : undefined}
                   className={`relative bg-white rounded-xl border p-2 flex flex-col items-center text-center transition-all active:scale-95 hover:shadow-sm ${
                     bloqueado
                       ? 'opacity-40 cursor-not-allowed border-slate-100'
                       : yaAgregado
                         ? 'border-emerald-300 shadow-sm shadow-emerald-100/80'
-                        : 'border-slate-200 hover:border-primary/50'
+                        : disponibleReal <= 0 && comprometido > 0
+                          ? 'border-amber-300 shadow-sm shadow-amber-100/80'
+                          : 'border-slate-200 hover:border-primary/50'
                   }`}>
 
                   {/* Icono / imagen */}
@@ -380,9 +387,10 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
                   {/* Stock badge — color-coded */}
                   <p className={`text-[9px] font-medium mt-0.5 ${
                     sinStock ? 'text-red-500' :
+                    disponibleReal <= 0 && comprometido > 0 ? 'text-amber-600' :
                     (p.stock_actual <= (p.stock_minimo || 5)) ? 'text-amber-500' : 'text-emerald-500'
                   }`}>
-                    {sinStock ? 'Agotado' : `${p.stock_actual ?? 0} disp.`}
+                    {sinStock ? 'Agotado' : comprometido > 0 ? `${p.stock_actual ?? 0} (${comprometido} comp.)` : `${p.stock_actual ?? 0} disp.`}
                   </p>
                 </button>
               )

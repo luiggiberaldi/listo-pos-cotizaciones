@@ -9,6 +9,7 @@ import useAuthStore from '../store/useAuthStore'
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import CustomSelect from '../components/ui/CustomSelect'
 import { useInventario, useCategorias, useDesactivarProducto, useBorrarProducto } from '../hooks/useInventario'
+import { useStockComprometido } from '../hooks/useStockComprometido'
 import ProductoCard  from '../components/inventario/ProductoCard'
 import ProductoRow   from '../components/inventario/ProductoRow'
 import ProductoForm  from '../components/inventario/ProductoForm'
@@ -78,6 +79,7 @@ export default function InventarioView() {
   const { data: categorias = [] } = useCategorias()
   const desactivar = useDesactivarProducto()
   const borrar = useBorrarProducto()
+  const { data: stockComprometido = {} } = useStockComprometido()
 
   // Filtrar por stock bajo (client-side)
   const productosFiltrados = useMemo(() => {
@@ -305,6 +307,7 @@ export default function InventarioView() {
                 onDesactivar={abrirDesactivar}
                 onBorrar={abrirBorrar}
                 tasa={tasaEfectiva}
+                comprometido={stockComprometido[p.id] || 0}
               />
             ))}
           </div>
@@ -318,6 +321,7 @@ export default function InventarioView() {
                 onDesactivar={abrirDesactivar}
                 onBorrar={abrirBorrar}
                 tasa={tasaEfectiva}
+                comprometido={stockComprometido[p.id] || 0}
               />
             ))}
           </div>
