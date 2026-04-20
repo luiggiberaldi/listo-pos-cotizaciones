@@ -125,8 +125,9 @@ export function usePushNotifications() {
 }
 
 // ─── Función global para disparar push desde cualquier parte ─────────────────
-// Llama al endpoint del worker para enviar push a todos los suscritos
-export async function sendPushNotification({ title, message, url = '/', tag }) {
+// targetRole: 'supervisor' | 'vendedor' — enviar solo a usuarios con ese rol
+// targetUserId: UUID — enviar solo a un usuario específico
+export async function sendPushNotification({ title, message, url = '/', tag, targetRole, targetUserId }) {
   try {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
@@ -137,7 +138,7 @@ export async function sendPushNotification({ title, message, url = '/', tag }) {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify({ title, message, url, tag }),
+      body: JSON.stringify({ title, message, url, tag, targetRole, targetUserId }),
     })
   } catch (err) {
     console.warn('[Push] Error al enviar notificación:', err)

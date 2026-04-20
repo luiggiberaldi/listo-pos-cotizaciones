@@ -1067,6 +1067,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
           message: `${perfil?.nombre} creó cotización #${numCot} con ${clienteUsado.nombre} (cliente de ${clienteUsado.vendedor?.nombre || 'otro vendedor'})`,
           tag: `cliente-ajeno-${numCot}`,
           url: '/cotizaciones',
+          targetRole: 'supervisor',
         })
       }
     } catch (e) {

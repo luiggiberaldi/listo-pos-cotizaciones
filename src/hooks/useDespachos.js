@@ -95,6 +95,7 @@ export function useCrearDespacho() {
         message: `Despacho para cotización #${numeroCotizacion ?? '—'} — ${clienteNombre ?? 'cliente'}`,
         tag: `despacho-${numeroCotizacion}`,
         url: '/despachos',
+        targetRole: 'supervisor',
       })
     },
   })

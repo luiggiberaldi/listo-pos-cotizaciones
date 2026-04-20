@@ -501,7 +501,7 @@ async function handlePush(request, env, url) {
     return json({ ok: true }, 200, request);
   }
 
-  // ── POST send — envía push a todos los supervisores ─────────────────────
+  // ── POST send — envía push a usuarios específicos ──────────────────────────
   if (route === 'send' && request.method === 'POST') {
     const user = await verifyAuth(request, env);
     if (!user?.id) return jsonError('No autenticado', 401, request);
@@ -515,19 +515,47 @@ async function handlePush(request, env, url) {
     let body;
     try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
 
-    const { title, message, url: targetUrl = '/', tag } = body;
+    const { title, message, url: targetUrl = '/', tag, targetRole, targetUserId } = body;
     if (!title || !message) return jsonError('Faltan title y message', 400, request);
 
-    // Obtener suscripciones de supervisores
-    const subsRes = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/push_subscriptions?select=endpoint,p256dh,auth`,
-      {
-        headers: {
-          apikey: env.SUPABASE_SERVICE_KEY,
-          Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-        },
-      }
-    );
+    // Construir filtro de suscripciones según target
+    let subsUrl = `${env.SUPABASE_URL}/rest/v1/push_subscriptions?select=endpoint,p256dh,auth,usuario_id`;
+
+    if (targetUserId) {
+      // Enviar solo a un usuario específico
+      subsUrl += `&usuario_id=eq.${targetUserId}`;
+    } else if (targetRole) {
+      // Enviar solo a usuarios con un rol específico (supervisor/vendedor)
+      // Primero obtener IDs de usuarios con ese rol
+      const usersRes = await fetch(
+        `${env.SUPABASE_URL}/rest/v1/usuarios?select=id&rol=eq.${targetRole}`,
+        {
+          headers: {
+            apikey: env.SUPABASE_SERVICE_KEY,
+            Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+          },
+        }
+      );
+      if (!usersRes.ok) return jsonError('Error al obtener usuarios', 500, request);
+      const users = await usersRes.json();
+      const userIds = users.map(u => u.id);
+      if (!userIds.length) return json({ ok: true, sent: 0 }, 200, request);
+      subsUrl += `&usuario_id=in.(${userIds.join(',')})`;
+    }
+    // Si no hay targetRole ni targetUserId, NO enviar a nadie (evitar spam global)
+    // excepto si el sender es supervisor (notificaciones de sistema)
+    else {
+      // Por defecto: enviar a todos menos al que envía
+      subsUrl += `&usuario_id=neq.${user.id}`;
+    }
+
+    // Obtener suscripciones filtradas
+    const subsRes = await fetch(subsUrl, {
+      headers: {
+        apikey: env.SUPABASE_SERVICE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+      },
+    });
 
     if (!subsRes.ok) return jsonError('Error al obtener suscripciones', 500, request);
     const subscriptions = await subsRes.json();

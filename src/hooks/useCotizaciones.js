@@ -224,6 +224,7 @@ export function useEnviarCotizacion() {
         message: `${vendedorNombre} envió COT-${numero} para ${clienteNombre} — $${totalUsd}. Requiere tu revisión.`,
         tag: `cotizacion-enviada-${numero}`,
         url: '/cotizaciones?estado=enviada',
+        targetRole: 'supervisor',
       })
     },
   })
@@ -255,15 +256,15 @@ export function useActualizarEstado() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ id, estado, numero, clienteNombre, totalUsd }) => {
+    mutationFn: async ({ id, estado, numero, clienteNombre, totalUsd, vendedorId }) => {
       const { error } = await supabase
         .from('cotizaciones')
         .update({ estado })
         .eq('id', id)
       if (error) throw error
-      return { estado, numero, clienteNombre, totalUsd }
+      return { estado, numero, clienteNombre, totalUsd, vendedorId }
     },
-    onSuccess: ({ estado, numero, clienteNombre, totalUsd }) => {
+    onSuccess: ({ estado, numero, clienteNombre, totalUsd, vendedorId }) => {
       qc.invalidateQueries({ queryKey: COTIZACIONES_KEY })
       if (estado === 'aceptada') {
         showToast(`Cotización #${numero} aceptada`, 'success')
@@ -273,6 +274,7 @@ export function useActualizarEstado() {
           message: `Cotización #${numero} — ${clienteNombre ?? 'cliente'} — $${Number(totalUsd).toFixed(2)}`,
           tag: `cotizacion-aceptada-${numero}`,
           url: '/cotizaciones',
+          targetUserId: vendedorId,
         })
       }
     },
