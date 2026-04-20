@@ -23,9 +23,9 @@ const PAGE_H    = 297
 const MARGIN    = 14
 const CONTENT_W = PAGE_W - MARGIN * 2
 
-const C_YELLOW = [124, 184, 242]   // Maya Blue — acentos, líneas
-const C_ORANGE = [58, 99, 168]     // Mariner — headers, barras
-const C_DARK   = [5, 8, 52]        // Midnight Express — texto, fondos oscuros
+const C_YELLOW = [250, 204, 21]
+const C_ORANGE = [245, 158, 11]
+const C_DARK   = [20, 20, 20]
 const C_WHITE  = [255, 255, 255]
 
 function hexToRgb(hex) {
@@ -100,6 +100,11 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     doc.text(splitName.slice(1).join(' ').toUpperCase(), textX, 32)
   }
 
+  // RIF debajo del nombre
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9)
+  doc.text(`RIF: ${rif}`, textX, 39)
+
   // "Cotización" + número a la derecha inferior
   doc.setFontSize(14)
   doc.text('Cotización', PAGE_W - MARGIN, HDR_H - 12, { align: 'right' })
@@ -119,9 +124,9 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   doc.setTextColor(...C_DARK)
 
   // Encabezado tipo "COTIZACIÓN a nombre de:"
-  doc.setFillColor(235, 241, 250)
+  doc.setFillColor(248, 248, 248)
   doc.rect(MARGIN, y, CONTENT_W, 7, 'F')
-  doc.setDrawColor(192, 200, 215)
+  doc.setDrawColor(220, 220, 220)
   doc.setLineWidth(0.3)
   doc.rect(MARGIN, y, CONTENT_W, 7, 'S')
   doc.text('COTIZACIÓN a nombre de:', MARGIN + 3, y + 4.8)
@@ -189,13 +194,13 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   ]
   const ROW_H = 8
 
-  // Cabecera de tabla azul
+  // Cabecera Naranja
   doc.setFillColor(...C_ORANGE)
   doc.rect(MARGIN, y, CONTENT_W, 8, 'F')
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8)
-  doc.setTextColor(...C_WHITE)
+  doc.setTextColor(...C_DARK)
   COLS.forEach(col => {
     let tx = col.x + 2
     if (col.align === 'center') tx = col.x + col.w/2
@@ -206,7 +211,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
 
   // Items
   doc.setLineWidth(0.2)
-  doc.setDrawColor(185, 195, 210)
+  doc.setDrawColor(200, 200, 200)
 
   items.forEach((item) => {
     if (y > PAGE_H - 90) { doc.addPage(); y = MARGIN }
@@ -330,8 +335,8 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   const totLineH = 7
   const totHeight = (totLines.length + 1) * totLineH + 4
 
-  doc.setFillColor(238, 243, 250)
-  doc.setDrawColor(192, 200, 215)
+  doc.setFillColor(250, 250, 250)
+  doc.setDrawColor(220, 220, 220)
   doc.setLineWidth(0.3)
   doc.roundedRect(totX, totStartY, totW, totHeight, 1.5, 1.5, 'FD')
 
@@ -345,12 +350,12 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     ty += totLineH
   })
 
-  // Total grande azul
+  // Total grande naranja
   doc.setFillColor(...C_ORANGE)
   doc.rect(totX, ty - 2, totW, 10, 'F')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(11)
-  doc.setTextColor(...C_WHITE)
+  doc.setTextColor(...C_DARK)
   doc.text('TOTAL', totX + 4, ty + 5)
   doc.text(fmtUsd(total), totX + totW - 4, ty + 5, { align: 'right' })
 
@@ -369,8 +374,21 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   // Avanzar Y al final de lo que sea más alto (condiciones o totales)
   y = Math.max(condY, ty + 14) + 5
 
+  // ── Firma ──
+  if (y > PAGE_H - 50) { doc.addPage(); y = MARGIN }
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7)
+  doc.setTextColor(...C_DARK)
+  doc.text('Elaborado por', MARGIN + 25, y + 8, { align: 'center' })
+  doc.setLineWidth(0.3)
+  doc.setDrawColor(...C_DARK)
+  doc.line(MARGIN, y + 13, MARGIN + 50, y + 13)
+  if (cotizacion.vendedor?.nombre) {
+    doc.text(cotizacion.vendedor.nombre, MARGIN + 25, y + 17, { align: 'center' })
+  }
+
   // ── Slogan ──
-  y += 8
+  y += 24
   if (y < PAGE_H - 45) {
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(9)
