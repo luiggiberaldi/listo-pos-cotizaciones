@@ -1,0 +1,1328 @@
+diff --git a/src/components/auth/LoginPinModal.jsx b/src/components/auth/LoginPinModal.jsx
+index a03d866..ed33889 100644
+--- a/src/components/auth/LoginPinModal.jsx
++++ b/src/components/auth/LoginPinModal.jsx
+@@ -118,7 +118,7 @@ export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
+       <div
+         className="relative w-full max-w-sm mx-4 rounded-3xl overflow-hidden animate-in zoom-in-95 duration-300"
+         style={{
+-          background: 'linear-gradient(160deg, #0d1f3c 0%, #0a1628 60%, #081520 100%)',
++          background: 'linear-gradient(160deg, #050834 0%, #030520 60%, #081520 100%)',
+           border: '1px solid rgba(255,255,255,0.08)',
+           boxShadow: '0 32px 80px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06)',
+         }}
+@@ -137,7 +137,7 @@ export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
+ 
+         {/* Línea dorada superior */}
+         <div className="absolute top-0 left-[20%] right-[20%] h-px"
+-          style={{ background: 'linear-gradient(to right, transparent, rgba(184,134,11,0.4), transparent)' }} />
++          style={{ background: 'linear-gradient(to right, transparent, rgba(124,184,242,0.4), transparent)' }} />
+ 
+         <div className="relative z-10 px-7 pt-8 pb-7">
+ 
+diff --git a/src/components/cotizaciones/CotizacionBuilder.jsx b/src/components/cotizaciones/CotizacionBuilder.jsx
+index d321566..36da537 100644
+--- a/src/components/cotizaciones/CotizacionBuilder.jsx
++++ b/src/components/cotizaciones/CotizacionBuilder.jsx
+@@ -50,9 +50,9 @@ function StepIndicator({ paso, totalPasos = 4 }) {
+               isDone ? 'bg-emerald-100 text-emerald-700' : !isActive ? 'bg-slate-100 text-slate-400' : ''
+             }`}
+               style={isActive ? {
+-                background: 'linear-gradient(135deg, #1B365D, #B8860B)',
++                background: 'linear-gradient(135deg, #050834, #3A63A8)',
+                 color: 'white',
+-                boxShadow: '0 2px 8px rgba(27,54,93,0.3)',
++                boxShadow: '0 2px 8px rgba(58,99,168,0.3)',
+               } : undefined}>
+               {isDone ? <CheckCircle size={12} /> : <span>{step}</span>}
+               <span className="hidden sm:inline">{STEP_LABELS[i]}</span>
+@@ -680,7 +680,7 @@ function ClienteSelector({ clientes, clienteId, onSelect }) {
+                     </p>
+                   </div>
+                   {esAjeno && c.vendedor && (
+-                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200 shrink-0 whitespace-nowrap">
++                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-sky-50 text-sky-500 border border-sky-200 shrink-0 whitespace-nowrap">
+                       {c.vendedor.nombre}
+                     </span>
+                   )}
+@@ -739,10 +739,10 @@ function ClienteSelector({ clientes, clienteId, onSelect }) {
+ function SectionH3({ icon: Icon, children }) {
+   return (
+     <div className="flex items-center gap-3 mb-1">
+-      <div className="w-0.5 self-stretch rounded-full shrink-0" style={{ background: 'linear-gradient(180deg, #B8860B, #1B365D)', minHeight: '18px' }} />
++      <div className="w-0.5 self-stretch rounded-full shrink-0" style={{ background: 'linear-gradient(180deg, #7CB8F2, #050834)', minHeight: '18px' }} />
+       <div className="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
+-        style={{ background: 'linear-gradient(135deg, rgba(27,54,93,0.08), rgba(184,134,11,0.08))', border: '1px solid rgba(27,54,93,0.1)' }}>
+-        {Icon && <Icon size={12} style={{ color: '#1B365D' }} />}
++        style={{ background: 'linear-gradient(135deg, rgba(58,99,168,0.08), rgba(124,184,242,0.08))', border: '1px solid rgba(58,99,168,0.1)' }}>
++        {Icon && <Icon size={12} style={{ color: '#3A63A8' }} />}
+       </div>
+       <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wide">{children}</h3>
+     </div>
+@@ -777,7 +777,7 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
+               <div className="flex items-center gap-1.5 mt-0.5">
+                 <span className="text-[10px] sm:text-[11px] font-bold text-emerald-600 bg-emerald-50 px-1 rounded">{fmtUsd(it.precioUnitUsd)}</span>
+                 <span className="text-[10px] text-slate-400">{it.unidadSnap}</span>
+-                {it.descuentoPct > 0 && <span className="text-[10px] text-amber-500 font-semibold">-{it.descuentoPct}%</span>}
++                {it.descuentoPct > 0 && <span className="text-[10px] text-sky-400 font-semibold">-{it.descuentoPct}%</span>}
+               </div>
+             </div>
+             <div className="flex flex-col items-end gap-1.5 shrink-0">
+@@ -825,7 +825,7 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
+       )}
+       <button type="button" onClick={onSiguiente} disabled={items.length === 0}
+         className="w-full flex items-center justify-center gap-2 py-3 sm:py-3.5 text-white font-bold text-sm sm:text-base rounded-xl sm:rounded-2xl transition-all disabled:opacity-40 active:scale-[0.98] shadow-lg"
+-        style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
++        style={{ background: 'linear-gradient(135deg, #050834, #3A63A8)' }}>
+         <ArrowRight size={16} /> Continuar al resumen
+       </button>
+       <button type="button" onClick={onAnterior}
+@@ -844,7 +844,7 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
+           <button type="button"
+             onClick={() => setSheetOpen(true)}
+             className="fixed bottom-4 left-3 right-3 z-30 p-3.5 rounded-2xl shadow-xl flex items-center justify-between active:scale-[0.97] transition-all"
+-            style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)', boxShadow: '0 8px 30px rgba(27,54,93,0.35)' }}>
++            style={{ background: 'linear-gradient(135deg, #050834, #3A63A8)', boxShadow: '0 8px 30px rgba(58,99,168,0.35)' }}>
+             <div className="flex items-center gap-3">
+               <div className="bg-white/20 p-2 rounded-xl">
+                 <ShoppingCart size={18} className="text-white" />
+@@ -1343,7 +1343,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
+             <div className="flex justify-end">
+               <button onClick={siguiente}
+                 className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-white font-bold text-sm rounded-xl transition-all shadow-lg active:scale-[0.98]"
+-                style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
++                style={{ background: 'linear-gradient(135deg, #050834, #3A63A8)' }}>
+                 Siguiente: Productos <ArrowRight size={16} />
+               </button>
+             </div>
+@@ -1500,7 +1500,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
+                 <button onClick={() => { setErrorGeneral(''); handleEnviar(tasaHook.tasaEfectiva) }}
+                   disabled={cargando || tasaHook.tasaEfectiva <= 0}
+                   className="flex items-center justify-center gap-2 w-full px-6 py-3.5 text-white font-bold text-sm rounded-xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50"
+-                  style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
++                  style={{ background: 'linear-gradient(135deg, #050834, #3A63A8)' }}>
+                   {enviarCotizacion.isPending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+                   Enviar cotización
+                 </button>
+@@ -1633,7 +1633,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
+                 <button onClick={() => { setErrorGeneral(''); handleEnviar(tasaHook.tasaEfectiva) }}
+                   disabled={cargando || tasaHook.tasaEfectiva <= 0}
+                   className="flex items-center justify-center gap-2 w-full px-6 py-3.5 text-white font-bold text-sm rounded-xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50"
+-                  style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
++                  style={{ background: 'linear-gradient(135deg, #050834, #3A63A8)' }}>
+                   {enviarCotizacion.isPending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+                   Enviar cotización
+                 </button>
+@@ -1661,7 +1661,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
+ 
+               {/* Header de éxito con animación sutil */}
+               <div className="relative h-28 sm:h-32 flex flex-col items-center justify-center"
+-                style={{ background: 'linear-gradient(135deg, #1B365D 0%, #2d5a8e 50%, #B8860B 100%)' }}>
++                style={{ background: 'linear-gradient(135deg, #050834 0%, #2d5a8e 50%, #3A63A8 100%)' }}>
+                 <div className="absolute inset-0 opacity-[0.07] pointer-events-none"
+                   style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '14px 14px' }} />
+                 <div className="relative z-10 w-14 h-14 rounded-full flex items-center justify-center bg-white/20 backdrop-blur-sm border-2 border-white/40 shadow-lg">
+@@ -1675,7 +1675,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
+                 <div>
+                   <h3 className="text-lg font-bold text-slate-800">Cotización enviada</h3>
+                   {numDisplay && (
+-                    <p className="font-black text-2xl font-mono mt-1 tracking-tight" style={{ color: '#1B365D' }}>{numDisplay}</p>
++                    <p className="font-black text-2xl font-mono mt-1 tracking-tight" style={{ color: '#3A63A8' }}>{numDisplay}</p>
+                   )}
+                 </div>
+ 
+@@ -1700,7 +1700,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
+                   <div className="flex flex-col xs:flex-row gap-2 sm:gap-3">
+                     <button onClick={descargarPDF} disabled={pdfLoading}
+                       className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all active:scale-[0.98] disabled:opacity-50"
+-                      style={{ backgroundColor: '#1B365D10', color: '#1B365D' }}>
++                      style={{ backgroundColor: '#3A63A810', color: '#3A63A8' }}>
+                       {pdfLoading
+                         ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                         : <FileDown size={16} />}
+@@ -1717,7 +1717,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
+ 
+                   <button onClick={onGuardado}
+                     className="w-full py-3.5 text-white font-bold text-sm rounded-xl transition-all shadow-lg hover:shadow-xl active:scale-[0.98] flex items-center justify-center gap-2"
+-                    style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
++                    style={{ background: 'linear-gradient(135deg, #050834, #3A63A8)' }}>
+                     <Plus size={16} /> Nueva cotización
+                   </button>
+ 
+diff --git a/src/components/cotizaciones/CotizacionRapida.jsx b/src/components/cotizaciones/CotizacionRapida.jsx
+index 1d0d9d4..d5cc405 100644
+--- a/src/components/cotizaciones/CotizacionRapida.jsx
++++ b/src/components/cotizaciones/CotizacionRapida.jsx
+@@ -196,7 +196,7 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
+           {clienteSeleccionado ? (
+             <div className="flex items-center gap-2 sm:gap-3">
+               <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shrink-0"
+-                style={{ background: 'linear-gradient(135deg, rgba(27,54,93,0.08), rgba(184,134,11,0.08))' }}>
++                style={{ background: 'linear-gradient(135deg, rgba(58,99,168,0.08), rgba(124,184,242,0.08))' }}>
+                 <User size={14} className="text-primary" />
+               </div>
+               <div className="flex-1 min-w-0">
+@@ -441,7 +441,7 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
+       {items.length === 0 ? (
+         <div className="p-6 sm:p-8 text-center">
+           <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full mx-auto mb-2 sm:mb-3 flex items-center justify-center"
+-            style={{ background: 'rgba(27,54,93,0.05)', border: '1.5px dashed rgba(27,54,93,0.15)' }}>
++            style={{ background: 'rgba(58,99,168,0.05)', border: '1.5px dashed rgba(58,99,168,0.15)' }}>
+             <ShoppingCart size={20} className="text-slate-300" />
+           </div>
+           <p className="text-sm font-bold text-slate-400">Carrito vacío</p>
+@@ -566,7 +566,7 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
+     <div className="space-y-2">
+       <button onClick={handleEnviar} disabled={cargando || !clienteOk || !productosOk}
+         className="w-full flex items-center justify-center gap-2 py-3 sm:py-3.5 text-white font-bold text-sm rounded-xl transition-all disabled:opacity-40 active:scale-[0.98] shadow-lg"
+-        style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
++        style={{ background: 'linear-gradient(135deg, #3A63A8, #7CB8F2)' }}>
+         {enviando ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+         Enviar cotización
+       </button>
+@@ -593,7 +593,7 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
+           </button>
+           <div className="flex items-center gap-2 sm:gap-2.5">
+             <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shadow-md"
+-              style={{ background: 'linear-gradient(135deg, #B8860B, #d4a017)' }}>
++              style={{ background: 'linear-gradient(135deg, #7CB8F2, #93C5F9)' }}>
+               <Zap size={15} className="text-white sm:hidden" />
+               <Zap size={18} className="text-white hidden sm:block" />
+             </div>
+@@ -647,7 +647,7 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
+           {/* Carrito */}
+           <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+             <div className="px-4 py-3 flex items-center justify-between"
+-              style={{ background: 'linear-gradient(135deg, rgba(27,54,93,0.04), rgba(184,134,11,0.04))', borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
++              style={{ background: 'linear-gradient(135deg, rgba(58,99,168,0.04), rgba(124,184,242,0.04))', borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+               <div className="flex items-center gap-2">
+                 <ShoppingCart size={14} className="text-primary" />
+                 <span className="text-xs font-black text-slate-600 uppercase tracking-wider">Carrito</span>
+@@ -705,7 +705,7 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
+             {/* Botón enviar */}
+             <button onClick={handleEnviar} disabled={cargando || !clienteOk || !productosOk}
+               className="flex items-center gap-1.5 px-4 py-2.5 text-white font-bold text-sm rounded-xl transition-all disabled:opacity-40 active:scale-[0.98] shadow-md shrink-0"
+-              style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
++              style={{ background: 'linear-gradient(135deg, #3A63A8, #7CB8F2)' }}>
+               {enviando ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+               <span>Enviar</span>
+             </button>
+diff --git a/src/components/cotizaciones/QuickQuoteFAB.jsx b/src/components/cotizaciones/QuickQuoteFAB.jsx
+index 0462ce1..fd4b697 100644
+--- a/src/components/cotizaciones/QuickQuoteFAB.jsx
++++ b/src/components/cotizaciones/QuickQuoteFAB.jsx
+@@ -16,8 +16,8 @@ export default function QuickQuoteFAB() {
+       onClick={() => navigate('/cotizaciones?rapida=1')}
+       className="fixed bottom-20 right-4 z-[90] md:hidden w-14 h-14 rounded-full flex items-center justify-center shadow-xl active:scale-90 transition-all"
+       style={{
+-        background: 'linear-gradient(135deg, #1B365D, #B8860B)',
+-        boxShadow: '0 6px 24px rgba(27,54,93,0.4)',
++        background: 'linear-gradient(135deg, #050834, #3A63A8)',
++        boxShadow: '0 6px 24px rgba(58,99,168,0.4)',
+       }}
+       title="Cotización Rápida"
+     >
+diff --git a/src/components/inventario/ProductoCard.jsx b/src/components/inventario/ProductoCard.jsx
+index 251e4b2..ffd4025 100644
+--- a/src/components/inventario/ProductoCard.jsx
++++ b/src/components/inventario/ProductoCard.jsx
+@@ -10,7 +10,7 @@ function fmtUsd(n) {
+ 
+ // Color determinista basado en la cadena de categoría
+ const PALETA = [
+-  ['#1e40af','#dbeafe'], ['#065f46','#d1fae5'], ['#92400e','#fef3c7'],
++  ['#1e40af','#dbeafe'], ['#065f46','#d1fae5'], ['#2D5090','#fef3c7'],
+   ['#7c3aed','#ede9fe'], ['#be185d','#fce7f3'], ['#0f766e','#ccfbf1'],
+   ['#b45309','#fef9c3'], ['#1d4ed8','#eff6ff'], ['#166534','#dcfce7'],
+ ]
+diff --git a/src/components/inventario/ProductoRow.jsx b/src/components/inventario/ProductoRow.jsx
+index 460a2d5..7981dab 100644
+--- a/src/components/inventario/ProductoRow.jsx
++++ b/src/components/inventario/ProductoRow.jsx
+@@ -11,7 +11,7 @@ function fmtUsd(n) {
+ 
+ // Mismo hash determinista que ProductoCard
+ const PALETA = [
+-  ['#1e40af','#dbeafe'], ['#065f46','#d1fae5'], ['#92400e','#fef3c7'],
++  ['#1e40af','#dbeafe'], ['#065f46','#d1fae5'], ['#2D5090','#fef3c7'],
+   ['#7c3aed','#ede9fe'], ['#be185d','#fce7f3'], ['#0f766e','#ccfbf1'],
+   ['#b45309','#fef9c3'], ['#1d4ed8','#eff6ff'], ['#166534','#dcfce7'],
+ ]
+diff --git a/src/components/layout/AppLayout.jsx b/src/components/layout/AppLayout.jsx
+index c235801..240be2c 100644
+--- a/src/components/layout/AppLayout.jsx
++++ b/src/components/layout/AppLayout.jsx
+@@ -90,7 +90,7 @@ const NavItem = memo(function NavItem({ path, label, Icono, onClick, collapsed }
+         }
+       `}
+       style={({ isActive }) => isActive
+-        ? { background: 'linear-gradient(135deg, rgba(27,54,93,0.9), rgba(184,134,11,0.7))', boxShadow: '0 4px 15px rgba(184,134,11,0.2)', border: '1px solid rgba(184,134,11,0.25)' }
++        ? { background: 'linear-gradient(135deg, rgba(58,99,168,0.9), rgba(124,184,242,0.5))', boxShadow: '0 4px 15px rgba(58,99,168,0.3)', border: '1px solid rgba(124,184,242,0.25)' }
+         : {}
+       }
+     >
+@@ -161,7 +161,7 @@ export default function AppLayout() {
+ 
+       {/* ── Barra superior (móvil + desktop) ────────────────────────────── */}
+       <div className="fixed top-0 left-0 right-0 z-40 px-4 h-14 flex items-center justify-between gap-4"
+-        style={{ background: 'linear-gradient(135deg, #0a1628 0%, #0d1f3c 100%)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
++        style={{ background: 'linear-gradient(135deg, #030520 0%, #050834 100%)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+ 
+         {/* Hamburger — solo móvil */}
+         <button
+@@ -179,7 +179,7 @@ export default function AppLayout() {
+         {currentPage && (
+           <div className="hidden md:flex items-center gap-2.5">
+             <div className="w-8 h-8 rounded-lg flex items-center justify-center"
+-              style={{ background: 'linear-gradient(135deg, rgba(27,54,93,0.8), rgba(184,134,11,0.5))', border: '1px solid rgba(184,134,11,0.2)' }}>
++              style={{ background: 'linear-gradient(135deg, rgba(58,99,168,0.8), rgba(124,184,242,0.5))', border: '1px solid rgba(124,184,242,0.2)' }}>
+               <currentPage.icono size={16} className="text-white/80" />
+             </div>
+             <span className="text-sm font-black tracking-wide text-white/90">{currentPage.label}</span>
+@@ -198,12 +198,12 @@ export default function AppLayout() {
+             onClick={() => { setShowNotifs(v => !v); if (unreadCount > 0) markAllRead() }}
+             className="relative p-2 rounded-xl transition-all"
+             style={{
+-              color:      unreadCount > 0 ? '#fbbf24' : 'rgba(255,255,255,0.55)',
+-              background: unreadCount > 0 ? 'rgba(251,191,36,0.1)' : 'transparent',
+-              border:     unreadCount > 0 ? '1px solid rgba(251,191,36,0.2)' : '1px solid transparent',
++              color:      unreadCount > 0 ? '#7CB8F2' : 'rgba(255,255,255,0.55)',
++              background: unreadCount > 0 ? 'rgba(124,184,242,0.1)' : 'transparent',
++              border:     unreadCount > 0 ? '1px solid rgba(124,184,242,0.2)' : '1px solid transparent',
+             }}
+-            onMouseEnter={e => { e.currentTarget.style.background = unreadCount > 0 ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.08)' }}
+-            onMouseLeave={e => { e.currentTarget.style.background = unreadCount > 0 ? 'rgba(251,191,36,0.1)' : 'transparent' }}
++            onMouseEnter={e => { e.currentTarget.style.background = unreadCount > 0 ? 'rgba(124,184,242,0.15)' : 'rgba(255,255,255,0.08)' }}
++            onMouseLeave={e => { e.currentTarget.style.background = unreadCount > 0 ? 'rgba(124,184,242,0.1)' : 'transparent' }}
+             title="Alertas"
+           >
+             <Bell size={20} />
+@@ -217,7 +217,7 @@ export default function AppLayout() {
+           {/* Dropdown de alertas */}
+           {showNotifs && (
+             <div className="absolute top-full right-0 mt-2 w-[calc(100vw-2rem)] sm:w-80 max-w-80 rounded-2xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+-              style={{ background: '#0f1f3c', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
++              style={{ background: '#050834', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+ 
+               {/* Header del dropdown */}
+               <div className="flex items-center justify-between px-4 py-3"
+@@ -332,7 +332,7 @@ export default function AppLayout() {
+           w-64 md:translate-x-0 md:static md:z-auto md:h-[calc(100vh-3.5rem)] md:sticky md:top-14
+         `}
+         style={{
+-          background: 'linear-gradient(180deg, #0a1628 0%, #0d1f3c 60%, #0a1a0f 100%)',
++          background: 'linear-gradient(180deg, #030520 0%, #050834 60%, #030520 100%)',
+           borderRight: '1px solid rgba(255,255,255,0.06)',
+           boxShadow: '4px 0 24px rgba(0,0,0,0.3)',
+         }}
+@@ -343,7 +343,7 @@ export default function AppLayout() {
+         </div>
+         {/* Orbe decorativo */}
+         <div className="absolute bottom-0 left-0 w-48 h-48 rounded-full pointer-events-none -mb-16 -ml-16 opacity-20"
+-          style={{ background: 'radial-gradient(circle, #B8860B 0%, transparent 70%)', filter: 'blur(30px)' }} />
++          style={{ background: 'radial-gradient(circle, #3A63A8 0%, transparent 70%)', filter: 'blur(30px)' }} />
+ 
+         {/* Botón cerrar — solo móvil */}
+         <div className="md:hidden flex justify-end p-3 pb-0 relative z-10">
+@@ -359,16 +359,16 @@ export default function AppLayout() {
+             className={`object-contain transition-all duration-300 select-none pointer-events-none ${
+               sidebarCollapsed ? 'h-[40px] w-[40px]' : 'h-[70px] md:h-[140px]'
+             }`}
+-            style={{ filter: 'brightness(1.05) drop-shadow(0 0 12px rgba(184,134,11,0.2))' }}
++            style={{ filter: 'brightness(1.05) drop-shadow(0 0 12px rgba(124,184,242,0.2))' }}
+             draggable={false}
+           />
+           {!sidebarCollapsed && (
+             <div className="mt-2 md:mt-3 hidden md:flex items-center gap-2 w-full justify-center">
+-              <div className="h-px flex-1 opacity-20" style={{ background: 'linear-gradient(to right, transparent, #B8860B)' }} />
+-              <span className="text-[9px] font-bold tracking-[0.25em] uppercase whitespace-nowrap" style={{ color: 'rgba(184,134,11,0.7)' }}>
++              <div className="h-px flex-1 opacity-20" style={{ background: 'linear-gradient(to right, transparent, #7CB8F2)' }} />
++              <span className="text-[9px] font-bold tracking-[0.25em] uppercase whitespace-nowrap" style={{ color: 'rgba(124,184,242,0.7)' }}>
+                 Sistema de Gestión
+               </span>
+-              <div className="h-px flex-1 opacity-20" style={{ background: 'linear-gradient(to left, transparent, #B8860B)' }} />
++              <div className="h-px flex-1 opacity-20" style={{ background: 'linear-gradient(to left, transparent, #7CB8F2)' }} />
+             </div>
+           )}
+ 
+@@ -376,7 +376,7 @@ export default function AppLayout() {
+           <button
+             onClick={() => setSidebarCollapsed(c => !c)}
+             className="hidden md:flex absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full items-center justify-center transition-all hover:scale-110"
+-            style={{ background: '#0d1f3c', border: '1px solid rgba(255,255,255,0.15)', boxShadow: '0 2px 8px rgba(0,0,0,0.4)', color: 'rgba(255,255,255,0.5)' }}
++            style={{ background: '#050834', border: '1px solid rgba(255,255,255,0.15)', boxShadow: '0 2px 8px rgba(0,0,0,0.4)', color: 'rgba(255,255,255,0.5)' }}
+             title={sidebarCollapsed ? 'Expandir menú' : 'Colapsar menú'}
+           >
+             {sidebarCollapsed ? <PanelLeftOpen size={13} /> : <PanelLeftClose size={13} />}
+@@ -392,7 +392,7 @@ export default function AppLayout() {
+             <>
+               {!sidebarCollapsed && (
+                 <div className="pt-4 pb-1.5 px-3">
+-                  <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'rgba(184,134,11,0.7)' }}>
++                  <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'rgba(124,184,242,0.7)' }}>
+                     Administración
+                   </p>
+                 </div>
+diff --git a/src/components/layout/BcvWidget.jsx b/src/components/layout/BcvWidget.jsx
+index 06e037b..3190ac6 100644
+--- a/src/components/layout/BcvWidget.jsx
++++ b/src/components/layout/BcvWidget.jsx
+@@ -58,7 +58,7 @@ export default function BcvWidget({ soloLectura = false }) {
+       <div className="flex items-center justify-between p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+         <div>
+           <p className="text-xs font-bold text-white/70">
+-            Modo {modoAuto ? <span className="text-emerald-400">automático</span> : <span className="text-amber-400">manual</span>}
++            Modo {modoAuto ? <span className="text-emerald-400">automático</span> : <span className="text-sky-300">manual</span>}
+           </p>
+           <p className="text-[10px] text-white/30 mt-0.5">
+             {modoAuto ? 'Se actualiza desde el BCV cada 15 min' : 'Tú defines la tasa'}
+@@ -97,15 +97,15 @@ export default function BcvWidget({ soloLectura = false }) {
+           )}
+         </div>
+       ) : (
+-        <div className="p-3 rounded-xl space-y-3" style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.12)' }}>
+-          <p className="text-xs font-bold text-amber-400">Tasa manual</p>
++        <div className="p-3 rounded-xl space-y-3" style={{ background: 'rgba(124,184,242,0.06)', border: '1px solid rgba(124,184,242,0.12)' }}>
++          <p className="text-xs font-bold text-sky-300">Tasa manual</p>
+           <div className="flex gap-2 items-center">
+             <div className="relative flex-1">
+               <input type="number" min="0.01" step="0.01"
+                 value={tasaInput}
+                 onChange={e => { setTasaInput(e.target.value); setTasaConfirmada(false) }}
+                 placeholder="Ej: 48.50"
+-                className="w-full px-3 py-2.5 rounded-xl text-sm font-bold text-white/90 focus:outline-none focus:ring-2 focus:ring-amber-500/40 placeholder:text-white/20"
++                className="w-full px-3 py-2.5 rounded-xl text-sm font-bold text-white/90 focus:outline-none focus:ring-2 focus:ring-sky-400/40 placeholder:text-white/20"
+                 style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)' }}
+                 onKeyDown={e => e.key === 'Enter' && confirmarTasaManual()}
+               />
+@@ -119,7 +119,7 @@ export default function BcvWidget({ soloLectura = false }) {
+                   ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/20'
+                   : 'text-white disabled:opacity-30'
+               }`}
+-              style={!tasaConfirmada ? { background: 'linear-gradient(135deg, #B8860B, #d4a017)' } : {}}
++              style={!tasaConfirmada ? { background: 'linear-gradient(135deg, #7CB8F2, #93C5F9)' } : {}}
+             >
+               {tasaConfirmada ? 'Listo' : 'Aplicar'}
+             </button>
+@@ -170,14 +170,14 @@ export default function BcvWidget({ soloLectura = false }) {
+         </span>
+         <span className="hidden sm:inline text-[10px] text-white/35 font-medium">Bs/$</span>
+         {!modoAuto && (
+-          <span className="text-[8px] sm:text-[9px] bg-amber-500/20 text-amber-400 px-1 sm:px-1.5 py-0.5 rounded font-bold border border-amber-500/20">MAN</span>
++          <span className="text-[8px] sm:text-[9px] bg-sky-500/20 text-sky-300 px-1 sm:px-1.5 py-0.5 rounded font-bold border border-sky-500/20">MAN</span>
+         )}
+       </button>
+ 
+       {/* ── Desktop: popover dropdown ── */}
+       {showConfig && (
+         <div className="hidden md:block absolute top-full right-0 mt-2 w-72 rounded-2xl shadow-2xl z-50 p-4 animate-in fade-in zoom-in-95 duration-150"
+-          style={{ background: '#0f1f3c', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
++          style={{ background: '#050834', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+           {configPanel}
+         </div>
+       )}
+@@ -192,7 +192,7 @@ export default function BcvWidget({ soloLectura = false }) {
+           {/* Sheet */}
+           <div className="md:hidden fixed bottom-0 left-0 right-0 z-[201] rounded-t-3xl p-5 animate-in slide-in-from-bottom duration-300"
+             style={{
+-              background: 'linear-gradient(180deg, #0f1f3c 0%, #0a1628 100%)',
++              background: 'linear-gradient(180deg, #050834 0%, #030520 100%)',
+               borderTop: '1px solid rgba(255,255,255,0.1)',
+               boxShadow: '0 -10px 40px rgba(0,0,0,0.5)',
+               paddingBottom: 'max(5rem, calc(env(safe-area-inset-bottom) + 4rem))',
+diff --git a/src/components/layout/BottomNav.jsx b/src/components/layout/BottomNav.jsx
+index bf211aa..d117eca 100644
+--- a/src/components/layout/BottomNav.jsx
++++ b/src/components/layout/BottomNav.jsx
+@@ -34,7 +34,7 @@ export default function BottomNav({ esSupervisor }) {
+       {/* More menu sheet */}
+       {showMore && (
+         <div className="fixed bottom-[4.5rem] left-3 right-3 z-[99] md:hidden rounded-2xl overflow-hidden shadow-2xl animate-in slide-in-from-bottom-2 fade-in duration-200"
+-          style={{ background: '#0f1f3c', border: '1px solid rgba(255,255,255,0.1)' }}>
++          style={{ background: '#050834', border: '1px solid rgba(255,255,255,0.1)' }}>
+           <div className="grid grid-cols-3 gap-1 p-3">
+             {MORE_ITEMS.filter(item => {
+               if (!esSupervisor && ['/reportes', '/auditoria', '/configuracion'].includes(item.path)) return false
+@@ -46,7 +46,7 @@ export default function BottomNav({ esSupervisor }) {
+                 onClick={() => setShowMore(false)}
+                 className={({ isActive }) => `
+                   flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl transition-all
+-                  ${isActive ? 'bg-white/10 text-amber-400' : 'text-white/60 hover:text-white hover:bg-white/5'}
++                  ${isActive ? 'bg-white/10 text-sky-300' : 'text-white/60 hover:text-white hover:bg-white/5'}
+                 `}
+               >
+                 <Icon size={20} />
+@@ -60,7 +60,7 @@ export default function BottomNav({ esSupervisor }) {
+       {/* Bottom navigation bar */}
+       <nav className="fixed bottom-0 left-0 right-0 z-[97] md:hidden"
+         style={{
+-          background: 'linear-gradient(135deg, #0a1628 0%, #0d1f3c 100%)',
++          background: 'linear-gradient(135deg, #030520 0%, #050834 100%)',
+           borderTop: '1px solid rgba(255,255,255,0.08)',
+           paddingBottom: 'env(safe-area-inset-bottom)',
+           boxShadow: '0 -4px 24px rgba(0,0,0,0.3)',
+@@ -73,15 +73,15 @@ export default function BottomNav({ esSupervisor }) {
+               end={path === '/'}
+               className={({ isActive }) => `
+                 flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl transition-all min-w-[56px]
+-                ${isActive ? 'text-amber-400' : 'text-white/50 active:text-white/80'}
++                ${isActive ? 'text-sky-300' : 'text-white/50 active:text-white/80'}
+               `}
+             >
+               {({ isActive }) => (
+                 <>
+-                  <div className={`p-1.5 rounded-lg transition-all ${isActive ? 'bg-amber-400/15' : ''}`}>
++                  <div className={`p-1.5 rounded-lg transition-all ${isActive ? 'bg-sky-300/15' : ''}`}>
+                     <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
+                   </div>
+-                  <span className={`text-[10px] font-bold ${isActive ? 'text-amber-400' : ''}`}>{label}</span>
++                  <span className={`text-[10px] font-bold ${isActive ? 'text-sky-300' : ''}`}>{label}</span>
+                 </>
+               )}
+             </NavLink>
+@@ -91,13 +91,13 @@ export default function BottomNav({ esSupervisor }) {
+           <button
+             onClick={() => setShowMore(v => !v)}
+             className={`flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl transition-all min-w-[56px]
+-              ${showMore ? 'text-amber-400' : 'text-white/50 active:text-white/80'}
++              ${showMore ? 'text-sky-300' : 'text-white/50 active:text-white/80'}
+             `}
+           >
+-            <div className={`p-1.5 rounded-lg transition-all ${showMore ? 'bg-amber-400/15' : ''}`}>
++            <div className={`p-1.5 rounded-lg transition-all ${showMore ? 'bg-sky-300/15' : ''}`}>
+               <MoreHorizontal size={20} strokeWidth={showMore ? 2.5 : 2} />
+             </div>
+-            <span className={`text-[10px] font-bold ${showMore ? 'text-amber-400' : ''}`}>Más</span>
++            <span className={`text-[10px] font-bold ${showMore ? 'text-sky-300' : ''}`}>Más</span>
+           </button>
+         </div>
+       </nav>
+diff --git a/src/components/reportes/KpiCards.jsx b/src/components/reportes/KpiCards.jsx
+index d62aabe..c357e31 100644
+--- a/src/components/reportes/KpiCards.jsx
++++ b/src/components/reportes/KpiCards.jsx
+@@ -56,7 +56,7 @@ export default function KpiCards({ kpis }) {
+         value={fmtUsd(kpis.totalVentas)}
+         sub={`Anterior: ${fmtUsd(kpis.prevTotalVentas)}`}
+         badge={<Badge pct={varVentas} />}
+-        gradient="linear-gradient(135deg, #1B365D 0%, #0d1f3c 100%)"
++        gradient="linear-gradient(135deg, #3A63A8 0%, #050834 100%)"
+         border="rgba(255,255,255,0.07)"
+       />
+       <KpiCard
+@@ -72,7 +72,7 @@ export default function KpiCards({ kpis }) {
+         value={fmtUsd(kpis.ticketPromedio)}
+         sub={`Anterior: ${fmtUsd(kpis.prevTicketPromedio)}`}
+         badge={<Badge pct={varTicket} />}
+-        gradient="linear-gradient(135deg, #92400e 0%, #B8860B 100%)"
++        gradient="linear-gradient(135deg, #2D5090 0%, #7CB8F2 100%)"
+         border="rgba(255,255,255,0.10)"
+       />
+       <KpiCard
+diff --git a/src/components/tester/TesterPanel.jsx b/src/components/tester/TesterPanel.jsx
+index 5962358..ba2b638 100644
+--- a/src/components/tester/TesterPanel.jsx
++++ b/src/components/tester/TesterPanel.jsx
+@@ -208,7 +208,7 @@ function TesterDeterminista() {
+       <div className="flex flex-wrap gap-2">
+         <button onClick={runSeed} disabled={status === 'running'}
+           className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-50"
+-          style={{ background: 'linear-gradient(135deg, #1B365D, #2563eb)' }}>
++          style={{ background: 'linear-gradient(135deg, #3A63A8, #2563eb)' }}>
+           {status === 'running' ? <RefreshCw size={14} className="animate-spin" /> : <Play size={14} />}
+           Ejecutar Seed Demo
+         </button>
+@@ -292,7 +292,7 @@ function TesterStress() {
+       <div className="flex flex-wrap gap-2">
+         <button onClick={runStress} disabled={status === 'running'}
+           className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-50"
+-          style={{ background: 'linear-gradient(135deg, #B8860B, #d97706)' }}>
++          style={{ background: 'linear-gradient(135deg, #7CB8F2, #d97706)' }}>
+           {status === 'running' ? <RefreshCw size={14} className="animate-spin" /> : <Zap size={14} />}
+           Ejecutar Stress Test
+         </button>
+diff --git a/src/components/ui/ConfirmModal.jsx b/src/components/ui/ConfirmModal.jsx
+index 6455a40..499b252 100644
+--- a/src/components/ui/ConfirmModal.jsx
++++ b/src/components/ui/ConfirmModal.jsx
+@@ -33,10 +33,10 @@ const VARIANTS = {
+   },
+   default: {
+     icon: CheckCircle,
+-    iconColor: '#1B365D',
+-    stripStart: '#93c5fd',
+-    stripEnd: '#1B365D',
+-    btnStyle: { background: 'linear-gradient(135deg, #1B365D, #B8860B)', boxShadow: '0 4px 12px rgba(27,54,93,0.3)' },
++    iconColor: '#3A63A8',
++    stripStart: '#7CB8F2',
++    stripEnd: '#3A63A8',
++    btnStyle: { background: 'linear-gradient(135deg, #050834, #3A63A8)', boxShadow: '0 4px 12px rgba(58,99,168,0.3)' },
+   },
+ };
+ 
+diff --git a/src/components/ui/EmptyState.jsx b/src/components/ui/EmptyState.jsx
+index 5534562..7c0dc11 100644
+--- a/src/components/ui/EmptyState.jsx
++++ b/src/components/ui/EmptyState.jsx
+@@ -12,14 +12,14 @@ export default function EmptyState({
+   return (
+     <div className="flex flex-col items-center justify-center p-10 text-center rounded-2xl min-h-[300px] relative overflow-hidden"
+       style={{
+-        background: 'linear-gradient(135deg, rgba(27,54,93,0.03) 0%, rgba(184,134,11,0.03) 100%)',
+-        border: '1.5px dashed rgba(27,54,93,0.15)',
++        background: 'linear-gradient(135deg, rgba(58,99,168,0.03) 0%, rgba(124,184,242,0.03) 100%)',
++        border: '1.5px dashed rgba(58,99,168,0.15)',
+       }}>
+ 
+       {/* Dot grid background */}
+       <div className="absolute inset-0 opacity-[0.03] pointer-events-none"
+         style={{
+-          backgroundImage: 'radial-gradient(circle, #1B365D 1px, transparent 1px)',
++          backgroundImage: 'radial-gradient(circle, #3A63A8 1px, transparent 1px)',
+           backgroundSize: '20px 20px',
+         }} />
+ 
+@@ -27,22 +27,22 @@ export default function EmptyState({
+       <div className="relative mb-5">
+         {/* Outer glow ring */}
+         <div className="w-20 h-20 rounded-full absolute inset-0"
+-          style={{ background: 'linear-gradient(135deg, rgba(27,54,93,0.08), rgba(184,134,11,0.08))' }} />
++          style={{ background: 'linear-gradient(135deg, rgba(58,99,168,0.08), rgba(124,184,242,0.08))' }} />
+         {/* Inner container */}
+         <div className="relative w-20 h-20 rounded-full flex items-center justify-center"
+           style={{
+-            background: 'linear-gradient(135deg, rgba(27,54,93,0.10) 0%, rgba(184,134,11,0.10) 100%)',
+-            border: '1.5px solid rgba(27,54,93,0.12)',
+-            boxShadow: 'inset 0 2px 4px rgba(27,54,93,0.06)',
++            background: 'linear-gradient(135deg, rgba(58,99,168,0.10) 0%, rgba(124,184,242,0.10) 100%)',
++            border: '1.5px solid rgba(58,99,168,0.12)',
++            boxShadow: 'inset 0 2px 4px rgba(58,99,168,0.06)',
+           }}>
+           {Icon
+-            ? <Icon size={32} style={{ color: '#1B365D', opacity: 0.5 }} />
+-            : <div className="w-8 h-8 rounded-full" style={{ background: 'rgba(27,54,93,0.2)' }} />
++            ? <Icon size={32} style={{ color: '#3A63A8', opacity: 0.5 }} />
++            : <div className="w-8 h-8 rounded-full" style={{ background: 'rgba(58,99,168,0.2)' }} />
+           }
+         </div>
+       </div>
+ 
+-      <h3 className="text-lg font-bold mb-1.5" style={{ color: '#1B365D' }}>
++      <h3 className="text-lg font-bold mb-1.5" style={{ color: '#3A63A8' }}>
+         {title}
+       </h3>
+       <p className="text-sm text-slate-500 max-w-xs mb-7 leading-relaxed">
+@@ -55,8 +55,8 @@ export default function EmptyState({
+             onClick={onAction}
+             className="px-6 py-2.5 text-white font-semibold rounded-xl active:scale-95 transition-all shadow-lg"
+             style={{
+-              background: 'linear-gradient(135deg, #1B365D, #B8860B)',
+-              boxShadow: '0 4px 12px rgba(27,54,93,0.25)',
++              background: 'linear-gradient(135deg, #050834, #3A63A8)',
++              boxShadow: '0 4px 12px rgba(58,99,168,0.25)',
+             }}>
+             {actionLabel}
+           </button>
+diff --git a/src/components/ui/ErrorBoundary.jsx b/src/components/ui/ErrorBoundary.jsx
+index 7f3cc2e..ee45f20 100644
+--- a/src/components/ui/ErrorBoundary.jsx
++++ b/src/components/ui/ErrorBoundary.jsx
+@@ -33,7 +33,7 @@ export class ErrorBoundary extends React.Component {
+             <button
+               onClick={() => window.location.reload()}
+               className="px-6 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90"
+-              style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}
++              style={{ background: 'linear-gradient(135deg, #3A63A8, #7CB8F2)' }}
+             >
+               Recargar página
+             </button>
+diff --git a/src/components/ui/Logo.jsx b/src/components/ui/Logo.jsx
+index 5fba141..ec310ed 100644
+--- a/src/components/ui/Logo.jsx
++++ b/src/components/ui/Logo.jsx
+@@ -46,7 +46,7 @@ export const LogoWordmark = ({ className = '' }) => {
+         <span className="text-base font-black tracking-tight text-[#334155]">
+           CONSTRUACERO
+         </span>
+-        <span className="text-[8px] font-bold uppercase tracking-[0.25em] text-[#B8860B]">
++        <span className="text-[8px] font-bold uppercase tracking-[0.25em] text-[#7CB8F2]">
+           Carabobo
+         </span>
+       </div>
+diff --git a/src/components/ui/OnboardingTooltip.jsx b/src/components/ui/OnboardingTooltip.jsx
+index 4945dad..d8481e5 100644
+--- a/src/components/ui/OnboardingTooltip.jsx
++++ b/src/components/ui/OnboardingTooltip.jsx
+@@ -57,7 +57,7 @@ export default function OnboardingTip({ tipId, children, className = '' }) {
+ 
+   return (
+     <div className={`flex items-start gap-2 px-3 py-2.5 rounded-xl border animate-in fade-in slide-in-from-top-1 duration-300 ${className}`}
+-      style={{ background: 'linear-gradient(135deg, rgba(27,54,93,0.05), rgba(184,134,11,0.05))', border: '1px solid rgba(27,54,93,0.12)' }}>
++      style={{ background: 'linear-gradient(135deg, rgba(58,99,168,0.05), rgba(124,184,242,0.05))', border: '1px solid rgba(58,99,168,0.12)' }}>
+       <Lightbulb size={14} className="text-amber-500 shrink-0 mt-0.5" />
+       <p className="text-xs text-slate-600 flex-1 leading-relaxed">{children}</p>
+       <button onClick={dismiss}
+diff --git a/src/components/ui/PageHeader.jsx b/src/components/ui/PageHeader.jsx
+index 3765837..5427f07 100644
+--- a/src/components/ui/PageHeader.jsx
++++ b/src/components/ui/PageHeader.jsx
+@@ -9,16 +9,16 @@ export default function PageHeader({ icon: Icon, title, subtitle, action }) {
+       <div className="flex items-center gap-3.5">
+         {/* Barra vertical gold-navy */}
+         <div className="w-1 self-stretch rounded-full shrink-0"
+-          style={{ background: 'linear-gradient(180deg, #B8860B 0%, #1B365D 100%)', minHeight: '36px' }} />
++          style={{ background: 'linear-gradient(180deg, #7CB8F2 0%, #050834 100%)', minHeight: '36px' }} />
+ 
+         {/* Ícono */}
+         <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+           style={{
+-            background: 'linear-gradient(135deg, rgba(27,54,93,0.08) 0%, rgba(184,134,11,0.08) 100%)',
+-            border: '1px solid rgba(27,54,93,0.12)',
++            background: 'linear-gradient(135deg, rgba(58,99,168,0.08) 0%, rgba(124,184,242,0.08) 100%)',
++            border: '1px solid rgba(58,99,168,0.12)',
+           }}
+         >
+-          {Icon && <Icon size={18} style={{ color: '#1B365D' }} />}
++          {Icon && <Icon size={18} style={{ color: '#3A63A8' }} />}
+         </div>
+ 
+         {/* Texto */}
+diff --git a/src/modules/auth/LoginPage.jsx b/src/modules/auth/LoginPage.jsx
+index 66b85ad..25735a3 100644
+--- a/src/modules/auth/LoginPage.jsx
++++ b/src/modules/auth/LoginPage.jsx
+@@ -14,13 +14,13 @@ const GATE_SESSION_KEY = 'construacero_gate_ok'
+ // ─── Fondo animado con orbes ─────────────────────────────────────────────────
+ function DarkBackground() {
+   return (
+-    <div className="fixed inset-0 overflow-hidden pointer-events-none" style={{ background: 'linear-gradient(135deg, #0a1628 0%, #0d1f3c 40%, #0a1a0f 100%)' }}>
++    <div className="fixed inset-0 overflow-hidden pointer-events-none" style={{ background: 'linear-gradient(135deg, #030520 0%, #050834 40%, #0a1a0f 100%)' }}>
+       {/* Orbe azul marino grande */}
+       <div className="absolute -top-[20%] -left-[10%] w-[700px] h-[700px] rounded-full opacity-30"
+-        style={{ background: 'radial-gradient(circle, #1B365D 0%, transparent 70%)', filter: 'blur(80px)' }} />
++        style={{ background: 'radial-gradient(circle, #3A63A8 0%, transparent 70%)', filter: 'blur(80px)' }} />
+       {/* Orbe dorado */}
+       <div className="absolute -bottom-[20%] -right-[10%] w-[600px] h-[600px] rounded-full opacity-20"
+-        style={{ background: 'radial-gradient(circle, #B8860B 0%, transparent 70%)', filter: 'blur(80px)' }} />
++        style={{ background: 'radial-gradient(circle, #7CB8F2 0%, transparent 70%)', filter: 'blur(80px)' }} />
+       {/* Orbe centro sutil */}
+       <div className="absolute top-[30%] left-[50%] -translate-x-1/2 w-[400px] h-[400px] rounded-full opacity-10"
+         style={{ background: 'radial-gradient(circle, #3b82f6 0%, transparent 70%)', filter: 'blur(60px)' }} />
+@@ -37,7 +37,7 @@ function DarkBackground() {
+ 
+       {/* Línea decorativa diagonal */}
+       <div className="absolute top-0 left-[35%] w-px h-full opacity-10"
+-        style={{ background: 'linear-gradient(to bottom, transparent 0%, #B8860B 30%, #1B365D 70%, transparent 100%)' }} />
++        style={{ background: 'linear-gradient(to bottom, transparent 0%, #7CB8F2 30%, #3A63A8 70%, transparent 100%)' }} />
+       <div className="absolute top-0 left-[65%] w-px h-full opacity-5"
+         style={{ background: 'linear-gradient(to bottom, transparent 0%, #3b82f6 50%, transparent 100%)' }} />
+     </div>
+@@ -163,9 +163,9 @@ function PwaInstallButton() {
+       onClick={handleInstall}
+       className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all hover:scale-105 active:scale-95"
+       style={{
+-        background: 'rgba(184,134,11,0.15)',
+-        border: '1px solid rgba(184,134,11,0.4)',
+-        color: '#B8860B',
++        background: 'rgba(124,184,242,0.15)',
++        border: '1px solid rgba(124,184,242,0.4)',
++        color: '#7CB8F2',
+         backdropFilter: 'blur(8px)',
+       }}
+     >
+@@ -206,16 +206,16 @@ function GateStep({ onPass }) {
+         <div className="flex flex-col items-center gap-4 mb-8 select-none" style={{ animation: 'logoReveal 0.8s ease forwards' }}>
+           <div className="relative flex items-center justify-center">
+             <div className="absolute rounded-full opacity-25 blur-3xl"
+-              style={{ width: '200px', height: '200px', background: 'radial-gradient(circle, #B8860B 0%, transparent 70%)' }} />
++              style={{ width: '200px', height: '200px', background: 'radial-gradient(circle, #7CB8F2 0%, transparent 70%)' }} />
+             <img src="/logo.png" alt="Construacero Carabobo"
+               className="relative z-10 w-auto object-contain select-none pointer-events-none drop-shadow-2xl"
+-              style={{ height: '140px', filter: 'drop-shadow(0 0 40px rgba(184,134,11,0.35)) brightness(1.05)' }}
++              style={{ height: '140px', filter: 'drop-shadow(0 0 40px rgba(124,184,242,0.35)) brightness(1.05)' }}
+               draggable={false} />
+           </div>
+           <div className="flex items-center gap-3">
+-            <div className="h-px w-12 opacity-40" style={{ background: 'linear-gradient(to right, transparent, #B8860B)' }} />
+-            <span className="text-[10px] font-bold tracking-[0.3em] uppercase" style={{ color: '#B8860B' }}>Acceso al Sistema</span>
+-            <div className="h-px w-12 opacity-40" style={{ background: 'linear-gradient(to left, transparent, #B8860B)' }} />
++            <div className="h-px w-12 opacity-40" style={{ background: 'linear-gradient(to right, transparent, #7CB8F2)' }} />
++            <span className="text-[10px] font-bold tracking-[0.3em] uppercase" style={{ color: '#7CB8F2' }}>Acceso al Sistema</span>
++            <div className="h-px w-12 opacity-40" style={{ background: 'linear-gradient(to left, transparent, #7CB8F2)' }} />
+           </div>
+         </div>
+ 
+@@ -233,7 +233,7 @@ function GateStep({ onPass }) {
+           }}
+         >
+           <div className="absolute top-0 left-[10%] right-[10%] h-px"
+-            style={{ background: 'linear-gradient(to right, transparent, rgba(184,134,11,0.6), transparent)' }} />
++            style={{ background: 'linear-gradient(to right, transparent, rgba(124,184,242,0.6), transparent)' }} />
+ 
+           <h2 className="text-lg font-black text-white mb-1">Verificación de acceso</h2>
+           <p className="text-xs mb-6" style={{ color: 'rgba(255,255,255,0.4)' }}>Ingresa las credenciales del negocio</p>
+@@ -249,7 +249,7 @@ function GateStep({ onPass }) {
+                 onChange={e => setEmail(e.target.value)}
+                 className="w-full pl-10 pr-4 py-2.5 rounded-xl text-sm text-white placeholder-white/20 outline-none transition-colors"
+                 style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+-                onFocus={e => e.target.style.borderColor = 'rgba(184,134,11,0.5)'}
++                onFocus={e => e.target.style.borderColor = 'rgba(124,184,242,0.5)'}
+                 onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+                 placeholder="correo@empresa.com"
+                 autoComplete="email"
+@@ -269,7 +269,7 @@ function GateStep({ onPass }) {
+                 onChange={e => setPassword(e.target.value)}
+                 className="w-full pl-10 pr-10 py-2.5 rounded-xl text-sm text-white placeholder-white/20 outline-none transition-colors"
+                 style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+-                onFocus={e => e.target.style.borderColor = 'rgba(184,134,11,0.5)'}
++                onFocus={e => e.target.style.borderColor = 'rgba(124,184,242,0.5)'}
+                 onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+                 placeholder="••••••••"
+                 required
+@@ -292,8 +292,8 @@ function GateStep({ onPass }) {
+             disabled={loading || !email.trim() || !password}
+             className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-40"
+             style={{
+-              background: 'linear-gradient(135deg, #B8860B 0%, #8B6914 100%)',
+-              boxShadow: '0 4px 20px rgba(184,134,11,0.3)',
++              background: 'linear-gradient(135deg, #7CB8F2 0%, #5A9BE0 100%)',
++              boxShadow: '0 4px 20px rgba(124,184,242,0.3)',
+             }}
+           >
+             {loading ? <RefreshCw size={16} className="animate-spin" /> : <ArrowRight size={16} />}
+@@ -385,14 +385,14 @@ function UserSelectStep() {
+           {/* Halo dorado */}
+           <div className="relative flex items-center justify-center lg:justify-start">
+             <div className="absolute rounded-full opacity-25 blur-3xl"
+-              style={{ width: 'clamp(160px, 30vw, 280px)', height: 'clamp(160px, 30vw, 280px)', background: 'radial-gradient(circle, #B8860B 0%, transparent 70%)' }} />
++              style={{ width: 'clamp(160px, 30vw, 280px)', height: 'clamp(160px, 30vw, 280px)', background: 'radial-gradient(circle, #7CB8F2 0%, transparent 70%)' }} />
+             <img
+               src="/logo.png"
+               alt="Construacero Carabobo"
+               className="relative z-10 w-auto object-contain select-none pointer-events-none drop-shadow-2xl"
+               style={{
+                 height: 'clamp(160px, 22vw, 300px)',
+-                filter: 'drop-shadow(0 0 40px rgba(184,134,11,0.35)) brightness(1.05)',
++                filter: 'drop-shadow(0 0 40px rgba(124,184,242,0.35)) brightness(1.05)',
+               }}
+               draggable={false}
+             />
+@@ -400,11 +400,11 @@ function UserSelectStep() {
+ 
+           {/* Separador + texto — visible siempre */}
+           <div className="flex items-center justify-center lg:justify-start gap-3 w-full">
+-            <div className="h-px flex-1 max-w-[48px] opacity-40" style={{ background: 'linear-gradient(to right, transparent, #B8860B)' }} />
+-            <span className="text-[10px] sm:text-xs font-bold tracking-[0.3em] uppercase whitespace-nowrap" style={{ color: '#B8860B' }}>
++            <div className="h-px flex-1 max-w-[48px] opacity-40" style={{ background: 'linear-gradient(to right, transparent, #7CB8F2)' }} />
++            <span className="text-[10px] sm:text-xs font-bold tracking-[0.3em] uppercase whitespace-nowrap" style={{ color: '#7CB8F2' }}>
+               Sistema de Gestión
+             </span>
+-            <div className="h-px flex-1 max-w-[48px] opacity-40" style={{ background: 'linear-gradient(to left, transparent, #B8860B)' }} />
++            <div className="h-px flex-1 max-w-[48px] opacity-40" style={{ background: 'linear-gradient(to left, transparent, #7CB8F2)' }} />
+           </div>
+ 
+           {/* Tagline — solo en desktop */}
+@@ -427,13 +427,13 @@ function UserSelectStep() {
+         >
+           {/* Línea top dorada */}
+           <div className="absolute top-0 left-[10%] right-[10%] h-px"
+-            style={{ background: 'linear-gradient(to right, transparent, rgba(184,134,11,0.6), transparent)' }} />
++            style={{ background: 'linear-gradient(to right, transparent, rgba(124,184,242,0.6), transparent)' }} />
+ 
+           {/* Destellos internos */}
+           <div className="absolute top-0 right-0 w-64 h-64 -mr-20 -mt-20 rounded-full opacity-10 pointer-events-none"
+-            style={{ background: 'radial-gradient(circle, #1B365D 0%, transparent 70%)', filter: 'blur(30px)' }} />
++            style={{ background: 'radial-gradient(circle, #3A63A8 0%, transparent 70%)', filter: 'blur(30px)' }} />
+           <div className="absolute bottom-0 left-0 w-48 h-48 -ml-16 -mb-16 rounded-full pointer-events-none"
+-            style={{ background: 'radial-gradient(circle, #B8860B 0%, transparent 70%)', filter: 'blur(30px)', opacity: 0.06 }} />
++            style={{ background: 'radial-gradient(circle, #7CB8F2 0%, transparent 70%)', filter: 'blur(30px)', opacity: 0.06 }} />
+ 
+           <div className="relative z-10 p-5 sm:p-7 lg:p-8">
+ 
+@@ -538,7 +538,7 @@ export default function LoginPage() {
+ 
+   useEffect(() => {
+     const prev = document.body.style.backgroundColor
+-    document.body.style.backgroundColor = '#0a1628'
++    document.body.style.backgroundColor = '#030520'
+     return () => { document.body.style.backgroundColor = prev }
+   }, [])
+ 
+diff --git a/src/views/ClientesView.jsx b/src/views/ClientesView.jsx
+index 7b5cb92..bccf8ec 100644
+--- a/src/views/ClientesView.jsx
++++ b/src/views/ClientesView.jsx
+@@ -209,7 +209,7 @@ export default function ClientesView() {
+         subtitle={isLoading ? 'Cargando...' : `${clientesFiltrados.length} cliente${clientesFiltrados.length !== 1 ? 's' : ''}`}
+         action={
+           <button onClick={abrirCrear} className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98]"
+-            style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
++            style={{ background: 'linear-gradient(135deg, #3A63A8, #7CB8F2)' }}>
+             <Plus size={16} />Nuevo cliente
+           </button>
+         }
+diff --git a/src/views/ComisionesView.jsx b/src/views/ComisionesView.jsx
+index 73b6fcf..4a60f97 100644
+--- a/src/views/ComisionesView.jsx
++++ b/src/views/ComisionesView.jsx
+@@ -46,7 +46,7 @@ function ComisionCard({ comision, esSupervisor, onMarcarPagada, marcando, onVerD
+       <div className="flex items-center justify-between gap-2">
+         <div className="flex items-center gap-2.5 min-w-0">
+           <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-black"
+-            style={{ background: comision.vendedor?.color || '#1B365D' }}>
++            style={{ background: comision.vendedor?.color || '#3A63A8' }}>
+             {(comision.vendedor?.nombre || '?')[0].toUpperCase()}
+           </div>
+           <div className="min-w-0">
+@@ -165,7 +165,7 @@ function ModalDetalleVendedor({ vendedor, comisiones, onClose, esSupervisor, onM
+ 
+         {/* Header */}
+         <div className="relative h-20 shrink-0 flex items-center gap-4 px-6"
+-          style={{ background: `linear-gradient(135deg, ${vendedor.color || '#1B365D'}ee, ${vendedor.color || '#1B365D'}99)` }}>
++          style={{ background: `linear-gradient(135deg, ${vendedor.color || '#3A63A8'}ee, ${vendedor.color || '#3A63A8'}99)` }}>
+           <div className="absolute inset-0 opacity-10 pointer-events-none"
+             style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '12px 12px' }} />
+           <div className="relative z-10 w-12 h-12 rounded-full bg-white/20 border border-white/30 flex items-center justify-center text-white text-lg font-black backdrop-blur-sm">
+@@ -324,7 +324,7 @@ export default function ComisionesView() {
+             label="Total acumulado"
+             value={fmtUsd(resumen.total)}
+             sub={`${resumen.countPendiente + resumen.countPagado} comisiones`}
+-            gradient="linear-gradient(135deg, #1B365D 0%, #0d1f3c 100%)"
++            gradient="linear-gradient(135deg, #3A63A8 0%, #050834 100%)"
+             border="rgba(255,255,255,0.07)"
+           />
+           <ResumenCard
+@@ -332,7 +332,7 @@ export default function ComisionesView() {
+             label="Pendiente de pago"
+             value={fmtUsd(resumen.pendiente)}
+             sub={`${resumen.countPendiente} por pagar`}
+-            gradient="linear-gradient(135deg, #92400e 0%, #B8860B 100%)"
++            gradient="linear-gradient(135deg, #2D5090 0%, #7CB8F2 100%)"
+             border="rgba(255,255,255,0.10)"
+           />
+           <ResumenCard
+diff --git a/src/views/ConfiguracionView.jsx b/src/views/ConfiguracionView.jsx
+index 5e4764b..4f3dd72 100644
+--- a/src/views/ConfiguracionView.jsx
++++ b/src/views/ConfiguracionView.jsx
+@@ -157,10 +157,10 @@ export default function ConfiguracionView() {
+   const inputCls = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400'
+   const SectionHeader = ({ icon: Icon, children }) => (
+     <div className="flex items-center gap-3 mb-1">
+-      <div className="w-0.5 self-stretch rounded-full shrink-0" style={{ background: 'linear-gradient(180deg, #B8860B, #1B365D)', minHeight: '20px' }} />
++      <div className="w-0.5 self-stretch rounded-full shrink-0" style={{ background: 'linear-gradient(180deg, #7CB8F2, #3A63A8)', minHeight: '20px' }} />
+       <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+-        style={{ background: 'linear-gradient(135deg, rgba(27,54,93,0.08), rgba(184,134,11,0.08))', border: '1px solid rgba(27,54,93,0.1)' }}>
+-        <Icon size={13} style={{ color: '#1B365D' }} />
++        style={{ background: 'linear-gradient(135deg, rgba(58,99,168,0.08), rgba(124,184,242,0.08))', border: '1px solid rgba(58,99,168,0.1)' }}>
++        <Icon size={13} style={{ color: '#3A63A8' }} />
+       </div>
+       <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wide">{children}</h2>
+     </div>
+@@ -193,10 +193,10 @@ export default function ConfiguracionView() {
+             >
+               {active && (
+                 <span className="absolute bottom-0 left-[20%] right-[20%] h-0.5 rounded-full"
+-                  style={{ background: 'linear-gradient(to right, #1B365D, #B8860B)' }} />
++                  style={{ background: 'linear-gradient(to right, #3A63A8, #7CB8F2)' }} />
+               )}
+               <span className={`flex items-center justify-center w-5 h-5 rounded-md transition-all ${
+-                active ? 'text-[#1B365D]' : ''
++                active ? 'text-[#3A63A8]' : ''
+               }`}>
+                 <Icon size={14} />
+               </span>
+@@ -481,7 +481,7 @@ export default function ConfiguracionView() {
+             )}
+             <button type="submit" disabled={isLoading || cargando}
+               className="flex items-center gap-2 text-white font-bold text-sm px-5 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50"
+-              style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
++              style={{ background: 'linear-gradient(135deg, #050834, #3A63A8)' }}>
+               {cargando
+                 ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Guardando...</>
+                 : <><Save size={15} />Guardar cambios</>
+diff --git a/src/views/CotizacionesView.jsx b/src/views/CotizacionesView.jsx
+index ae30813..119bb07 100644
+--- a/src/views/CotizacionesView.jsx
++++ b/src/views/CotizacionesView.jsx
+@@ -404,7 +404,7 @@ function ListaCotizaciones({ onNueva, onRapida, onEditar, onVersionar }) {
+               <span className="hidden sm:inline">Rápida</span>
+             </button>
+             <button onClick={onNueva} className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98]"
+-              style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
++              style={{ background: 'linear-gradient(135deg, #050834, #3A63A8)' }}>
+               <Plus size={16} />Nueva
+             </button>
+           </div>
+diff --git a/src/views/DashboardView.jsx b/src/views/DashboardView.jsx
+index 41b4834..7d87953 100644
+--- a/src/views/DashboardView.jsx
++++ b/src/views/DashboardView.jsx
+@@ -99,7 +99,7 @@ function useMetricas() {
+ const MetricCard = memo(function MetricCard({ icon: Icon, label, value, sub, color = 'primary' }) {
+   const themes = {
+     primary: {
+-      bg:    'linear-gradient(135deg, #1B365D 0%, #0d1f3c 100%)',
++      bg:    'linear-gradient(135deg, #3A63A8 0%, #050834 100%)',
+       icon:  'rgba(255,255,255,0.15)',
+       value: '#ffffff',
+       label: 'rgba(255,255,255,0.65)',
+@@ -115,7 +115,7 @@ const MetricCard = memo(function MetricCard({ icon: Icon, label, value, sub, col
+       border:'rgba(255,255,255,0.1)',
+     },
+     blue: {
+-      bg:    'linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%)',
++      bg:    'linear-gradient(135deg, #3A63A8 0%, #2D5090 100%)',
+       icon:  'rgba(255,255,255,0.15)',
+       value: '#ffffff',
+       label: 'rgba(255,255,255,0.65)',
+@@ -123,7 +123,7 @@ const MetricCard = memo(function MetricCard({ icon: Icon, label, value, sub, col
+       border:'rgba(255,255,255,0.1)',
+     },
+     gold: {
+-      bg:    'linear-gradient(135deg, #92400e 0%, #B8860B 100%)',
++      bg:    'linear-gradient(135deg, #2D5090 0%, #7CB8F2 100%)',
+       icon:  'rgba(255,255,255,0.15)',
+       value: '#ffffff',
+       label: 'rgba(255,255,255,0.65)',
+@@ -188,7 +188,7 @@ export default function DashboardView() {
+               <span>Rápida</span>
+             </button>
+             <button onClick={() => navigate('/cotizaciones?nueva=1')} className="flex items-center gap-2 text-white font-bold text-sm px-5 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98]"
+-              style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
++              style={{ background: 'linear-gradient(135deg, #3A63A8, #7CB8F2)' }}>
+               <Plus size={16} strokeWidth={2.5} />Nueva
+             </button>
+           </div>
+@@ -313,7 +313,7 @@ export default function DashboardView() {
+         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+           {/* Este mes */}
+           <div className="relative overflow-hidden rounded-2xl p-5"
+-            style={{ background: 'linear-gradient(135deg, #1B365D 0%, #0d1f3c 100%)', border: '1px solid rgba(255,255,255,0.07)' }}>
++            style={{ background: 'linear-gradient(135deg, #3A63A8 0%, #050834 100%)', border: '1px solid rgba(255,255,255,0.07)' }}>
+             <div className="absolute -bottom-4 -right-4 w-24 h-24 rounded-full" style={{ background: 'rgba(255,255,255,0.04)' }} />
+             <p className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: 'rgba(255,255,255,0.5)' }}>Este mes</p>
+             <p className="text-4xl font-black text-white leading-none">{m.delMesCount}</p>
+@@ -337,9 +337,9 @@ export default function DashboardView() {
+               </p>
+               <button onClick={() => navigate('/usuarios')}
+                 className="flex items-center justify-between w-full px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all group/btn hover:shadow-md"
+-                style={{ background: 'linear-gradient(135deg, rgba(27,54,93,0.06), rgba(184,134,11,0.06))', border: '1px solid rgba(27,54,93,0.12)' }}>
++                style={{ background: 'linear-gradient(135deg, rgba(58,99,168,0.06), rgba(124,184,242,0.06))', border: '1px solid rgba(58,99,168,0.12)' }}>
+                 <div className="flex items-center gap-2.5">
+-                  <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
++                  <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #3A63A8, #7CB8F2)' }}>
+                     <UserCog size={13} className="text-white" />
+                   </div>
+                   <span className="text-slate-700">Gestionar usuarios</span>
+@@ -348,9 +348,9 @@ export default function DashboardView() {
+               </button>
+               <button onClick={() => navigate('/auditoria')}
+                 className="flex items-center justify-between w-full px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all group/btn hover:shadow-md"
+-                style={{ background: 'linear-gradient(135deg, rgba(27,54,93,0.06), rgba(184,134,11,0.06))', border: '1px solid rgba(27,54,93,0.12)' }}>
++                style={{ background: 'linear-gradient(135deg, rgba(58,99,168,0.06), rgba(124,184,242,0.06))', border: '1px solid rgba(58,99,168,0.12)' }}>
+                 <div className="flex items-center gap-2.5">
+-                  <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
++                  <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #3A63A8, #7CB8F2)' }}>
+                     <ClipboardList size={13} className="text-white" />
+                   </div>
+                   <span className="text-slate-700">Ver auditoría</span>
+diff --git a/src/views/InventarioView.jsx b/src/views/InventarioView.jsx
+index 78fed6f..1fd0750 100644
+--- a/src/views/InventarioView.jsx
++++ b/src/views/InventarioView.jsx
+@@ -178,7 +178,7 @@ export default function InventarioView() {
+         subtitle={<>{isLoading ? 'Cargando...' : `${productosFiltrados.length} producto${productosFiltrados.length !== 1 ? 's' : ''}${stockBajo ? ' con stock bajo' : ''}`}{!esSupervisor && <span className="ml-1 opacity-60">(catálogo de precios)</span>}</>}
+         action={esSupervisor && (
+           <button onClick={abrirCrear} className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98]"
+-            style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
++            style={{ background: 'linear-gradient(135deg, #3A63A8, #7CB8F2)' }}>
+             <Plus size={16} />Nuevo producto
+           </button>
+         )}
+diff --git a/src/views/TransportistasView.jsx b/src/views/TransportistasView.jsx
+index 2cc0ec5..db31564 100644
+--- a/src/views/TransportistasView.jsx
++++ b/src/views/TransportistasView.jsx
+@@ -155,8 +155,8 @@ function TransportistaModal({ transportista = null, onClose }) {
+ 
+ // ─── Color determinista por nombre ────────────────────────────────────────────
+ const PALETA_TRANSP = [
+-  '#1B365D', '#065f46', '#7c3aed', '#be185d',
+-  '#0f766e', '#b45309', '#1d4ed8', '#92400e',
++  '#3A63A8', '#065f46', '#7c3aed', '#be185d',
++  '#0f766e', '#b45309', '#1d4ed8', '#2D5090',
+   '#0e7490', '#4f46e5', '#15803d', '#9a3412',
+ ]
+ function colorTransportista(str = '') {
+@@ -301,7 +301,7 @@ export default function TransportistasView() {
+             </button>
+             {esSupervisor && (
+               <button onClick={abrirNuevo} className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98]"
+-                style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
++                style={{ background: 'linear-gradient(135deg, #3A63A8, #7CB8F2)' }}>
+                 <Plus size={16} />Nuevo transportista
+               </button>
+             )}
+diff --git a/src/views/UsuariosView.jsx b/src/views/UsuariosView.jsx
+index 77a01f9..4724aad 100644
+--- a/src/views/UsuariosView.jsx
++++ b/src/views/UsuariosView.jsx
+@@ -147,7 +147,7 @@ function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
+         </button>
+         <button type="submit" disabled={cargando}
+           className="px-5 py-2 rounded-xl text-white text-sm font-black transition-all shadow-lg shadow-sky-500/20 active:scale-[0.98] disabled:opacity-60"
+-          style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
++          style={{ background: 'linear-gradient(135deg, #3A63A8, #7CB8F2)' }}>
+           {cargando ? 'Creando...' : 'Crear usuario'}
+         </button>
+       </div>
+@@ -248,7 +248,7 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando, coloresUsados =
+         </button>
+         <button type="submit" disabled={cargando}
+           className="px-5 py-2 rounded-xl text-white text-sm font-black transition-all shadow-lg shadow-sky-500/20 active:scale-[0.98] disabled:opacity-60"
+-          style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
++          style={{ background: 'linear-gradient(135deg, #3A63A8, #7CB8F2)' }}>
+           {cargando ? 'Guardando...' : 'Guardar'}
+         </button>
+       </div>
+@@ -313,7 +313,7 @@ function UsuarioModal({ usuario = null, onClose, coloresUsados = [] }) {
+ function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar, coloresUsados, onCambiarColor }) {
+   const conf = ROL_CONFIG[usuario.rol] ?? ROL_CONFIG.vendedor
+   const esSupervisor = usuario.rol === 'supervisor'
+-  const color = usuario.color || '#1B365D'
++  const color = usuario.color || '#3A63A8'
+   const [showColors, setShowColors] = useState(false)
+ 
+   return (
+@@ -515,7 +515,7 @@ export default function UsuariosView() {
+             </button>
+             <button onClick={abrirNuevo}
+               className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98]"
+-              style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
++              style={{ background: 'linear-gradient(135deg, #3A63A8, #7CB8F2)' }}>
+               <Plus size={16} />Nuevo usuario
+             </button>
+           </div>
+diff --git a/tailwind.config.js b/tailwind.config.js
+index 5f60b0a..2e97553 100644
+--- a/tailwind.config.js
++++ b/tailwind.config.js
+@@ -18,45 +18,45 @@ export default {
+       colors: {
+ 
+         // ─────────────────────────────────────────────────────
+-        // 🎨 CONSTRUACERO CARABOBO — PALETA PROFESIONAL
+-        // Navy Institucional + Dorado Bronce (refinada)
++        // 🎨 CONSTRUACERO CARABOBO — PALETA CORPORATIVA AZUL
++        // Midnight Express + Mariner + Maya Blue
+         // ─────────────────────────────────────────────────────
+ 
+-        // 1. PRIMARIO — Navy Institucional (botones, nav, foco)
++        // 1. PRIMARIO — Midnight Express (fondos oscuros, texto principal)
+         primary: {
+-          DEFAULT: '#1B365D', // Navy profundo — botón principal
+-          hover:   '#142A4A', // hover más oscuro
+-          light:   '#EDF2F7', // fondo suave (badges, highlights)
+-          focus:   '#90B4D2', // anillo de foco en inputs
+-          dark:    '#0E1F38', // pressed / active state
++          DEFAULT: '#050834', // Midnight Express — base oscura
++          hover:   '#0A1050', // hover sutil
++          light:   '#E8EEF8', // fondo suave (badges, highlights)
++          focus:   '#7CB8F2', // Maya Blue — anillo de foco
++          dark:    '#030520', // pressed / active state
+         },
+ 
+-        // 2. ACENTO DORADO BRONCE (énfasis, precios, CTA secundarios)
++        // 2. ACENTO — Mariner + Maya Blue (acciones, énfasis, CTA)
+         accent: {
+-          DEFAULT: '#B8860B', // Dorado bronce — más sobrio y profesional
+-          hover:   '#9A7209', // hover bronce oscuro
+-          light:   '#FBF5E6', // fondo dorado muy suave
+-          focus:   '#E8D5A3', // anillo dorado suave
+-          dark:    '#7A5A07', // bronce profundo
++          DEFAULT: '#3A63A8', // Mariner — botones, acciones principales
++          hover:   '#2D5090', // hover más oscuro
++          light:   '#E8F0FA', // fondo azul muy suave
++          focus:   '#7CB8F2', // Maya Blue — highlights
++          dark:    '#264580', // Mariner profundo
+         },
+ 
+         // 3. FONDOS DE PANTALLA
+         app: {
+-          light: '#F7F8FA', // Gris cálido — fondo general
+-          dark:  '#0E1A2E', // Navy profundo — modo oscuro
++          light: '#F0F3F7', // Gris azulado suave — fondo general
++          dark:  '#050834', // Midnight Express — modo oscuro
+         },
+ 
+         // 4. FONDOS DE TARJETAS / MODALES / SIDEBAR
+         surface: {
+           light: '#FFFFFF',
+-          dark:  '#152238', // Navy panel
++          dark:  '#0A1050', // Navy panel profundo
+         },
+ 
+         // 5. TEXTOS
+         content: {
+-          main:      '#1A2332', // Navy oscuro — títulos (alta legibilidad)
+-          secondary: '#5A6B7F', // Gris azulado — subtítulos
+-          inverse:   '#F7F8FA', // Texto claro sobre fondos oscuros
++          main:      '#050834', // Midnight Express — títulos
++          secondary: '#5C6972', // Shuttle Grey — subtítulos
++          inverse:   '#F0F3F7', // Texto claro sobre fondos oscuros
+         },
+ 
+         // 6. ESTADOS SEMÁNTICOS
+@@ -71,8 +71,8 @@ export default {
+ 
+         // 7. BORDES Y SEPARADORES
+         border: {
+-          subtle: '#E2E6EC',
+-          focus:  '#1B365D', // Navy — borde activo en inputs
++          subtle: '#D5D5D5', // Light Grey
++          focus:  '#3A63A8', // Mariner — borde activo en inputs
+         },
+ 
+         // ─────────────────────────────────────────────────────
+@@ -80,82 +80,82 @@ export default {
+         // ─────────────────────────────────────────────────────
+ 
+         brand: {
+-          light:   '#EDF2F7',
+-          DEFAULT: '#1B365D',
+-          dark:    '#0E1F38',
++          light:   '#E8EEF8',
++          DEFAULT: '#050834',
++          dark:    '#030520',
+         },
+ 
+         background: {
+-          light: '#F7F8FA',
+-          dark:  '#0E1A2E',
++          light: '#F0F3F7',
++          dark:  '#050834',
+         },
+ 
+-        // blue → navy institucional
++        // blue → Midnight/Mariner scale
+         blue: {
+-          50:  '#EDF2F7',
+-          100: '#D4DEE9',
+-          200: '#A8BDD4',
+-          300: '#7D9CBE',
+-          400: '#517BA9',
+-          500: '#1B365D',
+-          600: '#142A4A',
+-          700: '#0E1F38',
+-          800: '#091525',
+-          900: '#050B13',
+-          950: '#02060A',
++          50:  '#E8EEF8',
++          100: '#D0DEF0',
++          200: '#A8C4E4',
++          300: '#7CB8F2', // Maya Blue
++          400: '#5A8FCC',
++          500: '#3A63A8', // Mariner
++          600: '#2D5090',
++          700: '#1E3A70',
++          800: '#0A1050',
++          900: '#050834', // Midnight Express
++          950: '#030520',
+         },
+ 
+-        // indigo → navy (compatibilidad)
++        // indigo → Midnight (compatibilidad)
+         indigo: {
+-          50:  '#EDF2F7',
+-          100: '#D4DEE9',
+-          200: '#A8BDD4',
+-          300: '#7D9CBE',
+-          400: '#517BA9',
+-          500: '#1B365D',
+-          600: '#142A4A',
+-          700: '#0E1F38',
+-          800: '#091525',
+-          900: '#050B13',
+-          950: '#02060A',
++          50:  '#E8EEF8',
++          100: '#D0DEF0',
++          200: '#A8C4E4',
++          300: '#7CB8F2',
++          400: '#5A8FCC',
++          500: '#3A63A8',
++          600: '#2D5090',
++          700: '#1E3A70',
++          800: '#0A1050',
++          900: '#050834',
++          950: '#030520',
+         },
+ 
+-        // sky → navy
++        // sky → Maya Blue scale
+         sky: {
+-          50:  '#EDF2F7',
+-          100: '#D4DEE9',
+-          200: '#A8BDD4',
+-          300: '#7D9CBE',
+-          400: '#517BA9',
+-          500: '#1B365D',
+-          600: '#142A4A',
+-          700: '#0E1F38',
+-          800: '#091525',
+-          900: '#050B13',
++          50:  '#EDF4FE',
++          100: '#D6E8FC',
++          200: '#B0D4F9',
++          300: '#7CB8F2', // Maya Blue
++          400: '#5A9FE8',
++          500: '#3A83D8',
++          600: '#2D6AB8',
++          700: '#1E5090',
++          800: '#0A1050',
++          900: '#050834',
+         },
+ 
+-        // purple → navy
++        // purple → Mariner (compatibilidad)
+         purple: {
+-          50:  '#EDF2F7',
+-          100: '#D4DEE9',
+-          400: '#517BA9',
+-          500: '#1B365D',
+-          600: '#142A4A',
+-          700: '#0E1F38',
++          50:  '#E8EEF8',
++          100: '#D0DEF0',
++          400: '#5A8FCC',
++          500: '#3A63A8',
++          600: '#2D5090',
++          700: '#1E3A70',
+         },
+ 
+-        // teal → dorado bronce
++        // teal → Maya Blue accent scale
+         teal: {
+-          50:  '#FBF5E6',
+-          100: '#F5E8C4',
+-          200: '#E8D5A3',
+-          300: '#DBC282',
+-          400: '#CEAF61',
+-          500: '#B8860B',
+-          600: '#9A7209',
+-          700: '#7A5A07',
+-          800: '#5B4305',
+-          900: '#3B2C03',
++          50:  '#EDF4FE',
++          100: '#D6E8FC',
++          200: '#B0D4F9',
++          300: '#7CB8F2',
++          400: '#5A9FE8',
++          500: '#3A83D8',
++          600: '#2D6AB8',
++          700: '#1E5090',
++          800: '#0A1050',
++          900: '#050834',
+         },
+ 
+         // slate (neutros)
