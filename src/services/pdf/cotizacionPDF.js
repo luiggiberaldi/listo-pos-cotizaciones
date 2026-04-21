@@ -418,17 +418,19 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
 
     // Franja principal azul
     doc.setFillColor(...C_PRIMARY)
-    doc.rect(0, ph - 28, PAGE_W, 28, 'F')
+    doc.rect(0, ph - 32, PAGE_W, 32, 'F')
 
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8.5)
+    doc.setFontSize(7)
     doc.setTextColor(...C_WHITE)
 
-    const lineAddress = config.direccion_negocio || 'VÍA FLOR AMARILLO VALENCIA EDO CARABOBO'
-    doc.text(lineAddress, PAGE_W/2, ph - 18, { align: 'center' })
-
+    const addr1 = 'Av. 76 (Calle 8-9) Nro. 70-C-768, Local Galpón Nro 8, Edif. Centro Industrial Mística II, Parcela Ms-0 Y Ms7'
+    const addr2 = 'Urb. Industrial Aeropuerto Vía Flor Amarillo — Valencia, Carabobo, Zona Postal 2003'
+    doc.text(addr1, PAGE_W/2, ph - 24, { align: 'center' })
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(7.5)
+    doc.text(addr2, PAGE_W/2, ph - 19, { align: 'center' })
+
+    doc.setFontSize(7)
     const contactParts = [config.telefono_negocio, config.email_negocio].filter(Boolean)
     if (contactParts.length) {
       doc.text(contactParts.join('   |   '), PAGE_W/2, ph - 13, { align: 'center' })
