@@ -105,18 +105,13 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
 
   let name = config.nombre_negocio || 'CONSTRUACERO CARABOBO'
   let splitName = name.split(' ')
-  doc.text((splitName[0] || '').toUpperCase(), textX, 22)
+  doc.text((splitName[0] || '').toUpperCase(), textX, 25)
 
   if (splitName.length > 1) {
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(18)
-    doc.text(splitName.slice(1).join(' ').toUpperCase(), textX, 32)
+    doc.text(splitName.slice(1).join(' ').toUpperCase(), textX, 36)
   }
-
-  // RIF debajo del nombre
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9)
-  doc.text(`RIF: ${rif}`, textX, 39)
 
   // "Nota de Entrega" + número a la derecha inferior
   doc.setFontSize(13)
