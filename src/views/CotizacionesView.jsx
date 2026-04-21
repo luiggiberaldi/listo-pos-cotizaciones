@@ -434,16 +434,13 @@ function ListaCotizaciones({ onNueva, onRapida, onEditar, onVersionar }) {
                 {label}
               </button>
             ))}
-
-            {/* Filtro por vendedor — solo supervisor */}
-            {esSupervisor && vendedores.length > 1 && (
-              <>
-                <div className="w-px h-5 bg-slate-200 mx-1 hidden sm:block" />
-                <VendedorFilterPill vendedores={vendedores} value={vendedorFiltro} onChange={setVendedorFiltro} />
-              </>
-            )}
           </div>
         </div>
+
+        {/* Filtro por vendedor — solo supervisor (fuera del scroll para que el dropdown no se recorte) */}
+        {esSupervisor && vendedores.length > 1 && (
+          <VendedorFilterPill vendedores={vendedores} value={vendedorFiltro} onChange={setVendedorFiltro} />
+        )}
         <div className="flex items-center gap-1.5 shrink-0">
           <div className="flex bg-slate-100 rounded-xl p-0.5">
             <button type="button" onClick={() => { setVistaMode('grid'); localStorage.setItem('cotizaciones_vista', 'grid') }} title="Vista cuadrícula"
