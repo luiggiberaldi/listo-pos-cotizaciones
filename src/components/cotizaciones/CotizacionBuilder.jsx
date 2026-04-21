@@ -1153,7 +1153,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
       if (itemsRes.error) throw itemsRes.error
       if (cotRes.error) throw cotRes.error
       const vendedor = esSupervisor
-        ? vendedores.find(v => v.id === vendedorId) || null
+        ? vendedores.find(v => v.id === vendedorId) || perfil
         : perfil
       await generarPDF({
         cotizacion: { ...cotRes.data, cliente: clienteSeleccionado, vendedor },
@@ -1178,7 +1178,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
       if (cotRes.error) throw cotRes.error
 
       const vendedor = esSupervisor
-        ? vendedores.find(v => v.id === vendedorId) || null
+        ? vendedores.find(v => v.id === vendedorId) || perfil
         : perfil
       const pdfBlob = await generarPDF({
         cotizacion: { ...cotRes.data, cliente: clienteSeleccionado, vendedor },
