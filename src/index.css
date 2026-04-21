@@ -71,15 +71,22 @@
 /* Scrollbar en fondos oscuros */
 .dark .custom-scrollbar::-webkit-scrollbar-thumb,
 .sidebar-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.2);
+  border-radius: 4px;
 }
 .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover,
 .sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(255,255,255,0.25);
+  background: rgba(255,255,255,0.35);
 }
 .sidebar-scrollbar::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
 }
 .sidebar-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(255,255,255,0.05);
+  border-radius: 4px;
+}
+/* Firefox */
+.sidebar-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.2) rgba(255,255,255,0.05);
 }
