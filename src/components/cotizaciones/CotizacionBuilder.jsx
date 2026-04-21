@@ -1341,7 +1341,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
                   <ClienteSelector
                     clientes={clientes}
                     clienteId={clienteId}
-                    onSelect={setClienteId}
+                    onSelect={(id) => { setClienteId(id); setErrorGeneral('') }}
                   />
 
                   {/* Vista previa del cliente seleccionado */}

@@ -38,18 +38,18 @@ const ROL_CONFIG = {
 
 // Colores predefinidos para vendedores
 const COLORES_VENDEDOR = [
-  '#EF4444', // rojo
-  '#F97316', // naranja
-  '#F59E0B', // ámbar
-  '#84CC16', // lima
-  '#22C55E', // verde
-  '#14B8A6', // teal
-  '#06B6D4', // cyan
-  '#3B82F6', // azul
-  '#6366F1', // indigo
-  '#8B5CF6', // violeta
-  '#D946EF', // fucsia
-  '#EC4899', // rosa
+  '#E53E3E', // rojo
+  '#DD6B20', // naranja
+  '#D69E2E', // dorado
+  '#38A169', // verde
+  '#0891B2', // cyan
+  '#2563EB', // azul
+  '#7C3AED', // violeta
+  '#DB2777', // rosa
+  '#0D9488', // teal
+  '#9333EA', // púrpura
+  '#B45309', // marrón
+  '#059669', // esmeralda
 ]
 
 // ─── Formulario crear usuario ─────────────────────────────────────────────────
