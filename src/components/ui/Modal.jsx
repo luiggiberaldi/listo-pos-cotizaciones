@@ -74,7 +74,7 @@ export const Modal = ({ isOpen, onClose, title, children, className = '' }) => {
       {/* Contenido del Modal */}
       <div
         ref={modalRef}
-        className={`relative bg-white dark:bg-slate-900 w-full max-w-sm rounded-2xl sm:rounded-[2rem] max-h-[calc(100dvh-2rem)] sm:max-h-[90vh] shadow-2xl border border-slate-100 dark:border-slate-800 flex flex-col animate-in zoom-in-95 duration-200 transition-all pb-[env(safe-area-inset-bottom)] ${className}`}
+        className={`relative bg-white dark:bg-slate-900 w-full max-w-sm rounded-2xl sm:rounded-[2rem] max-h-[calc(100dvh-2rem)] sm:max-h-[90vh] shadow-2xl border border-slate-100 dark:border-slate-800 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 transition-all pb-[env(safe-area-inset-bottom)] ${className}`}
       >
 
         {/* Cabecera */}
