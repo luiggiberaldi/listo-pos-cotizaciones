@@ -65,8 +65,8 @@ export function useTurnoAtencion() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('usuarios')
-        .select('id, nombre, color')
-        .eq('rol', 'vendedor')
+        .select('id, nombre, color, rol')
+        .in('rol', ['vendedor', 'supervisor'])
         .eq('activo', true)
         .order('nombre')
       if (error) throw error
