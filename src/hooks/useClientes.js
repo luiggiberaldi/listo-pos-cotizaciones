@@ -194,9 +194,10 @@ export function useVendedores() {
         .order('nombre', { ascending: true })
 
       if (error) throw error
-      return data ?? []
+      // Ocultar cuenta "Super Admin" de todo el sistema
+      return (data ?? []).filter(u => u.nombre !== 'Super Admin')
     },
-    staleTime: 1000 * 60 * 10, // 10 minutos
+    staleTime: 1000 * 60 * 10,
     gcTime: 1000 * 60 * 30,
   })
 }

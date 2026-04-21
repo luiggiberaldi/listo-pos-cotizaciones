@@ -19,7 +19,8 @@ export function useUsuarios() {
         .select('id, nombre, rol, activo, creado_en, color')
         .order('nombre')
       if (error) throw error
-      return data ?? []
+      // Ocultar cuenta "Super Admin" de todo el sistema
+      return (data ?? []).filter(u => u.nombre !== 'Super Admin')
     },
     enabled: perfil?.rol === 'supervisor',
     staleTime: 1000 * 60 * 10,
