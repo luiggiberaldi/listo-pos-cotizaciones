@@ -972,6 +972,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
   })()
   const [notasCliente,       setNotasCliente]       = useState(cotizacionExistente?.notas_cliente ?? '')
   const [notasInternas,      setNotasInternas]      = useState(cotizacionExistente?.notas_internas ?? '')
+  const [monedaPDF,          setMonedaPDF]          = useState('$')
   const [descuentoGlobalPct, setDescuentoGlobalPct] = useState(cotizacionExistente?.descuento_global_pct ?? 0)
   const [costoEnvioUsd,      setCostoEnvioUsd]      = useState(cotizacionExistente?.costo_envio_usd ?? 0)
   const [items,              setItems]              = useState(
@@ -1159,6 +1160,8 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
         cotizacion: { ...cotRes.data, cliente: clienteSeleccionado, vendedor },
         items: itemsRes.data ?? [],
         config,
+        monedaPDF,
+        tasa: tasaHook.tasaEfectiva,
       })
     } catch {
     } finally {
@@ -1185,6 +1188,8 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
         items: itemsRes.data ?? [],
         config,
         returnBlob: true,
+        monedaPDF,
+        tasa: tasaHook.tasaEfectiva,
       })
 
       const mensaje = generarMensaje({
@@ -1477,6 +1482,33 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
                       ))}
                     </div>
                     <p className="text-[10px] text-slate-400 mt-1">Vence: {new Date(validaHasta).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' })}</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Moneda del PDF</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        { value: '$',     label: 'USD ($)' },
+                        { value: 'bs',    label: 'Bolívares (Bs)' },
+                        { value: 'mixto', label: 'Mixto ($+Bs)' },
+                      ].map(opt => (
+                        <button key={opt.value} type="button"
+                          onClick={() => setMonedaPDF(opt.value)}
+                          disabled={cargando}
+                          className={`px-3 py-2 rounded-xl text-sm font-semibold transition-all ${monedaPDF === opt.value
+                            ? 'bg-primary text-white shadow-sm'
+                            : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'
+                          }`}
+                          style={monedaPDF === opt.value ? { background: '#1B365D' } : {}}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                    {monedaPDF !== '$' && tasaHook.tasaEfectiva > 0 && (
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        Tasa: {new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2 }).format(tasaHook.tasaEfectiva)} Bs/$
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

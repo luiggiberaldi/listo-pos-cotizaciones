@@ -68,7 +68,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   // ══════════════════════════════════════════════════════════════════════════
   // 1. CABECERA GIGANTE AMARILLA
   // ══════════════════════════════════════════════════════════════════════════
-  const HDR_H = 55
+  const HDR_H = 40
   doc.setFillColor(...C_PRIMARY)
   doc.rect(0, 0, PAGE_W, HDR_H, 'F')
 
@@ -76,8 +76,8 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const vendedorColor = hexToRgb(despacho.vendedor?.color)
   doc.setFillColor(...vendedorColor)
   for(let i = 0; i < 4; i++) {
-    for(let j = 0; j < 8; j++) {
-      doc.circle(MARGIN + i * 2.5, 6 + j * 2.5, 0.4, 'F')
+    for(let j = 0; j < 6; j++) {
+      doc.circle(MARGIN + i * 2.5, 4 + j * 2.5, 0.4, 'F')
     }
   }
 
@@ -95,32 +95,33 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
 
   // Logo a la izquierda
   if (logoData) {
-    try { doc.addImage(logoData, 'PNG', MARGIN + 14, 8, 38, 38) } catch (_) {}
+    try { doc.addImage(logoData, 'PNG', MARGIN + 12, 4, 32, 32) } catch (_) {}
   }
-  const textX = MARGIN + 58
+  const textX = MARGIN + 48
 
-  // Títulos Negocio Grandes
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(26)
+  // Títulos Negocio Grandes — centrados entre logo y bloque derecho
+  const textCenterX = (MARGIN + 44 + PAGE_W - MARGIN - 40) / 2
+  doc.setFont('times', 'bold')
+  doc.setFontSize(22)
   doc.setTextColor(...C_WHITE)
 
   let name = config.nombre_negocio || 'CONSTRUACERO CARABOBO'
   let splitName = name.split(' ')
-  doc.text((splitName[0] || '').toUpperCase(), textX, 25)
+  doc.text((splitName[0] || '').toUpperCase(), textCenterX, 18, { align: 'center' })
 
   if (splitName.length > 1) {
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(18)
-    doc.text(splitName.slice(1).join(' ').toUpperCase(), textX, 36)
+    doc.setFont('times', 'bold')
+    doc.setFontSize(14)
+    doc.text(splitName.slice(1).join(' ').toUpperCase(), textCenterX, 27, { align: 'center' })
   }
 
   // "Nota de Entrega" + número a la derecha inferior
-  doc.setFontSize(13)
-  doc.text('Nota de Entrega', PAGE_W - MARGIN, HDR_H - 12, { align: 'right' })
   doc.setFontSize(12)
-  doc.text(numDes, PAGE_W - MARGIN, HDR_H - 5, { align: 'right' })
+  doc.text('Nota de Entrega', PAGE_W - MARGIN, HDR_H - 10, { align: 'right' })
+  doc.setFontSize(11)
+  doc.text(numDes, PAGE_W - MARGIN, HDR_H - 4, { align: 'right' })
 
-  y = HDR_H + 10
+  y = HDR_H + 8
 
   // ── Marca de agua central ──
   try {
@@ -138,16 +139,16 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
 
   // Encabezado
   doc.setFillColor(248, 248, 248)
-  doc.rect(MARGIN, y, CONTENT_W, 7, 'F')
+  doc.rect(MARGIN, y, CONTENT_W, 6, 'F')
   doc.setDrawColor(220, 220, 220)
   doc.setLineWidth(0.3)
-  doc.rect(MARGIN, y, CONTENT_W, 7, 'S')
+  doc.rect(MARGIN, y, CONTENT_W, 6, 'S')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8)
   doc.setTextColor(...C_DARK)
-  doc.text('NOTA DE ENTREGA a nombre de:', MARGIN + 3, y + 4.8)
-  doc.text(`NOTA # ${String(despacho.numero).padStart(6, '0')}`, PAGE_W - MARGIN - 3, y + 4.8, { align: 'right' })
-  y += 10
+  doc.text('NOTA DE ENTREGA a nombre de:', MARGIN + 3, y + 4)
+  doc.text(`NOTA # ${String(despacho.numero).padStart(6, '0')}`, PAGE_W - MARGIN - 3, y + 4, { align: 'right' })
+  y += 9
 
   // Fila de fechas
   doc.setFont('helvetica', 'bold')
@@ -169,7 +170,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     doc.setFont('helvetica', 'normal')
     doc.text(fmtFecha(despacho.entregada_en), MARGIN + 140, y)
   }
-  y += 7
+  y += 6
 
   // Datos del cliente en líneas subrayadas
   const itemsCliente = [
@@ -193,11 +194,11 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
 
     doc.setLineWidth(0.3)
     doc.setDrawColor(...C_PRIMARY)
-    doc.line(MARGIN, y + 2, PAGE_W - MARGIN, y + 2)
-    y += 7
+    doc.line(MARGIN, y + 1.5, PAGE_W - MARGIN, y + 1.5)
+    y += 5.5
   })
 
-  y += 5
+  y += 3
 
   // ══════════════════════════════════════════════════════════════════════════
   // 3. TABLA DE PRODUCTOS
@@ -232,7 +233,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.setDrawColor(200, 200, 200)
 
   items.forEach((item) => {
-    if (y > PAGE_H - 90) { doc.addPage(); y = MARGIN }
+    if (y > PAGE_H - 50) { doc.addPage(); y = MARGIN }
 
     doc.rect(MARGIN, y, CONTENT_W, ROW_H, 'S')
     COLS.forEach(col => { doc.line(col.x, y, col.x, y + ROW_H) })
@@ -257,8 +258,8 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
 
   // Notas Adicionales
   if (despacho.notas?.trim()) {
-    y += 5
-    if (y > PAGE_H - 100) { doc.addPage(); y = MARGIN }
+    y += 3
+    if (y > PAGE_H - 60) { doc.addPage(); y = MARGIN }
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(8)
     doc.setTextColor(...C_ACCENT)
@@ -275,12 +276,12 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     y += 4
   }
 
-  y += 8
+  y += 4
 
   // ══════════════════════════════════════════════════════════════════════════
   // 4. CONDICIONES + CUENTAS BANCARIAS (izq) + TOTALES (der)
   // ══════════════════════════════════════════════════════════════════════════
-  if (y > PAGE_H - 110) { doc.addPage(); y = MARGIN }
+  if (y > PAGE_H - 70) { doc.addPage(); y = MARGIN }
 
   const totW = 75
   const totX = PAGE_W - MARGIN - totW
@@ -408,10 +409,10 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   y += 12
 
   // ── Slogan ──
-  y += 20
-  if (y < PAGE_H - 45) {
+  y += 8
+  if (y < PAGE_H - 35) {
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
+    doc.setFontSize(11)
     doc.setTextColor(...C_DARK)
     doc.text('A sus ordenes para cualquier duda. Gracias por preferirnos.', PAGE_W / 2, y, { align: 'center' })
   }
@@ -425,35 +426,85 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     const ph = PAGE_H
 
     // Franja negra superior con las diagonales
-    const hazardY = ph - 33
+    const hazardY = ph - 25
     doc.setFillColor(...C_DARK)
-    doc.rect(0, hazardY, PAGE_W, 5, 'F')
+    doc.rect(0, hazardY, PAGE_W, 4, 'F')
 
     doc.setDrawColor(...C_PRIMARY)
     doc.setLineWidth(0.8)
     for(let k = 1; k < 20; k++) {
-      doc.line(k * 4, hazardY, k * 4 - 4, hazardY + 5)
-      doc.line(PAGE_W - k * 4, hazardY, PAGE_W - k * 4 + 4, hazardY + 5)
+      doc.line(k * 4, hazardY, k * 4 - 3, hazardY + 4)
+      doc.line(PAGE_W - k * 4, hazardY, PAGE_W - k * 4 + 3, hazardY + 4)
     }
 
     // Franja principal azul
     doc.setFillColor(...C_PRIMARY)
-    doc.rect(0, ph - 32, PAGE_W, 32, 'F')
+    doc.rect(0, ph - 24, PAGE_W, 24, 'F')
+
+    // ── Icono pin ubicación + dirección ──
+    doc.setFillColor(...C_WHITE)
+    doc.setDrawColor(...C_WHITE)
 
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7)
+    doc.setFontSize(6)
     doc.setTextColor(...C_WHITE)
 
     const addr1 = 'Av. 76 (Calle 8-9) Nro. 70-C-768, Local Galpón Nro 8, Edif. Centro Industrial Mística II, Parcela Ms-0 Y Ms7'
     const addr2 = 'Urb. Industrial Aeropuerto Vía Flor Amarillo — Valencia, Carabobo, Zona Postal 2003'
-    doc.text(addr1, PAGE_W/2, ph - 24, { align: 'center' })
-    doc.setFont('helvetica', 'normal')
-    doc.text(addr2, PAGE_W/2, ph - 19, { align: 'center' })
 
-    doc.setFontSize(7)
-    const contactParts = [config.telefono_negocio, config.email_negocio].filter(Boolean)
-    if (contactParts.length) {
-      doc.text(contactParts.join('   |   '), PAGE_W/2, ph - 13, { align: 'center' })
+    // Pin a la izquierda de addr1
+    const addr1W = doc.getTextWidth(addr1)
+    const addr1X = PAGE_W/2 - addr1W/2
+    const pinX = addr1X - 5
+    const pinY = ph - 16
+    doc.circle(pinX, pinY - 0.3, 1.2, 'F')
+    doc.triangle(pinX - 1, pinY, pinX + 1, pinY, pinX, pinY + 2, 'F')
+
+    doc.text(addr1, PAGE_W/2, ph - 15.5, { align: 'center' })
+    doc.setFont('helvetica', 'normal')
+    doc.text(addr2, PAGE_W/2, ph - 12, { align: 'center' })
+
+    // ── Icono teléfono + icono correo en la línea de contacto ──
+    doc.setFontSize(6.5)
+    const tel = config.telefono_negocio || ''
+    const email = config.email_negocio || ''
+    if (tel || email) {
+      const parts = []
+      if (tel) parts.push({ icon: 'phone', text: tel })
+      if (email) parts.push({ icon: 'mail', text: email })
+
+      // Calcular ancho total para centrar
+      doc.setFont('helvetica', 'normal')
+      const gap = 12
+      let totalW = 0
+      parts.forEach((p, i) => {
+        totalW += 5 + doc.getTextWidth(p.text)
+        if (i < parts.length - 1) totalW += gap
+      })
+
+      let cx = PAGE_W/2 - totalW/2
+      const cy = ph - 7
+
+      parts.forEach((p, i) => {
+        doc.setFillColor(...C_WHITE)
+        doc.setDrawColor(...C_WHITE)
+        if (p.icon === 'phone') {
+          // Icono teléfono: rectángulo redondeado
+          doc.setLineWidth(0.4)
+          doc.roundedRect(cx, cy - 2.2, 1.6, 2.8, 0.3, 0.3, 'S')
+          doc.setLineWidth(0.3)
+          doc.line(cx + 0.3, cy + 0.2, cx + 1.3, cy + 0.2)
+        } else {
+          // Icono sobre: rectángulo + V
+          doc.setLineWidth(0.3)
+          doc.rect(cx, cy - 1.8, 2.4, 1.8, 'S')
+          doc.line(cx, cy - 1.8, cx + 1.2, cy - 0.6)
+          doc.line(cx + 2.4, cy - 1.8, cx + 1.2, cy - 0.6)
+        }
+        doc.setTextColor(...C_WHITE)
+        doc.text(p.text, cx + 4, cy)
+        cx += 5 + doc.getTextWidth(p.text) + gap
+      })
     }
   }
 

@@ -17,6 +17,15 @@ function fmtFecha(f) {
     day: '2-digit', month: '2-digit', year: 'numeric',
   })
 }
+function fmtPrecio(n, moneda, tasa) {
+  if (moneda === 'bs' && tasa > 0) return fmtBs(Number(n || 0) * tasa)
+  return fmtUsd(n)
+}
+function fmtTotalLinea(n, moneda, tasa) {
+  if (moneda === 'bs' && tasa > 0) return fmtBs(Number(n || 0) * tasa)
+  if (moneda === 'mixto' && tasa > 0) return `${fmtUsd(n)} / ${fmtBs(Number(n || 0) * tasa)}`
+  return fmtUsd(n)
+}
 
 // ─── Layout y Colores ──────────────────────────────────────────────────────────
 const PAGE_W    = 210
@@ -41,7 +50,7 @@ const CUENTAS_BANCARIAS = [
   'CTA. CTE. PROVINCIAL 0108 0071 4901 0129 1305',
 ]
 
-export async function generarPDF({ cotizacion, items = [], config = {}, returnBlob = false }) {
+export async function generarPDF({ cotizacion, items = [], config = {}, returnBlob = false, monedaPDF = '$', tasa = 0 }) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
   let y = 0
 
@@ -55,7 +64,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   // ══════════════════════════════════════════════════════════════════════════
   // 1. CABECERA GIGANTE AMARILLA
   // ══════════════════════════════════════════════════════════════════════════
-  const HDR_H = 55
+  const HDR_H = 40
   doc.setFillColor(...C_PRIMARY)
   doc.rect(0, 0, PAGE_W, HDR_H, 'F')
 
@@ -63,8 +72,8 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   const vendedorColor = hexToRgb(cotizacion.vendedor?.color)
   doc.setFillColor(...vendedorColor)
   for(let i = 0; i < 4; i++) {
-    for(let j = 0; j < 8; j++) {
-      doc.circle(MARGIN + i * 2.5, 6 + j * 2.5, 0.4, 'F')
+    for(let j = 0; j < 6; j++) {
+      doc.circle(MARGIN + i * 2.5, 4 + j * 2.5, 0.4, 'F')
     }
   }
 
@@ -82,32 +91,33 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
 
   // Logo a la izquierda
   if (logoData) {
-    try { doc.addImage(logoData, 'PNG', MARGIN + 14, 8, 38, 38) } catch (_) {}
+    try { doc.addImage(logoData, 'PNG', MARGIN + 12, 4, 32, 32) } catch (_) {}
   }
-  const textX = MARGIN + 58
+  const textX = MARGIN + 48
 
-  // Títulos Negocio Grandes
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(26)
+  // Títulos Negocio Grandes — centrados entre logo y bloque derecho
+  const textCenterX = (MARGIN + 44 + PAGE_W - MARGIN - 40) / 2
+  doc.setFont('times', 'bold')
+  doc.setFontSize(22)
   doc.setTextColor(...C_WHITE)
 
   let name = config.nombre_negocio || 'CONSTRUACERO CARABOBO'
   let splitName = name.split(' ')
-  doc.text((splitName[0] || '').toUpperCase(), textX, 25)
+  doc.text((splitName[0] || '').toUpperCase(), textCenterX, 18, { align: 'center' })
 
   if (splitName.length > 1) {
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(18)
-    doc.text(splitName.slice(1).join(' ').toUpperCase(), textX, 36)
+    doc.setFont('times', 'bold')
+    doc.setFontSize(14)
+    doc.text(splitName.slice(1).join(' ').toUpperCase(), textCenterX, 27, { align: 'center' })
   }
 
   // "Cotización" + número a la derecha inferior
-  doc.setFontSize(14)
-  doc.text('Cotización', PAGE_W - MARGIN, HDR_H - 12, { align: 'right' })
-  doc.setFontSize(12)
-  doc.text(numDisplay, PAGE_W - MARGIN, HDR_H - 5, { align: 'right' })
+  doc.setFontSize(13)
+  doc.text('Cotización', PAGE_W - MARGIN, HDR_H - 10, { align: 'right' })
+  doc.setFontSize(11)
+  doc.text(numDisplay, PAGE_W - MARGIN, HDR_H - 4, { align: 'right' })
 
-  y = HDR_H + 10
+  y = HDR_H + 8
 
   // ── Marca de agua central ──
   try {
@@ -130,15 +140,15 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
 
   // Encabezado tipo "COTIZACIÓN a nombre de:"
   doc.setFillColor(248, 248, 248)
-  doc.rect(MARGIN, y, CONTENT_W, 7, 'F')
+  doc.rect(MARGIN, y, CONTENT_W, 6, 'F')
   doc.setDrawColor(220, 220, 220)
   doc.setLineWidth(0.3)
-  doc.rect(MARGIN, y, CONTENT_W, 7, 'S')
-  doc.text('COTIZACIÓN a nombre de:', MARGIN + 3, y + 4.8)
+  doc.rect(MARGIN, y, CONTENT_W, 6, 'S')
+  doc.text('COTIZACIÓN a nombre de:', MARGIN + 3, y + 4)
 
   // NOTA # a la derecha
-  doc.text(numDisplay, PAGE_W - MARGIN - 3, y + 4.8, { align: 'right' })
-  y += 10
+  doc.text(numDisplay, PAGE_W - MARGIN - 3, y + 4, { align: 'right' })
+  y += 9
 
   // Fila de fechas
   const halfW = CONTENT_W / 2
@@ -152,7 +162,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   doc.text('Vencimiento:', MARGIN + halfW, y)
   doc.setFont('helvetica', 'normal')
   doc.text(fmtFecha(cotizacion.valida_hasta), MARGIN + halfW + 25, y)
-  y += 7
+  y += 6
 
   // Datos del cliente en líneas subrayadas
   const itemsCliente = [
@@ -176,22 +186,24 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
 
     doc.setLineWidth(0.3)
     doc.setDrawColor(...C_PRIMARY)
-    doc.line(MARGIN, y + 2, PAGE_W - MARGIN, y + 2)
-    y += 7
+    doc.line(MARGIN, y + 1.5, PAGE_W - MARGIN, y + 1.5)
+    y += 5.5
   })
 
-  y += 5
+  y += 3
 
   // ══════════════════════════════════════════════════════════════════════════
   // 3. TABLA DE PRODUCTOS
   // ══════════════════════════════════════════════════════════════════════════
+  const precioLabel = monedaPDF === 'bs' ? 'PRECIO Bs' : 'PRECIO'
+  const totalLabel  = monedaPDF === 'bs' ? 'TOTAL Bs'  : 'TOTAL'
   const COLS = [
     { label: 'CANT.',       x: MARGIN,        w: 16,  align: 'center' },
     { label: 'CÓD.',        x: MARGIN + 16,   w: 24,  align: 'center' },
     { label: 'DESCRIPCIÓN', x: MARGIN + 40,   w: 68,  align: 'left'   },
     { label: 'UNID.',       x: MARGIN + 108,  w: 16,  align: 'center' },
-    { label: 'PRECIO',      x: MARGIN + 124,  w: 26,  align: 'right'  },
-    { label: 'TOTAL',       x: MARGIN + 150,  w: 32,  align: 'right'  },
+    { label: precioLabel,    x: MARGIN + 124,  w: 26,  align: 'right'  },
+    { label: totalLabel,     x: MARGIN + 150,  w: 32,  align: 'right'  },
   ]
   const ROW_H = 8
 
@@ -215,7 +227,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   doc.setDrawColor(200, 200, 200)
 
   items.forEach((item) => {
-    if (y > PAGE_H - 90) { doc.addPage(); y = MARGIN }
+    if (y > PAGE_H - 50) { doc.addPage(); y = MARGIN }
 
     doc.rect(MARGIN, y, CONTENT_W, ROW_H, 'S')
     COLS.forEach(col => { doc.line(col.x, y, col.x, y + ROW_H) })
@@ -230,18 +242,20 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     const descLines = doc.splitTextToSize(item.nombre_snap || '', COLS[2].w - 4)
     doc.text(descLines[0], COLS[2].x + 2, midY)
     doc.text(item.unidad_snap || '—', COLS[3].x + COLS[3].w / 2, midY, { align: 'center' })
-    doc.text(fmtUsd(item.precio_unit_usd), COLS[4].x + COLS[4].w - 2, midY, { align: 'right' })
+
+    const tasaEfectiva = tasa > 0 ? tasa : Number(cotizacion.tasa_bcv_snapshot || 0)
+    doc.text(fmtPrecio(item.precio_unit_usd, monedaPDF, tasaEfectiva), COLS[4].x + COLS[4].w - 2, midY, { align: 'right' })
 
     doc.setFont('helvetica', 'bold')
-    doc.text(fmtUsd(item.total_linea_usd), COLS[5].x + COLS[5].w - 2, midY, { align: 'right' })
+    doc.text(fmtPrecio(item.total_linea_usd, monedaPDF, tasaEfectiva), COLS[5].x + COLS[5].w - 2, midY, { align: 'right' })
 
     y += ROW_H
   })
 
   // Notas Adicionales
   if (cotizacion.notas_cliente?.trim()) {
-    y += 5
-    if (y > PAGE_H - 100) { doc.addPage(); y = MARGIN }
+    y += 3
+    if (y > PAGE_H - 60) { doc.addPage(); y = MARGIN }
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(8)
     doc.setTextColor(...C_ACCENT)
@@ -258,15 +272,15 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     y += 4
   }
 
-  y += 8
+  y += 4
 
   // ══════════════════════════════════════════════════════════════════════════
   // 4. CONDICIONES + CUENTAS BANCARIAS (izquierda) + TOTALES (derecha)
   // ══════════════════════════════════════════════════════════════════════════
-  if (y > PAGE_H - 110) { doc.addPage(); y = MARGIN }
+  if (y > PAGE_H - 70) { doc.addPage(); y = MARGIN }
 
   // Layout: izquierda condiciones+cuentas, derecha totales
-  const totW = 75
+  const totW = monedaPDF === 'mixto' ? 90 : 75
   const totX = PAGE_W - MARGIN - totW
   const leftW = totX - MARGIN - 5
 
@@ -298,21 +312,26 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   const subtotal = Number(cotizacion.subtotal_usd || 0)
   const descuento = Number(cotizacion.descuento_usd || 0)
   const total = Number(cotizacion.total_usd || 0)
-  const tasaBcv = Number(cotizacion.tasa_bcv_snapshot || 0)
-  const totalBs = Number(cotizacion.total_bs_snapshot || 0) || (tasaBcv > 0 ? total * tasaBcv : 0)
+  const tasaEfectivaTot = tasa > 0 ? tasa : Number(cotizacion.tasa_bcv_snapshot || 0)
+  const totalBs = Number(cotizacion.total_bs_snapshot || 0) || (tasaEfectivaTot > 0 ? total * tasaEfectivaTot : 0)
   const ivaPct = Number(config.iva_pct || 0)
   // Base imponible = subtotal - descuento
   const baseImponible = subtotal - descuento
   const ivaUsd = ivaPct > 0 ? baseImponible * (ivaPct / 100) : 0
 
   const totLines = []
-  totLines.push({ label: 'Subtotal:', val: fmtUsd(subtotal), bold: false })
+  totLines.push({ label: 'Subtotal:', val: fmtTotalLinea(subtotal, monedaPDF, tasaEfectivaTot), bold: false })
   if (descuento > 0) {
-    totLines.push({ label: 'Descuento:', val: `-${fmtUsd(descuento)}`, bold: false, color: [220, 50, 50] })
+    const descVal = monedaPDF === 'bs' && tasaEfectivaTot > 0
+      ? `-${fmtBs(descuento * tasaEfectivaTot)}`
+      : monedaPDF === 'mixto' && tasaEfectivaTot > 0
+        ? `-${fmtUsd(descuento)} / -${fmtBs(descuento * tasaEfectivaTot)}`
+        : `-${fmtUsd(descuento)}`
+    totLines.push({ label: 'Descuento:', val: descVal, bold: false, color: [220, 50, 50] })
   }
-  totLines.push({ label: 'Base Imponible:', val: fmtUsd(baseImponible), bold: false })
+  totLines.push({ label: 'Base Imponible:', val: fmtTotalLinea(baseImponible, monedaPDF, tasaEfectivaTot), bold: false })
   if (ivaPct > 0) {
-    totLines.push({ label: `IVA (${ivaPct}%):`, val: fmtUsd(ivaUsd), bold: false })
+    totLines.push({ label: `IVA (${ivaPct}%):`, val: fmtTotalLinea(ivaUsd, monedaPDF, tasaEfectivaTot), bold: false })
   }
 
   // Borde del cuadro de totales
@@ -342,10 +361,10 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   doc.setFontSize(11)
   doc.setTextColor(...C_WHITE)
   doc.text('TOTAL', totX + 4, ty + 5)
-  doc.text(fmtUsd(total), totX + totW - 4, ty + 5, { align: 'right' })
+  doc.text(fmtTotalLinea(total, monedaPDF, tasaEfectivaTot), totX + totW - 4, ty + 5, { align: 'right' })
 
-  // Total en Bs debajo
-  if (tasaBcv > 0) {
+  // Total en Bs debajo (solo en modo USD, los otros ya lo incluyen)
+  if (monedaPDF === '$' && tasaEfectivaTot > 0) {
     ty += 14
     doc.setFillColor(...C_DARK)
     doc.roundedRect(totX, ty - 2, totW, 9, 1.5, 1.5, 'F')
@@ -357,15 +376,15 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   }
 
   // Avanzar Y al final de lo que sea más alto (condiciones o totales)
-  y = Math.max(condY, ty + 14) + 5
+  y = Math.max(condY, ty + 14) + 3
 
   // ── (Sección de firma eliminada) ──
 
   // ── Slogan ──
-  y += 24
-  if (y < PAGE_H - 45) {
+  y += 8
+  if (y < PAGE_H - 35) {
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
+    doc.setFontSize(11)
     doc.setTextColor(...C_DARK)
     doc.text('A sus ordenes para cualquier duda. Gracias por preferirnos.', PAGE_W / 2, y, { align: 'center' })
   }
@@ -379,35 +398,85 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     const ph = PAGE_H
 
     // Franja negra superior con las diagonales
-    const hazardY = ph - 33
+    const hazardY = ph - 25
     doc.setFillColor(...C_DARK)
-    doc.rect(0, hazardY, PAGE_W, 5, 'F')
+    doc.rect(0, hazardY, PAGE_W, 4, 'F')
 
     doc.setDrawColor(...C_PRIMARY)
     doc.setLineWidth(0.8)
     for(let k = 1; k < 20; k++) {
-      doc.line(k * 4, hazardY, k * 4 - 4, hazardY + 5)
-      doc.line(PAGE_W - k * 4, hazardY, PAGE_W - k * 4 + 4, hazardY + 5)
+      doc.line(k * 4, hazardY, k * 4 - 3, hazardY + 4)
+      doc.line(PAGE_W - k * 4, hazardY, PAGE_W - k * 4 + 3, hazardY + 4)
     }
 
     // Franja principal azul
     doc.setFillColor(...C_PRIMARY)
-    doc.rect(0, ph - 32, PAGE_W, 32, 'F')
+    doc.rect(0, ph - 24, PAGE_W, 24, 'F')
+
+    // ── Icono pin ubicación + dirección ──
+    doc.setFillColor(...C_WHITE)
+    doc.setDrawColor(...C_WHITE)
 
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7)
+    doc.setFontSize(6)
     doc.setTextColor(...C_WHITE)
 
     const addr1 = 'Av. 76 (Calle 8-9) Nro. 70-C-768, Local Galpón Nro 8, Edif. Centro Industrial Mística II, Parcela Ms-0 Y Ms7'
     const addr2 = 'Urb. Industrial Aeropuerto Vía Flor Amarillo — Valencia, Carabobo, Zona Postal 2003'
-    doc.text(addr1, PAGE_W/2, ph - 24, { align: 'center' })
-    doc.setFont('helvetica', 'normal')
-    doc.text(addr2, PAGE_W/2, ph - 19, { align: 'center' })
 
-    doc.setFontSize(7)
-    const contactParts = [config.telefono_negocio, config.email_negocio].filter(Boolean)
-    if (contactParts.length) {
-      doc.text(contactParts.join('   |   '), PAGE_W/2, ph - 13, { align: 'center' })
+    // Pin a la izquierda de addr1
+    const addr1W = doc.getTextWidth(addr1)
+    const addr1X = PAGE_W/2 - addr1W/2
+    const pinX = addr1X - 5
+    const pinY = ph - 16
+    doc.circle(pinX, pinY - 0.3, 1.2, 'F')
+    doc.triangle(pinX - 1, pinY, pinX + 1, pinY, pinX, pinY + 2, 'F')
+
+    doc.text(addr1, PAGE_W/2, ph - 15.5, { align: 'center' })
+    doc.setFont('helvetica', 'normal')
+    doc.text(addr2, PAGE_W/2, ph - 12, { align: 'center' })
+
+    // ── Icono teléfono + icono correo en la línea de contacto ──
+    doc.setFontSize(6.5)
+    const tel = config.telefono_negocio || ''
+    const email = config.email_negocio || ''
+    if (tel || email) {
+      const parts = []
+      if (tel) parts.push({ icon: 'phone', text: tel })
+      if (email) parts.push({ icon: 'mail', text: email })
+
+      // Calcular ancho total para centrar
+      doc.setFont('helvetica', 'normal')
+      const gap = 12
+      let totalW = 0
+      parts.forEach((p, i) => {
+        totalW += 5 + doc.getTextWidth(p.text)
+        if (i < parts.length - 1) totalW += gap
+      })
+
+      let cx = PAGE_W/2 - totalW/2
+      const cy = ph - 7
+
+      parts.forEach((p, i) => {
+        doc.setFillColor(...C_WHITE)
+        doc.setDrawColor(...C_WHITE)
+        if (p.icon === 'phone') {
+          // Icono teléfono: rectángulo redondeado
+          doc.setLineWidth(0.4)
+          doc.roundedRect(cx, cy - 2.2, 1.6, 2.8, 0.3, 0.3, 'S')
+          doc.setLineWidth(0.3)
+          doc.line(cx + 0.3, cy + 0.2, cx + 1.3, cy + 0.2)
+        } else {
+          // Icono sobre: rectángulo + V
+          doc.setLineWidth(0.3)
+          doc.rect(cx, cy - 1.8, 2.4, 1.8, 'S')
+          doc.line(cx, cy - 1.8, cx + 1.2, cy - 0.6)
+          doc.line(cx + 2.4, cy - 1.8, cx + 1.2, cy - 0.6)
+        }
+        doc.setTextColor(...C_WHITE)
+        doc.text(p.text, cx + 4, cy)
+        cx += 5 + doc.getTextWidth(p.text) + gap
+      })
     }
   }
 
