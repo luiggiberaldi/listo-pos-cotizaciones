@@ -77,9 +77,11 @@ export default function InventarioView() {
   const [modalLoteOpen,    setModalLoteOpen]    = useState(false)
   const [tabActivo,        setTabActivo]        = useState('productos') // 'productos' | 'movimientos'
 
-  // Data
+  // Data — todos los productos (sin filtro de búsqueda) para el modal de movimientos
   const { data: inventarioData, isLoading, isError, refetch } = useInventario({ busqueda, categoria, pageSize: 1000 })
   const productos = inventarioData?.productos ?? inventarioData ?? []
+  const { data: todosData } = useInventario({ pageSize: 1000 })
+  const todosProductos = todosData?.productos ?? todosData ?? []
   const { data: categorias = [] } = useCategorias()
   const desactivar = useDesactivarProducto()
   const borrar = useBorrarProducto()
@@ -410,7 +412,7 @@ export default function InventarioView() {
         <MovimientoLoteModal
           isOpen={modalLoteOpen}
           onClose={() => setModalLoteOpen(false)}
-          productos={productos}
+          productos={todosProductos}
         />
       )}
     </div>
