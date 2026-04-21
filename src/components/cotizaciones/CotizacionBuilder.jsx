@@ -25,7 +25,7 @@ import { compartirPorWhatsApp, generarMensaje } from '../../utils/whatsapp'
 import { round2, round4, mulR } from '../../utils/dinero'
 import { calcTotales } from '../../utils/calcTotales'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../../utils/format'
-import { getLocalISODate }     from '../../utils/dateHelpers'
+
 import supabase from '../../services/supabase/client'
 import CustomSelect from '../ui/CustomSelect'
 import ClienteForm from '../clientes/ClienteForm'
@@ -957,7 +957,19 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
   const [vendedorId,         setVendedorId]         = useState(cotizacionExistente?.vendedor_id ?? '')
   const [clienteId,          setClienteId]          = useState(cotizacionExistente?.cliente_id ?? '')
   const [transportistaId,    setTransportistaId]    = useState(cotizacionExistente?.transportista_id ?? '')
-  const [validaHasta,        setValidaHasta]        = useState(cotizacionExistente?.valida_hasta ?? '')
+  // Calcular días de validez desde la fecha existente o usar 7 por defecto
+  const [diasValidez, setDiasValidez] = useState(() => {
+    if (cotizacionExistente?.valida_hasta) {
+      const diff = Math.round((new Date(cotizacionExistente.valida_hasta) - new Date()) / (1000 * 60 * 60 * 24))
+      return diff > 0 ? diff : 7
+    }
+    return 7
+  })
+  const validaHasta = (() => {
+    const d = new Date()
+    d.setDate(d.getDate() + diasValidez)
+    return d.toISOString().split('T')[0]
+  })()
   const [notasCliente,       setNotasCliente]       = useState(cotizacionExistente?.notas_cliente ?? '')
   const [notasInternas,      setNotasInternas]      = useState(cotizacionExistente?.notas_internas ?? '')
   const [descuentoGlobalPct, setDescuentoGlobalPct] = useState(cotizacionExistente?.descuento_global_pct ?? 0)
@@ -1448,9 +1460,23 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Válida hasta</label>
-                    <input type="date" value={validaHasta} onChange={e => setValidaHasta(e.target.value)}
-                      min={getLocalISODate()} className={inputCls} disabled={cargando} />
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Válida por</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[3, 7, 15, 30].map(d => (
+                        <button key={d} type="button"
+                          onClick={() => setDiasValidez(d)}
+                          disabled={cargando}
+                          className={`px-3 py-2 rounded-xl text-sm font-semibold transition-all ${diasValidez === d
+                            ? 'bg-primary text-white shadow-sm'
+                            : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'
+                          }`}
+                          style={diasValidez === d ? { background: '#1B365D' } : {}}
+                        >
+                          {d} días
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1">Vence: {new Date(validaHasta).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' })}</p>
                   </div>
                 </div>
               </div>
