@@ -378,7 +378,8 @@ function UserSelectStep() {
     if (error) {
       if (usuarios.length === 0) setErrorLista('No se pudo cargar la lista de usuarios')
     } else {
-      const lista = data ?? []
+      // Filtrar cuentas de sistema/dev que no deben aparecer en la lista
+      const lista = (data ?? []).filter(u => !u.email?.endsWith('@construacero.sys'))
       setUsuarios(lista)
       localStorage.setItem(USUARIOS_CACHE_KEY, JSON.stringify(lista))
     }
