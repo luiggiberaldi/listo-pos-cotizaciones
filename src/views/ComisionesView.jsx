@@ -74,6 +74,13 @@ function ComisionCard({ comision, esSupervisor, onMarcarPagada, marcando, onVerD
           <p className="text-slate-600 font-semibold">{fmtUsd(comision.monto_cabilla)}</p>
           <p className="text-emerald-600 font-black">{fmtUsd(comision.comision_cabilla)}</p>
         </div>
+        {(comision.detalle_extras || []).filter(e => Number(e.monto) > 0).map((extra, idx) => (
+          <div key={idx} className="bg-amber-50 rounded-xl p-2.5 border border-amber-100">
+            <p className="text-amber-600 font-medium mb-0.5">{extra.cat} ({extra.pct}%)</p>
+            <p className="text-slate-600 font-semibold">{fmtUsd(extra.monto)}</p>
+            <p className="text-emerald-600 font-black">{fmtUsd(extra.comision)}</p>
+          </div>
+        ))}
         <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
           <p className="text-slate-400 font-medium mb-0.5">Otros ({comision.pct_otros}%)</p>
           <p className="text-slate-600 font-semibold">{fmtUsd(comision.monto_otros)}</p>
@@ -229,17 +236,26 @@ function ModalDetalleVendedor({ vendedor, comisiones, onClose, esSupervisor, onM
                   </div>
 
                   {/* Row 2: Desglose inline */}
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 text-xs mb-2">
-                    <div className="flex-1 bg-slate-50 rounded-lg px-2.5 py-1.5 border border-slate-100">
-                      <span className="text-slate-400">Cabilla ({c.pct_cabilla}%)</span>
-                      <span className="ml-1.5 font-bold text-slate-600">{fmtUsd(c.monto_cabilla)}</span>
-                      <span className="ml-1 font-black text-emerald-600">→ {fmtUsd(c.comision_cabilla)}</span>
+                  <div className="flex flex-col gap-2 text-xs mb-2">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+                      <div className="flex-1 bg-slate-50 rounded-lg px-2.5 py-1.5 border border-slate-100">
+                        <span className="text-slate-400">Cabilla ({c.pct_cabilla}%)</span>
+                        <span className="ml-1.5 font-bold text-slate-600">{fmtUsd(c.monto_cabilla)}</span>
+                        <span className="ml-1 font-black text-emerald-600">→ {fmtUsd(c.comision_cabilla)}</span>
+                      </div>
+                      <div className="flex-1 bg-slate-50 rounded-lg px-2.5 py-1.5 border border-slate-100">
+                        <span className="text-slate-400">Otros ({c.pct_otros}%)</span>
+                        <span className="ml-1.5 font-bold text-slate-600">{fmtUsd(c.monto_otros)}</span>
+                        <span className="ml-1 font-black text-emerald-600">→ {fmtUsd(c.comision_otros)}</span>
+                      </div>
                     </div>
-                    <div className="flex-1 bg-slate-50 rounded-lg px-2.5 py-1.5 border border-slate-100">
-                      <span className="text-slate-400">Otros ({c.pct_otros}%)</span>
-                      <span className="ml-1.5 font-bold text-slate-600">{fmtUsd(c.monto_otros)}</span>
-                      <span className="ml-1 font-black text-emerald-600">→ {fmtUsd(c.comision_otros)}</span>
-                    </div>
+                    {(c.detalle_extras || []).filter(e => Number(e.monto) > 0).map((extra, idx) => (
+                      <div key={idx} className="bg-amber-50 rounded-lg px-2.5 py-1.5 border border-amber-100">
+                        <span className="text-amber-600">{extra.cat} ({extra.pct}%)</span>
+                        <span className="ml-1.5 font-bold text-slate-600">{fmtUsd(extra.monto)}</span>
+                        <span className="ml-1 font-black text-emerald-600">→ {fmtUsd(extra.comision)}</span>
+                      </div>
+                    ))}
                   </div>
 
                   {/* Row 3: Total + acción */}

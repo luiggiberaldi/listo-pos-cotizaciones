@@ -44,11 +44,12 @@ function ComisionesTab({ campos, cambiar, isLoading, cargando }) {
   // Las adicionales se guardan como JSON en un campo especial
   const [extras, setExtras] = useState([])
 
-  // Inicializar extras desde config (si hay JSON guardado)
+  // Inicializar extras desde config (puede ser array nativo o string JSON)
   useEffect(() => {
     if (campos._comision_extras) {
       try {
-        const parsed = JSON.parse(campos._comision_extras)
+        const val = campos._comision_extras
+        const parsed = Array.isArray(val) ? val : JSON.parse(val)
         if (Array.isArray(parsed)) setExtras(parsed)
       } catch {}
     }
@@ -64,19 +65,19 @@ function ComisionesTab({ campos, cambiar, isLoading, cargando }) {
     if (disponibles.length === 0) return
     const nuevas = [...extras, { cat: disponibles[0], pct: 2 }]
     setExtras(nuevas)
-    cambiar('_comision_extras', JSON.stringify(nuevas))
+    cambiar('_comision_extras', nuevas)
   }
 
   function cambiarExtra(idx, campo, valor) {
     const nuevas = extras.map((e, i) => i === idx ? { ...e, [campo]: valor } : e)
     setExtras(nuevas)
-    cambiar('_comision_extras', JSON.stringify(nuevas))
+    cambiar('_comision_extras', nuevas)
   }
 
   function eliminarExtra(idx) {
     const nuevas = extras.filter((_, i) => i !== idx)
     setExtras(nuevas)
-    cambiar('_comision_extras', JSON.stringify(nuevas))
+    cambiar('_comision_extras', nuevas)
   }
 
   const selectOnFocus = (e) => e.target.select()
