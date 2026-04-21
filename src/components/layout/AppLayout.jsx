@@ -86,7 +86,7 @@ const NavItem = memo(function NavItem({ path, label, Icono, onClick, collapsed }
       onClick={onClick}
       title={collapsed ? label : undefined}
       className={({ isActive }) => `
-        flex items-center ${collapsed ? 'justify-center' : 'gap-3'} ${collapsed ? 'px-2' : 'px-3'} py-2.5 rounded-xl
+        flex items-center ${collapsed ? 'justify-center' : 'gap-3'} ${collapsed ? 'px-2' : 'px-3'} py-2 md:py-1.5 xl:py-2.5 rounded-xl
         text-sm font-bold transition-all duration-200
         ${isActive
           ? 'text-white shadow-lg'
@@ -361,17 +361,17 @@ export default function AppLayout() {
         </div>
 
         {/* Logo + botón colapsar */}
-        <div className="relative z-10 px-4 py-3 md:py-5 flex flex-col items-center shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="relative z-10 px-4 py-3 md:py-3 xl:py-4 flex flex-col items-center shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
 
           <img src="/logo.png" alt="Construacero Carabobo"
             className={`object-contain transition-all duration-300 select-none pointer-events-none ${
-              sidebarCollapsed ? 'h-[40px] w-[40px]' : 'h-[70px] md:h-[140px]'
+              sidebarCollapsed ? 'h-[40px] w-[40px]' : 'h-[70px] md:h-[90px] xl:h-[130px]'
             }`}
             style={{ filter: 'brightness(1.05) drop-shadow(0 0 12px rgba(184,134,11,0.2))' }}
             draggable={false}
           />
           {!sidebarCollapsed && (
-            <div className="mt-2 md:mt-3 hidden md:flex items-center gap-2 w-full justify-center">
+            <div className="mt-1.5 md:mt-2 hidden md:flex items-center gap-2 w-full justify-center">
               <div className="h-px flex-1 opacity-20" style={{ background: 'linear-gradient(to right, transparent, #B8860B)' }} />
               <span className="text-[9px] font-bold tracking-[0.25em] uppercase whitespace-nowrap" style={{ color: 'rgba(184,134,11,0.7)' }}>
                 Sistema de Gestión

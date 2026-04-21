@@ -74,11 +74,11 @@ export const Modal = ({ isOpen, onClose, title, children, className = '' }) => {
       {/* Contenido del Modal */}
       <div
         ref={modalRef}
-        className={`relative bg-white dark:bg-slate-900 w-full max-w-sm rounded-2xl sm:rounded-[2rem] max-h-[100dvh] sm:max-h-[90vh] shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden animate-in zoom-in-95 duration-200 transition-all pb-[env(safe-area-inset-bottom)] ${className}`}
+        className={`relative bg-white dark:bg-slate-900 w-full max-w-sm rounded-2xl sm:rounded-[2rem] max-h-[calc(100dvh-2rem)] sm:max-h-[90vh] shadow-2xl border border-slate-100 dark:border-slate-800 flex flex-col animate-in zoom-in-95 duration-200 transition-all pb-[env(safe-area-inset-bottom)] ${className}`}
       >
 
         {/* Cabecera */}
-        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
+        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50 shrink-0">
           <h3 className="font-black text-slate-800 dark:text-white text-lg tracking-tight">{title}</h3>
           <button
             onClick={onClose}
@@ -90,7 +90,7 @@ export const Modal = ({ isOpen, onClose, title, children, className = '' }) => {
         </div>
 
         {/* Body con Scroll Mejorado */}
-        <div className="p-4 sm:p-6 max-h-[calc(100dvh-60px)] sm:max-h-[85vh] overflow-y-auto custom-scrollbar pb-16">
+        <div className="p-4 sm:p-6 flex-1 min-h-0 overflow-y-auto custom-scrollbar pb-6">
           {children}
         </div>
       </div>
