@@ -16,7 +16,6 @@ import PageHeader  from '../components/ui/PageHeader'
 
 // ─── Tabs ───────────────────────────────────────────────────────────────────
 const TABS = [
-  { id: 'fiscal',     label: 'Fiscal',     icon: Percent   },
   { id: 'comisiones', label: 'Comisiones', icon: DollarSign },
   { id: 'sistema',    label: 'Sistema',    icon: Lock      },
   { id: 'usuarios',   label: 'Usuarios',   icon: Users     },
@@ -215,7 +214,7 @@ function ComisionesTab({ campos, cambiar, isLoading, cargando }) {
 export default function ConfiguracionView() {
   const { data: config = {}, isLoading } = useConfigNegocio()
   const actualizar = useActualizarConfig()
-  const [tab, setTab]         = useState('fiscal')
+  const [tab, setTab]         = useState('comisiones')
   const [guardado, setGuardado] = useState(false)
   const [error,    setError]    = useState('')
   const [showGatePass, setShowGatePass] = useState(false)
@@ -357,7 +356,7 @@ export default function ConfiguracionView() {
 
   const inputCls = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400'
   const cargando = actualizar.isPending
-  const esTabForm = ['fiscal', 'sistema', 'comisiones'].includes(tab)
+  const esTabForm = ['sistema', 'comisiones'].includes(tab)
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-4xl space-y-5">
@@ -400,94 +399,6 @@ export default function ConfiguracionView() {
       {/* Tabs de formulario — Negocio, Fiscal, Sistema */}
       {esTabForm && (
         <form onSubmit={handleGuardar} className="space-y-5">
-
-          {/* ── Fiscal ──────────────────────────────────────────────────── */}
-          {tab === 'fiscal' && (
-            <>
-              <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-5">
-                <SectionHeader icon={Percent}>Impuestos</SectionHeader>
-
-                {ivaMissing ? (
-                  <div className="space-y-3">
-                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                      <div className="flex items-start gap-2">
-                        <AlertTriangle size={16} className="text-amber-600 mt-0.5 shrink-0" />
-                        <div className="space-y-2 min-w-0">
-                          <p className="text-sm font-semibold text-amber-800">Requiere migración de base de datos</p>
-                          <p className="text-xs text-amber-700">
-                            Para activar el IVA, ejecuta este SQL en el <strong>Editor SQL de Supabase Dashboard</strong>:
-                          </p>
-                          <div className="relative">
-                            <pre className="bg-amber-100 rounded-lg p-3 text-xs font-mono text-amber-900 overflow-x-auto whitespace-pre-wrap">{migrationSql}</pre>
-                            <button type="button" onClick={copiarSql}
-                              className="absolute top-2 right-2 p-1.5 rounded-lg bg-white border border-amber-300 text-amber-700 hover:bg-amber-50 transition-colors">
-                              {copiedSql ? <Check size={13} /> : <Copy size={13} />}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">
-                        Porcentaje de IVA
-                        <span className="ml-1.5 text-xs text-slate-400">(0 = desactivado)</span>
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <input type="number" min="0" max="100" step="0.01"
-                          value={campos.iva_pct}
-                          onChange={e => cambiar('iva_pct', Math.max(0, Math.min(100, Number(e.target.value))))}
-                          className="w-28 px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus text-right"
-                          disabled={isLoading || cargando} />
-                        <span className="text-lg font-bold text-slate-500">%</span>
-                        {campos.iva_pct > 0 && (
-                          <span className="text-xs bg-blue-100 text-blue-700 font-semibold px-2.5 py-1 rounded-full">
-                            Activo — {campos.iva_pct}% IVA
-                          </span>
-                        )}
-                        {campos.iva_pct === 0 && (
-                          <span className="text-xs bg-slate-100 text-slate-500 font-semibold px-2.5 py-1 rounded-full">
-                            Desactivado
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-slate-400">
-                        Venezuela aplica IVA general del 16%. Se añade al subtotal de cada cotización.
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-                <SectionHeader icon={FileText}>Cotizaciones</SectionHeader>
-                <div className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-slate-700">
-                      Pie de página del PDF
-                      <span className="ml-1.5 text-xs text-slate-400">(aparece al final de cada cotización)</span>
-                    </label>
-                    <textarea value={campos.pie_pagina_pdf} onChange={e => cambiar('pie_pagina_pdf', e.target.value)}
-                      rows={2} placeholder="Ej: Precios sujetos a cambio sin previo aviso."
-                      className={`${inputCls} resize-none`} disabled={isLoading || cargando} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-slate-700">
-                      Validez por defecto
-                      <span className="ml-1.5 text-xs text-slate-400">(días)</span>
-                    </label>
-                    <input type="number" min="1" max="365"
-                      value={campos.validez_cotizacion_dias}
-                      onChange={e => cambiar('validez_cotizacion_dias', Math.max(1, Number(e.target.value)))}
-                      className="w-32 px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus"
-                      disabled={isLoading || cargando} />
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
 
           {/* ── Sistema ─────────────────────────────────────────────────── */}
           {tab === 'sistema' && (
