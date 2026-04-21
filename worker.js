@@ -103,6 +103,9 @@ export default {
     if (url.pathname === '/api/admin/clear-inventory' && request.method === 'DELETE') {
       return handleClearInventory(request, env);
     }
+    if (url.pathname === '/api/admin/factory-reset' && request.method === 'DELETE') {
+      return handleTesterClearAll(request, env);
+    }
 
     // ── API: tester (seed demo + stress) ─────────────────────────────────
     if (url.pathname === '/api/admin/tester/seed-demo' && request.method === 'POST') {
@@ -867,8 +870,8 @@ async function handleRestore(request, env) {
     return jsonError('Archivo inválido: no parece un backup del sistema', 400, request);
   }
 
-  // Validate expected tables
-  const expectedTables = ['configuracion_negocio', 'transportistas', 'productos', 'clientes', 'cotizaciones', 'cotizacion_items', 'notas_despacho'];
+  // Validate expected tables (solo las fundamentales)
+  const expectedTables = ['productos'];
   const missingTables = expectedTables.filter(t => !backup.tablas[t]);
   if (missingTables.length > 0) {
     return jsonError(`Backup incompleto: faltan tablas ${missingTables.join(', ')}`, 400, request);

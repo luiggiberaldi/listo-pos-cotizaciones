@@ -14,7 +14,6 @@ import PageHeader  from '../components/ui/PageHeader'
 
 // ─── Tabs ───────────────────────────────────────────────────────────────────
 const TABS = [
-  { id: 'negocio',    label: 'Negocio',    icon: Building2 },
   { id: 'fiscal',     label: 'Fiscal',     icon: Percent   },
   { id: 'comisiones', label: 'Comisiones', icon: DollarSign },
   { id: 'sistema',    label: 'Sistema',    icon: Lock      },
@@ -25,7 +24,7 @@ const TABS = [
 export default function ConfiguracionView() {
   const { data: config = {}, isLoading } = useConfigNegocio()
   const actualizar = useActualizarConfig()
-  const [tab, setTab]         = useState('negocio')
+  const [tab, setTab]         = useState('fiscal')
   const [guardado, setGuardado] = useState(false)
   const [error,    setError]    = useState('')
   const [showGatePass, setShowGatePass] = useState(false)
@@ -34,6 +33,9 @@ export default function ConfiguracionView() {
   const [clearLoading, setClearLoading] = useState(false)
   const [clearMsg, setClearMsg]         = useState(null)
   const [confirmClear, setConfirmClear] = useState(false)
+  const [resetLoading, setResetLoading] = useState(false)
+  const [resetMsg, setResetMsg]         = useState(null)
+  const [confirmReset, setConfirmReset] = useState(false)
   const [restoreMsg, setRestoreMsg]         = useState(null)
   const [restoreLoading, setRestoreLoading] = useState(false)
   const [confirmRestore, setConfirmRestore] = useState(false)
@@ -94,6 +96,16 @@ export default function ConfiguracionView() {
     } catch (err) {
       setClearMsg({ tipo: 'error', texto: err.message || 'Error al borrar' })
     } finally { setClearLoading(false) }
+  }
+
+  async function handleFactoryReset() {
+    setResetLoading(true); setResetMsg(null); setConfirmReset(false)
+    try {
+      await adminAPI.factoryReset()
+      setResetMsg({ tipo: 'ok', texto: 'Reinicio completado. Todos los datos han sido eliminados.' })
+    } catch (err) {
+      setResetMsg({ tipo: 'error', texto: err.message || 'Error al reiniciar' })
+    } finally { setResetLoading(false) }
   }
 
   async function handleBackup() {
@@ -164,7 +176,7 @@ export default function ConfiguracionView() {
     </div>
   )
   const cargando = actualizar.isPending
-  const esTabForm = ['negocio', 'fiscal', 'sistema', 'comisiones'].includes(tab)
+  const esTabForm = ['fiscal', 'sistema', 'comisiones'].includes(tab)
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-4xl space-y-5">
@@ -207,54 +219,6 @@ export default function ConfiguracionView() {
       {/* Tabs de formulario — Negocio, Fiscal, Sistema */}
       {esTabForm && (
         <form onSubmit={handleGuardar} className="space-y-5">
-
-          {/* ── Negocio ─────────────────────────────────────────────────── */}
-          {tab === 'negocio' && (
-            <>
-              <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-                <SectionHeader icon={Building2}>Identidad del negocio</SectionHeader>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5 sm:col-span-2">
-                    <label className="text-sm font-medium text-slate-700">Nombre del negocio <span className="text-red-500">*</span></label>
-                    <input value={campos.nombre_negocio} onChange={e => cambiar('nombre_negocio', e.target.value)}
-                      placeholder="Ej: Ferretería El Tornillo C.A." className={inputCls} disabled={isLoading || cargando} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-slate-700">RIF</label>
-                    <input value={campos.rif_negocio} onChange={e => cambiar('rif_negocio', e.target.value)}
-                      placeholder="J-00000000-0" className={inputCls} disabled={isLoading || cargando} />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-                <SectionHeader icon={Phone}>Contacto</SectionHeader>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
-                      <Phone size={12} className="text-slate-400" /> Teléfono
-                    </label>
-                    <input value={campos.telefono_negocio} onChange={e => cambiar('telefono_negocio', e.target.value)}
-                      placeholder="0212-000-0000" className={inputCls} disabled={isLoading || cargando} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
-                      <Mail size={12} className="text-slate-400" /> Email
-                    </label>
-                    <input type="email" value={campos.email_negocio} onChange={e => cambiar('email_negocio', e.target.value)}
-                      placeholder="ventas@empresa.com" className={inputCls} disabled={isLoading || cargando} />
-                  </div>
-                  <div className="space-y-1.5 sm:col-span-2">
-                    <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
-                      <MapPin size={12} className="text-slate-400" /> Dirección
-                    </label>
-                    <input value={campos.direccion_negocio} onChange={e => cambiar('direccion_negocio', e.target.value)}
-                      placeholder="Av. Principal, Local 1, Caracas" className={inputCls} disabled={isLoading || cargando} />
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
 
           {/* ── Fiscal ──────────────────────────────────────────────────── */}
           {tab === 'fiscal' && (
@@ -594,6 +558,41 @@ export default function ConfiguracionView() {
                 {clearMsg.texto}
               </div>
             )}
+
+            <div className="border-t border-red-100 pt-4 mt-2">
+              <p className="text-xs text-slate-500 mb-3">Elimina <strong>todos los datos</strong> (productos, clientes, cotizaciones, despachos, comisiones, transportistas) y deja el sistema listo para trabajar desde cero. Los usuarios y la configuración se mantienen.</p>
+              {!confirmReset ? (
+                <button type="button" onClick={() => setConfirmReset(true)}
+                  className="flex items-center gap-2 bg-red-800 hover:bg-red-900 text-white font-semibold text-sm px-5 py-2.5 rounded-xl transition-colors shadow-sm">
+                  <AlertTriangle size={15} />Reinicio de fábrica
+                </button>
+              ) : (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-3">
+                  <p className="text-sm font-semibold text-red-800">
+                    ¿Estás seguro? Se borrarán <strong>todos los datos</strong> del sistema permanentemente. Solo se conservan los usuarios y la configuración.
+                  </p>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={handleFactoryReset} disabled={resetLoading}
+                      className="flex items-center gap-1.5 bg-red-800 hover:bg-red-900 text-white font-semibold text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-50">
+                      {resetLoading
+                        ? <><div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />Reiniciando...</>
+                        : 'Sí, reiniciar todo'
+                      }
+                    </button>
+                    <button type="button" onClick={() => setConfirmReset(false)}
+                      className="text-sm font-medium text-slate-600 px-4 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors">
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+              {resetMsg && (
+                <div className={`flex items-center gap-1.5 text-sm font-medium mt-2 ${resetMsg.tipo === 'ok' ? 'text-emerald-600' : 'text-red-600'}`}>
+                  {resetMsg.tipo === 'ok' ? <CheckCircle size={15} /> : <AlertCircle size={15} />}
+                  {resetMsg.texto}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

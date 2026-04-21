@@ -20,12 +20,12 @@ import Skeleton      from '../components/ui/Skeleton'
 import Pagination    from '../components/ui/Pagination'
 import PageHeader   from '../components/ui/PageHeader'
 
-const ITEMS_POR_PAGINA = 12
+const ITEMS_POR_PAGINA = 24
 
 // ─── Skeleton de carga ────────────────────────────────────────────────────────
 function SkeletonProductos() {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+    <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
       {Array.from({ length: 8 }).map((_, i) => (
         <div key={i} className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
           <Skeleton className="h-3 w-1/3 rounded" />
@@ -298,7 +298,7 @@ export default function InventarioView() {
         />
       ) : (
         vistaMode === 'grid' ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3">
+          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
             {productosPaginados.map(p => (
               <ProductoCard
                 key={p.id}

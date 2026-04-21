@@ -70,6 +70,10 @@ export const adminAPI = {
     return adminFetch('clear-inventory', 'DELETE')
   },
 
+  async factoryReset() {
+    return adminFetch('factory-reset', 'DELETE')
+  },
+
   async restoreBackup(file) {
     const token = await getAuthToken()
     if (!token) throw new Error('No autenticado')

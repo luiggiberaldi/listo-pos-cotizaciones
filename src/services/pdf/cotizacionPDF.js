@@ -411,14 +411,14 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     doc.setFontSize(6)
     doc.setTextColor(...C_WHITE)
 
-    const addr1 = 'Av. 76 (Calle 8-9) Nro. 70-C-768, Local Galpón Nro 8, Edif. Centro Industrial Mística II, Parcela Ms-0 Y Ms7'
-    const addr2 = 'Urb. Industrial Aeropuerto Vía Flor Amarillo — Valencia, Carabobo, Zona Postal 2003'
+    const addr1 = 'Av. 76, (Calle S-3) Nro. 70-C-766, Local Galpón Nro. 3 Edificio Centro Industrial Massico II'
+    const addr2 = 'Parcela MB-6 y Mb7, Urb. Industrial Aeropuerto Vía Flor Amarillo, Valencia, Edo. Carabobo, Zona Postal 2003'
 
     // Pin a la izquierda de addr1
     const addr1W = doc.getTextWidth(addr1)
     const addr1X = PAGE_W/2 - addr1W/2
-    const pinX = addr1X - 5
-    const pinY = ph - 16
+    const pinX = addr1X - 3
+    const pinY = ph - 17
     doc.circle(pinX, pinY - 0.3, 1.2, 'F')
     doc.triangle(pinX - 1, pinY, pinX + 1, pinY, pinX, pinY + 2, 'F')
 

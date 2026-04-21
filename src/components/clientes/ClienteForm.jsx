@@ -188,16 +188,27 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
 
       {/* RIF / Cédula */}
       <Campo label="RIF / Cédula *" icono={Hash} error={errores.rif_cedula}>
-        <div className="relative flex">
-          <select
-            value={rifPrefijo}
-            onChange={e => { setRifPrefijo(e.target.value); if (errores.rif_cedula) setErrores(prev => ({ ...prev, rif_cedula: '' })) }}
-            disabled={cargando}
-            className="px-2.5 py-2.5 rounded-l-xl border border-r-0 border-slate-200 bg-slate-100 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-focus appearance-none cursor-pointer text-center w-14"
-          >
-            {PREFIJOS_RIF.map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
-          <span className="inline-flex items-center px-1 border-y border-slate-200 bg-slate-100 text-slate-400 text-sm select-none">-</span>
+        <div className="flex gap-1.5 mb-2">
+          {PREFIJOS_RIF.map(p => (
+            <button
+              key={p}
+              type="button"
+              disabled={cargando}
+              onClick={() => { setRifPrefijo(p); if (errores.rif_cedula) setErrores(prev => ({ ...prev, rif_cedula: '' })) }}
+              className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${
+                rifPrefijo === p
+                  ? 'bg-primary text-white shadow-sm scale-105'
+                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+              } disabled:opacity-50`}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+        <div className="relative flex items-center">
+          <span className="inline-flex items-center px-3 rounded-l-xl border border-r-0 border-slate-200 bg-slate-100 text-sm font-bold text-slate-600 select-none h-[42px]">
+            {rifPrefijo}-
+          </span>
           <input
             type="text"
             name="rif_cedula"

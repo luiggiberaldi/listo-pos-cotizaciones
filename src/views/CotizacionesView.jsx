@@ -3,7 +3,7 @@
 // El builder reemplaza la lista in-page (sin navegación adicional)
 import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { FileText, Plus, RefreshCw, Filter, Copy, AlertTriangle, PackageCheck, Loader2, X, AlertCircle, LayoutGrid, List, Zap } from 'lucide-react'
+import { FileText, Plus, RefreshCw, Filter, Copy, AlertTriangle, PackageCheck, Loader2, X, AlertCircle, LayoutGrid, List, Zap, Users } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import supabase from '../services/supabase/client'
 import { useTasaCambio } from '../hooks/useTasaCambio'
@@ -316,6 +316,7 @@ function ListaCotizaciones({ onNueva, onRapida, onEditar, onVersionar }) {
   const esSupervisor = perfil?.rol === 'supervisor'
   const { tasaEfectiva } = useTasaCambio()
   const [estadoFiltro, setEstadoFiltro] = useState('')
+  const [vendedorFiltro, setVendedorFiltro] = useState('')
   const [pagina, setPagina] = useState(1)
   const [vistaMode, setVistaMode] = useState(() => localStorage.getItem('cotizaciones_vista') || 'grid')
   const [cotizacionAAnular, setCotizacionAAnular] = useState(null)
@@ -327,15 +328,21 @@ function ListaCotizaciones({ onNueva, onRapida, onEditar, onVersionar }) {
   const { data: cotizaciones = [], isLoading, isError, refetch } = useCotizaciones({ estado: estadoFiltro })
   const { data: vendedores = [] } = useVendedores()
 
+  // Filtrar por vendedor (solo supervisor)
+  const cotizacionesFiltradas = useMemo(() => {
+    if (!vendedorFiltro) return cotizaciones
+    return cotizaciones.filter(c => c.vendedor_id === vendedorFiltro)
+  }, [cotizaciones, vendedorFiltro])
+
   const ITEMS_POR_PAGINA = 12
-  const totalPaginas = Math.max(1, Math.ceil(cotizaciones.length / ITEMS_POR_PAGINA))
+  const totalPaginas = Math.max(1, Math.ceil(cotizacionesFiltradas.length / ITEMS_POR_PAGINA))
   const cotizacionesPaginadas = useMemo(() => {
     const inicio = (pagina - 1) * ITEMS_POR_PAGINA
-    return cotizaciones.slice(inicio, inicio + ITEMS_POR_PAGINA)
-  }, [cotizaciones, pagina])
+    return cotizacionesFiltradas.slice(inicio, inicio + ITEMS_POR_PAGINA)
+  }, [cotizacionesFiltradas, pagina])
 
   // Reset página al cambiar filtro
-  useEffect(() => { setPagina(1) }, [estadoFiltro])
+  useEffect(() => { setPagina(1) }, [estadoFiltro, vendedorFiltro])
 
   const anular        = useAnularCotizacion()
   const cambiarEstado = useActualizarEstado()
@@ -396,7 +403,7 @@ function ListaCotizaciones({ onNueva, onRapida, onEditar, onVersionar }) {
       <PageHeader
         icon={FileText}
         title="Cotizaciones"
-        subtitle={isLoading ? 'Cargando...' : `${cotizaciones.length} cotización${cotizaciones.length !== 1 ? 'es' : ''}`}
+        subtitle={isLoading ? 'Cargando...' : `${cotizacionesFiltradas.length} cotización${cotizacionesFiltradas.length !== 1 ? 'es' : ''}`}
         action={
           <div className="flex items-center gap-2">
             <button onClick={onRapida} className="flex items-center gap-1.5 bg-white border border-slate-200 text-slate-700 font-bold text-sm px-3 py-2.5 rounded-xl transition-all hover:border-primary/50 hover:text-primary active:scale-[0.98]">
@@ -411,7 +418,7 @@ function ListaCotizaciones({ onNueva, onRapida, onEditar, onVersionar }) {
         }
       />
 
-      {/* Filtros de estado */}
+      {/* Filtros de estado + vendedor */}
       <div className="flex items-center gap-2">
         <Filter size={16} className="text-slate-500 shrink-0 hidden sm:block" />
         <div className="flex-1 min-w-0 overflow-x-auto scrollbar-hide">
@@ -426,6 +433,30 @@ function ListaCotizaciones({ onNueva, onRapida, onEditar, onVersionar }) {
                 {label}
               </button>
             ))}
+
+            {/* Filtro por vendedor — solo supervisor */}
+            {esSupervisor && vendedores.length > 1 && (
+              <>
+                <div className="w-px h-5 bg-slate-200 mx-1 hidden sm:block" />
+                <div className="relative">
+                  <select
+                    value={vendedorFiltro}
+                    onChange={e => setVendedorFiltro(e.target.value)}
+                    className={`appearance-none pl-7 pr-7 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-semibold transition-colors border cursor-pointer ${
+                      vendedorFiltro
+                        ? 'bg-primary text-white border-primary'
+                        : 'bg-white text-slate-700 border-slate-200 hover:border-primary-focus'
+                    }`}
+                  >
+                    <option value="">Todos</option>
+                    {vendedores.map(v => (
+                      <option key={v.id} value={v.id}>{v.nombre}</option>
+                    ))}
+                  </select>
+                  <Users size={13} className={`absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none ${vendedorFiltro ? 'text-white' : 'text-slate-400'}`} />
+                </div>
+              </>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
@@ -453,15 +484,15 @@ function ListaCotizaciones({ onNueva, onRapida, onEditar, onVersionar }) {
           <p className="font-semibold">Error al cargar cotizaciones</p>
           <button onClick={() => refetch()} className="mt-3 text-sm underline">Intentar de nuevo</button>
         </div>
-      ) : cotizaciones.length === 0 ? (
+      ) : cotizacionesFiltradas.length === 0 ? (
         <EmptyState
           icon={FileText}
-          title={estadoFiltro ? `Sin cotizaciones ${estadoFiltro}s` : '¡Aún no tienes cotizaciones!'}
-          description={estadoFiltro ? 'Prueba con otro filtro.' : 'Crea tu primera cotización para empezar a vender. Usa "Rápida" para cotizar al instante.'}
-          actionLabel={estadoFiltro ? 'Ver todas' : 'Cotización Rápida'}
-          onAction={estadoFiltro ? () => setEstadoFiltro('') : onRapida}
-          secondaryActionLabel={estadoFiltro ? undefined : 'Asistente completo'}
-          onSecondaryAction={estadoFiltro ? undefined : onNueva}
+          title={estadoFiltro || vendedorFiltro ? 'Sin cotizaciones con estos filtros' : '¡Aún no tienes cotizaciones!'}
+          description={estadoFiltro || vendedorFiltro ? 'Prueba con otro filtro.' : 'Crea tu primera cotización para empezar a vender. Usa "Rápida" para cotizar al instante.'}
+          actionLabel={estadoFiltro || vendedorFiltro ? 'Limpiar filtros' : 'Cotización Rápida'}
+          onAction={estadoFiltro || vendedorFiltro ? () => { setEstadoFiltro(''); setVendedorFiltro('') } : onRapida}
+          secondaryActionLabel={estadoFiltro || vendedorFiltro ? undefined : 'Asistente completo'}
+          onSecondaryAction={estadoFiltro || vendedorFiltro ? undefined : onNueva}
         />
       ) : (
         <>

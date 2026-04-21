@@ -31,7 +31,7 @@ export function generarMensaje({ nombreNegocio, nombreCliente, numDisplay, total
   const saludo = nombreCliente ? `Estimado/a *${nombreCliente}*,` : 'Estimado/a cliente,'
 
   const vencim = validaHasta
-    ? `📅 *Válida hasta:* ${new Date(validaHasta + 'T12:00:00').toLocaleDateString('es-VE', { day: '2-digit', month: 'long', year: 'numeric' })}`
+    ? `Valida hasta: *${new Date(validaHasta + 'T12:00:00').toLocaleDateString('es-VE', { day: '2-digit', month: 'long', year: 'numeric' })}*`
     : ''
 
   const firma = nombreVendedor
@@ -39,8 +39,8 @@ export function generarMensaje({ nombreNegocio, nombreCliente, numDisplay, total
     : `Atentamente,\n_${empresa}_`
 
   const intro = nombreVendedor
-    ? `Le escribe *${nombreVendedor}* de *${empresa}*. A continuación le hacemos llegar la cotización *${numDisplay}*:`
-    : `Le hacemos llegar la cotización *${numDisplay}* emitida por *${empresa}*:`
+    ? `Le saluda *${nombreVendedor}* de *${empresa}*. Le enviamos la cotizacion *${numDisplay}*:`
+    : `Le enviamos la cotizacion *${numDisplay}* de *${empresa}*:`
 
   // Líneas de productos (máx 15 para no saturar el mensaje)
   const lineasProductos = items.slice(0, 15).map(it => {
@@ -49,11 +49,11 @@ export function generarMensaje({ nombreNegocio, nombreCliente, numDisplay, total
     const desc = Number(it.descuento_pct || it.descuentoPct || 0)
     const subtotal = cant * precio * (1 - desc / 100)
     const descStr = desc > 0 ? ` (-${desc}%)` : ''
-    return `  • ${it.nombre_snap || it.nombreSnap} x${cant}${descStr} — *$${subtotal.toFixed(2)}*`
+    return `- ${it.nombre_snap || it.nombreSnap} x${cant}${descStr} -- *$${subtotal.toFixed(2)}*`
   })
 
   const hayMas = items.length > 15
-    ? `  _...y ${items.length - 15} producto(s) más (ver PDF adjunto)_`
+    ? `_...y ${items.length - 15} producto(s) mas (ver PDF adjunto)_`
     : ''
 
   return [
@@ -61,16 +61,16 @@ export function generarMensaje({ nombreNegocio, nombreCliente, numDisplay, total
     '',
     intro,
     '',
-    '🛒 *Productos:*',
+    '*Productos:*',
     ...lineasProductos,
     hayMas || null,
     '',
-    `💰 *Total: ${total}*`,
+    `*Total: ${total}*`,
     vencim ? vencim : null,
     '',
-    'Adjunto encontrará el documento en formato PDF para su revisión.',
+    'Adjunto encontrara el documento PDF para su revision.',
     '',
-    'Para confirmar el pedido o consultar cualquier detalle, estamos a su entera disposición.',
+    'Quedamos a su disposicion para cualquier consulta.',
     '',
     firma,
   ].filter(l => l !== null && l !== undefined).join('\n')

@@ -2,10 +2,12 @@
 // Vista principal de notas de despacho
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Package, PackageCheck, RefreshCw, Filter, RefreshCcw, AlertTriangle, LayoutGrid, List } from 'lucide-react'
+import { Package, PackageCheck, RefreshCw, Filter, RefreshCcw, AlertTriangle, LayoutGrid, List, Users } from 'lucide-react'
+import useAuthStore from '../store/useAuthStore'
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import { useDespachos, useActualizarEstadoDespacho, useReciclarDespacho } from '../hooks/useDespachos'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
+import { useVendedores } from '../hooks/useClientes'
 import DespachoCard from '../components/despachos/DespachoCard'
 import DespachoRow  from '../components/despachos/DespachoRow'
 import DetalleModal from '../components/ui/DetalleModal'
@@ -44,9 +46,13 @@ function SkeletonDespachos() {
 
 export default function DespachosView() {
   const navigate = useNavigate()
+  const { perfil } = useAuthStore()
+  const esSupervisor = perfil?.rol === 'supervisor'
   const { tasaEfectiva } = useTasaCambio()
   const { data: config = {} } = useConfigNegocio()
+  const { data: vendedores = [] } = useVendedores()
   const [estadoFiltro, setEstadoFiltro] = useState('')
+  const [vendedorFiltro, setVendedorFiltro] = useState('')
   const [pagina, setPagina] = useState(1)
   const [vistaMode, setVistaMode] = useState(() => localStorage.getItem('despachos_vista') || 'grid')
   const [despachoAAnular, setDespachoAAnular] = useState(null)
@@ -57,15 +63,21 @@ export default function DespachosView() {
   const cambiarEstado = useActualizarEstadoDespacho()
   const reciclar = useReciclarDespacho()
 
+  // Filtrar por vendedor (solo supervisor)
+  const despachosFiltrados = useMemo(() => {
+    if (!vendedorFiltro) return despachos
+    return despachos.filter(d => d.vendedor_id === vendedorFiltro)
+  }, [despachos, vendedorFiltro])
+
   const ITEMS_POR_PAGINA = 12
-  const totalPaginas = Math.max(1, Math.ceil(despachos.length / ITEMS_POR_PAGINA))
+  const totalPaginas = Math.max(1, Math.ceil(despachosFiltrados.length / ITEMS_POR_PAGINA))
   const despachosPaginados = useMemo(() => {
     const inicio = (pagina - 1) * ITEMS_POR_PAGINA
-    return despachos.slice(inicio, inicio + ITEMS_POR_PAGINA)
-  }, [despachos, pagina])
+    return despachosFiltrados.slice(inicio, inicio + ITEMS_POR_PAGINA)
+  }, [despachosFiltrados, pagina])
 
   // Reset página al cambiar filtro
-  useEffect(() => { setPagina(1) }, [estadoFiltro])
+  useEffect(() => { setPagina(1) }, [estadoFiltro, vendedorFiltro])
 
   async function confirmarAnular() {
     if (!despachoAAnular) return
@@ -92,10 +104,10 @@ export default function DespachosView() {
       <PageHeader
         icon={PackageCheck}
         title="Notas de Despacho"
-        subtitle={isLoading ? 'Cargando...' : `${despachos.length} despacho${despachos.length !== 1 ? 's' : ''}`}
+        subtitle={isLoading ? 'Cargando...' : `${despachosFiltrados.length} despacho${despachosFiltrados.length !== 1 ? 's' : ''}`}
       />
 
-      {/* Filtros de estado */}
+      {/* Filtros de estado + vendedor */}
       <div className="flex items-center gap-2 flex-wrap">
         <Filter size={14} className="text-slate-400 shrink-0" />
         {ESTADOS_FILTRO.map(({ valor, label }) => (
@@ -108,6 +120,30 @@ export default function DespachosView() {
             {label}
           </button>
         ))}
+
+        {/* Filtro por vendedor — solo supervisor */}
+        {esSupervisor && vendedores.length > 1 && (
+          <>
+            <div className="w-px h-5 bg-slate-200 mx-1 hidden sm:block" />
+            <div className="relative">
+              <select
+                value={vendedorFiltro}
+                onChange={e => setVendedorFiltro(e.target.value)}
+                className={`appearance-none pl-7 pr-7 py-1.5 rounded-full text-xs font-semibold transition-colors border cursor-pointer ${
+                  vendedorFiltro
+                    ? 'bg-indigo-500 text-white border-indigo-500'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'
+                }`}
+              >
+                <option value="">Todos</option>
+                {vendedores.map(v => (
+                  <option key={v.id} value={v.id}>{v.nombre}</option>
+                ))}
+              </select>
+              <Users size={13} className={`absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none ${vendedorFiltro ? 'text-white' : 'text-slate-400'}`} />
+            </div>
+          </>
+        )}
         <div className="flex items-center gap-1.5 ml-auto shrink-0">
           <div className="flex bg-slate-100 rounded-xl p-0.5">
             <button type="button" onClick={() => { setVistaMode('grid'); localStorage.setItem('despachos_vista', 'grid') }} title="Vista cuadrícula"
@@ -133,13 +169,13 @@ export default function DespachosView() {
           <p className="font-semibold">Error al cargar despachos</p>
           <button onClick={() => refetch()} className="mt-3 text-sm underline">Intentar de nuevo</button>
         </div>
-      ) : despachos.length === 0 ? (
+      ) : despachosFiltrados.length === 0 ? (
         <EmptyState
           icon={Package}
-          title={estadoFiltro ? `Sin despachos ${estadoFiltro}s` : 'No hay notas de despacho'}
-          description={estadoFiltro ? 'Prueba con otro filtro.' : 'Las notas se crean al despachar cotizaciones enviadas o aceptadas.'}
-          actionLabel={estadoFiltro ? 'Ver todas' : undefined}
-          onAction={estadoFiltro ? () => setEstadoFiltro('') : undefined}
+          title={estadoFiltro || vendedorFiltro ? 'Sin despachos con estos filtros' : 'No hay notas de despacho'}
+          description={estadoFiltro || vendedorFiltro ? 'Prueba con otro filtro.' : 'Las notas se crean al despachar cotizaciones enviadas o aceptadas.'}
+          actionLabel={estadoFiltro || vendedorFiltro ? 'Limpiar filtros' : undefined}
+          onAction={estadoFiltro || vendedorFiltro ? () => { setEstadoFiltro(''); setVendedorFiltro('') } : undefined}
         />
       ) : (
         <>
