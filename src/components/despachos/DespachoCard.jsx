@@ -33,12 +33,21 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   async function descargarPDF() {
     setPdfLoading(true)
     try {
-      const [{ generarDespachoPDF }, itemsRes] = await Promise.all([
+      const [{ generarDespachoPDF }, itemsRes, clienteRes, vendedorRes, transportistaRes] = await Promise.all([
         import('../../services/pdf/despachoPDF'),
         supabase.from('cotizacion_items').select('codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, total_linea_usd, orden').eq('cotizacion_id', despacho.cotizacion_id).order('orden'),
+        despacho.cliente_id ? supabase.from('clientes').select('id, nombre, rif_cedula, telefono, direccion').eq('id', despacho.cliente_id).single() : Promise.resolve({ data: null }),
+        despacho.vendedor_id ? supabase.from('usuarios').select('id, nombre, color').eq('id', despacho.vendedor_id).single() : Promise.resolve({ data: null }),
+        despacho.transportista_id ? supabase.from('transportistas').select('id, nombre, rif, telefono').eq('id', despacho.transportista_id).single() : Promise.resolve({ data: null }),
       ])
       if (itemsRes.error) throw itemsRes.error
-      await generarDespachoPDF({ despacho, items: itemsRes.data ?? [], config, formaPago: despacho.forma_pago || '' })
+      const desConDatos = {
+        ...despacho,
+        cliente: clienteRes.data || despacho.cliente,
+        vendedor: vendedorRes.data || despacho.vendedor,
+        transportista: transportistaRes.data || despacho.transportista,
+      }
+      await generarDespachoPDF({ despacho: desConDatos, items: itemsRes.data ?? [], config, formaPago: despacho.forma_pago || '' })
     } catch (err) {
       showToast('Error al generar PDF: ' + (err.message || 'Error desconocido'), 'error')
     } finally {

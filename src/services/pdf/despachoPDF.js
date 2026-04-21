@@ -2,6 +2,7 @@
 // Genera PDF profesional de Nota de Despacho — formato Construacero Carabobo
 import { jsPDF } from 'jspdf'
 import { cargarLogo } from './pdfLogo'
+import { WATERMARK_LOGO } from './watermarkBase64'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function fmtUsd(n) {
@@ -120,6 +121,15 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.text(numDes, PAGE_W - MARGIN, HDR_H - 5, { align: 'right' })
 
   y = HDR_H + 10
+
+  // ── Marca de agua central ──
+  try {
+    const gState = new doc.GState({ opacity: 0.06 })
+    doc.setGState(gState)
+    const wmSize = 120
+    doc.addImage(WATERMARK_LOGO, 'PNG', (PAGE_W - wmSize) / 2, (PAGE_H - wmSize) / 2, wmSize, wmSize)
+    doc.setGState(new doc.GState({ opacity: 1 }))
+  } catch (_) {}
 
   // ══════════════════════════════════════════════════════════════════════════
   // 2. DATOS DEL CLIENTE — formato de nota física

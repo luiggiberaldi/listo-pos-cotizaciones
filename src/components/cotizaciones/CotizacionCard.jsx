@@ -28,12 +28,19 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
   async function descargarPDF() {
     setPdfLoading(true)
     try {
-      const [{ generarPDF }, itemsRes] = await Promise.all([
+      const [{ generarPDF }, itemsRes, clienteRes, vendedorRes] = await Promise.all([
         import('../../services/pdf/cotizacionPDF'),
         supabase.from('cotizacion_items').select('cantidad, codigo_snap, nombre_snap, unidad_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacion.id).order('orden'),
+        cotizacion.cliente_id ? supabase.from('clientes').select('id, nombre, rif_cedula, telefono, direccion, email').eq('id', cotizacion.cliente_id).single() : Promise.resolve({ data: null }),
+        cotizacion.vendedor_id ? supabase.from('usuarios').select('id, nombre, color').eq('id', cotizacion.vendedor_id).single() : Promise.resolve({ data: null }),
       ])
       if (itemsRes.error) throw itemsRes.error
-      await generarPDF({ cotizacion, items: itemsRes.data ?? [], config })
+      const cotConDatos = {
+        ...cotizacion,
+        cliente: clienteRes.data || cotizacion.cliente,
+        vendedor: vendedorRes.data || cotizacion.vendedor,
+      }
+      await generarPDF({ cotizacion: cotConDatos, items: itemsRes.data ?? [], config })
     } catch (err) {
       showToast('Error al generar PDF: ' + (err.message || 'Error desconocido'), 'error')
     } finally {
@@ -44,15 +51,23 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
   async function handleWhatsApp() {
     setWaLoading(true)
     try {
-      const [{ generarPDF }, itemsRes] = await Promise.all([
+      const [{ generarPDF }, itemsRes, clienteRes, vendedorRes] = await Promise.all([
         import('../../services/pdf/cotizacionPDF'),
         supabase.from('cotizacion_items').select('cantidad, codigo_snap, nombre_snap, unidad_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacion.id).order('orden'),
+        cotizacion.cliente_id ? supabase.from('clientes').select('id, nombre, rif_cedula, telefono, direccion, email').eq('id', cotizacion.cliente_id).single() : Promise.resolve({ data: null }),
+        cotizacion.vendedor_id ? supabase.from('usuarios').select('id, nombre, color').eq('id', cotizacion.vendedor_id).single() : Promise.resolve({ data: null }),
       ])
       if (itemsRes.error) throw itemsRes.error
-      const pdfBlob = await generarPDF({ cotizacion, items: itemsRes.data ?? [], config, returnBlob: true })
+      const cliente = clienteRes.data || cotizacion.cliente
+      const cotConDatos = {
+        ...cotizacion,
+        cliente,
+        vendedor: vendedorRes.data || cotizacion.vendedor,
+      }
+      const pdfBlob = await generarPDF({ cotizacion: cotConDatos, items: itemsRes.data ?? [], config, returnBlob: true })
       const mensaje = generarMensaje({
         nombreNegocio: config.nombre_negocio,
-        nombreCliente: cotizacion.cliente?.nombre,
+        nombreCliente: cliente?.nombre,
         numDisplay,
         totalUsd: cotizacion.total_usd,
         validaHasta: cotizacion.valida_hasta,
@@ -60,7 +75,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
       await compartirPorWhatsApp({
         pdfBlob,
         pdfFilename: `${numDisplay.replace(/\s+/g, '_')}.pdf`,
-        telefono: cotizacion.cliente?.telefono,
+        telefono: cliente?.telefono,
         mensaje,
       })
     } catch (err) {
