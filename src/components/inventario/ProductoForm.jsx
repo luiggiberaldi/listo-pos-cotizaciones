@@ -222,7 +222,8 @@ export default function ProductoForm({ producto = null, onSuccess, onCancel }) {
             onChange={val => setCampos(p => ({ ...p, unidad: val }))}
             icon={Layers}
             disabled={cargando}
-            searchable={false}
+            creatable
+            createLabel="Crear"
           />
         </Campo>
       </div>
