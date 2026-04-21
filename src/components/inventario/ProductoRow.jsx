@@ -1,6 +1,6 @@
 // src/components/inventario/ProductoRow.jsx
 // Fila compacta de producto para vista de lista
-import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle, Package, Trash2 } from 'lucide-react'
+import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle, Package, Trash2, ClipboardList } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtBs, usdToBs } from '../../utils/format'
 
@@ -22,7 +22,7 @@ function colorCategoria(str = '') {
   return fg
 }
 
-export default function ProductoRow({ producto, onEditar, onDesactivar, onBorrar, tasa = 0, comprometido = 0 }) {
+export default function ProductoRow({ producto, onEditar, onDesactivar, onBorrar, onKardex, tasa = 0, comprometido = 0 }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const stockBajo = producto.stock_minimo > 0 && producto.stock_actual <= producto.stock_minimo
@@ -115,6 +115,10 @@ export default function ProductoRow({ producto, onEditar, onDesactivar, onBorrar
       {/* Acciones (solo supervisor) */}
       {esSupervisor && (
         <div className="flex items-center gap-1 px-2 shrink-0">
+          <button onClick={() => onKardex(producto)} title="Kardex"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors">
+            <ClipboardList size={15} />
+          </button>
           <button onClick={() => onEditar(producto)} title="Editar producto"
             className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-light transition-colors">
             <Pencil size={15} />

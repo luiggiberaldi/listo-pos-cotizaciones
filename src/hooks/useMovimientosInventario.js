@@ -7,6 +7,7 @@ import { INVENTARIO_KEY } from './useInventario'
 import { showToast } from '../components/ui/Toast'
 
 const MOVIMIENTOS_KEY = ['inventario_movimientos']
+const KARDEX_KEY = ['kardex']
 
 // ─── Listar movimientos (paginado) ──────────────────────────────────────────
 export function useMovimientosInventario({ page = 0, pageSize = 30, tipo = '' } = {}) {
@@ -29,6 +30,26 @@ export function useMovimientosInventario({ page = 0, pageSize = 30, tipo = '' } 
     enabled: perfil?.rol === 'supervisor',
     staleTime: 1000 * 60 * 2,
     gcTime: 1000 * 60 * 5,
+  })
+}
+
+// ─── Kardex: movimientos de un producto específico ──────────────────────────
+export function useKardex(productoId) {
+  const { perfil } = useAuthStore()
+  return useQuery({
+    queryKey: [...KARDEX_KEY, productoId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('inventario_movimientos')
+        .select('*')
+        .eq('producto_id', productoId)
+        .order('creado_en', { ascending: true })
+
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: !!productoId && perfil?.rol === 'supervisor',
+    staleTime: 1000 * 60 * 2,
   })
 }
 

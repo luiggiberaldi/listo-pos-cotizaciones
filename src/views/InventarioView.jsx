@@ -15,6 +15,7 @@ import ProductoRow   from '../components/inventario/ProductoRow'
 import ProductoForm  from '../components/inventario/ProductoForm'
 import MovimientoLoteModal from '../components/inventario/MovimientoLoteModal'
 import MovimientosHistorial from '../components/inventario/MovimientosHistorial'
+import KardexModal from '../components/inventario/KardexModal'
 import { Modal }     from '../components/ui/Modal'
 import ConfirmModal  from '../components/ui/ConfirmModal'
 import EmptyState    from '../components/ui/EmptyState'
@@ -75,6 +76,7 @@ export default function InventarioView() {
   const [productoABorrar,  setProductoABorrar]  = useState(null)
   const [confirmBorrarOpen,setConfirmBorrarOpen]= useState(false)
   const [modalLoteOpen,    setModalLoteOpen]    = useState(false)
+  const [kardexProducto,   setKardexProducto]   = useState(null)
   const [tabActivo,        setTabActivo]        = useState('productos') // 'productos' | 'movimientos'
 
   // Data — todos los productos (sin filtro de búsqueda) para el modal de movimientos
@@ -338,6 +340,7 @@ export default function InventarioView() {
                 onEditar={abrirEditar}
                 onDesactivar={abrirDesactivar}
                 onBorrar={abrirBorrar}
+                onKardex={setKardexProducto}
                 tasa={tasaEfectiva}
                 comprometido={stockComprometido[p.id] || 0}
               />
@@ -352,6 +355,7 @@ export default function InventarioView() {
                 onEditar={abrirEditar}
                 onDesactivar={abrirDesactivar}
                 onBorrar={abrirBorrar}
+                onKardex={setKardexProducto}
                 tasa={tasaEfectiva}
                 comprometido={stockComprometido[p.id] || 0}
               />
@@ -413,6 +417,15 @@ export default function InventarioView() {
           isOpen={modalLoteOpen}
           onClose={() => setModalLoteOpen(false)}
           productos={todosProductos}
+        />
+      )}
+
+      {/* ── Modal: Kardex ─────────────────────────────────────────────────── */}
+      {esSupervisor && (
+        <KardexModal
+          isOpen={!!kardexProducto}
+          onClose={() => setKardexProducto(null)}
+          producto={kardexProducto}
         />
       )}
     </div>

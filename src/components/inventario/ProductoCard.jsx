@@ -1,5 +1,5 @@
 // src/components/inventario/ProductoCard.jsx
-import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle, Package, Trash2 } from 'lucide-react'
+import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle, Package, Trash2, ClipboardList } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtBs, usdToBs } from '../../utils/format'
 import StockComprometidoDetalle from './StockComprometidoDetalle'
@@ -59,7 +59,7 @@ function BadgeStock({ actual, minimo, comprometido = 0, productoId }) {
   )
 }
 
-export default function ProductoCard({ producto, onEditar, onDesactivar, onBorrar, tasa = 0, comprometido = 0 }) {
+export default function ProductoCard({ producto, onEditar, onDesactivar, onBorrar, onKardex, tasa = 0, comprometido = 0 }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const { fg, bg } = colorCategoria(producto.categoria || '')
@@ -158,6 +158,10 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, onBorra
       {/* Acciones — iconos compactos */}
       {esSupervisor && (
         <div className="border-t border-slate-100 px-1.5 py-1.5 flex items-center justify-between">
+          <button onClick={() => onKardex(producto)} title="Kardex"
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-violet-600 hover:bg-violet-50 transition-colors">
+            <ClipboardList size={11} />Kardex
+          </button>
           <button onClick={() => onEditar(producto)} title="Editar"
             className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-sky-600 hover:bg-sky-50 transition-colors">
             <Pencil size={11} />Editar
