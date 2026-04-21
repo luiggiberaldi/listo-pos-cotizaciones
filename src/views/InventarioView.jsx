@@ -4,7 +4,7 @@
 // — Supervisor: vista completa + crear/editar/desactivar
 import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Package, Plus, Search, RefreshCw, X, Filter, LayoutGrid, List, AlertTriangle } from 'lucide-react'
+import { Package, Plus, Search, RefreshCw, X, Filter, LayoutGrid, List, AlertTriangle, ArrowLeftRight } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import CustomSelect from '../components/ui/CustomSelect'
@@ -13,6 +13,8 @@ import { useStockComprometido } from '../hooks/useStockComprometido'
 import ProductoCard  from '../components/inventario/ProductoCard'
 import ProductoRow   from '../components/inventario/ProductoRow'
 import ProductoForm  from '../components/inventario/ProductoForm'
+import MovimientoLoteModal from '../components/inventario/MovimientoLoteModal'
+import MovimientosHistorial from '../components/inventario/MovimientosHistorial'
 import { Modal }     from '../components/ui/Modal'
 import ConfirmModal  from '../components/ui/ConfirmModal'
 import EmptyState    from '../components/ui/EmptyState'
@@ -72,6 +74,8 @@ export default function InventarioView() {
   const [confirmDesactOpen,setConfirmDesactOpen]= useState(false)
   const [productoABorrar,  setProductoABorrar]  = useState(null)
   const [confirmBorrarOpen,setConfirmBorrarOpen]= useState(false)
+  const [modalLoteOpen,    setModalLoteOpen]    = useState(false)
+  const [tabActivo,        setTabActivo]        = useState('productos') // 'productos' | 'movimientos'
 
   // Data
   const { data: inventarioData, isLoading, isError, refetch } = useInventario({ busqueda, categoria, pageSize: 1000 })
@@ -179,10 +183,16 @@ export default function InventarioView() {
         title="Inventario"
         subtitle={<>{isLoading ? 'Cargando...' : `${productosFiltrados.length} producto${productosFiltrados.length !== 1 ? 's' : ''}${stockBajo ? ' con stock bajo' : ''}`}{!esSupervisor && <span className="ml-1 opacity-60">(catálogo de precios)</span>}</>}
         action={esSupervisor && (
-          <button onClick={abrirCrear} className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98]"
-            style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
-            <Plus size={16} />Nuevo producto
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setModalLoteOpen(true)} className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98] bg-slate-700 hover:bg-slate-600">
+              <ArrowLeftRight size={16} />
+              <span className="hidden sm:inline">Ingreso / Egreso</span>
+            </button>
+            <button onClick={abrirCrear} className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98]"
+              style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
+              <Plus size={16} />Nuevo producto
+            </button>
+          </div>
         )}
       />
 
@@ -272,8 +282,28 @@ export default function InventarioView() {
         </div>
       </div>
 
+      {/* ── Tabs: Productos / Movimientos ─────────────────────────────────── */}
+      {esSupervisor && (
+        <div className="flex bg-slate-100 rounded-xl p-1 w-fit">
+          <button type="button" onClick={() => setTabActivo('productos')}
+            className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${
+              tabActivo === 'productos' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+            }`}>
+            Productos
+          </button>
+          <button type="button" onClick={() => setTabActivo('movimientos')}
+            className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${
+              tabActivo === 'movimientos' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+            }`}>
+            Movimientos
+          </button>
+        </div>
+      )}
+
       {/* ── Contenido ──────────────────────────────────────────────────────── */}
-      {isLoading ? (
+      {tabActivo === 'movimientos' && esSupervisor ? (
+        <MovimientosHistorial />
+      ) : isLoading ? (
         <SkeletonProductos />
       ) : isError ? (
         <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center text-red-700">
@@ -374,6 +404,15 @@ export default function InventarioView() {
         confirmText="Sí, borrar"
         variant="danger"
       />
+
+      {/* ── Modal: Ingreso/Egreso por lotes ────────────────────────────────── */}
+      {esSupervisor && (
+        <MovimientoLoteModal
+          isOpen={modalLoteOpen}
+          onClose={() => setModalLoteOpen(false)}
+          productos={productos}
+        />
+      )}
     </div>
   )
 }
