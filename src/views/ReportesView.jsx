@@ -1,10 +1,12 @@
 // src/views/ReportesView.jsx
 // Vista profesional de reportes de ventas
 import { useState, useMemo } from 'react'
-import { BarChart3, CreditCard, RefreshCw } from 'lucide-react'
+import { BarChart3, CreditCard, RefreshCw, Download } from 'lucide-react'
 import { useReporteVentas } from '../hooks/useReporteVentas'
+import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import { getWeekRange } from '../utils/dateHelpers'
 import { fmtUsd } from '../utils/format'
+import { generarReporteVentasPDF } from '../services/pdf/comisionesPDF'
 import PageHeader   from '../components/ui/PageHeader'
 import Skeleton     from '../components/ui/Skeleton'
 import EmptyState   from '../components/ui/EmptyState'
@@ -83,6 +85,17 @@ export default function ReportesView() {
 
   const [range, setRange] = useState(defaultRange)
   const { data: reporte, isLoading, isError, refetch } = useReporteVentas(range)
+  const { data: configNeg = {} } = useConfigNegocio()
+  const [exportando, setExportando] = useState(false)
+
+  async function exportarPDF() {
+    if (!reporte) return
+    setExportando(true)
+    try {
+      await generarReporteVentasPDF({ reporte, rango: range, config: configNeg })
+    } catch (e) { console.error('Error generando PDF:', e) }
+    setExportando(false)
+  }
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-4 md:space-y-5">
@@ -92,10 +105,20 @@ export default function ReportesView() {
         title="Reporte de Ventas"
         subtitle={`${range.from} — ${range.to}`}
         action={
-          <button onClick={() => refetch()}
-            className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
-            <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
-          </button>
+          <div className="flex items-center gap-2">
+            {reporte && reporte.kpis?.numDespachos > 0 && (
+              <button onClick={exportarPDF} disabled={exportando}
+                className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md"
+                style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}>
+                <Download size={14} />
+                {exportando ? 'Generando...' : 'Exportar PDF'}
+              </button>
+            )}
+            <button onClick={() => refetch()}
+              className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
+              <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
+            </button>
+          </div>
         }
       />
 

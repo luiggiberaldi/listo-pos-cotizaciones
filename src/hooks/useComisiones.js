@@ -22,6 +22,7 @@ export function useComisiones({ estado = '', vendedorId = '' } = {}) {
           monto_cabilla, monto_otros,
           pct_cabilla, pct_otros,
           comision_cabilla, comision_otros, total_comision,
+          detalle_extras,
           estado, pagada_en, pagada_por,
           creado_en,
           vendedor:usuarios!comisiones_vendedor_id_fkey(id, nombre, color),

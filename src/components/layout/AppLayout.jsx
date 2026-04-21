@@ -337,6 +337,7 @@ export default function AppLayout() {
           ${menuOpen ? 'translate-x-0' : '-translate-x-full'}
           ${sidebarCollapsed ? 'md:w-[72px]' : 'md:w-64'}
           w-64 md:translate-x-0 md:static md:z-auto md:h-[calc(100vh-3.5rem)] md:sticky md:top-14
+          overflow-hidden
         `}
         style={{
           background: 'linear-gradient(180deg, #0a1628 0%, #0d1f3c 60%, #0a1a0f 100%)',
@@ -391,7 +392,7 @@ export default function AppLayout() {
         </div>
 
         {/* Navegación */}
-        <nav className="relative z-10 flex-1 min-h-0 overflow-y-auto p-3 space-y-0.5">
+        <nav className="relative z-10 flex-1 min-h-0 overflow-y-auto custom-scrollbar p-3 space-y-0.5">
           {NAV_TODOS.map(({ path, label, icono: Icono }) => (
             <NavItem key={path} path={path} label={label} Icono={Icono} onClick={cerrarMenu} collapsed={sidebarCollapsed} />
           ))}

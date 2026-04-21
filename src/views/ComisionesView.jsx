@@ -2,11 +2,13 @@
 // Vista de comisiones por despacho entregado
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { DollarSign, CheckCircle, Clock, Filter, TrendingUp, Eye, X, FileText, ArrowLeft } from 'lucide-react'
+import { DollarSign, CheckCircle, Clock, Filter, TrendingUp, Eye, X, FileText, ArrowLeft, Download } from 'lucide-react'
 import { useComisiones, useComisionesResumen, useMarcarComisionPagada } from '../hooks/useComisiones'
 import { useVendedores } from '../hooks/useClientes'
+import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import useAuthStore from '../store/useAuthStore'
 import { fmtUsd, fmtFecha } from '../utils/format'
+import { generarComisionesPDF } from '../services/pdf/comisionesPDF'
 import PageHeader    from '../components/ui/PageHeader'
 import Skeleton      from '../components/ui/Skeleton'
 import EmptyState    from '../components/ui/EmptyState'
@@ -153,7 +155,7 @@ function SkeletonComisiones() {
 }
 
 // ─── Modal detalle de comisiones por vendedor ────────────────────────────────
-function ModalDetalleVendedor({ vendedor, comisiones, onClose, esSupervisor, onMarcarPagada, marcando }) {
+function ModalDetalleVendedor({ vendedor, comisiones, onClose, esSupervisor, onMarcarPagada, marcando, onExportarPDF }) {
   if (!vendedor) return null
 
   const comisionesVendedor = comisiones.filter(c => c.vendedor_id === vendedor.id)
@@ -205,6 +207,18 @@ function ModalDetalleVendedor({ vendedor, comisiones, onClose, esSupervisor, onM
             <p className="text-[10px] text-slate-400">{pagadas.length} pagada{pagadas.length !== 1 ? 's' : ''}</p>
           </div>
         </div>
+
+        {/* Botón exportar PDF del vendedor */}
+        {onExportarPDF && comisionesVendedor.length > 0 && (
+          <div className="px-6 pt-3">
+            <button
+              onClick={() => onExportarPDF(vendedor)}
+              className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+            >
+              <Download size={13} />Exportar PDF de {vendedor.nombre}
+            </button>
+          </div>
+        )}
 
         {/* Lista de comisiones */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
@@ -306,7 +320,20 @@ export default function ComisionesView() {
   })
   const { data: resumen,   isLoading: resumenLoading } = useComisionesResumen()
   const { data: vendedores = [] } = useVendedores()
+  const { data: configNeg = {} } = useConfigNegocio()
   const marcar = useMarcarComisionPagada()
+  const [exportando, setExportando] = useState(false)
+
+  async function exportarPDF(vendedorFiltro = null) {
+    setExportando(true)
+    try {
+      const lista = vendedorFiltro
+        ? comisiones.filter(c => c.vendedor_id === vendedorFiltro.id)
+        : comisiones
+      await generarComisionesPDF({ comisiones: lista, vendedor: vendedorFiltro, config: configNeg })
+    } catch (e) { console.error('Error generando PDF:', e) }
+    setExportando(false)
+  }
 
   const selectCls = 'text-sm font-medium px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary transition-colors'
 
@@ -380,6 +407,17 @@ export default function ComisionesView() {
             ))}
           </select>
         )}
+        {comisiones.length > 0 && (
+          <button
+            onClick={() => exportarPDF(null)}
+            disabled={exportando}
+            className="ml-auto flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md"
+            style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
+          >
+            <Download size={14} />
+            {exportando ? 'Generando...' : 'Exportar PDF'}
+          </button>
+        )}
       </div>
 
       {/* Lista */}
@@ -427,6 +465,7 @@ export default function ComisionesView() {
         esSupervisor={esSupervisor}
         onMarcarPagada={(comision) => { setVendedorDetalle(null); setComisionAPagar(comision) }}
         marcando={marcar.isPending}
+        onExportarPDF={exportarPDF}
       />
     </div>
   )

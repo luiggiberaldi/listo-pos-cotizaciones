@@ -622,7 +622,10 @@ function UserSelectStep() {
                 usuarios.length === 2 ? 'grid-cols-2' :
                 'grid-cols-2 sm:grid-cols-3'
               }`}>
-                {usuarios.map((u, i) => (
+                {[...usuarios].sort((a, b) => {
+                  const orden = { supervisor: 0, vendedor: 1 }
+                  return (orden[a.rol] ?? 2) - (orden[b.rol] ?? 2)
+                }).map((u, i) => (
                   <UserCard key={u.id} user={u} onClick={setSeleccionado} index={i} />
                 ))}
               </div>
