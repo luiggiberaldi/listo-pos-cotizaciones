@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { useConfigNegocio, useActualizarConfig, hashSHA256 } from '../hooks/useConfigNegocio'
 import { useCategorias } from '../hooks/useInventario'
+import CustomSelect from '../components/ui/CustomSelect'
 import { fmtUsd } from '../utils/format'
 import { adminAPI } from '../services/supabase/adminClient'
 import UsuariosView from './UsuariosView'
@@ -111,17 +112,13 @@ function ComisionesTab({ campos, cambiar, isLoading, cargando }) {
 
             {/* Selector dropdown */}
             {categorias.length > 0 && (
-              <select
+              <CustomSelect
+                options={categorias.filter(c => !extras.map(e => e.cat).includes(c)).map(c => ({ value: c, label: c }))}
                 value={catPrincipal}
-                onChange={e => !disabled && cambiar('comision_categoria_cabilla', e.target.value)}
+                onChange={val => !disabled && cambiar('comision_categoria_cabilla', val)}
+                placeholder="Seleccionar categoría"
                 disabled={disabled}
-                className={`w-full px-3 py-2.5 rounded-xl border ${COLORES[0].border} bg-white text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 ${COLORES[0].ring} disabled:opacity-50 appearance-none cursor-pointer`}
-                style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center' }}
-              >
-                {categorias.filter(c => !extras.map(e => e.cat).includes(c)).map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
+              />
             )}
 
             <div className="flex items-baseline gap-2">
@@ -153,18 +150,16 @@ function ComisionesTab({ campos, cambiar, isLoading, cargando }) {
                 </div>
 
                 {/* Selector dropdown */}
-                <select
+                <CustomSelect
+                  options={[
+                    { value: extra.cat, label: extra.cat },
+                    ...categorias.filter(c => !catsEspeciales.includes(c)).map(c => ({ value: c, label: c })),
+                  ]}
                   value={extra.cat}
-                  onChange={e => !disabled && cambiarExtra(idx, 'cat', e.target.value)}
+                  onChange={val => !disabled && cambiarExtra(idx, 'cat', val)}
+                  placeholder="Seleccionar categoría"
                   disabled={disabled}
-                  className={`w-full px-3 py-2.5 rounded-xl border ${color.border} bg-white text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 ${color.ring} disabled:opacity-50 appearance-none cursor-pointer`}
-                  style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center' }}
-                >
-                  <option value={extra.cat}>{extra.cat}</option>
-                  {categorias.filter(c => !catsEspeciales.includes(c)).map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
+                />
 
                 <div className="flex items-baseline gap-2">
                   <input type="number" min="0" max="100" step="0.01"

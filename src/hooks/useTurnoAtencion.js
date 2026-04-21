@@ -68,6 +68,7 @@ export function useTurnoAtencion() {
         .select('id, nombre, color, rol')
         .in('rol', ['vendedor', 'supervisor'])
         .eq('activo', true)
+        .neq('nombre', 'Super Admin')
         .order('nombre')
       if (error) throw error
       return data ?? []
