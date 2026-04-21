@@ -126,10 +126,6 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   doc.rect(MARGIN, y, CONTENT_W, 7, 'S')
   doc.text('COTIZACIÓN a nombre de:', MARGIN + 3, y + 4.8)
 
-  // R.I.F. al centro
-  const rifLbl = `R.I.F.: ${rif}`
-  doc.text(rifLbl, MARGIN + 70, y + 4.8)
-
   // NOTA # a la derecha
   doc.text(numDisplay, PAGE_W - MARGIN - 3, y + 4.8, { align: 'right' })
   y += 10

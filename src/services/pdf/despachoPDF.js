@@ -136,7 +136,6 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.setFontSize(8)
   doc.setTextColor(...C_DARK)
   doc.text('NOTA DE ENTREGA a nombre de:', MARGIN + 3, y + 4.8)
-  doc.text(`R.I.F.: ${rif}`, MARGIN + 70, y + 4.8)
   doc.text(`NOTA # ${String(despacho.numero).padStart(6, '0')}`, PAGE_W - MARGIN - 3, y + 4.8, { align: 'right' })
   y += 10
 
