@@ -28,10 +28,10 @@ const PAGE_W    = 210
 const PAGE_H    = 297
 const CONTENT_W = PAGE_W - MARGIN * 2
 
-const C_YELLOW = [250, 204, 21]
-const C_ORANGE = [245, 158, 11]
-const C_DARK   = [20,  20,  20]
-const C_WHITE  = [255, 255, 255]
+const C_PRIMARY = [58, 99, 168]     // Mariner — header, footer, accents
+const C_ACCENT  = [124, 184, 242]   // Maya Blue — table headers, labels
+const C_DARK    = [5, 8, 52]        // Midnight Express — text
+const C_WHITE   = [255, 255, 255]
 
 // Cuentas bancarias de Construacero
 const CUENTAS_BANCARIAS = [
@@ -68,7 +68,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   // 1. CABECERA GIGANTE AMARILLA
   // ══════════════════════════════════════════════════════════════════════════
   const HDR_H = 55
-  doc.setFillColor(...C_YELLOW)
+  doc.setFillColor(...C_PRIMARY)
   doc.rect(0, 0, PAGE_W, HDR_H, 'F')
 
   // Decoraciones: Cuadrícula de puntos a la izquierda (color del vendedor)
@@ -87,7 +87,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.rect(hazX, 0, hazW, 14, 'F')
 
   doc.setLineWidth(0.8)
-  doc.setDrawColor(...C_YELLOW)
+  doc.setDrawColor(...C_PRIMARY)
   for (let k = 0; k < 15; k++) {
     doc.line(hazX + k*4, 0, hazX + k*4 - 8, 14)
   }
@@ -101,7 +101,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   // Títulos Negocio Grandes
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(26)
-  doc.setTextColor(...C_DARK)
+  doc.setTextColor(...C_WHITE)
 
   let name = config.nombre_negocio || 'CONSTRUACERO CARABOBO'
   let splitName = name.split(' ')
@@ -188,7 +188,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     doc.text(String(item.val), MARGIN + lblW + 1, y)
 
     doc.setLineWidth(0.3)
-    doc.setDrawColor(...C_YELLOW)
+    doc.setDrawColor(...C_PRIMARY)
     doc.line(MARGIN, y + 2, PAGE_W - MARGIN, y + 2)
     y += 7
   })
@@ -208,13 +208,13 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   ]
   const ROW_H = 8
 
-  // Cabecera Naranja
-  doc.setFillColor(...C_ORANGE)
+  // Cabecera tabla
+  doc.setFillColor(...C_ACCENT)
   doc.rect(MARGIN, y, CONTENT_W, 8, 'F')
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8)
-  doc.setTextColor(...C_DARK)
+  doc.setTextColor(...C_WHITE)
   COLS.forEach(col => {
     let tx = col.x + 2
     if (col.align === 'center') tx = col.x + col.w/2
@@ -257,7 +257,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     if (y > PAGE_H - 100) { doc.addPage(); y = MARGIN }
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(8)
-    doc.setTextColor(...C_ORANGE)
+    doc.setTextColor(...C_ACCENT)
     doc.text('NOTAS:', MARGIN, y + 4)
 
     doc.setFont('helvetica', 'normal')
@@ -285,7 +285,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   // ── Condiciones (izquierda) ──
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7.5)
-  doc.setTextColor(...C_ORANGE)
+  doc.setTextColor(...C_ACCENT)
   doc.text('CONDICIONES GENERALES:', MARGIN, y + 4)
 
   doc.setFont('helvetica', 'normal')
@@ -307,7 +307,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   condY += 2
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7)
-  doc.setTextColor(...C_ORANGE)
+  doc.setTextColor(...C_ACCENT)
   doc.text('Realizar Transferencias a nombre de', MARGIN, condY)
   condY += 4
   doc.text((config.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.').toUpperCase(), MARGIN, condY)
@@ -333,14 +333,14 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   drawCheck(doc, 'P. MÓVIL',   totX + 45, y + 12, fp === 'pago movil')
   drawCheck(doc, 'USDT',       totX + 65, y + 12, fp === 'usdt')
 
-  // Total grande naranja
+  // Total grande
   const totTopY = y + 18
-  doc.setFillColor(...C_ORANGE)
+  doc.setFillColor(...C_ACCENT)
   doc.rect(totX, totTopY, totW, 14, 'F')
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(11)
-  doc.setTextColor(...C_DARK)
+  doc.setTextColor(...C_WHITE)
   doc.text('TOTAL', totX + 4, totTopY + 9)
   doc.text(fmtUsd(total), totX + totW - 4, totTopY + 9, { align: 'right' })
 
@@ -380,7 +380,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     doc.setFontSize(7)
     if (f.val) doc.text(f.val, fx, y + 4)
     doc.setLineWidth(0.2)
-    doc.setDrawColor(...C_YELLOW)
+    doc.setDrawColor(...C_PRIMARY)
     doc.line(fx, y + 5.5, fx + col3W, y + 5.5)
   })
   y += 11
@@ -398,7 +398,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     doc.setTextColor(...C_DARK)
     doc.text(`${f.label}:`, fx, y)
     doc.setLineWidth(0.2)
-    doc.setDrawColor(...C_YELLOW)
+    doc.setDrawColor(...C_PRIMARY)
     doc.line(fx, y + 5.5, fx + col3W, y + 5.5)
   })
   y += 12
@@ -438,20 +438,20 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     doc.setFillColor(...C_DARK)
     doc.rect(0, hazardY, PAGE_W, 5, 'F')
 
-    doc.setDrawColor(...C_YELLOW)
+    doc.setDrawColor(...C_PRIMARY)
     doc.setLineWidth(0.8)
     for(let k = 1; k < 20; k++) {
       doc.line(k * 4, hazardY, k * 4 - 4, hazardY + 5)
       doc.line(PAGE_W - k * 4, hazardY, PAGE_W - k * 4 + 4, hazardY + 5)
     }
 
-    // Franja principal amarilla
-    doc.setFillColor(...C_YELLOW)
+    // Franja principal azul
+    doc.setFillColor(...C_PRIMARY)
     doc.rect(0, ph - 28, PAGE_W, 28, 'F')
 
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(8.5)
-    doc.setTextColor(...C_DARK)
+    doc.setTextColor(...C_WHITE)
 
     const lineAddress = config.direccion_negocio || 'VÍA FLOR AMARILLO VALENCIA EDO CARABOBO'
     doc.text(lineAddress, PAGE_W/2, ph - 18, { align: 'center' })

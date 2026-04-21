@@ -331,6 +331,43 @@ function UserSelectStep() {
   const [loginLoading, setLoginLoading] = useState(false)
   const [loginError,   setLoginError]   = useState(null)
 
+  // ── Easter egg: 10 taps en el logo → acceso dev ──
+  const [tapCount, setTapCount]       = useState(0)
+  const [showDevPin, setShowDevPin]   = useState(false)
+  const [devPin, setDevPin]           = useState('')
+  const [devError, setDevError]       = useState(null)
+  const [devLoading, setDevLoading]   = useState(false)
+  const tapTimer = useRef(null)
+
+  function handleLogoTap() {
+    const next = tapCount + 1
+    setTapCount(next)
+    clearTimeout(tapTimer.current)
+    if (next >= 10) {
+      setShowDevPin(true)
+      setTapCount(0)
+    } else {
+      tapTimer.current = setTimeout(() => setTapCount(0), 3000)
+    }
+  }
+
+  async function handleDevPinSubmit() {
+    if (devPin !== '794848') {
+      setDevError('Código incorrecto')
+      setDevPin('')
+      return
+    }
+    setDevLoading(true)
+    setDevError(null)
+    const { ok } = await login('dev@construacero.sys', '794848')
+    setDevLoading(false)
+    if (ok) {
+      navigate('/', { replace: true })
+    } else {
+      setDevError('Error de autenticación')
+    }
+  }
+
   const { login } = useAuthStore()
   const navigate  = useNavigate()
 
@@ -409,7 +446,8 @@ function UserSelectStep() {
             <img
               src="/logo.png"
               alt="Construacero Carabobo"
-              className="relative z-10 w-auto object-contain select-none pointer-events-none drop-shadow-2xl"
+              onClick={handleLogoTap}
+              className="relative z-10 w-auto object-contain select-none drop-shadow-2xl cursor-default"
               style={{
                 height: 'clamp(160px, 22vw, 300px)',
                 filter: 'drop-shadow(0 0 40px rgba(184,134,11,0.35)) brightness(1.05)',
@@ -633,6 +671,70 @@ function UserSelectStep() {
         onClose={() => setSeleccionado(null)}
         onSubmit={handlePin}
       />
+
+      {/* ── Modal secreto dev (easter egg) ── */}
+      {showDevPin && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          onClick={e => { if (e.target === e.currentTarget) { setShowDevPin(false); setDevPin(''); setDevError(null) } }}>
+          <div className="w-full max-w-xs rounded-2xl p-6 mx-4"
+            style={{
+              background: 'rgba(15,15,30,0.95)',
+              border: '1px solid rgba(220,38,38,0.3)',
+              boxShadow: '0 25px 60px rgba(0,0,0,0.6), 0 0 40px rgba(220,38,38,0.1)',
+            }}>
+            <div className="text-center mb-5">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full mb-3"
+                style={{ background: 'rgba(220,38,38,0.15)', border: '1px solid rgba(220,38,38,0.3)' }}>
+                <Key size={20} style={{ color: '#dc2626' }} />
+              </div>
+              <h3 className="text-sm font-black text-white tracking-tight">Acceso Desarrollador</h3>
+              <p className="text-[11px] mt-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Ingresa el código de acceso</p>
+            </div>
+
+            <input
+              type="password"
+              inputMode="numeric"
+              maxLength={6}
+              value={devPin}
+              onChange={e => { setDevPin(e.target.value.replace(/\D/g, '')); setDevError(null) }}
+              onKeyDown={e => { if (e.key === 'Enter' && devPin.length === 6) handleDevPinSubmit() }}
+              autoFocus
+              className="w-full text-center text-2xl font-mono tracking-[0.5em] py-3 rounded-xl text-white outline-none transition-colors"
+              style={{
+                background: 'rgba(255,255,255,0.06)',
+                border: `1px solid ${devError ? 'rgba(220,38,38,0.5)' : 'rgba(255,255,255,0.1)'}`,
+                caretColor: '#dc2626',
+              }}
+              placeholder="------"
+            />
+
+            {devError && (
+              <p className="text-xs text-red-400 text-center mt-2">{devError}</p>
+            )}
+
+            <button
+              onClick={handleDevPinSubmit}
+              disabled={devPin.length !== 6 || devLoading}
+              className="w-full flex items-center justify-center gap-2 mt-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-40"
+              style={{
+                background: 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)',
+                boxShadow: '0 4px 20px rgba(220,38,38,0.3)',
+              }}
+            >
+              {devLoading ? <RefreshCw size={16} className="animate-spin" /> : <ArrowRight size={16} />}
+              {devLoading ? 'Accediendo...' : 'Entrar'}
+            </button>
+
+            <button
+              onClick={() => { setShowDevPin(false); setDevPin(''); setDevError(null) }}
+              className="w-full text-center text-xs mt-3 py-1 transition-colors"
+              style={{ color: 'rgba(255,255,255,0.3)' }}
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
     </>
   )
 }
