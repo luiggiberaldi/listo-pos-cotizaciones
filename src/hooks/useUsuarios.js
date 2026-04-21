@@ -28,12 +28,17 @@ export function useUsuarios() {
   })
 }
 
+// Vendedores usan PIN de 4 dígitos; Supabase requiere mínimo 6, se aplica padding "00"
+function padPin(pin, rol) {
+  return rol === 'vendedor' ? '00' + pin : pin
+}
+
 // ─── Crear usuario (vía Worker backend) ─────────────────────────────────────
 export function useCrearUsuario() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ email, password, nombre, rol, color }) => {
-      await adminAPI.createUser({ email, password, nombre, rol, color })
+      await adminAPI.createUser({ email, password: padPin(password, rol), nombre, rol, color })
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   })
@@ -44,7 +49,7 @@ export function useActualizarUsuario() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ id, nombre, rol, pin, color }) => {
-      await adminAPI.updateUser(id, { nombre, rol, pin, color })
+      await adminAPI.updateUser(id, { nombre, rol, pin: pin ? padPin(pin, rol) : undefined, color })
       return { color }
     },
     onSuccess: (result) => {

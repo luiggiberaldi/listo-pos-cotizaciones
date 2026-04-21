@@ -71,8 +71,9 @@ function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
 
   function submit(e) {
     e.preventDefault()
+    const pinLen = campos.rol === 'vendedor' ? 4 : 6
     if (!campos.nombre.trim())                   { setError('El nombre es obligatorio'); return }
-    if (!/^\d{6}$/.test(campos.password))        { setError('El PIN debe ser exactamente 6 dígitos numéricos'); return }
+    if (!new RegExp(`^\\d{${pinLen}}$`).test(campos.password)) { setError(`El PIN debe ser exactamente ${pinLen} dígitos numéricos`); return }
     if (coloresUsados.includes(campos.color))    { setError('Ese color ya está en uso por otro usuario'); return }
     const email = generarEmail(campos.nombre)
     onGuardar({ ...campos, email, color: campos.color })
@@ -96,8 +97,8 @@ function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
       <div className="relative">
         <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 text-xs font-bold">#</div>
         <input type={mostrarPass ? 'text' : 'password'} value={campos.password}
-          onChange={e => cambiar('password', e.target.value.replace(/\D/g, '').slice(0, 6))}
-          placeholder="PIN de 6 dígitos (solo números)"
+          onChange={e => cambiar('password', e.target.value.replace(/\D/g, '').slice(0, campos.rol === 'vendedor' ? 4 : 6))}
+          placeholder={`PIN de ${campos.rol === 'vendedor' ? 4 : 6} dígitos (solo números)`}
           inputMode="numeric"
           className={`${inputCls} pr-11`} disabled={cargando} />
         <button type="button" onClick={() => setMostrarPass(p => !p)}
@@ -112,7 +113,7 @@ function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
           { value: 'supervisor', label: 'Supervisor' },
         ]}
         value={campos.rol}
-        onChange={val => cambiar('rol', val)}
+        onChange={val => { cambiar('rol', val); setCampos(p => ({ ...p, password: '' })) }}
         placeholder="Seleccionar rol..."
         disabled={cargando}
         searchable={false}
@@ -163,9 +164,10 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando, coloresUsados = 
 
   function submit(e) {
     e.preventDefault()
+    const pinLen = campos.rol === 'vendedor' ? 4 : 6
     if (!campos.nombre.trim()) { setError('El nombre es obligatorio'); return }
-    if (campos.pin && !/^\d{6}$/.test(campos.pin)) {
-      setError('El PIN debe ser exactamente 6 dígitos numéricos')
+    if (campos.pin && !new RegExp(`^\\d{${pinLen}}$`).test(campos.pin)) {
+      setError(`El PIN debe ser exactamente ${pinLen} dígitos numéricos`)
       return
     }
     if (campos.pin && campos.pin !== campos.pinConfirm) {
@@ -197,7 +199,7 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando, coloresUsados = 
           { value: 'supervisor', label: 'Supervisor' },
         ]}
         value={campos.rol}
-        onChange={val => setCampos(p => ({ ...p, rol: val }))}
+        onChange={val => setCampos(p => ({ ...p, rol: val, pin: '', pinConfirm: '' }))}
         placeholder="Seleccionar rol..."
         disabled={cargando}
         searchable={false}
@@ -229,9 +231,9 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando, coloresUsados = 
         <input
           type={mostrarPin ? 'text' : 'password'}
           value={campos.pin}
-          onChange={e => setCampos(p => ({ ...p, pin: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
+          onChange={e => setCampos(p => ({ ...p, pin: e.target.value.replace(/\D/g, '').slice(0, p.rol === 'vendedor' ? 4 : 6) }))}
           className={`${inputCls} pr-11`}
-          placeholder="Nuevo PIN (dejar vacío para no cambiar)"
+          placeholder={`Nuevo PIN ${campos.rol === 'vendedor' ? '4' : '6'} dígitos (vacío = no cambiar)`}
           inputMode="numeric"
           disabled={cargando}
         />
@@ -246,23 +248,25 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando, coloresUsados = 
           <input
             type={mostrarPin ? 'text' : 'password'}
             value={campos.pinConfirm}
-            onChange={e => setCampos(p => ({ ...p, pinConfirm: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
-            className={`${inputCls} pr-11 ${campos.pinConfirm.length === 6 && campos.pinConfirm !== campos.pin ? 'border-red-300 ring-1 ring-red-200' : campos.pinConfirm.length === 6 && campos.pinConfirm === campos.pin ? 'border-emerald-300 ring-1 ring-emerald-200' : ''}`}
+            onChange={e => setCampos(p => ({ ...p, pinConfirm: e.target.value.replace(/\D/g, '').slice(0, p.rol === 'vendedor' ? 4 : 6) }))}
+            className={`${inputCls} pr-11 ${campos.pinConfirm.length === (campos.rol === 'vendedor' ? 4 : 6) && campos.pinConfirm !== campos.pin ? 'border-red-300 ring-1 ring-red-200' : campos.pinConfirm.length === (campos.rol === 'vendedor' ? 4 : 6) && campos.pinConfirm === campos.pin ? 'border-emerald-300 ring-1 ring-emerald-200' : ''}`}
             placeholder="Confirmar nuevo PIN"
             inputMode="numeric"
             disabled={cargando}
           />
         </div>
       )}
-      {campos.pin.length > 0 && campos.pin.length < 6 && (
-        <p className="text-xs text-slate-400 ml-1">{6 - campos.pin.length} dígitos restantes</p>
+      {(() => { const pl = campos.rol === 'vendedor' ? 4 : 6; return (<>
+      {campos.pin.length > 0 && campos.pin.length < pl && (
+        <p className="text-xs text-slate-400 ml-1">{pl - campos.pin.length} dígitos restantes</p>
       )}
-      {campos.pin.length === 6 && campos.pinConfirm.length === 6 && campos.pin !== campos.pinConfirm && (
+      {campos.pin.length === pl && campos.pinConfirm.length === pl && campos.pin !== campos.pinConfirm && (
         <p className="text-xs text-red-500 font-medium ml-1">Los PIN no coinciden</p>
       )}
-      {campos.pin.length === 6 && campos.pinConfirm.length === 6 && campos.pin === campos.pinConfirm && (
+      {campos.pin.length === pl && campos.pinConfirm.length === pl && campos.pin === campos.pinConfirm && (
         <p className="text-xs text-emerald-600 font-medium ml-1">PIN confirmado</p>
       )}
+      </>) })()}
 
       {error && <p className="text-xs text-red-500 font-bold ml-1">{error}</p>}
       <div className="flex justify-end gap-3 pt-2">

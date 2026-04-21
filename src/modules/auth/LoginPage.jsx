@@ -399,7 +399,9 @@ function UserSelectStep() {
 
   async function handlePin(pin) {
     if (!seleccionado) return false
-    const { ok } = await login(seleccionado.email, pin)
+    // Vendedores usan PIN de 4 dígitos; Supabase requiere mínimo 6, se aplica padding
+    const realPin = seleccionado.rol === 'vendedor' ? '00' + pin : pin
+    const { ok } = await login(seleccionado.email, realPin)
     if (ok) navigate('/', { replace: true })
     return ok
   }

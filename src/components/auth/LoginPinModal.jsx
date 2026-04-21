@@ -13,7 +13,7 @@ function setLock(id, data) { sessionStorage.setItem(lockKey(id), JSON.stringify(
 function clearLock(id)     { sessionStorage.removeItem(lockKey(id)) }
 
 export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
-  const PIN_LEN = 6
+  const PIN_LEN = user?.rol === 'vendedor' ? 4 : 6
 
   const [pin,       setPin]       = useState('')
   const [error,     setError]     = useState(false)
@@ -157,7 +157,7 @@ export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
             <div className="mb-4"><LoginAvatar user={user} /></div>
             <h2 className="text-xl font-black text-white">{nombre}</h2>
             <p className="text-xs mt-1" style={{ color: 'rgba(255,255,255,0.4)' }}>
-              Ingresa tu PIN de 6 dígitos
+              Ingresa tu PIN de {PIN_LEN} dígitos
             </p>
           </div>
 
