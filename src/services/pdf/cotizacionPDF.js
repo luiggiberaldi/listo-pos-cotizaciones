@@ -292,23 +292,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     condY += 4
   })
 
-  // Cuentas bancarias
   condY += 2
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7)
-  doc.setTextColor(...C_ACCENT)
-  doc.text('Realizar Transferencias a nombre de', MARGIN, condY)
-  condY += 4
-  doc.text((config.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.').toUpperCase(), MARGIN, condY)
-  condY += 5
-
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(6.5)
-  doc.setTextColor(...C_DARK)
-  CUENTAS_BANCARIAS.forEach(cuenta => {
-    doc.text(cuenta, MARGIN, condY)
-    condY += 4
-  })
 
   // ── Totales (derecha) ──
   const subtotal = Number(cotizacion.subtotal_usd || 0)
