@@ -5,13 +5,15 @@ const NOTIF_KEY = 'construacero_notifications_v1'
 const MAX_NOTIFS = 100
 
 export const NOTIF_TYPES = {
-  STOCK_BAJO:           'stock_bajo',
-  COTIZACION_ENVIADA:   'cotizacion_enviada',
-  COTIZACION_ACEPTADA:  'cotizacion_aceptada',
-  COTIZACION_CREADA:    'cotizacion_creada',
-  DESPACHO_CREADO:      'despacho_creado',
-  COTIZACION_ANULADA:   'cotizacion_anulada',
-  CLIENTE_AJENO:        'cliente_ajeno',
+  STOCK_BAJO:                'stock_bajo',
+  COTIZACION_ENVIADA:        'cotizacion_enviada',
+  COTIZACION_ACEPTADA:       'cotizacion_aceptada',
+  COTIZACION_CREADA:         'cotizacion_creada',
+  DESPACHO_CREADO:           'despacho_creado',
+  COTIZACION_ANULADA:        'cotizacion_anulada',
+  CLIENTE_AJENO:             'cliente_ajeno',
+  COTIZACION_SIN_RESPUESTA:  'cotizacion_sin_respuesta',
+  COTIZACION_POR_VENCER:     'cotizacion_por_vencer',
 }
 
 function readNotifs() {
@@ -145,3 +147,74 @@ export function notifyClienteAjeno(vendedorNombre, clienteNombre, clienteVendedo
     `${vendedorNombre} creó cotización #${numero} con el cliente ${clienteNombre} (asignado a ${clienteVendedorNombre})`,
   )
 }
+
+// ─── Recordatorios proactivos (estilo Buildertrend) ──────────────────────────
+
+const RECORDATORIO_COOLDOWN_KEY = 'construacero_recordatorios_v1'
+const RECORDATORIO_COOLDOWN_MS  = 24 * 60 * 60 * 1000 // 24 horas por cotización
+
+function readCooldowns() {
+  try { return JSON.parse(localStorage.getItem(RECORDATORIO_COOLDOWN_KEY) || '{}') }
+  catch { return {} }
+}
+
+function saveCooldowns(map) {
+  try { localStorage.setItem(RECORDATORIO_COOLDOWN_KEY, JSON.stringify(map)) }
+  catch { /* silencioso */ }
+}
+
+function hasCooldown(key) {
+  const map = readCooldowns()
+  const ts  = map[key]
+  return ts && (Date.now() - ts < RECORDATORIO_COOLDOWN_MS)
+}
+
+function setCooldown(key) {
+  const map = readCooldowns()
+  map[key] = Date.now()
+  // Limpiar entradas viejas (> 7 días) para no inflar localStorage
+  const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000
+  for (const k of Object.keys(map)) {
+    if (map[k] < cutoff) delete map[k]
+  }
+  saveCooldowns(map)
+}
+
+/**
+ * Llamar cuando se detecta una cotización enviada hace N días sin respuesta.
+ * Genera una notificación máximo una vez cada 24 h por cotización.
+ */
+export function notifyCotizacionSinRespuesta(numero, clienteNombre, diasTranscurridos, vendedorNombre) {
+  const key = `sin_respuesta_${numero}`
+  if (hasCooldown(key)) return
+  setCooldown(key)
+  const de = vendedorNombre ? ` — ${vendedorNombre}` : ''
+  createNotification(
+    NOTIF_TYPES.COTIZACION_SIN_RESPUESTA,
+    `COT-${numero} sin respuesta (${diasTranscurridos}d)`,
+    `${clienteNombre}${de} — Enviada hace ${diasTranscurridos} día${diasTranscurridos > 1 ? 's' : ''} sin confirmar`,
+    { numero, clienteNombre, diasTranscurridos },
+  )
+}
+
+/**
+ * Llamar cuando una cotización está próxima a vencer.
+ * Genera una notificación máximo una vez cada 24 h por cotización.
+ */
+export function notifyCotizacionPorVencer(numero, clienteNombre, diasRestantes) {
+  const key = `por_vencer_${numero}`
+  if (hasCooldown(key)) return
+  setCooldown(key)
+  const label = diasRestantes === 0
+    ? 'vence hoy'
+    : diasRestantes === 1
+      ? 'vence mañana'
+      : `vence en ${diasRestantes} días`
+  createNotification(
+    NOTIF_TYPES.COTIZACION_POR_VENCER,
+    `COT-${numero} ${label}`,
+    `${clienteNombre} — Cotización próxima a vencer`,
+    { numero, clienteNombre, diasRestantes },
+  )
+}
+

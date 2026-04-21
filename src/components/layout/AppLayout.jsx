@@ -9,6 +9,7 @@ import {
   Menu, X, DollarSign, RefreshCw, PackageCheck, Bell, BellOff,
   AlertTriangle, Send, CheckCircle, Ban,
   PanelLeftClose, PanelLeftOpen, BarChart3, FlaskConical,
+  Clock, CalendarClock,
 } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import LoginAvatar from '../auth/LoginAvatar'
@@ -18,18 +19,21 @@ import Breadcrumbs from '../ui/Breadcrumbs'
 import QuickQuoteFAB from '../cotizaciones/QuickQuoteFAB'
 import { useRealtimeSync } from '../../hooks/useRealtimeSync'
 import { useAdminAlerts } from '../../hooks/useAdminAlerts'
+import { useRecordatoriosCotizaciones } from '../../hooks/useRecordatoriosCotizaciones'
 import { usePushNotifications } from '../../hooks/usePushNotifications'
 import { showToast } from '../ui/Toast'
 import { NOTIF_TYPES } from '../../services/notificationService'
 
 // ─── Iconos por tipo de notificación ────────────────────────────────────────
 const NOTIF_ICON_MAP = {
-  [NOTIF_TYPES.STOCK_BAJO]:          { icon: AlertTriangle, color: 'text-amber-500', bg: 'bg-amber-50' },
-  [NOTIF_TYPES.COTIZACION_ENVIADA]:  { icon: Send,          color: 'text-sky-500',   bg: 'bg-sky-50' },
-  [NOTIF_TYPES.COTIZACION_ACEPTADA]: { icon: CheckCircle,   color: 'text-emerald-500', bg: 'bg-emerald-50' },
-  [NOTIF_TYPES.COTIZACION_CREADA]:   { icon: FileText,      color: 'text-indigo-500', bg: 'bg-indigo-50' },
-  [NOTIF_TYPES.DESPACHO_CREADO]:     { icon: Truck,         color: 'text-indigo-500', bg: 'bg-indigo-50' },
-  [NOTIF_TYPES.COTIZACION_ANULADA]:  { icon: Ban,           color: 'text-red-500',   bg: 'bg-red-50' },
+  [NOTIF_TYPES.STOCK_BAJO]:                 { icon: AlertTriangle, color: 'text-amber-500',   bg: 'bg-amber-50' },
+  [NOTIF_TYPES.COTIZACION_ENVIADA]:         { icon: Send,          color: 'text-sky-500',     bg: 'bg-sky-50' },
+  [NOTIF_TYPES.COTIZACION_ACEPTADA]:        { icon: CheckCircle,   color: 'text-emerald-500', bg: 'bg-emerald-50' },
+  [NOTIF_TYPES.COTIZACION_CREADA]:          { icon: FileText,      color: 'text-indigo-500',  bg: 'bg-indigo-50' },
+  [NOTIF_TYPES.DESPACHO_CREADO]:            { icon: Truck,         color: 'text-indigo-500',  bg: 'bg-indigo-50' },
+  [NOTIF_TYPES.COTIZACION_ANULADA]:         { icon: Ban,           color: 'text-red-500',     bg: 'bg-red-50' },
+  [NOTIF_TYPES.COTIZACION_SIN_RESPUESTA]:   { icon: Clock,         color: 'text-orange-500',  bg: 'bg-orange-50' },
+  [NOTIF_TYPES.COTIZACION_POR_VENCER]:      { icon: CalendarClock, color: 'text-rose-500',    bg: 'bg-rose-50' },
 }
 const DEFAULT_NOTIF_ICON = { icon: Bell, color: 'text-slate-400', bg: 'bg-slate-50' }
 
@@ -109,6 +113,9 @@ export default function AppLayout() {
 
   // Realtime: escucha cambios en tablas y refresca cache automáticamente
   useRealtimeSync()
+
+  // Recordatorios proactivos de cotizaciones (sin respuesta / por vencer)
+  useRecordatoriosCotizaciones()
 
   // Notificaciones
   const { unreadCount, notifications, markAllRead, clearAll } = useAdminAlerts()
