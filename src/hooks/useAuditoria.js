@@ -16,7 +16,7 @@ export function useAuditoria({ pagina = 0, porPagina = 50, usuarioId = '', categ
         .from('auditoria')
         .select(`
           id, accion, descripcion, ts,
-          categoria,
+          categoria, meta,
           entidad_tipo, entidad_id,
           usuario_nombre, usuario_rol,
           usuario:usuarios!auditoria_usuario_id_fkey(id, nombre, rol)
