@@ -585,14 +585,6 @@ function UserSelectStep() {
                   {loginLoading ? <RefreshCw size={16} className="animate-spin" /> : <ArrowRight size={16} />}
                   {loginLoading ? 'Ingresando...' : 'Iniciar sesión'}
                 </button>
-
-                <div className="text-center pt-2">
-                  <button type="button" onClick={() => { setModoEmail(false); setLoginError(null) }}
-                    className="text-xs font-semibold transition-colors hover:underline"
-                    style={{ color: 'rgba(255,255,255,0.4)' }}>
-                    ← Volver a selección de usuario
-                  </button>
-                </div>
               </form>
             ) : (
               <>
