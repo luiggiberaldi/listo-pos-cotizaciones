@@ -222,7 +222,7 @@ export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
               {/* Pad numérico */}
               <div className="grid grid-cols-3 gap-3 max-w-[270px] mx-auto">
                 {[1,2,3,4,5,6,7,8,9].map(n => (
-                  <button key={n} onClick={() => presionar(String(n))}
+                  <button key={n} type="button" onPointerDown={e => { e.preventDefault(); presionar(String(n)) }}
                     className="h-14 rounded-2xl text-xl font-bold transition-all duration-150 active:scale-95 select-none"
                     style={{
                       background: 'rgba(255,255,255,0.07)',
@@ -242,7 +242,7 @@ export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
 
                 <div />
 
-                <button onClick={() => presionar('0')}
+                <button type="button" onPointerDown={e => { e.preventDefault(); presionar('0') }}
                   className="h-14 rounded-2xl text-xl font-bold transition-all duration-150 active:scale-95 select-none"
                   style={{
                     background: 'rgba(255,255,255,0.07)',
@@ -259,7 +259,7 @@ export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
                   0
                 </button>
 
-                <button onClick={borrar}
+                <button type="button" onPointerDown={e => { e.preventDefault(); borrar() }}
                   className="h-14 rounded-2xl flex items-center justify-center transition-all duration-150 active:scale-95 select-none"
                   style={{
                     background: 'rgba(255,255,255,0.05)',
