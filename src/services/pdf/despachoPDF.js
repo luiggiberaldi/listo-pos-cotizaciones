@@ -127,7 +127,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   try {
     const gState = new doc.GState({ opacity: 0.06 })
     doc.setGState(gState)
-    const wmSize = 120
+    const wmSize = 140
     doc.addImage(WATERMARK_LOGO, 'PNG', (PAGE_W - wmSize) / 2, (PAGE_H - wmSize) / 2, wmSize, wmSize)
     doc.setGState(new doc.GState({ opacity: 1 }))
   } catch (_) {}

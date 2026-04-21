@@ -5,17 +5,20 @@
 
 /**
  * Formatea un número de teléfono para wa.me
- * Quita espacios, guiones y paréntesis. Si empieza con 0, asume Colombia (+57)
+ * Quita espacios, guiones y paréntesis. Asume Venezuela (+58)
+ * Acepta: 412-1234567, 04121234567, +584121234567, 584121234567
  */
 export function formatearTelefono(telefono) {
   if (!telefono) return ''
   let num = telefono.replace(/[\s\-\(\)\.]/g, '')
   // Si empieza con +, quitar el +
   if (num.startsWith('+')) num = num.slice(1)
-  // Si empiega con 0, reemplazar con código de Colombia
-  if (num.startsWith('0')) num = '57' + num.slice(1)
-  // Si no tiene código de país (menos de 11 dígitos), agregar +57
-  if (num.length <= 10) num = '57' + num
+  // Si empieza con 0, quitar el 0
+  if (num.startsWith('0')) num = num.slice(1)
+  // Si ya tiene 58 al inicio y es largo, dejarlo
+  if (num.startsWith('58') && num.length >= 12) return num
+  // Agregar código de país 58
+  if (!num.startsWith('58')) num = '58' + num
   return num
 }
 

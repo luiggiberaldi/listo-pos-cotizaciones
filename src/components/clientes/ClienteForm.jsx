@@ -45,11 +45,23 @@ const VACIO = {
   tipo_cliente: 'natural',
 }
 
+const PREFIJOS_RIF = ['V', 'J', 'E', 'G', 'P']
+
+/** Separa "J-12345678-9" en { prefijo: 'J', numero: '12345678-9' } */
+function parsearRif(rif) {
+  if (!rif) return { prefijo: 'V', numero: '' }
+  const limpio = rif.trim().toUpperCase()
+  const match = limpio.match(/^([VJEGP])-?(.*)$/)
+  if (match) return { prefijo: match[1], numero: match[2] }
+  return { prefijo: 'V', numero: limpio }
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function ClienteForm({ cliente = null, onSuccess, onCancel, compact = false }) {
   const esEdicion = !!cliente
 
   const [campos, setCampos] = useState(VACIO)
+  const [rifPrefijo, setRifPrefijo] = useState('V')
   const [errores, setErrores] = useState({})
   const [errorGeneral, setErrorGeneral] = useState('')
 
@@ -61,10 +73,23 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
   // Cargar datos del cliente al editar
   useEffect(() => {
     if (cliente) {
+      // Normalizar teléfono viejo (0412-1234567, +584121234567, etc.) al nuevo formato (412-1234567)
+      let tel = cliente.telefono ?? ''
+      if (tel) {
+        let limpio = tel.replace(/[\s\-\(\)\.+]/g, '')
+        if (limpio.startsWith('58') && limpio.length >= 12) limpio = limpio.slice(2)
+        if (limpio.startsWith('0')) limpio = limpio.slice(1)
+        limpio = limpio.slice(0, 10)
+        if (limpio.length > 3) limpio = limpio.slice(0, 3) + '-' + limpio.slice(3)
+        tel = limpio
+      }
+      // Separar prefijo del RIF/Cédula
+      const { prefijo, numero } = parsearRif(cliente.rif_cedula)
+      setRifPrefijo(prefijo)
       setCampos({
         nombre:       cliente.nombre       ?? '',
-        rif_cedula:   cliente.rif_cedula   ?? '',
-        telefono:     cliente.telefono     ?? '',
+        rif_cedula:   numero,
+        telefono:     tel,
         email:        cliente.email        ?? '',
         direccion:    cliente.direccion    ?? '',
         notas:        cliente.notas        ?? '',
@@ -88,17 +113,21 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
     if (!campos.rif_cedula.trim()) {
       errs.rif_cedula = 'El RIF/Cédula es obligatorio para proteger la asignación del cliente'
     } else {
-      const rif = campos.rif_cedula.trim().toUpperCase()
-      // Formatos válidos: V12345678, J-12345678-9, E-12345678, G-20000001-0
-      if (!/^[VJEGP]-?\d{6,9}(-\d)?$/.test(rif)) {
-        errs.rif_cedula = 'Formato inválido. Ej: V-12345678, J-12345678-9'
+      const nums = campos.rif_cedula.replace(/-/g, '').trim()
+      // Debe ser 6-9 dígitos, opcionalmente seguido de guion y dígito verificador
+      if (!/^\d{6,9}(-\d)?$/.test(campos.rif_cedula.trim())) {
+        errs.rif_cedula = 'Solo números. Ej: 12345678-9 o 12345678'
       }
     }
     if (campos.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(campos.email.trim())) {
       errs.email = 'Correo inválido'
     }
-    if (campos.telefono && !/^[\d+\-() ]{7,20}$/.test(campos.telefono.trim())) {
-      errs.telefono = 'Teléfono inválido'
+    if (campos.telefono) {
+      const telLimpio = campos.telefono.replace(/[\s\-]/g, '')
+      // Debe ser un número móvil venezolano: 4XX seguido de 7 dígitos
+      if (!/^4(12|14|16|24|26)\d{7}$/.test(telLimpio)) {
+        errs.telefono = 'Debe ser un número móvil válido (412, 414, 416, 424, 426)'
+      }
     }
     return errs
   }
@@ -108,12 +137,18 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
     const errs = validar()
     if (Object.keys(errs).length) { setErrores(errs); return }
 
+    // Combinar prefijo + número del RIF
+    const camposFinales = {
+      ...campos,
+      rif_cedula: `${rifPrefijo}-${campos.rif_cedula.trim()}`,
+    }
+
     try {
       let resultado
       if (esEdicion) {
-        resultado = await actualizarCliente.mutateAsync({ id: cliente.id, campos })
+        resultado = await actualizarCliente.mutateAsync({ id: cliente.id, campos: camposFinales })
       } else {
-        resultado = await crearCliente.mutateAsync(campos)
+        resultado = await crearCliente.mutateAsync(camposFinales)
       }
       onSuccess?.(resultado)
     } catch (err) {
@@ -143,7 +178,7 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
         <CustomSelect
           options={TIPOS_CLIENTE.map(t => ({ value: t.valor, label: t.label }))}
           value={campos.tipo_cliente}
-          onChange={val => { setCampos(prev => ({ ...prev, tipo_cliente: val })); if (errores.tipo_cliente) setErrores(prev => ({ ...prev, tipo_cliente: '' })); if (errorGeneral) setErrorGeneral('') }}
+          onChange={val => { setCampos(prev => ({ ...prev, tipo_cliente: val })); if (val === 'natural' && rifPrefijo === 'J') setRifPrefijo('V'); if (val === 'juridico' && rifPrefijo === 'V') setRifPrefijo('J'); if (errores.tipo_cliente) setErrores(prev => ({ ...prev, tipo_cliente: '' })); if (errorGeneral) setErrorGeneral('') }}
           placeholder="Seleccionar tipo..."
           icon={Tag}
           disabled={cargando}
@@ -153,28 +188,63 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
 
       {/* RIF / Cédula */}
       <Campo label="RIF / Cédula *" icono={Hash} error={errores.rif_cedula}>
-        <input
-          type="text"
-          name="rif_cedula"
-          value={campos.rif_cedula}
-          onChange={cambiar}
-          placeholder="Ej: J-12345678-9"
-          className={inputClass}
-          disabled={cargando}
-        />
+        <div className="relative flex">
+          <select
+            value={rifPrefijo}
+            onChange={e => { setRifPrefijo(e.target.value); if (errores.rif_cedula) setErrores(prev => ({ ...prev, rif_cedula: '' })) }}
+            disabled={cargando}
+            className="px-2.5 py-2.5 rounded-l-xl border border-r-0 border-slate-200 bg-slate-100 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-focus appearance-none cursor-pointer text-center w-14"
+          >
+            {PREFIJOS_RIF.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+          <span className="inline-flex items-center px-1 border-y border-slate-200 bg-slate-100 text-slate-400 text-sm select-none">-</span>
+          <input
+            type="text"
+            name="rif_cedula"
+            value={campos.rif_cedula}
+            onChange={e => {
+              // Solo permitir dígitos y guion para dígito verificador
+              let val = e.target.value.replace(/[^\d-]/g, '')
+              // Máx formato: 123456789-0
+              if (val.replace(/-/g, '').length > 10) return
+              cambiar({ target: { name: 'rif_cedula', value: val } })
+            }}
+            placeholder="12345678-9"
+            className={`${inputClass} rounded-l-none`}
+            disabled={cargando}
+            inputMode="numeric"
+          />
+        </div>
       </Campo>
 
       {/* Teléfono */}
       <Campo label="Teléfono" icono={Phone} error={errores.telefono}>
-        <input
-          type="tel"
-          name="telefono"
-          value={campos.telefono}
-          onChange={cambiar}
-          placeholder="Ej: 0412-1234567"
-          className={inputClass}
-          disabled={cargando}
-        />
+        <div className="relative flex">
+          <span className="inline-flex items-center px-3 rounded-l-xl border border-r-0 border-slate-200 bg-slate-100 text-sm text-slate-500 select-none">
+            +58
+          </span>
+          <input
+            type="tel"
+            name="telefono"
+            value={campos.telefono}
+            onChange={e => {
+              let val = e.target.value.replace(/[^\d]/g, '')
+              // Si pega número con 58 al inicio, quitarlo
+              if (val.startsWith('58') && val.length > 10) val = val.slice(2)
+              // Si empieza con 0, quitarlo (ya mostramos +58)
+              if (val.startsWith('0')) val = val.slice(1)
+              // Máx 10 dígitos (4XX-XXXXXXX)
+              val = val.slice(0, 10)
+              // Auto-formato: 412-1234567
+              if (val.length > 3) val = val.slice(0, 3) + '-' + val.slice(3)
+              cambiar({ target: { name: 'telefono', value: val } })
+            }}
+            placeholder="412-1234567"
+            className={`${inputClass} rounded-l-none`}
+            disabled={cargando}
+          />
+        </div>
+        <p className="text-[10px] text-slate-400 mt-0.5">Número móvil venezolano para WhatsApp</p>
       </Campo>
 
       {/* Email */}

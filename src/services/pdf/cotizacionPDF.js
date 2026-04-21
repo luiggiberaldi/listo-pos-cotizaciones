@@ -123,7 +123,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   try {
     const gState = new doc.GState({ opacity: 0.06 })
     doc.setGState(gState)
-    const wmSize = 120
+    const wmSize = 140
     doc.addImage(WATERMARK_LOGO, 'PNG', (PAGE_W - wmSize) / 2, (PAGE_H - wmSize) / 2, wmSize, wmSize)
     doc.setGState(new doc.GState({ opacity: 1 }))
   } catch (_) {}
@@ -363,17 +363,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   doc.text('TOTAL', totX + 4, ty + 5)
   doc.text(fmtTotalLinea(total, monedaPDF, tasaEfectivaTot), totX + totW - 4, ty + 5, { align: 'right' })
 
-  // Total en Bs debajo (solo en modo USD, los otros ya lo incluyen)
-  if (monedaPDF === '$' && tasaEfectivaTot > 0) {
-    ty += 14
-    doc.setFillColor(...C_DARK)
-    doc.roundedRect(totX, ty - 2, totW, 9, 1.5, 1.5, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
-    doc.setTextColor(...C_ACCENT)
-    doc.text('Total Bs:', totX + 4, ty + 4)
-    doc.text(fmtBs(totalBs), totX + totW - 4, ty + 4, { align: 'right' })
-  }
+  // (Total en Bs omitido en modo USD — solo se muestra en mixto/bs)
 
   // Avanzar Y al final de lo que sea más alto (condiciones o totales)
   y = Math.max(condY, ty + 14) + 3
