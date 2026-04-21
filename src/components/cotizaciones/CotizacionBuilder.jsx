@@ -1148,8 +1148,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
         items: itemsRes.data ?? [],
         config,
       })
-    } catch (err) {
-      console.error('PDF error:', err)
+    } catch {
     } finally {
       setPdfLoading(false)
     }
@@ -1193,7 +1192,6 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
         mensaje,
       })
     } catch (err) {
-      console.error('WhatsApp error:', err)
       const texto = generarMensaje({
         nombreNegocio: config.nombre_negocio,
         nombreCliente: clienteSeleccionado?.nombre,

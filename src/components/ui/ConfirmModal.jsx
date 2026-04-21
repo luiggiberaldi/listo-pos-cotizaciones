@@ -62,7 +62,6 @@ export default function ConfirmModal({
       await onConfirm();
       onClose();
     } catch (err) {
-      console.error('ConfirmModal error:', err);
       showToast(err.message || 'Ocurrió un error inesperado', 'error');
     } finally {
       setLoading(false);

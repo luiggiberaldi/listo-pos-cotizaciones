@@ -29,3 +29,6 @@ backup_*.json
 # Capturas y videos de trabajo
 *.mp4 *.mov
 frames/
+
+# Scripts internos (contienen credenciales y datos sensibles)
+scripts/

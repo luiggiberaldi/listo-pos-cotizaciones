@@ -85,7 +85,6 @@ export function usePushNotifications() {
       setSubscribed(true)
       return { ok: true }
     } catch (err) {
-      console.error('[Push] Error al suscribirse:', err)
       return { ok: false, error: err.message }
     } finally {
       setLoading(false)
@@ -114,8 +113,8 @@ export function usePushNotifications() {
         await sub.unsubscribe()
       }
       setSubscribed(false)
-    } catch (err) {
-      console.error('[Push] Error al desuscribirse:', err)
+    } catch {
+      // Error al desuscribirse — se ignora
     } finally {
       setLoading(false)
     }
@@ -140,7 +139,7 @@ export async function sendPushNotification({ title, message, url = '/', tag, tar
       },
       body: JSON.stringify({ title, message, url, tag, targetRole, targetUserId }),
     })
-  } catch (err) {
-    console.warn('[Push] Error al enviar notificación:', err)
+  } catch {
+    // Error al enviar notificación — se ignora
   }
 }

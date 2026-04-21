@@ -75,14 +75,13 @@ export function useCrearDespacho() {
       // Guardar forma de pago si se indicó
       if (formaPago && data) {
         const { error: fpError } = await supabase.from('notas_despacho').update({ forma_pago: formaPago }).eq('id', data)
-        if (fpError) console.warn('Error guardando forma de pago:', fpError.message)
+        if (fpError) { /* ignorado — no bloquea el flujo */ }
       }
       // Calcular comisión automáticamente al crear el despacho
       if (data) {
         const { error: comError } = await supabase.rpc('calcular_comision_despacho', { p_despacho_id: data })
         if (comError) {
           // No fallar el despacho, pero notificar al usuario para que reintente
-          console.error('Error calculando comisión:', comError.message)
           setTimeout(() => showToast('Despacho creado, pero la comisión no se calculó. Contacta al supervisor.', 'warning'), 500)
         }
       }

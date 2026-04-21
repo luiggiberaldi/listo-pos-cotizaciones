@@ -179,8 +179,7 @@ export function useTasaCambio() {
       if (!dolarApiData && tasaRef.current?.precio <= 0) {
         if (!esAutoUpdate) setError('No se pudo obtener la tasa BCV')
       }
-    } catch (err) {
-      console.error('Error al obtener tasas:', err)
+    } catch {
       if (!esAutoUpdate) setError('Error de conexión')
     } finally {
       if (!esAutoUpdate) setCargando(false)

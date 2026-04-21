@@ -51,8 +51,8 @@ const useAuthStore = create((set, get) => ({
               )
               await Promise.race([perfilPromise, timeoutPromise])
             }
-          } catch (err) {
-            console.warn('Error al cargar perfil inicial:', err.message)
+          } catch {
+            // Error al cargar perfil inicial — se ignora y se marca como inicializado
           } finally {
             clearTimeout(timeoutId)
             set({ initialized: true })

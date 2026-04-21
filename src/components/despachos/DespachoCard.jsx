@@ -40,7 +40,6 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       if (itemsRes.error) throw itemsRes.error
       await generarDespachoPDF({ despacho, items: itemsRes.data ?? [], config, formaPago: despacho.forma_pago || '' })
     } catch (err) {
-      console.error('PDF error:', err)
       showToast('Error al generar PDF: ' + (err.message || 'Error desconocido'), 'error')
     } finally {
       setPdfLoading(false)

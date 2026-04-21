@@ -35,7 +35,6 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
       if (itemsRes.error) throw itemsRes.error
       await generarPDF({ cotizacion, items: itemsRes.data ?? [], config })
     } catch (err) {
-      console.error('PDF error:', err)
       showToast('Error al generar PDF: ' + (err.message || 'Error desconocido'), 'error')
     } finally {
       setPdfLoading(false)
@@ -65,7 +64,6 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         mensaje,
       })
     } catch (err) {
-      console.error('WhatsApp error:', err)
       const texto = generarMensaje({
         nombreNegocio: config.nombre_negocio,
         nombreCliente: cotizacion.cliente?.nombre,
