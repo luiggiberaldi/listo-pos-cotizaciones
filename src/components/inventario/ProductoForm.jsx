@@ -217,7 +217,7 @@ export default function ProductoForm({ producto = null, onSuccess, onCancel }) {
         </Campo>
         <Campo label="Unidad" icono={Layers} error={errores.unidad}>
           <CustomSelect
-            options={['und', 'kg', 'g', 'lt', 'ml', 'm', 'cm', 'm2', 'm3', 'caja', 'rollo', 'par', 'bolsa'].map(u => ({ value: u, label: u }))}
+            options={['und', 'kg', 'g', 'lt', 'ml', 'm', 'cm', 'm2', 'm3', 'caja', 'rollo', 'par', 'bolsa', 'saco'].map(u => ({ value: u, label: u }))}
             value={campos.unidad}
             onChange={val => setCampos(p => ({ ...p, unidad: val }))}
             icon={Layers}
