@@ -116,15 +116,27 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
     .filter(Boolean)
     .slice(0, 6)
 
+  function stockDisponible(productoId) {
+    const p = productos.find(x => x.id === productoId)
+    return p ? Number(p.stock_actual) || 0 : 0
+  }
+
   function agregarProducto(p) {
+    const stock = Number(p.stock_actual) || 0
     guardarProductoReciente(perfil?.id, p)
-    setLastAdded(p.id)
-    setTimeout(() => setLastAdded(null), 600)
     setItems(prev => {
       const idx = prev.findIndex(it => it.productoId === p.id)
       if (idx !== -1) {
+        if (prev[idx].cantidad >= stock) {
+          showToast(`Stock máximo: ${stock} ${p.unidad ?? 'und'}`, 'error')
+          return prev
+        }
+        setLastAdded(p.id)
+        setTimeout(() => setLastAdded(null), 600)
         return prev.map((it, i) => i === idx ? { ...it, cantidad: it.cantidad + 1 } : it)
       }
+      setLastAdded(p.id)
+      setTimeout(() => setLastAdded(null), 600)
       return [...prev, {
         _key: `qi-${++_qCounter}`,
         productoId: p.id,
@@ -515,8 +527,16 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
                     </button>
                     <span className="w-8 sm:w-9 text-center text-xs font-black text-slate-700 border-x border-slate-100 py-1">{it.cantidad}</span>
                     <button type="button"
-                      onClick={() => cambiarItem(idx, 'cantidad', it.cantidad + 1)}
-                      className="min-w-[44px] min-h-[44px] w-11 h-11 flex items-center justify-center text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 transition-colors active:scale-90">
+                      onClick={() => {
+                        const max = stockDisponible(it.productoId)
+                        if (it.cantidad >= max) { showToast(`Stock máximo: ${max}`, 'error'); return }
+                        cambiarItem(idx, 'cantidad', it.cantidad + 1)
+                      }}
+                      className={`min-w-[44px] min-h-[44px] w-11 h-11 flex items-center justify-center transition-colors active:scale-90 ${
+                        it.cantidad >= stockDisponible(it.productoId)
+                          ? 'text-slate-200 cursor-not-allowed'
+                          : 'text-slate-400 hover:text-emerald-500 hover:bg-emerald-50'
+                      }`}>
                       <Plus size={14} strokeWidth={3} />
                     </button>
                   </div>
