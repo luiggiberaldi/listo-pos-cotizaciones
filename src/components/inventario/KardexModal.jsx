@@ -22,7 +22,7 @@ export default function KardexModal({ isOpen, onClose, producto }) {
 
         {/* Encabezado del producto */}
         <div className="flex items-center gap-3 bg-slate-50 rounded-xl px-4 py-3">
-          <div className="w-10 h-10 rounded-lg bg-sky-100 flex items-center justify-center shrink-0">
+          <div className="w-10 h-10 rounded-lg bg-sky-100 flex items-center justify-center shrink-0 overflow-hidden">
             {producto.imagen_url
               ? <img src={producto.imagen_url} alt="" className="w-full h-full object-cover rounded-lg" />
               : <Package size={18} className="text-sky-500" />
