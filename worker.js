@@ -107,6 +107,11 @@ export default {
       return handleTesterClearAll(request, env);
     }
 
+    // ── API: guardar configuración (bypass RLS) ──────────────────────────
+    if (url.pathname === '/api/admin/config' && request.method === 'PUT') {
+      return handleSaveConfig(request, env);
+    }
+
     // ── API: tester (seed demo + stress) ─────────────────────────────────
     if (url.pathname === '/api/admin/tester/seed-demo' && request.method === 'POST') {
       return handleTesterSeedDemo(request, env);
@@ -1355,6 +1360,33 @@ async function handleTesterClearAll(request, env) {
 }
 
 // ── Seed Demo (datos deterministas de ferretería) ───────────────────────────
+// ── Guardar configuración del negocio (bypass RLS) ─────────────────────────
+async function handleSaveConfig(request, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return jsonError('Server misconfigured', 500, request);
+  const user = await verifyAuth(request, env);
+  if (!user?.id) return jsonError('No autenticado', 401, request);
+  const isSup = await verifySupervisor(user.id, env);
+  if (!isSup) return jsonError('Solo supervisores', 403, request);
+
+  const campos = await request.json();
+  // Upsert con service_role key (bypass RLS)
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/configuracion_negocio?on_conflict=id`, {
+    method: 'POST',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'resolution=merge-duplicates',
+    },
+    body: JSON.stringify({ id: 1, ...campos }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    return jsonError(text || `Error ${res.status}`, res.status, request);
+  }
+  return json({ ok: true }, 200, request);
+}
+
 async function handleTesterSeedDemo(request, env) {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return jsonError('Server misconfigured', 500, request);
   const user = await verifyAuth(request, env);
