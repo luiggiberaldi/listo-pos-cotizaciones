@@ -54,19 +54,24 @@
   }
 }
 
-/* Scrollbar delgado para sidebar y paneles */
+/* Scrollbar para modales y paneles claros */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
 }
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(0,0,0,0.04);
+  border-radius: 4px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(0,0,0,0.15);
+  background: rgba(0,0,0,0.2);
   border-radius: 4px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(0,0,0,0.3);
+  background: rgba(0,0,0,0.35);
+}
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0,0,0,0.2) rgba(0,0,0,0.04);
 }
 /* Scrollbar en fondos oscuros */
 .dark .custom-scrollbar::-webkit-scrollbar-thumb,
