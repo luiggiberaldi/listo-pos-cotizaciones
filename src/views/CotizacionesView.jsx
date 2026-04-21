@@ -3,7 +3,7 @@
 // El builder reemplaza la lista in-page (sin navegación adicional)
 import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { FileText, Plus, RefreshCw, Filter, Copy, AlertTriangle, PackageCheck, Loader2, X, AlertCircle, LayoutGrid, List, Zap, Users } from 'lucide-react'
+import { FileText, Plus, RefreshCw, Filter, Copy, AlertTriangle, PackageCheck, Loader2, X, AlertCircle, LayoutGrid, List, Zap } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import supabase from '../services/supabase/client'
 import { useTasaCambio } from '../hooks/useTasaCambio'
@@ -21,6 +21,7 @@ import EmptyState        from '../components/ui/EmptyState'
 import Skeleton          from '../components/ui/Skeleton'
 import { useVendedores } from '../hooks/useClientes'
 import CustomSelect      from '../components/ui/CustomSelect'
+import VendedorFilterPill from '../components/ui/VendedorFilterPill'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../utils/format'
 import { showToast } from '../components/ui/Toast'
 import PageHeader from '../components/ui/PageHeader'
@@ -438,23 +439,7 @@ function ListaCotizaciones({ onNueva, onRapida, onEditar, onVersionar }) {
             {esSupervisor && vendedores.length > 1 && (
               <>
                 <div className="w-px h-5 bg-slate-200 mx-1 hidden sm:block" />
-                <div className="relative">
-                  <select
-                    value={vendedorFiltro}
-                    onChange={e => setVendedorFiltro(e.target.value)}
-                    className={`appearance-none pl-7 pr-7 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-semibold transition-colors border cursor-pointer ${
-                      vendedorFiltro
-                        ? 'bg-primary text-white border-primary'
-                        : 'bg-white text-slate-700 border-slate-200 hover:border-primary-focus'
-                    }`}
-                  >
-                    <option value="">Todos</option>
-                    {vendedores.map(v => (
-                      <option key={v.id} value={v.id}>{v.nombre}</option>
-                    ))}
-                  </select>
-                  <Users size={13} className={`absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none ${vendedorFiltro ? 'text-white' : 'text-slate-400'}`} />
-                </div>
+                <VendedorFilterPill vendedores={vendedores} value={vendedorFiltro} onChange={setVendedorFiltro} />
               </>
             )}
           </div>

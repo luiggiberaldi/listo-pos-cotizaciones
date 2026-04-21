@@ -2,12 +2,13 @@
 // Vista principal de notas de despacho
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Package, PackageCheck, RefreshCw, Filter, RefreshCcw, AlertTriangle, LayoutGrid, List, Users } from 'lucide-react'
+import { Package, PackageCheck, RefreshCw, Filter, RefreshCcw, AlertTriangle, LayoutGrid, List } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import { useDespachos, useActualizarEstadoDespacho, useReciclarDespacho } from '../hooks/useDespachos'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import { useVendedores } from '../hooks/useClientes'
+import VendedorFilterPill from '../components/ui/VendedorFilterPill'
 import DespachoCard from '../components/despachos/DespachoCard'
 import DespachoRow  from '../components/despachos/DespachoRow'
 import DetalleModal from '../components/ui/DetalleModal'
@@ -125,23 +126,7 @@ export default function DespachosView() {
         {esSupervisor && vendedores.length > 1 && (
           <>
             <div className="w-px h-5 bg-slate-200 mx-1 hidden sm:block" />
-            <div className="relative">
-              <select
-                value={vendedorFiltro}
-                onChange={e => setVendedorFiltro(e.target.value)}
-                className={`appearance-none pl-7 pr-7 py-1.5 rounded-full text-xs font-semibold transition-colors border cursor-pointer ${
-                  vendedorFiltro
-                    ? 'bg-indigo-500 text-white border-indigo-500'
-                    : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'
-                }`}
-              >
-                <option value="">Todos</option>
-                {vendedores.map(v => (
-                  <option key={v.id} value={v.id}>{v.nombre}</option>
-                ))}
-              </select>
-              <Users size={13} className={`absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none ${vendedorFiltro ? 'text-white' : 'text-slate-400'}`} />
-            </div>
+            <VendedorFilterPill vendedores={vendedores} value={vendedorFiltro} onChange={setVendedorFiltro} />
           </>
         )}
         <div className="flex items-center gap-1.5 ml-auto shrink-0">
