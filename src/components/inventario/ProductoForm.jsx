@@ -2,7 +2,7 @@
 // Formulario para crear/editar productos — solo supervisor
 import { useState, useEffect, useRef } from 'react'
 import { Hash, Package, Tag, Layers, DollarSign, BarChart2, Loader2, Camera, X } from 'lucide-react'
-import { useCrearProducto, useActualizarProducto } from '../../hooks/useInventario'
+import { useCrearProducto, useActualizarProducto, useCategorias } from '../../hooks/useInventario'
 import { comprimirImagen, subirImagenProducto } from '../../utils/imageCompress'
 import supabase from '../../services/supabase/client'
 import CustomSelect from '../ui/CustomSelect'
@@ -48,6 +48,7 @@ export default function ProductoForm({ producto = null, onSuccess, onCancel }) {
 
   const crear     = useCrearProducto()
   const actualizar = useActualizarProducto()
+  const { data: categoriasExistentes = [] } = useCategorias()
   const mutation  = esEdicion ? actualizar : crear
   const cargando  = mutation.isPending
 
@@ -202,9 +203,17 @@ export default function ProductoForm({ producto = null, onSuccess, onCancel }) {
       {/* Categoría + Unidad (fila) */}
       <div className="grid grid-cols-2 gap-3">
         <Campo label="Categoría" icono={Tag} error={errores.categoria}>
-          <input type="text" name="categoria" value={campos.categoria}
-            onChange={cambiar} placeholder="Ej: Cemento"
-            className={inputClass} disabled={cargando} />
+          <CustomSelect
+            options={categoriasExistentes.map(c => ({ value: c, label: c }))}
+            value={campos.categoria}
+            onChange={val => { setCampos(p => ({ ...p, categoria: val })); if (errores.categoria) setErrores(p => ({ ...p, categoria: '' })); if (errorGeneral) setErrorGeneral('') }}
+            placeholder="Seleccionar categoría..."
+            icon={Tag}
+            disabled={cargando}
+            clearable
+            creatable
+            createLabel="Crear"
+          />
         </Campo>
         <Campo label="Unidad" icono={Layers} error={errores.unidad}>
           <CustomSelect
