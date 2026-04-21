@@ -7,6 +7,7 @@ import {
   AlertCircle, AlertTriangle, Percent, Users, Database, Copy, Check, DollarSign,
 } from 'lucide-react'
 import { useConfigNegocio, useActualizarConfig, hashSHA256 } from '../hooks/useConfigNegocio'
+import { useCategorias } from '../hooks/useInventario'
 import { fmtUsd } from '../utils/format'
 import { adminAPI } from '../services/supabase/adminClient'
 import UsuariosView from './UsuariosView'
@@ -20,6 +21,107 @@ const TABS = [
   { id: 'usuarios',   label: 'Usuarios',   icon: Users     },
   { id: 'datos',      label: 'Datos',      icon: Database  },
 ]
+
+// ─── Section Header reutilizable ─────────────────────────────────────────────
+const SectionHeader = ({ icon: Icon, children }) => (
+  <div className="flex items-center gap-3 mb-1">
+    <div className="w-0.5 self-stretch rounded-full shrink-0" style={{ background: 'linear-gradient(180deg, #B8860B, #1B365D)', minHeight: '20px' }} />
+    <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+      style={{ background: 'linear-gradient(135deg, rgba(27,54,93,0.08), rgba(184,134,11,0.08))', border: '1px solid rgba(27,54,93,0.1)' }}>
+      <Icon size={13} style={{ color: '#1B365D' }} />
+    </div>
+    <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wide">{children}</h2>
+  </div>
+)
+
+// ─── Comisiones Tab (extraído para claridad) ─────────────────────────────────
+function ComisionesTab({ campos, cambiar, isLoading, cargando }) {
+  const { data: categorias = [] } = useCategorias()
+  const catSeleccionada = campos.comision_categoria_cabilla || 'Cabilla'
+  const disabled = isLoading || cargando
+
+  return (
+    <div className="space-y-5">
+      {/* Card: Categoría especial */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+        <SectionHeader icon={DollarSign}>Categoría con tasa especial</SectionHeader>
+        <p className="text-xs text-slate-500 -mt-2">
+          Elige la categoría de productos que tendrá una comisión diferenciada. El resto usa la tasa general.
+        </p>
+
+        {categorias.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {categorias.map(cat => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => !disabled && cambiar('comision_categoria_cabilla', cat)}
+                disabled={disabled}
+                className={`px-3.5 py-2 rounded-xl text-sm font-semibold transition-all border ${
+                  catSeleccionada === cat
+                    ? 'bg-primary text-white border-primary shadow-sm shadow-primary/20'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-primary/40 hover:text-primary'
+                } disabled:opacity-50`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-slate-400 italic">Cargando categorías...</p>
+        )}
+      </div>
+
+      {/* Card: Tasas */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+        <SectionHeader icon={Percent}>Tasas de comisión</SectionHeader>
+        <p className="text-xs text-slate-500 -mt-2">
+          Porcentaje que se calcula al marcar un despacho como entregado.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Comisión categoría especial */}
+          <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl border border-amber-200 p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+              <span className="text-sm font-bold text-amber-800">{catSeleccionada}</span>
+            </div>
+            <div className="flex items-baseline gap-2">
+              <input type="number" min="0" max="100" step="0.01"
+                value={campos.comision_pct_cabilla}
+                onChange={e => cambiar('comision_pct_cabilla', Math.max(0, Math.min(100, Number(e.target.value))))}
+                className="w-20 px-3 py-2.5 rounded-xl border border-amber-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-300 text-right font-bold"
+                disabled={disabled} />
+              <span className="text-lg font-bold text-amber-600">%</span>
+            </div>
+            <p className="text-xs text-amber-700">
+              $1,000 → <strong>{fmtUsd(1000 * campos.comision_pct_cabilla / 100)}</strong> comisión
+            </p>
+          </div>
+
+          {/* Comisión otros */}
+          <div className="bg-gradient-to-br from-slate-50 to-blue-50 rounded-xl border border-slate-200 p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+              <span className="text-sm font-bold text-slate-700">Demás categorías</span>
+            </div>
+            <div className="flex items-baseline gap-2">
+              <input type="number" min="0" max="100" step="0.01"
+                value={campos.comision_pct_otros}
+                onChange={e => cambiar('comision_pct_otros', Math.max(0, Math.min(100, Number(e.target.value))))}
+                className="w-20 px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 text-right font-bold"
+                disabled={disabled} />
+              <span className="text-lg font-bold text-blue-500">%</span>
+            </div>
+            <p className="text-xs text-slate-500">
+              $1,000 → <strong>{fmtUsd(1000 * campos.comision_pct_otros / 100)}</strong> comisión
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function ConfiguracionView() {
   const { data: config = {}, isLoading } = useConfigNegocio()
@@ -102,7 +204,7 @@ export default function ConfiguracionView() {
     setResetLoading(true); setResetMsg(null); setConfirmReset(false)
     try {
       await adminAPI.factoryReset()
-      setResetMsg({ tipo: 'ok', texto: 'Reinicio completado. Todos los datos han sido eliminados.' })
+      setResetMsg({ tipo: 'ok', texto: 'Reinicio completado. El inventario se conservó.' })
     } catch (err) {
       setResetMsg({ tipo: 'error', texto: err.message || 'Error al reiniciar' })
     } finally { setResetLoading(false) }
@@ -165,16 +267,6 @@ export default function ConfiguracionView() {
   }
 
   const inputCls = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400'
-  const SectionHeader = ({ icon: Icon, children }) => (
-    <div className="flex items-center gap-3 mb-1">
-      <div className="w-0.5 self-stretch rounded-full shrink-0" style={{ background: 'linear-gradient(180deg, #B8860B, #1B365D)', minHeight: '20px' }} />
-      <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
-        style={{ background: 'linear-gradient(135deg, rgba(27,54,93,0.08), rgba(184,134,11,0.08))', border: '1px solid rgba(27,54,93,0.1)' }}>
-        <Icon size={13} style={{ color: '#1B365D' }} />
-      </div>
-      <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wide">{children}</h2>
-    </div>
-  )
   const cargando = actualizar.isPending
   const esTabForm = ['fiscal', 'sistema', 'comisiones'].includes(tab)
 
@@ -368,61 +460,7 @@ export default function ConfiguracionView() {
           )}
 
           {/* ── Comisiones ────────────────────────────────────────────────── */}
-          {tab === 'comisiones' && (
-            <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-5">
-              <SectionHeader icon={DollarSign}>Tasas de comisión</SectionHeader>
-              <p className="text-xs text-slate-500 -mt-2">
-                Porcentaje de comisión que se calcula al marcar un despacho como entregado.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">
-                    % Comisión cabilla
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input type="number" min="0" max="100" step="0.01"
-                      value={campos.comision_pct_cabilla}
-                      onChange={e => cambiar('comision_pct_cabilla', Math.max(0, Math.min(100, Number(e.target.value))))}
-                      className="w-24 px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus text-right"
-                      disabled={isLoading || cargando} />
-                    <span className="text-lg font-bold text-slate-500">%</span>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">
-                    % Comisión otros
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input type="number" min="0" max="100" step="0.01"
-                      value={campos.comision_pct_otros}
-                      onChange={e => cambiar('comision_pct_otros', Math.max(0, Math.min(100, Number(e.target.value))))}
-                      className="w-24 px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus text-right"
-                      disabled={isLoading || cargando} />
-                    <span className="text-lg font-bold text-slate-500">%</span>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">
-                    Categoría "cabilla"
-                    <span className="block text-xs text-slate-400 font-normal mt-0.5">Nombre de la categoría en productos</span>
-                  </label>
-                  <input
-                    value={campos.comision_categoria_cabilla}
-                    onChange={e => cambiar('comision_categoria_cabilla', e.target.value)}
-                    placeholder="Cabilla"
-                    className={inputCls}
-                    disabled={isLoading || cargando}
-                  />
-                </div>
-              </div>
-              <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-xs text-blue-700">
-                <strong>Ejemplo:</strong> Una venta de $1,000 en cabilla ({campos.comision_pct_cabilla}%) genera{' '}
-                <strong>{fmtUsd(1000 * campos.comision_pct_cabilla / 100)}</strong> de comisión.
-                Una venta de $1,000 en otros ({campos.comision_pct_otros}%) genera{' '}
-                <strong>{fmtUsd(1000 * campos.comision_pct_otros / 100)}</strong>.
-              </div>
-            </div>
-          )}
+          {tab === 'comisiones' && <ComisionesTab campos={campos} cambiar={cambiar} isLoading={isLoading} cargando={cargando} />}
 
           {/* Error */}
           {error && (
@@ -560,7 +598,7 @@ export default function ConfiguracionView() {
             )}
 
             <div className="border-t border-red-100 pt-4 mt-2">
-              <p className="text-xs text-slate-500 mb-3">Elimina <strong>todos los datos</strong> (productos, clientes, cotizaciones, despachos, comisiones, transportistas) y deja el sistema listo para trabajar desde cero. Los usuarios y la configuración se mantienen.</p>
+              <p className="text-xs text-slate-500 mb-3">Elimina clientes, cotizaciones, despachos, comisiones y transportistas. <strong>El inventario, los usuarios y la configuración se conservan.</strong></p>
               {!confirmReset ? (
                 <button type="button" onClick={() => setConfirmReset(true)}
                   className="flex items-center gap-2 bg-red-800 hover:bg-red-900 text-white font-semibold text-sm px-5 py-2.5 rounded-xl transition-colors shadow-sm">
@@ -569,7 +607,7 @@ export default function ConfiguracionView() {
               ) : (
                 <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-3">
                   <p className="text-sm font-semibold text-red-800">
-                    ¿Estás seguro? Se borrarán <strong>todos los datos</strong> del sistema permanentemente. Solo se conservan los usuarios y la configuración.
+                    ¿Estás seguro? Se borrarán clientes, cotizaciones, despachos, comisiones y transportistas. <strong>El inventario se conserva.</strong>
                   </p>
                   <div className="flex gap-2">
                     <button type="button" onClick={handleFactoryReset} disabled={resetLoading}

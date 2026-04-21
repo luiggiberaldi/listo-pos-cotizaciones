@@ -157,7 +157,7 @@ function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
 
 // ─── Formulario editar usuario ────────────────────────────────────────────────
 function FormEditar({ usuario, onGuardar, onCancelar, cargando, coloresUsados = [] }) {
-  const [campos, setCampos] = useState({ nombre: usuario.nombre, rol: usuario.rol, pin: '', color: usuario.color || COLORES_VENDEDOR[0] })
+  const [campos, setCampos] = useState({ nombre: usuario.nombre, rol: usuario.rol, pin: '', pinConfirm: '', color: usuario.color || COLORES_VENDEDOR[0] })
   const [mostrarPin, setMostrarPin] = useState(false)
   const [error, setError] = useState('')
 
@@ -166,6 +166,10 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando, coloresUsados = 
     if (!campos.nombre.trim()) { setError('El nombre es obligatorio'); return }
     if (campos.pin && !/^\d{6}$/.test(campos.pin)) {
       setError('El PIN debe ser exactamente 6 dígitos numéricos')
+      return
+    }
+    if (campos.pin && campos.pin !== campos.pinConfirm) {
+      setError('Los PIN no coinciden')
       return
     }
     // Color en uso por otro usuario (excluir el color actual del propio usuario)
@@ -236,8 +240,28 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando, coloresUsados = 
           {mostrarPin ? <EyeOff size={15} /> : <Eye size={15} />}
         </button>
       </div>
+      {/* Confirmar PIN */}
+      {campos.pin.length > 0 && (
+        <div className="relative">
+          <input
+            type={mostrarPin ? 'text' : 'password'}
+            value={campos.pinConfirm}
+            onChange={e => setCampos(p => ({ ...p, pinConfirm: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
+            className={`${inputCls} pr-11 ${campos.pinConfirm.length === 6 && campos.pinConfirm !== campos.pin ? 'border-red-300 ring-1 ring-red-200' : campos.pinConfirm.length === 6 && campos.pinConfirm === campos.pin ? 'border-emerald-300 ring-1 ring-emerald-200' : ''}`}
+            placeholder="Confirmar nuevo PIN"
+            inputMode="numeric"
+            disabled={cargando}
+          />
+        </div>
+      )}
       {campos.pin.length > 0 && campos.pin.length < 6 && (
         <p className="text-xs text-slate-400 ml-1">{6 - campos.pin.length} dígitos restantes</p>
+      )}
+      {campos.pin.length === 6 && campos.pinConfirm.length === 6 && campos.pin !== campos.pinConfirm && (
+        <p className="text-xs text-red-500 font-medium ml-1">Los PIN no coinciden</p>
+      )}
+      {campos.pin.length === 6 && campos.pinConfirm.length === 6 && campos.pin === campos.pinConfirm && (
+        <p className="text-xs text-emerald-600 font-medium ml-1">PIN confirmado</p>
       )}
 
       {error && <p className="text-xs text-red-500 font-bold ml-1">{error}</p>}

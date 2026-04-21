@@ -1343,8 +1343,7 @@ async function handleTesterClearAll(request, env) {
     await supaDelete(env, 'clientes', logStep);
     logStep('Eliminando transportistas...');
     await supaDelete(env, 'transportistas', logStep);
-    logStep('Eliminando productos...');
-    await supaDelete(env, 'productos', logStep);
+    logStep('Inventario conservado.');
 
     const elapsed = Date.now() - start;
     logStep(`✓ Limpieza completada en ${elapsed}ms`);
