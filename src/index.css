@@ -51,15 +51,22 @@
 
 /* Scrollbar delgado para sidebar y paneles */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 4px;
+  width: 6px;
 }
 .custom-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.15);
+  background: rgba(0,0,0,0.15);
   border-radius: 4px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0,0,0,0.3);
+}
+/* Scrollbar en fondos oscuros */
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.15);
+}
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(255,255,255,0.25);
 }
