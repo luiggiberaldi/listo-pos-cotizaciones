@@ -53,7 +53,7 @@ export default function BcvWidget({ soloLectura = false }) {
   // Colores del botón trigger según modo activo
   const triggerColors = {
     bcv: { text: 'text-emerald-400', bg: 'rgba(52,211,153,0.12)', border: 'rgba(52,211,153,0.3)' },
-    usdt: { text: 'text-indigo-400', bg: 'rgba(99,102,241,0.12)', border: 'rgba(99,102,241,0.3)' },
+    usdt: { text: 'text-sky-300', bg: 'rgba(125,211,252,0.12)', border: 'rgba(125,211,252,0.3)' },
     manual: { text: 'text-amber-400', bg: 'rgba(251,191,36,0.12)', border: 'rgba(251,191,36,0.3)' },
   }[modoTasa]
 
@@ -191,7 +191,7 @@ export default function BcvWidget({ soloLectura = false }) {
         <span className={`text-sm font-black ${triggerColors.text}`}>
           {tasaEfectiva > 0 ? fmtRate(tasaEfectiva) : '—'}
         </span>
-        <span className="hidden sm:inline text-[10px] text-white/35 font-medium">Bs/$</span>
+        <span className="hidden sm:inline text-[10px] text-white/55 font-medium">Bs/$</span>
       </div>
     )
   }
@@ -215,7 +215,7 @@ export default function BcvWidget({ soloLectura = false }) {
         <span className={`text-sm font-black ${triggerColors.text}`}>
           {tasaEfectiva > 0 ? fmtRate(tasaEfectiva) : '—'}
         </span>
-        <span className="hidden sm:inline text-[10px] text-white/35 font-medium">Bs/$</span>
+        <span className="hidden sm:inline text-[10px] text-white/55 font-medium">Bs/$</span>
         {modoTasa === 'manual' && (
           <span className="text-[8px] sm:text-[9px] bg-amber-500/20 text-amber-400 px-1 sm:px-1.5 py-0.5 rounded font-bold border border-amber-500/20">MAN</span>
         )}
