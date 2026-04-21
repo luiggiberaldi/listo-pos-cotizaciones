@@ -653,10 +653,6 @@ function UserSelectStep() {
         <div className="pointer-events-auto">
           <PwaInstallButton />
         </div>
-        <p className="text-[10px] tracking-[0.2em] uppercase font-medium px-4 py-1.5 rounded-full"
-          style={{ color: 'rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-          Construacero Carabobo C.A. · Sistema de Gestión
-        </p>
       </div>
 
       {/* Botón instalar PWA en móvil */}
