@@ -20,14 +20,19 @@ function colorCategoria(str = '') {
   for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) & 0xffff
   const [fg, bg] = PALETA[h % PALETA.length]
   return { fg, bg }
-
 }
 
 function BadgeStock({ actual, minimo, comprometido = 0, productoId }) {
-  const bajo = minimo > 0 && actual <= minimo
+  const agotado = actual <= 0
+  const bajo = !agotado && minimo > 0 && actual <= minimo
   const disponible = actual - comprometido
   const sobrecomprometido = comprometido > 0 && disponible < 0
 
+  if (agotado) return (
+    <span className="flex items-center gap-1 text-[10px] font-bold text-red-700 bg-red-100 border border-red-200 px-1.5 py-0.5 rounded-full">
+      Agotado
+    </span>
+  )
   if (sobrecomprometido) return (
     <div className="text-right">
       <span className="flex items-center gap-1 text-[10px] font-semibold text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-full">
@@ -59,11 +64,22 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, onBorra
   const esSupervisor = perfil?.rol === 'supervisor'
   const { fg, bg } = colorCategoria(producto.categoria || '')
 
-  return (
-    <div className="bg-white rounded-2xl border border-slate-200 hover:border-sky-200 hover:shadow-lg hover:shadow-sky-50 transition-all duration-200 flex flex-col overflow-hidden">
+  const stockActual = Number(producto.stock_actual) || 0
+  const stockMinimo = Number(producto.stock_minimo) || 0
+  const agotado = stockActual <= 0
+  const stockBajo = !agotado && stockMinimo > 0 && stockActual <= stockMinimo
 
-      {/* Imagen reducida — 80px fijo */}
-      <div className="w-full h-20 flex items-center justify-center overflow-hidden shrink-0"
+  return (
+    <div className={`rounded-2xl border hover:shadow-lg transition-all duration-200 flex flex-col overflow-hidden ${
+      agotado
+        ? 'bg-red-50/50 border-red-200 hover:border-red-300 hover:shadow-red-100'
+        : stockBajo
+          ? 'bg-amber-50/30 border-amber-200 hover:border-amber-300 hover:shadow-amber-100'
+          : 'bg-white border-slate-200 hover:border-sky-200 hover:shadow-sky-50'
+    }`}>
+
+      {/* Imagen — 80px fijo */}
+      <div className={`relative w-full h-20 flex items-center justify-center overflow-hidden shrink-0 ${agotado ? 'opacity-50 grayscale' : ''}`}
         style={{ background: producto.imagen_url ? '#f8fafc' : bg }}>
         {producto.imagen_url ? (
           <img src={producto.imagen_url} alt={producto.nombre}
@@ -71,13 +87,25 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, onBorra
         ) : (
           <Package size={28} style={{ color: fg, opacity: 0.7 }} />
         )}
+        {agotado && (
+          <div className="absolute inset-0 flex items-center justify-center bg-red-900/40">
+            <span className="text-[10px] font-black text-white bg-red-600 px-2 py-0.5 rounded-full uppercase tracking-wider">Agotado</span>
+          </div>
+        )}
+        {stockBajo && (
+          <div className="absolute top-1 right-1">
+            <span className="flex items-center gap-0.5 text-[9px] font-bold text-amber-800 bg-amber-300 px-1.5 py-0.5 rounded-full shadow-sm">
+              <AlertTriangle size={8} />Bajo
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Contenido */}
-      <div className="px-3 pt-2.5 pb-3 flex flex-col gap-2 flex-1">
+      <div className={`px-3 pt-2.5 pb-3 flex flex-col gap-2 flex-1 ${agotado ? 'opacity-70' : ''}`}>
 
         {/* Código + nombre + categoría */}
-        <div>
+        <div className="min-h-[48px]">
           {producto.codigo && (
             <div className="flex items-center gap-1 mb-0.5">
               <Hash size={9} className="text-slate-400" />
@@ -127,20 +155,20 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, onBorra
         </div>
       </div>
 
-      {/* Acciones */}
+      {/* Acciones — iconos compactos */}
       {esSupervisor && (
-        <div className="border-t border-slate-100 px-2 py-1.5 flex items-center gap-1">
-          <button onClick={() => onEditar(producto)}
+        <div className="border-t border-slate-100 px-1.5 py-1.5 flex items-center justify-between">
+          <button onClick={() => onEditar(producto)} title="Editar"
             className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-sky-600 hover:bg-sky-50 transition-colors">
             <Pencil size={11} />Editar
           </button>
-          <button onClick={() => onDesactivar(producto)}
-            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-amber-500 hover:bg-amber-50 transition-colors ml-auto">
-            <EyeOff size={11} />Desactivar
+          <button onClick={() => onDesactivar(producto)} title="Desactivar"
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-amber-500 hover:bg-amber-50 transition-colors">
+            <EyeOff size={11} />
           </button>
-          <button onClick={() => onBorrar(producto)}
+          <button onClick={() => onBorrar(producto)} title="Borrar"
             className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-red-500 hover:bg-red-50 transition-colors">
-            <Trash2 size={11} />Borrar
+            <Trash2 size={11} />
           </button>
         </div>
       )}
