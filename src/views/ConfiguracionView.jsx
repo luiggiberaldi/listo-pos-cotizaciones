@@ -109,25 +109,19 @@ function ComisionesTab({ campos, cambiar, isLoading, cargando }) {
               <span className={`text-xs font-bold uppercase tracking-wider ${COLORES[0].title}`}>Categoría especial</span>
             </div>
 
-            {/* Selector de categoría como chips */}
+            {/* Selector dropdown */}
             {categorias.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
+              <select
+                value={catPrincipal}
+                onChange={e => !disabled && cambiar('comision_categoria_cabilla', e.target.value)}
+                disabled={disabled}
+                className={`w-full px-3 py-2.5 rounded-xl border ${COLORES[0].border} bg-white text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 ${COLORES[0].ring} disabled:opacity-50 appearance-none cursor-pointer`}
+                style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center' }}
+              >
                 {categorias.filter(c => !extras.map(e => e.cat).includes(c)).map(cat => (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => !disabled && cambiar('comision_categoria_cabilla', cat)}
-                    disabled={disabled}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all border ${
-                      catPrincipal === cat
-                        ? 'bg-amber-500 text-white border-amber-500 shadow-sm'
-                        : 'bg-white/80 text-slate-600 border-amber-200/50 hover:border-amber-400 hover:text-amber-700'
-                    } disabled:opacity-50`}
-                  >
-                    {cat}
-                  </button>
+                  <option key={cat} value={cat}>{cat}</option>
                 ))}
-              </div>
+              </select>
             )}
 
             <div className="flex items-baseline gap-2">
@@ -158,30 +152,19 @@ function ComisionesTab({ campos, cambiar, isLoading, cargando }) {
                   <span className={`text-xs font-bold uppercase tracking-wider ${color.title}`}>Categoría especial {idx + 2}</span>
                 </div>
 
-                {/* Selector de categoría */}
-                <div className="flex flex-wrap gap-1.5">
-                  {categorias.filter(c => c === extra.cat || (!catsEspeciales.includes(c) || c === extra.cat)).map(cat => {
-                    // Solo mostrar la seleccionada + las disponibles
-                    const isUsada = catsEspeciales.includes(cat) && cat !== extra.cat
-                    if (isUsada) return null
-                    return (
-                      <button
-                        key={cat}
-                        type="button"
-                        onClick={() => !disabled && cambiarExtra(idx, 'cat', cat)}
-                        disabled={disabled}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all border ${
-                          extra.cat === cat
-                            ? `${color.dot.replace('bg-', 'bg-')} text-white border-transparent shadow-sm`
-                            : `bg-white/80 text-slate-600 ${color.border.replace('border-', 'border-')}/50 hover:text-slate-800`
-                        } disabled:opacity-50`}
-                        style={extra.cat === cat ? { backgroundColor: `var(--tw-gradient-from, ${color.dot.includes('violet') ? '#8b5cf6' : color.dot.includes('emerald') ? '#10b981' : color.dot.includes('rose') ? '#f43f5e' : '#f59e0b'})` } : {}}
-                      >
-                        {cat}
-                      </button>
-                    )
-                  })}
-                </div>
+                {/* Selector dropdown */}
+                <select
+                  value={extra.cat}
+                  onChange={e => !disabled && cambiarExtra(idx, 'cat', e.target.value)}
+                  disabled={disabled}
+                  className={`w-full px-3 py-2.5 rounded-xl border ${color.border} bg-white text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 ${color.ring} disabled:opacity-50 appearance-none cursor-pointer`}
+                  style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center' }}
+                >
+                  <option value={extra.cat}>{extra.cat}</option>
+                  {categorias.filter(c => !catsEspeciales.includes(c)).map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
 
                 <div className="flex items-baseline gap-2">
                   <input type="number" min="0" max="100" step="0.01"
