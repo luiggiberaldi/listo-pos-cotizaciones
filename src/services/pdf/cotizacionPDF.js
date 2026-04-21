@@ -409,11 +409,6 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     if (contactParts.length) {
       doc.text(contactParts.join('   |   '), PAGE_W/2, ph - 13, { align: 'center' })
     }
-
-    // RIF en el footer
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7)
-    doc.text(`RIF: ${rif}`, PAGE_W/2, ph - 8, { align: 'center' })
   }
 
   const filename = `${numDisplay.replace(/\s+/g, '_')}.pdf`
