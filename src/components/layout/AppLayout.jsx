@@ -337,7 +337,7 @@ export default function AppLayout() {
           ${menuOpen ? 'translate-x-0' : '-translate-x-full'}
           ${sidebarCollapsed ? 'md:w-[72px]' : 'md:w-64'}
           w-64 md:translate-x-0 md:static md:z-auto md:h-[calc(100vh-3.5rem)] md:sticky md:top-14
-          overflow-hidden
+          overflow-visible
         `}
         style={{
           background: 'linear-gradient(180deg, #0a1628 0%, #0d1f3c 60%, #0a1a0f 100%)',
@@ -345,6 +345,7 @@ export default function AppLayout() {
           boxShadow: '4px 0 24px rgba(0,0,0,0.3)',
         }}
       >
+        <div className="flex flex-col h-full overflow-hidden">
         {/* Malla de puntos decorativa */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-[0.03]">
           <svg width="100%" height="100%"><defs><pattern id="sdot" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="white"/></pattern></defs><rect width="100%" height="100%" fill="url(#sdot)"/></svg>
@@ -380,19 +381,11 @@ export default function AppLayout() {
             </div>
           )}
 
-          {/* Botón colapsar — solo desktop */}
-          <button
-            onClick={() => setSidebarCollapsed(c => !c)}
-            className="hidden md:flex absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full items-center justify-center transition-all hover:scale-110"
-            style={{ background: '#0d1f3c', border: '1px solid rgba(255,255,255,0.15)', boxShadow: '0 2px 8px rgba(0,0,0,0.4)', color: 'rgba(255,255,255,0.5)' }}
-            title={sidebarCollapsed ? 'Expandir menú' : 'Colapsar menú'}
-          >
-            {sidebarCollapsed ? <PanelLeftOpen size={13} /> : <PanelLeftClose size={13} />}
-          </button>
+          {/* Botón colapsar — movido fuera del overflow-hidden */}
         </div>
 
         {/* Navegación */}
-        <nav className="relative z-10 flex-1 min-h-0 overflow-y-auto custom-scrollbar p-3 space-y-0.5">
+        <nav className="relative z-10 flex-1 min-h-0 overflow-y-auto sidebar-scrollbar p-3 space-y-0.5">
           {NAV_TODOS.map(({ path, label, icono: Icono }) => (
             <NavItem key={path} path={path} label={label} Icono={Icono} onClick={cerrarMenu} collapsed={sidebarCollapsed} />
           ))}
@@ -440,6 +433,17 @@ export default function AppLayout() {
             )}
           </button>
         </div>
+        </div>
+
+        {/* Botón colapsar — solo desktop, fuera del overflow-hidden */}
+        <button
+          onClick={() => setSidebarCollapsed(c => !c)}
+          className="hidden md:flex absolute -right-3 top-28 w-6 h-6 rounded-full items-center justify-center transition-all hover:scale-110 z-50"
+          style={{ background: '#0d1f3c', border: '1px solid rgba(255,255,255,0.15)', boxShadow: '0 2px 8px rgba(0,0,0,0.4)', color: 'rgba(255,255,255,0.5)' }}
+          title={sidebarCollapsed ? 'Expandir menú' : 'Colapsar menú'}
+        >
+          {sidebarCollapsed ? <PanelLeftOpen size={13} /> : <PanelLeftClose size={13} />}
+        </button>
 
       </aside>
 
