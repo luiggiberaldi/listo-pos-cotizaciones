@@ -9,6 +9,7 @@ import {
 import { useClientes } from '../../hooks/useClientes'
 import ClienteForm from '../clientes/ClienteForm'
 import { useInventario, useCategorias } from '../../hooks/useInventario'
+import { parseSearchTerms, smartMatchProducto } from '../../utils/smartSearch'
 import { useGuardarBorrador, useEnviarCotizacion } from '../../hooks/useCotizaciones'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
@@ -102,10 +103,9 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
     : []
 
   // Filtrar productos
+  const searchTerms = productoBusqueda.trim() ? parseSearchTerms(productoBusqueda) : null
   const productosFiltrados = productos.filter(p => {
-    const coincideTexto = !productoBusqueda.trim() ||
-      p.nombre.toLowerCase().includes(productoBusqueda.toLowerCase()) ||
-      (p.codigo ?? '').toLowerCase().includes(productoBusqueda.toLowerCase())
+    const coincideTexto = !searchTerms || smartMatchProducto(p, searchTerms)
     const coincideCat = !catActiva || (p.categoria ?? '').toUpperCase().startsWith(catActiva.toUpperCase())
     return coincideTexto && coincideCat
   })

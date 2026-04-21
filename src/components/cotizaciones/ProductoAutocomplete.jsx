@@ -2,6 +2,7 @@
 // Autocomplete dropdown para búsqueda rápida de productos
 import { useState, useRef, useEffect } from 'react'
 import { Search, Plus, Package, X } from 'lucide-react'
+import { parseSearchTerms, smartMatchProducto } from '../../utils/smartSearch'
 
 export default function ProductoAutocomplete({ productos = [], onAgregar, idsAgregados = new Set(), placeholder = 'Búsqueda rápida por nombre o código...', stockComprometido = {} }) {
   const [texto, setTexto] = useState('')
@@ -18,10 +19,10 @@ export default function ProductoAutocomplete({ productos = [], onAgregar, idsAgr
   }, [])
 
   const sugerencias = texto.trim().length >= 2
-    ? productos.filter(p => {
-        const t = texto.toLowerCase()
-        return p.nombre.toLowerCase().includes(t) || (p.codigo ?? '').toLowerCase().includes(t)
-      }).slice(0, 8)
+    ? (() => {
+        const terms = parseSearchTerms(texto)
+        return productos.filter(p => smartMatchProducto(p, terms)).slice(0, 8)
+      })()
     : []
 
   const showDropdown = focused && sugerencias.length > 0

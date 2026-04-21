@@ -5,7 +5,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
 import useAuthStore from '../store/useAuthStore'
-import { sanitizePostgrestSearch } from '../utils/format'
+import { buildSmartFilter, parseSearchTerms } from '../utils/smartSearch'
 import { notifyStockBajo } from '../services/notificationService'
 import { showToast } from '../components/ui/Toast'
 
@@ -27,8 +27,13 @@ export function useInventario({ busqueda = '', categoria = '', page = 0, pageSiz
           .eq('activo', true)
 
         if (busqueda.trim()) {
-          const safe = sanitizePostgrestSearch(busqueda)
-          if (safe) query = query.or(`nombre.ilike.%${safe}%,codigo.ilike.%${safe}%`)
+          const filters = buildSmartFilter(busqueda)
+          if (filters) {
+            // Cada grupo de variantes se aplica como un .or() — encadenarlos = AND entre términos
+            for (const orClause of filters) {
+              query = query.or(orClause)
+            }
+          }
         }
 
         if (categoria) {

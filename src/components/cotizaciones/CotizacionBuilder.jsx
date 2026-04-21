@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { useClientes, useVendedores } from '../../hooks/useClientes'
 import { useInventario, useCategorias } from '../../hooks/useInventario'
+import { parseSearchTerms, smartMatchProducto } from '../../utils/smartSearch'
 import { useStockComprometido } from '../../hooks/useStockComprometido'
 import { useTransportistas }   from '../../hooks/useTransportistas'
 import { useGuardarBorrador, useEnviarCotizacion } from '../../hooks/useCotizaciones'
@@ -218,10 +219,9 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
     scrollRef.current?.scrollBy({ left: dir * 200, behavior: 'smooth' })
   }
 
+  const searchTerms = texto.trim() ? parseSearchTerms(texto) : null
   const filtrados = todosProductos.filter(p => {
-    const coincideTexto = !texto.trim() ||
-      p.nombre.toLowerCase().includes(texto.toLowerCase()) ||
-      (p.codigo ?? '').toLowerCase().includes(texto.toLowerCase())
+    const coincideTexto = !searchTerms || smartMatchProducto(p, searchTerms)
     const coincideCat = !catActiva || (p.categoria ?? '').toUpperCase().startsWith(catActiva.toUpperCase())
     return coincideTexto && coincideCat
   })
