@@ -369,18 +369,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   // Avanzar Y al final de lo que sea más alto (condiciones o totales)
   y = Math.max(condY, ty + 14) + 5
 
-  // ── Firma ──
-  if (y > PAGE_H - 50) { doc.addPage(); y = MARGIN }
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7)
-  doc.setTextColor(...C_DARK)
-  doc.text('Elaborado por', MARGIN + 25, y + 8, { align: 'center' })
-  doc.setLineWidth(0.3)
-  doc.setDrawColor(...C_DARK)
-  doc.line(MARGIN, y + 13, MARGIN + 50, y + 13)
-  if (cotizacion.vendedor?.nombre) {
-    doc.text(cotizacion.vendedor.nombre, MARGIN + 25, y + 17, { align: 'center' })
-  }
+  // ── (Sección de firma eliminada) ──
 
   // ── Slogan ──
   y += 24

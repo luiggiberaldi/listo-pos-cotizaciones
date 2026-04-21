@@ -398,19 +398,6 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   })
   y += 12
 
-  // Firmas
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7)
-  doc.setTextColor(...C_DARK)
-
-  doc.text('Elaborado/Entregado por', MARGIN + 25, y + 8, { align: 'center' })
-  doc.setLineWidth(0.3)
-  doc.setDrawColor(...C_DARK)
-  doc.line(MARGIN, y + 13, MARGIN + 50, y + 13)
-
-  doc.text('Recibido por', MARGIN + 85, y + 8, { align: 'center' })
-  doc.line(MARGIN + 60, y + 13, MARGIN + 110, y + 13)
-
   // ── Slogan ──
   y += 20
   if (y < PAGE_H - 45) {
