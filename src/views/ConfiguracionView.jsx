@@ -37,87 +37,197 @@ const SectionHeader = ({ icon: Icon, children }) => (
 // ─── Comisiones Tab (extraído para claridad) ─────────────────────────────────
 function ComisionesTab({ campos, cambiar, isLoading, cargando }) {
   const { data: categorias = [] } = useCategorias()
-  const catSeleccionada = campos.comision_categoria_cabilla || 'Cabilla'
   const disabled = isLoading || cargando
+
+  // Parse categorías especiales: [{cat, pct}]
+  // La primera siempre viene de comision_categoria_cabilla + comision_pct_cabilla
+  // Las adicionales se guardan como JSON en un campo especial
+  const [extras, setExtras] = useState([])
+
+  // Inicializar extras desde config (si hay JSON guardado)
+  useEffect(() => {
+    if (campos._comision_extras) {
+      try {
+        const parsed = JSON.parse(campos._comision_extras)
+        if (Array.isArray(parsed)) setExtras(parsed)
+      } catch {}
+    }
+  }, [campos._comision_extras])
+
+  // Todas las categorías especiales (la principal + extras)
+  const catPrincipal = campos.comision_categoria_cabilla || ''
+  const catsEspeciales = [catPrincipal, ...extras.map(e => e.cat)].filter(Boolean)
+
+  function agregarCategoria() {
+    // Buscar primera categoría no usada
+    const disponibles = categorias.filter(c => !catsEspeciales.includes(c))
+    if (disponibles.length === 0) return
+    const nuevas = [...extras, { cat: disponibles[0], pct: 2 }]
+    setExtras(nuevas)
+    cambiar('_comision_extras', JSON.stringify(nuevas))
+  }
+
+  function cambiarExtra(idx, campo, valor) {
+    const nuevas = extras.map((e, i) => i === idx ? { ...e, [campo]: valor } : e)
+    setExtras(nuevas)
+    cambiar('_comision_extras', JSON.stringify(nuevas))
+  }
+
+  function eliminarExtra(idx) {
+    const nuevas = extras.filter((_, i) => i !== idx)
+    setExtras(nuevas)
+    cambiar('_comision_extras', JSON.stringify(nuevas))
+  }
+
+  const selectOnFocus = (e) => e.target.select()
+
+  // Categorías disponibles para nueva selección
+  const catsDisponibles = categorias.filter(c => !catsEspeciales.includes(c))
+
+  // Colores para las tarjetas
+  const COLORES = [
+    { from: 'from-amber-50', to: 'to-orange-50', border: 'border-amber-200', dot: 'bg-amber-500', title: 'text-amber-800', ring: 'focus:ring-amber-300', pct: 'text-amber-600', ejemplo: 'text-amber-700' },
+    { from: 'from-violet-50', to: 'to-purple-50', border: 'border-violet-200', dot: 'bg-violet-500', title: 'text-violet-800', ring: 'focus:ring-violet-300', pct: 'text-violet-600', ejemplo: 'text-violet-700' },
+    { from: 'from-emerald-50', to: 'to-teal-50', border: 'border-emerald-200', dot: 'bg-emerald-500', title: 'text-emerald-800', ring: 'focus:ring-emerald-300', pct: 'text-emerald-600', ejemplo: 'text-emerald-700' },
+    { from: 'from-rose-50', to: 'to-pink-50', border: 'border-rose-200', dot: 'bg-rose-500', title: 'text-rose-800', ring: 'focus:ring-rose-300', pct: 'text-rose-600', ejemplo: 'text-rose-700' },
+  ]
 
   return (
     <div className="space-y-5">
-      {/* Card: Categoría especial */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-        <SectionHeader icon={DollarSign}>Categoría con tasa especial</SectionHeader>
-        <p className="text-xs text-slate-500 -mt-2">
-          Elige la categoría de productos que tendrá una comisión diferenciada. El resto usa la tasa general.
-        </p>
-
-        {categorias.length > 0 ? (
-          <div className="flex flex-wrap gap-2">
-            {categorias.map(cat => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => !disabled && cambiar('comision_categoria_cabilla', cat)}
-                disabled={disabled}
-                className={`px-3.5 py-2 rounded-xl text-sm font-semibold transition-all border ${
-                  catSeleccionada === cat
-                    ? 'bg-primary text-white border-primary shadow-sm shadow-primary/20'
-                    : 'bg-white text-slate-600 border-slate-200 hover:border-primary/40 hover:text-primary'
-                } disabled:opacity-50`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-slate-400 italic">Cargando categorías...</p>
-        )}
-      </div>
-
-      {/* Card: Tasas */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+      <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-5">
         <SectionHeader icon={Percent}>Tasas de comisión</SectionHeader>
         <p className="text-xs text-slate-500 -mt-2">
-          Porcentaje que se calcula al marcar un despacho como entregado.
+          Porcentaje que se calcula al marcar un despacho como entregado. Asigna tasas diferenciadas por categoría.
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* Comisión categoría especial */}
-          <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl border border-amber-200 p-4 space-y-3">
+          {/* Tarjeta categoría principal */}
+          <div className={`bg-gradient-to-br ${COLORES[0].from} ${COLORES[0].to} rounded-xl border ${COLORES[0].border} p-4 space-y-3`}>
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-              <span className="text-sm font-bold text-amber-800">{catSeleccionada}</span>
+              <span className={`w-2.5 h-2.5 rounded-full ${COLORES[0].dot}`} />
+              <span className={`text-xs font-bold uppercase tracking-wider ${COLORES[0].title}`}>Categoría especial</span>
             </div>
+
+            {/* Selector de categoría como chips */}
+            {categorias.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {categorias.filter(c => !extras.map(e => e.cat).includes(c)).map(cat => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => !disabled && cambiar('comision_categoria_cabilla', cat)}
+                    disabled={disabled}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all border ${
+                      catPrincipal === cat
+                        ? 'bg-amber-500 text-white border-amber-500 shadow-sm'
+                        : 'bg-white/80 text-slate-600 border-amber-200/50 hover:border-amber-400 hover:text-amber-700'
+                    } disabled:opacity-50`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="flex items-baseline gap-2">
               <input type="number" min="0" max="100" step="0.01"
                 value={campos.comision_pct_cabilla}
+                onFocus={selectOnFocus}
                 onChange={e => cambiar('comision_pct_cabilla', Math.max(0, Math.min(100, Number(e.target.value))))}
-                className="w-20 px-3 py-2.5 rounded-xl border border-amber-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-300 text-right font-bold"
+                className={`w-20 px-3 py-2.5 rounded-xl border ${COLORES[0].border} bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 ${COLORES[0].ring} text-right font-bold`}
                 disabled={disabled} />
-              <span className="text-lg font-bold text-amber-600">%</span>
+              <span className={`text-lg font-bold ${COLORES[0].pct}`}>%</span>
             </div>
-            <p className="text-xs text-amber-700">
-              $1,000 → <strong>{fmtUsd(1000 * campos.comision_pct_cabilla / 100)}</strong> comisión
+            <p className={`text-xs ${COLORES[0].ejemplo}`}>
+              $1,000 → <strong>{fmtUsd(1000 * campos.comision_pct_cabilla / 100)}</strong>
             </p>
           </div>
 
-          {/* Comisión otros */}
+          {/* Tarjetas de categorías extras */}
+          {extras.map((extra, idx) => {
+            const color = COLORES[(idx + 1) % COLORES.length]
+            return (
+              <div key={idx} className={`bg-gradient-to-br ${color.from} ${color.to} rounded-xl border ${color.border} p-4 space-y-3 relative`}>
+                <button type="button" onClick={() => eliminarExtra(idx)} disabled={disabled}
+                  className="absolute top-2 right-2 p-1 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+                <div className="flex items-center gap-2">
+                  <span className={`w-2.5 h-2.5 rounded-full ${color.dot}`} />
+                  <span className={`text-xs font-bold uppercase tracking-wider ${color.title}`}>Categoría especial {idx + 2}</span>
+                </div>
+
+                {/* Selector de categoría */}
+                <div className="flex flex-wrap gap-1.5">
+                  {categorias.filter(c => c === extra.cat || (!catsEspeciales.includes(c) || c === extra.cat)).map(cat => {
+                    // Solo mostrar la seleccionada + las disponibles
+                    const isUsada = catsEspeciales.includes(cat) && cat !== extra.cat
+                    if (isUsada) return null
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => !disabled && cambiarExtra(idx, 'cat', cat)}
+                        disabled={disabled}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all border ${
+                          extra.cat === cat
+                            ? `${color.dot.replace('bg-', 'bg-')} text-white border-transparent shadow-sm`
+                            : `bg-white/80 text-slate-600 ${color.border.replace('border-', 'border-')}/50 hover:text-slate-800`
+                        } disabled:opacity-50`}
+                        style={extra.cat === cat ? { backgroundColor: `var(--tw-gradient-from, ${color.dot.includes('violet') ? '#8b5cf6' : color.dot.includes('emerald') ? '#10b981' : color.dot.includes('rose') ? '#f43f5e' : '#f59e0b'})` } : {}}
+                      >
+                        {cat}
+                      </button>
+                    )
+                  })}
+                </div>
+
+                <div className="flex items-baseline gap-2">
+                  <input type="number" min="0" max="100" step="0.01"
+                    value={extra.pct}
+                    onFocus={selectOnFocus}
+                    onChange={e => cambiarExtra(idx, 'pct', Math.max(0, Math.min(100, Number(e.target.value))))}
+                    className={`w-20 px-3 py-2.5 rounded-xl border ${color.border} bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 ${color.ring} text-right font-bold`}
+                    disabled={disabled} />
+                  <span className={`text-lg font-bold ${color.pct}`}>%</span>
+                </div>
+                <p className={`text-xs ${color.ejemplo}`}>
+                  $1,000 → <strong>{fmtUsd(1000 * extra.pct / 100)}</strong>
+                </p>
+              </div>
+            )
+          })}
+
+          {/* Tarjeta "Demás categorías" (siempre al final) */}
           <div className="bg-gradient-to-br from-slate-50 to-blue-50 rounded-xl border border-slate-200 p-4 space-y-3">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
-              <span className="text-sm font-bold text-slate-700">Demás categorías</span>
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Demás categorías</span>
             </div>
+            <p className="text-[11px] text-slate-400">Aplica a todas las categorías sin tasa especial.</p>
             <div className="flex items-baseline gap-2">
               <input type="number" min="0" max="100" step="0.01"
                 value={campos.comision_pct_otros}
+                onFocus={selectOnFocus}
                 onChange={e => cambiar('comision_pct_otros', Math.max(0, Math.min(100, Number(e.target.value))))}
                 className="w-20 px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 text-right font-bold"
                 disabled={disabled} />
               <span className="text-lg font-bold text-blue-500">%</span>
             </div>
             <p className="text-xs text-slate-500">
-              $1,000 → <strong>{fmtUsd(1000 * campos.comision_pct_otros / 100)}</strong> comisión
+              $1,000 → <strong>{fmtUsd(1000 * campos.comision_pct_otros / 100)}</strong>
             </p>
           </div>
         </div>
+
+        {/* Botón agregar categoría */}
+        {catsDisponibles.length > 0 && (
+          <button type="button" onClick={agregarCategoria} disabled={disabled}
+            className="flex items-center gap-2 text-sm font-semibold text-primary hover:text-primary-hover transition-colors disabled:opacity-50">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
+            Agregar otra categoría con tasa especial
+          </button>
+        )}
       </div>
     </div>
   )
