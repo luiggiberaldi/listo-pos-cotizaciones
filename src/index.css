@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Forzar modo claro — evita dark mode automático en Samsung Internet y otros */
+:root {
+  color-scheme: only light;
+}
+
 @layer base {
   :root {
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
