@@ -300,6 +300,11 @@ function GateStep({ onPass }) {
             {loading ? 'Verificando...' : 'Acceder'}
           </button>
         </form>
+
+        {/* Botón instalar PWA */}
+        <div className="mt-6" style={{ animation: 'fadeSlideUp 0.6s ease 0.5s forwards', opacity: 0 }}>
+          <PwaInstallButton />
+        </div>
       </div>
 
       <style>{`
