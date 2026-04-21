@@ -404,43 +404,6 @@ export default function ConfiguracionView() {
           {tab === 'sistema' && (
             <>
               <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-                <SectionHeader icon={Lock}>Acceso al sistema</SectionHeader>
-                <p className="text-xs text-slate-500 -mt-2">
-                  Credenciales compartidas en todos los dispositivos. Cada vendedor se identifica después con su PIN.
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
-                      <Mail size={12} className="text-slate-400" /> Correo de acceso
-                    </label>
-                    <input type="email" value={campos.gate_email} onChange={e => cambiar('gate_email', e.target.value)}
-                      placeholder="negocio@ejemplo.com" className={inputCls} disabled={isLoading || cargando} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
-                      <Lock size={12} className="text-slate-400" /> Nueva contraseña
-                      <span className="text-xs text-slate-400">(vacío = no cambiar)</span>
-                    </label>
-                    <div className="relative">
-                      <input type={showGatePass ? 'text' : 'password'} value={gatePassword}
-                        onChange={e => { setGatePassword(e.target.value); setGuardado(false); setError('') }}
-                        placeholder="••••••••" className={`${inputCls} pr-10`} disabled={isLoading || cargando} />
-                      <button type="button" onClick={() => setShowGatePass(!showGatePass)}
-                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-sky-500 transition-colors">
-                        {showGatePass ? <EyeOff size={14} /> : <Eye size={14} />}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                {config.gate_email && (
-                  <p className="text-xs text-emerald-600 font-medium">Acceso configurado: {config.gate_email}</p>
-                )}
-                {!config.gate_email && (
-                  <p className="text-xs text-amber-600 font-medium">Sin configurar — cualquier persona puede acceder.</p>
-                )}
-              </div>
-
-              <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
                 <SectionHeader icon={Accessibility}>Modo lectura fácil</SectionHeader>
                 <p className="text-xs text-slate-500 -mt-2">
                   Textos y botones más grandes. Solo aplica en este dispositivo.
