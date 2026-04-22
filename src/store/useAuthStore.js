@@ -50,6 +50,8 @@ const useAuthStore = create((set, get) => ({
         if (event === 'INITIAL_SESSION') {
           try {
             if (session?.user) {
+              // Setear user inmediatamente para que LoginPage sepa que hay sesión
+              set({ user: session.user })
               const perfilPromise = get()._cargarPerfil(session.user)
               const timeoutPromise = new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('timeout')), 1800)
@@ -224,19 +226,29 @@ const useAuthStore = create((set, get) => ({
         return { ok: false }
       }
 
-      // Refrescar sesión para obtener JWT con app_metadata actualizada
-      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession()
-
-      if (refreshError || !refreshData?.user) {
-        set({ loading: false, error: 'Error al refrescar sesión. Intenta de nuevo.' })
-        return { ok: false }
+      // Setear perfil inmediatamente con datos del worker (sin esperar refresh)
+      const op = result.operator
+      if (op) {
+        set({
+          perfil: {
+            id: op.id,
+            nombre: op.nombre,
+            email: get().user?.email,
+            rol: op.rol,
+            activo: true,
+            color: op.color ?? null,
+          },
+          loading: false,
+          error: null,
+        })
       }
 
-      // Cargar perfil del operador
-      await get()._cargarPerfil(refreshData.user)
+      // Refrescar JWT en background para que RLS funcione con el nuevo operador
+      supabase.auth.refreshSession().then(({ data }) => {
+        if (data?.user) set({ user: data.user })
+      }).catch(() => {})
 
-      set({ loading: false })
-      return get().perfil ? { ok: true } : { ok: false }
+      return { ok: true }
     } catch (err) {
       set({ loading: false, error: 'Error de conexión. Verifica tu internet.' })
       return { ok: false }
