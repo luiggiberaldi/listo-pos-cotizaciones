@@ -106,9 +106,18 @@ function ItemLinea({ item, idx, onChange, onDelete, tasa = 0 }) {
         <span className="text-[11px] font-medium bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{item.unidadSnap}</span>
       </td>
       <td className="py-3 px-2">
-        <input type="number" min="0.01" step="0.01"
+        <input type="text" inputMode="decimal"
           value={item.cantidad}
-          onChange={e => onChange(idx, 'cantidad', Math.max(0.01, Number(e.target.value)))}
+          onChange={e => {
+            const raw = e.target.value.replace(',', '.')
+            if (raw === '' || raw === '0' || raw === '0.') return onChange(idx, 'cantidad', raw)
+            const v = parseFloat(raw)
+            if (!isNaN(v) && v >= 0) onChange(idx, 'cantidad', raw)
+          }}
+          onBlur={e => {
+            const v = parseFloat(String(e.target.value).replace(',', '.'))
+            onChange(idx, 'cantidad', (!isNaN(v) && v > 0) ? v : 1)
+          }}
           onFocus={e => e.target.select()}
           className="w-20 px-2 py-1.5 text-sm text-right border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary bg-white transition-all"
         />
@@ -167,9 +176,19 @@ function ItemCard({ item, idx, onChange, onDelete, tasa = 0 }) {
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
           <label className="text-xs font-medium text-slate-500">Cantidad</label>
-          <input type="number" min="0.01" step="0.01"
+          <input type="text" inputMode="decimal"
             value={item.cantidad}
-            onChange={e => onChange(idx, 'cantidad', Math.max(0.01, Number(e.target.value)))}
+            onFocus={e => e.target.select()}
+            onChange={e => {
+              const raw = e.target.value.replace(',', '.')
+              if (raw === '' || raw === '0' || raw === '0.') return onChange(idx, 'cantidad', raw)
+              const v = parseFloat(raw)
+              if (!isNaN(v) && v >= 0) onChange(idx, 'cantidad', raw)
+            }}
+            onBlur={e => {
+              const v = parseFloat(String(e.target.value).replace(',', '.'))
+              onChange(idx, 'cantidad', (!isNaN(v) && v > 0) ? v : 1)
+            }}
             className="w-full px-3 py-2.5 text-sm text-right border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-primary-focus bg-white"
           />
         </div>
@@ -818,9 +837,19 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
                   <Minus size={14} strokeWidth={3} />
                 </button>
                 <input
-                  type="number" min="0.01" step="0.01"
+                  type="text" inputMode="decimal"
                   value={it.cantidad}
-                  onChange={e => { const v = parseFloat(e.target.value); if (!isNaN(v) && v > 0) onCambiar(idx, 'cantidad', v) }}
+                  onFocus={e => e.target.select()}
+                  onChange={e => {
+                    const raw = e.target.value.replace(',', '.')
+                    if (raw === '' || raw === '0' || raw === '0.') return onCambiar(idx, 'cantidad', raw)
+                    const v = parseFloat(raw)
+                    if (!isNaN(v) && v >= 0) onCambiar(idx, 'cantidad', raw)
+                  }}
+                  onBlur={e => {
+                    const v = parseFloat(String(e.target.value).replace(',', '.'))
+                    onCambiar(idx, 'cantidad', (!isNaN(v) && v > 0) ? v : 1)
+                  }}
                   className="w-10 sm:w-12 h-11 text-center text-xs font-black text-slate-700 bg-white border-x border-slate-100 outline-none"
                 />
                 <button type="button"
@@ -945,7 +974,7 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
   )
 }
 
-export default function CotizacionBuilder({ cotizacionExistente = null, onVolver, onGuardado }) {
+export default function CotizacionBuilder({ cotizacionExistente = null, clientePreseleccionado = null, onVolver, onGuardado }) {
   const esEdicion = !!cotizacionExistente
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
@@ -956,7 +985,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
 
   // Estado del formulario
   const [vendedorId,         setVendedorId]         = useState(cotizacionExistente?.vendedor_id ?? '')
-  const [clienteId,          setClienteId]          = useState(cotizacionExistente?.cliente_id ?? '')
+  const [clienteId,          setClienteId]          = useState(cotizacionExistente?.cliente_id ?? clientePreseleccionado ?? '')
   const [transportistaId,    setTransportistaId]    = useState(cotizacionExistente?.transportista_id ?? '')
   // Calcular días de validez desde la fecha existente o usar 7 por defecto
   const [diasValidez, setDiasValidez] = useState(() => {

@@ -75,7 +75,7 @@ export function clearNotifications() {
 const STOCK_BAJO_COOLDOWN_MS = 6 * 60 * 60 * 1000 // 6 horas
 
 export function notifyStockBajo(productos) {
-  const bajos = productos.filter(p => p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo)
+  const bajos = productos.filter(p => p.stock_actual <= 0 || (p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo))
   if (!bajos.length) return
 
   // No crear nueva notificación si la última tiene menos de 6 horas y la cantidad no cambió
@@ -151,7 +151,7 @@ export function notifyClienteAjeno(vendedorNombre, clienteNombre, clienteVendedo
 // ─── Recordatorios proactivos (estilo Buildertrend) ──────────────────────────
 
 const RECORDATORIO_COOLDOWN_KEY = 'construacero_recordatorios_v1'
-const RECORDATORIO_COOLDOWN_MS  = 24 * 60 * 60 * 1000 // 24 horas por cotización
+const RECORDATORIO_COOLDOWN_MS  = 1 * 60 * 60 * 1000 // 1 hora por cotización
 
 function readCooldowns() {
   try { return JSON.parse(localStorage.getItem(RECORDATORIO_COOLDOWN_KEY) || '{}') }
@@ -181,19 +181,19 @@ function setCooldown(key) {
 }
 
 /**
- * Llamar cuando se detecta una cotización enviada hace N días sin respuesta.
- * Genera una notificación máximo una vez cada 24 h por cotización.
+ * Llamar cuando se detecta una cotización enviada sin respuesta.
+ * Genera una notificación máximo una vez cada 1 h por cotización.
  */
-export function notifyCotizacionSinRespuesta(numero, clienteNombre, diasTranscurridos, vendedorNombre) {
+export function notifyCotizacionSinRespuesta(numero, clienteNombre, tiempoTexto, vendedorNombre) {
   const key = `sin_respuesta_${numero}`
   if (hasCooldown(key)) return
   setCooldown(key)
   const de = vendedorNombre ? ` — ${vendedorNombre}` : ''
   createNotification(
     NOTIF_TYPES.COTIZACION_SIN_RESPUESTA,
-    `COT-${numero} sin respuesta (${diasTranscurridos}d)`,
-    `${clienteNombre}${de} — Enviada hace ${diasTranscurridos} día${diasTranscurridos > 1 ? 's' : ''} sin confirmar`,
-    { numero, clienteNombre, diasTranscurridos },
+    `COT-${numero} sin respuesta (${tiempoTexto})`,
+    `${clienteNombre}${de} — Enviada hace ${tiempoTexto} sin confirmar`,
+    { numero, clienteNombre, tiempoTexto },
   )
 }
 

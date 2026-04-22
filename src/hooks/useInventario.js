@@ -50,8 +50,8 @@ export function useInventario({ busqueda = '', categoria = '', page = 0, pageSiz
         const productos = data ?? []
 
         // Stock bajo (solo supervisor, sin filtros, primera página)
-        if (!busqueda && !categoria && page === 0) {
-          const bajos = productos.filter(p => p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo)
+        if (esSupervisor && !busqueda && !categoria && page === 0) {
+          const bajos = productos.filter(p => p.stock_actual <= 0 || (p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo))
           if (bajos.length > 0) notifyStockBajo(bajos)
         }
 
@@ -205,7 +205,7 @@ export function useActualizarProducto() {
       qc.invalidateQueries({ queryKey: INVENTARIO_KEY })
       qc.invalidateQueries({ queryKey: MOVIMIENTOS_KEY })
       showToast('Producto actualizado', 'success')
-      if (data?.stock_minimo > 0 && data?.stock_actual <= data?.stock_minimo) {
+      if (data?.stock_actual <= 0 || (data?.stock_minimo > 0 && data?.stock_actual <= data?.stock_minimo)) {
         notifyStockBajo([data])
       }
     },

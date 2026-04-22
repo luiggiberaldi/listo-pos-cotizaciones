@@ -16,7 +16,6 @@ import { useComisionesResumen } from '../hooks/useComisiones'
 import { getWeekRange, getMonthRange } from '../utils/dateHelpers'
 import { fmtUsd } from '../utils/format'
 import useAuthStore from '../store/useAuthStore'
-import PageHeader from '../components/ui/PageHeader'
 import Skeleton from '../components/ui/Skeleton'
 import EmptyState from '../components/ui/EmptyState'
 import DateRangeSelector from '../components/reportes/DateRangeSelector'
@@ -27,11 +26,11 @@ import TablaProductos from '../components/reportes/TablaProductos'
 
 // ─── Tabs Definition ──────────────────────────────────────────────────────
 const TABS = [
-  { id: 'ventas',       label: 'Ventas',        icon: DollarSign },
-  { id: 'inventario',   label: 'Inventario',    icon: Package },
-  { id: 'cotizaciones', label: 'Cotizaciones',  icon: FileText },
-  { id: 'despachos',    label: 'Despachos',     icon: Truck },
-  { id: 'comisiones',   label: 'Comisiones',    icon: Percent },
+  { id: 'ventas',       label: 'Ventas',        short: 'Ventas',   icon: DollarSign },
+  { id: 'inventario',   label: 'Inventario',    short: 'Invent.',  icon: Package },
+  { id: 'cotizaciones', label: 'Cotizaciones',  short: 'Cotiz.',   icon: FileText },
+  { id: 'despachos',    label: 'Despachos',     short: 'Desp.',    icon: Truck },
+  { id: 'comisiones',   label: 'Comisiones',    short: 'Comis.',   icon: Percent },
 ]
 
 // ─── Skeleton ──────────────────────────────────────────────────────────────
@@ -57,21 +56,21 @@ function SkeletonReporte() {
 // ─── KPI Card (reusable) ──────────────────────────────────────────────────
 function KpiCard({ icon: Icon, label, value, sub, gradient, border }) {
   return (
-    <div className="relative overflow-hidden rounded-2xl p-3 sm:p-4 flex flex-col gap-2 sm:gap-2.5 min-w-0"
+    <div className="relative overflow-hidden rounded-xl sm:rounded-2xl p-2.5 sm:p-3 md:p-4 flex flex-col gap-1 sm:gap-2 min-w-0"
       style={{ background: gradient, border: `1px solid ${border}`, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
-      <div className="absolute -bottom-4 -right-4 w-20 h-20 rounded-full pointer-events-none"
+      <div className="absolute -bottom-4 -right-4 w-16 sm:w-20 h-16 sm:h-20 rounded-full pointer-events-none"
         style={{ background: 'rgba(255,255,255,0.05)' }} />
-      <div className="flex items-start gap-1.5 sm:gap-2 relative z-10 min-w-0">
-        <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center shrink-0"
+      <div className="flex items-start gap-1.5 relative z-10 min-w-0">
+        <div className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 rounded-lg flex items-center justify-center shrink-0"
           style={{ background: 'rgba(255,255,255,0.15)' }}>
-          <Icon size={14} className="text-white sm:w-4 sm:h-4" />
+          <Icon size={12} className="text-white sm:w-3.5 sm:h-3.5 md:w-4 md:h-4" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] sm:text-[11px] font-medium leading-tight" style={{ color: 'rgba(255,255,255,0.6)' }}>{label}</p>
+          <p className="text-[9px] sm:text-[10px] md:text-[11px] font-medium leading-tight truncate" style={{ color: 'rgba(255,255,255,0.6)' }}>{label}</p>
         </div>
       </div>
-      <p className="text-xl sm:text-2xl font-black leading-tight text-white relative z-10">{value}</p>
-      {sub && <p className="text-[10px] sm:text-[11px] relative z-10" style={{ color: 'rgba(255,255,255,0.4)' }}>{sub}</p>}
+      <p className="text-base sm:text-xl md:text-2xl font-black leading-tight text-white relative z-10 truncate">{value}</p>
+      {sub && <p className="text-[9px] sm:text-[10px] md:text-[11px] relative z-10 truncate" style={{ color: 'rgba(255,255,255,0.4)' }}>{sub}</p>}
     </div>
   )
 }
@@ -83,29 +82,29 @@ function FormaPagoSection({ data = [] }) {
   const COLORS = { 'Efectivo': '#10b981', 'Zelle': '#3b82f6', 'Pago Móvil': '#8b5cf6', 'USDT': '#f59e0b', 'Sin especificar': '#94a3b8' }
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-      <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
-        <CreditCard size={16} className="text-slate-500" />
-        <h3 className="text-sm font-black text-slate-800">Formas de pago</h3>
+    <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 overflow-hidden">
+      <div className="px-3 sm:px-4 py-2 sm:py-3 border-b border-slate-100 flex items-center gap-2">
+        <CreditCard size={14} className="text-slate-500 sm:w-4 sm:h-4" />
+        <h3 className="text-xs sm:text-sm font-black text-slate-800">Formas de pago</h3>
       </div>
-      <div className="p-4 space-y-3">
+      <div className="p-3 sm:p-4 space-y-2.5 sm:space-y-3">
         {data.map(fp => {
           const pct = total > 0 ? (fp.totalUsd / total) * 100 : 0
           const color = COLORS[fp.formaPago] || '#64748b'
           return (
             <div key={fp.formaPago} className="space-y-1">
-              <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-sm" style={{ background: color }} />
-                  <span className="font-semibold text-slate-700">{fp.formaPago}</span>
-                  <span className="text-[10px] text-slate-400 font-bold">{fp.count} despacho{fp.count !== 1 ? 's' : ''}</span>
+              <div className="flex items-center justify-between text-xs sm:text-sm">
+                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                  <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-sm shrink-0" style={{ background: color }} />
+                  <span className="font-semibold text-slate-700 truncate">{fp.formaPago}</span>
+                  <span className="text-[9px] sm:text-[10px] text-slate-400 font-bold shrink-0">{fp.count}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-400">{pct.toFixed(1)}%</span>
-                  <span className="font-bold text-slate-800">{fmtUsd(fp.totalUsd)}</span>
+                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                  <span className="text-[10px] sm:text-xs text-slate-400">{pct.toFixed(0)}%</span>
+                  <span className="font-bold text-slate-800 text-xs sm:text-sm">{fmtUsd(fp.totalUsd)}</span>
                 </div>
               </div>
-              <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
+              <div className="h-2 sm:h-2.5 rounded-full bg-slate-100 overflow-hidden">
                 <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: color }} />
               </div>
             </div>
@@ -134,17 +133,17 @@ const ESTADO_STYLES = {
 function AdminTable({ icon: Icon, iconColor, title, headers, rows, emptyText }) {
   if (rows.length === 0) return null
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-      <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
-        <Icon size={16} className={iconColor} />
-        <h3 className="text-sm font-black text-slate-800">{title}</h3>
+    <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 overflow-hidden">
+      <div className="px-3 sm:px-4 py-2 sm:py-3 border-b border-slate-100 flex items-center gap-2">
+        <Icon size={14} className={`${iconColor} sm:w-4 sm:h-4`} />
+        <h3 className="text-xs sm:text-sm font-black text-slate-800">{title}</h3>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-xs sm:text-sm">
           <thead>
-            <tr className="text-xs text-slate-400 uppercase border-b border-slate-100">
+            <tr className="text-[10px] sm:text-xs text-slate-400 uppercase border-b border-slate-100">
               {headers.map((h, i) => (
-                <th key={i} className={`px-4 py-2.5 font-semibold ${h.align || 'text-left'}`}>{h.label}</th>
+                <th key={i} className={`px-2 sm:px-4 py-2 font-semibold ${h.align || 'text-left'}`}>{h.label}</th>
               ))}
             </tr>
           </thead>
@@ -152,7 +151,7 @@ function AdminTable({ icon: Icon, iconColor, title, headers, rows, emptyText }) 
             {rows.map((row, i) => (
               <tr key={i} className="border-b border-slate-50 hover:bg-slate-50/50">
                 {row.map((cell, j) => (
-                  <td key={j} className={`px-4 py-2.5 ${cell.className || ''}`}>{cell.content}</td>
+                  <td key={j} className={`px-2 sm:px-4 py-2 sm:py-2.5 ${cell.className || ''}`}>{cell.content}</td>
                 ))}
               </tr>
             ))}
@@ -175,30 +174,30 @@ function BarSection({ icon: Icon, iconColor, title, data, labelKey, countKey, co
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-      <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
-        <Icon size={16} className={iconColor} />
-        <h3 className="text-sm font-black text-slate-800">{title}</h3>
+    <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 overflow-hidden">
+      <div className="px-3 sm:px-4 py-2 sm:py-3 border-b border-slate-100 flex items-center gap-2">
+        <Icon size={14} className={`${iconColor} sm:w-4 sm:h-4`} />
+        <h3 className="text-xs sm:text-sm font-black text-slate-800">{title}</h3>
       </div>
-      <div className="p-4 space-y-3">
+      <div className="p-3 sm:p-4 space-y-2.5 sm:space-y-3">
         {data.filter(d => d[countKey] > 0).map((d, i) => {
           const pct = total > 0 ? (d[valueKey] / total) * 100 : 0
           const color = ESTADO_BAR_COLORS[d[labelKey]] || '#64748b'
           const label = d[labelKey].charAt(0).toUpperCase() + d[labelKey].slice(1)
           return (
             <div key={i} className="space-y-1">
-              <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-sm" style={{ background: color }} />
-                  <span className="font-semibold text-slate-700">{label}</span>
-                  <span className="text-[10px] text-slate-400 font-bold">{d[countKey]} {countSuffix}</span>
+              <div className="flex items-center justify-between text-xs sm:text-sm">
+                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                  <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-sm shrink-0" style={{ background: color }} />
+                  <span className="font-semibold text-slate-700 truncate">{label}</span>
+                  <span className="text-[9px] sm:text-[10px] text-slate-400 font-bold shrink-0">{d[countKey]} {countSuffix}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-400">{pct.toFixed(1)}%</span>
-                  <span className="font-bold text-slate-800">{fmtUsd(d[valueKey])}</span>
+                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                  <span className="text-[10px] sm:text-xs text-slate-400">{pct.toFixed(0)}%</span>
+                  <span className="font-bold text-slate-800 text-xs sm:text-sm">{fmtUsd(d[valueKey])}</span>
                 </div>
               </div>
-              <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
+              <div className="h-2 sm:h-2.5 rounded-full bg-slate-100 overflow-hidden">
                 <div className="h-full rounded-full transition-all duration-500"
                   style={{ width: `${Math.max(pct, 1)}%`, background: color }} />
               </div>
@@ -215,26 +214,26 @@ function AgingSection({ title, data, countLabel }) {
   if (!data || data.every(a => a.count === 0)) return null
   const agingColors = ['text-emerald-600', 'text-amber-600', 'text-amber-600', 'text-red-600']
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-      <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
-        <Clock size={16} className="text-amber-500" />
-        <h3 className="text-sm font-black text-slate-800">{title}</h3>
+    <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 overflow-hidden">
+      <div className="px-3 sm:px-4 py-2 sm:py-3 border-b border-slate-100 flex items-center gap-2">
+        <Clock size={14} className="text-amber-500 sm:w-4 sm:h-4" />
+        <h3 className="text-xs sm:text-sm font-black text-slate-800">{title}</h3>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-xs sm:text-sm">
           <thead>
-            <tr className="text-xs text-slate-400 uppercase border-b border-slate-100">
-              <th className="text-left px-4 py-2.5 font-semibold">Rango</th>
-              <th className="text-center px-4 py-2.5 font-semibold">{countLabel}</th>
-              <th className="text-right px-4 py-2.5 font-semibold">Monto USD</th>
+            <tr className="text-[10px] sm:text-xs text-slate-400 uppercase border-b border-slate-100">
+              <th className="text-left px-2 sm:px-4 py-2 font-semibold">Rango</th>
+              <th className="text-center px-2 sm:px-4 py-2 font-semibold">{countLabel}</th>
+              <th className="text-right px-2 sm:px-4 py-2 font-semibold">Monto USD</th>
             </tr>
           </thead>
           <tbody>
             {data.filter(a => a.count > 0).map((a, i) => (
               <tr key={i} className="border-b border-slate-50">
-                <td className="px-4 py-2.5 font-medium text-slate-700">{a.rango}</td>
-                <td className="px-4 py-2.5 text-center text-slate-600">{a.count}</td>
-                <td className={`px-4 py-2.5 text-right font-bold ${agingColors[i] || 'text-slate-800'}`}>{fmtUsd(a.totalUsd)}</td>
+                <td className="px-2 sm:px-4 py-2 font-medium text-slate-700">{a.rango}</td>
+                <td className="px-2 sm:px-4 py-2 text-center text-slate-600">{a.count}</td>
+                <td className={`px-2 sm:px-4 py-2 text-right font-bold ${agingColors[i] || 'text-slate-800'}`}>{fmtUsd(a.totalUsd)}</td>
               </tr>
             ))}
           </tbody>
@@ -689,9 +688,9 @@ function TabComisiones({ configNeg }) {
 function ExportButton({ onClick, loading, disabled }) {
   return (
     <button onClick={onClick} disabled={loading || disabled}
-      className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md"
+      className="flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-sm font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md"
       style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}>
-      <Download size={14} />
+      <Download size={12} className="sm:w-3.5 sm:h-3.5" />
       {loading ? 'Generando...' : 'Exportar PDF'}
     </button>
   )
@@ -723,35 +722,46 @@ export default function ReportesView() {
   const needsDateRange = activeTab !== 'inventario' && activeTab !== 'comisiones'
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 space-y-4 md:space-y-5">
+    <div className="p-3 sm:p-4 md:p-6 lg:p-8 space-y-3 sm:space-y-4 md:space-y-5">
 
-      <PageHeader
-        icon={BarChart3}
-        title="Reportes Administrativos"
-        subtitle={needsDateRange ? `${range.from} — ${range.to}` : 'Datos actuales'}
-        action={
-          <button onClick={() => window.location.reload()}
-            className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
-            <RefreshCw size={16} />
-          </button>
-        }
-      />
+      {/* ── Header compacto mobile ─────────────────────────────────────── */}
+      <div className="flex items-center justify-between gap-2 pb-2 sm:pb-4" style={{ borderBottom: '1px solid #e2e8f0' }}>
+        <div className="flex items-center gap-2 sm:gap-3.5 min-w-0">
+          <div className="w-1 self-stretch rounded-full shrink-0 hidden sm:block"
+            style={{ background: 'linear-gradient(180deg, #B8860B 0%, #1B365D 100%)', minHeight: '36px' }} />
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shrink-0"
+            style={{ background: 'linear-gradient(135deg, rgba(27,54,93,0.08) 0%, rgba(184,134,11,0.08) 100%)', border: '1px solid rgba(27,54,93,0.12)' }}>
+            <BarChart3 size={16} style={{ color: '#1B365D' }} className="sm:w-[18px] sm:h-[18px]" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-base sm:text-xl font-black text-slate-800 leading-tight tracking-tight">Reportes</h1>
+            <p className="text-[10px] sm:text-xs font-medium text-slate-400 mt-0.5 truncate">
+              {needsDateRange ? `${range.from} — ${range.to}` : 'Datos actuales'}
+            </p>
+          </div>
+        </div>
+        <button onClick={() => window.location.reload()}
+          className="p-1.5 sm:p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg sm:rounded-xl transition-colors shrink-0">
+          <RefreshCw size={14} className="sm:w-4 sm:h-4" />
+        </button>
+      </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
+      {/* ── Tabs scrollable ────────────────────────────────────────────── */}
+      <div className="flex gap-1 overflow-x-auto pb-0.5 -mx-1 px-1 scrollbar-hide">
         {TABS.map(tab => {
           const Icon = tab.icon
           const isActive = activeTab === tab.id
           return (
             <button key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all border shrink-0 ${
+              className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold whitespace-nowrap transition-all border shrink-0 ${
                 isActive
                   ? 'bg-primary text-white border-primary shadow-md'
                   : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
               }`}>
-              <Icon size={14} />
-              {tab.label}
+              <Icon size={12} className="sm:w-3.5 sm:h-3.5" />
+              <span className="sm:hidden">{tab.short}</span>
+              <span className="hidden sm:inline">{tab.label}</span>
             </button>
           )
         })}

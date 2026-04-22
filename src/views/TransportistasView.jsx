@@ -128,7 +128,7 @@ function TransportistaModal({ transportista = null, onClose }) {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-lg p-6 space-y-5">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6 space-y-5">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 bg-primary-light rounded-xl flex items-center justify-center">
             <Truck size={18} className="text-primary" />

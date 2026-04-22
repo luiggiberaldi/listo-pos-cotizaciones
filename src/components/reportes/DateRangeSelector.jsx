@@ -4,10 +4,10 @@ import { Calendar } from 'lucide-react'
 import { getWeekRange, getMonthRange, getLocalISODate } from '../../utils/dateHelpers'
 
 const PRESETS = [
-  { id: 'thisWeek',  label: 'Esta semana',   getRango: () => getWeekRange(0),  getPrev: () => getWeekRange(-1) },
-  { id: 'lastWeek',  label: 'Semana pasada', getRango: () => getWeekRange(-1), getPrev: () => getWeekRange(-2) },
-  { id: 'thisMonth', label: 'Este mes',      getRango: () => getMonthRange(0), getPrev: () => getMonthRange(-1) },
-  { id: 'lastMonth', label: 'Mes pasado',    getRango: () => getMonthRange(-1),getPrev: () => getMonthRange(-2) },
+  { id: 'thisWeek',  label: 'Esta semana',   short: 'Semana',    getRango: () => getWeekRange(0),  getPrev: () => getWeekRange(-1) },
+  { id: 'lastWeek',  label: 'Semana pasada', short: 'Anterior',  getRango: () => getWeekRange(-1), getPrev: () => getWeekRange(-2) },
+  { id: 'thisMonth', label: 'Este mes',      short: 'Mes',       getRango: () => getMonthRange(0), getPrev: () => getMonthRange(-1) },
+  { id: 'lastMonth', label: 'Mes pasado',    short: 'Mes ant.',  getRango: () => getMonthRange(-1),getPrev: () => getMonthRange(-2) },
 ]
 
 export default function DateRangeSelector({ value, onChange }) {
@@ -38,37 +38,41 @@ export default function DateRangeSelector({ value, onChange }) {
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <Calendar size={14} className="text-slate-400 shrink-0" />
-      {PRESETS.map(p => (
-        <button key={p.id}
-          onClick={() => selectPreset(p)}
-          className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border whitespace-nowrap ${
-            activePreset === p.id && !showCustom
+    <div className="space-y-2">
+      <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto scrollbar-hide pb-0.5">
+        <Calendar size={12} className="text-slate-400 shrink-0 sm:w-3.5 sm:h-3.5" />
+        {PRESETS.map(p => (
+          <button key={p.id}
+            onClick={() => selectPreset(p)}
+            className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold transition-colors border whitespace-nowrap shrink-0 ${
+              activePreset === p.id && !showCustom
+                ? 'bg-primary text-white border-primary'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-primary-focus'
+            }`}>
+            <span className="sm:hidden">{p.short}</span>
+            <span className="hidden sm:inline">{p.label}</span>
+          </button>
+        ))}
+        <button
+          onClick={() => { setShowCustom(true); setActivePreset('') }}
+          className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold transition-colors border whitespace-nowrap shrink-0 ${
+            showCustom
               ? 'bg-primary text-white border-primary'
               : 'bg-white text-slate-600 border-slate-200 hover:border-primary-focus'
           }`}>
-          {p.label}
+          <span className="sm:hidden">Rango</span>
+          <span className="hidden sm:inline">Personalizado</span>
         </button>
-      ))}
-      <button
-        onClick={() => { setShowCustom(true); setActivePreset('') }}
-        className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border whitespace-nowrap ${
-          showCustom
-            ? 'bg-primary text-white border-primary'
-            : 'bg-white text-slate-600 border-slate-200 hover:border-primary-focus'
-        }`}>
-        Personalizado
-      </button>
+      </div>
       {showCustom && (
-        <div className="flex items-center gap-2 ml-1 w-full sm:w-auto">
+        <div className="flex items-center gap-2">
           <input type="date" value={value.from}
             onChange={e => handleCustom('from', e.target.value)}
-            className="text-xs px-2 py-1.5 rounded-lg border border-slate-200 text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-focus flex-1 min-w-0" />
-          <span className="text-xs text-slate-400 shrink-0">a</span>
+            className="text-[11px] sm:text-xs px-2 py-1.5 rounded-lg border border-slate-200 text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-focus flex-1 min-w-0" />
+          <span className="text-[10px] sm:text-xs text-slate-400 shrink-0">a</span>
           <input type="date" value={value.to}
             onChange={e => handleCustom('to', e.target.value)}
-            className="text-xs px-2 py-1.5 rounded-lg border border-slate-200 text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-focus flex-1 min-w-0" />
+            className="text-[11px] sm:text-xs px-2 py-1.5 rounded-lg border border-slate-200 text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-focus flex-1 min-w-0" />
         </div>
       )}
     </div>

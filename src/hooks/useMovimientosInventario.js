@@ -5,6 +5,7 @@ import supabase from '../services/supabase/client'
 import useAuthStore from '../store/useAuthStore'
 import { INVENTARIO_KEY } from './useInventario'
 import { showToast } from '../components/ui/Toast'
+import { notifyStockBajo } from '../services/notificationService'
 import { formatCorrelativo } from '../utils/motivosTipo'
 
 export const MOVIMIENTOS_KEY = ['inventario_movimientos']
@@ -76,7 +77,7 @@ export function useAplicarMovimientoLote() {
       if (error) throw error
       return data // { lote_id, numero }
     },
-    onSuccess: (data, variables) => {
+    onSuccess: async (data, variables) => {
       qc.invalidateQueries({ queryKey: INVENTARIO_KEY })
       qc.invalidateQueries({ queryKey: MOVIMIENTOS_KEY })
       qc.invalidateQueries({ queryKey: KARDEX_KEY })
@@ -84,6 +85,21 @@ export function useAplicarMovimientoLote() {
       const label = variables.tipo === 'ingreso' ? 'ingresados' : 'retirados'
       const corr = data?.numero ? formatCorrelativo(data.numero) : ''
       showToast(`${corr ? corr + ' — ' : ''}${n} producto${n > 1 ? 's' : ''} ${label} exitosamente`, 'success')
+
+      // Verificar stock bajo después del movimiento
+      try {
+        const ids = variables.items.map(i => i.producto_id)
+        const { data: productos } = await supabase
+          .from('productos')
+          .select('id, nombre, stock_actual, stock_minimo, unidad')
+          .in('id', ids)
+        if (productos) {
+          const bajos = productos.filter(p =>
+            p.stock_actual <= 0 || (p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo)
+          )
+          if (bajos.length > 0) notifyStockBajo(bajos)
+        }
+      } catch (_) {}
     },
     onError: (error) => {
       showToast(error.message || 'Error al aplicar movimiento', 'error')

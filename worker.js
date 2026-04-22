@@ -1045,6 +1045,12 @@ async function handleClearInventory(request, env) {
     Prefer: 'return=minimal',
   };
 
+  // Borrar kardex (movimientos) antes de productos
+  await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos?id=neq.00000000-0000-0000-0000-000000000000`, {
+    method: 'DELETE',
+    headers: h,
+  });
+
   const res = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=neq.00000000-0000-0000-0000-000000000000`, {
     method: 'DELETE',
     headers: h,
@@ -1439,6 +1445,8 @@ async function handleTesterClearAll(request, env) {
     await supaDelete(env, 'clientes', logStep);
     logStep('Eliminando transportistas...');
     await supaDelete(env, 'transportistas', logStep);
+    logStep('Eliminando inventario_movimientos (kardex)...');
+    await supaDelete(env, 'inventario_movimientos', logStep);
     logStep('Inventario conservado.');
 
     // Reiniciar correlativos (COT-00001, despacho #1)

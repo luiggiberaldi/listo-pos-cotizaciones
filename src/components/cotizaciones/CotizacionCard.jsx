@@ -100,7 +100,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
   const canWhatsApp = cotizacion.estado === 'enviada' || cotizacion.estado === 'aceptada'
   const canAcceptReject = esSupervisor && esEnviada
   const canDespachar = esSupervisor && cotizacion.estado === 'aceptada' && onDespachar && !despacho
-  const canAnular = esBorrador || (esSupervisor && (cotizacion.estado === 'enviada' || cotizacion.estado === 'aceptada'))
+  const canAnular = cotizacion.estado !== 'anulada' && cotizacion.estado !== 'vencida' && cotizacion.estado !== 'rechazada' && (esBorrador || (esSupervisor && (esEnviada || (cotizacion.estado === 'aceptada' && !despacho))))
   const canReciclar = esSupervisor && ['rechazada', 'anulada', 'vencida'].includes(cotizacion.estado)
   const hasSecondaryActions = canAcceptReject || canDespachar || canAnular
 

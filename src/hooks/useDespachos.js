@@ -7,7 +7,8 @@ import { INVENTARIO_KEY } from './useInventario'
 import { COTIZACIONES_KEY } from './useCotizaciones'
 import { COMISIONES_KEY } from './useComisiones'
 import { STOCK_COMPROMETIDO_KEY } from './useStockComprometido'
-import { notifyDespachoCreado } from '../services/notificationService'
+import { REPORTE_KEY } from './useReporteVentas'
+import { notifyDespachoCreado, notifyStockBajo } from '../services/notificationService'
 import { showToast } from '../components/ui/Toast'
 import { sendPushNotification } from './usePushNotifications'
 
@@ -85,6 +86,70 @@ export function useCrearDespacho() {
           setTimeout(() => showToast('Despacho creado, pero la comisión no se calculó. Contacta al supervisor.', 'warning'), 500)
         }
       }
+
+      // Registrar egresos en el kardex (inventario_movimientos)
+      // El RPC ya descontó el stock; aquí solo registramos el movimiento
+      if (data) {
+        try {
+          const [itemsRes, userRes] = await Promise.all([
+            supabase
+              .from('cotizacion_items')
+              .select('producto_id, cantidad, nombre_snap')
+              .eq('cotizacion_id', cotizacionId)
+              .not('producto_id', 'is', null),
+            supabase.auth.getUser(),
+          ])
+
+          const items = itemsRes.data ?? []
+          if (items.length > 0) {
+            const productoIds = items.map(i => i.producto_id)
+            const { data: productos } = await supabase
+              .from('productos')
+              .select('id, stock_actual, stock_minimo, nombre, unidad')
+              .in('id', productoIds)
+
+            const stockMap = {}
+            for (const p of (productos ?? [])) stockMap[p.id] = Number(p.stock_actual)
+
+            const perfil = useAuthStore.getState().perfil
+            const loteId = crypto.randomUUID()
+
+            const kardexEntries = items.map(item => ({
+              lote_id: loteId,
+              tipo: 'egreso',
+              motivo: `Nota de despacho #${numeroCotizacion}`,
+              motivo_tipo: 'otro',
+              producto_id: item.producto_id,
+              producto_nombre: item.nombre_snap,
+              cantidad: Number(item.cantidad),
+              // El stock ya fue descontado por el RPC; reconstruimos el anterior
+              stock_anterior: (stockMap[item.producto_id] ?? 0) + Number(item.cantidad),
+              stock_nuevo: stockMap[item.producto_id] ?? 0,
+              usuario_id: perfil?.id,
+              usuario_nombre: perfil?.nombre ?? 'Supervisor',
+              usuario_color: perfil?.color ?? null,
+            }))
+
+            const { error: kardexError } = await supabase
+              .from('inventario_movimientos')
+              .insert(kardexEntries)
+
+            if (kardexError) {
+              console.error('[Kardex] Error registrando egresos de despacho:', kardexError)
+            }
+
+            // Notificar productos que quedaron en stock bajo
+            const bajos = (productos ?? []).filter(p =>
+              p.stock_actual <= 0 || (p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo)
+            )
+            if (bajos.length > 0) notifyStockBajo(bajos)
+          }
+        } catch (kardexErr) {
+          // No bloquear el flujo del despacho
+          console.error('[Kardex] Error inesperado:', kardexErr)
+        }
+      }
+
       return { id: data, numeroCotizacion, clienteNombre }
     },
     onSuccess: ({ numeroCotizacion, clienteNombre }) => {
@@ -158,6 +223,7 @@ export function useActualizarEstadoDespacho() {
       qc.invalidateQueries({ queryKey: COMISIONES_KEY })
       qc.invalidateQueries({ queryKey: COTIZACIONES_KEY })
       qc.invalidateQueries({ queryKey: STOCK_COMPROMETIDO_KEY })
+      qc.invalidateQueries({ queryKey: REPORTE_KEY })
     },
   })
 }

@@ -1,10 +1,10 @@
 // src/hooks/useRecordatoriosCotizaciones.js
-// Recordatorios proactivos de cotizaciones (estilo Buildertrend):
-//   1. Cotización enviada hace ≥ DIAS_SIN_RESPUESTA sin respuesta → alerta al vendedor/supervisor
-//   2. Cotización próxima a vencer (≤ DIAS_AVISO_VENCIMIENTO días)  → alerta
+// Recordatorios proactivos de cotizaciones:
+//   1. Cotización enviada hace ≥ 1 hora sin respuesta → alerta al supervisor
+//   2. Cotización próxima a vencer (≤ 2 días) → alerta
 //
 // Corre una vez al montar el layout y luego cada CHECK_INTERVAL_MS.
-// Usa cooldowns en localStorage para no repetir la misma alerta en < 24 h.
+// Usa cooldowns en localStorage para no repetir la misma alerta.
 
 import { useEffect, useRef } from 'react'
 import supabase from '../services/supabase/client'
@@ -14,9 +14,9 @@ import {
   notifyCotizacionPorVencer,
 } from '../services/notificationService'
 
-const DIAS_SIN_RESPUESTA    = 3   // días sin respuesta para alertar
-const DIAS_AVISO_VENCIMIENTO = 2  // días restantes para alertar
-const CHECK_INTERVAL_MS     = 60 * 60 * 1000 // cada 1 hora
+const HORAS_SIN_RESPUESTA     = 1    // horas sin respuesta para alertar
+const DIAS_AVISO_VENCIMIENTO  = 2    // días restantes para alertar
+const CHECK_INTERVAL_MS       = 15 * 60 * 1000 // cada 15 minutos
 
 export function useRecordatoriosCotizaciones() {
   const { perfil } = useAuthStore()
@@ -30,9 +30,8 @@ export function useRecordatoriosCotizaciones() {
       const hoy = new Date()
       hoy.setHours(0, 0, 0, 0)
 
-      // ── 1. Cotizaciones enviadas sin respuesta ────────────────────────────
-      const umbralesSinRespuesta = new Date(hoy)
-      umbralesSinRespuesta.setDate(umbralesSinRespuesta.getDate() - DIAS_SIN_RESPUESTA)
+      // ── 1. Cotizaciones enviadas sin respuesta (≥ 1 hora) ───────────────
+      const umbralSinRespuesta = new Date(Date.now() - HORAS_SIN_RESPUESTA * 60 * 60 * 1000)
 
       let sinRespuestaQuery = supabase
         .from('cotizaciones')
@@ -42,7 +41,7 @@ export function useRecordatoriosCotizaciones() {
           vendedor:usuarios!cotizaciones_vendedor_id_fkey(nombre)
         `)
         .eq('estado', 'enviada')
-        .lte('enviada_en', umbralesSinRespuesta.toISOString())
+        .lte('enviada_en', umbralSinRespuesta.toISOString())
         .not('enviada_en', 'is', null)
         .order('enviada_en', { ascending: true })
         .limit(50)
@@ -54,19 +53,23 @@ export function useRecordatoriosCotizaciones() {
       const { data: sinRespuesta } = await sinRespuestaQuery
       if (sinRespuesta?.length) {
         for (const c of sinRespuesta) {
-          const dias = Math.floor(
-            (Date.now() - new Date(c.enviada_en).getTime()) / (1000 * 60 * 60 * 24)
-          )
+          const msTranscurridos = Date.now() - new Date(c.enviada_en).getTime()
+          const horasTranscurridas = Math.floor(msTranscurridos / (1000 * 60 * 60))
+          const dias = Math.floor(msTranscurridos / (1000 * 60 * 60 * 24))
+
+          // Mostrar en horas si < 24h, en días si >= 24h
+          const tiempoTexto = dias >= 1 ? `${dias}d` : `${horasTranscurridas}h`
+
           notifyCotizacionSinRespuesta(
             c.numero,
             c.cliente?.nombre ?? '—',
-            dias,
+            tiempoTexto,
             esSupervisor ? c.vendedor?.nombre : null,
           )
         }
       }
 
-      // ── 2. Cotizaciones por vencer ────────────────────────────────────────
+      // ── 2. Cotizaciones por vencer ──────────────────────────────────────
       const limiteVencimiento = new Date(hoy)
       limiteVencimiento.setDate(limiteVencimiento.getDate() + DIAS_AVISO_VENCIMIENTO)
 

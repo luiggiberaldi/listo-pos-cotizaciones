@@ -3,11 +3,12 @@ import { DollarSign, Package, TrendingUp, Percent } from 'lucide-react'
 import { fmtUsd } from '../../utils/format'
 
 function variacion(actual, anterior) {
-  if (anterior === 0) return actual > 0 ? 100 : 0
+  if (anterior === 0) return null   // sin período anterior, no hay % válido
   return ((actual - anterior) / anterior) * 100
 }
 
 function Badge({ pct }) {
+  if (pct === null) return <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-white/10 text-white/60">Nuevo</span>
   if (pct === 0) return null
   const positivo = pct > 0
   return (
@@ -76,9 +77,11 @@ export default function KpiCards({ kpis }) {
         border="rgba(255,255,255,0.10)"
       />
       <KpiCard
-        icon={Percent} label="Comisiones"
+        icon={Percent} label="Comisiones generadas"
         value={fmtUsd(kpis.totalComisiones)}
-        sub={`Anterior: ${fmtUsd(kpis.prevTotalComisiones)}`}
+        sub={kpis.comisionesPagadas > 0 || kpis.comisionesPendientes > 0
+          ? `Pagadas: ${fmtUsd(kpis.comisionesPagadas)} · Pendientes: ${fmtUsd(kpis.comisionesPendientes)}`
+          : `Anterior: ${fmtUsd(kpis.prevTotalComisiones)}`}
         badge={<Badge pct={varComisiones} />}
         gradient="linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)"
         border="rgba(255,255,255,0.10)"

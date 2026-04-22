@@ -13,7 +13,7 @@ export default function QuickQuoteFAB() {
 
   return (
     <button
-      onClick={() => navigate('/cotizaciones?rapida=1')}
+      onClick={() => navigate('/cotizaciones?nueva=1')}
       className="fixed bottom-20 right-4 z-[90] md:hidden w-14 h-14 rounded-full flex items-center justify-center shadow-xl active:scale-90 transition-all"
       style={{
         background: 'linear-gradient(135deg, #1B365D, #B8860B)',

@@ -1,6 +1,6 @@
 // src/components/clientes/ClienteRow.jsx
 // Fila compacta de cliente para vista de lista — barra lateral color vendedor
-import { Phone, Mail, MapPin, Hash, Tag, Pencil, UserMinus, ArrowRightLeft } from 'lucide-react'
+import { Phone, Mail, MapPin, Hash, Tag, Pencil, UserMinus, ArrowRightLeft, FileText } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 
 const TIPO_LABELS = { natural: 'Natural', juridico: 'Jurídico' }
@@ -9,7 +9,7 @@ const TIPO_COLORS = {
   juridico: 'bg-violet-50 text-violet-700 border-violet-200',
 }
 
-export default function ClienteRow({ cliente, onEditar, onDesactivar, onReasignar }) {
+export default function ClienteRow({ cliente, onEditar, onDesactivar, onReasignar, onCotizar }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const esPropio = cliente.vendedor_id === perfil?.id
@@ -77,6 +77,10 @@ export default function ClienteRow({ cliente, onEditar, onDesactivar, onReasigna
 
       {/* Acciones */}
       <div className="flex items-center gap-1 px-2 shrink-0">
+        <button onClick={() => onCotizar(cliente)} title="Cotizar"
+          className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 transition-colors">
+          <FileText size={15} />
+        </button>
         <button onClick={() => onEditar(cliente)}
           className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-light transition-colors">
           <Pencil size={15} />

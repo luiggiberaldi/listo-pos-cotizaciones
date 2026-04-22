@@ -18,6 +18,14 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
     queryKey: [...REPORTE_KEY, from, to, prevFrom, prevTo, esSupervisor, perfil?.id],
     queryFn: async () => {
       // ── 1. Despachos entregados período actual + anterior en paralelo ──
+      // Construir offset de zona horaria local para filtros correctos
+      // getTimezoneOffset() devuelve minutos de diferencia UTC-local (positivo = zona negativa)
+      // Ej: Venezuela UTC-4 → offset = 240 → tzStr = '-04:00'
+      const rawOffset = new Date().getTimezoneOffset()
+      const sign = rawOffset <= 0 ? '+' : '-'
+      const absOffset = Math.abs(rawOffset)
+      const tzStr = `${sign}${String(Math.floor(absOffset / 60)).padStart(2, '0')}:${String(absOffset % 60).padStart(2, '0')}`
+
       const buildQuery = (f, t) => {
         let q = supabase
           .from('notas_despacho')
@@ -28,8 +36,8 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
             cliente:clientes!notas_despacho_cliente_id_fkey(id, nombre)
           `)
           .eq('estado', 'entregada')
-          .gte('entregada_en', f + 'T00:00:00')
-          .lte('entregada_en', t + 'T23:59:59')
+          .gte('entregada_en', `${f}T00:00:00${tzStr}`)
+          .lte('entregada_en', `${t}T23:59:59${tzStr}`)
           .order('entregada_en', { ascending: false })
         if (!esSupervisor) q = q.eq('vendedor_id', perfil.id)
         return q
@@ -41,16 +49,16 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
         (() => {
           let q = supabase.from('comisiones')
             .select('id, vendedor_id, total_comision, estado, creado_en')
-            .gte('creado_en', from + 'T00:00:00')
-            .lte('creado_en', to + 'T23:59:59')
+            .gte('creado_en', `${from}T00:00:00${tzStr}`)
+            .lte('creado_en', `${to}T23:59:59${tzStr}`)
           if (!esSupervisor) q = q.eq('vendedor_id', perfil.id)
           return q
         })(),
         (() => {
           let q = supabase.from('comisiones')
             .select('id, vendedor_id, total_comision, estado, creado_en')
-            .gte('creado_en', prevFrom + 'T00:00:00')
-            .lte('creado_en', prevTo + 'T23:59:59')
+            .gte('creado_en', `${prevFrom}T00:00:00${tzStr}`)
+            .lte('creado_en', `${prevTo}T23:59:59${tzStr}`)
           if (!esSupervisor) q = q.eq('vendedor_id', perfil.id)
           return q
         })(),
@@ -91,6 +99,8 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
       const numDespachos = despachos.length
       const ticketPromedio = numDespachos > 0 ? totalVentas / numDespachos : 0
       const totalComisiones = comisiones.reduce((s, c) => s + Number(c.total_comision || 0), 0)
+      const comisionesPagadas = comisiones.filter(c => c.estado === 'pagada').reduce((s, c) => s + Number(c.total_comision || 0), 0)
+      const comisionesPendientes = comisiones.filter(c => c.estado === 'pendiente').reduce((s, c) => s + Number(c.total_comision || 0), 0)
 
       // KPIs anteriores (para comparativo)
       const prevTotalVentas = prevDespachos.reduce((s, d) => s + Number(d.total_usd || 0), 0)
@@ -189,6 +199,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
       return {
         kpis: {
           totalVentas, numDespachos, ticketPromedio, totalComisiones,
+          comisionesPagadas, comisionesPendientes,
           prevTotalVentas, prevNumDespachos, prevTicketPromedio, prevTotalComisiones,
         },
         porVendedor,

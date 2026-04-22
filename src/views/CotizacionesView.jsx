@@ -611,11 +611,13 @@ export default function CotizacionesView() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [modo,      setModo]      = useState('lista')           // 'lista' | 'builder'
   const [editandoId, setEditandoId] = useState(null)            // ID del borrador a editar
+  const [clientePreseleccionado, setClientePreseleccionado] = useState(null) // cliente_id desde URL
 
-  // Si viene ?nueva=1 del dashboard, abrir wizard directamente
+  // Si viene ?nueva=1 del dashboard o clientes, abrir wizard directamente
   useEffect(() => {
     if (searchParams.get('nueva') === '1') {
       setEditandoId(null)
+      setClientePreseleccionado(searchParams.get('cliente') || null)
       setModo('builder')
       setSearchParams({}, { replace: true })
     }
@@ -626,6 +628,7 @@ export default function CotizacionesView() {
 
   function abrirNueva() {
     setEditandoId(null)
+    setClientePreseleccionado(null)
     setModo('builder')
   }
 
@@ -664,6 +667,7 @@ export default function CotizacionesView() {
     return (
       <CotizacionBuilder
         cotizacionExistente={editandoId ? cotizacionParaEditar : null}
+        clientePreseleccionado={clientePreseleccionado}
         onVolver={volver}
         onGuardado={volver}
       />

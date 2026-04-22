@@ -1,6 +1,6 @@
 // src/components/clientes/ClienteCard.jsx
 // Tarjeta de cliente — color header strip del vendedor asignado
-import { Phone, Mail, MapPin, Hash, Tag, Pencil, UserMinus, ArrowRightLeft } from 'lucide-react'
+import { Phone, Mail, MapPin, Hash, Tag, Pencil, UserMinus, ArrowRightLeft, FileText } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 
 function Contacto({ icono: Icono, valor }) {
@@ -22,7 +22,7 @@ function getIniciales(nombre = '') {
   return nombre.slice(0, 2).toUpperCase()
 }
 
-export default function ClienteCard({ cliente, onEditar, onDesactivar, onReasignar }) {
+export default function ClienteCard({ cliente, onEditar, onDesactivar, onReasignar, onCotizar }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const esPropio     = cliente.vendedor_id === perfil?.id
@@ -109,6 +109,11 @@ export default function ClienteCard({ cliente, onEditar, onDesactivar, onReasign
 
       {/* ── Acciones ── */}
       <div className="mt-auto border-t border-slate-100 px-3 py-2 flex items-center gap-1">
+        <button onClick={() => onCotizar(cliente)} title="Cotizar con este cliente"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 active:bg-emerald-100 transition-colors">
+          <FileText size={13} />
+          Cotizar
+        </button>
         <button onClick={() => onEditar(cliente)} title="Editar cliente"
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
           <Pencil size={13} />

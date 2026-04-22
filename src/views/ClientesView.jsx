@@ -3,6 +3,7 @@
 // — Vendedor: ve y gestiona sus propios clientes
 // — Supervisor: ve todos los clientes + puede reasignar
 import { useState, useMemo, useRef, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Users, Plus, Search, RefreshCw, X, LayoutGrid, List, Filter, ChevronDown, Check } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { useClientes, useDesactivarCliente, useVendedores } from '../hooks/useClientes'
@@ -94,6 +95,7 @@ function SkeletonClientes() {
 // ─── Vista principal ──────────────────────────────────────────────────────────
 export default function ClientesView() {
   const { perfil } = useAuthStore()
+  const navigate = useNavigate()
 
   // Búsqueda y filtros
   const [busqueda, setBusqueda] = useState('')
@@ -187,6 +189,10 @@ export default function ClientesView() {
   function abrirReasignar(cliente) {
     setClienteReasig(cliente)
     setModalReasigOpen(true)
+  }
+
+  function cotizarCliente(cliente) {
+    navigate(`/cotizaciones?nueva=1&cliente=${cliente.id}`)
   }
 
   async function confirmarDesactivar() {
@@ -369,6 +375,7 @@ export default function ClientesView() {
                 onEditar={abrirEditar}
                 onDesactivar={abrirDesactivar}
                 onReasignar={abrirReasignar}
+                onCotizar={cotizarCliente}
               />
             ))}
           </div>
@@ -381,6 +388,7 @@ export default function ClientesView() {
                 onEditar={abrirEditar}
                 onDesactivar={abrirDesactivar}
                 onReasignar={abrirReasignar}
+                onCotizar={cotizarCliente}
               />
             ))}
           </div>
