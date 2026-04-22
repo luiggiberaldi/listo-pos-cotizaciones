@@ -120,7 +120,6 @@ function PrecioSelector({ precios, currentPrice, onSelect, tasa = 0, mobile = fa
               >
                 <span className={`text-[11px] font-bold uppercase tracking-widest ${active ? 'text-white/80' : 'text-slate-400'}`}>{n.label}</span>
                 <span className={`text-base font-black mt-0.5 ${active ? 'text-white' : 'text-slate-800'}`}>${Number(n.value).toFixed(2)}</span>
-                {tasa > 0 && <span className={`text-[10px] mt-0.5 ${active ? 'text-white/70' : 'text-slate-400'}`}>{fmtBs(usdToBs(n.value, tasa))}</span>}
               </button>
             )
           })}
@@ -942,7 +941,6 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
                       >
                         <span className={`text-[11px] font-bold uppercase tracking-widest ${active ? 'text-white/80' : 'text-slate-400'}`}>{n.label}</span>
                         <span className={`text-sm font-black mt-0.5 ${active ? 'text-white' : 'text-slate-800'}`}>${Number(n.value).toFixed(2)}</span>
-                        {tasa > 0 && <span className={`text-[10px] mt-0.5 ${active ? 'text-white/70' : 'text-slate-400'}`}>{fmtBs(usdToBs(n.value, tasa))}</span>}
                       </button>
                     )
                   })}
