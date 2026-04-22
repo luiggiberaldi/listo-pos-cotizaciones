@@ -3,7 +3,7 @@
 // El builder reemplaza la lista in-page (sin navegación adicional)
 import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { FileText, Plus, RefreshCw, Filter, Copy, AlertTriangle, PackageCheck, Loader2, X, AlertCircle, LayoutGrid, List, Zap } from 'lucide-react'
+import { FileText, Plus, RefreshCw, Filter, Copy, AlertTriangle, PackageCheck, Loader2, X, AlertCircle, LayoutGrid, List } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import supabase from '../services/supabase/client'
 import { useTasaCambio } from '../hooks/useTasaCambio'
@@ -14,7 +14,8 @@ import CotizacionCard    from '../components/cotizaciones/CotizacionCard'
 import CotizacionRow     from '../components/cotizaciones/CotizacionRow'
 import DetalleModal      from '../components/ui/DetalleModal'
 import CotizacionBuilder from '../components/cotizaciones/CotizacionBuilder'
-import CotizacionRapida  from '../components/cotizaciones/CotizacionRapida'
+// CotizacionRapida desactivada temporalmente
+// import CotizacionRapida  from '../components/cotizaciones/CotizacionRapida'
 import ConfirmModal      from '../components/ui/ConfirmModal'
 import { Modal }         from '../components/ui/Modal'
 import EmptyState        from '../components/ui/EmptyState'
@@ -312,7 +313,7 @@ function ModalVersionar({ cotizacion, onConfirm, onCancel, cargando }) {
 }
 
 // ─── Vista lista ──────────────────────────────────────────────────────────────
-function ListaCotizaciones({ onNueva, onRapida, onEditar, onVersionar }) {
+function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const { tasaEfectiva } = useTasaCambio()
@@ -407,10 +408,6 @@ function ListaCotizaciones({ onNueva, onRapida, onEditar, onVersionar }) {
         subtitle={isLoading ? 'Cargando...' : `${cotizacionesFiltradas.length} cotización${cotizacionesFiltradas.length !== 1 ? 'es' : ''}`}
         action={
           <div className="flex items-center gap-2">
-            <button onClick={onRapida} className="flex items-center gap-1.5 bg-white border border-slate-200 text-slate-700 font-bold text-sm px-3 py-2.5 rounded-xl transition-all hover:border-primary/50 hover:text-primary active:scale-[0.98]">
-              <Zap size={14} />
-              <span className="hidden sm:inline">Rápida</span>
-            </button>
             <button onClick={onNueva} className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98]"
               style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
               <Plus size={16} />Nueva
@@ -470,11 +467,9 @@ function ListaCotizaciones({ onNueva, onRapida, onEditar, onVersionar }) {
         <EmptyState
           icon={FileText}
           title={estadoFiltro || vendedorFiltro ? 'Sin cotizaciones con estos filtros' : '¡Aún no tienes cotizaciones!'}
-          description={estadoFiltro || vendedorFiltro ? 'Prueba con otro filtro.' : 'Crea tu primera cotización para empezar a vender. Usa "Rápida" para cotizar al instante.'}
-          actionLabel={estadoFiltro || vendedorFiltro ? 'Limpiar filtros' : 'Cotización Rápida'}
-          onAction={estadoFiltro || vendedorFiltro ? () => { setEstadoFiltro(''); setVendedorFiltro('') } : onRapida}
-          secondaryActionLabel={estadoFiltro || vendedorFiltro ? undefined : 'Asistente completo'}
-          onSecondaryAction={estadoFiltro || vendedorFiltro ? undefined : onNueva}
+          description={estadoFiltro || vendedorFiltro ? 'Prueba con otro filtro.' : 'Crea tu primera cotización para empezar a vender.'}
+          actionLabel={estadoFiltro || vendedorFiltro ? 'Limpiar filtros' : 'Nueva cotización'}
+          onAction={estadoFiltro || vendedorFiltro ? () => { setEstadoFiltro(''); setVendedorFiltro('') } : onNueva}
         />
       ) : (
         <>
@@ -614,18 +609,14 @@ function ListaCotizaciones({ onNueva, onRapida, onEditar, onVersionar }) {
 // ─── Vista raíz ───────────────────────────────────────────────────────────────
 export default function CotizacionesView() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const [modo,      setModo]      = useState('lista')           // 'lista' | 'builder' | 'rapida'
+  const [modo,      setModo]      = useState('lista')           // 'lista' | 'builder'
   const [editandoId, setEditandoId] = useState(null)            // ID del borrador a editar
 
   // Si viene ?nueva=1 del dashboard, abrir wizard directamente
-  // Si viene ?rapida=1, abrir cotización rápida
   useEffect(() => {
     if (searchParams.get('nueva') === '1') {
       setEditandoId(null)
       setModo('builder')
-      setSearchParams({}, { replace: true })
-    } else if (searchParams.get('rapida') === '1') {
-      setModo('rapida')
       setSearchParams({}, { replace: true })
     }
   }, [searchParams, setSearchParams])
@@ -660,15 +651,6 @@ export default function CotizacionesView() {
     }
   }
 
-  if (modo === 'rapida') {
-    return (
-      <CotizacionRapida
-        onVolver={volver}
-        onGuardado={volver}
-      />
-    )
-  }
-
   if (modo === 'builder') {
     // Si es edición, esperar que cargue la cotización con sus items
     if (editandoId && !cotizacionParaEditar) {
@@ -692,7 +674,6 @@ export default function CotizacionesView() {
     <>
       <ListaCotizaciones
         onNueva={abrirNueva}
-        onRapida={() => setModo('rapida')}
         onEditar={abrirEditar}
         onVersionar={iniciarVersionado}
       />
