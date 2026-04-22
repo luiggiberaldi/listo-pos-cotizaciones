@@ -227,7 +227,10 @@ export function useBorrarProducto() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: INVENTARIO_KEY })
       qc.invalidateQueries({ queryKey: MOVIMIENTOS_KEY })
-      showToast('Producto eliminado', 'success')
+      showToast('Producto eliminado y registrado en kardex', 'success')
+    },
+    onError: (error) => {
+      showToast(error.message || 'Error al borrar producto', 'error')
     },
   })
 }

@@ -46,17 +46,16 @@ BEGIN
     RAISE EXCEPTION 'Producto no encontrado';
   END IF;
 
-  -- Registrar egreso del stock restante en kardex
-  IF v_producto.stock_actual > 0 THEN
-    v_lote_id := gen_random_uuid();
-    INSERT INTO public.inventario_movimientos
-      (lote_id, tipo, motivo, motivo_tipo, producto_id, producto_nombre,
-       cantidad, stock_anterior, stock_nuevo, usuario_id, usuario_nombre, usuario_color)
-    VALUES
-      (v_lote_id, 'egreso', 'Producto eliminado del sistema', 'ajuste_inventario',
-       v_producto.id, v_producto.nombre, v_producto.stock_actual, v_producto.stock_actual, 0,
-       v_usuario_id, v_usuario_nombre, v_usuario_color);
-  END IF;
+  -- Siempre registrar eliminación en kardex (incluso con stock 0)
+  v_lote_id := gen_random_uuid();
+  INSERT INTO public.inventario_movimientos
+    (lote_id, tipo, motivo, motivo_tipo, producto_id, producto_nombre,
+     cantidad, stock_anterior, stock_nuevo, usuario_id, usuario_nombre, usuario_color)
+  VALUES
+    (v_lote_id, 'egreso', 'Producto eliminado del sistema', 'ajuste_inventario',
+     v_producto.id, v_producto.nombre, GREATEST(v_producto.stock_actual, 0),
+     v_producto.stock_actual, 0,
+     v_usuario_id, v_usuario_nombre, v_usuario_color);
 
   -- Borrar producto (movimientos quedan con producto_id = NULL, producto_nombre intacto)
   DELETE FROM public.productos WHERE id = p_producto_id;
