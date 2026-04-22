@@ -52,17 +52,24 @@ export function useTasaCambio() {
     return DEFAULT_RATE
   })
 
-  // Modo: 'bcv' | 'usdt' | 'manual'
+  // Modo: 'usdt' | 'manual' (bcv se mantiene internamente pero no como modo visible)
   const [modoTasa, setModoTasa] = useState(() => {
     const saved = localStorage.getItem(STORAGE_KEY_MODO)
-    if (saved && MODOS_VALIDOS.includes(saved)) return saved
-    // Migrar legacy: si tenía modo_auto=true → bcv, si false → manual
+    if (saved && MODOS_VALIDOS.includes(saved)) {
+      // Migrar bcv → usdt (BCV ya no es opción visible)
+      if (saved === 'bcv') {
+        localStorage.setItem(STORAGE_KEY_MODO, 'usdt')
+        return 'usdt'
+      }
+      return saved
+    }
+    // Migrar legacy: si tenía modo_auto=true → usdt, si false → manual
     const legacy = localStorage.getItem('construacero_tasa_modo_auto')
     if (legacy !== null) {
       localStorage.removeItem('construacero_tasa_modo_auto')
-      return JSON.parse(legacy) ? 'bcv' : 'manual'
+      return JSON.parse(legacy) ? 'usdt' : 'manual'
     }
-    return 'bcv'
+    return 'usdt'
   })
 
   // Tasa manual

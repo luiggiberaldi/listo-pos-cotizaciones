@@ -7,9 +7,14 @@ import { useTasaCambio } from '../../hooks/useTasaCambio'
 const fmtRate = n => new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
 
 const MODO_CONFIG = {
-  bcv:    { label: 'BCV',    color: 'emerald' },
   usdt:   { label: 'USDT',   color: 'indigo' },
   manual: { label: 'Manual', color: 'amber' },
+}
+
+// BCV se mantiene internamente para cálculos, pero no se muestra como opción visible
+const MODO_CONFIG_FULL = {
+  bcv:    { label: 'BCV',    color: 'emerald' },
+  ...MODO_CONFIG,
 }
 
 export default function BcvWidget({ soloLectura = false }) {
@@ -48,14 +53,14 @@ export default function BcvWidget({ soloLectura = false }) {
     }
   }
 
-  const modoActual = MODO_CONFIG[modoTasa] || MODO_CONFIG.bcv
+  const modoActual = MODO_CONFIG_FULL[modoTasa] || MODO_CONFIG.usdt
 
   // Colores del botón trigger según modo activo
   const triggerColors = {
     bcv: { text: 'text-emerald-400', bg: 'rgba(52,211,153,0.12)', border: 'rgba(52,211,153,0.3)' },
     usdt: { text: 'text-sky-300', bg: 'rgba(125,211,252,0.12)', border: 'rgba(125,211,252,0.3)' },
     manual: { text: 'text-amber-400', bg: 'rgba(251,191,36,0.12)', border: 'rgba(251,191,36,0.3)' },
-  }[modoTasa]
+  }[modoTasa] || { text: 'text-sky-300', bg: 'rgba(125,211,252,0.12)', border: 'rgba(125,211,252,0.3)' }
 
   // Panel de configuración compartido
   const configPanel = (
@@ -69,7 +74,7 @@ export default function BcvWidget({ soloLectura = false }) {
         <p className="text-xs text-white/40 mt-1">Bs por dólar</p>
       </div>
 
-      {/* Selector de modo — 3 botones */}
+      {/* Selector de modo — USDT y Manual */}
       <div className="flex gap-1.5 p-1 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
         {Object.entries(MODO_CONFIG).map(([key, cfg]) => (
           <button
@@ -92,32 +97,6 @@ export default function BcvWidget({ soloLectura = false }) {
       </div>
 
       {/* Contenido según modo */}
-      {modoTasa === 'bcv' && (
-        <div className="p-3 rounded-xl space-y-2" style={{ background: 'rgba(52,211,153,0.06)', border: '1px solid rgba(52,211,153,0.12)' }}>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold text-emerald-400">BCV Oficial</p>
-              <p className="text-[10px] text-white/40">
-                {tasaBcv.fuente || 'Cargando...'}
-                {tasaBcv.ultimaActualizacion && (
-                  <> · {new Date(tasaBcv.ultimaActualizacion).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}</>
-                )}
-              </p>
-            </div>
-            <button onClick={refrescar} disabled={tasaCargando}
-              className="p-2.5 rounded-xl text-emerald-400/60 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all active:scale-90">
-              <RefreshCw size={16} className={tasaCargando ? 'animate-spin' : ''} />
-            </button>
-          </div>
-          {tasaBcv.precio > 0 && (
-            <p className="text-lg font-black text-emerald-400">
-              {fmtRate(tasaBcv.precio)} <span className="text-xs font-medium text-white/30">Bs/$</span>
-            </p>
-          )}
-          <p className="text-[10px] text-white/25">Se actualiza automáticamente cada 15 min</p>
-        </div>
-      )}
-
       {modoTasa === 'usdt' && (
         <div className="p-3 rounded-xl space-y-2" style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)' }}>
           <div className="flex items-center justify-between">

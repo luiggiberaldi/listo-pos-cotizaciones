@@ -1,7 +1,7 @@
 // src/hooks/useRealtimeSync.js
 // Escucha cambios en tablas clave vía Supabase Realtime
-// Solo invalida el cache de React Query — no transmite datos pesados
-// Consumo: ~10 conexiones (1 por dispositivo), pocos mensajes/mes
+// Invalida cache de React Query para mantener datos sincronizados entre terminales
+// productos y configuracion_negocio hacen refetch inmediato (datos críticos para POS)
 import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
@@ -12,14 +12,22 @@ import { COMISIONES_KEY } from './useComisiones'
 
 const COTIZACIONES_KEY = ['cotizaciones']
 const CLIENTES_KEY = ['clientes']
+const CONFIG_KEY = ['config_negocio']
+const USUARIOS_KEY = ['usuarios']
 
-// Tablas que escuchamos y sus query keys correspondientes
-const TABLAS = [
-  { tabla: 'productos',       keys: [INVENTARIO_KEY] },
+// Tablas con invalidación lazy (refetch al navegar a la vista)
+const TABLAS_LAZY = [
   { tabla: 'cotizaciones',    keys: [COTIZACIONES_KEY] },
   { tabla: 'clientes',        keys: [CLIENTES_KEY] },
   { tabla: 'notas_despacho',  keys: [DESPACHOS_KEY, INVENTARIO_KEY] },
   { tabla: 'comisiones',      keys: [COMISIONES_KEY] },
+  { tabla: 'usuarios',        keys: [USUARIOS_KEY] },
+]
+
+// Tablas con refetch inmediato (datos críticos para operación del POS)
+const TABLAS_INMEDIATAS = [
+  { tabla: 'productos',              keys: [INVENTARIO_KEY] },
+  { tabla: 'configuracion_negocio',  keys: [CONFIG_KEY] },
 ]
 
 export function useRealtimeSync() {
@@ -29,20 +37,29 @@ export function useRealtimeSync() {
   useEffect(() => {
     if (!perfil) return
 
-    const channel = supabase
-      .channel('db-changes')
+    const channel = supabase.channel('db-changes')
 
-    // Suscribirse a cambios en cada tabla
-    for (const { tabla, keys } of TABLAS) {
+    // Lazy: marca como stale, refetch cuando el usuario visite la vista
+    for (const { tabla, keys } of TABLAS_LAZY) {
       channel.on(
         'postgres_changes',
         { event: '*', schema: 'public', table: tabla },
         () => {
-          // Mark data as stale without immediately refetching
-          // Data will be refetched when the user navigates to the view
-          // This saves significant egress vs refetching on every change
           for (const key of keys) {
             qc.invalidateQueries({ queryKey: key, refetchType: 'none' })
+          }
+        }
+      )
+    }
+
+    // Inmediato: refetch al instante (stock y config son críticos)
+    for (const { tabla, keys } of TABLAS_INMEDIATAS) {
+      channel.on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: tabla },
+        () => {
+          for (const key of keys) {
+            qc.invalidateQueries({ queryKey: key })
           }
         }
       )

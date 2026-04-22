@@ -5,7 +5,7 @@ import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import {
   Users, FileText, Package, Truck,
   UserCog, ClipboardList,
-  LayoutDashboard, Settings, LogOut,
+  LayoutDashboard, Settings, LogOut, ArrowRightLeft,
   Menu, X, DollarSign, RefreshCw, PackageCheck, Bell, BellOff,
   AlertTriangle, Send, CheckCircle, Ban,
   PanelLeftClose, PanelLeftOpen, BarChart3, FlaskConical,
@@ -106,7 +106,7 @@ const NavItem = memo(function NavItem({ path, label, Icono, onClick, collapsed }
 
 // ─── Layout principal ──────────────────────────────────────────────────────────
 export default function AppLayout() {
-  const { perfil, logout } = useAuthStore()
+  const { perfil, logout, switchOut } = useAuthStore()
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -158,6 +158,11 @@ export default function AppLayout() {
 
   async function handleLogout() {
     await logout()
+    navigate('/login', { replace: true })
+  }
+
+  async function handleSwitchOut() {
+    await switchOut()
     navigate('/login', { replace: true })
   }
 
@@ -406,31 +411,44 @@ export default function AppLayout() {
           )}
         </nav>
 
-        {/* Usuario + cerrar sesión — siempre visible al fondo */}
-        <div className="relative z-10 p-3 pb-20 md:pb-3 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-          <button
-            onClick={handleLogout}
-            className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} p-3 rounded-2xl active:scale-[0.98] transition-all group`}
-            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}
-            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.04)'}
-            title={sidebarCollapsed ? `${perfil?.nombre ?? 'Usuario'} — Cerrar sesión` : undefined}
-          >
+        {/* Usuario + acciones — siempre visible al fondo */}
+        <div className="relative z-10 p-3 pb-20 md:pb-3 shrink-0 space-y-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          {/* Info del usuario */}
+          <div className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} p-3 rounded-2xl`}
+            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
             <LoginAvatar user={perfil} size="sm" />
             {!sidebarCollapsed && (
-              <>
-                <div className="flex-1 min-w-0 text-left">
-                  <p className="text-sm font-black text-white/90 truncate leading-tight">
-                    {perfil?.nombre ?? 'Usuario'}
-                  </p>
-                  <BadgeRol rol={perfil?.rol} />
-                </div>
-                <div className="shrink-0 w-7 h-7 rounded-xl flex items-center justify-center transition-colors group-hover:bg-rose-500/20"
-                  style={{ background: 'rgba(255,255,255,0.07)' }}>
-                  <LogOut size={14} className="text-white/30 group-hover:text-rose-400 transition-colors" />
-                </div>
-              </>
+              <div className="flex-1 min-w-0 text-left">
+                <p className="text-sm font-black text-white/90 truncate leading-tight">
+                  {perfil?.nombre ?? 'Usuario'}
+                </p>
+                <BadgeRol rol={perfil?.rol} />
+              </div>
             )}
+          </div>
+          {/* Cambiar operador */}
+          <button
+            onClick={handleSwitchOut}
+            className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-2.5'} px-3 py-2 rounded-xl active:scale-[0.98] transition-all group`}
+            style={{ color: 'rgba(255,255,255,0.5)' }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            title={sidebarCollapsed ? 'Cambiar operador' : undefined}
+          >
+            <ArrowRightLeft size={14} className="shrink-0" />
+            {!sidebarCollapsed && <span className="text-xs font-bold">Cambiar operador</span>}
+          </button>
+          {/* Cerrar sesión */}
+          <button
+            onClick={handleLogout}
+            className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-2.5'} px-3 py-2 rounded-xl active:scale-[0.98] transition-all group`}
+            style={{ color: 'rgba(255,255,255,0.4)' }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = 'rgba(244,63,94,0.8)' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.4)' }}
+            title={sidebarCollapsed ? 'Cerrar sesión' : undefined}
+          >
+            <LogOut size={14} className="shrink-0" />
+            {!sidebarCollapsed && <span className="text-xs font-bold">Cerrar sesión</span>}
           </button>
         </div>
         </div>

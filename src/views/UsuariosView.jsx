@@ -55,28 +55,19 @@ const COLORES_VENDEDOR = [
 // ─── Formulario crear usuario ─────────────────────────────────────────────────
 function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
   const primerColorLibre = COLORES_VENDEDOR.find(c => !coloresUsados.includes(c)) ?? COLORES_VENDEDOR[0]
-  const [campos, setCampos] = useState({ nombre: '', password: '', rol: 'vendedor', color: primerColorLibre })
+  const [campos, setCampos] = useState({ nombre: '', pin: '', rol: 'vendedor', color: primerColorLibre })
   const [mostrarPass, setMostrarPass] = useState(false)
   const [error, setError] = useState('')
 
   function cambiar(k, v) { setCampos(p => ({ ...p, [k]: v })); setError('') }
 
-  // Generar email interno a partir del nombre
-  function generarEmail(nombre) {
-    const slug = nombre.trim().toLowerCase()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '')
-    return slug ? `${slug}.${Date.now()}@construacero.internal` : ''
-  }
-
   function submit(e) {
     e.preventDefault()
     const pinLen = campos.rol === 'vendedor' ? 4 : 6
     if (!campos.nombre.trim())                   { setError('El nombre es obligatorio'); return }
-    if (!new RegExp(`^\\d{${pinLen}}$`).test(campos.password)) { setError(`El PIN debe ser exactamente ${pinLen} dígitos numéricos`); return }
+    if (!new RegExp(`^\\d{${pinLen}}$`).test(campos.pin)) { setError(`El PIN debe ser exactamente ${pinLen} dígitos numéricos`); return }
     if (coloresUsados.includes(campos.color))    { setError('Ese color ya está en uso por otro usuario'); return }
-    const email = generarEmail(campos.nombre)
-    onGuardar({ ...campos, email, color: campos.color })
+    onGuardar({ nombre: campos.nombre, pin: campos.pin, rol: campos.rol, color: campos.color })
   }
 
   const inputCls = `
@@ -93,11 +84,11 @@ function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
         <input value={campos.nombre} onChange={e => cambiar('nombre', e.target.value)}
           placeholder="Nombre completo" className={inputCls} disabled={cargando} autoFocus />
       </div>
-      {/* Contraseña */}
+      {/* PIN */}
       <div className="relative">
         <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 text-xs font-bold">#</div>
-        <input type={mostrarPass ? 'text' : 'password'} value={campos.password}
-          onChange={e => cambiar('password', e.target.value.replace(/\D/g, '').slice(0, campos.rol === 'vendedor' ? 4 : 6))}
+        <input type={mostrarPass ? 'text' : 'password'} value={campos.pin}
+          onChange={e => cambiar('pin', e.target.value.replace(/\D/g, '').slice(0, campos.rol === 'vendedor' ? 4 : 6))}
           placeholder={`PIN de ${campos.rol === 'vendedor' ? 4 : 6} dígitos (solo números)`}
           inputMode="numeric"
           className={`${inputCls} pr-11`} disabled={cargando} />
@@ -113,7 +104,7 @@ function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
           { value: 'supervisor', label: 'Supervisor' },
         ]}
         value={campos.rol}
-        onChange={val => { cambiar('rol', val); setCampos(p => ({ ...p, password: '' })) }}
+        onChange={val => { cambiar('rol', val); setCampos(p => ({ ...p, pin: '' })) }}
         placeholder="Seleccionar rol..."
         disabled={cargando}
         searchable={false}

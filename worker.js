@@ -63,6 +63,30 @@ function isValidUuid(str) {
   return typeof str === 'string' && UUID_RE.test(str)
 }
 
+// ── PBKDF2 PIN hashing (Web Crypto, zero dependencies) ─────────────────────
+async function hashPinPBKDF2(pin, salt) {
+  const enc = new TextEncoder()
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw', enc.encode(pin), 'PBKDF2', false, ['deriveBits']
+  )
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: enc.encode(salt), iterations: 100_000, hash: 'SHA-256' },
+    keyMaterial, 256
+  )
+  return Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
+async function verifyPinPBKDF2(pin, storedHash, storedSalt) {
+  const hash = await hashPinPBKDF2(pin, storedSalt)
+  return hash === storedHash
+}
+
+function generateSalt() {
+  const arr = new Uint8Array(16)
+  crypto.getRandomValues(arr)
+  return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
 // ── Sanitize search input for PostgREST ilike ─────────────────────────────────
 function sanitizeSearch(input) {
   if (typeof input !== 'string') return ''
@@ -121,6 +145,14 @@ export default {
     }
     if (url.pathname === '/api/admin/tester/clear-all' && request.method === 'DELETE') {
       return handleTesterClearAll(request, env);
+    }
+
+    // ── API: switch/clear operator (auth con PIN) ────────────────────────
+    if (url.pathname === '/api/auth/switch-operator' && request.method === 'POST') {
+      return handleSwitchOperator(request, env);
+    }
+    if (url.pathname === '/api/auth/clear-operator' && request.method === 'POST') {
+      return handleClearOperator(request, env);
     }
 
     // ── API routes para operaciones admin ──────────────────────────────────
@@ -203,6 +235,7 @@ function jsonError(message, status = 400, request = null) {
 }
 
 // Verifica el JWT del usuario autenticado contra Supabase
+// Extrae operator_id/operator_rol de app_metadata si están presentes
 async function verifyAuth(request, env) {
   const authHeader = request.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) return null;
@@ -217,13 +250,17 @@ async function verifyAuth(request, env) {
   });
   if (!res.ok) return null;
   const user = await res.json();
+  // Attach operator context from app_metadata (set by switch-operator)
+  user.operator_id = user.app_metadata?.operator_id || null;
+  user.operator_rol = user.app_metadata?.operator_rol || null;
   return user;
 }
 
-// Verifica que el usuario sea supervisor consultando la tabla usuarios
-async function verifySupervisor(userId, env) {
+// Verifica que el operador sea supervisor consultando la tabla usuarios
+async function verifySupervisor(operatorId, env) {
+  if (!operatorId) return false;
   const res = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${userId}&activo=eq.true&select=rol`,
+    `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${operatorId}&activo=eq.true&select=rol`,
     {
       headers: {
         apikey: env.SUPABASE_SERVICE_KEY,
@@ -259,8 +296,8 @@ async function handleAdmin(request, env, url) {
   const user = await verifyAuth(request, env);
   if (!user?.id) return jsonError('No autenticado', 401, request);
 
-  // Verificar que es supervisor
-  const isSupervisor = await verifySupervisor(user.id, env);
+  // Verificar que es supervisor (usa operator_id del JWT app_metadata)
+  const isSupervisor = await verifySupervisor(user.operator_id, env);
   if (!isSupervisor) return jsonError('Acceso denegado: solo supervisores', 403, request);
 
   // Parsear body
@@ -269,16 +306,11 @@ async function handleAdmin(request, env, url) {
 
   const route = url.pathname.replace('/api/admin/', '');
 
-  // ── Crear usuario ─────────────────────────────────────────────────────
+  // ── Crear usuario (solo en tabla usuarios, sin auth.users) ───────────
   if (route === 'users' && request.method === 'POST') {
-    const { email, password, nombre, rol, color } = body;
-    if (!email || !password || !nombre || !rol) {
-      return jsonError('Faltan campos: email, password, nombre, rol', 400, request);
-    }
-
-    // Validate email format
-    if (!isValidEmail(email)) {
-      return jsonError('Formato de email inválido', 400, request);
+    const { nombre, rol, pin, color } = body;
+    if (!nombre || !rol || !pin) {
+      return jsonError('Faltan campos: nombre, rol, pin', 400, request);
     }
 
     // Validate rol
@@ -286,29 +318,16 @@ async function handleAdmin(request, env, url) {
       return jsonError('Rol inválido: debe ser supervisor o vendedor', 400, request);
     }
 
-    // Crear en Supabase Auth
-    const authRes = await fetch(`${env.SUPABASE_URL}/auth/v1/admin/users`, {
-      method: 'POST',
-      headers: {
-        apikey: env.SUPABASE_SERVICE_KEY,
-        Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        email: email.trim().toLowerCase(),
-        password,
-        email_confirm: true,
-      }),
-    });
-
-    const authData = await authRes.json();
-    if (!authRes.ok) {
-      const msg = authData?.msg || authData?.message || 'Error al crear usuario en auth';
-      if (msg.includes('already registered')) {
-        return jsonError('Ya existe un usuario con ese email', 409, request);
-      }
-      return jsonError(msg, authRes.status, request);
+    // Validate PIN length
+    const pinLen = rol === 'vendedor' ? 4 : 6;
+    if (!/^\d+$/.test(pin) || pin.length !== pinLen) {
+      return jsonError(`El PIN debe ser exactamente ${pinLen} dígitos numéricos`, 400, request);
     }
+
+    // Hash PIN with PBKDF2
+    const salt = generateSalt();
+    const hash = await hashPinPBKDF2(pin, salt);
+    const newId = crypto.randomUUID();
 
     // Insertar en public.usuarios
     const dbRes = await fetch(`${env.SUPABASE_URL}/rest/v1/usuarios`, {
@@ -320,27 +339,22 @@ async function handleAdmin(request, env, url) {
         Prefer: 'return=minimal',
       },
       body: JSON.stringify({
-        id: authData.id,
+        id: newId,
         nombre: nombre.trim(),
         rol,
         activo: true,
+        pin_hash: hash,
+        pin_salt: salt,
         ...(color ? { color } : {}),
       }),
     });
 
     if (!dbRes.ok) {
-      // Rollback: eliminar auth user
-      await fetch(`${env.SUPABASE_URL}/auth/v1/admin/users/${authData.id}`, {
-        method: 'DELETE',
-        headers: {
-          apikey: env.SUPABASE_SERVICE_KEY,
-          Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-        },
-      });
-      return jsonError('Error al insertar en tabla usuarios', 500, request);
+      const errText = await dbRes.text();
+      return jsonError('Error al crear usuario: ' + errText, 500, request);
     }
 
-    return json({ id: authData.id, ok: true }, 201, request);
+    return json({ id: newId, ok: true }, 201, request);
   }
 
   // ── Actualizar usuario (nombre, rol, PIN, color) ──────────────────────
@@ -354,13 +368,25 @@ async function handleAdmin(request, env, url) {
       return jsonError('Rol inválido', 400, request);
     }
 
-    // Actualizar en public.usuarios
-    if (nombre || rol || color !== undefined) {
-      const updateData = {};
-      if (nombre) updateData.nombre = nombre.trim();
-      if (rol) updateData.rol = rol;
-      if (color !== undefined) updateData.color = color;
+    // Build update data
+    const updateData = {};
+    if (nombre) updateData.nombre = nombre.trim();
+    if (rol) updateData.rol = rol;
+    if (color !== undefined) updateData.color = color;
 
+    // Hash new PIN if provided
+    if (pin) {
+      const pinLen = (rol || 'vendedor') === 'vendedor' ? 4 : 6;
+      if (!/^\d+$/.test(pin) || pin.length !== pinLen) {
+        return jsonError(`El PIN debe ser exactamente ${pinLen} dígitos numéricos`, 400, request);
+      }
+      const salt = generateSalt();
+      const hash = await hashPinPBKDF2(pin, salt);
+      updateData.pin_hash = hash;
+      updateData.pin_salt = salt;
+    }
+
+    if (Object.keys(updateData).length > 0) {
       const dbRes = await fetch(
         `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${userId}`,
         {
@@ -377,33 +403,16 @@ async function handleAdmin(request, env, url) {
       if (!dbRes.ok) return jsonError('Error al actualizar usuario', 500, request);
     }
 
-    // Cambiar PIN si se proporcionó
-    if (pin) {
-      const authRes = await fetch(
-        `${env.SUPABASE_URL}/auth/v1/admin/users/${userId}`,
-        {
-          method: 'PUT',
-          headers: {
-            apikey: env.SUPABASE_SERVICE_KEY,
-            Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ password: pin }),
-        }
-      );
-      if (!authRes.ok) return jsonError('Error al cambiar PIN', 500, request);
-    }
-
     return json({ ok: true }, 200, request);
   }
 
-  // ── Eliminar usuario ──────────────────────────────────────────────────
+  // ── Eliminar usuario (solo de tabla usuarios, sin auth) ──────────────
   if (route.startsWith('users/') && request.method === 'DELETE') {
     const userId = route.replace('users/', '');
     if (!isValidUuid(userId)) return jsonError('ID de usuario inválido', 400, request);
 
-    // Eliminar de public.usuarios primero
-    await fetch(
+    // Eliminar de public.usuarios
+    const dbRes = await fetch(
       `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${userId}`,
       {
         method: 'DELETE',
@@ -415,24 +424,106 @@ async function handleAdmin(request, env, url) {
       }
     );
 
-    // Eliminar de auth
-    const authRes = await fetch(
-      `${env.SUPABASE_URL}/auth/v1/admin/users/${userId}`,
-      {
-        method: 'DELETE',
-        headers: {
-          apikey: env.SUPABASE_SERVICE_KEY,
-          Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-        },
-      }
-    );
-
-    if (!authRes.ok) return jsonError('Error al eliminar usuario de auth', 500, request);
+    if (!dbRes.ok) return jsonError('Error al eliminar usuario', 500, request);
 
     return json({ ok: true }, 200, request);
   }
 
   return jsonError('Ruta no encontrada', 404, request);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// OPERATOR SWITCHING (PIN-based auth)
+// ══════════════════════════════════════════════════════════════════════════════
+
+async function handleSwitchOperator(request, env) {
+  // Rate limit
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown'
+  if (isRateLimited(`switch:${ip}`)) {
+    return jsonError('Demasiados intentos. Intenta en un minuto.', 429, request);
+  }
+
+  // Verify business account is authenticated
+  const user = await verifyAuth(request, env);
+  if (!user?.id) return jsonError('No autenticado', 401, request);
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+
+  const { operator_id, pin } = body;
+  if (!operator_id || !pin) return jsonError('operator_id y pin requeridos', 400, request);
+  if (!isValidUuid(operator_id)) return jsonError('operator_id inválido', 400, request);
+
+  // Fetch operator from usuarios table
+  const res = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${operator_id}&activo=eq.true&select=id,nombre,rol,pin_hash,pin_salt,color`,
+    {
+      headers: {
+        apikey: env.SUPABASE_SERVICE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+      },
+    }
+  );
+  if (!res.ok) return jsonError('Error al buscar operador', 500, request);
+  const [operator] = await res.json();
+  if (!operator) return jsonError('Operador no encontrado o inactivo', 404, request);
+
+  // Validate PIN
+  if (!operator.pin_hash || !operator.pin_salt) {
+    return jsonError('El operador no tiene PIN configurado. El supervisor debe asignarle uno.', 400, request);
+  }
+
+  const isValid = await verifyPinPBKDF2(pin, operator.pin_hash, operator.pin_salt);
+  if (!isValid) return jsonError('PIN incorrecto', 401, request);
+
+  // Update app_metadata on the business auth user
+  const metaRes = await fetch(
+    `${env.SUPABASE_URL}/auth/v1/admin/users/${user.id}`,
+    {
+      method: 'PUT',
+      headers: {
+        apikey: env.SUPABASE_SERVICE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        app_metadata: {
+          operator_id: operator.id,
+          operator_rol: operator.rol,
+          operator_nombre: operator.nombre,
+        },
+      }),
+    }
+  );
+
+  if (!metaRes.ok) {
+    return jsonError('Error al establecer operador', 500, request);
+  }
+
+  return json({
+    ok: true,
+    operator: { id: operator.id, nombre: operator.nombre, rol: operator.rol, color: operator.color },
+  }, 200, request);
+}
+
+async function handleClearOperator(request, env) {
+  const user = await verifyAuth(request, env);
+  if (!user?.id) return jsonError('No autenticado', 401, request);
+
+  // Clear operator from app_metadata
+  await fetch(`${env.SUPABASE_URL}/auth/v1/admin/users/${user.id}`, {
+    method: 'PUT',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      app_metadata: { operator_id: null, operator_rol: null, operator_nombre: null },
+    }),
+  });
+
+  return json({ ok: true }, 200, request);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -476,7 +567,7 @@ async function handlePush(request, env, url) {
         Prefer: 'resolution=merge-duplicates,return=minimal',
       },
       body: JSON.stringify({
-        usuario_id: user.id,
+        usuario_id: user.operator_id || user.id,
         endpoint,
         p256dh: keys.p256dh,
         auth: keys.auth,
@@ -496,7 +587,7 @@ async function handlePush(request, env, url) {
     try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
 
     await fetch(
-      `${env.SUPABASE_URL}/rest/v1/push_subscriptions?usuario_id=eq.${user.id}&endpoint=eq.${encodeURIComponent(body.endpoint)}`,
+      `${env.SUPABASE_URL}/rest/v1/push_subscriptions?usuario_id=eq.${user.operator_id || user.id}&endpoint=eq.${encodeURIComponent(body.endpoint)}`,
       {
         method: 'DELETE',
         headers: {
@@ -554,7 +645,7 @@ async function handlePush(request, env, url) {
     // excepto si el sender es supervisor (notificaciones de sistema)
     else {
       // Por defecto: enviar a todos menos al que envía
-      subsUrl += `&usuario_id=neq.${user.id}`;
+      subsUrl += `&usuario_id=neq.${user.operator_id || user.id}`;
     }
 
     // Obtener suscripciones filtradas
@@ -766,7 +857,7 @@ async function handleBackup(request, env) {
   const user = await verifyAuth(request, env);
   if (!user?.id) return jsonError('No autenticado', 401, request);
 
-  const isSupervisor = await verifySupervisor(user.id, env);
+  const isSupervisor = await verifySupervisor(user.operator_id, env);
   if (!isSupervisor) return jsonError('Acceso denegado: solo supervisores', 403, request);
 
   const h = {
@@ -861,7 +952,7 @@ async function handleRestore(request, env) {
   const user = await verifyAuth(request, env);
   if (!user?.id) return jsonError('No autenticado', 401, request);
 
-  const isSupervisor = await verifySupervisor(user.id, env);
+  const isSupervisor = await verifySupervisor(user.operator_id, env);
   if (!isSupervisor) return jsonError('Acceso denegado: solo supervisores', 403, request);
 
   let backup;
@@ -944,7 +1035,7 @@ async function handleClearInventory(request, env) {
   const user = await verifyAuth(request, env);
   if (!user?.id) return jsonError('No autenticado', 401, request);
 
-  const isSupervisor = await verifySupervisor(user.id, env);
+  const isSupervisor = await verifySupervisor(user.operator_id, env);
   if (!isSupervisor) return jsonError('Acceso denegado: solo supervisores', 403, request);
 
   const h = {
@@ -1023,8 +1114,8 @@ async function handleGuardarCotizacion(request, env) {
     if (it.descuento_pct != null && (it.descuento_pct < 0 || it.descuento_pct > 100)) return jsonError(`Item ${i + 1}: descuento debe estar entre 0 y 100`, 400, request);
   }
 
-  // Force vendedor_id to authenticated user
-  headerData.vendedor_id = user.id;
+  // Force vendedor_id to authenticated operator
+  headerData.vendedor_id = user.operator_id;
 
   const supaHeaders = {
     apikey: env.SUPABASE_SERVICE_KEY,
@@ -1057,9 +1148,9 @@ async function handleGuardarCotizacion(request, env) {
       if (!checkRes.ok) return jsonError('Error al verificar cotización', 500, request);
       const [existing] = await checkRes.json();
       if (!existing) return jsonError('Cotización no encontrada', 404, request);
-      if (existing.vendedor_id !== user.id) {
+      if (existing.vendedor_id !== user.operator_id) {
         // Check if user is supervisor (supervisors can edit any cotización)
-        const isSupervisor = await verifySupervisor(user.id, env);
+        const isSupervisor = await verifySupervisor(user.operator_id, env);
         if (!isSupervisor) return jsonError('No tienes permiso para editar esta cotización', 403, request);
       }
       if (existing.estado !== 'borrador') return jsonError('Solo se pueden editar cotizaciones en borrador', 400, request);
@@ -1110,7 +1201,7 @@ async function handleReciclarCotizacion(request, env) {
   if (!user?.id) return jsonError('No autenticado', 401, request);
 
   // Solo supervisores
-  const isSup = await verifySupervisor(user.id, env);
+  const isSup = await verifySupervisor(user.operator_id, env);
   if (!isSup) return jsonError('Solo supervisores pueden reciclar cotizaciones', 403, request);
 
   let body;
@@ -1145,7 +1236,7 @@ async function handleReciclarCotizacion(request, env) {
     const [vendRes, vendOrigRes, supRes] = await Promise.all([
       fetch(`${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${vendedorDestinoId}&activo=eq.true&select=id,nombre,rol`, { headers: supaHeaders }),
       fetch(`${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${cotOrig.vendedor_id}&select=nombre`, { headers: supaHeaders }),
-      fetch(`${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${user.id}&select=nombre,rol`, { headers: supaHeaders }),
+      fetch(`${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${user.operator_id}&select=nombre,rol`, { headers: supaHeaders }),
     ]);
 
     const [vendDest] = await vendRes.json();
@@ -1208,7 +1299,7 @@ async function handleReciclarCotizacion(request, env) {
       method: 'POST',
       headers: supaHeaders,
       body: JSON.stringify({
-        usuario_id: user.id,
+        usuario_id: user.operator_id,
         usuario_nombre: supData?.nombre || 'Supervisor',
         usuario_rol: supData?.rol || 'supervisor',
         categoria: 'COTIZACION',
@@ -1324,7 +1415,7 @@ async function handleTesterClearAll(request, env) {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return jsonError('Server misconfigured', 500, request);
   const user = await verifyAuth(request, env);
   if (!user?.id) return jsonError('No autenticado', 401, request);
-  const isSup = await verifySupervisor(user.id, env);
+  const isSup = await verifySupervisor(user.operator_id, env);
   if (!isSup) return jsonError('Solo supervisores', 403, request);
 
   const start = Date.now();
@@ -1365,7 +1456,7 @@ async function handleSaveConfig(request, env) {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return jsonError('Server misconfigured', 500, request);
   const user = await verifyAuth(request, env);
   if (!user?.id) return jsonError('No autenticado', 401, request);
-  const isSup = await verifySupervisor(user.id, env);
+  const isSup = await verifySupervisor(user.operator_id, env);
   if (!isSup) return jsonError('Solo supervisores', 403, request);
 
   const campos = await request.json();
@@ -1391,7 +1482,7 @@ async function handleTesterSeedDemo(request, env) {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return jsonError('Server misconfigured', 500, request);
   const user = await verifyAuth(request, env);
   if (!user?.id) return jsonError('No autenticado', 401, request);
-  const isSup = await verifySupervisor(user.id, env);
+  const isSup = await verifySupervisor(user.operator_id, env);
   if (!isSup) return jsonError('Solo supervisores', 403, request);
 
   const start = Date.now();
@@ -1596,7 +1687,7 @@ async function handleTesterStressSeed(request, env) {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return jsonError('Server misconfigured', 500, request);
   const user = await verifyAuth(request, env);
   if (!user?.id) return jsonError('No autenticado', 401, request);
-  const isSup = await verifySupervisor(user.id, env);
+  const isSup = await verifySupervisor(user.operator_id, env);
   if (!isSup) return jsonError('Solo supervisores', 403, request);
 
   let body;
