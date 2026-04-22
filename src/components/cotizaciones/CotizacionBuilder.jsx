@@ -796,10 +796,11 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
       {items.map((it, idx) => {
         const linea = mulR(it.cantidad, mulR(it.precioUnitUsd, 1 - it.descuentoPct / 100))
         return (
-          <div key={it._key} className="px-3 sm:px-4 py-2.5 flex items-center gap-2 sm:gap-3 group relative">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-slate-50 flex items-center justify-center shrink-0">
-              <Package size={16} className="text-slate-300" />
-            </div>
+          <div key={it._key} className="px-3 sm:px-4 py-2.5 flex items-center gap-2 sm:gap-3 group">
+            <button type="button" onClick={() => onEliminar(idx)}
+              className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-red-50 hover:bg-red-100 flex items-center justify-center shrink-0 transition-colors active:scale-95">
+              <Trash2 size={14} className="text-red-400" />
+            </button>
             <div className="flex-1 min-w-0">
               <p className="text-xs sm:text-sm font-bold text-slate-700 leading-tight truncate">{it.nombreSnap}</p>
               <div className="flex items-center gap-1.5 mt-0.5">
@@ -829,10 +830,6 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
                 </button>
               </div>
             </div>
-            <button type="button" onClick={() => onEliminar(idx)}
-              className="absolute -top-1 -right-1 sm:top-1 sm:right-1 p-1 bg-red-50 text-red-500 sm:bg-transparent sm:text-slate-300 sm:hover:text-red-500 opacity-80 sm:opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
-              <X size={12} />
-            </button>
           </div>
         )
       })}
