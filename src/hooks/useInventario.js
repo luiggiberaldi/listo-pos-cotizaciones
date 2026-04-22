@@ -212,20 +212,21 @@ export function useActualizarProducto() {
   })
 }
 
-// ─── Mutation: borrar producto (hard delete) ──────────────────────────────────
+// ─── Mutation: borrar producto (hard delete con kardex) ────────────────────────
+// Usa RPC que registra egreso del stock restante antes de borrar
 export function useBorrarProducto() {
   const qc = useQueryClient()
 
   return useMutation({
     mutationFn: async (id) => {
-      const { error } = await supabase
-        .from('productos')
-        .delete()
-        .eq('id', id)
+      const { error } = await supabase.rpc('borrar_producto_con_kardex', {
+        p_producto_id: id,
+      })
       if (error) throw error
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: INVENTARIO_KEY })
+      qc.invalidateQueries({ queryKey: MOVIMIENTOS_KEY })
       showToast('Producto eliminado', 'success')
     },
   })
