@@ -10,7 +10,8 @@ export default memo(function CotizacionRow({ cotizacion, onEditar, onVer, tasa =
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const esBorrador = cotizacion.estado === 'borrador'
-  const canVersion = !esBorrador && ['enviada', 'aceptada', 'rechazada'].includes(cotizacion.estado)
+  const esPropietario = cotizacion.vendedor_id === perfil?.id
+  const canVersion = !esBorrador && ['enviada', 'aceptada', 'rechazada'].includes(cotizacion.estado) && (!esSupervisor || esPropietario)
   const vendedorColor = cotizacion.vendedor?.color || '#64748b'
   const despacho = cotizacion.despacho
 

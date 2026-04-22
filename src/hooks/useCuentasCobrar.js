@@ -2,6 +2,7 @@
 // Queries y mutations para el sistema de cuentas por cobrar
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
+import { apiUrl } from '../services/apiBase'
 import useAuthStore from '../store/useAuthStore'
 import { CLIENTES_KEY } from './useClientes'
 import { showToast } from '../components/ui/Toast'
@@ -124,32 +125,26 @@ export function useResumenCxC() {
   })
 }
 
-// ─── Registrar abono (pago del cliente) ────────────────────────────────────
+// ─── Registrar abono (pago del cliente, via Worker API) ─────────────────────
 export function useRegistrarAbono() {
   const qc = useQueryClient()
 
   return useMutation({
     mutationFn: async ({ clienteId, monto, formaPago, referencia, descripcion }) => {
-      const { data, error } = await supabase.rpc('registrar_abono_cxc', {
-        p_cliente_id: clienteId,
-        p_monto: monto,
-        p_forma_pago: formaPago || null,
-        p_referencia: referencia || null,
-        p_descripcion: descripcion || 'Abono recibido',
-      })
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('No autenticado')
 
-      if (error) {
-        if (error.message.includes('ACCESO_DENEGADO'))
-          throw new Error('Solo supervisores pueden registrar abonos')
-        if (error.message.includes('MONTO_INVALIDO'))
-          throw new Error('El monto debe ser mayor a cero')
-        if (error.message.includes('SIN_DEUDA'))
-          throw new Error('El cliente no tiene saldo pendiente')
-        if (error.message.includes('CLIENTE_NO_ENCONTRADO'))
-          throw new Error('Cliente no encontrado o inactivo')
-        throw error
-      }
-      return data
+      const res = await fetch(apiUrl('/api/cxc/abono'), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ clienteId, monto, formaPago: formaPago || null, referencia: referencia || null, descripcion: descripcion || 'Abono recibido' }),
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Error al registrar abono')
+      return result
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: CXC_KEY })

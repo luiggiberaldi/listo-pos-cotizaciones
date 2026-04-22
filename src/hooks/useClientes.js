@@ -149,32 +149,25 @@ export function useDesactivarCliente() {
   })
 }
 
-// ─── Mutation: reasignar cliente (solo supervisor, vía RPC) ───────────────────
+// ─── Mutation: reasignar cliente (solo supervisor, via Worker API) ───────────
 export function useReasignarCliente() {
   const qc = useQueryClient()
 
   return useMutation({
     mutationFn: async ({ clienteId, nuevoVendedorId, motivo }) => {
-      const { error } = await supabase.rpc('reasignar_cliente', {
-        p_cliente_id:     clienteId,
-        p_nuevo_vendedor: nuevoVendedorId,
-        p_motivo:         motivo,
-      })
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('No autenticado')
 
-      if (error) {
-        // Traducir errores del servidor a mensajes amigables
-        if (error.message.includes('ACCESO_DENEGADO'))
-          throw new Error('Solo un supervisor puede reasignar clientes')
-        if (error.message.includes('MOTIVO_INVALIDO'))
-          throw new Error('El motivo debe tener al menos 10 caracteres')
-        if (error.message.includes('CLIENTE_NO_ENCONTRADO'))
-          throw new Error('El cliente no existe o está inactivo')
-        if (error.message.includes('VENDEDOR_INVALIDO'))
-          throw new Error('El vendedor destino no existe o está inactivo')
-        if (error.message.includes('SIN_CAMBIO'))
-          throw new Error('El cliente ya pertenece a ese vendedor')
-        throw error
-      }
+      const res = await fetch(apiUrl('/api/clientes/reasignar'), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ clienteId, nuevoVendedorId, motivo }),
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Error al reasignar cliente')
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: CLIENTES_KEY })

@@ -75,9 +75,9 @@ export default function MovimientosHistorial() {
       const lote = {
         id: m.lote_id,
         tipo: m.tipo,
-        motivo: m.motivo,
+        motivo: m.motivo || '',
         motivo_tipo: m.motivo_tipo || 'otro',
-        usuario: m.usuario_nombre,
+        usuario: m.usuario_nombre || 'Sin usuario',
         usuario_color: m.usuario_color,
         fecha: m.creado_en,
         numero: m.numero,
@@ -284,7 +284,7 @@ export default function MovimientosHistorial() {
                       {lote.items.map(m => (
                         <div key={m.id} className="grid grid-cols-[1fr_80px_100px] sm:grid-cols-[1fr_80px_100px_80px] gap-1 px-4 py-2 hover:bg-slate-50/50 transition-colors items-center">
                           <div className="min-w-0">
-                            <p className="text-sm font-medium text-slate-700 truncate">{m.producto_nombre}</p>
+                            <p className="text-sm font-medium text-slate-700 truncate">{m.producto_nombre || 'Producto'}</p>
                             {m.numero && (
                               <span className="text-[10px] text-slate-300 font-mono">{formatCorrelativo(m.numero)}</span>
                             )}

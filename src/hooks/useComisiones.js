@@ -2,6 +2,7 @@
 // Queries y mutations para el sistema de comisiones
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
+import { apiUrl } from '../services/apiBase'
 import useAuthStore from '../store/useAuthStore'
 import { showToast } from '../components/ui/Toast'
 
@@ -87,22 +88,25 @@ export function useComisionesResumen() {
   })
 }
 
-// ─── Marcar comisión como pagada (RPC) ──────────────────────────────────────
+// ─── Marcar comisión como pagada (via Worker API) ──────────────────────────
 export function useMarcarComisionPagada() {
   const qc = useQueryClient()
 
   return useMutation({
     mutationFn: async (comisionId) => {
-      const { error } = await supabase.rpc('marcar_comision_pagada', {
-        p_comision_id: comisionId,
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('No autenticado')
+
+      const res = await fetch(apiUrl('/api/comisiones/pagar'), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ comisionId }),
       })
-      if (error) {
-        if (error.message.includes('ACCESO_DENEGADO'))
-          throw new Error('Solo supervisores pueden marcar comisiones como pagadas')
-        if (error.message.includes('COMISION_YA_PAGADA'))
-          throw new Error('Esta comisión ya fue marcada como pagada')
-        throw error
-      }
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Error al marcar comisión como pagada')
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: COMISIONES_KEY })

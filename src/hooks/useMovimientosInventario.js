@@ -2,6 +2,7 @@
 // Queries y mutations para movimientos de inventario (ingreso/egreso por lotes)
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
+import { apiUrl } from '../services/apiBase'
 import useAuthStore from '../store/useAuthStore'
 import { INVENTARIO_KEY } from './useInventario'
 import { showToast } from '../components/ui/Toast'
@@ -63,19 +64,25 @@ export function useKardex(productoId) {
   })
 }
 
-// ─── Aplicar movimiento por lotes (atómico vía RPC) ─────────────────────────
+// ─── Aplicar movimiento por lotes (via Worker API) ──────────────────────────
 export function useAplicarMovimientoLote() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ tipo, motivo, motivo_tipo = 'otro', items }) => {
-      const { data, error } = await supabase.rpc('aplicar_movimiento_lote', {
-        p_tipo: tipo,
-        p_motivo: motivo,
-        p_motivo_tipo: motivo_tipo,
-        p_items: items,
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('No autenticado')
+
+      const res = await fetch(apiUrl('/api/inventario/movimiento'), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ tipo, motivo, motivo_tipo, items }),
       })
-      if (error) throw error
-      return data // { lote_id, numero }
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Error al aplicar movimiento')
+      return result // { lote_id, numero }
     },
     onSuccess: async (data, variables) => {
       qc.invalidateQueries({ queryKey: INVENTARIO_KEY })

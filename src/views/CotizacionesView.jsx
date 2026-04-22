@@ -291,7 +291,7 @@ function ModalVersionar({ cotizacion, onConfirm, onCancel, cargando }) {
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-2.5">
           <AlertTriangle size={15} className="text-amber-600 shrink-0 mt-0.5" />
           <p className="text-sm text-amber-800">
-            <strong>{num}</strong> ya fue enviada y no se puede modificar. Se creará una <strong>copia editable</strong> (versión {(cotizacion.version ?? 1) + 1}) con los mismos productos y precios.
+            <strong>{num}</strong> ya fue enviada y no se puede modificar. Se creará una <strong>copia editable</strong> (Rev.{(cotizacion.version ?? 1) + 1}) con los mismos datos, y la cotización original quedará <strong>anulada automáticamente</strong>.
           </p>
         </div>
 
@@ -646,7 +646,7 @@ export default function CotizacionesView() {
   async function iniciarVersionado(cot) {
     try {
       const nuevoId = await crearVersion.mutateAsync(cot.id)
-      showToast(`Se creó Rev.${(cot.version || 1) + 1} como borrador editable`, 'success')
+      showToast(`Se creó Rev.${(cot.version || 1) + 1} como borrador editable. La cotización original fue anulada.`, 'success')
       setEditandoId(nuevoId)
       setModo('builder')
     } catch (e) {

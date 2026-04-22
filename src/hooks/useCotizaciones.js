@@ -187,23 +187,26 @@ export function useGuardarBorrador() {
   })
 }
 
-// ─── Enviar cotización (RPC) ──────────────────────────────────────────────────
+// ─── Enviar cotización (via Worker API) ──────────────────────────────────────
 export function useEnviarCotizacion() {
   const qc = useQueryClient()
 
   return useMutation({
     mutationFn: async ({ cotizacionId, tasaBcv }) => {
-      const { error } = await supabase.rpc('enviar_cotizacion', {
-        p_cotizacion_id: cotizacionId,
-        p_tasa_bcv:      Number(tasaBcv),
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('No autenticado')
+
+      const res = await fetch(apiUrl('/api/cotizaciones/enviar'), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ cotizacionId, tasaBcv: Number(tasaBcv) }),
       })
-      if (error) {
-        if (error.message.includes('SIN_ITEMS'))
-          throw new Error('La cotización no tiene productos')
-        if (error.message.includes('ESTADO_INVALIDO'))
-          throw new Error('Solo se pueden enviar cotizaciones en borrador')
-        throw error
-      }
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Error al enviar cotización')
+
       // Obtener número, cliente, vendedor y total para notificación
       const { data: cot } = await supabase
         .from('cotizaciones')
@@ -285,8 +288,7 @@ export function useActualizarEstado() {
   })
 }
 
-// ─── Crear nueva versión de cotización enviada (RPC) ──────────────────────────
-// Llama crear_version_cotizacion(p_cotizacion_id) que:
+// ─── Crear nueva versión de cotización enviada (via Worker API) ────────────────
 // 1. Crea un borrador nuevo con version = anterior + 1
 // 2. Copia todos los items de la versión anterior
 // 3. Devuelve el ID del nuevo borrador
@@ -295,16 +297,22 @@ export function useCrearVersion() {
 
   return useMutation({
     mutationFn: async (cotizacionId) => {
-      const { data, error } = await supabase.rpc('crear_version_cotizacion', {
-        p_cotizacion_id: cotizacionId,
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('No autenticado')
+
+      const res = await fetch(apiUrl('/api/cotizaciones/crear-version'), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ cotizacionId }),
       })
-      if (error) {
-        if (error.message.includes('ESTADO_INVALIDO'))
-          throw new Error('Solo se pueden versionar cotizaciones enviadas')
-        throw error
-      }
-      // data es el UUID del nuevo borrador
-      return data
+
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Error al crear versión')
+
+      return result.id
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: COTIZACIONES_KEY }),
   })

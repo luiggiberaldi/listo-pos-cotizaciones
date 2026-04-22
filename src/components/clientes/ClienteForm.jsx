@@ -122,12 +122,17 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
     if (campos.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(campos.email.trim())) {
       errs.email = 'Correo inválido'
     }
-    if (campos.telefono) {
+    if (!campos.telefono.trim()) {
+      errs.telefono = 'El teléfono es obligatorio'
+    } else if (campos.telefono) {
       const telLimpio = campos.telefono.replace(/[\s\-]/g, '')
       // Debe ser un número móvil venezolano: 4XX seguido de 7 dígitos
       if (!/^4(12|14|16|24|26)\d{7}$/.test(telLimpio)) {
         errs.telefono = 'Debe ser un número móvil válido (412, 414, 416, 424, 426)'
       }
+    }
+    if (!campos.direccion.trim()) {
+      errs.direccion = 'La dirección es obligatoria'
     }
     return errs
   }
@@ -229,7 +234,7 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
       </Campo>
 
       {/* Teléfono */}
-      <Campo label="Teléfono" icono={Phone} error={errores.telefono}>
+      <Campo label="Teléfono *" icono={Phone} error={errores.telefono}>
         <div className="relative flex">
           <span className="inline-flex items-center px-3 rounded-l-xl border border-r-0 border-slate-200 bg-slate-100 text-sm text-slate-500 select-none">
             +58
@@ -272,7 +277,7 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
       </Campo>
 
       {/* Dirección */}
-      <Campo label="Dirección" icono={MapPin} error={errores.direccion}>
+      <Campo label="Dirección *" icono={MapPin} error={errores.direccion}>
         <input
           type="text"
           name="direccion"

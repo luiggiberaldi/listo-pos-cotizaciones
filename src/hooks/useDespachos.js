@@ -2,6 +2,7 @@
 // Queries y mutations para notas de despacho
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
+import { apiUrl } from '../services/apiBase'
 import useAuthStore from '../store/useAuthStore'
 import { INVENTARIO_KEY } from './useInventario'
 import { COTIZACIONES_KEY } from './useCotizaciones'
@@ -53,64 +54,36 @@ export function useDespachos({ estado = '' } = {}) {
   })
 }
 
-// ─── Crear nota de despacho (RPC) ───────────────────────────────────────────
+// ─── Crear nota de despacho (via Worker API) ───────────────────────────────
 export function useCrearDespacho() {
   const qc = useQueryClient()
 
   return useMutation({
     mutationFn: async ({ cotizacionId, notas = null, formaPago = null, numeroCotizacion, clienteNombre }) => {
-      const { data, error } = await supabase.rpc('crear_nota_despacho', {
-        p_cotizacion_id: cotizacionId,
-        p_notas: notas || null,
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('No autenticado')
+
+      const res = await fetch(apiUrl('/api/despachos/crear'), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ cotizacionId, notas: notas || null, formaPago: formaPago || null }),
       })
-      if (error) {
-        if (error.message.includes('STOCK_INSUFICIENTE'))
-          throw new Error(error.message.split('STOCK_INSUFICIENTE: ')[1] || 'Stock insuficiente')
-        if (error.message.includes('DESPACHO_EXISTENTE'))
-          throw new Error('Ya existe una nota de despacho para esta cotización')
-        if (error.message.includes('ESTADO_INVALIDO'))
-          throw new Error('La cotización debe estar aceptada para despachar')
-        if (error.message.includes('ACCESO_DENEGADO'))
-          throw new Error('Solo supervisores pueden crear notas de despacho')
-        throw error
-      }
-      // Guardar forma de pago si se indicó
-      if (formaPago && data) {
-        const { error: fpError } = await supabase.from('notas_despacho').update({ forma_pago: formaPago }).eq('id', data)
-        if (fpError) {
-          console.error('[Despacho] Error guardando forma de pago:', fpError)
-          throw new Error('Despacho creado, pero no se pudo registrar la forma de pago. Contacta al supervisor.')
-        }
-      }
-      // Registrar cargo en crédito si es Cta por cobrar
-      if (formaPago === 'Cta por cobrar' && data) {
-        const { error: cxcError } = await supabase.rpc('registrar_cargo_cxc', { p_despacho_id: data })
-        if (cxcError) {
-          console.error('[CxC] Error registrando cargo:', cxcError)
-          throw new Error('Despacho creado, pero el cargo a Crédito no se registró. Contacta al supervisor para registrarlo manualmente.')
-        }
-      }
-      // Calcular comisión automáticamente al crear el despacho
-      if (data) {
-        const { error: comError } = await supabase.rpc('calcular_comision_despacho', { p_despacho_id: data })
-        if (comError) {
-          // No fallar el despacho, pero notificar al usuario para que reintente
-          setTimeout(() => showToast('Despacho creado, pero la comisión no se calculó. Contacta al supervisor.', 'warning'), 500)
-        }
-      }
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Error al crear despacho')
+
+      const despachoId = result.id
 
       // Registrar egresos en el kardex (inventario_movimientos)
-      // El RPC ya descontó el stock; aquí solo registramos el movimiento
-      if (data) {
+      if (despachoId) {
         try {
-          const [itemsRes, userRes] = await Promise.all([
-            supabase
-              .from('cotizacion_items')
-              .select('producto_id, cantidad, nombre_snap')
-              .eq('cotizacion_id', cotizacionId)
-              .not('producto_id', 'is', null),
-            supabase.auth.getUser(),
-          ])
+          const itemsRes = await supabase
+            .from('cotizacion_items')
+            .select('producto_id, cantidad, nombre_snap')
+            .eq('cotizacion_id', cotizacionId)
+            .not('producto_id', 'is', null)
 
           const items = itemsRes.data ?? []
           if (items.length > 0) {
@@ -134,7 +107,6 @@ export function useCrearDespacho() {
               producto_id: item.producto_id,
               producto_nombre: item.nombre_snap,
               cantidad: Number(item.cantidad),
-              // El stock ya fue descontado por el RPC; reconstruimos el anterior
               stock_anterior: (stockMap[item.producto_id] ?? 0) + Number(item.cantidad),
               stock_nuevo: stockMap[item.producto_id] ?? 0,
               usuario_id: perfil?.id,
@@ -157,12 +129,11 @@ export function useCrearDespacho() {
             if (bajos.length > 0) notifyStockBajo(bajos)
           }
         } catch (kardexErr) {
-          // No bloquear el flujo del despacho
           console.error('[Kardex] Error inesperado:', kardexErr)
         }
       }
 
-      return { id: data, numeroCotizacion, clienteNombre }
+      return { id: despachoId, numeroCotizacion, clienteNombre }
     },
     onSuccess: ({ numeroCotizacion, clienteNombre }) => {
       qc.invalidateQueries({ queryKey: DESPACHOS_KEY })
@@ -184,7 +155,7 @@ export function useCrearDespacho() {
   })
 }
 
-// ─── Actualizar estado de despacho (RPC) ────────────────────────────────────
+// ─── Actualizar estado de despacho (via Worker API) ────────────────────────
 const ESTADO_LABELS = { pendiente: 'Pendiente', despachada: 'Despachada', entregada: 'Entregada', anulada: 'Anulada' }
 
 export function useActualizarEstadoDespacho() {
@@ -192,17 +163,19 @@ export function useActualizarEstadoDespacho() {
 
   return useMutation({
     mutationFn: async ({ despachoId, nuevoEstado }) => {
-      const { error } = await supabase.rpc('actualizar_estado_despacho', {
-        p_despacho_id: despachoId,
-        p_nuevo_estado: nuevoEstado,
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('No autenticado')
+
+      const res = await fetch(apiUrl('/api/despachos/estado'), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ despachoId, nuevoEstado }),
       })
-      if (error) {
-        if (error.message.includes('TRANSICION_INVALIDA'))
-          throw new Error(`No se puede cambiar a "${ESTADO_LABELS[nuevoEstado] || nuevoEstado}". Verifique el estado actual del despacho.`)
-        if (error.message.includes('ACCESO_DENEGADO'))
-          throw new Error('Solo supervisores pueden actualizar despachos')
-        throw error
-      }
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Error al cambiar estado del despacho')
       return { nuevoEstado }
     },
     // Optimistic update: reflect state change immediately in UI
@@ -241,23 +214,26 @@ export function useActualizarEstadoDespacho() {
   })
 }
 
-// ─── Reciclar despacho anulado → cotización borrador (RPC) ──────────────────
+// ─── Reciclar despacho anulado → cotización borrador (via Worker API) ────────
 export function useReciclarDespacho() {
   const qc = useQueryClient()
 
   return useMutation({
     mutationFn: async (despachoId) => {
-      const { data, error } = await supabase.rpc('reciclar_despacho', {
-        p_despacho_id: despachoId,
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('No autenticado')
+
+      const res = await fetch(apiUrl('/api/despachos/reciclar'), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ despachoId }),
       })
-      if (error) {
-        if (error.message.includes('ESTADO_INVALIDO'))
-          throw new Error('Solo se pueden reciclar despachos anulados')
-        if (error.message.includes('ACCESO_DENEGADO'))
-          throw new Error('Solo supervisores pueden reciclar despachos')
-        throw error
-      }
-      return data // UUID de la nueva cotización borrador
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Error al reciclar despacho')
+      return result.id
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: DESPACHOS_KEY })

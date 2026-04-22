@@ -206,7 +206,7 @@ export default function KardexModal({ isOpen, onClose, producto }) {
                             <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: m.usuario_color }} />
                           )}
                           <User size={9} className="text-slate-300" />
-                          <span className="text-[10px] text-slate-400 truncate">{m.usuario_nombre}</span>
+                          <span className="text-[10px] text-slate-400 truncate">{m.usuario_nombre || 'Sin usuario'}</span>
                         </div>
                       </div>
 
@@ -243,7 +243,7 @@ export default function KardexModal({ isOpen, onClose, producto }) {
 
                       {/* Motivo */}
                       <div className="hidden sm:flex items-center gap-1 min-w-0">
-                        <span className="text-[11px] text-slate-400 truncate">{m.motivo}</span>
+                        <span className="text-[11px] text-slate-400 truncate">{m.motivo || ''}</span>
                         {motivoLargo && (
                           isExpanded
                             ? <ChevronUp size={10} className="text-slate-300 shrink-0" />

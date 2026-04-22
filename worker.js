@@ -117,6 +117,51 @@ export default {
       return handleReciclarCotizacion(request, env);
     }
 
+    // ── API: crear versión de cotización enviada (bypass RLS) ──────────────
+    if (url.pathname === '/api/cotizaciones/crear-version' && request.method === 'POST') {
+      return handleCrearVersion(request, env);
+    }
+
+    // ── API: enviar cotización (bypass RLS) ─────────────────────────────────
+    if (url.pathname === '/api/cotizaciones/enviar' && request.method === 'POST') {
+      return handleEnviarCotizacion(request, env);
+    }
+
+    // ── API: crear nota de despacho (bypass RLS) ────────────────────────────
+    if (url.pathname === '/api/despachos/crear' && request.method === 'POST') {
+      return handleCrearDespacho(request, env);
+    }
+
+    // ── API: actualizar estado de despacho (bypass RLS) ─────────────────────
+    if (url.pathname === '/api/despachos/estado' && request.method === 'POST') {
+      return handleActualizarEstadoDespacho(request, env);
+    }
+
+    // ── API: reciclar despacho anulado (bypass RLS) ─────────────────────────
+    if (url.pathname === '/api/despachos/reciclar' && request.method === 'POST') {
+      return handleReciclarDespacho(request, env);
+    }
+
+    // ── API: reasignar cliente (bypass RLS) ─────────────────────────────────
+    if (url.pathname === '/api/clientes/reasignar' && request.method === 'POST') {
+      return handleReasignarCliente(request, env);
+    }
+
+    // ── API: registrar abono CxC (bypass RLS) ──────────────────────────────
+    if (url.pathname === '/api/cxc/abono' && request.method === 'POST') {
+      return handleRegistrarAbono(request, env);
+    }
+
+    // ── API: marcar comisión pagada (bypass RLS) ────────────────────────────
+    if (url.pathname === '/api/comisiones/pagar' && request.method === 'POST') {
+      return handleMarcarComisionPagada(request, env);
+    }
+
+    // ── API: aplicar movimiento de inventario (bypass RLS) ──────────────────
+    if (url.pathname === '/api/inventario/movimiento' && request.method === 'POST') {
+      return handleAplicarMovimientoLote(request, env);
+    }
+
     // ── API: backup completo del sistema ───────────────────────────────────
     if (url.pathname === '/api/admin/backup' && request.method === 'GET') {
       return handleBackup(request, env);
@@ -1387,6 +1432,863 @@ async function handleReciclarCotizacion(request, env) {
     });
   } catch (e) {
     return jsonError(e.message || 'Error interno al reciclar', 500, request);
+  }
+}
+
+// ── Crear versión de cotización enviada/rechazada (bypass RLS) ──────────────
+async function handleCrearVersion(request, env) {
+  const user = await verifyAuth(request, env);
+  if (!user?.id) return jsonError('No autenticado', 401, request);
+  if (!user.operator_id) return jsonError('No hay operador seleccionado', 400, request);
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+
+  const { cotizacionId, notasCambio } = body;
+  if (!cotizacionId) return jsonError('Falta cotizacionId', 400, request);
+  if (!isValidUuid(cotizacionId)) return jsonError('cotizacionId inválido', 400, request);
+
+  const supaHeaders = {
+    apikey: env.SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    'Content-Type': 'application/json',
+    Prefer: 'return=representation',
+  };
+
+  try {
+    // 1. Obtener operador
+    const opRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${user.operator_id}&activo=eq.true&select=id,nombre,rol`,
+      { headers: supaHeaders }
+    );
+    const [operador] = await opRes.json();
+    if (!operador) return jsonError('Operador no encontrado o inactivo', 400, request);
+
+    // 2. Obtener cotización original
+    const cotRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${cotizacionId}&select=*`,
+      { headers: supaHeaders }
+    );
+    const [cotOrig] = await cotRes.json();
+    if (!cotOrig) return jsonError('Cotización no encontrada', 404, request);
+
+    // 3. Validar estado
+    if (!['enviada', 'rechazada'].includes(cotOrig.estado)) {
+      return jsonError('Solo se pueden versionar cotizaciones enviadas o rechazadas', 400, request);
+    }
+
+    // 4. Validar acceso
+    if (cotOrig.vendedor_id !== user.operator_id && operador.rol !== 'supervisor') {
+      return jsonError('No tienes permiso para versionar esta cotización', 403, request);
+    }
+
+    // 5. Calcular raíz y nueva versión
+    const raizId = cotOrig.cotizacion_raiz_id || cotOrig.id;
+    const verRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/cotizaciones?or=(cotizacion_raiz_id.eq.${raizId},id.eq.${raizId})&select=version`,
+      { headers: supaHeaders }
+    );
+    const versiones = await verRes.json();
+    const nuevaVersion = Math.max(...versiones.map(v => v.version || 0)) + 1;
+
+    // 6. Crear nueva cotización borrador
+    const nuevaRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?select=id,numero`, {
+      method: 'POST',
+      headers: { ...supaHeaders, Prefer: 'return=representation' },
+      body: JSON.stringify({
+        version: nuevaVersion,
+        cotizacion_raiz_id: raizId,
+        cliente_id: cotOrig.cliente_id,
+        vendedor_id: cotOrig.vendedor_id,
+        transportista_id: cotOrig.transportista_id,
+        estado: 'borrador',
+        valida_hasta: cotOrig.valida_hasta,
+        notas_cliente: cotOrig.notas_cliente,
+        notas_internas: notasCambio || cotOrig.notas_internas,
+      }),
+    });
+    if (!nuevaRes.ok) {
+      const err = await nuevaRes.text();
+      return jsonError(`Error al crear versión: ${err}`, 500, request);
+    }
+    const [nueva] = await nuevaRes.json();
+
+    // 7. Copiar items
+    const itemsRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/cotizacion_items?cotizacion_id=eq.${cotizacionId}&select=producto_id,codigo_snap,nombre_snap,unidad_snap,cantidad,precio_unit_usd,descuento_pct,total_linea_usd,orden`,
+      { headers: supaHeaders }
+    );
+    const items = await itemsRes.json();
+
+    if (items.length > 0) {
+      const nuevosItems = items.map(it => ({ ...it, cotizacion_id: nueva.id }));
+      const insRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizacion_items`, {
+        method: 'POST',
+        headers: supaHeaders,
+        body: JSON.stringify(nuevosItems),
+      });
+      if (!insRes.ok) {
+        const err = await insRes.text();
+        return jsonError(`Error al copiar items: ${err}`, 500, request);
+      }
+    }
+
+    // 8. Copiar totales
+    await fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${nueva.id}`, {
+      method: 'PATCH',
+      headers: { ...supaHeaders, Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        subtotal_usd: cotOrig.subtotal_usd,
+        descuento_global_pct: cotOrig.descuento_global_pct,
+        descuento_usd: cotOrig.descuento_usd,
+        costo_envio_usd: cotOrig.costo_envio_usd,
+        total_usd: cotOrig.total_usd,
+      }),
+    });
+
+    // 9. Anular la cotización original
+    await fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${cotizacionId}`, {
+      method: 'PATCH',
+      headers: { ...supaHeaders, Prefer: 'return=minimal' },
+      body: JSON.stringify({ estado: 'anulada', actualizado_en: new Date().toISOString() }),
+    });
+
+    // 10. Auditoría
+    const numOrigPad = String(cotOrig.numero).padStart(5, '0');
+    const numNuevoPad = String(nueva.numero).padStart(5, '0');
+    await fetch(`${env.SUPABASE_URL}/rest/v1/auditoria`, {
+      method: 'POST',
+      headers: supaHeaders,
+      body: JSON.stringify({
+        usuario_id: user.operator_id,
+        usuario_nombre: operador.nombre,
+        usuario_rol: operador.rol,
+        categoria: 'COTIZACION',
+        accion: 'CREAR_VERSION',
+        descripcion: `Versión ${nuevaVersion} creada de COT-${numOrigPad} → COT-${numNuevoPad}`,
+        entidad_tipo: 'cotizacion',
+        entidad_id: nueva.id,
+        meta: {
+          cotizacion_origen: cotizacionId,
+          nueva_version: nuevaVersion,
+        },
+      }),
+    });
+
+    return json({ id: nueva.id, numero: nueva.numero, version: nuevaVersion }, 200, request);
+  } catch (e) {
+    return jsonError(e.message || 'Error interno al crear versión', 500, request);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// HELPERS para endpoints migrados de RPC
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Obtiene headers Supabase con service key
+function supaServiceHeaders(env) {
+  return {
+    apikey: env.SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    'Content-Type': 'application/json',
+    Prefer: 'return=representation',
+  };
+}
+
+// Valida auth + operator_id, devuelve { user, operador } o Response de error
+async function validateOperator(request, env, { requireSupervisor = false } = {}) {
+  const user = await verifyAuth(request, env);
+  if (!user?.id) return { error: jsonError('No autenticado', 401, request) };
+  if (!user.operator_id) return { error: jsonError('No hay operador seleccionado', 400, request) };
+
+  const h = supaServiceHeaders(env);
+  const rolFilter = requireSupervisor ? '&rol=eq.supervisor' : '';
+  const res = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${user.operator_id}&activo=eq.true${rolFilter}&select=id,nombre,rol,color`,
+    { headers: h }
+  );
+  const [operador] = await res.json();
+  if (!operador) {
+    const msg = requireSupervisor
+      ? 'Solo supervisores pueden realizar esta acción'
+      : 'Operador no encontrado o inactivo';
+    return { error: jsonError(msg, 403, request) };
+  }
+
+  return { user, operador, headers: h };
+}
+
+// Registra auditoría via REST
+async function registrarAuditoria(env, headers, { usuarioId, usuarioNombre, usuarioRol, categoria, accion, descripcion, entidadTipo, entidadId, meta }) {
+  await fetch(`${env.SUPABASE_URL}/rest/v1/auditoria`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      usuario_id: usuarioId,
+      usuario_nombre: usuarioNombre,
+      usuario_rol: usuarioRol,
+      categoria: categoria,
+      accion: accion,
+      descripcion: descripcion || null,
+      entidad_tipo: entidadTipo,
+      entidad_id: entidadId,
+      meta: meta || null,
+    }),
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 1. ENVIAR COTIZACIÓN
+// ══════════════════════════════════════════════════════════════════════════════
+async function handleEnviarCotizacion(request, env) {
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { user, operador, headers } = v;
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+  const { cotizacionId, tasaBcv } = body;
+  if (!cotizacionId || !tasaBcv) return jsonError('Faltan campos: cotizacionId, tasaBcv', 400, request);
+  if (!isValidUuid(cotizacionId)) return jsonError('cotizacionId inválido', 400, request);
+
+  try {
+    // 1. Obtener cotización
+    const cotRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${cotizacionId}&select=*`, { headers });
+    const [cot] = await cotRes.json();
+    if (!cot) return jsonError('Cotización no encontrada', 404, request);
+
+    // 2. Validar acceso
+    if (cot.vendedor_id !== user.operator_id && operador.rol !== 'supervisor') {
+      return jsonError('No tienes permiso para enviar esta cotización', 403, request);
+    }
+
+    // 3. Validar estado
+    if (cot.estado !== 'borrador') return jsonError('Solo se pueden enviar cotizaciones en borrador', 400, request);
+
+    // 4. Validar que tenga items
+    const itemsRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizacion_items?cotizacion_id=eq.${cotizacionId}&select=id&limit=1`, { headers });
+    const items = await itemsRes.json();
+    if (!items || items.length === 0) return jsonError('La cotización no tiene productos', 400, request);
+
+    // 5. Actualizar estado
+    const tasa = Number(tasaBcv);
+    const totalBs = Number(cot.total_usd) * tasa;
+    await fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${cotizacionId}`, {
+      method: 'PATCH',
+      headers: { ...headers, Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        estado: 'enviada',
+        enviada_en: new Date().toISOString(),
+        tasa_bcv_snapshot: tasa,
+        total_bs_snapshot: totalBs,
+        actualizado_en: new Date().toISOString(),
+      }),
+    });
+
+    // 6. Auditoría
+    await registrarAuditoria(env, headers, {
+      usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
+      categoria: 'COTIZACION', accion: 'ENVIAR_COTIZACION',
+      entidadTipo: 'cotizacion', entidadId: cotizacionId,
+      meta: { tasa_bcv: tasa },
+    });
+
+    return json({ ok: true }, 200, request);
+  } catch (e) {
+    return jsonError(e.message || 'Error al enviar cotización', 500, request);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 2. CREAR NOTA DE DESPACHO (+ cargo CxC + comisión)
+// ══════════════════════════════════════════════════════════════════════════════
+async function handleCrearDespacho(request, env) {
+  const v = await validateOperator(request, env, { requireSupervisor: true });
+  if (v.error) return v.error;
+  const { user, operador, headers } = v;
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+  const { cotizacionId, notas, formaPago } = body;
+  if (!cotizacionId) return jsonError('Falta cotizacionId', 400, request);
+  if (!isValidUuid(cotizacionId)) return jsonError('cotizacionId inválido', 400, request);
+
+  try {
+    // 1. Obtener cotización
+    const cotRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${cotizacionId}&select=*`, { headers });
+    const [cot] = await cotRes.json();
+    if (!cot) return jsonError('Cotización no encontrada', 404, request);
+
+    if (!['enviada', 'aceptada'].includes(cot.estado)) {
+      return jsonError('La cotización debe estar enviada o aceptada para despachar', 400, request);
+    }
+
+    // 2. Verificar que no exista despacho
+    const existRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?cotizacion_id=eq.${cotizacionId}&select=id&limit=1`, { headers });
+    const existing = await existRes.json();
+    if (existing && existing.length > 0) {
+      return jsonError('Ya existe una nota de despacho para esta cotización', 400, request);
+    }
+
+    // 3. Si está enviada, aceptarla
+    if (cot.estado === 'enviada') {
+      await fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${cotizacionId}`, {
+        method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
+        body: JSON.stringify({ estado: 'aceptada' }),
+      });
+    }
+
+    // 4. Obtener items con producto
+    const ciRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/cotizacion_items?cotizacion_id=eq.${cotizacionId}&producto_id=not.is.null&select=producto_id,cantidad,nombre_snap`,
+      { headers }
+    );
+    const cotItems = await ciRes.json();
+
+    // 5. Verificar stock
+    if (cotItems.length > 0) {
+      const prodIds = cotItems.map(i => i.producto_id);
+      const prodRes = await fetch(
+        `${env.SUPABASE_URL}/rest/v1/productos?id=in.(${prodIds.join(',')})&activo=eq.true&select=id,stock_actual,nombre`,
+        { headers }
+      );
+      const productos = await prodRes.json();
+      const stockMap = Object.fromEntries(productos.map(p => [p.id, p]));
+
+      for (const item of cotItems) {
+        const prod = stockMap[item.producto_id];
+        if (!prod) return jsonError(`Producto "${item.nombre_snap}" no encontrado o inactivo`, 400, request);
+        if (Number(prod.stock_actual) < Number(item.cantidad)) {
+          return jsonError(`Stock insuficiente: "${item.nombre_snap}" requiere ${item.cantidad} pero solo hay ${prod.stock_actual}`, 400, request);
+        }
+      }
+
+      // 6. Descontar stock y registrar kardex
+      const loteId = crypto.randomUUID();
+      const movimientos = [];
+      for (const item of cotItems) {
+        const prod = stockMap[item.producto_id];
+        const stockAnterior = Number(prod.stock_actual);
+        const nuevoStock = stockAnterior - Number(item.cantidad);
+        await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${item.producto_id}`, {
+          method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
+          body: JSON.stringify({ stock_actual: nuevoStock }),
+        });
+        movimientos.push({
+          lote_id: loteId,
+          tipo: 'egreso',
+          motivo: `Nota de despacho #${cot.numero}`,
+          motivo_tipo: 'venta',
+          producto_id: item.producto_id,
+          producto_nombre: item.nombre_snap || prod.nombre,
+          cantidad: Number(item.cantidad),
+          stock_anterior: stockAnterior,
+          stock_nuevo: nuevoStock,
+          usuario_id: user.operator_id,
+          usuario_nombre: operador.nombre,
+          usuario_color: operador.color || null,
+        });
+      }
+
+      // Insertar movimientos de kardex
+      if (movimientos.length > 0) {
+        await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos`, {
+          method: 'POST', headers,
+          body: JSON.stringify(movimientos),
+        });
+      }
+    }
+
+    // 7. Crear nota de despacho
+    const despRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?select=id,numero`, {
+      method: 'POST',
+      headers: { ...headers, Prefer: 'return=representation', 'X-Skip-Trigger': 'numero' },
+      body: JSON.stringify({
+        numero: cot.numero,
+        cotizacion_id: cotizacionId,
+        cliente_id: cot.cliente_id,
+        vendedor_id: cot.vendedor_id,
+        transportista_id: cot.transportista_id,
+        estado: 'pendiente',
+        total_usd: cot.total_usd,
+        notas: notas || null,
+        forma_pago: formaPago || null,
+        creado_por: user.operator_id,
+      }),
+    });
+
+    if (!despRes.ok) {
+      const err = await despRes.text();
+      return jsonError(`Error al crear despacho: ${err}`, 500, request);
+    }
+    const [despacho] = await despRes.json();
+
+    // 8. Si es Cta por cobrar, registrar cargo CxC
+    if (formaPago === 'Cta por cobrar' && despacho) {
+      const saldoRes = await fetch(
+        `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${cot.cliente_id}&select=saldo_pendiente`,
+        { headers }
+      );
+      const [clienteSaldo] = await saldoRes.json();
+      const saldoActual = Number(clienteSaldo?.saldo_pendiente || 0);
+      const nuevoSaldo = saldoActual + Number(cot.total_usd);
+
+      await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
+        method: 'POST', headers,
+        body: JSON.stringify({
+          cliente_id: cot.cliente_id,
+          despacho_id: despacho.id,
+          tipo: 'cargo',
+          monto_usd: cot.total_usd,
+          saldo_usd: nuevoSaldo,
+          descripcion: `Orden de despacho #${cot.numero}`,
+          registrado_por: user.operator_id,
+        }),
+      });
+
+      await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${cot.cliente_id}`, {
+        method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
+        body: JSON.stringify({ saldo_pendiente: nuevoSaldo }),
+      });
+    }
+
+    // 9. Calcular comisión (usar RPC con service key — esta función no usa get_operador_id)
+    try {
+      await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcular_comision_despacho`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ p_despacho_id: despacho.id }),
+      });
+    } catch { /* comisión no es crítica */ }
+
+    // 10. Auditoría
+    await registrarAuditoria(env, headers, {
+      usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: 'supervisor',
+      categoria: 'COTIZACION', accion: 'CREAR_DESPACHO',
+      entidadTipo: 'nota_despacho', entidadId: despacho.id,
+      meta: { cotizacion_id: cotizacionId, total_usd: cot.total_usd },
+    });
+
+    return json({ id: despacho.id, numero: despacho.numero }, 200, request);
+  } catch (e) {
+    return jsonError(e.message || 'Error al crear despacho', 500, request);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 3. ACTUALIZAR ESTADO DESPACHO
+// ══════════════════════════════════════════════════════════════════════════════
+async function handleActualizarEstadoDespacho(request, env) {
+  const v = await validateOperator(request, env, { requireSupervisor: true });
+  if (v.error) return v.error;
+  const { user, operador, headers } = v;
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+  const { despachoId, nuevoEstado } = body;
+  if (!despachoId || !nuevoEstado) return jsonError('Faltan campos', 400, request);
+  if (!isValidUuid(despachoId)) return jsonError('despachoId inválido', 400, request);
+
+  try {
+    // 1. Obtener despacho
+    const dRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&select=*`, { headers });
+    const [desp] = await dRes.json();
+    if (!desp) return jsonError('Despacho no encontrado', 404, request);
+
+    // 2. Validar transición
+    const valid = (desp.estado === 'pendiente' && ['despachada', 'anulada'].includes(nuevoEstado))
+      || (desp.estado === 'despachada' && ['entregada', 'anulada'].includes(nuevoEstado));
+    if (!valid) {
+      return jsonError(`No se puede pasar de "${desp.estado}" a "${nuevoEstado}"`, 400, request);
+    }
+
+    // 3. Si se anula, devolver stock y registrar kardex
+    if (nuevoEstado === 'anulada') {
+      const ciRes = await fetch(
+        `${env.SUPABASE_URL}/rest/v1/cotizacion_items?cotizacion_id=eq.${desp.cotizacion_id}&producto_id=not.is.null&select=producto_id,cantidad,nombre_snap`,
+        { headers }
+      );
+      const items = await ciRes.json();
+      const loteId = crypto.randomUUID();
+      const movimientos = [];
+      for (const item of items) {
+        const pRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${item.producto_id}&select=stock_actual,nombre`, { headers });
+        const [prod] = await pRes.json();
+        if (prod) {
+          const stockAnterior = Number(prod.stock_actual);
+          const nuevoStock = stockAnterior + Number(item.cantidad);
+          await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${item.producto_id}`, {
+            method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
+            body: JSON.stringify({ stock_actual: nuevoStock }),
+          });
+          movimientos.push({
+            lote_id: loteId,
+            tipo: 'ingreso',
+            motivo: `Anulación de despacho #${desp.numero}`,
+            motivo_tipo: 'venta',
+            producto_id: item.producto_id,
+            producto_nombre: item.nombre_snap || prod.nombre,
+            cantidad: Number(item.cantidad),
+            stock_anterior: stockAnterior,
+            stock_nuevo: nuevoStock,
+            usuario_id: user.operator_id,
+            usuario_nombre: operador.nombre,
+            usuario_color: operador.color || null,
+          });
+        }
+      }
+      if (movimientos.length > 0) {
+        await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos`, {
+          method: 'POST', headers,
+          body: JSON.stringify(movimientos),
+        });
+      }
+    }
+
+    // 4. Actualizar estado
+    const updateData = { estado: nuevoEstado };
+    if (nuevoEstado === 'despachada') updateData.despachada_en = new Date().toISOString();
+    if (nuevoEstado === 'entregada') updateData.entregada_en = new Date().toISOString();
+
+    await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}`, {
+      method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
+      body: JSON.stringify(updateData),
+    });
+
+    // 5. Si entregada, calcular comisión
+    if (nuevoEstado === 'entregada') {
+      try {
+        await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcular_comision_despacho`, {
+          method: 'POST', headers,
+          body: JSON.stringify({ p_despacho_id: despachoId }),
+        });
+      } catch { /* no crítico */ }
+    }
+
+    // 6. Auditoría
+    await registrarAuditoria(env, headers, {
+      usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: 'supervisor',
+      categoria: 'COTIZACION', accion: 'ACTUALIZAR_DESPACHO',
+      entidadTipo: 'nota_despacho', entidadId: despachoId,
+      meta: { estado_anterior: desp.estado, estado_nuevo: nuevoEstado, cotizacion_id: desp.cotizacion_id },
+    });
+
+    return json({ ok: true, nuevoEstado }, 200, request);
+  } catch (e) {
+    return jsonError(e.message || 'Error al actualizar despacho', 500, request);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 4. RECICLAR DESPACHO ANULADO → COTIZACIÓN BORRADOR
+// ══════════════════════════════════════════════════════════════════════════════
+async function handleReciclarDespacho(request, env) {
+  const v = await validateOperator(request, env, { requireSupervisor: true });
+  if (v.error) return v.error;
+  const { user, operador, headers } = v;
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+  const { despachoId } = body;
+  if (!despachoId || !isValidUuid(despachoId)) return jsonError('despachoId inválido', 400, request);
+
+  try {
+    // 1. Obtener despacho
+    const dRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&select=*`, { headers });
+    const [desp] = await dRes.json();
+    if (!desp) return jsonError('Despacho no encontrado', 404, request);
+    if (desp.estado !== 'anulada') return jsonError('Solo se pueden reciclar despachos anulados', 400, request);
+
+    // 2. Obtener cotización original
+    const cotRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${desp.cotizacion_id}&select=*`, { headers });
+    const [cotOrig] = await cotRes.json();
+    if (!cotOrig) return jsonError('Cotización original no encontrada', 404, request);
+
+    // 3. Crear nueva cotización borrador
+    const nuevaRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?select=id,numero`, {
+      method: 'POST', headers: { ...headers, Prefer: 'return=representation' },
+      body: JSON.stringify({
+        version: 1,
+        cliente_id: cotOrig.cliente_id,
+        vendedor_id: cotOrig.vendedor_id,
+        transportista_id: cotOrig.transportista_id,
+        estado: 'borrador',
+        subtotal_usd: cotOrig.subtotal_usd,
+        descuento_global_pct: cotOrig.descuento_global_pct,
+        descuento_usd: cotOrig.descuento_usd,
+        costo_envio_usd: cotOrig.costo_envio_usd,
+        total_usd: cotOrig.total_usd,
+        notas_cliente: cotOrig.notas_cliente,
+        notas_internas: cotOrig.notas_internas,
+      }),
+    });
+    if (!nuevaRes.ok) return jsonError('Error al crear cotización', 500, request);
+    const [nueva] = await nuevaRes.json();
+
+    // 4. Copiar items
+    const itemsRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/cotizacion_items?cotizacion_id=eq.${desp.cotizacion_id}&select=producto_id,codigo_snap,nombre_snap,unidad_snap,cantidad,precio_unit_usd,descuento_pct,total_linea_usd,orden`,
+      { headers }
+    );
+    const items = await itemsRes.json();
+    if (items.length > 0) {
+      await fetch(`${env.SUPABASE_URL}/rest/v1/cotizacion_items`, {
+        method: 'POST', headers,
+        body: JSON.stringify(items.map(it => ({ ...it, cotizacion_id: nueva.id }))),
+      });
+    }
+
+    // 5. Auditoría
+    await registrarAuditoria(env, headers, {
+      usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: 'supervisor',
+      categoria: 'COTIZACION', accion: 'RECICLAR_DESPACHO',
+      entidadTipo: 'cotizacion', entidadId: nueva.id,
+      meta: { despacho_id: despachoId, cotizacion_original_id: desp.cotizacion_id, total_usd: cotOrig.total_usd },
+    });
+
+    return json({ id: nueva.id, numero: nueva.numero }, 200, request);
+  } catch (e) {
+    return jsonError(e.message || 'Error al reciclar despacho', 500, request);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 5. REASIGNAR CLIENTE
+// ══════════════════════════════════════════════════════════════════════════════
+async function handleReasignarCliente(request, env) {
+  const v = await validateOperator(request, env, { requireSupervisor: true });
+  if (v.error) return v.error;
+  const { user, operador, headers } = v;
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+  const { clienteId, nuevoVendedorId, motivo } = body;
+  if (!clienteId || !nuevoVendedorId) return jsonError('Faltan campos', 400, request);
+  if (!isValidUuid(clienteId) || !isValidUuid(nuevoVendedorId)) return jsonError('IDs inválidos', 400, request);
+  if (!motivo || motivo.trim().length < 10) return jsonError('El motivo debe tener al menos 10 caracteres', 400, request);
+
+  try {
+    // 1. Obtener cliente
+    const cRes = await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteId}&activo=eq.true&select=id,nombre,vendedor_id`, { headers });
+    const [cliente] = await cRes.json();
+    if (!cliente) return jsonError('Cliente no encontrado o inactivo', 404, request);
+    if (cliente.vendedor_id === nuevoVendedorId) return jsonError('El cliente ya pertenece a ese vendedor', 400, request);
+
+    // 2. Validar vendedor destino
+    const vRes = await fetch(`${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${nuevoVendedorId}&activo=eq.true&select=id`, { headers });
+    const [vendDest] = await vRes.json();
+    if (!vendDest) return jsonError('Vendedor destino no encontrado o inactivo', 400, request);
+
+    // 3. Actualizar cliente
+    await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteId}`, {
+      method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        vendedor_id: nuevoVendedorId,
+        ultima_reasig_por: user.operator_id,
+        ultima_reasig_motivo: motivo,
+        ultima_reasig_en: new Date().toISOString(),
+        actualizado_en: new Date().toISOString(),
+      }),
+    });
+
+    // 4. Insertar registro de reasignación
+    await fetch(`${env.SUPABASE_URL}/rest/v1/reasignaciones_clientes`, {
+      method: 'POST', headers,
+      body: JSON.stringify({
+        cliente_id: clienteId,
+        vendedor_origen: cliente.vendedor_id,
+        vendedor_destino: nuevoVendedorId,
+        supervisor_id: user.operator_id,
+        motivo,
+      }),
+    });
+
+    // 5. Auditoría
+    await registrarAuditoria(env, headers, {
+      usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: 'supervisor',
+      categoria: 'REASIGNACION', accion: 'REASIGNAR_CLIENTE',
+      descripcion: `Cliente "${cliente.nombre}" reasignado. Motivo: ${motivo}`,
+      entidadTipo: 'cliente', entidadId: clienteId,
+      meta: { vendedor_origen: cliente.vendedor_id, vendedor_destino: nuevoVendedorId, motivo },
+    });
+
+    return json({ ok: true }, 200, request);
+  } catch (e) {
+    return jsonError(e.message || 'Error al reasignar cliente', 500, request);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 6. REGISTRAR ABONO CxC
+// ══════════════════════════════════════════════════════════════════════════════
+async function handleRegistrarAbono(request, env) {
+  const v = await validateOperator(request, env, { requireSupervisor: true });
+  if (v.error) return v.error;
+  const { user, headers } = v;
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+  const { clienteId, monto, formaPago, referencia, descripcion } = body;
+  if (!clienteId || !monto) return jsonError('Faltan campos', 400, request);
+  if (!isValidUuid(clienteId)) return jsonError('clienteId inválido', 400, request);
+  if (Number(monto) <= 0) return jsonError('El monto debe ser mayor a cero', 400, request);
+
+  try {
+    // 1. Obtener saldo actual
+    const cRes = await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteId}&activo=eq.true&select=saldo_pendiente`, { headers });
+    const [cliente] = await cRes.json();
+    if (!cliente) return jsonError('Cliente no encontrado o inactivo', 404, request);
+
+    const saldoActual = Number(cliente.saldo_pendiente || 0);
+    if (saldoActual <= 0) return jsonError('El cliente no tiene saldo pendiente', 400, request);
+
+    const nuevoSaldo = Math.max(0, saldoActual - Number(monto));
+
+    // 2. Insertar abono
+    const insRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?select=id`, {
+      method: 'POST', headers: { ...headers, Prefer: 'return=representation' },
+      body: JSON.stringify({
+        cliente_id: clienteId,
+        tipo: 'abono',
+        monto_usd: monto,
+        saldo_usd: nuevoSaldo,
+        forma_pago_abono: formaPago || null,
+        referencia: referencia ? referencia.trim() || null : null,
+        descripcion: descripcion?.trim() || 'Abono recibido',
+        registrado_por: user.operator_id,
+      }),
+    });
+    if (!insRes.ok) return jsonError('Error al registrar abono', 500, request);
+    const [abono] = await insRes.json();
+
+    // 3. Actualizar saldo en cliente
+    await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteId}`, {
+      method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
+      body: JSON.stringify({ saldo_pendiente: nuevoSaldo }),
+    });
+
+    return json({ id: abono.id, nuevoSaldo }, 200, request);
+  } catch (e) {
+    return jsonError(e.message || 'Error al registrar abono', 500, request);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 7. MARCAR COMISIÓN PAGADA
+// ══════════════════════════════════════════════════════════════════════════════
+async function handleMarcarComisionPagada(request, env) {
+  const v = await validateOperator(request, env, { requireSupervisor: true });
+  if (v.error) return v.error;
+  const { user, operador, headers } = v;
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+  const { comisionId } = body;
+  if (!comisionId || !isValidUuid(comisionId)) return jsonError('comisionId inválido', 400, request);
+
+  try {
+    // 1. Obtener comisión
+    const cRes = await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?id=eq.${comisionId}&select=*`, { headers });
+    const [comision] = await cRes.json();
+    if (!comision) return jsonError('Comisión no encontrada', 404, request);
+    if (comision.estado === 'pagada') return jsonError('Esta comisión ya fue marcada como pagada', 400, request);
+
+    // 2. Actualizar
+    await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?id=eq.${comisionId}`, {
+      method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        estado: 'pagada',
+        pagada_en: new Date().toISOString(),
+        pagada_por: user.operator_id,
+        actualizado_en: new Date().toISOString(),
+      }),
+    });
+
+    // 3. Auditoría
+    await registrarAuditoria(env, headers, {
+      usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: 'supervisor',
+      categoria: 'COTIZACION', accion: 'PAGAR_COMISION',
+      entidadTipo: 'comision', entidadId: comisionId,
+      meta: { vendedor_id: comision.vendedor_id, total_comision: comision.total_comision, despacho_id: comision.despacho_id },
+    });
+
+    return json({ ok: true }, 200, request);
+  } catch (e) {
+    return jsonError(e.message || 'Error al marcar comisión', 500, request);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 8. APLICAR MOVIMIENTO DE INVENTARIO POR LOTES
+// ══════════════════════════════════════════════════════════════════════════════
+async function handleAplicarMovimientoLote(request, env) {
+  const v = await validateOperator(request, env, { requireSupervisor: true });
+  if (v.error) return v.error;
+  const { user, operador, headers } = v;
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+  const { tipo, motivo, motivo_tipo = 'otro', items } = body;
+  if (!tipo || !motivo || !items || !Array.isArray(items) || items.length === 0) {
+    return jsonError('Faltan campos: tipo, motivo, items', 400, request);
+  }
+  if (!['ingreso', 'egreso'].includes(tipo)) return jsonError('tipo debe ser ingreso o egreso', 400, request);
+  if (!motivo.trim()) return jsonError('El motivo es obligatorio', 400, request);
+
+  try {
+    const loteId = crypto.randomUUID();
+    const movimientos = [];
+
+    for (const item of items) {
+      const cantidad = Number(item.cantidad);
+      if (cantidad <= 0) return jsonError('La cantidad debe ser mayor a 0', 400, request);
+
+      // Obtener producto
+      const pRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${item.producto_id}&activo=eq.true&select=id,nombre,stock_actual`, { headers });
+      const [prod] = await pRes.json();
+      if (!prod) return jsonError('Producto no encontrado o inactivo', 400, request);
+
+      let nuevoStock;
+      if (tipo === 'egreso') {
+        nuevoStock = Number(prod.stock_actual) - cantidad;
+        if (nuevoStock < 0) {
+          return jsonError(`Stock insuficiente para "${prod.nombre}": tiene ${prod.stock_actual} y se intenta retirar ${cantidad}`, 400, request);
+        }
+      } else {
+        nuevoStock = Number(prod.stock_actual) + cantidad;
+      }
+
+      // Actualizar stock
+      await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${item.producto_id}`, {
+        method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
+        body: JSON.stringify({ stock_actual: nuevoStock, actualizado_en: new Date().toISOString() }),
+      });
+
+      movimientos.push({
+        lote_id: loteId,
+        tipo,
+        motivo: motivo.trim(),
+        motivo_tipo,
+        producto_id: item.producto_id,
+        producto_nombre: prod.nombre,
+        cantidad,
+        stock_anterior: Number(prod.stock_actual),
+        stock_nuevo: nuevoStock,
+        usuario_id: user.operator_id,
+        usuario_nombre: operador.nombre,
+      });
+    }
+
+    // Insertar todos los movimientos
+    const insRes = await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos?select=numero`, {
+      method: 'POST', headers: { ...headers, Prefer: 'return=representation' },
+      body: JSON.stringify(movimientos),
+    });
+    const movResults = await insRes.json();
+    const numero = movResults?.[0]?.numero || null;
+
+    return json({ lote_id: loteId, numero }, 200, request);
+  } catch (e) {
+    return jsonError(e.message || 'Error al aplicar movimiento', 500, request);
   }
 }
 

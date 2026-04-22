@@ -303,6 +303,11 @@ BEGIN
     total_usd            = v_original.total_usd
   WHERE id = v_nueva_cot_id;
 
+  -- 8b. Anular la cotización original automáticamente
+  UPDATE public.cotizaciones
+  SET estado = 'anulada'
+  WHERE id = p_cotizacion_id;
+
   -- 9. Auditoría
   PERFORM public.registrar_auditoria(
     p_usuario_id     := v_usuario_id,

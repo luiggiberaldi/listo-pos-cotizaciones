@@ -29,7 +29,7 @@ const inputClass = `
 
 const VACIO = {
   codigo: '', nombre: '', descripcion: '', categoria: '',
-  unidad: 'und', precio_usd: '', costo_usd: '',
+  unidad: 'und', precio_usd: '', precio_2: '', precio_3: '', costo_usd: '',
   stock_actual: '0', stock_minimo: '0',
 }
 
@@ -61,6 +61,8 @@ export default function ProductoForm({ producto = null, onSuccess, onCancel }) {
         categoria:    producto.categoria    ?? '',
         unidad:       producto.unidad       ?? 'und',
         precio_usd:   producto.precio_usd != null ? String(producto.precio_usd) : '',
+        precio_2:     producto.precio_2  != null ? String(producto.precio_2)  : '',
+        precio_3:     producto.precio_3  != null ? String(producto.precio_3)  : '',
         costo_usd:    producto.costo_usd  != null ? String(producto.costo_usd)  : '',
         stock_actual: producto.stock_actual != null ? String(producto.stock_actual) : '0',
         stock_minimo: producto.stock_minimo != null ? String(producto.stock_minimo) : '0',
@@ -104,8 +106,12 @@ export default function ProductoForm({ producto = null, onSuccess, onCancel }) {
     setImagenEliminada(true)
   }
 
+  const camposNumericos = new Set(['precio_usd', 'precio_2', 'precio_3', 'costo_usd', 'stock_actual', 'stock_minimo'])
+
   function cambiar(e) {
-    const { name, value } = e.target
+    const { name } = e.target
+    let value = e.target.value
+    if (camposNumericos.has(name)) value = value.replace(',', '.')
     setCampos(p => ({ ...p, [name]: value }))
     if (errores[name]) setErrores(p => ({ ...p, [name]: '' }))
     if (errorGeneral) setErrorGeneral('')
@@ -116,6 +122,10 @@ export default function ProductoForm({ producto = null, onSuccess, onCancel }) {
     if (!campos.nombre.trim()) errs.nombre = 'El nombre es obligatorio'
     if (campos.precio_usd !== '' && isNaN(Number(campos.precio_usd)))
       errs.precio_usd = 'Precio inválido'
+    if (campos.precio_2 !== '' && isNaN(Number(campos.precio_2)))
+      errs.precio_2 = 'Precio inválido'
+    if (campos.precio_3 !== '' && isNaN(Number(campos.precio_3)))
+      errs.precio_3 = 'Precio inválido'
     if (campos.costo_usd !== '' && isNaN(Number(campos.costo_usd)))
       errs.costo_usd = 'Costo inválido'
     if (isNaN(Number(campos.stock_actual)))
@@ -236,19 +246,31 @@ export default function ProductoForm({ producto = null, onSuccess, onCancel }) {
           className={`${inputClass} resize-none`} disabled={cargando} />
       </Campo>
 
-      {/* Precio venta + Costo (fila) */}
-      <div className="grid grid-cols-2 gap-3">
-        <Campo label="Precio venta (USD)" icono={DollarSign} error={errores.precio_usd}>
-          <input type="number" name="precio_usd" value={campos.precio_usd}
-            onChange={cambiar} placeholder="0.00" step="0.01" min="0"
+      {/* Precios (fila de 3) */}
+      <div className="grid grid-cols-3 gap-3">
+        <Campo label="Precio 1 (USD)" icono={DollarSign} error={errores.precio_usd}>
+          <input type="text" inputMode="decimal" name="precio_usd" value={campos.precio_usd}
+            onChange={cambiar} placeholder="0.00"
             className={inputClass} disabled={cargando} />
         </Campo>
-        <Campo label="Costo (USD)" icono={DollarSign} error={errores.costo_usd}>
-          <input type="number" name="costo_usd" value={campos.costo_usd}
-            onChange={cambiar} placeholder="0.00" step="0.01" min="0"
+        <Campo label="Precio 2 (USD)" icono={DollarSign} error={errores.precio_2}>
+          <input type="text" inputMode="decimal" name="precio_2" value={campos.precio_2}
+            onChange={cambiar} placeholder="Opcional"
+            className={inputClass} disabled={cargando} />
+        </Campo>
+        <Campo label="Precio 3 (USD)" icono={DollarSign} error={errores.precio_3}>
+          <input type="text" inputMode="decimal" name="precio_3" value={campos.precio_3}
+            onChange={cambiar} placeholder="Opcional"
             className={inputClass} disabled={cargando} />
         </Campo>
       </div>
+
+      {/* Costo */}
+      <Campo label="Costo (USD)" icono={DollarSign} error={errores.costo_usd}>
+        <input type="number" name="costo_usd" value={campos.costo_usd}
+          onChange={cambiar} placeholder="0.00" step="0.01" min="0"
+          className={inputClass} disabled={cargando} />
+      </Campo>
 
       {/* Stock actual + mínimo (fila) */}
       <div className="grid grid-cols-2 gap-3">

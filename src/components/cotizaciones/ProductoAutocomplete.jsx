@@ -94,6 +94,9 @@ export default function ProductoAutocomplete({ productos = [], onAgregar, idsAgr
                 </div>
                 <div className="text-right shrink-0">
                   <p className="text-sm font-black text-slate-800">${Number(p.precio_usd || 0).toFixed(2)}</p>
+                  {(p.precio_2 != null || p.precio_3 != null) && (
+                    <p className="text-[9px] font-bold text-primary/60">{[p.precio_2 != null && 'P2', p.precio_3 != null && 'P3'].filter(Boolean).length + 1} precios</p>
+                  )}
                 </div>
                 {!bloqueado && !yaAgregado && (
                   <div className="shrink-0 w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">

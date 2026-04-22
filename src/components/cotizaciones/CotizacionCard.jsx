@@ -101,7 +101,8 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
   const despacho = cotizacion.despacho   // { id, estado } si existe
   const despachoAnulado = despacho?.estado === 'anulada'
   const canEdit = esBorrador
-  const canVersion = !esBorrador && !despachoAnulado && ['enviada', 'aceptada', 'rechazada'].includes(cotizacion.estado)
+  const esPropietario = cotizacion.vendedor_id === perfil?.id
+  const canVersion = !esBorrador && !despachoAnulado && ['enviada', 'aceptada', 'rechazada'].includes(cotizacion.estado) && (!esSupervisor || esPropietario)
   const canPdf = cotizacion.estado !== 'borrador' && cotizacion.estado !== 'anulada'
   const canWhatsApp = !despachoAnulado && (cotizacion.estado === 'enviada' || cotizacion.estado === 'aceptada')
   const canAcceptReject = esSupervisor && esEnviada

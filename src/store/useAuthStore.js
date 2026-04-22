@@ -243,10 +243,12 @@ const useAuthStore = create((set, get) => ({
         })
       }
 
-      // Refrescar JWT en background para que RLS funcione con el nuevo operador
-      supabase.auth.refreshSession().then(({ data }) => {
-        if (data?.user) set({ user: data.user })
-      }).catch(() => {})
+      // Refrescar JWT para que RLS funcione con el nuevo operador
+      // IMPORTANTE: await para que el JWT tenga operator_id antes de que el usuario interactúe
+      try {
+        const { data: refreshData } = await supabase.auth.refreshSession()
+        if (refreshData?.user) set({ user: refreshData.user })
+      } catch { /* ignorar — perfil ya está seteado */ }
 
       return { ok: true }
     } catch (err) {

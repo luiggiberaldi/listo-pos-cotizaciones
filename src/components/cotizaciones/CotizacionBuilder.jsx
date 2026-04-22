@@ -4,7 +4,7 @@
 // Paso 2: Agregar productos
 // Paso 3: Descuentos, envío, notas y resumen
 // Paso 4: Confirmación (post-envío) con PDF y WhatsApp
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import {
   User, Truck, Search, Plus, Trash2, UserPlus, ChevronDown, ChevronLeft, ChevronRight, X, Package,
   Save, Send, ArrowLeft, ArrowRight, Loader2, AlertCircle, DollarSign, RefreshCw,
@@ -92,8 +92,39 @@ function StepIndicator({ paso, totalPasos = 4 }) {
   )
 }
 
+// ─── Mini selector de nivel de precio ─────────────────────────────────────
+function PrecioSelector({ precios, currentPrice, onSelect }) {
+  if (!precios) return null
+  const niveles = [
+    { label: 'P1', value: precios.p1 },
+    { label: 'P2', value: precios.p2 },
+    { label: 'P3', value: precios.p3 },
+  ].filter(n => n.value != null && Number(n.value) > 0)
+  if (niveles.length <= 1) return null
+  return (
+    <div className="flex gap-0.5 mt-1">
+      {niveles.map(n => {
+        const active = Number(currentPrice) === Number(n.value)
+        return (
+          <button key={n.label} type="button"
+            onClick={() => onSelect(Number(n.value))}
+            className={`px-1.5 py-0.5 text-[9px] font-bold rounded transition-all ${
+              active
+                ? 'bg-primary text-white'
+                : 'bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600'
+            }`}
+            title={`${n.label}: $${Number(n.value).toFixed(2)}`}
+          >
+            {n.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─── Línea de ítem (desktop) ────────────────────────────────────────────────
-function ItemLinea({ item, idx, onChange, onDelete, tasa = 0 }) {
+function ItemLinea({ item, idx, onChange, onDelete, tasa = 0, precios }) {
   const lineTotal = round2(item.cantidad * item.precioUnitUsd * (1 - item.descuentoPct / 100))
 
   return (
@@ -129,6 +160,7 @@ function ItemLinea({ item, idx, onChange, onDelete, tasa = 0 }) {
           onFocus={e => e.target.select()}
           className="w-24 px-2 py-1.5 text-sm text-right border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary bg-white transition-all"
         />
+        <PrecioSelector precios={precios} currentPrice={item.precioUnitUsd} onSelect={v => onChange(idx, 'precioUnitUsd', v)} />
         {tasa > 0 && <p className="text-[10px] text-slate-400 text-right pr-1 mt-0.5">{fmtBs(usdToBs(item.precioUnitUsd, tasa))}</p>}
       </td>
       <td className="py-3 px-2">
@@ -157,7 +189,7 @@ function ItemLinea({ item, idx, onChange, onDelete, tasa = 0 }) {
 }
 
 // ─── Tarjeta de ítem (móvil) ────────────────────────────────────────────────
-function ItemCard({ item, idx, onChange, onDelete, tasa = 0 }) {
+function ItemCard({ item, idx, onChange, onDelete, tasa = 0, precios }) {
   const lineTotal = round2(item.cantidad * item.precioUnitUsd * (1 - item.descuentoPct / 100))
 
   return (
@@ -199,6 +231,7 @@ function ItemCard({ item, idx, onChange, onDelete, tasa = 0 }) {
             onChange={e => onChange(idx, 'precioUnitUsd', Math.max(0, Number(e.target.value)))}
             className="w-full px-3 py-2.5 text-sm text-right border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-primary-focus bg-white"
           />
+          <PrecioSelector precios={precios} currentPrice={item.precioUnitUsd} onSelect={v => onChange(idx, 'precioUnitUsd', v)} />
           {tasa > 0 && <p className="text-[10px] text-slate-400 text-right">{fmtBs(usdToBs(item.precioUnitUsd, tasa))}</p>}
         </div>
         <div className="space-y-1">
@@ -403,6 +436,9 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
                   <p className={`text-[11px] font-black ${yaAgregado ? 'text-emerald-600' : 'text-slate-800'}`}>
                     {fmtUsd(p.precio_usd)}
                   </p>
+                  {(p.precio_2 != null || p.precio_3 != null) && (
+                    <p className="text-[8px] font-bold text-primary/60">{[p.precio_2 != null && 'P2', p.precio_3 != null && 'P3'].filter(Boolean).length + 1} precios</p>
+                  )}
                   {tasa > 0 && (
                     <p className="text-[9px] text-slate-400 leading-tight">{fmtBs(usdToBs(p.precio_usd, tasa))}</p>
                   )}
@@ -797,7 +833,7 @@ function SectionH3({ icon: Icon, children }) {
 }
 // ─── Panel de cesta (lado derecho del paso 2) ────────────────────────────────
 // Inspirado en PreciosAlDia: FAB + bottom sheet en móvil, panel lateral en desktop
-function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente, onAnterior }) {
+function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente, onAnterior, preciosMap = {} }) {
   const [sheetOpen, setSheetOpen] = useState(false)
 
   const totalItems = items.reduce((s, it) => s + it.cantidad, 0)
@@ -827,6 +863,7 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
                 <span className="text-[10px] text-slate-400">{it.unidadSnap}</span>
                 {it.descuentoPct > 0 && <span className="text-[10px] text-amber-500 font-semibold">-{it.descuentoPct}%</span>}
               </div>
+              <PrecioSelector precios={preciosMap[it.productoId]} currentPrice={it.precioUnitUsd} onSelect={v => onCambiar(idx, 'precioUnitUsd', v)} />
             </div>
             <div className="flex flex-col items-end gap-1.5 shrink-0">
               <span className="text-xs sm:text-sm font-black text-slate-800">{fmtUsd(linea)}</span>
@@ -1081,9 +1118,22 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
   const guardarBorrador  = useGuardarBorrador()
   const enviarCotizacion = useEnviarCotizacion()
   const tasaHook         = useTasaCambio()
+  const { data: inventarioParaPrecios } = useInventario({ pageSize: 1000 })
 
   const { subtotal, descuentoUsd, ivaUsd, totalUsd } = calcTotales(items, descuentoGlobalPct, costoEnvioUsd, config.iva_pct ?? 0)
   const totalBs = tasaHook.tasaEfectiva > 0 ? mulR(totalUsd, tasaHook.tasaEfectiva) : 0
+
+  // Mapa de precios por producto (para selector P1/P2/P3 en la cesta)
+  const preciosMap = useMemo(() => {
+    const prods = inventarioParaPrecios?.productos ?? inventarioParaPrecios ?? []
+    const m = {}
+    for (const p of prods) {
+      if (p.precio_2 != null || p.precio_3 != null) {
+        m[p.id] = { p1: Number(p.precio_usd) || 0, p2: p.precio_2 != null ? Number(p.precio_2) : null, p3: p.precio_3 != null ? Number(p.precio_3) : null }
+      }
+    }
+    return m
+  }, [inventarioParaPrecios])
 
   // Cliente seleccionado (para mostrar datos)
   const clienteSeleccionado = clientes.find(c => c.id === clienteId)
@@ -1526,6 +1576,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                   tasa={tasaHook.tasaEfectiva}
                   onSiguiente={siguiente}
                   onAnterior={anterior}
+                  preciosMap={preciosMap}
                 />
               </div>
             </div>

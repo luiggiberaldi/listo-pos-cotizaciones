@@ -24,7 +24,7 @@ export function useInventario({ busqueda = '', categoria = '', page = 0, pageSiz
         // Supervisor: tabla directa (con costo_usd)
         let query = supabase
           .from('productos')
-          .select('id, codigo, nombre, descripcion, categoria, unidad, precio_usd, costo_usd, stock_actual, stock_minimo, activo, imagen_url, creado_en, actualizado_en', { count: 'exact' })
+          .select('id, codigo, nombre, descripcion, categoria, unidad, precio_usd, precio_2, precio_3, costo_usd, stock_actual, stock_minimo, activo, imagen_url, creado_en, actualizado_en', { count: 'exact' })
           .eq('activo', true)
 
         if (busqueda.trim()) {
@@ -157,6 +157,8 @@ export function useCrearProducto() {
         p_costo_usd:    campos.costo_usd ? Number(campos.costo_usd) : null,
         p_stock_actual: Number(campos.stock_actual) || 0,
         p_stock_minimo: Number(campos.stock_minimo) || 0,
+        p_precio_2:     campos.precio_2 ? Number(campos.precio_2) : null,
+        p_precio_3:     campos.precio_3 ? Number(campos.precio_3) : null,
       })
 
       if (error) {
@@ -192,6 +194,8 @@ export function useActualizarProducto() {
         p_costo_usd:    campos.costo_usd ? Number(campos.costo_usd) : null,
         p_stock_actual: Number(campos.stock_actual) || 0,
         p_stock_minimo: Number(campos.stock_minimo) || 0,
+        p_precio_2:     campos.precio_2 ? Number(campos.precio_2) : null,
+        p_precio_3:     campos.precio_3 ? Number(campos.precio_3) : null,
       })
 
       if (error) {
