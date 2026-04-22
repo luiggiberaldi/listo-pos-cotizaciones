@@ -31,7 +31,7 @@ export function useDespachos({ estado = '' } = {}) {
           creado_en, despachada_en, entregada_en,
           cliente_id, vendedor_id, transportista_id,
           cliente:clientes!notas_despacho_cliente_id_fkey(id, nombre, rif_cedula, telefono, direccion),
-          vendedor:usuarios!notas_despacho_vendedor_id_fkey(id, nombre, color),
+          vendedor:usuarios!notas_despacho_vendedor_id_fkey(id, nombre, color, telefono),
           transportista:transportistas!notas_despacho_transportista_id_fkey(id, nombre, rif, telefono),
           cotizacion:cotizaciones!notas_despacho_cotizacion_id_fkey(id, numero, version)
         `)
@@ -77,17 +77,17 @@ export function useCrearDespacho() {
       // Guardar forma de pago si se indicó
       if (formaPago && data) {
         const { error: fpError } = await supabase.from('notas_despacho').update({ forma_pago: formaPago }).eq('id', data)
-        if (fpError) { /* ignorado — no bloquea el flujo */ }
+        if (fpError) {
+          console.error('[Despacho] Error guardando forma de pago:', fpError)
+          throw new Error('Despacho creado, pero no se pudo registrar la forma de pago. Contacta al supervisor.')
+        }
       }
-      // Registrar cargo en cuentas por cobrar si es crédito
+      // Registrar cargo en crédito si es Cta por cobrar
       if (formaPago === 'Cta por cobrar' && data) {
-        try {
-          const { error: cxcError } = await supabase.rpc('registrar_cargo_cxc', { p_despacho_id: data })
-          if (cxcError) {
-            setTimeout(() => showToast('Despacho creado, pero el cargo CxC no se registró. Contacta al supervisor.', 'warning'), 500)
-          }
-        } catch (cxcErr) {
-          console.error('[CxC] Error registrando cargo:', cxcErr)
+        const { error: cxcError } = await supabase.rpc('registrar_cargo_cxc', { p_despacho_id: data })
+        if (cxcError) {
+          console.error('[CxC] Error registrando cargo:', cxcError)
+          throw new Error('Despacho creado, pero el cargo a Crédito no se registró. Contacta al supervisor para registrarlo manualmente.')
         }
       }
       // Calcular comisión automáticamente al crear el despacho

@@ -165,6 +165,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     { label: 'Dirección Fiscal', val: cliente.direccion || '—' },
     { label: 'Correo', val: cliente.email || '—' },
     { label: 'Vendedor', val: cotizacion.vendedor?.nombre || '—' },
+    { label: 'Tlf. Vendedor', val: cotizacion.vendedor?.telefono || '—' },
   ]
 
   doc.setFontSize(9.5)

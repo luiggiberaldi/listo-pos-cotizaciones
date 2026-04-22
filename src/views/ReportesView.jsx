@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react'
 import {
   BarChart3, CreditCard, RefreshCw, Download, Package,
   FileText, Truck, DollarSign, TrendingUp, AlertTriangle,
-  Clock, Users, Percent,
+  Clock, Users, Percent, ArrowUpCircle, ArrowDownCircle,
 } from 'lucide-react'
 import { useReporteVentas } from '../hooks/useReporteVentas'
 import { useReporteInventario } from '../hooks/useReporteInventario'
@@ -13,6 +13,7 @@ import { useReporteDespachos } from '../hooks/useReporteDespachos'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import { useComisiones } from '../hooks/useComisiones'
 import { useComisionesResumen } from '../hooks/useComisiones'
+import { useResumenCxC } from '../hooks/useCuentasCobrar'
 import { getWeekRange, getMonthRange } from '../utils/dateHelpers'
 import { fmtUsd } from '../utils/format'
 import useAuthStore from '../store/useAuthStore'
@@ -26,11 +27,12 @@ import TablaProductos from '../components/reportes/TablaProductos'
 
 // ─── Tabs Definition ──────────────────────────────────────────────────────
 const TABS = [
-  { id: 'ventas',       label: 'Ventas',        short: 'Ventas',   icon: DollarSign },
-  { id: 'inventario',   label: 'Inventario',    short: 'Invent.',  icon: Package },
-  { id: 'cotizaciones', label: 'Cotizaciones',  short: 'Cotiz.',   icon: FileText },
-  { id: 'despachos',    label: 'Despachos',     short: 'Desp.',    icon: Truck },
-  { id: 'comisiones',   label: 'Comisiones',    short: 'Comis.',   icon: Percent },
+  { id: 'ventas',       label: 'Ventas',            short: 'Ventas',   icon: DollarSign },
+  { id: 'inventario',   label: 'Inventario',        short: 'Invent.',  icon: Package },
+  { id: 'cotizaciones', label: 'Cotizaciones',      short: 'Cotiz.',   icon: FileText },
+  { id: 'despachos',    label: 'Despachos',         short: 'Desp.',    icon: Truck },
+  { id: 'comisiones',   label: 'Comisiones',        short: 'Comis.',   icon: Percent },
+  { id: 'credito',      label: 'Crédito',            short: 'Créd.',    icon: CreditCard },
 ]
 
 // ─── Skeleton ──────────────────────────────────────────────────────────────
@@ -706,6 +708,96 @@ function ErrorMsg({ onRetry }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// TAB: CRÉDITO
+// ═══════════════════════════════════════════════════════════════════════════
+function TabCredito() {
+  const { data, isLoading, isError, refetch } = useResumenCxC()
+
+  if (isLoading) return <SkeletonReporte />
+  if (isError) return <ErrorMsg onRetry={refetch} />
+  if (!data || data.kpis.numClientesConDeuda === 0) {
+    return (
+      <EmptyState
+        icon={CreditCard}
+        title="Sin créditos pendientes"
+        description="No hay clientes con saldo pendiente actualmente."
+      />
+    )
+  }
+
+  const { kpis, clientesConDeuda, aging } = data
+
+  return (
+    <div className="space-y-4">
+      {/* KPIs */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiCard
+          icon={DollarSign} label="Total por cobrar"
+          value={`$${Number(kpis.totalDeuda).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+          gradient="linear-gradient(135deg, #991b1b, #b91c1c)" border="rgba(255,255,255,0.10)"
+        />
+        <KpiCard
+          icon={Users} label="Clientes con deuda"
+          value={String(kpis.numClientesConDeuda)}
+          gradient="linear-gradient(135deg, #92400e, #B8860B)" border="rgba(255,255,255,0.10)"
+        />
+        <KpiCard
+          icon={Clock} label="Deuda más antigua"
+          value={`${kpis.diasMasAntiguo}d`}
+          sub="días sin pago"
+          gradient="linear-gradient(135deg, #1e3a5f, #1B365D)" border="rgba(255,255,255,0.07)"
+        />
+        <KpiCard
+          icon={CreditCard} label="Total cargos"
+          value={String(kpis.numCargos)}
+          sub="órdenes a crédito"
+          gradient="linear-gradient(135deg, #065f46, #047857)" border="rgba(255,255,255,0.10)"
+        />
+      </div>
+
+      {/* Aging */}
+      <AgingSection title="Antigüedad de deuda" data={aging} countLabel="Cargos" />
+
+      {/* Clientes con deuda */}
+      <AdminTable
+        icon={Users} iconColor="text-red-500" title="Clientes con saldo pendiente"
+        headers={[
+          { label: 'Cliente' },
+          { label: 'Vendedor' },
+          { label: 'Saldo pendiente', align: 'text-right' },
+        ]}
+        rows={clientesConDeuda.map(c => [
+          {
+            content: (
+              <div>
+                <p className="font-semibold text-slate-800 text-xs">{c.nombre}</p>
+                {c.rif_cedula && <p className="text-[10px] text-slate-400 font-mono">{c.rif_cedula}</p>}
+              </div>
+            ),
+          },
+          {
+            content: c.vendedor ? (
+              <span className="flex items-center gap-1.5 text-xs">
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: c.vendedor.color || '#64748b' }} />
+                {c.vendedor.nombre}
+              </span>
+            ) : '—',
+          },
+          {
+            content: (
+              <span className="font-black text-red-600 text-xs">
+                ${Number(c.saldo_pendiente).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            ),
+            className: 'text-right',
+          },
+        ])}
+      />
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // MAIN VIEW
 // ═══════════════════════════════════════════════════════════════════════════
 export default function ReportesView() {
@@ -719,7 +811,7 @@ export default function ReportesView() {
   const [range, setRange] = useState(defaultRange)
   const { data: configNeg = {} } = useConfigNegocio()
 
-  const needsDateRange = activeTab !== 'inventario' && activeTab !== 'comisiones'
+  const needsDateRange = activeTab !== 'inventario' && activeTab !== 'comisiones' && activeTab !== 'credito'
 
   return (
     <div className="p-3 sm:p-4 md:p-6 lg:p-8 space-y-3 sm:space-y-4 md:space-y-5">
@@ -776,6 +868,7 @@ export default function ReportesView() {
       {activeTab === 'cotizaciones' && <TabCotizaciones range={range} configNeg={configNeg} />}
       {activeTab === 'despachos' && <TabDespachos range={range} configNeg={configNeg} />}
       {activeTab === 'comisiones' && <TabComisiones configNeg={configNeg} />}
+      {activeTab === 'credito' && <TabCredito />}
     </div>
   )
 }

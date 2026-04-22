@@ -148,7 +148,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const clienteRows = [
     [{ label: 'Cliente', val: cliente.nombre || '—' },         { label: 'R.I.F / Cédula', val: cliente.rif_cedula || '—' }],
     [{ label: 'Teléfono', val: cliente.telefono || '—' },      { label: 'Vendedor', val: despacho.vendedor?.nombre || '—' }],
-    [{ label: 'Dirección Fiscal', val: cliente.direccion || '—' }],
+    [{ label: 'Dirección Fiscal', val: cliente.direccion || '—' }, { label: 'Tlf. Vendedor', val: despacho.vendedor?.telefono || '—' }],
   ]
 
   doc.setFontSize(9.5)
@@ -322,9 +322,11 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   drawCheck(doc, 'ZELLE',      totX + 25, y + 12, fp === 'zelle')
   drawCheck(doc, 'P. MÓVIL',   totX + 45, y + 12, fp === 'pago movil')
   drawCheck(doc, 'USDT',       totX + 65, y + 12, fp === 'usdt')
+  drawCheck(doc, 'TRANSF.',    totX,      y + 19, fp === 'transferencia')
+  drawCheck(doc, 'CTA X COB.', totX + 25, y + 19, fp === 'cta por cobrar')
 
   // Total grande
-  const totTopY = y + 18
+  const totTopY = y + 26
   doc.setFillColor(60, 60, 60)
   doc.rect(totX, totTopY, totW, 14, 'F')
 

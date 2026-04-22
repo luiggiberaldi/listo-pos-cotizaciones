@@ -11,6 +11,7 @@ import ClienteCard       from '../components/clientes/ClienteCard'
 import ClienteRow        from '../components/clientes/ClienteRow'
 import ClienteForm       from '../components/clientes/ClienteForm'
 import ReasignacionModal from '../components/clientes/ReasignacionModal'
+import FichaClienteModal from '../components/clientes/FichaClienteModal'
 import { Modal }         from '../components/ui/Modal'
 import ConfirmModal      from '../components/ui/ConfirmModal'
 import EmptyState        from '../components/ui/EmptyState'
@@ -113,6 +114,8 @@ export default function ClientesView() {
   const [modalReasigOpen,  setModalReasigOpen]  = useState(false)
   const [clienteADesact,   setClienteADesact]   = useState(null)
   const [confirmDesactOpen,setConfirmDesactOpen]= useState(false)
+  const [clienteFicha,     setClienteFicha]     = useState(null)
+  const [fichaOpen,        setFichaOpen]        = useState(false)
 
   // Data + mutations
   const { data: clientes = [], isLoading, isError, refetch } = useClientes(busqueda)
@@ -189,6 +192,11 @@ export default function ClientesView() {
   function abrirReasignar(cliente) {
     setClienteReasig(cliente)
     setModalReasigOpen(true)
+  }
+
+  function abrirFicha(cliente) {
+    setClienteFicha(cliente)
+    setFichaOpen(true)
   }
 
   function cotizarCliente(cliente) {
@@ -376,6 +384,7 @@ export default function ClientesView() {
                 onDesactivar={abrirDesactivar}
                 onReasignar={abrirReasignar}
                 onCotizar={cotizarCliente}
+                onVerFicha={abrirFicha}
               />
             ))}
           </div>
@@ -422,6 +431,13 @@ export default function ClientesView() {
         cliente={clienteReasig}
         isOpen={modalReasigOpen}
         onClose={() => { setModalReasigOpen(false); setClienteReasig(null) }}
+      />
+
+      {/* ── Modal: Ficha del cliente ─────────────────────────────────────── */}
+      <FichaClienteModal
+        cliente={clienteFicha}
+        isOpen={fichaOpen}
+        onClose={() => { setFichaOpen(false); setClienteFicha(null) }}
       />
 
       {/* ── Confirm: Desactivar cliente ─────────────────────────────────────── */}

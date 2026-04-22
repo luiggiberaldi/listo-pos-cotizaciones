@@ -1,6 +1,6 @@
 // src/components/clientes/ClienteCard.jsx
 // Tarjeta de cliente — color header strip del vendedor asignado
-import { Phone, Mail, MapPin, Hash, Tag, Pencil, UserMinus, ArrowRightLeft, FileText, AlertCircle } from 'lucide-react'
+import { Phone, Mail, MapPin, Hash, Tag, Pencil, UserMinus, ArrowRightLeft, FileText, AlertCircle, BookOpen } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtUsdSimple as fmtUsd } from '../../utils/format'
 
@@ -23,7 +23,7 @@ function getIniciales(nombre = '') {
   return nombre.slice(0, 2).toUpperCase()
 }
 
-export default function ClienteCard({ cliente, onEditar, onDesactivar, onReasignar, onCotizar }) {
+export default function ClienteCard({ cliente, onEditar, onDesactivar, onReasignar, onCotizar, onVerFicha }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const esPropio     = cliente.vendedor_id === perfil?.id
@@ -101,7 +101,7 @@ export default function ClienteCard({ cliente, onEditar, onDesactivar, onReasign
         </div>
       )}
 
-      {/* ── Saldo pendiente (deuda CxC) ── */}
+      {/* ── Saldo pendiente (crédito) ── */}
       {Number(cliente.saldo_pendiente || 0) > 0 && (
         <div className="mx-4 mb-3 flex items-center justify-between bg-red-50 rounded-lg px-3 py-1.5 border border-red-100">
           <span className="flex items-center gap-1 text-xs text-red-600 font-semibold">
@@ -126,6 +126,13 @@ export default function ClienteCard({ cliente, onEditar, onDesactivar, onReasign
           <FileText size={13} />
           Cotizar
         </button>
+        {onVerFicha && (
+          <button onClick={() => onVerFicha(cliente)} title="Ver ficha del cliente"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-violet-600 hover:bg-violet-50 active:bg-violet-100 transition-colors">
+            <BookOpen size={13} />
+            Ficha
+          </button>
+        )}
         <button onClick={() => onEditar(cliente)} title="Editar cliente"
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
           <Pencil size={13} />
