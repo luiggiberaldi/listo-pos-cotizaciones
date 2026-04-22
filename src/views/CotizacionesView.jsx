@@ -3,7 +3,7 @@
 // El builder reemplaza la lista in-page (sin navegación adicional)
 import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { FileText, Plus, RefreshCw, Filter, Copy, AlertTriangle, PackageCheck, Loader2, X, AlertCircle, LayoutGrid, List } from 'lucide-react'
+import { FileText, Plus, RefreshCw, Copy, AlertTriangle, PackageCheck, Loader2, X, AlertCircle, LayoutGrid, List } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import supabase from '../services/supabase/client'
 import { useTasaCambio } from '../hooks/useTasaCambio'
@@ -416,28 +416,29 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
         }
       />
 
-      {/* Filtros de estado + vendedor */}
-      <div className="flex items-center gap-2">
-        <Filter size={16} className="text-slate-500 shrink-0 hidden sm:block" />
-        <div className="flex-1 min-w-0 overflow-x-auto scrollbar-hide">
-          <div className="flex items-center gap-1.5 sm:gap-2.5 w-max pb-1 sm:flex-wrap sm:w-auto">
-            {ESTADOS_FILTRO.map(({ valor, label }) => (
-              <button key={valor} onClick={() => setEstadoFiltro(valor)}
-                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-semibold transition-colors border whitespace-nowrap ${
-                  estadoFiltro === valor
-                    ? 'bg-primary text-white border-primary'
-                    : 'bg-white text-slate-700 border-slate-200 hover:border-primary-focus'
-                }`}>
-                {label}
-              </button>
-            ))}
-          </div>
+      {/* Filtros: fila 1 — tabs de estado (scroll horizontal) */}
+      <div className="overflow-x-auto scrollbar-hide -mx-1 px-1">
+        <div className="flex items-center gap-1.5 w-max pb-0.5">
+          {ESTADOS_FILTRO.map(({ valor, label }) => (
+            <button key={valor} onClick={() => setEstadoFiltro(valor)}
+              className={`px-3.5 py-2 rounded-full text-xs font-semibold transition-colors border whitespace-nowrap ${
+                estadoFiltro === valor
+                  ? 'bg-primary text-white border-primary'
+                  : 'bg-white text-slate-700 border-slate-200 hover:border-primary/40'
+              }`}>
+              {label}
+            </button>
+          ))}
         </div>
+      </div>
 
-        {/* Filtro por vendedor — solo supervisor (fuera del scroll para que el dropdown no se recorte) */}
-        {esSupervisor && vendedores.length > 1 && (
-          <VendedorFilterPill vendedores={vendedores} value={vendedorFiltro} onChange={setVendedorFiltro} />
-        )}
+      {/* Filtros: fila 2 — vendedor + controles de vista */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          {esSupervisor && vendedores.length > 1 && (
+            <VendedorFilterPill vendedores={vendedores} value={vendedorFiltro} onChange={setVendedorFiltro} />
+          )}
+        </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <div className="flex bg-slate-100 rounded-xl p-0.5">
             <button type="button" onClick={() => { setVistaMode('grid'); localStorage.setItem('cotizaciones_vista', 'grid') }} title="Vista cuadrícula"
@@ -449,7 +450,7 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
               <List size={16} />
             </button>
           </div>
-          <button onClick={() => refetch()} title="Recargar" className="p-2 sm:p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
+          <button onClick={() => refetch()} title="Recargar" className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
             <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
           </button>
         </div>

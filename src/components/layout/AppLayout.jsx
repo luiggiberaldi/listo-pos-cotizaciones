@@ -113,8 +113,8 @@ export default function AppLayout() {
   // Realtime: escucha cambios en tablas y refresca cache automáticamente
   useRealtimeSync()
 
-  // Recordatorios proactivos de cotizaciones (sin respuesta / por vencer)
-  useRecordatoriosCotizaciones()
+  // Recordatorios de vencimiento deshabilitados (cotizaciones y despachos no vencen)
+  // useRecordatoriosCotizaciones()
 
   // Notificaciones
   const { unreadCount, notifications, markAllRead, clearAll } = useAdminAlerts()

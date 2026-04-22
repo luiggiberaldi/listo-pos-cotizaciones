@@ -92,8 +92,8 @@ function StepIndicator({ paso, totalPasos = 4 }) {
   )
 }
 
-// ─── Mini selector de nivel de precio ─────────────────────────────────────
-function PrecioSelector({ precios, currentPrice, onSelect }) {
+// ─── Selector de nivel de precio (desktop: compacto / mobile: full-width) ──
+function PrecioSelector({ precios, currentPrice, onSelect, tasa = 0, mobile = false }) {
   if (!precios) return null
   const niveles = [
     { label: 'P1', value: precios.p1 },
@@ -101,6 +101,34 @@ function PrecioSelector({ precios, currentPrice, onSelect }) {
     { label: 'P3', value: precios.p3 },
   ].filter(n => n.value != null && Number(n.value) > 0)
   if (niveles.length <= 1) return null
+
+  if (mobile) {
+    return (
+      <div className="col-span-2 space-y-1.5">
+        <label className="text-xs font-medium text-slate-500">Nivel de precio</label>
+        <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${niveles.length}, 1fr)` }}>
+          {niveles.map(n => {
+            const active = Number(currentPrice) === Number(n.value)
+            return (
+              <button key={n.label} type="button"
+                onClick={() => onSelect(Number(n.value))}
+                className={`flex flex-col items-center justify-center py-3 px-2 rounded-xl border-2 transition-all active:scale-[0.96] touch-manipulation ${
+                  active
+                    ? 'border-primary bg-primary text-white shadow-md'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-primary/40'
+                }`}
+              >
+                <span className={`text-[11px] font-bold uppercase tracking-widest ${active ? 'text-white/80' : 'text-slate-400'}`}>{n.label}</span>
+                <span className={`text-base font-black mt-0.5 ${active ? 'text-white' : 'text-slate-800'}`}>${Number(n.value).toFixed(2)}</span>
+                {tasa > 0 && <span className={`text-[10px] mt-0.5 ${active ? 'text-white/70' : 'text-slate-400'}`}>{fmtBs(usdToBs(n.value, tasa))}</span>}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex gap-0.5 mt-1">
       {niveles.map(n => {
@@ -231,9 +259,9 @@ function ItemCard({ item, idx, onChange, onDelete, tasa = 0, precios }) {
             onChange={e => onChange(idx, 'precioUnitUsd', Math.max(0, Number(e.target.value)))}
             className="w-full px-3 py-2.5 text-sm text-right border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-primary-focus bg-white"
           />
-          <PrecioSelector precios={precios} currentPrice={item.precioUnitUsd} onSelect={v => onChange(idx, 'precioUnitUsd', v)} />
           {tasa > 0 && <p className="text-[10px] text-slate-400 text-right">{fmtBs(usdToBs(item.precioUnitUsd, tasa))}</p>}
         </div>
+        <PrecioSelector precios={precios} currentPrice={item.precioUnitUsd} onSelect={v => onChange(idx, 'precioUnitUsd', v)} tasa={tasa} mobile />
         <div className="space-y-1">
           <label className="text-xs font-medium text-slate-500">Desc. %</label>
           <input type="number" min="0" max="100" step="0.5"
