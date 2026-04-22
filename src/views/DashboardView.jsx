@@ -360,17 +360,6 @@ export default function DashboardView() {
                 </div>
                 <ArrowRight size={14} className="text-slate-400 group-hover/btn:translate-x-0.5 transition-transform" />
               </button>
-              <button onClick={() => navigate('/auditoria')}
-                className="flex items-center justify-between w-full px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all group/btn hover:shadow-md"
-                style={{ background: 'linear-gradient(135deg, rgba(27,54,93,0.06), rgba(184,134,11,0.06))', border: '1px solid rgba(27,54,93,0.12)' }}>
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
-                    <ClipboardList size={13} className="text-white" />
-                  </div>
-                  <span className="text-slate-700">Ver auditoría</span>
-                </div>
-                <ArrowRight size={14} className="text-slate-400 group-hover/btn:translate-x-0.5 transition-transform" />
-              </button>
             </div>
           ) : (
             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex items-center justify-center">

@@ -3,7 +3,7 @@
 import { NavLink } from 'react-router-dom'
 import { LayoutDashboard, FileText, Users, Package, MoreHorizontal } from 'lucide-react'
 import { useState } from 'react'
-import { PackageCheck, Truck, DollarSign, BarChart3, ClipboardList, Settings } from 'lucide-react'
+import { PackageCheck, Truck, DollarSign, BarChart3, Settings } from 'lucide-react'
 
 const BOTTOM_ITEMS = [
   { path: '/', label: 'Inicio', icon: LayoutDashboard },
@@ -17,7 +17,6 @@ const MORE_ITEMS = [
   { path: '/transportistas', label: 'Transportistas', icon: Truck },
   { path: '/comisiones', label: 'Comisiones', icon: DollarSign },
   { path: '/reportes', label: 'Reportes', icon: BarChart3 },
-  { path: '/auditoria', label: 'Auditoría', icon: ClipboardList },
   { path: '/configuracion', label: 'Configuración', icon: Settings },
 ]
 

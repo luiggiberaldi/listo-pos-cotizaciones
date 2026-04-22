@@ -57,7 +57,8 @@ const DespachosView     = lazyRetry(() => import('./views/DespachosView'))
 const InventarioView    = lazyRetry(() => import('./views/InventarioView'))
 const TransportistasView = lazyRetry(() => import('./views/TransportistasView'))
 const UsuariosView      = lazyRetry(() => import('./views/UsuariosView'))
-const AuditoriaView     = lazyRetry(() => import('./views/AuditoriaView'))
+// Auditoría desactivada temporalmente para ahorrar cuotas Supabase
+// const AuditoriaView     = lazyRetry(() => import('./views/AuditoriaView'))
 const ConfiguracionView = lazyRetry(() => import('./views/ConfiguracionView'))
 const ComisionesView    = lazyRetry(() => import('./views/ComisionesView'))
 const ReportesView      = lazyRetry(() => import('./views/ReportesView'))
@@ -169,7 +170,6 @@ function AppRoutes() {
             <Route element={<RutaSupervisor />}>
               <Route path="/usuarios"      element={<Navigate to="/configuracion" replace />} />
               <Route path="/reportes"      element={<ReportesView />} />
-              <Route path="/auditoria"     element={<AuditoriaView />} />
               <Route path="/configuracion" element={<ConfiguracionView />} />
             </Route>
           </Route>

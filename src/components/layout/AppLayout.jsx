@@ -59,7 +59,6 @@ const NAV_TODOS = [
 
 const NAV_SUPERVISOR = [
   { path: '/reportes',      label: 'Reportes',      icono: BarChart3 },
-  { path: '/auditoria',     label: 'Auditoría',     icono: ClipboardList },
   { path: '/configuracion', label: 'Configuración', icono: Settings },
 ]
 
