@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { memo, useMemo } from 'react'
-import { LayoutDashboard, FileText, Users, DollarSign, TrendingUp, Clock, Plus, UserCog, ClipboardList, ArrowRight } from 'lucide-react'
+import { LayoutDashboard, FileText, Users, DollarSign, TrendingUp, Clock, Plus, UserCog, ClipboardList, ArrowRight, Package, UserRound, BarChart2 } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import supabase     from '../services/supabase/client'
 import { fmtUsd, fmtBs, usdToBs } from '../utils/format'
@@ -343,17 +343,24 @@ export default function DashboardView() {
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
                 <Users size={12} />Accesos rápidos
               </p>
-              <button onClick={() => navigate('/usuarios')}
-                className="flex items-center justify-between w-full px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all group/btn hover:shadow-md"
-                style={{ background: 'linear-gradient(135deg, rgba(27,54,93,0.06), rgba(184,134,11,0.06))', border: '1px solid rgba(27,54,93,0.12)' }}>
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
-                    <UserCog size={13} className="text-white" />
+              {[
+                { label: 'Gestionar usuarios', icon: UserCog, path: '/usuarios', colors: ['#1B365D', '#B8860B'] },
+                { label: 'Clientes',           icon: UserRound, path: '/clientes', colors: ['#0369a1', '#0ea5e9'] },
+                { label: 'Inventario',         icon: Package,  path: '/inventario', colors: ['#065f46', '#10b981'] },
+                { label: 'Reportes',           icon: BarChart2, path: '/reportes', colors: ['#7c3aed', '#a78bfa'] },
+              ].map(({ label, icon: Icon, path, colors }) => (
+                <button key={path} onClick={() => navigate(path)}
+                  className="flex items-center justify-between w-full px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all group/btn hover:shadow-md"
+                  style={{ background: 'linear-gradient(135deg, rgba(27,54,93,0.06), rgba(184,134,11,0.06))', border: '1px solid rgba(27,54,93,0.12)' }}>
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${colors[0]}, ${colors[1]})` }}>
+                      <Icon size={13} className="text-white" />
+                    </div>
+                    <span className="text-slate-700">{label}</span>
                   </div>
-                  <span className="text-slate-700">Gestionar usuarios</span>
-                </div>
-                <ArrowRight size={14} className="text-slate-400 group-hover/btn:translate-x-0.5 transition-transform" />
-              </button>
+                  <ArrowRight size={14} className="text-slate-400 group-hover/btn:translate-x-0.5 transition-transform" />
+                </button>
+              ))}
             </div>
           ) : (
             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex items-center justify-center">

@@ -2,7 +2,7 @@
 // Vista principal de notas de despacho
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Package, PackageCheck, RefreshCw, Filter, RefreshCcw, AlertTriangle, LayoutGrid, List } from 'lucide-react'
+import { Package, PackageCheck, RefreshCw, Filter, RefreshCcw, AlertTriangle, LayoutGrid, List, FileDown } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import { useDespachos, useActualizarEstadoDespacho, useReciclarDespacho } from '../hooks/useDespachos'
@@ -19,7 +19,7 @@ import PageHeader  from '../components/ui/PageHeader'
 import Pagination  from '../components/ui/Pagination'
 import { showToast } from '../components/ui/Toast'
 
-// ─── Filtros de estado ──────────────────────────────────────────────────────
+import { generarDespachoPlantillaPDF } from '../services/pdf/despachoPlantillaPDF'
 const ESTADOS_FILTRO = [
   { valor: '',           label: 'Todas' },
   { valor: 'pendiente',  label: 'Pendientes' },
@@ -106,6 +106,17 @@ export default function DespachosView() {
         icon={PackageCheck}
         title="Notas de Despacho"
         subtitle={isLoading ? 'Cargando...' : `${despachosFiltrados.length} despacho${despachosFiltrados.length !== 1 ? 's' : ''}`}
+        action={
+          <button
+            onClick={() => generarDespachoPlantillaPDF({ config })}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold border transition-all hover:shadow-sm active:scale-[0.98]"
+            style={{ background: 'linear-gradient(135deg, rgba(27,54,93,0.06), rgba(184,134,11,0.06))', border: '1px solid rgba(27,54,93,0.18)', color: '#1B365D' }}
+            title="Descargar plantilla vacía"
+          >
+            <FileDown size={15} />
+            Plantilla vacía
+          </button>
+        }
       />
 
       {/* Filtros de estado + vendedor */}
