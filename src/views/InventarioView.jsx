@@ -364,8 +364,8 @@ export default function InventarioView() {
         )
       )}
 
-      {/* ── Paginación ───────────────────────────────────────────────────────── */}
-      {!isLoading && productosFiltrados.length > ITEMS_POR_PAGINA && (
+      {/* ── Paginación (solo tab productos) ──────────────────────────────────── */}
+      {tabActivo === 'productos' && !isLoading && productosFiltrados.length > ITEMS_POR_PAGINA && (
         <Pagination
           paginaActual={pagina}
           totalPaginas={totalPaginas}
