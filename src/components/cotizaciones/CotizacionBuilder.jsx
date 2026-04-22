@@ -829,7 +829,7 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
 
   // Footer compartido (totales + botones)
   const footerContent = (
-    <div className="border-t border-slate-200 p-3 sm:p-4 space-y-2 sm:space-y-3 bg-white">
+    <div className="border-t border-slate-200 p-3 sm:p-4 pb-6 sm:pb-4 space-y-2 sm:space-y-3 bg-white">
       {items.length > 0 && (
         <div className="flex justify-between items-end px-1">
           <div>
@@ -879,9 +879,9 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
 
         {/* Bottom Sheet Overlay */}
         {sheetOpen && (
-          <div className="fixed inset-0 z-50 flex flex-col justify-end bg-slate-900/60 backdrop-blur-sm"
+          <div className="fixed inset-0 z-[100] flex flex-col justify-end bg-slate-900/60 backdrop-blur-sm"
             onClick={() => setSheetOpen(false)}>
-            <div className="bg-white w-full rounded-t-3xl shadow-2xl flex flex-col max-h-[85vh]"
+            <div className="bg-white w-full rounded-t-3xl shadow-2xl flex flex-col max-h-[85vh] pb-[env(safe-area-inset-bottom)]"
               onClick={e => e.stopPropagation()}>
               {/* Handle */}
               <div className="shrink-0 flex justify-center pt-3 pb-2" onClick={() => setSheetOpen(false)}>
