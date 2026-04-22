@@ -1441,6 +1441,19 @@ async function handleTesterClearAll(request, env) {
     await supaDelete(env, 'transportistas', logStep);
     logStep('Inventario conservado.');
 
+    // Reiniciar correlativos (COT-00001, despacho #1)
+    logStep('Reiniciando correlativos...');
+    const seqRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/reiniciar_correlativos`, {
+      method: 'POST',
+      headers: {
+        apikey: env.SUPABASE_SERVICE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: '{}',
+    });
+    logStep(`  Correlativos: HTTP ${seqRes.status}`);
+
     const elapsed = Date.now() - start;
     logStep(`✓ Limpieza completada en ${elapsed}ms`);
     return json({ ok: true, elapsed_ms: elapsed, log }, 200, request);

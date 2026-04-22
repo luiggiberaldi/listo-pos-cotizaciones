@@ -3,13 +3,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { memo, useMemo } from 'react'
-import { LayoutDashboard, FileText, Users, DollarSign, TrendingUp, Clock, Plus, UserCog, ClipboardList, ArrowRight, Zap, Phone } from 'lucide-react'
+import { LayoutDashboard, FileText, Users, DollarSign, TrendingUp, Clock, Plus, UserCog, ClipboardList, ArrowRight, Zap } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import supabase     from '../services/supabase/client'
 import { fmtUsd, fmtBs, usdToBs } from '../utils/format'
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import { useComisionesResumen } from '../hooks/useComisiones'
-import { useTurnoAtencion } from '../hooks/useTurnoAtencion'
+// import { useTurnoAtencion } from '../hooks/useTurnoAtencion' // Oculto temporalmente
 import Skeleton     from '../components/ui/Skeleton'
 import PageHeader  from '../components/ui/PageHeader'
 import OnboardingTip from '../components/ui/OnboardingTooltip'
@@ -161,7 +161,7 @@ export default function DashboardView() {
   const { data: m, isLoading } = useMetricas()
   const { data: comResumen } = useComisionesResumen()
   const { tasaEfectiva } = useTasaCambio()
-  const { vendedorHoy, calendario, esDomingo } = useTurnoAtencion()
+  // const { vendedorHoy, calendario, esDomingo } = useTurnoAtencion() // Oculto temporalmente
   const navigate = useNavigate()
 
   const mesActual = new Date().toLocaleDateString('es-VE', { month: 'long', year: 'numeric' })
@@ -247,73 +247,17 @@ export default function DashboardView() {
         </div>
       )}
 
-      {/* Turno de atención */}
-      {vendedorHoy && !esDomingo && calendario.length > 0 && (
+      {/* Turno de atención — oculto temporalmente, pendiente de rediseño */}
+      {/* {vendedorHoy && !esDomingo && calendario.length > 0 && (
         <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-bold text-slate-700 text-sm uppercase tracking-wide flex items-center gap-2">
-              <Phone size={14} />Turno de Atención
-            </h2>
-            <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full"
-              style={{ background: (vendedorHoy.color || '#1B365D') + '18', color: vendedorHoy.color || '#1B365D' }}>
-              Hoy
-            </span>
-          </div>
-
-          {/* Vendedor de turno */}
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center text-white font-black text-sm shrink-0"
-              style={{ background: vendedorHoy.color || '#1B365D' }}>
-              {vendedorHoy.nombre.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase()}
-            </div>
-            <div>
-              <p className="text-lg font-black text-slate-800 leading-tight">{vendedorHoy.nombre}</p>
-              <p className="text-xs text-slate-400">Atención de llamadas y mensajes</p>
-            </div>
-          </div>
-
-          {/* Calendario semanal */}
-          <div className="grid grid-cols-6 gap-1.5 sm:gap-2">
-            {calendario.map(dia => {
-              const iniciales = dia.vendedor
-                ? dia.vendedor.nombre.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase()
-                : '—'
-              const nombre = dia.vendedor?.nombre?.split(' ')[0] ?? ''
-              const color = dia.vendedor?.color || '#1B365D'
-              return (
-                <div key={dia.fecha.toISOString()} className="flex flex-col items-center gap-1">
-                  <span className="text-[10px] font-semibold uppercase text-slate-400 tracking-wide">
-                    {dia.diaSemana.replace('.', '')}
-                  </span>
-                  <div className={`w-full aspect-square max-w-[48px] rounded-xl flex items-center justify-center font-black text-sm transition-all ${dia.esHoy ? 'shadow-lg scale-105' : ''}`}
-                    style={dia.esHoy
-                      ? { background: color, color: '#fff', boxShadow: `0 4px 12px ${color}40` }
-                      : { background: '#f1f5f9', color: '#64748b' }
-                    }>
-                    {iniciales}
-                  </div>
-                  <span className={`text-[10px] leading-tight text-center truncate w-full ${dia.esHoy ? 'font-bold text-slate-700' : 'text-slate-400'}`}>
-                    {nombre}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
+          ...turno widget...
         </div>
-      )}
+      )} */}
 
-      {/* Mensaje de domingo */}
-      {esDomingo && (
-        <div className="bg-slate-50 rounded-2xl border border-slate-200 p-5 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
-            <Phone size={18} className="text-slate-400" />
-          </div>
-          <div>
-            <p className="text-sm font-bold text-slate-500">Día de descanso</p>
-            <p className="text-xs text-slate-400">Hoy domingo no hay turno de atención asignado</p>
-          </div>
-        </div>
-      )}
+      {/* Mensaje de domingo — oculto temporalmente */}
+      {/* {esDomingo && (
+        ...domingo widget...
+      )} */}
 
       {/* Desglose por estado */}
       <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
