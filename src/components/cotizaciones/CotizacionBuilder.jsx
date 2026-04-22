@@ -38,6 +38,27 @@ let _itemCounter = 0
 
 const STEP_LABELS = ['Cliente', 'Productos', 'Resumen', 'Enviada']
 
+// ─── Auto-guardado en localStorage ──────────────────────────────────────────
+const DRAFT_KEY = 'construacero_cotizacion_draft'
+
+function saveDraft(state) {
+  try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...state, _ts: Date.now() })) } catch {}
+}
+
+function loadDraft() {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY)
+    if (!raw) return null
+    const draft = JSON.parse(raw)
+    if (Date.now() - draft._ts > 24 * 60 * 60 * 1000) { localStorage.removeItem(DRAFT_KEY); return null }
+    return draft
+  } catch { return null }
+}
+
+function clearDraft() {
+  try { localStorage.removeItem(DRAFT_KEY) } catch {}
+}
+
 // ─── Indicador de pasos ──────────────────────────────────────────────────────
 function StepIndicator({ paso, totalPasos = 4 }) {
   return (
@@ -990,6 +1011,52 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
   const [pdfLoading, setPdfLoading] = useState(false)
   const [waLoading, setWaLoading]   = useState(false)
 
+  // ── Auto-guardado: restaurar borrador al montar ────────────────────────────
+  const [showDraftBanner, setShowDraftBanner] = useState(false)
+  const draftRef = useRef(null)
+
+  useEffect(() => {
+    if (esEdicion) return
+    const draft = loadDraft()
+    if (draft && (draft.items?.length > 0 || draft.clienteId)) {
+      draftRef.current = draft
+      setShowDraftBanner(true)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function restoreDraft() {
+    const d = draftRef.current
+    if (!d) return
+    if (d.clienteId) setClienteId(d.clienteId)
+    if (d.vendedorId) setVendedorId(d.vendedorId)
+    if (d.notasCliente) setNotasCliente(d.notasCliente)
+    if (d.notasInternas) setNotasInternas(d.notasInternas)
+    if (d.monedaPDF) setMonedaPDF(d.monedaPDF)
+    if (d.items?.length > 0) {
+      setItems(d.items.map(it => ({ ...it, _key: `item-${++_itemCounter}` })))
+    }
+    if (d.paso && d.paso > 1 && d.paso < 4) setPaso(d.paso)
+    setShowDraftBanner(false)
+    draftRef.current = null
+  }
+
+  function discardDraft() {
+    clearDraft()
+    setShowDraftBanner(false)
+    draftRef.current = null
+  }
+
+  // ── Auto-guardado: persistir en localStorage (debounced 1.5s) ──────────────
+  useEffect(() => {
+    if (esEdicion || paso === 4 || enviada) return
+    const timer = setTimeout(() => {
+      if (items.length > 0 || clienteId) {
+        saveDraft({ paso, clienteId, vendedorId, notasCliente, notasInternas, monedaPDF, items })
+      }
+    }, 1500)
+    return () => clearTimeout(timer)
+  }, [paso, clienteId, vendedorId, notasCliente, notasInternas, monedaPDF, items, esEdicion, enviada])
+
   const { data: clientes      = [], refetch: refetchClientes } = useClientes()
   const { data: transportistas = [] } = useTransportistas()
   const { data: vendedores     = [] } = useVendedores()
@@ -1064,6 +1131,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
         items,
       })
       setCotizacionId(id)
+      clearDraft()
       onGuardado?.()
     } catch (e) {
       setErrorGeneral(e.message ?? 'Error al guardar')
@@ -1108,6 +1176,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
       }
 
       setEnviada(true)
+      clearDraft()
       setPaso(4)
 
       // Notificar al supervisor si el vendedor usó un cliente ajeno
@@ -1259,6 +1328,26 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
           <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
             <AlertCircle size={15} className="shrink-0" />
             {errorGeneral}
+          </div>
+        )}
+
+        {/* Banner: retomar borrador */}
+        {showDraftBanner && (
+          <div className="flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 animate-in fade-in duration-300">
+            <div className="flex items-center gap-2 min-w-0">
+              <Save size={16} className="text-amber-600 shrink-0" />
+              <span className="text-sm font-medium text-amber-800 truncate">Tienes una cotización sin terminar</span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button type="button" onClick={restoreDraft}
+                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg transition-colors">
+                Retomar
+              </button>
+              <button type="button" onClick={discardDraft}
+                className="px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors">
+                Descartar
+              </button>
+            </div>
           </div>
         )}
 
