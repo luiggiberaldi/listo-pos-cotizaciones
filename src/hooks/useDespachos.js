@@ -8,6 +8,7 @@ import { COTIZACIONES_KEY } from './useCotizaciones'
 import { COMISIONES_KEY } from './useComisiones'
 import { STOCK_COMPROMETIDO_KEY } from './useStockComprometido'
 import { REPORTE_KEY } from './useReporteVentas'
+import { CXC_KEY } from './useCuentasCobrar'
 import { notifyDespachoCreado, notifyStockBajo } from '../services/notificationService'
 import { showToast } from '../components/ui/Toast'
 import { sendPushNotification } from './usePushNotifications'
@@ -77,6 +78,17 @@ export function useCrearDespacho() {
       if (formaPago && data) {
         const { error: fpError } = await supabase.from('notas_despacho').update({ forma_pago: formaPago }).eq('id', data)
         if (fpError) { /* ignorado — no bloquea el flujo */ }
+      }
+      // Registrar cargo en cuentas por cobrar si es crédito
+      if (formaPago === 'Cta por cobrar' && data) {
+        try {
+          const { error: cxcError } = await supabase.rpc('registrar_cargo_cxc', { p_despacho_id: data })
+          if (cxcError) {
+            setTimeout(() => showToast('Despacho creado, pero el cargo CxC no se registró. Contacta al supervisor.', 'warning'), 500)
+          }
+        } catch (cxcErr) {
+          console.error('[CxC] Error registrando cargo:', cxcErr)
+        }
       }
       // Calcular comisión automáticamente al crear el despacho
       if (data) {
@@ -158,6 +170,7 @@ export function useCrearDespacho() {
       qc.invalidateQueries({ queryKey: COMISIONES_KEY })
       qc.invalidateQueries({ queryKey: COTIZACIONES_KEY })
       qc.invalidateQueries({ queryKey: STOCK_COMPROMETIDO_KEY })
+      qc.invalidateQueries({ queryKey: CXC_KEY })
       showToast('Nota de despacho creada', 'success')
       notifyDespachoCreado(numeroCotizacion ?? '—', clienteNombre ?? 'cliente')
       sendPushNotification({

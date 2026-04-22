@@ -2,7 +2,7 @@
 // Gestión de usuarios — solo supervisores
 // Construacero Carabobo (avatares con inicial, Crown para supervisor)
 import { useState } from 'react'
-import { UserCog, Plus, Pencil, UserCheck, UserX, RefreshCw, Crown, Eye, EyeOff, Trash2 } from 'lucide-react'
+import { UserCog, Plus, Pencil, UserCheck, UserX, RefreshCw, Crown, Eye, EyeOff, Trash2, Phone } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import CustomSelect from '../components/ui/CustomSelect'
 import {
@@ -55,7 +55,7 @@ const COLORES_VENDEDOR = [
 // ─── Formulario crear usuario ─────────────────────────────────────────────────
 function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
   const primerColorLibre = COLORES_VENDEDOR.find(c => !coloresUsados.includes(c)) ?? COLORES_VENDEDOR[0]
-  const [campos, setCampos] = useState({ nombre: '', pin: '', rol: 'vendedor', color: primerColorLibre })
+  const [campos, setCampos] = useState({ nombre: '', pin: '', rol: 'vendedor', color: primerColorLibre, telefono: '' })
   const [mostrarPass, setMostrarPass] = useState(false)
   const [error, setError] = useState('')
 
@@ -67,7 +67,7 @@ function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
     if (!campos.nombre.trim())                   { setError('El nombre es obligatorio'); return }
     if (!new RegExp(`^\\d{${pinLen}}$`).test(campos.pin)) { setError(`El PIN debe ser exactamente ${pinLen} dígitos numéricos`); return }
     if (coloresUsados.includes(campos.color))    { setError('Ese color ya está en uso por otro usuario'); return }
-    onGuardar({ nombre: campos.nombre, pin: campos.pin, rol: campos.rol, color: campos.color })
+    onGuardar({ nombre: campos.nombre, pin: campos.pin, rol: campos.rol, color: campos.color, telefono: campos.telefono.trim() || undefined })
   }
 
   const inputCls = `
@@ -83,6 +83,12 @@ function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
         <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 text-xs font-bold">N</div>
         <input value={campos.nombre} onChange={e => cambiar('nombre', e.target.value)}
           placeholder="Nombre completo" className={inputCls} disabled={cargando} autoFocus />
+      </div>
+      {/* Teléfono */}
+      <div className="relative">
+        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400"><Phone size={14} /></div>
+        <input value={campos.telefono} onChange={e => cambiar('telefono', e.target.value)}
+          placeholder="Teléfono (opcional)" type="tel" inputMode="tel" className={inputCls} disabled={cargando} />
       </div>
       {/* PIN */}
       <div className="relative">
@@ -149,7 +155,7 @@ function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
 
 // ─── Formulario editar usuario ────────────────────────────────────────────────
 function FormEditar({ usuario, onGuardar, onCancelar, cargando, coloresUsados = [] }) {
-  const [campos, setCampos] = useState({ nombre: usuario.nombre, rol: usuario.rol, pin: '', pinConfirm: '', color: usuario.color || COLORES_VENDEDOR[0] })
+  const [campos, setCampos] = useState({ nombre: usuario.nombre, rol: usuario.rol, pin: '', pinConfirm: '', color: usuario.color || COLORES_VENDEDOR[0], telefono: usuario.telefono || '' })
   const [mostrarPin, setMostrarPin] = useState(false)
   const [error, setError] = useState('')
 
@@ -171,7 +177,7 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando, coloresUsados = 
       setError('Ese color ya está en uso por otro usuario')
       return
     }
-    onGuardar({ nombre: campos.nombre, rol: campos.rol, pin: campos.pin || undefined, color: campos.color })
+    onGuardar({ nombre: campos.nombre, rol: campos.rol, pin: campos.pin || undefined, color: campos.color, telefono: campos.telefono.trim() })
   }
 
   const inputCls = `
@@ -184,6 +190,13 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando, coloresUsados = 
     <form onSubmit={submit} className="space-y-3">
       <input value={campos.nombre} onChange={e => setCampos(p => ({ ...p, nombre: e.target.value }))}
         className={inputCls} placeholder="Nombre completo" disabled={cargando} />
+      {/* Teléfono */}
+      <div className="relative">
+        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400"><Phone size={14} /></div>
+        <input value={campos.telefono} onChange={e => setCampos(p => ({ ...p, telefono: e.target.value }))}
+          placeholder="Teléfono (opcional)" type="tel" inputMode="tel"
+          className={`${inputCls} !pl-10`} disabled={cargando} />
+      </div>
       <CustomSelect
         options={[
           { value: 'vendedor', label: 'Vendedor' },
@@ -403,6 +416,14 @@ function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar, c
         <span className={`inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full border ${conf.bg} ${conf.text} ${conf.border}`}>
           {conf.label}
         </span>
+
+        {/* Teléfono */}
+        {usuario.telefono && (
+          <div className="flex items-center gap-1 text-xs text-slate-500">
+            <Phone size={11} className="shrink-0" />
+            <span className="truncate">{usuario.telefono}</span>
+          </div>
+        )}
 
         {/* Estado + fecha */}
         <div className="flex items-center justify-between gap-1">

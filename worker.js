@@ -308,7 +308,7 @@ async function handleAdmin(request, env, url) {
 
   // ── Crear usuario (solo en tabla usuarios, sin auth.users) ───────────
   if (route === 'users' && request.method === 'POST') {
-    const { nombre, rol, pin, color } = body;
+    const { nombre, rol, pin, color, telefono } = body;
     if (!nombre || !rol || !pin) {
       return jsonError('Faltan campos: nombre, rol, pin', 400, request);
     }
@@ -346,6 +346,7 @@ async function handleAdmin(request, env, url) {
         pin_hash: hash,
         pin_salt: salt,
         ...(color ? { color } : {}),
+        ...(telefono ? { telefono: telefono.trim() } : {}),
       }),
     });
 
@@ -361,7 +362,7 @@ async function handleAdmin(request, env, url) {
   if (route.startsWith('users/') && request.method === 'PUT') {
     const userId = route.replace('users/', '');
     if (!isValidUuid(userId)) return jsonError('ID de usuario inválido', 400, request);
-    const { nombre, rol, pin, color } = body;
+    const { nombre, rol, pin, color, telefono } = body;
 
     // Validate rol if provided
     if (rol && !['supervisor', 'vendedor'].includes(rol)) {
@@ -373,6 +374,7 @@ async function handleAdmin(request, env, url) {
     if (nombre) updateData.nombre = nombre.trim();
     if (rol) updateData.rol = rol;
     if (color !== undefined) updateData.color = color;
+    if (telefono !== undefined) updateData.telefono = telefono ? telefono.trim() : null;
 
     // Hash new PIN if provided
     if (pin) {
@@ -1072,7 +1074,7 @@ async function handleListarClientes(request, env) {
   const url = new URL(request.url);
   const busqueda = url.searchParams.get('busqueda') || '';
 
-  let queryUrl = `${env.SUPABASE_URL}/rest/v1/clientes?activo=eq.true&order=nombre.asc&select=id,nombre,rif_cedula,telefono,email,direccion,notas,tipo_cliente,activo,vendedor_id,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color)`;
+  let queryUrl = `${env.SUPABASE_URL}/rest/v1/clientes?activo=eq.true&order=nombre.asc&select=id,nombre,rif_cedula,telefono,email,direccion,notas,tipo_cliente,activo,vendedor_id,saldo_pendiente,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color)`;
 
   if (busqueda.trim()) {
     const safe = sanitizeSearch(busqueda);

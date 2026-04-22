@@ -47,7 +47,7 @@ export function useCliente(id) {
         .select(`
           id, nombre, rif_cedula, telefono, email,
           direccion, notas, tipo_cliente, activo,
-          vendedor_id, asignado_en,
+          vendedor_id, asignado_en, saldo_pendiente,
           vendedor:usuarios!clientes_vendedor_id_fkey(id, nombre)
         `)
         .eq('id', id)

@@ -1,7 +1,8 @@
 // src/components/clientes/ClienteCard.jsx
 // Tarjeta de cliente — color header strip del vendedor asignado
-import { Phone, Mail, MapPin, Hash, Tag, Pencil, UserMinus, ArrowRightLeft, FileText } from 'lucide-react'
+import { Phone, Mail, MapPin, Hash, Tag, Pencil, UserMinus, ArrowRightLeft, FileText, AlertCircle } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
+import { fmtUsdSimple as fmtUsd } from '../../utils/format'
 
 function Contacto({ icono: Icono, valor }) {
   if (!valor) return null
@@ -97,6 +98,17 @@ export default function ClienteCard({ cliente, onEditar, onDesactivar, onReasign
             {cliente.vendedor.nombre}
             {esPropio && <span className="text-[9px] opacity-60 ml-0.5">(tú)</span>}
           </span>
+        </div>
+      )}
+
+      {/* ── Saldo pendiente (deuda CxC) ── */}
+      {Number(cliente.saldo_pendiente || 0) > 0 && (
+        <div className="mx-4 mb-3 flex items-center justify-between bg-red-50 rounded-lg px-3 py-1.5 border border-red-100">
+          <span className="flex items-center gap-1 text-xs text-red-600 font-semibold">
+            <AlertCircle size={11} />
+            Deuda
+          </span>
+          <span className="text-xs font-bold text-red-700">{fmtUsd(cliente.saldo_pendiente)}</span>
         </div>
       )}
 

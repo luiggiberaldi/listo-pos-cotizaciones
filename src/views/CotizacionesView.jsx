@@ -57,7 +57,7 @@ function SkeletonCotizaciones() {
 }
 
 // ─── Modal de resumen para despachar ────────────────────────────────────────
-const FORMAS_PAGO = ['Efectivo', 'Zelle', 'Pago Móvil', 'USDT']
+const FORMAS_PAGO = ['Efectivo', 'Zelle', 'Pago Móvil', 'USDT', 'Cta por cobrar']
 
 function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 }) {
   const { data: detalle } = useCotizacion(cotizacion?.id)

@@ -1,7 +1,7 @@
 // src/services/pdf/despachoPDF.js
 // Genera PDF profesional de Nota de Despacho — formato Construacero Carabobo
 import { jsPDF } from 'jspdf'
-import { cargarLogo } from './pdfLogo'
+import { LOGO_DESPACHO } from './logoDespachoBase64'
 import { WATERMARK_LOGO } from './watermarkBase64'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -51,7 +51,7 @@ function drawCheck(doc, label, x, y, checked = false) {
     doc.setLineWidth(0.3)
   }
   doc.setFont('helvetica', checked ? 'bold' : 'normal')
-  doc.setFontSize(7)
+  doc.setFontSize(8)
   doc.setTextColor(...C_DARK)
   doc.text(label, x + 4.5, y)
 }
@@ -59,69 +59,37 @@ function drawCheck(doc, label, x, y, checked = false) {
 export async function generarDespachoPDF({ despacho, items = [], config = {}, formaPago = '' }) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
 
-  const logoData = await cargarLogo(config.logo_url)
   const rif = config.rif_negocio || 'J-50115913-0'
   let y = 0
 
   const numDes = `N°- ${String(despacho.numero).padStart(5, '0')}`
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 1. CABECERA GIGANTE AMARILLA
+  // 1. CABECERA HORIZONTAL COMPACTA (blanco y negro)
   // ══════════════════════════════════════════════════════════════════════════
-  const HDR_H = 36
-  doc.setFillColor(...C_PRIMARY)
-  doc.rect(0, 0, PAGE_W, HDR_H, 'F')
+  const HDR_H = 20
 
-  // Decoraciones: Cuadrícula de puntos a la izquierda (color del vendedor)
-  const vendedorColor = hexToRgb(despacho.vendedor?.color)
-  doc.setFillColor(...vendedorColor)
-  for(let i = 0; i < 4; i++) {
-    for(let j = 0; j < 6; j++) {
-      doc.circle(MARGIN + i * 2.5, 4 + j * 2.5, 0.4, 'F')
-    }
-  }
+  // Logo a la izquierda (más pequeño)
+  try { doc.addImage(LOGO_DESPACHO, 'PNG', MARGIN - 2, 1, 22, 22) } catch (_) {}
 
-  // Cuadro derecho con rayas diagonales "Hazard"
-  const hazW = 40
-  const hazX = PAGE_W - hazW
-  doc.setFillColor(...C_DARK)
-  doc.rect(hazX, 0, hazW, 14, 'F')
+  // Nombre del negocio centrado
+  const centerX = PAGE_W / 2
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(20)
+  doc.setTextColor(...C_DARK)
+  doc.text('CONSTRUACERO CARABOBO, C.A.', centerX, 11, { align: 'center' })
 
-  doc.setLineWidth(0.8)
-  doc.setDrawColor(...C_PRIMARY)
-  for (let k = 0; k < 15; k++) {
-    doc.line(hazX + k*4, 0, hazX + k*4 - 8, 14)
-  }
-
-  // Logo a la izquierda
-  if (logoData) {
-    try { doc.addImage(logoData, 'PNG', MARGIN + 12, 4, 32, 32) } catch (_) {}
-  }
-  const textX = MARGIN + 48
-
-  // Títulos Negocio Grandes — centrados entre logo y bloque derecho
-  const textCenterX = (MARGIN + 44 + PAGE_W - MARGIN - 40) / 2
-  doc.setFont('times', 'bold')
-  doc.setFontSize(22)
-  doc.setTextColor(...C_WHITE)
-
-  let name = config.nombre_negocio || 'CONSTRUACERO CARABOBO'
-  let splitName = name.split(' ')
-  doc.text((splitName[0] || '').toUpperCase(), textCenterX, 18, { align: 'center' })
-
-  if (splitName.length > 1) {
-    doc.setFont('times', 'bold')
-    doc.setFontSize(14)
-    doc.text(splitName.slice(1).join(' ').toUpperCase(), textCenterX, 27, { align: 'center' })
-  }
-
-  // "Nota de Entrega" + número a la derecha inferior
+  // RIF centrado
+  doc.setFont('helvetica', 'normal')
   doc.setFontSize(12)
-  doc.text('Nota de Entrega', PAGE_W - MARGIN, HDR_H - 10, { align: 'right' })
-  doc.setFontSize(11)
-  doc.text(numDes, PAGE_W - MARGIN, HDR_H - 4, { align: 'right' })
+  doc.text('RIF.: J-50115913-0', centerX, 16, { align: 'center' })
 
-  y = HDR_H + 7
+  // Línea separadora
+  doc.setLineWidth(0.8)
+  doc.setDrawColor(...C_DARK)
+  doc.line(MARGIN, HDR_H + 4, PAGE_W - MARGIN, HDR_H + 4)
+
+  y = HDR_H + 11
 
   // ── Marca de agua central ──
   try {
@@ -133,72 +101,81 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   } catch (_) {}
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 2. DATOS DEL CLIENTE — formato de nota física
+  // 2. DATOS DEL CLIENTE — compacto
   // ══════════════════════════════════════════════════════════════════════════
   const cliente = despacho.cliente || {}
 
-  // Encabezado
-  doc.setFillColor(248, 248, 248)
-  doc.rect(MARGIN, y, CONTENT_W, 6, 'F')
-  doc.setDrawColor(220, 220, 220)
+  // Barra ORDEN DE DESPACHO con fechas integradas
+  const notaBarY = y - 4
+  doc.setFillColor(240, 240, 240)
+  doc.rect(MARGIN, notaBarY, CONTENT_W, 7, 'F')
+  doc.setDrawColor(180, 180, 180)
   doc.setLineWidth(0.3)
-  doc.rect(MARGIN, y, CONTENT_W, 6, 'S')
+  doc.rect(MARGIN, notaBarY, CONTENT_W, 7, 'S')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8)
+  doc.setFontSize(9)
   doc.setTextColor(...C_DARK)
-  doc.text('NOTA DE ENTREGA a nombre de:', MARGIN + 3, y + 4)
-  doc.text(`NOTA # ${String(despacho.numero).padStart(6, '0')}`, PAGE_W - MARGIN - 3, y + 4, { align: 'right' })
+  doc.text('ORDEN DE DESPACHO', MARGIN + 3, notaBarY + 5)
+  doc.text(numDes, PAGE_W - MARGIN - 3, notaBarY + 5, { align: 'right' })
+
+  // Fechas dentro de la barra
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8)
+  let fechaX = MARGIN + 55
+  doc.setFont('helvetica', 'bold')
+  doc.text('Emisión:', fechaX, notaBarY + 5)
+  doc.setFont('helvetica', 'normal')
+  doc.text(fmtFecha(despacho.creado_en), fechaX + 17, notaBarY + 5)
+  if (despacho.despachada_en) {
+    fechaX += 45
+    doc.setFont('helvetica', 'bold')
+    doc.text('Despachada:', fechaX, notaBarY + 5)
+    doc.setFont('helvetica', 'normal')
+    doc.text(fmtFecha(despacho.despachada_en), fechaX + 22, notaBarY + 5)
+  }
+  if (despacho.entregada_en) {
+    fechaX += 45
+    doc.setFont('helvetica', 'bold')
+    doc.text('Entregada:', fechaX, notaBarY + 5)
+    doc.setFont('helvetica', 'normal')
+    doc.text(fmtFecha(despacho.entregada_en), fechaX + 20, notaBarY + 5)
+  }
   y += 8
 
-  // Fila de fechas
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7.5)
-  doc.text('Emisión:', MARGIN, y)
-  doc.setFont('helvetica', 'normal')
-  doc.text(fmtFecha(despacho.creado_en), MARGIN + 18, y)
-
-  if (despacho.despachada_en) {
-    doc.setFont('helvetica', 'bold')
-    doc.text('Despachada:', MARGIN + 60, y)
-    doc.setFont('helvetica', 'normal')
-    doc.text(fmtFecha(despacho.despachada_en), MARGIN + 82, y)
-  }
-
-  if (despacho.entregada_en) {
-    doc.setFont('helvetica', 'bold')
-    doc.text('Entregada:', MARGIN + 120, y)
-    doc.setFont('helvetica', 'normal')
-    doc.text(fmtFecha(despacho.entregada_en), MARGIN + 140, y)
-  }
-  y += 6
-
-  // Datos del cliente en líneas subrayadas
-  const itemsCliente = [
-    { label: 'Cliente', val: cliente.nombre || '—' },
-    { label: 'R.I.F / Cédula', val: cliente.rif_cedula || '—' },
-    { label: 'Teléfono', val: cliente.telefono || '—' },
-    { label: 'Dirección Fiscal', val: cliente.direccion || '—' },
-    { label: 'Vendedor', val: despacho.vendedor?.nombre || '—' },
-    { label: 'Estado', val: (despacho.estado || 'PENDIENTE').toUpperCase() },
+  // Datos del cliente en 2 columnas
+  const halfW = CONTENT_W / 2 - 2
+  const col2X = MARGIN + halfW + 4
+  const clienteRows = [
+    [{ label: 'Cliente', val: cliente.nombre || '—' },         { label: 'R.I.F / Cédula', val: cliente.rif_cedula || '—' }],
+    [{ label: 'Teléfono', val: cliente.telefono || '—' },      { label: 'Vendedor', val: despacho.vendedor?.nombre || '—' }],
+    [{ label: 'Dirección Fiscal', val: cliente.direccion || '—' }],
   ]
 
-  doc.setFontSize(8)
-  itemsCliente.forEach(item => {
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(...C_DARK)
-    doc.text(`${item.label}: `, MARGIN, y)
+  doc.setFontSize(9.5)
+  clienteRows.forEach(row => {
+    row.forEach((item, colIdx) => {
+      const baseX = colIdx === 0 ? MARGIN : col2X
+      const lineEndX = row.length === 1 ? PAGE_W - MARGIN : (colIdx === 0 ? MARGIN + halfW : PAGE_W - MARGIN)
 
-    doc.setFont('helvetica', 'normal')
-    const lblW = doc.getTextWidth(`${item.label}: `)
-    doc.text(String(item.val), MARGIN + lblW + 1, y)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(...C_DARK)
+      doc.setFontSize(9.5)
+      doc.text(`${item.label}: `, baseX, y)
+      const lblW = doc.getTextWidth(`${item.label}: `)
 
-    doc.setLineWidth(0.3)
-    doc.setDrawColor(...C_PRIMARY)
-    doc.line(MARGIN, y + 1.5, PAGE_W - MARGIN, y + 1.5)
-    y += 5
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(10.5)
+      doc.text(String(item.val), baseX + lblW + 2, y)
+      doc.setFontSize(9.5)
+
+      doc.setLineWidth(0.3)
+      doc.setDrawColor(150, 150, 150)
+      doc.line(baseX, y + 1.5, lineEndX, y + 1.5)
+    })
+    y += 6.5
   })
 
-  y += 3
+  y += 2
 
   // ══════════════════════════════════════════════════════════════════════════
   // 3. TABLA DE PRODUCTOS
@@ -206,41 +183,41 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const COLS = [
     { label: 'CANT.',       x: MARGIN,        w: 16,  align: 'center' },
     { label: 'CÓD.',        x: MARGIN + 16,   w: 24,  align: 'center' },
-    { label: 'DESCRIPCIÓN', x: MARGIN + 40,   w: 68,  align: 'left'   },
+    { label: 'DESCRIPCIÓN', x: MARGIN + 40,   w: 68,  align: 'center' },
     { label: 'UNID.',       x: MARGIN + 108,  w: 16,  align: 'center' },
-    { label: 'PRECIO',      x: MARGIN + 124,  w: 26,  align: 'right'  },
+    { label: 'PRECIO',      x: MARGIN + 124,  w: 26,  align: 'center' },
     { label: 'TOTAL',       x: MARGIN + 150,  w: 32,  align: 'right'  },
   ]
-  const ROW_H = 7
+  const ROW_H = 9
 
   // Cabecera tabla
-  doc.setFillColor(...C_ACCENT)
-  doc.rect(MARGIN, y, CONTENT_W, 7, 'F')
+  doc.setFillColor(60, 60, 60)
+  doc.rect(MARGIN, y, CONTENT_W, 9, 'F')
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7.5)
+  doc.setFontSize(9.5)
   doc.setTextColor(...C_WHITE)
   COLS.forEach(col => {
     let tx = col.x + 2
     if (col.align === 'center') tx = col.x + col.w/2
     else if (col.align === 'right') tx = col.x + col.w - 2
-    doc.text(col.label, tx, y + 5, { align: col.align })
+    doc.text(col.label, tx, y + 6.5, { align: col.align })
   })
-  y += 7
+  y += 9
 
   // Items
   doc.setLineWidth(0.2)
   doc.setDrawColor(200, 200, 200)
 
   items.forEach((item) => {
-    if (y > PAGE_H - 50) { doc.addPage(); y = MARGIN }
+    if (y > PAGE_H - 55) { doc.addPage(); y = MARGIN }
 
     doc.rect(MARGIN, y, CONTENT_W, ROW_H, 'S')
     COLS.forEach(col => { doc.line(col.x, y, col.x, y + ROW_H) })
 
     const midY = y + ROW_H / 2 + 1.2
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(7.5)
+    doc.setFontSize(9)
     doc.setTextColor(...C_DARK)
 
     doc.text(String(item.cantidad), COLS[0].x + COLS[0].w / 2, midY, { align: 'center' })
@@ -259,18 +236,18 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   // Notas Adicionales
   if (despacho.notas?.trim()) {
     y += 3
-    if (y > PAGE_H - 60) { doc.addPage(); y = MARGIN }
+    if (y > PAGE_H - 65) { doc.addPage(); y = MARGIN }
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
-    doc.setTextColor(...C_ACCENT)
+    doc.setFontSize(9.5)
+    doc.setTextColor(...C_DARK)
     doc.text('NOTAS:', MARGIN, y + 4)
 
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(7.5)
+    doc.setFontSize(9)
     doc.setTextColor(...C_DARK)
     const lineas = doc.splitTextToSize(despacho.notas.trim(), CONTENT_W)
     lineas.forEach(lin => {
-      y += 4
+      y += 5
       doc.text(lin, MARGIN, y + 4)
     })
     y += 4
@@ -281,56 +258,64 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   // ══════════════════════════════════════════════════════════════════════════
   // 4. CONDICIONES + CUENTAS BANCARIAS (izq) + TOTALES (der)
   // ══════════════════════════════════════════════════════════════════════════
-  if (y > PAGE_H - 70) { doc.addPage(); y = MARGIN }
+  if (y > PAGE_H - 75) { doc.addPage(); y = MARGIN }
 
   const totW = 75
   const totX = PAGE_W - MARGIN - totW
+  const leftW = totX - MARGIN - 5
   const total = Number(despacho.total_usd || 0)
 
-  // ── Condiciones (izquierda) ──
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7.5)
-  doc.setTextColor(...C_ACCENT)
-  doc.text('CONDICIONES GENERALES:', MARGIN, y + 4)
-
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(6.5)
-  doc.setTextColor(...C_DARK)
-
+  // ── Condiciones (izquierda) — recuadro compacto ──
   const condiciones = [
     'Precios Sujetos a cambios sin previo aviso.',
-    'Construacero Carabobo corre con el costo del flete.',
     'El cliente se encarga de descargar la mercancía.',
   ]
-  let condY = y + 7
+  const condPadding = 2
+  const condLineH = 4.5
+  const condBoxH = 6 + condiciones.length * condLineH + condPadding * 2
+
+  doc.setFillColor(245, 245, 245)
+  doc.setDrawColor(100, 100, 100)
+  doc.setLineWidth(0.4)
+  doc.roundedRect(MARGIN, y, leftW, condBoxH, 1, 1, 'FD')
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9)
+  doc.setTextColor(...C_DARK)
+  doc.text('CONDICIONES GENERALES:', MARGIN + condPadding, y + condPadding + 3.5)
+
+  doc.setDrawColor(100, 100, 100)
+  doc.setLineWidth(0.2)
+  doc.line(MARGIN + condPadding, y + condPadding + 5.5, MARGIN + leftW - condPadding, y + condPadding + 5.5)
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8.5)
+  let condY = y + condPadding + 9.5
   condiciones.forEach(c => {
-    doc.text(`• ${c}`, MARGIN, condY)
-    condY += 3.5
+    doc.text(`• ${c}`, MARGIN + condPadding, condY)
+    condY += condLineH
   })
 
-  // Cuentas bancarias
-  condY += 1
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7)
-  doc.setTextColor(...C_ACCENT)
-  doc.text('Realizar Transferencias a nombre de', MARGIN, condY)
-  condY += 3.5
-  doc.text((config.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.').toUpperCase(), MARGIN, condY)
-  condY += 4
+  condY = y + condBoxH + 1
 
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(6.5)
+  // Cuentas bancarias (compactas)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(7.5)
   doc.setTextColor(...C_DARK)
+  doc.text('Transferencias a nombre de ' + (config.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.').toUpperCase(), MARGIN, condY + 3)
+  condY += 4
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.5)
   CUENTAS_BANCARIAS.forEach(cuenta => {
-    doc.text(cuenta, MARGIN, condY)
-    condY += 4
+    doc.text(cuenta, MARGIN, condY + 3)
+    condY += 3.5
   })
 
   // ── Totales (derecha) ──
   // Forma de pago
   const fp = (formaPago || despacho.forma_pago || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7.5)
+  doc.setFontSize(9)
   doc.setTextColor(...C_DARK)
   doc.text('FORMA DE PAGO:', totX, y + 4)
   drawCheck(doc, 'EFECTIVO',   totX,      y + 12, fp === 'efectivo')
@@ -340,7 +325,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
 
   // Total grande
   const totTopY = y + 18
-  doc.setFillColor(...C_ACCENT)
+  doc.setFillColor(60, 60, 60)
   doc.rect(totX, totTopY, totW, 14, 'F')
 
   doc.setFont('helvetica', 'bold')
@@ -355,156 +340,87 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   // ══════════════════════════════════════════════════════════════════════════
   // 5. DATOS DEL CHOFER Y VEHÍCULO
   // ══════════════════════════════════════════════════════════════════════════
-  if (y > PAGE_H - 70) { doc.addPage(); y = MARGIN }
+  if (y > PAGE_H - 60) { doc.addPage(); y = MARGIN }
 
   const transportista = despacho.transportista || null
-  const col3W = (CONTENT_W - 8) / 3
+  const col6W = (CONTENT_W - 10) / 6
 
-  // Cabecera gris
+  // Cabecera gris compacta
   doc.setFillColor(240, 240, 240)
   doc.rect(MARGIN, y, CONTENT_W, 6, 'F')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7)
+  doc.setFontSize(8)
   doc.setTextColor(...C_DARK)
   doc.text('DATOS DEL CHOFER Y DEL VEHÍCULO', MARGIN + 2, y + 4)
-  y += 8
+  y += 10
 
-  // Fila 1: Nombre / C.I. / Teléfono
-  const fields1 = [
-    { label: 'NOMBRE DEL CHOFER', val: transportista?.nombre   || '' },
-    { label: 'N° IDENTIFICACIÓN', val: transportista?.rif      || '' },
-    { label: 'TELÉFONO',          val: transportista?.telefono || '' },
+  // Una sola fila con 6 campos
+  const choferFields = [
+    { label: 'CHOFER', val: transportista?.nombre || '' },
+    { label: 'C.I.', val: transportista?.rif || '' },
+    { label: 'TELÉFONO', val: transportista?.telefono || '' },
+    { label: 'VEHÍCULO', val: '' },
+    { label: 'COLOR', val: '' },
+    { label: 'PLACA', val: '' },
   ]
-  fields1.forEach((f, i) => {
-    const fx = MARGIN + i * (col3W + 4)
+  choferFields.forEach((f, i) => {
+    const fx = MARGIN + i * (col6W + 2)
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(6.5)
+    doc.setFontSize(7)
     doc.setTextColor(...C_DARK)
     doc.text(`${f.label}:`, fx, y)
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(7)
+    doc.setFontSize(8)
     if (f.val) doc.text(f.val, fx, y + 4)
     doc.setLineWidth(0.2)
-    doc.setDrawColor(...C_PRIMARY)
-    doc.line(fx, y + 5.5, fx + col3W, y + 5.5)
+    doc.setDrawColor(150, 150, 150)
+    doc.line(fx, y + 5.5, fx + col6W, y + 5.5)
   })
-  y += 9
-
-  // Fila 2: Tipo de Vehículo / Color / Placa
-  const fields2 = [
-    { label: 'TIPO DE VEHÍCULO', val: '' },
-    { label: 'COLOR',            val: '' },
-    { label: 'PLACA',            val: '' },
-  ]
-  fields2.forEach((f, i) => {
-    const fx = MARGIN + i * (col3W + 4)
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(6.5)
-    doc.setTextColor(...C_DARK)
-    doc.text(`${f.label}:`, fx, y)
-    doc.setLineWidth(0.2)
-    doc.setDrawColor(...C_PRIMARY)
-    doc.line(fx, y + 5.5, fx + col3W, y + 5.5)
-  })
-  y += 9
+  y += 8
 
   // ── Slogan ──
   y += 4
-  if (y < PAGE_H - 35) {
+  if (y < PAGE_H - 40) {
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(11)
+    doc.setFontSize(14)
     doc.setTextColor(...C_DARK)
     doc.text('A sus ordenes para cualquier duda. Gracias por preferirnos.', PAGE_W / 2, y, { align: 'center' })
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 6. FOOTER CON FRANJA DE PRECAUCIÓN
+  // 6. FOOTER LIMPIO (blanco y negro)
   // ══════════════════════════════════════════════════════════════════════════
   const totalPages = doc.internal.getNumberOfPages()
   for (let p = 1; p <= totalPages; p++) {
     doc.setPage(p)
     const ph = PAGE_H
 
-    // Franja negra superior con las diagonales
-    const hazardY = ph - 25
-    doc.setFillColor(...C_DARK)
-    doc.rect(0, hazardY, PAGE_W, 4, 'F')
-
-    doc.setDrawColor(...C_PRIMARY)
+    // Línea separadora
+    const footerY = ph - 22
     doc.setLineWidth(0.8)
-    for(let k = 1; k < 20; k++) {
-      doc.line(k * 4, hazardY, k * 4 - 3, hazardY + 4)
-      doc.line(PAGE_W - k * 4, hazardY, PAGE_W - k * 4 + 3, hazardY + 4)
-    }
+    doc.setDrawColor(...C_DARK)
+    doc.line(MARGIN, footerY, PAGE_W - MARGIN, footerY)
 
-    // Franja principal azul
-    doc.setFillColor(...C_PRIMARY)
-    doc.rect(0, ph - 24, PAGE_W, 24, 'F')
-
-    // ── Icono pin ubicación + dirección ──
-    doc.setFillColor(...C_WHITE)
-    doc.setDrawColor(...C_WHITE)
-
+    // Dirección
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(6)
-    doc.setTextColor(...C_WHITE)
+    doc.setFontSize(7.5)
+    doc.setTextColor(...C_DARK)
 
     const addr1 = 'Av. 76, (Calle S-3) Nro. 70-C-766, Local Galpón Nro. 3 Edificio Centro Industrial Massico II'
     const addr2 = 'Parcela MB-6 y Mb7, Urb. Industrial Aeropuerto Vía Flor Amarillo, Valencia, Edo. Carabobo, Zona Postal 2003'
 
-    // Pin a la izquierda de addr1
-    const addr1W = doc.getTextWidth(addr1)
-    const addr1X = PAGE_W/2 - addr1W/2
-    const pinX = addr1X - 3
-    const pinY = ph - 17
-    doc.circle(pinX, pinY - 0.3, 1.2, 'F')
-    doc.triangle(pinX - 1, pinY, pinX + 1, pinY, pinX, pinY + 2, 'F')
-
-    doc.text(addr1, PAGE_W/2, ph - 15.5, { align: 'center' })
+    doc.text(addr1, PAGE_W / 2, footerY + 5, { align: 'center' })
     doc.setFont('helvetica', 'normal')
-    doc.text(addr2, PAGE_W/2, ph - 12, { align: 'center' })
+    doc.text(addr2, PAGE_W / 2, footerY + 9, { align: 'center' })
 
-    // ── Icono teléfono + icono correo en la línea de contacto ──
-    doc.setFontSize(6.5)
+    // Teléfono y correo
+    doc.setFontSize(8)
     const tel = config.telefono_negocio || ''
     const email = config.email_negocio || ''
-    if (tel || email) {
-      const parts = []
-      if (tel) parts.push({ icon: 'phone', text: tel })
-      if (email) parts.push({ icon: 'mail', text: email })
-
-      // Calcular ancho total para centrar
+    const contactLine = [tel, email].filter(Boolean).join('     |     ')
+    if (contactLine) {
       doc.setFont('helvetica', 'normal')
-      const gap = 12
-      let totalW = 0
-      parts.forEach((p, i) => {
-        totalW += 5 + doc.getTextWidth(p.text)
-        if (i < parts.length - 1) totalW += gap
-      })
-
-      let cx = PAGE_W/2 - totalW/2
-      const cy = ph - 7
-
-      parts.forEach((p, i) => {
-        doc.setFillColor(...C_WHITE)
-        doc.setDrawColor(...C_WHITE)
-        if (p.icon === 'phone') {
-          // Icono teléfono: rectángulo redondeado
-          doc.setLineWidth(0.4)
-          doc.roundedRect(cx, cy - 2.2, 1.6, 2.8, 0.3, 0.3, 'S')
-          doc.setLineWidth(0.3)
-          doc.line(cx + 0.3, cy + 0.2, cx + 1.3, cy + 0.2)
-        } else {
-          // Icono sobre: rectángulo + V
-          doc.setLineWidth(0.3)
-          doc.rect(cx, cy - 1.8, 2.4, 1.8, 'S')
-          doc.line(cx, cy - 1.8, cx + 1.2, cy - 0.6)
-          doc.line(cx + 2.4, cy - 1.8, cx + 1.2, cy - 0.6)
-        }
-        doc.setTextColor(...C_WHITE)
-        doc.text(p.text, cx + 4, cy)
-        cx += 5 + doc.getTextWidth(p.text) + gap
-      })
+      doc.text(contactLine, PAGE_W / 2, footerY + 15, { align: 'center' })
     }
   }
 
