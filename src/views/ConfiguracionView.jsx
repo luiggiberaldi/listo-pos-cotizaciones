@@ -403,22 +403,6 @@ export default function ConfiguracionView() {
           {/* ── Sistema ─────────────────────────────────────────────────── */}
           {tab === 'sistema' && (
             <>
-              <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-                <SectionHeader icon={Accessibility}>Modo lectura fácil</SectionHeader>
-                <p className="text-xs text-slate-500 -mt-2">
-                  Textos y botones más grandes. Solo aplica en este dispositivo.
-                </p>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-slate-700">Activar modo lectura fácil</p>
-                    <p className="text-xs text-slate-400">Mayor contraste y tamaño</p>
-                  </div>
-                  <button type="button" onClick={toggleModoAccesible}
-                    className={`relative w-12 h-7 rounded-full transition-colors ${modoAccesible ? 'bg-sky-500' : 'bg-slate-300'}`}>
-                    <span className={`absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform ${modoAccesible ? 'translate-x-5' : 'translate-x-0'}`} />
-                  </button>
-                </div>
-              </div>
             </>
           )}
 
