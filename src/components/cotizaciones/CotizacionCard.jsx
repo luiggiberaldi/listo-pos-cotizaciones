@@ -94,14 +94,15 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
 
   const vendedorColor = cotizacion.vendedor?.color || '#64748b'
   const despacho = cotizacion.despacho   // { id, estado } si existe
+  const despachoAnulado = despacho?.estado === 'anulada'
   const canEdit = esBorrador
-  const canVersion = !esBorrador && ['enviada', 'aceptada', 'rechazada'].includes(cotizacion.estado)
+  const canVersion = !esBorrador && !despachoAnulado && ['enviada', 'aceptada', 'rechazada'].includes(cotizacion.estado)
   const canPdf = cotizacion.estado !== 'borrador' && cotizacion.estado !== 'anulada'
-  const canWhatsApp = cotizacion.estado === 'enviada' || cotizacion.estado === 'aceptada'
+  const canWhatsApp = !despachoAnulado && (cotizacion.estado === 'enviada' || cotizacion.estado === 'aceptada')
   const canAcceptReject = esSupervisor && esEnviada
   const canDespachar = esSupervisor && cotizacion.estado === 'aceptada' && onDespachar && !despacho
-  const canAnular = cotizacion.estado !== 'anulada' && cotizacion.estado !== 'vencida' && cotizacion.estado !== 'rechazada' && (esBorrador || (esSupervisor && (esEnviada || (cotizacion.estado === 'aceptada' && !despacho))))
-  const canReciclar = esSupervisor && ['rechazada', 'anulada', 'vencida'].includes(cotizacion.estado)
+  const canAnular = !despachoAnulado && cotizacion.estado !== 'anulada' && cotizacion.estado !== 'vencida' && cotizacion.estado !== 'rechazada' && (esBorrador || (esSupervisor && (esEnviada || (cotizacion.estado === 'aceptada' && !despacho))))
+  const canReciclar = esSupervisor && (despachoAnulado || ['rechazada', 'anulada', 'vencida'].includes(cotizacion.estado))
   const hasSecondaryActions = canAcceptReject || canDespachar || canAnular
 
   return (
