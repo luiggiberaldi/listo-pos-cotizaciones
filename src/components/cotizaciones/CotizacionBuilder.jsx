@@ -264,15 +264,6 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
   return (
     <div className="space-y-3">
 
-      {/* Autocomplete de búsqueda rápida */}
-      <ProductoAutocomplete
-        productos={todosProductos}
-        onAgregar={agregarConReciente}
-        idsAgregados={idsAgregados}
-        placeholder="Búsqueda rápida por nombre o código..."
-        stockComprometido={stockComprometido}
-      />
-
       {/* Barra de búsqueda para filtrar grid */}
       <div className="relative">
         <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
