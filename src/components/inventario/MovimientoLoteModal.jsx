@@ -2,15 +2,17 @@
 // Modal para ingreso/egreso de inventario por lotes
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { Modal } from '../ui/Modal'
-import { Search, Plus, Minus, X, Package, ArrowDownToLine, ArrowUpFromLine, Loader2, AlertCircle } from 'lucide-react'
+import { Search, Plus, X, Package, ArrowDownToLine, ArrowUpFromLine, Loader2, AlertCircle } from 'lucide-react'
 import { useAplicarMovimientoLote } from '../../hooks/useMovimientosInventario'
 import { parseSearchTerms, smartMatchProducto } from '../../utils/smartSearch'
+import { MOTIVOS_TIPO_LIST, getMotivoChipClasses } from '../../utils/motivosTipo'
 
 export default function MovimientoLoteModal({ isOpen, onClose, productos = [] }) {
   const [tipo, setTipo] = useState('ingreso')
   const [busqueda, setBusqueda] = useState('')
   const [items, setItems] = useState([]) // [{ producto_id, nombre, codigo, unidad, stock_actual, cantidad }]
   const [motivo, setMotivo] = useState('')
+  const [motivoTipo, setMotivoTipo] = useState('compra_proveedor')
   const [error, setError] = useState('')
   const [showSearch, setShowSearch] = useState(false)
   const searchRef = useRef(null)
@@ -25,6 +27,7 @@ export default function MovimientoLoteModal({ isOpen, onClose, productos = [] })
       setBusqueda('')
       setItems([])
       setMotivo('')
+      setMotivoTipo('compra_proveedor')
       setError('')
       setShowSearch(false)
     }
@@ -88,6 +91,7 @@ export default function MovimientoLoteModal({ isOpen, onClose, productos = [] })
       await mutation.mutateAsync({
         tipo,
         motivo: motivo.trim(),
+        motivo_tipo: motivoTipo,
         items: itemsValidos.map(i => ({
           producto_id: i.producto_id,
           cantidad: Number(i.cantidad),
@@ -119,6 +123,33 @@ export default function MovimientoLoteModal({ isOpen, onClose, productos = [] })
             }`}>
             <ArrowUpFromLine size={16} /> Egreso
           </button>
+        </div>
+
+        {/* ── Categoría de motivo ─────────────────────────────────────────── */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Categoría</label>
+          <div className="flex flex-wrap gap-1.5">
+            {MOTIVOS_TIPO_LIST.map(mt => {
+              const sel = motivoTipo === mt.value
+              const colors = getMotivoChipClasses(mt.value)
+              const Icon = mt.icon
+              return (
+                <button
+                  key={mt.value}
+                  type="button"
+                  onClick={() => setMotivoTipo(mt.value)}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                    sel
+                      ? `${colors.bg} ${colors.text} ${colors.border} ring-1 ring-offset-1 ring-current/20`
+                      : 'bg-white border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-slate-600'
+                  }`}
+                >
+                  <Icon size={12} />
+                  {mt.label}
+                </button>
+              )
+            })}
+          </div>
         </div>
 
         {/* Buscador de productos */}
@@ -216,16 +247,23 @@ export default function MovimientoLoteModal({ isOpen, onClose, productos = [] })
           </div>
         )}
 
-        {/* Motivo */}
+        {/* Detalle / Notas */}
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-slate-700">
-            Motivo <span className="text-red-400">*</span>
+            Detalle / Notas <span className="text-red-400">*</span>
           </label>
           <textarea
             value={motivo}
             onChange={e => { setMotivo(e.target.value); setError('') }}
             rows={2}
-            placeholder="Ej: Compra proveedor Ferretotal, Merma mensual, Ajuste inventario físico..."
+            placeholder={
+              motivoTipo === 'compra_proveedor' ? 'Ej: Compra proveedor Ferretotal, Factura #1234...'
+              : motivoTipo === 'ajuste_inventario' ? 'Ej: Ajuste por conteo físico, diferencia detectada...'
+              : motivoTipo === 'merma' ? 'Ej: Merma mensual, producto dañado en almacén...'
+              : motivoTipo === 'devolucion' ? 'Ej: Devolución de cliente, producto defectuoso...'
+              : motivoTipo === 'transferencia' ? 'Ej: Transferencia a sucursal Valencia...'
+              : 'Describe el motivo del movimiento...'
+            }
             className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 outline-none transition-all resize-none"
           />
         </div>
