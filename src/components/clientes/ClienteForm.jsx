@@ -157,7 +157,7 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
 
       {/* Nombre */}
       <Campo label="Nombre *" icono={User} error={errores.nombre}>
