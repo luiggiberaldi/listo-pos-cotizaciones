@@ -377,7 +377,7 @@ export default function ConfiguracionView() {
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`relative flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-all sm:flex-1 justify-center overflow-hidden ${
+              className={`relative flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all sm:flex-1 justify-center overflow-hidden ${
                 active ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
               }`}
             >
@@ -390,7 +390,7 @@ export default function ConfiguracionView() {
               }`}>
                 <Icon size={14} />
               </span>
-              <span className="hidden sm:inline">{t.label}</span>
+              <span className="inline sm:inline">{t.label}</span>
             </button>
           )
         })}

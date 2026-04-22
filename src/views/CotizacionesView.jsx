@@ -241,7 +241,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
             {FORMAS_PAGO.map(fp => (
               <button key={fp} type="button"
                 onClick={() => setFormaPago(fp === formaPago ? '' : fp)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                className={`px-4 py-2.5 rounded-lg text-sm font-semibold border transition-all min-h-[44px] ${
                   formaPago === fp
                     ? 'bg-indigo-500 text-white border-indigo-500 shadow-sm'
                     : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600'

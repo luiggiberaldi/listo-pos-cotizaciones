@@ -332,7 +332,7 @@ export default function ClientesView() {
         {hayFiltros && (
           <button
             onClick={limpiarFiltros}
-            className="flex items-center gap-1.5 text-xs font-bold text-red-500 hover:text-white border border-red-200 hover:border-red-500 rounded-xl px-3 py-2 bg-red-50 hover:bg-red-500 transition-all"
+            className="flex items-center gap-1.5 text-xs font-bold text-red-500 hover:text-white border border-red-200 hover:border-red-500 rounded-xl px-3 py-2.5 bg-red-50 hover:bg-red-500 transition-all min-h-[44px]"
           >
             <X size={12} />
             Limpiar

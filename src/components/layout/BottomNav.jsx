@@ -49,7 +49,7 @@ export default function BottomNav({ esSupervisor }) {
                 `}
               >
                 <Icon size={20} />
-                <span className="text-[10px] font-bold">{label}</span>
+                <span className="text-xs font-bold">{label}</span>
               </NavLink>
             ))}
           </div>
@@ -80,7 +80,7 @@ export default function BottomNav({ esSupervisor }) {
                   <div className={`p-1.5 rounded-lg transition-all ${isActive ? 'bg-amber-400/15' : ''}`}>
                     <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
                   </div>
-                  <span className={`text-[10px] font-bold ${isActive ? 'text-amber-400' : ''}`}>{label}</span>
+                  <span className={`text-xs font-bold ${isActive ? 'text-amber-400' : ''}`}>{label}</span>
                 </>
               )}
             </NavLink>
@@ -96,7 +96,7 @@ export default function BottomNav({ esSupervisor }) {
             <div className={`p-1.5 rounded-lg transition-all ${showMore ? 'bg-amber-400/15' : ''}`}>
               <MoreHorizontal size={20} strokeWidth={showMore ? 2.5 : 2} />
             </div>
-            <span className={`text-[10px] font-bold ${showMore ? 'text-amber-400' : ''}`}>Más</span>
+            <span className={`text-xs font-bold ${showMore ? 'text-amber-400' : ''}`}>Más</span>
           </button>
         </div>
       </nav>

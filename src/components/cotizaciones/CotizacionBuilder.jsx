@@ -177,7 +177,7 @@ function ItemLinea({ item, idx, onChange, onDelete, tasa = 0, precios }) {
             onChange(idx, 'cantidad', (!isNaN(v) && v > 0) ? v : 1)
           }}
           onFocus={e => e.target.select()}
-          className="w-20 px-2 py-1.5 text-sm text-right border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary bg-white transition-all"
+          className="w-20 px-2 py-2.5 text-sm text-right border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary bg-white transition-all min-h-[44px]"
         />
       </td>
       <td className="py-3 px-2">

@@ -324,7 +324,7 @@ export default function DashboardView() {
             style={{ background: 'linear-gradient(135deg, #1B365D 0%, #0d1f3c 100%)', border: '1px solid rgba(255,255,255,0.07)' }}>
             <div className="absolute -bottom-4 -right-4 w-24 h-24 rounded-full" style={{ background: 'rgba(255,255,255,0.04)' }} />
             <p className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: 'rgba(255,255,255,0.5)' }}>Este mes</p>
-            <p className="text-4xl font-black text-white leading-none">{m.delMesCount}</p>
+            <p className="text-3xl sm:text-4xl font-black text-white leading-none">{m.delMesCount}</p>
             <p className="text-sm mt-1" style={{ color: 'rgba(255,255,255,0.55)' }}>cotizaciones generadas</p>
             {variacionMes !== null && (
               <div className="mt-3 inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full"

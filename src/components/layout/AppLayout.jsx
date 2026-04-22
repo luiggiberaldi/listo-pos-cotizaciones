@@ -172,7 +172,7 @@ export default function AppLayout() {
         {/* Hamburger — solo móvil */}
         <button
           onClick={() => setMenuOpen(true)}
-          className="md:hidden p-2 -ml-2 rounded-xl transition-colors text-white/60 hover:text-white hover:bg-white/10"
+          className="md:hidden p-3 rounded-xl transition-colors text-white/60 hover:text-white hover:bg-white/10"
           aria-label="Abrir menú"
         >
           <Menu size={22} />
@@ -202,7 +202,7 @@ export default function AppLayout() {
         <div className="relative" ref={notifsRef}>
           <button
             onClick={() => { setShowNotifs(v => !v); if (unreadCount > 0) markAllRead() }}
-            className="relative p-2 rounded-xl transition-all"
+            className="relative p-3 rounded-xl transition-all"
             style={{
               color:      unreadCount > 0 ? '#fbbf24' : 'rgba(255,255,255,0.55)',
               background: unreadCount > 0 ? 'rgba(251,191,36,0.1)' : 'transparent',

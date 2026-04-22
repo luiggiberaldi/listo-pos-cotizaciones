@@ -264,12 +264,12 @@ export default function InventarioView() {
             </button>
 
             {/* Toggle cuadrícula / lista */}
-            <div className="flex bg-slate-100 rounded-xl p-0.5">
+            <div className="flex bg-slate-100 rounded-xl p-1">
               <button
                 type="button"
                 onClick={() => cambiarVista('grid')}
                 title="Vista cuadrícula"
-                className={`p-2 rounded-lg transition-colors ${vistaMode === 'grid' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                className={`p-2.5 rounded-lg transition-colors ${vistaMode === 'grid' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
               >
                 <LayoutGrid size={16} />
               </button>
@@ -277,7 +277,7 @@ export default function InventarioView() {
                 type="button"
                 onClick={() => cambiarVista('list')}
                 title="Vista lista"
-                className={`p-2 rounded-lg transition-colors ${vistaMode === 'list' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                className={`p-2.5 rounded-lg transition-colors ${vistaMode === 'list' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
               >
                 <List size={16} />
               </button>

@@ -68,11 +68,11 @@ function KpiCard({ icon: Icon, label, value, sub, gradient, border }) {
           <Icon size={12} className="text-white sm:w-3.5 sm:h-3.5 md:w-4 md:h-4" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[9px] sm:text-[10px] md:text-[11px] font-medium leading-tight truncate" style={{ color: 'rgba(255,255,255,0.6)' }}>{label}</p>
+          <p className="text-[11px] sm:text-xs font-medium leading-tight truncate" style={{ color: 'rgba(255,255,255,0.6)' }}>{label}</p>
         </div>
       </div>
       <p className="text-base sm:text-xl md:text-2xl font-black leading-tight text-white relative z-10 truncate">{value}</p>
-      {sub && <p className="text-[9px] sm:text-[10px] md:text-[11px] relative z-10 truncate" style={{ color: 'rgba(255,255,255,0.4)' }}>{sub}</p>}
+      {sub && <p className="text-[11px] sm:text-xs relative z-10 truncate" style={{ color: 'rgba(255,255,255,0.4)' }}>{sub}</p>}
     </div>
   )
 }

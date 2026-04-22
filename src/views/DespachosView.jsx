@@ -109,7 +109,7 @@ export default function DespachosView() {
         action={
           <button
             onClick={() => generarDespachoPlantillaPDF({ config })}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold border transition-all hover:shadow-sm active:scale-[0.98]"
+            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-semibold border transition-all hover:shadow-sm active:scale-[0.98] min-h-[44px]"
             style={{ background: 'linear-gradient(135deg, rgba(27,54,93,0.06), rgba(184,134,11,0.06))', border: '1px solid rgba(27,54,93,0.18)', color: '#1B365D' }}
             title="Descargar plantilla vacía"
           >
