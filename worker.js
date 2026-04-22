@@ -155,6 +155,11 @@ export default {
       return handleClearOperator(request, env);
     }
 
+    // ── API: subir PDF temporal (para WhatsApp) ─────────────────────────
+    if (url.pathname === '/api/pdf-temp' && request.method === 'POST') {
+      return handlePdfTemp(request, env);
+    }
+
     // ── API routes para operaciones admin ──────────────────────────────────
     if (url.pathname.startsWith('/api/admin/')) {
       return handleAdmin(request, env, url);
@@ -271,6 +276,46 @@ async function verifySupervisor(operatorId, env) {
   if (!res.ok) return false;
   const rows = await res.json();
   return rows.length === 1 && rows[0].rol === 'supervisor';
+}
+
+// ── PDF temporal handler (para WhatsApp) ──────────────────────────────────
+
+async function handlePdfTemp(request, env) {
+  const user = await verifyAuth(request, env);
+  if (!user?.id) return jsonError('No autenticado', 401, request);
+
+  const blob = await request.arrayBuffer();
+  if (!blob || blob.byteLength === 0) return jsonError('PDF vacío', 400, request);
+  if (blob.byteLength > 2 * 1024 * 1024) return jsonError('PDF muy grande (max 2MB)', 400, request);
+
+  const id = crypto.randomUUID().slice(0, 8);
+  const filename = request.headers.get('X-Filename') || 'cotizacion.pdf';
+  const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const path = `${id}_${safeName}`;
+
+  const res = await fetch(
+    `${env.SUPABASE_URL}/storage/v1/object/pdf-temp/${path}`,
+    {
+      method: 'POST',
+      headers: {
+        apikey: env.SUPABASE_SERVICE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+        'Content-Type': 'application/pdf',
+        'Cache-Control': 'max-age=604800',
+      },
+      body: blob,
+    }
+  );
+
+  if (!res.ok) {
+    const err = await res.text();
+    return jsonError(`Error subiendo PDF: ${err}`, 500, request);
+  }
+
+  const publicUrl = `${env.SUPABASE_URL}/storage/v1/object/public/pdf-temp/${path}`;
+  return new Response(JSON.stringify({ url: publicUrl }), {
+    headers: { 'Content-Type': 'application/json', ...corsHeaders(request) },
+  });
 }
 
 // ── Admin route handler ───────────────────────────────────────────────────

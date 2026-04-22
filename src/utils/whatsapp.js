@@ -1,6 +1,6 @@
 // src/utils/whatsapp.js
 // Utilidades para compartir cotizaciones por WhatsApp
-// Sube el PDF a Supabase Storage y envía el link por wa.me directo al número del cliente
+// Sube el PDF al worker y envía el link por wa.me directo al número del cliente
 
 import supabase from '../services/supabase/client'
 
@@ -20,24 +20,31 @@ export function formatearTelefono(telefono) {
 }
 
 /**
- * Sube un PDF a Supabase Storage y devuelve la URL pública
+ * Sube un PDF al worker (que usa service key) y devuelve la URL pública
  */
 async function subirPdfTemporal(pdfBlob, pdfFilename) {
-  const id = crypto.randomUUID().slice(0, 8)
-  const path = `${id}_${pdfFilename}`
+  const { data: { session } } = await supabase.auth.getSession()
+  const token = session?.access_token
 
-  const { error } = await supabase.storage
-    .from('pdf-temp')
-    .upload(path, pdfBlob, {
-      contentType: 'application/pdf',
-      cacheControl: '604800', // 7 días
-      upsert: false,
-    })
+  const headers = {
+    'Content-Type': 'application/pdf',
+    'X-Filename': pdfFilename,
+  }
+  if (token) headers['Authorization'] = `Bearer ${token}`
 
-  if (error) throw error
+  const res = await fetch('/api/pdf-temp', {
+    method: 'POST',
+    headers,
+    body: pdfBlob,
+  })
 
-  const { data } = supabase.storage.from('pdf-temp').getPublicUrl(path)
-  return data.publicUrl
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(err)
+  }
+
+  const { url } = await res.json()
+  return url
 }
 
 /**
@@ -70,7 +77,7 @@ export function generarMensaje({ nombreNegocio, nombreCliente, numDisplay, total
     : ''
 
   const pdfLine = pdfUrl
-    ? `📄 *Ver/Descargar PDF:*\n${pdfUrl}`
+    ? `*Pulse aca para ver su cotizacion:*\n${pdfUrl}`
     : 'Adjunto encontrara el documento PDF para su revision.'
 
   return [
@@ -107,8 +114,7 @@ export async function compartirPorWhatsApp({ pdfBlob, pdfFilename, telefono, men
       const pdfUrl = await subirPdfTemporal(pdfBlob, pdfFilename)
       mensajeFinal = generarMensaje({ ...mensajeParams, pdfUrl })
     } catch (err) {
-      console.warn('[WhatsApp] No se pudo subir el PDF, enviando sin link:', err)
-      // Continuar con el mensaje original sin link
+      console.error('[WhatsApp] Error subiendo PDF:', err?.message || err)
     }
   }
 
