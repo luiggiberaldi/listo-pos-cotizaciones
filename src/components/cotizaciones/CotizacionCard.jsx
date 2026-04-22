@@ -32,7 +32,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         import('../../services/pdf/cotizacionPDF'),
         supabase.from('cotizacion_items').select('cantidad, codigo_snap, nombre_snap, unidad_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacion.id).order('orden'),
         cotizacion.cliente_id ? supabase.from('clientes').select('id, nombre, rif_cedula, telefono, direccion, email').eq('id', cotizacion.cliente_id).single() : Promise.resolve({ data: null }),
-        cotizacion.vendedor_id ? supabase.from('usuarios').select('id, nombre, color').eq('id', cotizacion.vendedor_id).single() : Promise.resolve({ data: null }),
+        cotizacion.vendedor_id ? supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', cotizacion.vendedor_id).single() : Promise.resolve({ data: null }),
       ])
       if (itemsRes.error) throw itemsRes.error
       const cotConDatos = {
@@ -55,22 +55,25 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         import('../../services/pdf/cotizacionPDF'),
         supabase.from('cotizacion_items').select('cantidad, codigo_snap, nombre_snap, unidad_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacion.id).order('orden'),
         cotizacion.cliente_id ? supabase.from('clientes').select('id, nombre, rif_cedula, telefono, direccion, email').eq('id', cotizacion.cliente_id).single() : Promise.resolve({ data: null }),
-        cotizacion.vendedor_id ? supabase.from('usuarios').select('id, nombre, color').eq('id', cotizacion.vendedor_id).single() : Promise.resolve({ data: null }),
+        cotizacion.vendedor_id ? supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', cotizacion.vendedor_id).single() : Promise.resolve({ data: null }),
       ])
       if (itemsRes.error) throw itemsRes.error
       const cliente = clienteRes.data || cotizacion.cliente
+      const vendedor = vendedorRes.data || cotizacion.vendedor
       const cotConDatos = {
         ...cotizacion,
         cliente,
-        vendedor: vendedorRes.data || cotizacion.vendedor,
+        vendedor,
       }
       const pdfBlob = await generarPDF({ cotizacion: cotConDatos, items: itemsRes.data ?? [], config, returnBlob: true })
       const mensaje = generarMensaje({
         nombreNegocio: config.nombre_negocio,
         nombreCliente: cliente?.nombre,
+        nombreVendedor: vendedor?.nombre,
         numDisplay,
         totalUsd: cotizacion.total_usd,
         validaHasta: cotizacion.valida_hasta,
+        items: itemsRes.data ?? [],
       })
       await compartirPorWhatsApp({
         pdfBlob,

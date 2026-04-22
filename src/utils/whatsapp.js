@@ -86,42 +86,61 @@ function esMobil() {
 
 /**
  * Comparte una cotización por WhatsApp
- * @param {object} opts
- * @param {Blob|null} opts.pdfBlob - Blob del PDF (si está disponible)
- * @param {string} opts.pdfFilename - Nombre del archivo PDF
- * @param {string} opts.telefono - Teléfono del cliente
- * @param {string} opts.mensaje - Mensaje prellenado
+ * Estrategia en 2 pasos para móvil:
+ *   1. Web Share API para enviar el PDF como archivo adjunto
+ *   2. Luego abre wa.me con el mensaje prellenado al número del cliente
+ * En escritorio: descarga PDF + abre wa.me
  */
 export async function compartirPorWhatsApp({ pdfBlob, pdfFilename, telefono, mensaje }) {
   const telFormateado = formatearTelefono(telefono)
 
-  // Intentar Web Share API en móvil (permite compartir el PDF como archivo)
+  // ── MÓVIL: compartir PDF vía Web Share API ──
   if (esMobil() && pdfBlob && navigator.canShare) {
     try {
       const file = new File([pdfBlob], pdfFilename, { type: 'application/pdf' })
-      const shareData = { files: [file], text: mensaje }
 
-      if (navigator.canShare(shareData)) {
-        await navigator.share(shareData)
+      // Intentar compartir archivo + texto juntos (funciona en iOS y algunos Android)
+      const shareDataFull = { files: [file], text: mensaje }
+      if (navigator.canShare(shareDataFull)) {
+        await navigator.share(shareDataFull)
         return { method: 'share_api' }
       }
+
+      // Fallback: compartir solo el archivo (Android a veces rechaza files+text)
+      const shareDataFile = { files: [file] }
+      if (navigator.canShare(shareDataFile)) {
+        await navigator.share(shareDataFile)
+        // Después de compartir el archivo, abrir wa.me con el mensaje
+        setTimeout(() => {
+          const waUrl = telFormateado
+            ? `https://wa.me/${telFormateado}?text=${encodeURIComponent(mensaje)}`
+            : `https://wa.me/?text=${encodeURIComponent(mensaje)}`
+          window.open(waUrl, '_blank', 'noopener')
+        }, 800)
+        return { method: 'share_api_then_wa' }
+      }
     } catch (err) {
-      // Si el usuario cancela o falla, caer al método wa.me
       if (err.name === 'AbortError') return { method: 'cancelled' }
+      // Si falla, continuar con el método wa.me
     }
   }
 
-  // Fallback: descargar PDF + abrir WhatsApp con mensaje
+  // ── ESCRITORIO / FALLBACK: descargar PDF + abrir wa.me ──
   if (pdfBlob) {
     const url = URL.createObjectURL(pdfBlob)
     const a = document.createElement('a')
     a.href = url
     a.download = pdfFilename
+    document.body.appendChild(a)
     a.click()
-    URL.revokeObjectURL(url)
+    document.body.removeChild(a)
+    // Dar tiempo para que inicie la descarga antes de revocar
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
 
   // Abrir WhatsApp con el teléfono del cliente
+  // Pequeño delay para que el usuario vea la descarga primero
+  await new Promise(r => setTimeout(r, 500))
   const waUrl = telFormateado
     ? `https://wa.me/${telFormateado}?text=${encodeURIComponent(mensaje)}`
     : `https://wa.me/?text=${encodeURIComponent(mensaje)}`

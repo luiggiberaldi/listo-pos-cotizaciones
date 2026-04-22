@@ -157,32 +157,36 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   doc.text(fmtFecha(cotizacion.creado_en), MARGIN + 20, y)
   y += 7
 
-  // Datos del cliente en líneas subrayadas
-  const itemsCliente = [
-    { label: 'Cliente', val: cliente.nombre || '—' },
-    { label: 'R.I.F / Cédula', val: cliente.rif_cedula || '—' },
-    { label: 'Teléfono', val: cliente.telefono || '—' },
-    { label: 'Dirección Fiscal', val: cliente.direccion || '—' },
-    { label: 'Correo', val: cliente.email || '—' },
-    { label: 'Vendedor', val: cotizacion.vendedor?.nombre || '—' },
-    { label: 'Tlf. Vendedor', val: cotizacion.vendedor?.telefono || '—' },
+  // Datos del cliente en 2 columnas
+  const halfW = (PAGE_W - MARGIN * 2) / 2 - 2
+  const col2X = MARGIN + halfW + 4
+  const clienteRows = [
+    [{ label: 'Cliente', val: cliente.nombre || '—' },         { label: 'R.I.F / Cédula', val: cliente.rif_cedula || '—' }],
+    [{ label: 'Teléfono', val: cliente.telefono || '—' },      { label: 'Correo', val: cliente.email || '—' }],
+    [{ label: 'Vendedor', val: cotizacion.vendedor?.nombre || '—' }, { label: 'Tlf. Vendedor', val: cotizacion.vendedor?.telefono || '—' }],
+    [{ label: 'Dirección Fiscal', val: cliente.direccion || '—' }],
   ]
 
   doc.setFontSize(9.5)
-  itemsCliente.forEach(item => {
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(...C_DARK)
-    doc.text(`${item.label}: `, MARGIN, y)
-    const lblW = doc.getTextWidth(`${item.label}: `)
+  clienteRows.forEach(row => {
+    row.forEach((item, colIdx) => {
+      const baseX = colIdx === 0 ? MARGIN : col2X
+      const lineEndX = row.length === 1 ? PAGE_W - MARGIN : (colIdx === 0 ? MARGIN + halfW : PAGE_W - MARGIN)
 
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(10.5)
-    doc.text(String(item.val), MARGIN + lblW + 3, y)
-    doc.setFontSize(9.5)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(...C_DARK)
+      doc.text(`${item.label}: `, baseX, y)
+      const lblW = doc.getTextWidth(`${item.label}: `)
 
-    doc.setLineWidth(0.3)
-    doc.setDrawColor(...C_PRIMARY)
-    doc.line(MARGIN, y + 1.5, PAGE_W - MARGIN, y + 1.5)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(10.5)
+      doc.text(String(item.val), baseX + lblW + 3, y)
+      doc.setFontSize(9.5)
+
+      doc.setLineWidth(0.3)
+      doc.setDrawColor(...C_PRIMARY)
+      doc.line(baseX, y + 1.5, lineEndX, y + 1.5)
+    })
     y += 6.5
   })
 
