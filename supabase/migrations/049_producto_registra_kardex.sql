@@ -19,7 +19,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_usuario_id     UUID := auth.uid();
+  v_usuario_id     UUID := public.get_operador_id();
   v_usuario_nombre TEXT;
   v_usuario_color  TEXT;
   v_producto       RECORD;
@@ -99,7 +99,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_usuario_id     UUID := auth.uid();
+  v_usuario_id     UUID := public.get_operador_id();
   v_usuario_nombre TEXT;
   v_usuario_color  TEXT;
   v_old_stock      NUMERIC(10,2);
