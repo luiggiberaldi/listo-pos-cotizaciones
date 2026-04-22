@@ -8,6 +8,7 @@ import useAuthStore from '../store/useAuthStore'
 import { buildSmartFilter, parseSearchTerms } from '../utils/smartSearch'
 import { notifyStockBajo } from '../services/notificationService'
 import { showToast } from '../components/ui/Toast'
+import { MOVIMIENTOS_KEY } from './useMovimientosInventario'
 
 export const INVENTARIO_KEY = ['inventario']
 
@@ -140,73 +141,71 @@ export function useCategorias() {
 export { getCategoryGroup }
 
 // ─── Mutation: crear producto (solo supervisor) ───────────────────────────────
+// Usa RPC que registra stock inicial en kardex automáticamente
 export function useCrearProducto() {
   const qc = useQueryClient()
 
   return useMutation({
     mutationFn: async (campos) => {
-      const { data, error } = await supabase
-        .from('productos')
-        .insert({
-          codigo:       campos.codigo?.trim()      || null,
-          nombre:       campos.nombre.trim(),
-          descripcion:  campos.descripcion?.trim() || null,
-          categoria:    campos.categoria?.trim()   || null,
-          unidad:       campos.unidad?.trim()      || 'und',
-          precio_usd:   Number(campos.precio_usd)  || 0,
-          costo_usd:    campos.costo_usd ? Number(campos.costo_usd) : null,
-          stock_actual: Number(campos.stock_actual) || 0,
-          stock_minimo: Number(campos.stock_minimo) || 0,
-        })
-        .select()
-        .single()
+      const { data, error } = await supabase.rpc('crear_producto_con_kardex', {
+        p_codigo:       campos.codigo?.trim()      || null,
+        p_nombre:       campos.nombre.trim(),
+        p_descripcion:  campos.descripcion?.trim() || null,
+        p_categoria:    campos.categoria?.trim()   || null,
+        p_unidad:       campos.unidad?.trim()      || 'und',
+        p_precio_usd:   Number(campos.precio_usd)  || 0,
+        p_costo_usd:    campos.costo_usd ? Number(campos.costo_usd) : null,
+        p_stock_actual: Number(campos.stock_actual) || 0,
+        p_stock_minimo: Number(campos.stock_minimo) || 0,
+      })
 
       if (error) {
-        if (error.code === '23505') throw new Error('Ya existe un producto con ese código')
+        if (error.message?.includes('duplicate') || error.code === '23505')
+          throw new Error('Ya existe un producto con ese código')
         throw error
       }
       return data
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: INVENTARIO_KEY })
+      qc.invalidateQueries({ queryKey: MOVIMIENTOS_KEY })
       showToast('Producto creado', 'success')
     },
   })
 }
 
 // ─── Mutation: actualizar producto (solo supervisor) ──────────────────────────
+// Usa RPC que registra cambios de stock en kardex automáticamente
 export function useActualizarProducto() {
   const qc = useQueryClient()
 
   return useMutation({
     mutationFn: async ({ id, campos }) => {
-      const { data, error } = await supabase
-        .from('productos')
-        .update({
-          codigo:       campos.codigo?.trim()      || null,
-          nombre:       campos.nombre.trim(),
-          descripcion:  campos.descripcion?.trim() || null,
-          categoria:    campos.categoria?.trim()   || null,
-          unidad:       campos.unidad?.trim()      || 'und',
-          precio_usd:   Number(campos.precio_usd)  || 0,
-          costo_usd:    campos.costo_usd ? Number(campos.costo_usd) : null,
-          stock_actual: Number(campos.stock_actual) || 0,
-          stock_minimo: Number(campos.stock_minimo) || 0,
-        })
-        .eq('id', id)
-        .select()
-        .single()
+      const { data, error } = await supabase.rpc('actualizar_producto_con_kardex', {
+        p_id:           id,
+        p_codigo:       campos.codigo?.trim()      || null,
+        p_nombre:       campos.nombre.trim(),
+        p_descripcion:  campos.descripcion?.trim() || null,
+        p_categoria:    campos.categoria?.trim()   || null,
+        p_unidad:       campos.unidad?.trim()      || 'und',
+        p_precio_usd:   Number(campos.precio_usd)  || 0,
+        p_costo_usd:    campos.costo_usd ? Number(campos.costo_usd) : null,
+        p_stock_actual: Number(campos.stock_actual) || 0,
+        p_stock_minimo: Number(campos.stock_minimo) || 0,
+      })
 
       if (error) {
-        if (error.code === '23505') throw new Error('Ya existe un producto con ese código')
+        if (error.message?.includes('duplicate') || error.code === '23505')
+          throw new Error('Ya existe un producto con ese código')
         throw error
       }
       return data
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: INVENTARIO_KEY })
+      qc.invalidateQueries({ queryKey: MOVIMIENTOS_KEY })
       showToast('Producto actualizado', 'success')
-      if (data.stock_minimo > 0 && data.stock_actual <= data.stock_minimo) {
+      if (data?.stock_minimo > 0 && data?.stock_actual <= data?.stock_minimo) {
         notifyStockBajo([data])
       }
     },
