@@ -1433,49 +1433,10 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
             {/* ── Columna izquierda: formularios ── */}
             <div className="flex-1 min-w-0 space-y-4">
 
-              {/* Envío y validez */}
+              {/* Moneda del PDF */}
               <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 space-y-4">
-                <SectionH3 icon={Truck}>Envío y validez</SectionH3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Transportista</label>
-                    <CustomSelect
-                      options={[
-                        { value: '', label: 'Sin transportista' },
-                        ...transportistas.map(t => ({
-                          value: t.id,
-                          label: t.nombre,
-                          sub: [t.zona_cobertura, t.tarifa_base > 0 ? `$${Number(t.tarifa_base).toFixed(2)}` : ''].filter(Boolean).join(' · ') || undefined,
-                        })),
-                      ]}
-                      value={transportistaId}
-                      onChange={val => setTransportistaId(val)}
-                      placeholder="Sin transportista"
-                      icon={Truck}
-                      disabled={cargando}
-                      clearable
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Válida por</label>
-                    <div className="flex flex-wrap gap-1.5">
-                      {[3, 7, 15, 30].map(d => (
-                        <button key={d} type="button"
-                          onClick={() => setDiasValidez(d)}
-                          disabled={cargando}
-                          className={`px-3 py-2 rounded-xl text-sm font-semibold transition-all ${diasValidez === d
-                            ? 'bg-primary text-white shadow-sm'
-                            : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'
-                          }`}
-                          style={diasValidez === d ? { background: '#1B365D' } : {}}
-                        >
-                          {d} días
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-[10px] text-slate-400 mt-1">Vence: {new Date(validaHasta).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' })}</p>
-                  </div>
-                  <div className="space-y-1.5">
+                <SectionH3 icon={Truck}>Opciones</SectionH3>
+                <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Moneda del PDF</label>
                     <div className="flex flex-wrap gap-1.5">
                       {[
@@ -1501,45 +1462,6 @@ export default function CotizacionBuilder({ cotizacionExistente = null, onVolver
                         Tasa: {new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2 }).format(tasaHook.tasaEfectiva)} Bs/$
                       </p>
                     )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Descuentos */}
-              <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 space-y-4">
-                <SectionH3 icon={DollarSign}>Ajustes de precio</SectionH3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Descuento global (%)</label>
-                    <div className="relative">
-                      <input type="number" inputMode="decimal" min="0" max="100" step="0.5"
-                        value={descuentoGlobalPct}
-                        onChange={e => setDescuentoGlobalPct(Math.min(100, Math.max(0, Number(e.target.value))))}
-                        onBlur={e => setDescuentoGlobalPct(Math.min(100, Math.max(0, Number(e.target.value))))}
-                        onFocus={e => e.target.select()}
-                        className={inputCls} disabled={cargando} />
-                      {descuentoGlobalPct > 0 && (
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-emerald-600">
-                          -{fmtUsd(descuentoUsd)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Costo de envío (USD)</label>
-                    <div className="relative">
-                      <input type="number" min="0" step="0.01"
-                        value={costoEnvioUsd}
-                        onChange={e => setCostoEnvioUsd(Math.max(0, Number(e.target.value)))}
-                        onFocus={e => e.target.select()}
-                        className={inputCls} disabled={cargando} />
-                      {costoEnvioUsd > 0 && (
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500">
-                          +{fmtUsd(costoEnvioUsd)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
                 </div>
               </div>
 
