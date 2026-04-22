@@ -66,7 +66,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         vendedor,
       }
       const pdfBlob = await generarPDF({ cotizacion: cotConDatos, items: itemsRes.data ?? [], config, returnBlob: true })
-      const mensaje = generarMensaje({
+      const mensajeParams = {
         nombreNegocio: config.nombre_negocio,
         nombreCliente: cliente?.nombre,
         nombreVendedor: vendedor?.nombre,
@@ -74,12 +74,14 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         totalUsd: cotizacion.total_usd,
         validaHasta: cotizacion.valida_hasta,
         items: itemsRes.data ?? [],
-      })
+      }
+      const mensaje = generarMensaje(mensajeParams)
       await compartirPorWhatsApp({
         pdfBlob,
         pdfFilename: `${numDisplay.replace(/\s+/g, '_')}.pdf`,
         telefono: cliente?.telefono,
         mensaje,
+        mensajeParams,
       })
     } catch (err) {
       const texto = generarMensaje({

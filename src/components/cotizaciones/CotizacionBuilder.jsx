@@ -1270,7 +1270,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
         tasa: tasaHook.tasaEfectiva,
       })
 
-      const mensaje = generarMensaje({
+      const mensajeParams = {
         nombreNegocio: config.nombre_negocio,
         nombreCliente: clienteSeleccionado?.nombre,
         numDisplay,
@@ -1278,13 +1278,15 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
         validaHasta,
         nombreVendedor: vendedor?.nombre || perfil?.nombre,
         items: itemsRes.data ?? [],
-      })
+      }
+      const mensaje = generarMensaje(mensajeParams)
 
       await compartirPorWhatsApp({
         pdfBlob,
         pdfFilename: `${numDisplay.replace(/\s+/g, '_')}.pdf`,
         telefono: clienteSeleccionado?.telefono,
         mensaje,
+        mensajeParams,
       })
     } catch (err) {
       const texto = generarMensaje({
