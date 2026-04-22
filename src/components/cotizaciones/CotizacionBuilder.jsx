@@ -878,8 +878,11 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
       )}
       {items.map((it, idx) => {
         const linea = mulR(it.cantidad, mulR(it.precioUnitUsd, 1 - it.descuentoPct / 100))
+        const precios = preciosMap[it.productoId]
+        const tieneMultiprecios = precios && [precios.p1, precios.p2, precios.p3].filter(v => v != null && Number(v) > 0).length > 1
         return (
-          <div key={it._key} className="px-3 sm:px-4 py-2.5 flex items-center gap-2 sm:gap-3 group">
+          <div key={it._key} className="px-3 sm:px-4 py-2.5 space-y-2 group">
+            <div className="flex items-center gap-2 sm:gap-3">
             <button type="button" onClick={() => onEliminar(idx)}
               className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-red-50 hover:bg-red-100 flex items-center justify-center shrink-0 transition-colors active:scale-95">
               <Trash2 size={14} className="text-red-400" />
@@ -891,7 +894,6 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
                 <span className="text-[10px] text-slate-400">{it.unidadSnap}</span>
                 {it.descuentoPct > 0 && <span className="text-[10px] text-amber-500 font-semibold">-{it.descuentoPct}%</span>}
               </div>
-              <PrecioSelector precios={preciosMap[it.productoId]} currentPrice={it.precioUnitUsd} onSelect={v => onCambiar(idx, 'precioUnitUsd', v)} />
             </div>
             <div className="flex flex-col items-end gap-1.5 shrink-0">
               <span className="text-xs sm:text-sm font-black text-slate-800">{fmtUsd(linea)}</span>
@@ -924,6 +926,28 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
                 </button>
               </div>
             </div>
+            </div>
+            {tieneMultiprecios && (
+              <div className="grid gap-2 pl-10" style={{ gridTemplateColumns: `repeat(${[precios.p1, precios.p2, precios.p3].filter(v => v != null && Number(v) > 0).length}, 1fr)` }}>
+                {[{ label: 'P1', value: precios.p1 }, { label: 'P2', value: precios.p2 }, { label: 'P3', value: precios.p3 }]
+                  .filter(n => n.value != null && Number(n.value) > 0)
+                  .map(n => {
+                    const active = Number(it.precioUnitUsd) === Number(n.value)
+                    return (
+                      <button key={n.label} type="button"
+                        onClick={() => onCambiar(idx, 'precioUnitUsd', Number(n.value))}
+                        className={`flex flex-col items-center justify-center py-2.5 px-2 rounded-xl border-2 transition-all active:scale-[0.96] touch-manipulation ${
+                          active ? 'border-primary bg-primary text-white shadow-md' : 'border-slate-200 bg-white text-slate-600'
+                        }`}
+                      >
+                        <span className={`text-[11px] font-bold uppercase tracking-widest ${active ? 'text-white/80' : 'text-slate-400'}`}>{n.label}</span>
+                        <span className={`text-sm font-black mt-0.5 ${active ? 'text-white' : 'text-slate-800'}`}>${Number(n.value).toFixed(2)}</span>
+                        {tasa > 0 && <span className={`text-[10px] mt-0.5 ${active ? 'text-white/70' : 'text-slate-400'}`}>{fmtBs(usdToBs(n.value, tasa))}</span>}
+                      </button>
+                    )
+                  })}
+              </div>
+            )}
           </div>
         )
       })}
