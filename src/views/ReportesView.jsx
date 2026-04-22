@@ -1,22 +1,82 @@
 // src/views/ReportesView.jsx
-// Vista profesional de reportes de ventas
+// Vista profesional de reportes administrativos con tabs
 import { useState, useMemo } from 'react'
-import { BarChart3, CreditCard, RefreshCw, Download } from 'lucide-react'
+import {
+  BarChart3, CreditCard, RefreshCw, Download, Package,
+  FileText, Truck, DollarSign, TrendingUp, AlertTriangle,
+  Clock, Users, Percent,
+} from 'lucide-react'
 import { useReporteVentas } from '../hooks/useReporteVentas'
+import { useReporteInventario } from '../hooks/useReporteInventario'
+import { useReportePipeline } from '../hooks/useReportePipeline'
+import { useReporteDespachos } from '../hooks/useReporteDespachos'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
-import { getWeekRange } from '../utils/dateHelpers'
+import { useComisiones } from '../hooks/useComisiones'
+import { useComisionesResumen } from '../hooks/useComisiones'
+import { getWeekRange, getMonthRange } from '../utils/dateHelpers'
 import { fmtUsd } from '../utils/format'
-import { generarReporteVentasPDF } from '../services/pdf/comisionesPDF'
-import PageHeader   from '../components/ui/PageHeader'
-import Skeleton     from '../components/ui/Skeleton'
-import EmptyState   from '../components/ui/EmptyState'
+import useAuthStore from '../store/useAuthStore'
+import PageHeader from '../components/ui/PageHeader'
+import Skeleton from '../components/ui/Skeleton'
+import EmptyState from '../components/ui/EmptyState'
 import DateRangeSelector from '../components/reportes/DateRangeSelector'
-import KpiCards     from '../components/reportes/KpiCards'
+import KpiCards from '../components/reportes/KpiCards'
 import TablaVendedores from '../components/reportes/TablaVendedores'
-import TablaClientes   from '../components/reportes/TablaClientes'
-import TablaProductos  from '../components/reportes/TablaProductos'
+import TablaClientes from '../components/reportes/TablaClientes'
+import TablaProductos from '../components/reportes/TablaProductos'
 
-// Forma de pago section
+// ─── Tabs Definition ──────────────────────────────────────────────────────
+const TABS = [
+  { id: 'ventas',       label: 'Ventas',        icon: DollarSign },
+  { id: 'inventario',   label: 'Inventario',    icon: Package },
+  { id: 'cotizaciones', label: 'Cotizaciones',  icon: FileText },
+  { id: 'despachos',    label: 'Despachos',     icon: Truck },
+  { id: 'comisiones',   label: 'Comisiones',    icon: Percent },
+]
+
+// ─── Skeleton ──────────────────────────────────────────────────────────────
+function SkeletonReporte() {
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[1,2,3,4].map(i => (
+          <div key={i} className="rounded-2xl p-4 bg-slate-200/50 space-y-3">
+            <Skeleton className="h-4 w-2/3 rounded" />
+            <Skeleton className="h-8 w-1/2 rounded" />
+          </div>
+        ))}
+      </div>
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
+        <Skeleton className="h-4 w-1/3 rounded" />
+        <Skeleton className="h-32 rounded-xl" />
+      </div>
+    </div>
+  )
+}
+
+// ─── KPI Card (reusable) ──────────────────────────────────────────────────
+function KpiCard({ icon: Icon, label, value, sub, gradient, border }) {
+  return (
+    <div className="relative overflow-hidden rounded-2xl p-3 sm:p-4 flex flex-col gap-2 sm:gap-2.5 min-w-0"
+      style={{ background: gradient, border: `1px solid ${border}`, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
+      <div className="absolute -bottom-4 -right-4 w-20 h-20 rounded-full pointer-events-none"
+        style={{ background: 'rgba(255,255,255,0.05)' }} />
+      <div className="flex items-start gap-1.5 sm:gap-2 relative z-10 min-w-0">
+        <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center shrink-0"
+          style={{ background: 'rgba(255,255,255,0.15)' }}>
+          <Icon size={14} className="text-white sm:w-4 sm:h-4" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] sm:text-[11px] font-medium leading-tight" style={{ color: 'rgba(255,255,255,0.6)' }}>{label}</p>
+        </div>
+      </div>
+      <p className="text-xl sm:text-2xl font-black leading-tight text-white relative z-10">{value}</p>
+      {sub && <p className="text-[10px] sm:text-[11px] relative z-10" style={{ color: 'rgba(255,255,255,0.4)' }}>{sub}</p>}
+    </div>
+  )
+}
+
+// ─── Forma de Pago Section ────────────────────────────────────────────────
 function FormaPagoSection({ data = [] }) {
   if (data.length === 0) return null
   const total = data.reduce((s, fp) => s + fp.totalUsd, 0)
@@ -56,27 +116,601 @@ function FormaPagoSection({ data = [] }) {
   )
 }
 
-function SkeletonReporte() {
+// ─── Estado Badge ─────────────────────────────────────────────────────────
+const ESTADO_STYLES = {
+  borrador:  'bg-slate-100 text-slate-600',
+  enviada:   'bg-blue-100 text-blue-700',
+  aceptada:  'bg-emerald-100 text-emerald-700',
+  rechazada: 'bg-red-100 text-red-700',
+  vencida:   'bg-amber-100 text-amber-700',
+  anulada:   'bg-gray-100 text-gray-500',
+  pendiente: 'bg-amber-100 text-amber-700',
+  despachada:'bg-blue-100 text-blue-700',
+  entregada: 'bg-emerald-100 text-emerald-700',
+  pagada:    'bg-emerald-100 text-emerald-700',
+}
+
+// ─── Tabla genérica admin ─────────────────────────────────────────────────
+function AdminTable({ icon: Icon, iconColor, title, headers, rows, emptyText }) {
+  if (rows.length === 0) return null
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {[1,2,3,4].map(i => (
-          <div key={i} className="rounded-2xl p-4 bg-slate-200/50 space-y-3">
-            <Skeleton className="h-4 w-2/3 rounded" />
-            <Skeleton className="h-8 w-1/2 rounded" />
-          </div>
-        ))}
+    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
+        <Icon size={16} className={iconColor} />
+        <h3 className="text-sm font-black text-slate-800">{title}</h3>
       </div>
-      <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
-        <Skeleton className="h-4 w-1/3 rounded" />
-        <Skeleton className="h-32 rounded-xl" />
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-xs text-slate-400 uppercase border-b border-slate-100">
+              {headers.map((h, i) => (
+                <th key={i} className={`px-4 py-2.5 font-semibold ${h.align || 'text-left'}`}>{h.label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, i) => (
+              <tr key={i} className="border-b border-slate-50 hover:bg-slate-50/50">
+                {row.map((cell, j) => (
+                  <td key={j} className={`px-4 py-2.5 ${cell.className || ''}`}>{cell.content}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   )
 }
 
+// ─── Bar section ──────────────────────────────────────────────────────────
+function BarSection({ icon: Icon, iconColor, title, data, labelKey, countKey, countSuffix, valueKey }) {
+  if (!data || data.length === 0) return null
+  const total = data.reduce((s, d) => s + (d[valueKey] || 0), 0)
+
+  const ESTADO_BAR_COLORS = {
+    borrador: '#94a3b8', enviada: '#3b82f6', aceptada: '#10b981',
+    rechazada: '#ef4444', vencida: '#f59e0b', anulada: '#6b7280',
+    pendiente: '#f59e0b', despachada: '#3b82f6', entregada: '#10b981',
+  }
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
+        <Icon size={16} className={iconColor} />
+        <h3 className="text-sm font-black text-slate-800">{title}</h3>
+      </div>
+      <div className="p-4 space-y-3">
+        {data.filter(d => d[countKey] > 0).map((d, i) => {
+          const pct = total > 0 ? (d[valueKey] / total) * 100 : 0
+          const color = ESTADO_BAR_COLORS[d[labelKey]] || '#64748b'
+          const label = d[labelKey].charAt(0).toUpperCase() + d[labelKey].slice(1)
+          return (
+            <div key={i} className="space-y-1">
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-sm" style={{ background: color }} />
+                  <span className="font-semibold text-slate-700">{label}</span>
+                  <span className="text-[10px] text-slate-400 font-bold">{d[countKey]} {countSuffix}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400">{pct.toFixed(1)}%</span>
+                  <span className="font-bold text-slate-800">{fmtUsd(d[valueKey])}</span>
+                </div>
+              </div>
+              <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                <div className="h-full rounded-full transition-all duration-500"
+                  style={{ width: `${Math.max(pct, 1)}%`, background: color }} />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ─── Aging Table ──────────────────────────────────────────────────────────
+function AgingSection({ title, data, countLabel }) {
+  if (!data || data.every(a => a.count === 0)) return null
+  const agingColors = ['text-emerald-600', 'text-amber-600', 'text-amber-600', 'text-red-600']
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
+        <Clock size={16} className="text-amber-500" />
+        <h3 className="text-sm font-black text-slate-800">{title}</h3>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-xs text-slate-400 uppercase border-b border-slate-100">
+              <th className="text-left px-4 py-2.5 font-semibold">Rango</th>
+              <th className="text-center px-4 py-2.5 font-semibold">{countLabel}</th>
+              <th className="text-right px-4 py-2.5 font-semibold">Monto USD</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.filter(a => a.count > 0).map((a, i) => (
+              <tr key={i} className="border-b border-slate-50">
+                <td className="px-4 py-2.5 font-medium text-slate-700">{a.rango}</td>
+                <td className="px-4 py-2.5 text-center text-slate-600">{a.count}</td>
+                <td className={`px-4 py-2.5 text-right font-bold ${agingColors[i] || 'text-slate-800'}`}>{fmtUsd(a.totalUsd)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TAB: VENTAS
+// ═══════════════════════════════════════════════════════════════════════════
+function TabVentas({ range, configNeg }) {
+  const { data: reporte, isLoading, isError, refetch } = useReporteVentas(range)
+  const [exportando, setExportando] = useState(false)
+
+  async function exportarPDF() {
+    if (!reporte) return
+    setExportando(true)
+    try {
+      const { generarReporteVentasPDF } = await import('../services/pdf/comisionesPDF')
+      await generarReporteVentasPDF({ reporte, rango: range, config: configNeg })
+    } catch (e) { console.error('Error generando PDF:', e) }
+    setExportando(false)
+  }
+
+  if (isLoading) return <SkeletonReporte />
+  if (isError) return <ErrorMsg onRetry={refetch} />
+  if (!reporte || reporte.kpis.numDespachos === 0) {
+    return <EmptyState icon={BarChart3} title="Sin despachos entregados" description="No hay despachos entregados en el período seleccionado." />
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <ExportButton onClick={exportarPDF} loading={exportando} />
+      </div>
+      <KpiCards kpis={reporte.kpis} />
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <TablaVendedores data={reporte.porVendedor} />
+        <TablaClientes data={reporte.porCliente} />
+      </div>
+      <TablaProductos porProducto={reporte.porProducto} porCategoria={reporte.porCategoria} />
+      <FormaPagoSection data={reporte.porFormaPago} />
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TAB: INVENTARIO
+// ═══════════════════════════════════════════════════════════════════════════
+function TabInventario({ configNeg }) {
+  const { data: reporte, isLoading, isError, refetch } = useReporteInventario()
+  const [exportando, setExportando] = useState(false)
+
+  async function exportarPDF() {
+    if (!reporte) return
+    setExportando(true)
+    try {
+      const { generarInventarioPDF } = await import('../services/pdf/inventarioPDF')
+      await generarInventarioPDF({ reporte, config: configNeg })
+    } catch (e) { console.error('Error generando PDF:', e) }
+    setExportando(false)
+  }
+
+  if (isLoading) return <SkeletonReporte />
+  if (isError) return <ErrorMsg onRetry={refetch} />
+  if (!reporte) return <EmptyState icon={Package} title="Sin datos" description="No se pudo cargar el inventario." />
+
+  const { kpis, productosBajoStock, productosSinMov90, porCategoria } = reporte
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <ExportButton onClick={exportarPDF} loading={exportando} />
+      </div>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiCard icon={Package} label="Total productos" value={String(kpis.totalProductos)}
+          gradient="linear-gradient(135deg, #1B365D, #0d1f3c)" border="rgba(255,255,255,0.07)" />
+        {kpis.esSupervisor && (
+          <KpiCard icon={DollarSign} label="Valor a costo" value={fmtUsd(kpis.totalValorCosto)}
+            gradient="linear-gradient(135deg, #065f46, #047857)" border="rgba(255,255,255,0.10)" />
+        )}
+        <KpiCard icon={TrendingUp} label="Valor a precio venta" value={fmtUsd(kpis.totalValorVenta)}
+          gradient="linear-gradient(135deg, #92400e, #B8860B)" border="rgba(255,255,255,0.10)" />
+        <KpiCard icon={AlertTriangle} label="Bajo stock" value={String(kpis.numBajoStock)}
+          sub={`${kpis.numSinMov90} sin mov. 90+ días`}
+          gradient="linear-gradient(135deg, #991b1b, #b91c1c)" border="rgba(255,255,255,0.10)" />
+      </div>
+
+      {/* Por Categoría */}
+      <AdminTable
+        icon={BarChart3} iconColor="text-primary" title="Resumen por Categoría"
+        headers={[
+          { label: 'Categoría' },
+          { label: 'Productos', align: 'text-center' },
+          { label: 'Stock total', align: 'text-center' },
+          ...(kpis.esSupervisor ? [{ label: 'Valor costo', align: 'text-right' }] : []),
+          { label: 'Valor venta', align: 'text-right' },
+          ...(kpis.esSupervisor ? [{ label: 'Margen', align: 'text-right' }] : []),
+        ]}
+        rows={porCategoria.map(cat => {
+          const margen = cat.valorVenta > 0 && cat.valorCosto > 0
+            ? ((cat.valorVenta - cat.valorCosto) / cat.valorVenta * 100).toFixed(1)
+            : null
+          return [
+            { content: cat.categoria, className: 'font-semibold text-slate-700' },
+            { content: cat.count, className: 'text-center text-slate-600' },
+            { content: Number(cat.stockTotal).toLocaleString(), className: 'text-center text-slate-600' },
+            ...(kpis.esSupervisor ? [{ content: fmtUsd(cat.valorCosto), className: 'text-right text-slate-600' }] : []),
+            { content: fmtUsd(cat.valorVenta), className: 'text-right font-bold text-slate-800' },
+            ...(kpis.esSupervisor ? [{
+              content: margen ? `${margen}%` : '—',
+              className: `text-right font-bold ${margen && Number(margen) > 0 ? 'text-emerald-600' : 'text-slate-400'}`
+            }] : []),
+          ]
+        })}
+      />
+
+      {/* Bajo Stock */}
+      {productosBajoStock.length > 0 && (
+        <AdminTable
+          icon={AlertTriangle} iconColor="text-red-500"
+          title={`Productos con Stock Bajo (${productosBajoStock.length})`}
+          headers={[
+            { label: 'Código' }, { label: 'Producto' }, { label: 'Categoría' },
+            { label: 'Stock', align: 'text-center' }, { label: 'Mínimo', align: 'text-center' },
+            { label: 'Déficit', align: 'text-right' },
+          ]}
+          rows={productosBajoStock.slice(0, 20).map(p => {
+            const deficit = Math.max(0, Number(p.stock_minimo) - Number(p.stock_actual))
+            return [
+              { content: p.codigo || '—', className: 'text-slate-500 text-xs' },
+              { content: p.nombre, className: 'font-semibold text-slate-700' },
+              { content: p.categoria || '—', className: 'text-slate-500' },
+              { content: Number(p.stock_actual).toLocaleString(), className: 'text-center' },
+              { content: Number(p.stock_minimo).toLocaleString(), className: 'text-center text-slate-400' },
+              { content: deficit.toLocaleString(), className: 'text-right font-bold text-red-600' },
+            ]
+          })}
+        />
+      )}
+
+      {/* Sin Movimiento 90+ */}
+      {productosSinMov90.length > 0 && (
+        <AdminTable
+          icon={Clock} iconColor="text-amber-500"
+          title={`Productos sin Movimiento 90+ días (${productosSinMov90.length})`}
+          headers={[
+            { label: 'Código' }, { label: 'Producto' }, { label: 'Categoría' },
+            { label: 'Stock', align: 'text-center' }, { label: 'Valor USD', align: 'text-right' },
+            { label: 'Días', align: 'text-right' },
+          ]}
+          rows={productosSinMov90.sort((a, b) => b.valorVenta - a.valorVenta).slice(0, 20).map(p => [
+            { content: p.codigo || '—', className: 'text-slate-500 text-xs' },
+            { content: p.nombre, className: 'font-semibold text-slate-700' },
+            { content: p.categoria || '—', className: 'text-slate-500' },
+            { content: Number(p.stock_actual).toLocaleString(), className: 'text-center' },
+            { content: fmtUsd(p.valorVenta), className: 'text-right font-bold' },
+            { content: p.diasSinMov >= 999 ? '90+' : String(p.diasSinMov), className: 'text-right font-bold text-amber-600' },
+          ])}
+        />
+      )}
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TAB: COTIZACIONES (Pipeline)
+// ═══════════════════════════════════════════════════════════════════════════
+function TabCotizaciones({ range, configNeg }) {
+  const { data: reporte, isLoading, isError, refetch } = useReportePipeline(range)
+  const [exportando, setExportando] = useState(false)
+
+  async function exportarPDF() {
+    if (!reporte) return
+    setExportando(true)
+    try {
+      const { generarPipelinePDF } = await import('../services/pdf/pipelinePDF')
+      await generarPipelinePDF({ reporte, rango: range, config: configNeg })
+    } catch (e) { console.error('Error generando PDF:', e) }
+    setExportando(false)
+  }
+
+  if (isLoading) return <SkeletonReporte />
+  if (isError) return <ErrorMsg onRetry={refetch} />
+  if (!reporte || reporte.kpis.totalCotizaciones === 0) {
+    return <EmptyState icon={FileText} title="Sin cotizaciones" description="No hay cotizaciones en el período seleccionado." />
+  }
+
+  const { kpis, porEstado, aging, porVendedor, topPendientes } = reporte
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <ExportButton onClick={exportarPDF} loading={exportando} />
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiCard icon={FileText} label="Total cotizaciones" value={String(kpis.totalCotizaciones)}
+          gradient="linear-gradient(135deg, #1B365D, #0d1f3c)" border="rgba(255,255,255,0.07)" />
+        <KpiCard icon={DollarSign} label="Valor pipeline" value={fmtUsd(kpis.valorPipeline)}
+          sub="Borradores + enviadas"
+          gradient="linear-gradient(135deg, #92400e, #B8860B)" border="rgba(255,255,255,0.10)" />
+        <KpiCard icon={TrendingUp} label="Tasa de conversión" value={`${kpis.tasaConversion.toFixed(1)}%`}
+          sub="Aceptadas / (Env+Acep+Rech)"
+          gradient="linear-gradient(135deg, #065f46, #047857)" border="rgba(255,255,255,0.10)" />
+        <KpiCard icon={Clock} label="Enviadas pendientes" value={String(kpis.enviadasPendientes)}
+          gradient="linear-gradient(135deg, #991b1b, #b91c1c)" border="rgba(255,255,255,0.10)" />
+      </div>
+
+      <BarSection icon={FileText} iconColor="text-blue-500" title="Cotizaciones por Estado"
+        data={porEstado} labelKey="estado" countKey="count" countSuffix="cot." valueKey="totalUsd" />
+
+      <AgingSection title="Antigüedad — Enviadas sin Respuesta" data={aging} countLabel="Cotizaciones" />
+
+      {/* Por Vendedor */}
+      {porVendedor.length > 0 && (
+        <AdminTable
+          icon={Users} iconColor="text-indigo-500" title="Pipeline por Vendedor"
+          headers={[
+            { label: 'Vendedor' }, { label: 'Borr.', align: 'text-center' },
+            { label: 'Env.', align: 'text-center' }, { label: 'Acept.', align: 'text-center' },
+            { label: 'Rech.', align: 'text-center' }, { label: 'Total USD', align: 'text-right' },
+          ]}
+          rows={porVendedor.map(v => [
+            { content: <div className="flex items-center gap-2">
+              <div className="w-5 h-5 rounded-full shrink-0" style={{ background: v.color || '#64748b' }} />
+              <span className="font-semibold">{v.nombre}</span>
+            </div> },
+            { content: v.borrador || 0, className: 'text-center text-slate-500' },
+            { content: v.enviada || 0, className: 'text-center text-blue-600 font-medium' },
+            { content: v.aceptada || 0, className: 'text-center text-emerald-600 font-medium' },
+            { content: v.rechazada || 0, className: 'text-center text-red-600 font-medium' },
+            { content: fmtUsd(v.totalUsd), className: 'text-right font-bold text-slate-800' },
+          ])}
+        />
+      )}
+
+      {/* Top Pendientes */}
+      {topPendientes.length > 0 && (
+        <AdminTable
+          icon={Clock} iconColor="text-amber-500" title="Cotizaciones más Antiguas sin Respuesta"
+          headers={[
+            { label: '#' }, { label: 'Cliente' }, { label: 'Vendedor' },
+            { label: 'Total USD', align: 'text-right' }, { label: 'Días', align: 'text-right' },
+          ]}
+          rows={topPendientes.map(c => [
+            { content: `${c.numero}${c.version > 1 ? ` v${c.version}` : ''}`, className: 'text-slate-500 font-medium' },
+            { content: c.cliente, className: 'font-semibold text-slate-700' },
+            { content: <div className="flex items-center gap-1.5">
+              <div className="w-4 h-4 rounded-full shrink-0" style={{ background: c.vendedorColor || '#64748b' }} />
+              <span>{c.vendedor}</span>
+            </div>, className: 'text-slate-600' },
+            { content: fmtUsd(c.totalUsd), className: 'text-right font-bold' },
+            { content: c.dias, className: `text-right font-bold ${c.dias > 30 ? 'text-red-600' : c.dias > 15 ? 'text-amber-600' : 'text-emerald-600'}` },
+          ])}
+        />
+      )}
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TAB: DESPACHOS
+// ═══════════════════════════════════════════════════════════════════════════
+function TabDespachos({ range, configNeg }) {
+  const { data: reporte, isLoading, isError, refetch } = useReporteDespachos(range)
+  const [exportando, setExportando] = useState(false)
+
+  async function exportarPDF() {
+    if (!reporte) return
+    setExportando(true)
+    try {
+      const { generarDespachoReportePDF } = await import('../services/pdf/despachoReportePDF')
+      await generarDespachoReportePDF({ reporte, rango: range, config: configNeg })
+    } catch (e) { console.error('Error generando PDF:', e) }
+    setExportando(false)
+  }
+
+  if (isLoading) return <SkeletonReporte />
+  if (isError) return <ErrorMsg onRetry={refetch} />
+  if (!reporte || reporte.kpis.totalDespachos === 0) {
+    return <EmptyState icon={Truck} title="Sin despachos" description="No hay despachos en el período seleccionado." />
+  }
+
+  const { kpis, porEstado, porFormaPago, aging, porVendedor, topClientesPendientes } = reporte
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <ExportButton onClick={exportarPDF} loading={exportando} />
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiCard icon={Truck} label="Total despachos" value={String(kpis.totalDespachos)}
+          gradient="linear-gradient(135deg, #1B365D, #0d1f3c)" border="rgba(255,255,255,0.07)" />
+        <KpiCard icon={Package} label="Entregados" value={String(kpis.numEntregados)}
+          sub={fmtUsd(kpis.montoEntregado)}
+          gradient="linear-gradient(135deg, #065f46, #047857)" border="rgba(255,255,255,0.10)" />
+        <KpiCard icon={Clock} label="Pendientes" value={String(kpis.numPendientes)}
+          sub={fmtUsd(kpis.montoPendiente)}
+          gradient="linear-gradient(135deg, #92400e, #B8860B)" border="rgba(255,255,255,0.10)" />
+        <KpiCard icon={AlertTriangle} label="Monto pendiente" value={fmtUsd(kpis.montoPendiente)}
+          gradient="linear-gradient(135deg, #991b1b, #b91c1c)" border="rgba(255,255,255,0.10)" />
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <BarSection icon={Truck} iconColor="text-blue-500" title="Despachos por Estado"
+          data={porEstado} labelKey="estado" countKey="count" countSuffix="desp." valueKey="totalUsd" />
+        <FormaPagoSection data={porFormaPago} />
+      </div>
+
+      <AgingSection title="Antigüedad — Despachos Pendientes" data={aging} countLabel="Despachos" />
+
+      {/* Por Vendedor */}
+      {porVendedor.length > 0 && (
+        <AdminTable
+          icon={Users} iconColor="text-indigo-500" title="Despachos por Vendedor"
+          headers={[
+            { label: 'Vendedor' }, { label: 'Total', align: 'text-center' },
+            { label: 'Entregados', align: 'text-center' }, { label: 'Pendientes', align: 'text-center' },
+            { label: 'Ventas USD', align: 'text-right' }, { label: 'Pend. USD', align: 'text-right' },
+          ]}
+          rows={porVendedor.map(v => [
+            { content: <div className="flex items-center gap-2">
+              <div className="w-5 h-5 rounded-full shrink-0" style={{ background: v.color || '#64748b' }} />
+              <span className="font-semibold">{v.nombre}</span>
+            </div> },
+            { content: v.despachos, className: 'text-center font-medium' },
+            { content: v.entregados, className: 'text-center text-emerald-600 font-medium' },
+            { content: v.pendientes, className: 'text-center text-amber-600 font-medium' },
+            { content: fmtUsd(v.totalUsd), className: 'text-right font-bold text-slate-800' },
+            { content: fmtUsd(v.montoPendiente), className: 'text-right font-bold text-red-600' },
+          ])}
+        />
+      )}
+
+      {/* Top clientes con monto pendiente */}
+      {topClientesPendientes.length > 0 && (
+        <AdminTable
+          icon={Users} iconColor="text-red-500" title="Clientes con Mayor Monto Pendiente"
+          headers={[
+            { label: 'Cliente' }, { label: 'Despachos pend.', align: 'text-center' },
+            { label: 'Monto Pendiente', align: 'text-right' },
+          ]}
+          rows={topClientesPendientes.map(c => [
+            { content: c.nombre, className: 'font-semibold text-slate-700' },
+            { content: c.count, className: 'text-center text-slate-600' },
+            { content: fmtUsd(c.totalUsd), className: 'text-right font-bold text-red-600' },
+          ])}
+        />
+      )}
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TAB: COMISIONES
+// ═══════════════════════════════════════════════════════════════════════════
+function TabComisiones({ configNeg }) {
+  const { perfil } = useAuthStore()
+  const esSupervisor = perfil?.rol === 'supervisor'
+  const { data: comisiones = [], isLoading } = useComisiones({ estado: '' })
+  const { data: resumen } = useComisionesResumen()
+  const [exportando, setExportando] = useState(false)
+
+  async function exportarPDF() {
+    setExportando(true)
+    try {
+      const { generarComisionesPDF } = await import('../services/pdf/comisionesPDF')
+      await generarComisionesPDF({ comisiones, config: configNeg })
+    } catch (e) { console.error('Error generando PDF:', e) }
+    setExportando(false)
+  }
+
+  if (isLoading) return <SkeletonReporte />
+
+  const pendientes = comisiones.filter(c => c.estado === 'pendiente')
+  const pagadas = comisiones.filter(c => c.estado === 'pagada')
+  const totalPendiente = pendientes.reduce((s, c) => s + Number(c.total_comision || 0), 0)
+  const totalPagado = pagadas.reduce((s, c) => s + Number(c.total_comision || 0), 0)
+  const totalGeneral = totalPendiente + totalPagado
+
+  // Por vendedor
+  const porVendedor = {}
+  comisiones.forEach(c => {
+    const vid = c.vendedor_id
+    if (!porVendedor[vid]) {
+      porVendedor[vid] = {
+        nombre: c.vendedor?.nombre || '—',
+        color: c.vendedor?.color || '#64748b',
+        total: 0, pendiente: 0, pagado: 0, count: 0,
+      }
+    }
+    porVendedor[vid].total += Number(c.total_comision || 0)
+    porVendedor[vid].count++
+    if (c.estado === 'pendiente') porVendedor[vid].pendiente += Number(c.total_comision || 0)
+    else porVendedor[vid].pagado += Number(c.total_comision || 0)
+  })
+  const vendedoresList = Object.values(porVendedor).sort((a, b) => b.total - a.total)
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <ExportButton onClick={exportarPDF} loading={exportando} disabled={comisiones.length === 0} />
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+        <KpiCard icon={DollarSign} label="Total acumulado" value={fmtUsd(totalGeneral)}
+          sub={`${comisiones.length} comisiones`}
+          gradient="linear-gradient(135deg, #1B365D, #0d1f3c)" border="rgba(255,255,255,0.07)" />
+        <KpiCard icon={Clock} label="Pendiente" value={fmtUsd(totalPendiente)}
+          sub={`${pendientes.length} por pagar`}
+          gradient="linear-gradient(135deg, #92400e, #B8860B)" border="rgba(255,255,255,0.10)" />
+        <KpiCard icon={Percent} label="Pagado" value={fmtUsd(totalPagado)}
+          sub={`${pagadas.length} pagadas`}
+          gradient="linear-gradient(135deg, #065f46, #047857)" border="rgba(255,255,255,0.10)" />
+      </div>
+
+      {vendedoresList.length > 0 && (
+        <AdminTable
+          icon={Users} iconColor="text-indigo-500" title="Comisiones por Vendedor"
+          headers={[
+            { label: 'Vendedor' }, { label: 'Comisiones', align: 'text-center' },
+            { label: 'Pendiente', align: 'text-right' }, { label: 'Pagado', align: 'text-right' },
+            { label: 'Total', align: 'text-right' },
+          ]}
+          rows={vendedoresList.map(v => [
+            { content: <div className="flex items-center gap-2">
+              <div className="w-5 h-5 rounded-full shrink-0" style={{ background: v.color }} />
+              <span className="font-semibold">{v.nombre}</span>
+            </div> },
+            { content: v.count, className: 'text-center text-slate-600' },
+            { content: fmtUsd(v.pendiente), className: 'text-right text-amber-600 font-semibold' },
+            { content: fmtUsd(v.pagado), className: 'text-right text-emerald-600 font-semibold' },
+            { content: fmtUsd(v.total), className: 'text-right font-bold text-slate-800' },
+          ])}
+        />
+      )}
+
+      {comisiones.length === 0 && (
+        <EmptyState icon={Percent} title="Sin comisiones" description="No hay comisiones registradas." />
+      )}
+    </div>
+  )
+}
+
+// ─── Shared Components ────────────────────────────────────────────────────
+function ExportButton({ onClick, loading, disabled }) {
+  return (
+    <button onClick={onClick} disabled={loading || disabled}
+      className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md"
+      style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}>
+      <Download size={14} />
+      {loading ? 'Generando...' : 'Exportar PDF'}
+    </button>
+  )
+}
+
+function ErrorMsg({ onRetry }) {
+  return (
+    <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center text-red-700">
+      <p className="font-semibold">Error al cargar el reporte</p>
+      <button onClick={onRetry} className="mt-3 text-sm underline">Intentar de nuevo</button>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MAIN VIEW
+// ═══════════════════════════════════════════════════════════════════════════
 export default function ReportesView() {
-  // Default: esta semana con comparativo semana pasada
+  const [activeTab, setActiveTab] = useState('ventas')
   const defaultRange = useMemo(() => {
     const curr = getWeekRange(0)
     const prev = getWeekRange(-1)
@@ -84,79 +718,54 @@ export default function ReportesView() {
   }, [])
 
   const [range, setRange] = useState(defaultRange)
-  const { data: reporte, isLoading, isError, refetch } = useReporteVentas(range)
   const { data: configNeg = {} } = useConfigNegocio()
-  const [exportando, setExportando] = useState(false)
 
-  async function exportarPDF() {
-    if (!reporte) return
-    setExportando(true)
-    try {
-      await generarReporteVentasPDF({ reporte, rango: range, config: configNeg })
-    } catch (e) { console.error('Error generando PDF:', e) }
-    setExportando(false)
-  }
+  const needsDateRange = activeTab !== 'inventario' && activeTab !== 'comisiones'
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-4 md:space-y-5">
 
       <PageHeader
         icon={BarChart3}
-        title="Reporte de Ventas"
-        subtitle={`${range.from} — ${range.to}`}
+        title="Reportes Administrativos"
+        subtitle={needsDateRange ? `${range.from} — ${range.to}` : 'Datos actuales'}
         action={
-          <div className="flex items-center gap-2">
-            {reporte && reporte.kpis?.numDespachos > 0 && (
-              <button onClick={exportarPDF} disabled={exportando}
-                className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md"
-                style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}>
-                <Download size={14} />
-                {exportando ? 'Generando...' : 'Exportar PDF'}
-              </button>
-            )}
-            <button onClick={() => refetch()}
-              className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
-              <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
-            </button>
-          </div>
+          <button onClick={() => window.location.reload()}
+            className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
+            <RefreshCw size={16} />
+          </button>
         }
       />
 
-      {/* Selector de período */}
-      <DateRangeSelector value={range} onChange={setRange} />
+      {/* Tabs */}
+      <div className="flex gap-1 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
+        {TABS.map(tab => {
+          const Icon = tab.icon
+          const isActive = activeTab === tab.id
+          return (
+            <button key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all border shrink-0 ${
+                isActive
+                  ? 'bg-primary text-white border-primary shadow-md'
+                  : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+              }`}>
+              <Icon size={14} />
+              {tab.label}
+            </button>
+          )
+        })}
+      </div>
 
-      {/* Contenido */}
-      {isLoading ? (
-        <SkeletonReporte />
-      ) : isError ? (
-        <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center text-red-700">
-          <p className="font-semibold">Error al cargar el reporte</p>
-          <button onClick={() => refetch()} className="mt-3 text-sm underline">Intentar de nuevo</button>
-        </div>
-      ) : !reporte || reporte.kpis.numDespachos === 0 ? (
-        <EmptyState
-          icon={BarChart3}
-          title="Sin despachos entregados"
-          description="No hay despachos entregados en el período seleccionado."
-          actionLabel="Cambiar rango de fechas"
-          onAction={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-        />
-      ) : (
-        <div className="space-y-4">
-          {/* KPIs */}
-          <KpiCards kpis={reporte.kpis} />
+      {/* Date Range (for time-based tabs) */}
+      {needsDateRange && <DateRangeSelector value={range} onChange={setRange} />}
 
-          {/* Grid de tablas */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <TablaVendedores data={reporte.porVendedor} />
-            <TablaClientes data={reporte.porCliente} />
-          </div>
-
-          <TablaProductos porProducto={reporte.porProducto} porCategoria={reporte.porCategoria} />
-
-          <FormaPagoSection data={reporte.porFormaPago} />
-        </div>
-      )}
+      {/* Tab Content */}
+      {activeTab === 'ventas' && <TabVentas range={range} configNeg={configNeg} />}
+      {activeTab === 'inventario' && <TabInventario configNeg={configNeg} />}
+      {activeTab === 'cotizaciones' && <TabCotizaciones range={range} configNeg={configNeg} />}
+      {activeTab === 'despachos' && <TabDespachos range={range} configNeg={configNeg} />}
+      {activeTab === 'comisiones' && <TabComisiones configNeg={configNeg} />}
     </div>
   )
 }

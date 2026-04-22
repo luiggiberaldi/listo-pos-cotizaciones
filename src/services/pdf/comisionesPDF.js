@@ -606,7 +606,7 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {} }) {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 5. POR CATEGORÍA
+  // 5. POR CATEGORÍA (con barras visuales)
   // ══════════════════════════════════════════════════════════════════════════
   const porCategoria = reporte.porCategoria || []
   if (porCategoria.length > 0) {
@@ -617,32 +617,31 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {} }) {
     doc.text('Ventas por Categoría', MARGIN, y + 4)
     y += 8
 
-    doc.setFillColor(240, 242, 245)
-    doc.rect(MARGIN, y, CONTENT_W, 6, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(6.5)
-    doc.setTextColor(80, 90, 110)
-    doc.text('Categoría', MARGIN + 2, y + 4)
-    doc.text('Unidades', MARGIN + 90, y + 4)
-    doc.text('Total USD', MARGIN + 125, y + 4)
-    y += 8
-
+    const catTotal = porCategoria.reduce((s, c) => s + c.totalUsd, 0)
     porCategoria.forEach((cat, idx) => {
-      y = checkPage(doc, y, 7)
-      if (idx % 2 === 0) {
-        doc.setFillColor(252, 252, 253)
-        doc.rect(MARGIN, y - 1, CONTENT_W, 6, 'F')
-      }
+      y = checkPage(doc, y, 10)
+      const pct = catTotal > 0 ? ((cat.totalUsd / catTotal) * 100).toFixed(1) : '0.0'
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(7)
       doc.setTextColor(...C_DARK)
-      doc.text((cat.categoria || '—').substring(0, 35), MARGIN + 2, y + 3)
-      doc.text(String(cat.unidades || 0), MARGIN + 95, y + 3)
+      doc.text(`${(cat.categoria || '—').substring(0, 25)} (${cat.unidades || 0} uds.)`, MARGIN + 2, y + 3)
+      doc.text(`${pct}%`, MARGIN + 80, y + 3)
       doc.setFont('helvetica', 'bold')
-      doc.text(fmtUsd(cat.totalUsd), MARGIN + 125, y + 3)
-      y += 6
+      doc.text(fmtUsd(cat.totalUsd), MARGIN + 100, y + 3)
+
+      // Mini barra
+      const barX = MARGIN + 130
+      const barW = CONTENT_W - 130
+      doc.setFillColor(230, 233, 240)
+      doc.roundedRect(barX, y, barW, 3, 1, 1, 'F')
+      const fillW = barW * (Number(pct) / 100)
+      if (fillW > 0) {
+        doc.setFillColor(...C_PRIMARY)
+        doc.roundedRect(barX, y, Math.max(fillW, 2), 3, 1, 1, 'F')
+      }
+      y += 7
     })
-    y += 6
+    y += 4
   }
 
   // ══════════════════════════════════════════════════════════════════════════
