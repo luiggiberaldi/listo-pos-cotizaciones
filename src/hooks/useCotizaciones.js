@@ -25,32 +25,69 @@ export function useCotizaciones({ estado = '', clienteId = '' } = {}) {
   return useQuery({
     queryKey: [...COTIZACIONES_KEY, estado, clienteId, esSupervisor],
     queryFn: async () => {
-      // Ambos roles usan tabla directa con joins FK para obtener cliente/vendedor
-      // Vendedor no incluye notas_internas (que se oculta vía la vista)
+      if (esSupervisor) {
+        // Supervisor: tabla directa con joins por FK
+        let query = supabase
+          .from('cotizaciones')
+          .select(`
+            id, numero, version, estado,
+            subtotal_usd, descuento_global_pct, descuento_usd,
+            costo_envio_usd, total_usd,
+            tasa_bcv_snapshot, total_bs_snapshot,
+            valida_hasta, creado_en, enviada_en,
+            notas_cliente,
+            cliente_id, vendedor_id,
+            cliente:clientes!cotizaciones_cliente_id_fkey(id, nombre, rif_cedula, telefono, tipo_cliente, direccion, vendedor_id),
+            vendedor:usuarios!cotizaciones_vendedor_id_fkey(id, nombre, color, telefono),
+            despacho:notas_despacho!notas_despacho_cotizacion_id_fkey(id, estado)
+          `)
+          .order('creado_en', { ascending: false })
+          .limit(200)
+
+        if (estado) query = query.eq('estado', estado)
+        if (clienteId) query = query.eq('cliente_id', clienteId)
+
+        const { data, error } = await query
+        if (error) throw error
+        return data ?? []
+      }
+
+      // Vendedor: vista (sin notas_internas) + batch lookup de relaciones
       let query = supabase
-        .from('cotizaciones')
-        .select(`
-          id, numero, version, estado,
-          subtotal_usd, descuento_global_pct, descuento_usd,
-          costo_envio_usd, total_usd,
-          tasa_bcv_snapshot, total_bs_snapshot,
-          valida_hasta, creado_en, enviada_en,
-          notas_cliente,
-          cliente_id, vendedor_id,
-          cliente:clientes!cotizaciones_cliente_id_fkey(id, nombre, rif_cedula, telefono, tipo_cliente, direccion, vendedor_id),
-          vendedor:usuarios!cotizaciones_vendedor_id_fkey(id, nombre, color, telefono),
-          despacho:notas_despacho!notas_despacho_cotizacion_id_fkey(id, estado)
-        `)
+        .from('v_cotizaciones_vendedor')
+        .select('id, numero, version, cliente_id, vendedor_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, notas_cliente, creado_en, enviada_en')
+        .eq('vendedor_id', perfil.id)
         .order('creado_en', { ascending: false })
         .limit(200)
 
-      if (!esSupervisor) query = query.eq('vendedor_id', perfil.id)
       if (estado) query = query.eq('estado', estado)
       if (clienteId) query = query.eq('cliente_id', clienteId)
 
-      const { data, error } = await query
+      const { data: rows, error } = await query
       if (error) throw error
-      return data ?? []
+      if (!rows?.length) return []
+
+      // Fetch related clients and vendors in batch
+      const clienteIds  = [...new Set(rows.map(r => r.cliente_id).filter(Boolean))]
+      const vendedorIds = [...new Set(rows.map(r => r.vendedor_id).filter(Boolean))]
+
+      const [clientesRes, vendedoresRes] = await Promise.all([
+        clienteIds.length
+          ? supabase.from('clientes').select('id, nombre, rif_cedula, telefono, tipo_cliente, vendedor_id').in('id', clienteIds)
+          : { data: [] },
+        vendedorIds.length
+          ? supabase.from('usuarios').select('id, nombre, color').in('id', vendedorIds)
+          : { data: [] },
+      ])
+
+      const clientesMap  = Object.fromEntries((clientesRes.error ? [] : clientesRes.data ?? []).map(c => [c.id, c]))
+      const vendedoresMap = Object.fromEntries((vendedoresRes.error ? [] : vendedoresRes.data ?? []).map(v => [v.id, v]))
+
+      return rows.map(r => ({
+        ...r,
+        cliente:  clientesMap[r.cliente_id]  ?? null,
+        vendedor: vendedoresMap[r.vendedor_id] ?? null,
+      }))
     },
     enabled: !!perfil,
     staleTime: 1000 * 60 * 5,
