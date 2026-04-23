@@ -310,7 +310,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
                 <div className="absolute left-0 bottom-full mb-1 w-40 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
                   onMouseDown={e => e.preventDefault()}>
                   {[
-                    { key: '$', icon: <DollarSign size={14} className="text-emerald-500" />, label: 'Dólares ($)' },
+                    { key: '$', icon: <DollarSign size={14} className="text-emerald-500" />, label: 'USDT ($)' },
                     { key: 'bcv', icon: <span className="text-sm font-bold text-teal-500 w-[14px] text-center">$</span>, label: 'Dólar BCV' },
                     { key: 'bs', icon: <span className="text-sm font-bold text-blue-500 w-[14px] text-center">Bs</span>, label: 'Bolívares' },
                     { key: 'mixto', icon: <span className="text-xs font-bold text-amber-500 w-[18px] text-center shrink-0">$Bs</span>, label: 'Mixto' },
@@ -370,7 +370,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
               <div className="absolute left-0 bottom-full mb-1 w-40 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
                 onMouseDown={e => e.preventDefault()}>
                 {[
-                  { key: '$', icon: <DollarSign size={14} className="text-emerald-500" />, label: 'Dólares ($)' },
+                  { key: '$', icon: <DollarSign size={14} className="text-emerald-500" />, label: 'USDT ($)' },
                   { key: 'bcv', icon: <span className="text-sm font-bold text-teal-500 w-[14px] text-center">$</span>, label: 'Dólar BCV' },
                   { key: 'bs', icon: <span className="text-sm font-bold text-blue-500 w-[14px] text-center">Bs</span>, label: 'Bolívares' },
                   { key: 'mixto', icon: <span className="text-xs font-bold text-amber-500 w-[18px] text-center shrink-0">$Bs</span>, label: 'Mixto' },
