@@ -1,6 +1,9 @@
 // src/services/notificationService.js
 // Sistema de alertas internas — Construacero Carabobo
 // Notificaciones separadas por usuario (localStorage per-user)
+// Realtime broadcast via Supabase para entrega cross-device
+
+import supabase from './supabase/client'
 
 const NOTIF_KEY_BASE = 'construacero_notifications_v2'
 const MAX_NOTIFS = 100
@@ -38,18 +41,19 @@ export const NOTIF_TYPES = {
   COTIZACION_POR_VENCER:     'cotizacion_por_vencer',
 }
 
-// Qué rol ve cada tipo de notificación
-// null = ambos roles ven la notificación local (el push se encarga del cross-role)
+// Qué rol ve cada tipo de notificación en la campanita local
+// null = ambos roles ven la notificación local
+// 'supervisor'/'vendedor' = solo ese rol la ve localmente
 const NOTIF_TARGET_ROLE = {
   [NOTIF_TYPES.STOCK_BAJO]:                'supervisor',
-  [NOTIF_TYPES.COTIZACION_ENVIADA]:        null,         // vendedor crea → push llega al supervisor
-  [NOTIF_TYPES.COTIZACION_ACEPTADA]:       null,         // supervisor crea → push llega al vendedor
-  [NOTIF_TYPES.COTIZACION_CREADA]:         null,         // ambos
-  [NOTIF_TYPES.DESPACHO_CREADO]:           null,         // quien despacha crea → push al supervisor
-  [NOTIF_TYPES.COTIZACION_ANULADA]:        null,         // ambos
-  [NOTIF_TYPES.CLIENTE_AJENO]:             null,         // vendedor crea → push al supervisor
-  [NOTIF_TYPES.COTIZACION_SIN_RESPUESTA]:  null,         // ya filtrado en query
-  [NOTIF_TYPES.COTIZACION_POR_VENCER]:     null,         // ya filtrado en query
+  [NOTIF_TYPES.COTIZACION_ENVIADA]:        'supervisor',  // vendedor ya sabe que envió
+  [NOTIF_TYPES.COTIZACION_ACEPTADA]:       'vendedor',    // supervisor ya sabe que aceptó
+  [NOTIF_TYPES.COTIZACION_CREADA]:         null,
+  [NOTIF_TYPES.DESPACHO_CREADO]:           null,
+  [NOTIF_TYPES.COTIZACION_ANULADA]:        null,
+  [NOTIF_TYPES.CLIENTE_AJENO]:             'supervisor',  // vendedor ya sabe que usó cliente ajeno
+  [NOTIF_TYPES.COTIZACION_SIN_RESPUESTA]:  null,
+  [NOTIF_TYPES.COTIZACION_POR_VENCER]:     null,
 }
 
 function readNotifs() {
@@ -73,10 +77,25 @@ function saveNotifs(notifs) {
  * @param {string|null} currentRole - Rol del usuario actual ('supervisor'|'vendedor')
  */
 export function createNotification(type, title, body, meta = null, currentRole = null) {
-  // Filtrar por rol: si la notificación es para un rol específico, solo crearla si coincide
   const targetRole = NOTIF_TARGET_ROLE[type]
-  if (targetRole && currentRole && targetRole !== currentRole) return null
 
+  // Notificación para un rol específico diferente al actual → solo broadcast
+  if (targetRole && currentRole && targetRole !== currentRole) {
+    _broadcastNotification({ type, title, body, meta, targetRole })
+    return null
+  }
+
+  // Notificación para ambos roles (null) → crear local + broadcast al otro rol
+  if (!targetRole && currentRole) {
+    const otherRole = currentRole === 'supervisor' ? 'vendedor' : 'supervisor'
+    _broadcastNotification({ type, title, body, meta, targetRole: otherRole })
+  }
+
+  return _insertLocalNotification(type, title, body, meta)
+}
+
+// Crea la notificación localmente (localStorage + evento + sonido)
+function _insertLocalNotification(type, title, body, meta) {
   const notif = {
     id: crypto.randomUUID(),
     ts: Date.now(),
@@ -94,6 +113,45 @@ export function createNotification(type, title, body, meta = null, currentRole =
   window.dispatchEvent(new CustomEvent('construacero-notification', { detail: notif }))
   playNotifSound()
   return notif
+}
+
+// ─── Supabase Realtime broadcast ──────────────────────────────────────────────
+let _realtimeChannel = null
+
+function _broadcastNotification({ type, title, body, meta, targetRole }) {
+  try {
+    if (!_realtimeChannel) return // no hay canal activo, se pierde (push lo cubre)
+    _realtimeChannel.send({
+      type: 'broadcast',
+      event: 'new_notification',
+      payload: { type, title, body, meta, targetRole, ts: Date.now() },
+    })
+  } catch { /* silencioso */ }
+}
+
+/**
+ * Inicia la escucha de notificaciones Realtime.
+ * Llamar una vez al montar AppLayout con el rol actual.
+ */
+export function startRealtimeNotifications(currentRole) {
+  stopRealtimeNotifications()
+
+  _realtimeChannel = supabase
+    .channel('notificaciones')
+    .on('broadcast', { event: 'new_notification' }, ({ payload }) => {
+      if (!payload) return
+      // Solo crear localmente si la notificación es para mi rol (o para todos)
+      if (payload.targetRole && payload.targetRole !== currentRole) return
+      _insertLocalNotification(payload.type, payload.title, payload.body, payload.meta)
+    })
+    .subscribe()
+}
+
+export function stopRealtimeNotifications() {
+  if (_realtimeChannel) {
+    supabase.removeChannel(_realtimeChannel)
+    _realtimeChannel = null
+  }
 }
 
 export function getNotifications() {

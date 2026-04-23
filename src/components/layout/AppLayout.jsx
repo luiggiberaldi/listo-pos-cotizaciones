@@ -22,7 +22,7 @@ import { useAdminAlerts } from '../../hooks/useAdminAlerts'
 import { useRecordatoriosCotizaciones } from '../../hooks/useRecordatoriosCotizaciones'
 import { usePushNotifications } from '../../hooks/usePushNotifications'
 import { showToast } from '../ui/Toast'
-import { NOTIF_TYPES, setNotificationUserId } from '../../services/notificationService'
+import { NOTIF_TYPES, setNotificationUserId, startRealtimeNotifications, stopRealtimeNotifications } from '../../services/notificationService'
 
 // ─── Iconos por tipo de notificación ────────────────────────────────────────
 const NOTIF_ICON_MAP = {
@@ -117,6 +117,14 @@ export default function AppLayout() {
   useEffect(() => {
     if (perfil?.id) setNotificationUserId(perfil.id)
   }, [perfil?.id])
+
+  // Realtime notifications cross-device
+  useEffect(() => {
+    if (perfil?.rol) {
+      startRealtimeNotifications(perfil.rol)
+      return () => stopRealtimeNotifications()
+    }
+  }, [perfil?.rol])
 
   // Recordatorios de vencimiento deshabilitados (cotizaciones y despachos no vencen)
   // useRecordatoriosCotizaciones()
