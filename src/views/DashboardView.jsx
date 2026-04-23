@@ -3,12 +3,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { memo, useMemo } from 'react'
-import { LayoutDashboard, FileText, Users, DollarSign, TrendingUp, Clock, Plus, UserCog, ClipboardList, ArrowRight, Package, UserRound, BarChart2 } from 'lucide-react'
+import { LayoutDashboard, FileText, Users, DollarSign, TrendingUp, Clock, Plus, UserCog, ClipboardList, ArrowRight, Package, UserRound, BarChart2, AlertCircle } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import supabase     from '../services/supabase/client'
 import { fmtUsd, fmtBs, usdToBs } from '../utils/format'
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import { useComisionesResumen } from '../hooks/useComisiones'
+import { useResumenCxC } from '../hooks/useCuentasCobrar'
 // import { useTurnoAtencion } from '../hooks/useTurnoAtencion' // Oculto temporalmente
 import Skeleton     from '../components/ui/Skeleton'
 import PageHeader  from '../components/ui/PageHeader'
@@ -152,6 +153,14 @@ const MetricCard = memo(function MetricCard({ icon: Icon, label, value, sub, col
       sub:   'rgba(255,255,255,0.45)',
       border:'rgba(255,255,255,0.1)',
     },
+    red: {
+      bg:    'linear-gradient(135deg, #991b1b 0%, #dc2626 100%)',
+      icon:  'rgba(255,255,255,0.15)',
+      value: '#ffffff',
+      label: 'rgba(255,255,255,0.65)',
+      sub:   'rgba(255,255,255,0.45)',
+      border:'rgba(255,255,255,0.1)',
+    },
   }
   const t = themes[color] ?? themes.primary
   return (
@@ -181,6 +190,7 @@ export default function DashboardView() {
   const esSupervisor = perfil?.rol === 'supervisor'
   const { data: m, isLoading } = useMetricas()
   const { data: comResumen } = useComisionesResumen()
+  const { data: cxcResumen } = useResumenCxC()
   const { tasaEfectiva } = useTasaCambio()
   // const { vendedorHoy, calendario, esDomingo } = useTurnoAtencion() // Oculto temporalmente
   const navigate = useNavigate()
@@ -259,6 +269,15 @@ export default function DashboardView() {
             sub={m?.tasaAceptacion !== null ? 'aceptadas vs rechazadas' : 'sin datos suficientes'}
             color="gold"
           />
+          {esSupervisor && cxcResumen?.totalDeuda > 0 && (
+            <MetricCard
+              icon={AlertCircle}
+              label="Cuentas por cobrar"
+              value={fmtUsd(cxcResumen.totalDeuda)}
+              sub={`${cxcResumen.clientes?.length ?? 0} cliente${(cxcResumen.clientes?.length ?? 0) !== 1 ? 's' : ''} con deuda`}
+              color="red"
+            />
+          )}
         </div>
       )}
 
