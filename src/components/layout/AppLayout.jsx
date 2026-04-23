@@ -108,7 +108,7 @@ export default function AppLayout() {
   const { perfil, switchOut } = useAuthStore()
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth < 1400)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth >= 768 && window.innerWidth < 1400)
 
   // Realtime: escucha cambios en tablas y refresca cache automáticamente
   useRealtimeSync()
