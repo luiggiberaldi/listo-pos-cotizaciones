@@ -5,6 +5,7 @@ import {
   Settings, Building2, Phone, Mail, MapPin, FileText, Save, CheckCircle,
   Eye, EyeOff, Accessibility, HardDrive, Download, Upload,
   AlertCircle, AlertTriangle, Percent, Users, Database, Copy, Check, DollarSign,
+  ZoomIn, ZoomOut, RotateCcw,
 } from 'lucide-react'
 import { useConfigNegocio, useActualizarConfig, hashSHA256 } from '../hooks/useConfigNegocio'
 import { useCategorias } from '../hooks/useInventario'
@@ -242,6 +243,18 @@ export default function ConfiguracionView() {
     document.documentElement.classList.toggle('modo-accesible', next)
   }
 
+  const [zoom, setZoom] = useState(() => {
+    const saved = localStorage.getItem('app-zoom')
+    return saved ? Number(saved) : 100
+  })
+
+  function applyZoom(val) {
+    const clamped = Math.max(70, Math.min(130, val))
+    setZoom(clamped)
+    localStorage.setItem('app-zoom', String(clamped))
+    document.documentElement.style.zoom = `${clamped}%`
+  }
+
   const [campos, setCampos] = useState({
     nombre_negocio:          '',
     rif_negocio:             '',
@@ -366,6 +379,40 @@ export default function ConfiguracionView() {
         title="Configuración"
         subtitle="Ajustes del sistema y del negocio"
       />
+
+      {/* ── Zoom de pantalla ─────────────────────────────────────────── */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+            style={{ background: 'linear-gradient(135deg, rgba(27,54,93,0.08), rgba(184,134,11,0.08))', border: '1px solid rgba(27,54,93,0.1)' }}>
+            <Eye size={13} style={{ color: '#1B365D' }} />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-slate-700">Tamaño de pantalla</p>
+            <p className="text-xs text-slate-400">Ajusta el zoom de la interfaz</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => applyZoom(zoom - 5)}
+            disabled={zoom <= 70}
+            className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-50 active:scale-95 transition-all disabled:opacity-30">
+            <ZoomOut size={15} />
+          </button>
+          <span className="text-sm font-bold text-slate-700 w-12 text-center">{zoom}%</span>
+          <button type="button" onClick={() => applyZoom(zoom + 5)}
+            disabled={zoom >= 130}
+            className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-50 active:scale-95 transition-all disabled:opacity-30">
+            <ZoomIn size={15} />
+          </button>
+          {zoom !== 100 && (
+            <button type="button" onClick={() => applyZoom(100)}
+              className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-50 active:scale-95 transition-all"
+              title="Restablecer a 100%">
+              <RotateCcw size={13} />
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* Tabs */}
       <div className="flex overflow-x-auto gap-1 bg-slate-100 p-1 rounded-2xl scrollbar-hide">

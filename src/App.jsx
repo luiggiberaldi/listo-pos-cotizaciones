@@ -156,6 +156,10 @@ function AppRoutes() {
     if (localStorage.getItem('modo-accesible') === '1') {
       document.documentElement.classList.add('modo-accesible')
     }
+    const savedZoom = localStorage.getItem('app-zoom')
+    if (savedZoom) {
+      document.documentElement.style.zoom = `${savedZoom}%`
+    }
   }, [])
 
   return (
