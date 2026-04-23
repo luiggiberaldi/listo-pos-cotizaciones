@@ -35,8 +35,8 @@ function fmtTotalLinea(n, moneda, tasa, factorBcv) {
 }
 
 // ─── Layout y Colores ──────────────────────────────────────────────────────────
-const PAGE_W    = 210
-const PAGE_H    = 297
+const PAGE_W    = 216
+const PAGE_H    = 279
 const MARGIN    = 14
 const CONTENT_W = PAGE_W - MARGIN * 2
 
@@ -58,7 +58,7 @@ const CUENTAS_BANCARIAS = [
 ]
 
 export async function generarPDF({ cotizacion, items = [], config = {}, returnBlob = false, monedaPDF = '$', tasa = 0, tasaUsdt = 0, tasaBcv = 0 }) {
-  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
+  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
   let y = 0
 
   // Factor BCV: cuántos dólares BCV equivale 1 USDT (ej: 1.30)

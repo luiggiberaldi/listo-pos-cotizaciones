@@ -202,7 +202,7 @@ export default function DashboardView() {
     : null, [m?.totalMesUsd, m?.totalMesAntUsd])
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 space-y-4 md:space-y-6">
+    <div className="p-3 sm:p-4 md:p-5 lg:p-6 space-y-3 sm:space-y-4 md:space-y-5">
 
       {/* Tip de onboarding */}
       <OnboardingTip tipId="dashboard_intro">

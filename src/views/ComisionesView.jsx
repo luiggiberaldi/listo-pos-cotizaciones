@@ -338,7 +338,7 @@ export default function ComisionesView() {
   const selectCls = 'text-sm font-medium px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary transition-colors'
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 space-y-4 md:space-y-5">
+    <div className="p-3 sm:p-4 md:p-5 lg:p-6 space-y-3 sm:space-y-4 md:space-y-5">
 
       <PageHeader
         icon={DollarSign}

@@ -13,8 +13,8 @@ function fmtNum(n) {
 }
 
 // ─── Layout y Colores ────────────────────────────────────────────────────────
-const PAGE_W    = 210
-const PAGE_H    = 297
+const PAGE_W    = 216
+const PAGE_H    = 279
 const MARGIN    = 14
 const CONTENT_W = PAGE_W - MARGIN * 2
 
@@ -97,7 +97,7 @@ function drawFooter(doc, config) {
 
 // ─── Generar Reporte de Inventario ──────────────────────────────────────────
 export async function generarInventarioPDF({ reporte, config = {} }) {
-  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
+  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
   const logoData = await cargarLogo(config.logo_url)
 
   let y = drawHeader(doc, logoData, config, 'Inventario Valorizado')

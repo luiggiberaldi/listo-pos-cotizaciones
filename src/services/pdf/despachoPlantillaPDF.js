@@ -6,8 +6,8 @@ import { LOGO_DESPACHO } from './logoDespachoBase64'
 import { WATERMARK_LOGO } from './watermarkBase64'
 
 const MARGIN    = 14
-const PAGE_W    = 210
-const PAGE_H    = 297
+const PAGE_W    = 216
+const PAGE_H    = 279
 const CONTENT_W = PAGE_W - MARGIN * 2
 const C_DARK    = [5, 8, 52]
 const C_WHITE   = [255, 255, 255]
@@ -23,7 +23,7 @@ function drawCheck(doc, label, x, y) {
 }
 
 export async function generarDespachoPlantillaPDF({ config = {} } = {}) {
-  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
+  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
 
   let y = 0
 

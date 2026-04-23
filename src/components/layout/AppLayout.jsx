@@ -85,7 +85,7 @@ const NavItem = memo(function NavItem({ path, label, Icono, onClick, collapsed }
       onClick={onClick}
       title={collapsed ? label : undefined}
       className={({ isActive }) => `
-        flex items-center ${collapsed ? 'justify-center' : 'gap-3'} ${collapsed ? 'px-2' : 'px-3'} py-2 md:py-1.5 xl:py-2.5 rounded-xl
+        flex items-center ${collapsed ? 'justify-center' : 'gap-3'} ${collapsed ? 'px-2' : 'px-3'} py-1.5 md:py-1.5 xl:py-2 rounded-xl
         text-sm font-bold transition-all duration-200
         ${isActive
           ? 'text-white shadow-lg'
@@ -108,7 +108,7 @@ export default function AppLayout() {
   const { perfil, switchOut } = useAuthStore()
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth < 1400)
 
   // Realtime: escucha cambios en tablas y refresca cache automáticamente
   useRealtimeSync()
@@ -374,11 +374,11 @@ export default function AppLayout() {
         </div>
 
         {/* Logo + botón colapsar */}
-        <div className="relative z-10 px-4 py-3 md:py-3 xl:py-4 flex flex-col items-center shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="relative z-10 px-4 py-2 md:py-2 xl:py-3 flex flex-col items-center shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
 
           <img src="/logo.png" alt="Construacero Carabobo"
             className={`object-contain transition-all duration-300 select-none pointer-events-none ${
-              sidebarCollapsed ? 'h-[40px] w-[40px]' : 'h-[70px] md:h-[90px] xl:h-[130px]'
+              sidebarCollapsed ? 'h-[36px] w-[36px]' : 'h-[60px] md:h-[72px] xl:h-[95px]'
             }`}
             style={{ filter: 'brightness(1.05) drop-shadow(0 0 12px rgba(184,134,11,0.2))' }}
             draggable={false}
@@ -419,7 +419,7 @@ export default function AppLayout() {
         </nav>
 
         {/* Usuario — toca para cambiar operador */}
-        <div className="relative z-10 p-3 pb-20 md:pb-3 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="relative z-10 p-2 pb-20 md:pb-2 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           <button
             onClick={handleSwitchOut}
             className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} p-3 rounded-2xl transition-all active:scale-[0.98] group`}

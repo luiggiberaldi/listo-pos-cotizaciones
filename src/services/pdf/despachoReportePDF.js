@@ -16,8 +16,8 @@ function hexToRgb(hex) {
 }
 
 // ─── Layout y Colores ────────────────────────────────────────────────────────
-const PAGE_W    = 210
-const PAGE_H    = 297
+const PAGE_W    = 216
+const PAGE_H    = 279
 const MARGIN    = 14
 const CONTENT_W = PAGE_W - MARGIN * 2
 
@@ -60,7 +60,7 @@ function checkPage(doc, y, needed = 30) {
 
 // ─── Generar Reporte de Despachos ───────────────────────────────────────────
 export async function generarDespachoReportePDF({ reporte, rango, config = {} }) {
-  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
+  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
   const logoData = await cargarLogo(config.logo_url)
   let y = 0
 

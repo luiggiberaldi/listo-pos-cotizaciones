@@ -572,7 +572,7 @@ export default function AuditoriaView() {
   const hayFiltros = categoria || usuarioId || busqueda || filtroFecha
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 space-y-4">
+    <div className="p-3 sm:p-4 md:p-5 lg:p-6 space-y-3 sm:space-y-4">
 
       {/* Encabezado */}
       <PageHeader

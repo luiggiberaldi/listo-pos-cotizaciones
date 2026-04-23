@@ -40,8 +40,8 @@ function hexToRgb(hex) {
 
 // ─── Constantes de diseño ─────────────────────────────────────────────────────
 const MARGIN    = 14
-const PAGE_W    = 210
-const PAGE_H    = 297
+const PAGE_W    = 216
+const PAGE_H    = 279
 const CONTENT_W = PAGE_W - MARGIN * 2
 
 const C_PRIMARY = [58, 99, 168]     // Mariner — header, footer, accents
@@ -72,7 +72,7 @@ function drawCheck(doc, label, x, y, checked = false) {
 }
 
 export async function generarDespachoPDF({ despacho, items = [], config = {}, formaPago = '', monedaPDF = '$', tasa = 0, tasaUsdt = 0, tasaBcv = 0, returnBlob = false }) {
-  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
+  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
 
   const factorBcv = (tasaUsdt > 0 && tasaBcv > 0) ? tasaUsdt / tasaBcv : 0
 

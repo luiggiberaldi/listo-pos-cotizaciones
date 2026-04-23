@@ -814,7 +814,7 @@ export default function ReportesView() {
   const needsDateRange = activeTab !== 'inventario' && activeTab !== 'comisiones' && activeTab !== 'credito'
 
   return (
-    <div className="p-3 sm:p-4 md:p-6 lg:p-8 space-y-3 sm:space-y-4 md:space-y-5">
+    <div className="p-3 sm:p-4 md:p-5 lg:p-6 space-y-3 sm:space-y-4 md:space-y-5">
 
       {/* ── Header compacto mobile ─────────────────────────────────────── */}
       <div className="flex items-center justify-between gap-2 pb-2 sm:pb-4" style={{ borderBottom: '1px solid #e2e8f0' }}>
