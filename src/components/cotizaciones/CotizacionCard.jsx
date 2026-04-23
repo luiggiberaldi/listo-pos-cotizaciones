@@ -336,7 +336,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         </button>
 
         {/* Fila secundaria: Ver + PDF + más */}
-        <div className="flex items-center gap-1.5 mt-2">
+        <div className="flex items-center gap-1 mt-2 flex-wrap">
           {primaryAction.key !== 'ver' && (
             <button onClick={() => setShowDetalle(true)}
               className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 active:bg-slate-100 transition-colors">
@@ -348,7 +348,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
               <div className="relative">
                 <button onClick={() => setShowMonedaMenu(v => !v)}
                   onBlur={() => setTimeout(() => setShowMonedaMenu(false), 200)}
-                  className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors">
+                  className="flex items-center gap-1 px-2 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors whitespace-nowrap">
                   <DollarSign size={14} />
                   {monedaLabel} <ChevronDown size={10} />
                 </button>
