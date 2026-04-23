@@ -41,14 +41,16 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
   const [showActions, setShowActions] = useState(false)
   const [showDetalle, setShowDetalle] = useState(false)
   const [showSheet, setShowSheet]     = useState(false)
+  const [showPdfMenu, setShowPdfMenu] = useState(false)
   const { data: config = {} } = useConfigNegocio()
 
   const numDisplay = cotizacion.version > 1
     ? `COT-${String(cotizacion.numero).padStart(5, '0')} Rev.${cotizacion.version}`
     : `COT-${String(cotizacion.numero).padStart(5, '0')}`
 
-  async function descargarPDF() {
+  async function descargarPDF(monedaPDF = '$') {
     setPdfLoading(true)
+    setShowPdfMenu(false)
     try {
       const [{ generarPDF }, itemsRes, clienteData, vendedorRes] = await Promise.all([
         import('../../services/pdf/cotizacionPDF'),
@@ -62,7 +64,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         cliente: clienteData || cotizacion.cliente,
         vendedor: vendedorRes.data || cotizacion.vendedor,
       }
-      await generarPDF({ cotizacion: cotConDatos, items: itemsRes.data ?? [], config })
+      await generarPDF({ cotizacion: cotConDatos, items: itemsRes.data ?? [], config, monedaPDF, tasa })
     } catch (err) {
       showToast('Error al generar PDF: ' + (err.message || 'Error desconocido'), 'error')
     } finally {
@@ -292,11 +294,31 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
             </button>
           )}
           {canPdf && (
-            <button onClick={descargarPDF} disabled={pdfLoading}
-              className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40">
-              {pdfLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <FileDown size={14} />}
-              PDF
-            </button>
+            <div className="relative">
+              <button onClick={() => setShowPdfMenu(v => !v)} disabled={pdfLoading}
+                onBlur={() => setTimeout(() => setShowPdfMenu(false), 200)}
+                className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40">
+                {pdfLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <FileDown size={14} />}
+                PDF <ChevronDown size={10} />
+              </button>
+              {showPdfMenu && (
+                <div className="absolute left-0 bottom-full mb-1 w-36 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
+                  onMouseDown={e => e.preventDefault()}>
+                  <button onClick={() => descargarPDF('$')}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
+                    <DollarSign size={14} className="text-emerald-500" /> Dólares ($)
+                  </button>
+                  <button onClick={() => descargarPDF('bs')}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
+                    <span className="text-sm font-bold text-blue-500 w-[14px] text-center">Bs</span> Bolívares
+                  </button>
+                  <button onClick={() => descargarPDF('mixto')}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
+                    <span className="text-sm font-bold text-amber-500 w-[14px] text-center">$Bs</span> Mixto
+                  </button>
+                </div>
+              )}
+            </div>
           )}
           {getMobileSheetActions().length > 0 && (
             <button onClick={() => setShowSheet(true)}
@@ -333,11 +355,31 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
           </button>
         )}
         {canPdf && (
-          <button onClick={descargarPDF} disabled={pdfLoading}
-            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-40">
-            {pdfLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <FileDown size={13} />}
-            PDF
-          </button>
+          <div className="relative">
+            <button onClick={() => setShowPdfMenu(v => !v)} disabled={pdfLoading}
+              onBlur={() => setTimeout(() => setShowPdfMenu(false), 200)}
+              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-40">
+              {pdfLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <FileDown size={13} />}
+              PDF <ChevronDown size={10} />
+            </button>
+            {showPdfMenu && (
+              <div className="absolute left-0 bottom-full mb-1 w-36 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
+                onMouseDown={e => e.preventDefault()}>
+                <button onClick={() => descargarPDF('$')}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
+                  <DollarSign size={14} className="text-emerald-500" /> Dólares ($)
+                </button>
+                <button onClick={() => descargarPDF('bs')}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
+                  <span className="text-sm font-bold text-blue-500 w-[14px] text-center">Bs</span> Bolívares
+                </button>
+                <button onClick={() => descargarPDF('mixto')}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
+                  <span className="text-sm font-bold text-amber-500 w-[14px] text-center">$Bs</span> Mixto
+                </button>
+              </div>
+            )}
+          </div>
         )}
         {canWhatsApp && (
           <button onClick={handleWhatsApp} disabled={waLoading}
