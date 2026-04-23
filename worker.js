@@ -1914,7 +1914,8 @@ async function handleCrearDespacho(request, env) {
 
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
-  const { cotizacionId, notas, formaPago, transportistaId } = body;
+  const { cotizacionId, notas, formaPago, transportistaId, fleteUsd } = body;
+  const flete = Math.max(0, Number(fleteUsd) || 0);
   if (!cotizacionId) return jsonError('Falta cotizacionId', 400, request);
   if (!isValidUuid(cotizacionId)) return jsonError('cotizacionId inválido', 400, request);
 
@@ -2020,6 +2021,7 @@ async function handleCrearDespacho(request, env) {
     }
 
     // 7. Crear nota de despacho
+    const totalConFlete = Number(cot.total_usd) + flete;
     const despRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?select=id,numero`, {
       method: 'POST',
       headers: { ...headers, Prefer: 'return=representation' },
@@ -2029,7 +2031,7 @@ async function handleCrearDespacho(request, env) {
         vendedor_id: cot.vendedor_id,
         transportista_id: transportistaId || cot.transportista_id,
         estado: 'pendiente',
-        total_usd: cot.total_usd,
+        total_usd: totalConFlete,
         notas: notas || null,
         forma_pago: formaPago || null,
         creado_por: user.operator_id,
@@ -2050,7 +2052,7 @@ async function handleCrearDespacho(request, env) {
       );
       const [clienteSaldo] = await saldoRes.json();
       const saldoActual = Number(clienteSaldo?.saldo_pendiente || 0);
-      const nuevoSaldo = saldoActual + Number(cot.total_usd);
+      const nuevoSaldo = saldoActual + totalConFlete;
 
       await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
         method: 'POST', headers,
@@ -2058,7 +2060,7 @@ async function handleCrearDespacho(request, env) {
           cliente_id: cot.cliente_id,
           despacho_id: despacho.id,
           tipo: 'cargo',
-          monto_usd: cot.total_usd,
+          monto_usd: totalConFlete,
           saldo_usd: nuevoSaldo,
           descripcion: `Orden de despacho #${cot.numero}`,
           registrado_por: user.operator_id,

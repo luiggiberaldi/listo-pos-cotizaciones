@@ -65,6 +65,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
   const { data: detalle } = useCotizacion(cotizacion?.id)
   const [formaPago, setFormaPago] = useState('')
   const [transportistaId, setTransportistaId] = useState('')
+  const [fleteUsd, setFleteUsd] = useState('')
   const [showTransportistaMenu, setShowTransportistaMenu] = useState(false)
   const [stockMap, setStockMap] = useState({})
   const { data: transportistas = [] } = useTransportistas()
@@ -285,7 +286,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
               <div className="absolute left-0 right-0 bottom-full mb-1 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20 max-h-48 overflow-y-auto"
                 onMouseDown={e => e.preventDefault()}>
                 <button
-                  onClick={() => { setTransportistaId(''); setShowTransportistaMenu(false) }}
+                  onClick={() => { setTransportistaId(''); setFleteUsd(''); setShowTransportistaMenu(false) }}
                   className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left transition-colors ${
                     !transportistaId ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-500 hover:bg-slate-50'
                   }`}
@@ -320,13 +321,37 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
           </div>
         </div>
 
+        {/* Monto del flete (solo si hay transportista) */}
+        {transportistaId && (
+          <div className="space-y-2">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              Monto del flete (USD)
+            </p>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={fleteUsd}
+              onChange={e => setFleteUsd(e.target.value)}
+              placeholder="0.00"
+              className="w-full px-4 py-2.5 rounded-lg text-sm font-medium border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition-colors min-h-[44px]"
+              disabled={cargando}
+            />
+            {Number(fleteUsd) > 0 && (
+              <p className="text-xs text-indigo-500 font-medium">
+                Total con flete: ${(Number(cotizacion?.total_usd || 0) + Number(fleteUsd)).toFixed(2)}
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Botones — despachar */}
         <div className="flex flex-col-reverse sm:flex-row gap-3 pt-1">
           <button onClick={onCancel} disabled={cargando}
             className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-700 font-semibold text-base hover:bg-slate-50 transition-colors disabled:opacity-50">
             Cancelar
           </button>
-          <button onClick={() => onConfirm(formaPago, transportistaId || null)} disabled={cargando || items.length === 0 || !formaPago}
+          <button onClick={() => onConfirm(formaPago, transportistaId || null, Number(fleteUsd) || 0)} disabled={cargando || items.length === 0 || !formaPago}
             title={!formaPago ? 'Selecciona una forma de pago' : undefined}
             className="flex-1 py-3 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-semibold text-base transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20">
             {cargando
@@ -424,13 +449,14 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
     setCotizacionAAnular(null)
   }
 
-  async function confirmarDespachar(formaPago = '', transportistaId = null) {
+  async function confirmarDespachar(formaPago = '', transportistaId = null, fleteUsd = 0) {
     if (!cotizacionADespachar) return
     try {
       await crearDespacho.mutateAsync({
         cotizacionId: cotizacionADespachar.id,
         formaPago: formaPago || null,
         transportistaId: transportistaId || null,
+        fleteUsd: fleteUsd || 0,
       })
       setCotizacionADespachar(null)
     } catch (err) {
