@@ -270,61 +270,56 @@ export async function generarDespachoPlantillaPDF({ config = {} } = {}) {
 
   y = Math.max(condY, totTopY + 18) + 2
 
+  // Slogan — fijo 10mm sobre el footer (footerY = PAGE_H - 22)
+  const sloganY = PAGE_H - 32
+
   // ══════════════════════════════════════════════════════════════════════════
-  // 7. DATOS DEL CHOFER Y VEHÍCULO — líneas vacías
+  // 7. DATOS DEL CHOFER Y VEHÍCULO — fijo 5mm sobre el slogan
   // ══════════════════════════════════════════════════════════════════════════
-  if (y > PAGE_H - 60) { doc.addPage(); y = MARGIN }
+  const FIRMA_H = 20   // firma: 6 + 10 + 4
+  const TRANS_H = 18   // chofer: header 6 + y+=10 + fila 8
+  const choferStartY = sloganY - 5 - FIRMA_H - TRANS_H
 
   const col6W = (CONTENT_W - 10) / 6
 
   doc.setFillColor(240, 240, 240)
-  doc.rect(MARGIN, y, CONTENT_W, 6, 'F')
+  doc.rect(MARGIN, choferStartY, CONTENT_W, 6, 'F')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8)
   doc.setTextColor(...C_DARK)
-  doc.text('DATOS DEL CHOFER Y DEL VEHÍCULO', MARGIN + 2, y + 4)
-  y += 10
+  doc.text('DATOS DEL CHOFER Y DEL VEHÍCULO', MARGIN + 2, choferStartY + 4)
 
+  const choferFieldsY = choferStartY + 10
   const choferFields = ['CHOFER', 'C.I.', 'TELÉFONO', 'VEHÍCULO', 'PLACA CHUTO', 'PLACA BATEA']
   choferFields.forEach((label, i) => {
     const fx = MARGIN + i * (col6W + 2)
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(7)
     doc.setTextColor(...C_DARK)
-    doc.text(`${label}:`, fx, y)
+    doc.text(`${label}:`, fx, choferFieldsY)
     doc.setLineWidth(0.2)
     doc.setDrawColor(150, 150, 150)
-    doc.line(fx, y + 5.5, fx + col6W, y + 5.5)
+    doc.line(fx, choferFieldsY + 5.5, fx + col6W, choferFieldsY + 5.5)
   })
-  y += 8
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 8. FIRMA DEL CLIENTE
+  // 8. FIRMA DEL CLIENTE — fijo entre chofer y slogan
   // ══════════════════════════════════════════════════════════════════════════
-  y += 6
-  if (y < PAGE_H - 45) {
-    const sigW = 70
-    const sigY = y + 10
+  const sigY = choferStartY + TRANS_H + 10
+  const sigW = 70
 
-    // Línea de firma izquierda
-    doc.setLineWidth(0.4)
-    doc.setDrawColor(...C_DARK)
-    doc.line(MARGIN, sigY, MARGIN + sigW, sigY)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8)
-    doc.setTextColor(...C_DARK)
-    doc.text('Firma y Sello del Cliente', MARGIN + sigW / 2, sigY + 4, { align: 'center' })
+  doc.setLineWidth(0.4)
+  doc.setDrawColor(...C_DARK)
+  doc.line(MARGIN, sigY, MARGIN + sigW, sigY)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8)
+  doc.setTextColor(...C_DARK)
+  doc.text('Firma y Sello del Cliente', MARGIN + sigW / 2, sigY + 4, { align: 'center' })
 
-    // Línea de firma derecha
-    const sigRX = PAGE_W - MARGIN - sigW
-    doc.line(sigRX, sigY, sigRX + sigW, sigY)
-    doc.text('Firma del Despachador', sigRX + sigW / 2, sigY + 4, { align: 'center' })
+  const sigRX = PAGE_W - MARGIN - sigW
+  doc.line(sigRX, sigY, sigRX + sigW, sigY)
+  doc.text('Firma del Despachador', sigRX + sigW / 2, sigY + 4, { align: 'center' })
 
-    y = sigY + 10
-  }
-
-  // Slogan — fijo 10mm sobre el footer (footerY = PAGE_H - 22)
-  const sloganY = PAGE_H - 32
   if (y < sloganY) {
     doc.setFont('helvetica', 'bolditalic')
     doc.setFontSize(16)

@@ -407,24 +407,28 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   // Avanzar Y
   y = Math.max(condY, totTopY + 18) + 2
 
+  // ── Slogan — fijo 10mm sobre el footer (footerY = PAGE_H - 28) ──
+  const sloganY = PAGE_H - 38
+
   // ══════════════════════════════════════════════════════════════════════════
-  // 5. DATOS DEL CHOFER Y VEHÍCULO (solo si hay transportista)
+  // 5. DATOS DEL CHOFER Y VEHÍCULO — fijo 5mm sobre el slogan
   // ══════════════════════════════════════════════════════════════════════════
   const transportista = despacho.transportista_id ? (despacho.transportista || null) : null
 
   if (transportista) {
-    if (y > PAGE_H - 60) { doc.addPage(); y = MARGIN }
-
+    const TRANS_H = 18
+    const ty = sloganY - 5 - TRANS_H
     const col7W = (CONTENT_W - 12) / 7
 
     // Cabecera gris compacta
     doc.setFillColor(240, 240, 240)
-    doc.rect(MARGIN, y, CONTENT_W, 6, 'F')
+    doc.rect(MARGIN, ty, CONTENT_W, 6, 'F')
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(8)
     doc.setTextColor(...C_DARK)
-    doc.text('DATOS DEL CHOFER Y DEL VEHÍCULO', MARGIN + 2, y + 4)
-    y += 10
+    doc.text('DATOS DEL CHOFER Y DEL VEHÍCULO', MARGIN + 2, ty + 4)
+
+    const fieldsY = ty + 10
 
     // Una sola fila con 7 campos
     const choferFields = [
@@ -441,19 +445,16 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(7)
       doc.setTextColor(...C_DARK)
-      doc.text(`${f.label}:`, fx, y)
+      doc.text(`${f.label}:`, fx, fieldsY)
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(8)
-      if (f.val) doc.text(f.val, fx, y + 4)
+      if (f.val) doc.text(f.val, fx, fieldsY + 4)
       doc.setLineWidth(0.2)
       doc.setDrawColor(150, 150, 150)
-      doc.line(fx, y + 5.5, fx + col7W, y + 5.5)
+      doc.line(fx, fieldsY + 5.5, fx + col7W, fieldsY + 5.5)
     })
-    y += 8
   }
 
-  // ── Slogan — fijo 10mm sobre el footer (footerY = PAGE_H - 28) ──
-  const sloganY = PAGE_H - 38
   if (y < sloganY) {
     doc.setFont('helvetica', 'bolditalic')
     doc.setFontSize(16)
