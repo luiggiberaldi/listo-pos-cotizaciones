@@ -28,7 +28,7 @@ export function useCotizaciones({ estado = '', clienteId = '' } = {}) {
       // Supervisor: tabla directa; Vendedor: vista (sin notas_internas)
       const tabla = esSupervisor ? 'cotizaciones' : 'v_cotizaciones_vendedor'
       const selectCols = esSupervisor
-        ? 'id, numero, version, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, creado_en, enviada_en, notas_cliente, cliente_id, vendedor_id, vendedor:usuarios!cotizaciones_vendedor_id_fkey(id, nombre, color, telefono), despacho:notas_despacho!notas_despacho_cotizacion_id_fkey(id, estado)'
+        ? 'id, numero, version, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, creado_en, enviada_en, notas_cliente, cliente_id, vendedor_id, despacho:notas_despacho!notas_despacho_cotizacion_id_fkey(id, estado)'
         : 'id, numero, version, cliente_id, vendedor_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, notas_cliente, creado_en, enviada_en'
 
       let query = supabase
@@ -47,7 +47,8 @@ export function useCotizaciones({ estado = '', clienteId = '' } = {}) {
 
       // Fetch clientes via Worker API (service key, bypasses RLS)
       const clienteIds  = [...new Set(rows.map(r => r.cliente_id).filter(Boolean))]
-      const vendedorIds = !esSupervisor ? [...new Set(rows.map(r => r.vendedor_id).filter(Boolean))] : []
+      // Siempre cargar vendedores por separado (el join de Supabase puede fallar por RLS)
+      const vendedorIds = [...new Set(rows.map(r => r.vendedor_id).filter(Boolean))]
 
       const session = (await supabase.auth.getSession()).data.session
 
@@ -60,19 +61,17 @@ export function useCotizaciones({ estado = '', clienteId = '' } = {}) {
             }).then(r => r.ok ? r.json() : [])
           : [],
         vendedorIds.length
-          ? supabase.from('usuarios').select('id, nombre, color').in('id', vendedorIds)
+          ? supabase.from('usuarios').select('id, nombre, color, telefono').in('id', vendedorIds)
           : { data: [] },
       ])
 
       const clientesMap = Object.fromEntries((clientesData ?? []).map(c => [c.id, c]))
-      const vendedoresMap = !esSupervisor
-        ? Object.fromEntries((vendedoresRes.error ? [] : vendedoresRes.data ?? []).map(v => [v.id, v]))
-        : {}
+      const vendedoresMap = Object.fromEntries((vendedoresRes.error ? [] : vendedoresRes.data ?? []).map(v => [v.id, v]))
 
       return rows.map(r => ({
         ...r,
         cliente: clientesMap[r.cliente_id] ?? r.cliente ?? null,
-        ...(!esSupervisor ? { vendedor: vendedoresMap[r.vendedor_id] ?? null } : {}),
+        vendedor: vendedoresMap[r.vendedor_id] ?? r.vendedor ?? null,
       }))
     },
     enabled: !!perfil,
@@ -91,10 +90,8 @@ export function useCotizacion(id) {
     queryFn: async () => {
       const tabla = esSupervisor ? 'cotizaciones' : 'v_cotizaciones_vendedor'
 
-      // Columnas planas (sin FK joins — cliente se busca via Worker API)
-      const selectFields = esSupervisor
-        ? 'id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en, vendedor:usuarios!cotizaciones_vendedor_id_fkey(id, nombre, color, telefono)'
-        : 'id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en'
+      // Columnas planas (sin FK joins — cliente y vendedor se buscan por separado)
+      const selectFields = 'id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en'
 
       const [cotRes, itemsRes] = await Promise.all([
         supabase
@@ -113,7 +110,7 @@ export function useCotizacion(id) {
 
       let cot = cotRes.data
 
-      // Fetch cliente via Worker API (service key, bypasses RLS) para TODOS los roles
+      // Fetch cliente y vendedor por separado (evita problemas de RLS con joins)
       const session = (await supabase.auth.getSession()).data.session
       const lookups = await Promise.all([
         cot.cliente_id
@@ -123,15 +120,14 @@ export function useCotizacion(id) {
               body: JSON.stringify({ ids: [cot.cliente_id] }),
             }).then(r => r.ok ? r.json() : [])
           : [],
-        // Vendedor: supervisor ya tiene join, vendedor necesita lookup
-        !esSupervisor && cot.vendedor_id
+        cot.vendedor_id
           ? supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', cot.vendedor_id).single()
           : Promise.resolve({ data: null }),
       ])
       cot = {
         ...cot,
         cliente: lookups[0]?.[0] ?? null,
-        vendedor: cot.vendedor ?? lookups[1]?.data ?? null,
+        vendedor: lookups[1]?.data ?? null,
       }
 
       return { ...cot, items: itemsRes.data ?? [] }
