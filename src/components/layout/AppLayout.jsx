@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Settings, ArrowRightLeft,
   Menu, X, DollarSign, RefreshCw, PackageCheck, Bell, BellOff,
   AlertTriangle, Send, CheckCircle, Ban,
-  PanelLeftClose, PanelLeftOpen, BarChart3, FlaskConical,
+  PanelLeftClose, PanelLeftOpen, BarChart3,
   Clock, CalendarClock, AlertCircle,
 } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
@@ -60,7 +60,6 @@ const NAV_TODOS = [
 const NAV_SUPERVISOR = [
   { path: '/reportes',      label: 'Reportes',      icono: BarChart3 },
   { path: '/configuracion', label: 'Configuración', icono: Settings },
-  { path: '/tester-flow',   label: 'Tester Flow',   icono: FlaskConical },
 ]
 
 // ─── Badge de rol ──────────────────────────────────────────────────────────────

@@ -3,7 +3,7 @@
 import { NavLink } from 'react-router-dom'
 import { LayoutDashboard, FileText, Users, Package, MoreHorizontal } from 'lucide-react'
 import { useState } from 'react'
-import { PackageCheck, Truck, DollarSign, BarChart3, Settings, AlertCircle, FlaskConical } from 'lucide-react'
+import { PackageCheck, Truck, DollarSign, BarChart3, Settings, AlertCircle } from 'lucide-react'
 
 const BOTTOM_ITEMS = [
   { path: '/', label: 'Inicio', icon: LayoutDashboard },
@@ -18,7 +18,6 @@ const MORE_ITEMS = [
   { path: '/comisiones', label: 'Comisiones', icon: DollarSign },
   { path: '/reportes', label: 'Reportes', icon: BarChart3, supervisorOnly: true },
   { path: '/configuracion', label: 'Configuración', icon: Settings, supervisorOnly: true },
-  { path: '/tester-flow', label: 'Tester Flow', icon: FlaskConical, supervisorOnly: true },
 ]
 
 export default function BottomNav({ esSupervisor }) {
