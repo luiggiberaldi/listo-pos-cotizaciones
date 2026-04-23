@@ -104,10 +104,16 @@ export function useCotizacion(id) {
     queryKey: [...COTIZACIONES_KEY, id],
     queryFn: async () => {
       const tabla = esSupervisor ? 'cotizaciones' : 'v_cotizaciones_vendedor'
+
+      // Supervisor: join directo; Vendedor: fetch plano + lookup aparte
+      const selectFields = esSupervisor
+        ? 'id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en, cliente:clientes!cotizaciones_cliente_id_fkey(id, nombre, rif_cedula, telefono, tipo_cliente, direccion), vendedor:usuarios!cotizaciones_vendedor_id_fkey(id, nombre, color, telefono)'
+        : 'id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en'
+
       const [cotRes, itemsRes] = await Promise.all([
         supabase
           .from(tabla)
-          .select('id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en')
+          .select(selectFields)
           .eq('id', id)
           .single(),
         supabase
@@ -119,7 +125,22 @@ export function useCotizacion(id) {
       if (cotRes.error) throw cotRes.error
       if (itemsRes.error) throw itemsRes.error
 
-      return { ...cotRes.data, items: itemsRes.data ?? [] }
+      let cot = cotRes.data
+
+      // Para vendedores (vista), hacer lookup de cliente y vendedor aparte
+      if (!esSupervisor) {
+        const [cliRes, vendRes] = await Promise.all([
+          cot.cliente_id
+            ? supabase.from('clientes').select('id, nombre, rif_cedula, telefono, tipo_cliente, direccion').eq('id', cot.cliente_id).single()
+            : { data: null },
+          cot.vendedor_id
+            ? supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', cot.vendedor_id).single()
+            : { data: null },
+        ])
+        cot = { ...cot, cliente: cliRes.data ?? null, vendedor: vendRes.data ?? null }
+      }
+
+      return { ...cot, items: itemsRes.data ?? [] }
     },
     enabled: !!id && !!perfil,
   })

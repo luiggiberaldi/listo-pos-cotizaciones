@@ -40,15 +40,36 @@ function useMetricas() {
       const tabla = esSupervisor ? 'cotizaciones' : 'v_cotizaciones_vendedor'
 
       // Todas las cotizaciones del usuario (o todas si supervisor) — solo columnas necesarias
-      let q = supabase.from(tabla).select('estado, total_usd, creado_en').limit(1000)
+      let q = supabase.from(tabla).select('id, estado, total_usd, creado_en').limit(1000)
       if (!esSupervisor) q = q.eq('vendedor_id', perfil.id)
       const { data: todas, error } = await q
       if (error) throw error
 
+      // Despachos entregados del mes actual para calcular facturado
       const ahora     = new Date()
       const inicioMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1).toISOString()
       const inicioMesAnt = new Date(ahora.getFullYear(), ahora.getMonth() - 1, 1).toISOString()
       const finMesAnt    = new Date(ahora.getFullYear(), ahora.getMonth(), 0, 23, 59, 59).toISOString()
+
+      // Obtener despachos entregados para calcular facturado real
+      let dq = supabase.from('notas_despacho')
+        .select('cotizacion_id, estado, entregada_en, total_usd')
+        .eq('estado', 'entregada')
+        .gte('entregada_en', inicioMesAnt)
+        .limit(500)
+      const { data: despachos } = await dq
+
+      // Set de cotizacion_ids con despacho entregado en el mes actual
+      const entregadosMesIds = new Set(
+        (despachos ?? [])
+          .filter(d => d.entregada_en >= inicioMes)
+          .map(d => d.cotizacion_id)
+      )
+      const entregadosMesAntIds = new Set(
+        (despachos ?? [])
+          .filter(d => d.entregada_en >= inicioMesAnt && d.entregada_en <= finMesAnt)
+          .map(d => d.cotizacion_id)
+      )
 
       const delMes     = todas.filter(c => c.creado_en >= inicioMes)
       const delMesAnt  = todas.filter(c => c.creado_en >= inicioMesAnt && c.creado_en <= finMesAnt)
@@ -61,13 +82,13 @@ function useMetricas() {
         porEstado[c.estado].total  += Number(c.total_usd || 0)
       })
 
-      // Totales del mes actual
-      const totalMesUsd = delMes
-        .filter(c => c.estado !== 'anulada')
+      // Totales del mes actual — solo cotizaciones con despacho entregado
+      const totalMesUsd = todas
+        .filter(c => entregadosMesIds.has(c.id))
         .reduce((s, c) => s + Number(c.total_usd || 0), 0)
 
-      const totalMesAntUsd = delMesAnt
-        .filter(c => c.estado !== 'anulada')
+      const totalMesAntUsd = todas
+        .filter(c => entregadosMesAntIds.has(c.id))
         .reduce((s, c) => s + Number(c.total_usd || 0), 0)
 
       // Cotizaciones activas (enviadas) pendientes de respuesta
