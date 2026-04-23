@@ -70,7 +70,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
               body: JSON.stringify({ ids: [despacho.cliente_id] }),
             }).then(r => r.ok ? r.json() : [])
           : Promise.resolve([]),
-        despacho.vendedor_id ? supabase.from('usuarios').select('id, nombre, color').eq('id', despacho.vendedor_id).single() : Promise.resolve({ data: null }),
+        despacho.vendedor_id ? supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', despacho.vendedor_id).single() : Promise.resolve({ data: null }),
         despacho.transportista_id ? supabase.from('transportistas').select('id, nombre, rif, telefono, zona_cobertura, vehiculo, placa_chuto, placa_batea').eq('id', despacho.transportista_id).single() : Promise.resolve({ data: null }),
       ])
       if (itemsRes.error) throw itemsRes.error
@@ -102,7 +102,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
               body: JSON.stringify({ ids: [despacho.cliente_id] }),
             }).then(r => r.ok ? r.json() : [])
           : Promise.resolve([]),
-        despacho.vendedor_id ? supabase.from('usuarios').select('id, nombre, color').eq('id', despacho.vendedor_id).single() : Promise.resolve({ data: null }),
+        despacho.vendedor_id ? supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', despacho.vendedor_id).single() : Promise.resolve({ data: null }),
         despacho.transportista_id ? supabase.from('transportistas').select('id, nombre, rif, telefono, zona_cobertura, vehiculo, placa_chuto, placa_batea').eq('id', despacho.transportista_id).single() : Promise.resolve({ data: null }),
       ])
       if (itemsRes.error) throw itemsRes.error
