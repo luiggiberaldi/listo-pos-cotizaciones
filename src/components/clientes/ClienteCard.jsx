@@ -120,37 +120,36 @@ export default function ClienteCard({ cliente, onEditar, onDesactivar, onReasign
       )}
 
       {/* ── Acciones ── */}
-      <div className="mt-auto border-t border-slate-100 px-3 py-2 flex items-center gap-1">
+      <div className="mt-auto border-t border-slate-100 px-2 py-2 flex items-center flex-wrap gap-1">
         <button onClick={() => onCotizar(cliente)} title="Cotizar con este cliente"
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 active:bg-emerald-100 transition-colors">
+          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 active:bg-emerald-100 transition-colors">
           <FileText size={13} />
           Cotizar
         </button>
         {onVerFicha && (
           <button onClick={() => onVerFicha(cliente)} title="Ver ficha del cliente"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-violet-600 hover:bg-violet-50 active:bg-violet-100 transition-colors">
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-violet-600 hover:bg-violet-50 active:bg-violet-100 transition-colors">
             <BookOpen size={13} />
             Ficha
           </button>
         )}
         {(esPropio || esSupervisor) && (
           <button onClick={() => onEditar(cliente)} title="Editar cliente"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
             <Pencil size={13} />
             Editar
           </button>
         )}
         {esSupervisor && (
           <button onClick={() => onReasignar(cliente)} title="Reasignar cliente"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">
-            <ArrowRightLeft size={13} />
-            Reasignar
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+            <ArrowRightLeft size={14} />
           </button>
         )}
         {esSupervisor && (
           <button onClick={() => onDesactivar(cliente)} title="Desactivar cliente"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 transition-colors ml-auto">
-            <UserMinus size={13} />
+            className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors ml-auto">
+            <UserMinus size={14} />
           </button>
         )}
       </div>
