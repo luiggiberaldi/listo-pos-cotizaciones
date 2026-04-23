@@ -133,11 +133,13 @@ export default function ClienteCard({ cliente, onEditar, onDesactivar, onReasign
             Ficha
           </button>
         )}
-        <button onClick={() => onEditar(cliente)} title="Editar cliente"
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
-          <Pencil size={13} />
-          Editar
-        </button>
+        {(esPropio || esSupervisor) && (
+          <button onClick={() => onEditar(cliente)} title="Editar cliente"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
+            <Pencil size={13} />
+            Editar
+          </button>
+        )}
         {esSupervisor && (
           <button onClick={() => onReasignar(cliente)} title="Reasignar cliente"
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">

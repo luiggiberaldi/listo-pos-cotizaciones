@@ -81,10 +81,12 @@ export default function ClienteRow({ cliente, onEditar, onDesactivar, onReasigna
           className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 transition-colors">
           <FileText size={15} />
         </button>
-        <button onClick={() => onEditar(cliente)}
-          className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-light transition-colors">
-          <Pencil size={15} />
-        </button>
+        {(esPropio || esSupervisor) && (
+          <button onClick={() => onEditar(cliente)}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-light transition-colors">
+            <Pencil size={15} />
+          </button>
+        )}
         {esSupervisor && (
           <button onClick={() => onReasignar(cliente)}
             className="p-1.5 rounded-lg text-slate-400 hover:text-sky-500 hover:bg-sky-50 transition-colors">
