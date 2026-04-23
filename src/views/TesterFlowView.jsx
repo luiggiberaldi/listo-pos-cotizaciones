@@ -197,8 +197,7 @@ export default function TesterFlowView() {
 
   async function stepCreateProduct(id) {
     addLog(id, `RPC crear_producto_con_kardex(codigo=${TEST.producto.codigo}, stock=${TEST.producto.stock_inicial})`)
-    addLog(id, `Params: ${JSON.stringify({ p_codigo: TEST.producto.codigo, p_nombre: TEST.producto.nombre, p_unidad: TEST.producto.unidad, p_precio_usd: TEST.producto.precio_usd, p_costo_usd: TEST.producto.costo_usd, p_stock_actual: TEST.producto.stock_inicial, p_stock_minimo: TEST.producto.stock_minimo, p_categoria: TEST.producto.categoria })}`)
-    const { data: result, error } = await supabase.rpc('crear_producto_con_kardex', {
+    const rpcParams = {
       p_codigo: TEST.producto.codigo,
       p_nombre: TEST.producto.nombre,
       p_unidad: TEST.producto.unidad,
@@ -207,12 +206,14 @@ export default function TesterFlowView() {
       p_stock_actual: TEST.producto.stock_inicial,
       p_stock_minimo: TEST.producto.stock_minimo,
       p_categoria: TEST.producto.categoria,
-      p_usuario_id: perfil.id,
-      p_usuario_nombre: perfil.nombre,
-    })
+    }
+    addLog(id, `Params: ${JSON.stringify(rpcParams)}`)
+    const { data: result, error } = await supabase.rpc('crear_producto_con_kardex', rpcParams)
     if (error) throw error
-    dataRef.current.productoId = result
-    addLog(id, `OK → productoId=${result}`, 'success')
+    addLog(id, `Raw result: ${JSON.stringify(result)}`)
+    const productoId = typeof result === 'object' ? result.id : result
+    dataRef.current.productoId = productoId
+    addLog(id, `OK → productoId=${productoId}`, 'success')
   }
 
   async function stepAssertProduct(id) {
