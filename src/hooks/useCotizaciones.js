@@ -25,41 +25,19 @@ export function useCotizaciones({ estado = '', clienteId = '' } = {}) {
   return useQuery({
     queryKey: [...COTIZACIONES_KEY, estado, clienteId, esSupervisor],
     queryFn: async () => {
-      if (esSupervisor) {
-        // Supervisor: tabla directa con joins por FK
-        let query = supabase
-          .from('cotizaciones')
-          .select(`
-            id, numero, version, estado,
-            subtotal_usd, descuento_global_pct, descuento_usd,
-            costo_envio_usd, total_usd,
-            tasa_bcv_snapshot, total_bs_snapshot,
-            valida_hasta, creado_en, enviada_en,
-            notas_cliente,
-            cliente_id, vendedor_id,
-            cliente:clientes!cotizaciones_cliente_id_fkey(id, nombre, rif_cedula, telefono, tipo_cliente, direccion, vendedor_id),
-            vendedor:usuarios!cotizaciones_vendedor_id_fkey(id, nombre, color, telefono),
-            despacho:notas_despacho!notas_despacho_cotizacion_id_fkey(id, estado)
-          `)
-          .order('creado_en', { ascending: false })
-          .limit(200)
+      // Supervisor: tabla directa; Vendedor: vista (sin notas_internas)
+      const tabla = esSupervisor ? 'cotizaciones' : 'v_cotizaciones_vendedor'
+      const selectCols = esSupervisor
+        ? 'id, numero, version, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, creado_en, enviada_en, notas_cliente, cliente_id, vendedor_id, vendedor:usuarios!cotizaciones_vendedor_id_fkey(id, nombre, color, telefono), despacho:notas_despacho!notas_despacho_cotizacion_id_fkey(id, estado)'
+        : 'id, numero, version, cliente_id, vendedor_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, notas_cliente, creado_en, enviada_en'
 
-        if (estado) query = query.eq('estado', estado)
-        if (clienteId) query = query.eq('cliente_id', clienteId)
-
-        const { data, error } = await query
-        if (error) throw error
-        return data ?? []
-      }
-
-      // Vendedor: vista (sin notas_internas) + batch lookup de relaciones
       let query = supabase
-        .from('v_cotizaciones_vendedor')
-        .select('id, numero, version, cliente_id, vendedor_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, notas_cliente, creado_en, enviada_en')
-        .eq('vendedor_id', perfil.id)
+        .from(tabla)
+        .select(selectCols)
         .order('creado_en', { ascending: false })
         .limit(200)
 
+      if (!esSupervisor) query = query.eq('vendedor_id', perfil.id)
       if (estado) query = query.eq('estado', estado)
       if (clienteId) query = query.eq('cliente_id', clienteId)
 
@@ -67,9 +45,9 @@ export function useCotizaciones({ estado = '', clienteId = '' } = {}) {
       if (error) throw error
       if (!rows?.length) return []
 
-      // Fetch related clients (via Worker API to bypass RLS) and vendors in batch
+      // Fetch clientes via Worker API (service key, bypasses RLS)
       const clienteIds  = [...new Set(rows.map(r => r.cliente_id).filter(Boolean))]
-      const vendedorIds = [...new Set(rows.map(r => r.vendedor_id).filter(Boolean))]
+      const vendedorIds = !esSupervisor ? [...new Set(rows.map(r => r.vendedor_id).filter(Boolean))] : []
 
       const session = (await supabase.auth.getSession()).data.session
 
@@ -86,13 +64,15 @@ export function useCotizaciones({ estado = '', clienteId = '' } = {}) {
           : { data: [] },
       ])
 
-      const clientesMap  = Object.fromEntries((clientesData ?? []).map(c => [c.id, c]))
-      const vendedoresMap = Object.fromEntries((vendedoresRes.error ? [] : vendedoresRes.data ?? []).map(v => [v.id, v]))
+      const clientesMap = Object.fromEntries((clientesData ?? []).map(c => [c.id, c]))
+      const vendedoresMap = !esSupervisor
+        ? Object.fromEntries((vendedoresRes.error ? [] : vendedoresRes.data ?? []).map(v => [v.id, v]))
+        : {}
 
       return rows.map(r => ({
         ...r,
-        cliente:  clientesMap[r.cliente_id]  ?? null,
-        vendedor: vendedoresMap[r.vendedor_id] ?? null,
+        cliente: clientesMap[r.cliente_id] ?? r.cliente ?? null,
+        ...(!esSupervisor ? { vendedor: vendedoresMap[r.vendedor_id] ?? null } : {}),
       }))
     },
     enabled: !!perfil,
@@ -111,9 +91,9 @@ export function useCotizacion(id) {
     queryFn: async () => {
       const tabla = esSupervisor ? 'cotizaciones' : 'v_cotizaciones_vendedor'
 
-      // Supervisor: join directo; Vendedor: fetch plano + lookup aparte
+      // Columnas planas (sin FK joins — cliente se busca via Worker API)
       const selectFields = esSupervisor
-        ? 'id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en, cliente:clientes!cotizaciones_cliente_id_fkey(id, nombre, rif_cedula, telefono, tipo_cliente, direccion, vendedor_id), vendedor:usuarios!cotizaciones_vendedor_id_fkey(id, nombre, color, telefono)'
+        ? 'id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en, vendedor:usuarios!cotizaciones_vendedor_id_fkey(id, nombre, color, telefono)'
         : 'id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en'
 
       const [cotRes, itemsRes] = await Promise.all([
@@ -133,22 +113,25 @@ export function useCotizacion(id) {
 
       let cot = cotRes.data
 
-      // Para vendedores (vista), hacer lookup de cliente via Worker API (bypass RLS) y vendedor
-      if (!esSupervisor) {
-        const session = (await supabase.auth.getSession()).data.session
-        const [clienteData, vendRes] = await Promise.all([
-          cot.cliente_id
-            ? fetch(apiUrl('/api/clientes/lookup'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-                body: JSON.stringify({ ids: [cot.cliente_id] }),
-              }).then(r => r.ok ? r.json() : [])
-            : [],
-          cot.vendedor_id
-            ? supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', cot.vendedor_id).single()
-            : { data: null },
-        ])
-        cot = { ...cot, cliente: clienteData?.[0] ?? null, vendedor: vendRes.data ?? null }
+      // Fetch cliente via Worker API (service key, bypasses RLS) para TODOS los roles
+      const session = (await supabase.auth.getSession()).data.session
+      const lookups = await Promise.all([
+        cot.cliente_id
+          ? fetch(apiUrl('/api/clientes/lookup'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+              body: JSON.stringify({ ids: [cot.cliente_id] }),
+            }).then(r => r.ok ? r.json() : [])
+          : [],
+        // Vendedor: supervisor ya tiene join, vendedor necesita lookup
+        !esSupervisor && cot.vendedor_id
+          ? supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', cot.vendedor_id).single()
+          : Promise.resolve({ data: null }),
+      ])
+      cot = {
+        ...cot,
+        cliente: lookups[0]?.[0] ?? null,
+        vendedor: cot.vendedor ?? lookups[1]?.data ?? null,
       }
 
       return { ...cot, items: itemsRes.data ?? [] }
@@ -240,14 +223,31 @@ export function useEnviarCotizacion() {
       const result = await res.json()
       if (!res.ok) throw new Error(result.error || 'Error al enviar cotización')
 
-      // Obtener número, cliente, vendedor y total para notificación
+      // Obtener número, vendedor y total para notificación
       const { data: cot } = await supabase
         .from('cotizaciones')
-        .select('numero, version, total_usd, cliente:clientes!cotizaciones_cliente_id_fkey(nombre), vendedor:usuarios!cotizaciones_vendedor_id_fkey(nombre)')
+        .select('numero, version, total_usd, cliente_id, vendedor:usuarios!cotizaciones_vendedor_id_fkey(nombre)')
         .eq('id', cotizacionId)
         .single()
+
+      // Cliente via Worker API (bypasses RLS)
+      let clienteNombre = 'cliente'
+      if (cot?.cliente_id) {
+        const session2 = (await supabase.auth.getSession()).data.session
+        try {
+          const cRes = await fetch(apiUrl('/api/clientes/lookup'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session2?.access_token}` },
+            body: JSON.stringify({ ids: [cot.cliente_id] }),
+          })
+          if (cRes.ok) {
+            const cData = await cRes.json()
+            clienteNombre = cData?.[0]?.nombre ?? 'cliente'
+          }
+        } catch { /* fallback */ }
+      }
+
       const numero        = cot?.numero ? String(cot.numero).padStart(5, '0') : '—'
-      const clienteNombre = cot?.cliente?.nombre ?? 'cliente'
       const vendedorNombre = cot?.vendedor?.nombre ?? 'vendedor'
       const totalUsd      = Number(cot?.total_usd || 0).toFixed(2)
       return { numero, clienteNombre, vendedorNombre, totalUsd }

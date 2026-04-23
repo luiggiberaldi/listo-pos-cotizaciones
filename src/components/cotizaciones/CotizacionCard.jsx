@@ -10,8 +10,25 @@ import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import { compartirPorWhatsApp, generarMensaje } from '../../utils/whatsapp'
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs } from '../../utils/format'
 import { getAction, PRIMARY_ACTION_COLORS } from '../../utils/cotizacionActions'
+import { apiUrl } from '../../services/apiBase'
 import DetalleModal from '../ui/DetalleModal'
 import { showToast } from '../ui/Toast'
+
+// Helper: fetch cliente via Worker API (bypasses RLS)
+async function fetchClienteViaAPI(clienteId) {
+  if (!clienteId) return null
+  try {
+    const session = (await supabase.auth.getSession()).data.session
+    const res = await fetch(apiUrl('/api/clientes/lookup'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+      body: JSON.stringify({ ids: [clienteId] }),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    return data?.[0] ?? null
+  } catch { return null }
+}
 
 export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, onCambiarEstado, onDespachar, onReciclar, tasa = 0 }) {
   const { perfil } = useAuthStore()
@@ -33,16 +50,16 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
   async function descargarPDF() {
     setPdfLoading(true)
     try {
-      const [{ generarPDF }, itemsRes, clienteRes, vendedorRes] = await Promise.all([
+      const [{ generarPDF }, itemsRes, clienteData, vendedorRes] = await Promise.all([
         import('../../services/pdf/cotizacionPDF'),
         supabase.from('cotizacion_items').select('cantidad, codigo_snap, nombre_snap, unidad_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacion.id).order('orden'),
-        cotizacion.cliente_id ? supabase.from('clientes').select('id, nombre, rif_cedula, telefono, direccion, email').eq('id', cotizacion.cliente_id).single() : Promise.resolve({ data: null }),
+        fetchClienteViaAPI(cotizacion.cliente_id),
         cotizacion.vendedor_id ? supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', cotizacion.vendedor_id).single() : Promise.resolve({ data: null }),
       ])
       if (itemsRes.error) throw itemsRes.error
       const cotConDatos = {
         ...cotizacion,
-        cliente: clienteRes.data || cotizacion.cliente,
+        cliente: clienteData || cotizacion.cliente,
         vendedor: vendedorRes.data || cotizacion.vendedor,
       }
       await generarPDF({ cotizacion: cotConDatos, items: itemsRes.data ?? [], config })
@@ -56,14 +73,14 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
   async function handleWhatsApp() {
     setWaLoading(true)
     try {
-      const [{ generarPDF }, itemsRes, clienteRes, vendedorRes] = await Promise.all([
+      const [{ generarPDF }, itemsRes, clienteData, vendedorRes] = await Promise.all([
         import('../../services/pdf/cotizacionPDF'),
         supabase.from('cotizacion_items').select('cantidad, codigo_snap, nombre_snap, unidad_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacion.id).order('orden'),
-        cotizacion.cliente_id ? supabase.from('clientes').select('id, nombre, rif_cedula, telefono, direccion, email').eq('id', cotizacion.cliente_id).single() : Promise.resolve({ data: null }),
+        fetchClienteViaAPI(cotizacion.cliente_id),
         cotizacion.vendedor_id ? supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', cotizacion.vendedor_id).single() : Promise.resolve({ data: null }),
       ])
       if (itemsRes.error) throw itemsRes.error
-      const cliente = clienteRes.data || cotizacion.cliente
+      const cliente = clienteData || cotizacion.cliente
       const vendedor = vendedorRes.data || cotizacion.vendedor
       const cotConDatos = { ...cotizacion, cliente, vendedor }
       const pdfBlob = await generarPDF({ cotizacion: cotConDatos, items: itemsRes.data ?? [], config, returnBlob: true })
@@ -201,12 +218,6 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
 
       {/* ── Fechas ── */}
       <div className="px-4 pt-3 pb-2">
-        {clienteAjeno && (
-          <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 mb-2">
-            <AlertTriangle size={12} className="shrink-0" />
-            Cliente de otro vendedor
-          </div>
-        )}
         <div className="flex items-center gap-3 text-xs text-slate-400">
           <span className="flex items-center gap-1">
             <Calendar size={11} />
@@ -227,6 +238,23 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
       <div className="px-4 pb-2">
         <QuoteFlowIndicator estado={cotizacion.estado} despacho={despacho} compact />
       </div>
+
+      {/* ── Cliente ── */}
+      {cotizacion.cliente?.nombre && (
+        <div className="px-4 pb-2 flex items-center justify-between">
+          <span className="text-xs text-slate-400">Cliente</span>
+          <span className="text-xs font-semibold text-slate-700 truncate max-w-[200px]">
+            {cotizacion.cliente.nombre}
+          </span>
+        </div>
+      )}
+
+      {clienteAjeno && (
+        <div className="mx-4 mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+          <AlertTriangle size={12} className="shrink-0" />
+          Cliente de otro vendedor
+        </div>
+      )}
 
       {/* ── Total ── */}
       <div className="mx-4 mb-3 bg-slate-50 rounded-xl px-3.5 py-2.5 flex items-center justify-between">
