@@ -11,6 +11,21 @@ function fmtUsd(n) {
 function fmtBs(n) {
   return `Bs ${Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
+function fmtBcvUsd(n) {
+  return `$${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+function fmtPrecio(n, moneda, tasa, factorBcv) {
+  if (moneda === 'bs' && tasa > 0) return fmtBs(Number(n || 0) * tasa)
+  if ((moneda === 'bcv' || moneda === 'mixto_bcv') && factorBcv > 0) return fmtBcvUsd(Number(n || 0) * factorBcv)
+  return fmtUsd(n)
+}
+function fmtTotal(n, moneda, tasa, factorBcv) {
+  if (moneda === 'bs' && tasa > 0) return fmtBs(Number(n || 0) * tasa)
+  if (moneda === 'bcv' && factorBcv > 0) return fmtBcvUsd(Number(n || 0) * factorBcv)
+  if (moneda === 'mixto' && tasa > 0) return `${fmtUsd(n)} / ${fmtBs(Number(n || 0) * tasa)}`
+  if (moneda === 'mixto_bcv' && factorBcv > 0 && tasa > 0) return `${fmtBcvUsd(Number(n || 0) * factorBcv)} / ${fmtBs(Number(n || 0) * tasa)}`
+  return fmtUsd(n)
+}
 function fmtFecha(f) {
   if (!f) return '—'
   const d = new Date(f)
@@ -56,8 +71,10 @@ function drawCheck(doc, label, x, y, checked = false) {
   doc.text(label, x + 4.5, y)
 }
 
-export async function generarDespachoPDF({ despacho, items = [], config = {}, formaPago = '' }) {
+export async function generarDespachoPDF({ despacho, items = [], config = {}, formaPago = '', monedaPDF = '$', tasa = 0, tasaUsdt = 0, tasaBcv = 0 }) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
+
+  const factorBcv = (tasaUsdt > 0 && tasaBcv > 0) ? tasaUsdt / tasaBcv : 0
 
   const rif = config.rif_negocio || 'J-50115913-0'
   let y = 0
@@ -180,13 +197,15 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   // ══════════════════════════════════════════════════════════════════════════
   // 3. TABLA DE PRODUCTOS
   // ══════════════════════════════════════════════════════════════════════════
+  const precioLabel = monedaPDF === 'bs' ? 'PRECIO Bs' : (monedaPDF === 'bcv' || monedaPDF === 'mixto_bcv') ? 'PRECIO BCV' : 'PRECIO'
+  const totalLabel  = monedaPDF === 'bs' ? 'TOTAL Bs'  : (monedaPDF === 'bcv' || monedaPDF === 'mixto_bcv') ? 'TOTAL BCV'  : 'TOTAL'
   const COLS = [
     { label: 'CANT.',       x: MARGIN,        w: 16,  align: 'center' },
     { label: 'CÓD.',        x: MARGIN + 16,   w: 24,  align: 'center' },
     { label: 'DESCRIPCIÓN', x: MARGIN + 40,   w: 68,  align: 'center' },
     { label: 'UNID.',       x: MARGIN + 108,  w: 16,  align: 'center' },
-    { label: 'PRECIO',      x: MARGIN + 124,  w: 26,  align: 'center' },
-    { label: 'TOTAL',       x: MARGIN + 150,  w: 32,  align: 'right'  },
+    { label: precioLabel,    x: MARGIN + 124,  w: 26,  align: 'center' },
+    { label: totalLabel,     x: MARGIN + 150,  w: 32,  align: 'right'  },
   ]
   const ROW_H = 9
 
@@ -225,10 +244,10 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     const descLines = doc.splitTextToSize(item.nombre_snap || '', COLS[2].w - 4)
     doc.text(descLines[0], COLS[2].x + 2, midY)
     doc.text(item.unidad_snap || '—', COLS[3].x + COLS[3].w / 2, midY, { align: 'center' })
-    doc.text(fmtUsd(item.precio_unit_usd), COLS[4].x + COLS[4].w - 2, midY, { align: 'right' })
+    doc.text(fmtPrecio(item.precio_unit_usd, monedaPDF, tasa, factorBcv), COLS[4].x + COLS[4].w - 2, midY, { align: 'right' })
 
     doc.setFont('helvetica', 'bold')
-    doc.text(fmtUsd(item.total_linea_usd), COLS[5].x + COLS[5].w - 2, midY, { align: 'right' })
+    doc.text(fmtPrecio(item.total_linea_usd, monedaPDF, tasa, factorBcv), COLS[5].x + COLS[5].w - 2, midY, { align: 'right' })
 
     y += ROW_H
   })
@@ -260,7 +279,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   // ══════════════════════════════════════════════════════════════════════════
   if (y > PAGE_H - 75) { doc.addPage(); y = MARGIN }
 
-  const totW = 75
+  const totW = (monedaPDF === 'mixto' || monedaPDF === 'mixto_bcv') ? 90 : 75
   const totX = PAGE_W - MARGIN - totW
   const leftW = totX - MARGIN - 5
   const total = Number(despacho.total_usd || 0)
@@ -334,7 +353,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.setFontSize(11)
   doc.setTextColor(...C_WHITE)
   doc.text('TOTAL', totX + 4, totTopY + 9)
-  doc.text(fmtUsd(total), totX + totW - 4, totTopY + 9, { align: 'right' })
+  doc.text(fmtTotal(total, monedaPDF, tasa, factorBcv), totX + totW - 4, totTopY + 9, { align: 'right' })
 
   // Avanzar Y
   y = Math.max(condY, totTopY + 18) + 2
