@@ -1450,6 +1450,8 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
         config,
         monedaPDF,
         tasa: tasaHook.tasaEfectiva,
+        tasaUsdt: tasaHook.tasaUsdt?.precio || 0,
+        tasaBcv: tasaHook.tasaBcv?.precio || 0,
       })
     } catch {
     } finally {
@@ -1478,6 +1480,8 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
         returnBlob: true,
         monedaPDF,
         tasa: tasaHook.tasaEfectiva,
+        tasaUsdt: tasaHook.tasaUsdt?.precio || 0,
+        tasaBcv: tasaHook.tasaBcv?.precio || 0,
       })
 
       const mensajeParams = {
@@ -1759,9 +1763,11 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                     <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Moneda del PDF</label>
                     <div className="flex flex-wrap gap-1.5">
                       {[
-                        { value: '$',     label: 'USD ($)' },
-                        { value: 'bs',    label: 'Bolívares (Bs)' },
-                        { value: 'mixto', label: 'Mixto ($+Bs)' },
+                        { value: '$',         label: 'USDT ($)' },
+                        { value: 'bcv',       label: 'Dólar BCV' },
+                        { value: 'bs',        label: 'Bolívares (Bs)' },
+                        { value: 'mixto',     label: 'Mixto USDT' },
+                        { value: 'mixto_bcv', label: 'Mixto BCV' },
                       ].map(opt => (
                         <button key={opt.value} type="button"
                           onClick={() => setMonedaPDF(opt.value)}
@@ -1779,6 +1785,9 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                     {monedaPDF !== '$' && tasaHook.tasaEfectiva > 0 && (
                       <p className="text-[10px] text-slate-400 mt-1">
                         Tasa: {new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2 }).format(tasaHook.tasaEfectiva)} Bs/$
+                        {(monedaPDF === 'bcv' || monedaPDF === 'mixto_bcv') && tasaHook.tasaUsdt?.precio > 0 && tasaHook.tasaBcv?.precio > 0 && (
+                          <> · Factor BCV: {(tasaHook.tasaUsdt.precio / tasaHook.tasaBcv.precio).toFixed(2)}</>
+                        )}
                       </p>
                     )}
                 </div>
