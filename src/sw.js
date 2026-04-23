@@ -4,6 +4,12 @@ import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching'
 import { registerRoute, NavigationRoute } from 'workbox-routing'
 import { NetworkFirst } from 'workbox-strategies'
 
+// ─── Activar nuevo SW inmediatamente al instalar ────────────────────────────
+self.addEventListener('install', () => self.skipWaiting())
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim())
+})
+
 // ─── Precache: app shell (HTML, JS, CSS, images) ────────────────────────────
 // __WB_MANIFEST is replaced at build time with the list of all built assets
 precacheAndRoute(self.__WB_MANIFEST)
