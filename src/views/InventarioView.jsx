@@ -58,7 +58,7 @@ export default function InventarioView() {
   const [textoBusqueda, setTextoBusqueda] = useState('')
   const [categoria,     setCategoria]     = useState('')
   const [stockBajo,     setStockBajo]     = useState(() => searchParams.get('filtro') === 'stock_bajo')
-  const [vistaMode,     setVistaMode]     = useState(() => localStorage.getItem('inventario_vista') || 'grid')
+  const [vistaMode,     setVistaMode]     = useState(() => localStorage.getItem('inventario_vista') || (window.innerWidth < 768 ? 'list' : 'grid'))
   const [pagina,        setPagina]        = useState(1)
 
   // Sincronizar URL param con estado

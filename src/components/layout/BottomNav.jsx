@@ -18,7 +18,6 @@ const MORE_ITEMS = [
   { path: '/comisiones', label: 'Comisiones', icon: DollarSign },
   { path: '/reportes', label: 'Reportes', icon: BarChart3 },
   { path: '/configuracion', label: 'Configuración', icon: Settings },
-  { path: '/logs', label: 'System Logs', icon: AlertCircle, supervisorOnly: true },
 ]
 
 export default function BottomNav({ esSupervisor }) {

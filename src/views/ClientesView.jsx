@@ -104,7 +104,7 @@ export default function ClientesView() {
   const [filtroTipo, setFiltroTipo]         = useState('')
   const [filtroVendedor, setFiltroVendedor] = useState('')
   const [filtroCiudad, setFiltroCiudad]     = useState('')
-  const [vistaMode, setVistaMode] = useState(() => localStorage.getItem('clientes_vista') || 'grid')
+  const [vistaMode, setVistaMode] = useState(() => localStorage.getItem('clientes_vista') || (window.innerWidth < 768 ? 'list' : 'grid'))
   const [pagina, setPagina] = useState(1)
 
   // Estados de modales

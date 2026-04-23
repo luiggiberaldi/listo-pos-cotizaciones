@@ -2,12 +2,13 @@
 // Vista principal de notas de despacho
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Package, PackageCheck, RefreshCw, Filter, RefreshCcw, AlertTriangle, LayoutGrid, List, FileDown } from 'lucide-react'
+import { Package, PackageCheck, RefreshCw, Filter, LayoutGrid, List, FileDown } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import { useDespachos, useActualizarEstadoDespacho, useReciclarDespacho } from '../hooks/useDespachos'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import { useVendedores } from '../hooks/useClientes'
+import { getDespachoAction } from '../utils/despachoActions'
 import VendedorFilterPill from '../components/ui/VendedorFilterPill'
 import DespachoCard from '../components/despachos/DespachoCard'
 import DespachoRow  from '../components/despachos/DespachoRow'
@@ -17,6 +18,7 @@ import EmptyState   from '../components/ui/EmptyState'
 import Skeleton     from '../components/ui/Skeleton'
 import PageHeader  from '../components/ui/PageHeader'
 import Pagination  from '../components/ui/Pagination'
+import { OnboardingSequence } from '../components/ui/OnboardingTooltip'
 import { showToast } from '../components/ui/Toast'
 
 import { generarDespachoPlantillaPDF } from '../services/pdf/despachoPlantillaPDF'
@@ -25,7 +27,7 @@ const ESTADOS_FILTRO = [
   { valor: 'pendiente',  label: 'Pendientes' },
   { valor: 'despachada', label: 'Despachadas' },
   { valor: 'entregada',  label: 'Entregadas' },
-  { valor: 'anulada',    label: 'Anuladas' },
+  { valor: 'anulada',    label: 'Canceladas' },
 ]
 
 function SkeletonDespachos() {
@@ -49,13 +51,14 @@ export default function DespachosView() {
   const navigate = useNavigate()
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
+  const rol = perfil?.rol || 'vendedor'
   const { tasaEfectiva } = useTasaCambio()
   const { data: config = {} } = useConfigNegocio()
   const { data: vendedores = [] } = useVendedores()
   const [estadoFiltro, setEstadoFiltro] = useState('')
   const [vendedorFiltro, setVendedorFiltro] = useState('')
   const [pagina, setPagina] = useState(1)
-  const [vistaMode, setVistaMode] = useState(() => localStorage.getItem('despachos_vista') || 'grid')
+  const [vistaMode, setVistaMode] = useState(() => localStorage.getItem('despachos_vista') || (window.innerWidth < 768 ? 'list' : 'grid'))
   const [despachoAAnular, setDespachoAAnular] = useState(null)
   const [despachoAReciclar, setDespachoAReciclar] = useState(null)
   const [despachoDetalle, setDespachoDetalle] = useState(null)
@@ -80,6 +83,14 @@ export default function DespachosView() {
   // Reset página al cambiar filtro
   useEffect(() => { setPagina(1) }, [estadoFiltro, vendedorFiltro])
 
+  // Config de confirmación por rol
+  const anularConfig = getDespachoAction('anular', rol)
+  const reciclarConfig = getDespachoAction('reciclar', rol)
+
+  const anularNumDisplay = despachoAAnular
+    ? `DES-${String(despachoAAnular.cotizacion?.numero || despachoAAnular.numero).padStart(5, '0')}`
+    : ''
+
   async function confirmarAnular() {
     if (!despachoAAnular) return
     await cambiarEstado.mutateAsync({ despachoId: despachoAAnular.id, nuevoEstado: 'anulada' })
@@ -91,7 +102,6 @@ export default function DespachosView() {
     try {
       await reciclar.mutateAsync(despachoAReciclar.id)
       setDespachoAReciclar(null)
-      // Navegar a cotizaciones para que vea el nuevo borrador
       navigate('/cotizaciones')
     } catch (err) {
       showToast(err.message || 'Error al reciclar despacho', 'error')
@@ -118,6 +128,9 @@ export default function DespachosView() {
           </button>
         }
       />
+
+      {/* Onboarding tips */}
+      <OnboardingSequence rol={rol} page="/despachos" />
 
       {/* Filtros de estado + vendedor */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -217,26 +230,28 @@ export default function DespachosView() {
         tasa={tasaEfectiva}
       />
 
-      {/* Confirm anular */}
+      {/* Confirm anular — con mensajes por rol */}
       <ConfirmModal
         isOpen={!!despachoAAnular}
         onClose={() => setDespachoAAnular(null)}
         onConfirm={confirmarAnular}
-        title="¿Anular despacho?"
-        message={`Se restaurará el stock de los productos al inventario.\nEsta acción no se puede deshacer.`}
-        confirmText="Sí, anular"
-        variant="danger"
+        title={anularConfig.confirmTitle || '¿Anular despacho?'}
+        message={anularConfig.confirmMessage || 'Se restaurará el stock de los productos al inventario.'}
+        details={anularConfig.confirmDetails || 'Esta acción no se puede deshacer.'}
+        confirmText={anularConfig.confirmText || 'Sí, anular'}
+        variant={anularConfig.variant || 'danger'}
       />
 
-      {/* Confirm reciclar */}
+      {/* Confirm reciclar — con mensajes por rol */}
       <ConfirmModal
         isOpen={!!despachoAReciclar}
         onClose={() => setDespachoAReciclar(null)}
         onConfirm={confirmarReciclar}
-        title="¿Reciclar como cotización?"
-        message={`Se creará una nueva cotización en borrador con los mismos productos y precios, lista para editar y enviar.\nEl despacho anulado permanecerá en el historial.`}
-        confirmText="Sí, reciclar"
-        variant="warning"
+        title={reciclarConfig.confirmTitle || '¿Reciclar como cotización?'}
+        message={reciclarConfig.confirmMessage || 'Se creará una nueva cotización en borrador con los mismos productos y precios.'}
+        details={reciclarConfig.confirmDetails || 'El despacho anulado permanecerá en el historial.'}
+        confirmText={reciclarConfig.confirmText || 'Sí, reciclar'}
+        variant={reciclarConfig.variant || 'warning'}
       />
     </div>
   )

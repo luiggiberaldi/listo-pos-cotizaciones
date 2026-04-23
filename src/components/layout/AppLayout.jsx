@@ -60,7 +60,6 @@ const NAV_TODOS = [
 const NAV_SUPERVISOR = [
   { path: '/reportes',      label: 'Reportes',      icono: BarChart3 },
   { path: '/configuracion', label: 'Configuración', icono: Settings },
-  { path: '/logs',          label: 'System Logs',   icono: AlertCircle },
 ]
 
 // ─── Badge de rol ──────────────────────────────────────────────────────────────

@@ -2554,6 +2554,9 @@ async function handleTesterClearAll(request, env) {
   logStep(`Supabase URL: ${env.SUPABASE_URL}`);
 
   try {
+    // Orden por dependencias FK: primero las tablas hijas
+    logStep('Eliminando cuentas_por_cobrar...');
+    await supaDelete(env, 'cuentas_por_cobrar', logStep);
     logStep('Eliminando comisiones...');
     await supaDelete(env, 'comisiones', logStep);
     logStep('Eliminando notas_despacho...');
@@ -2568,7 +2571,13 @@ async function handleTesterClearAll(request, env) {
     await supaDelete(env, 'transportistas', logStep);
     logStep('Eliminando inventario_movimientos (kardex)...');
     await supaDelete(env, 'inventario_movimientos', logStep);
-    logStep('Inventario conservado.');
+    logStep('Eliminando reasignaciones...');
+    await supaDelete(env, 'reasignaciones', logStep);
+    logStep('Eliminando auditoria...');
+    await supaDelete(env, 'auditoria', logStep);
+    logStep('Eliminando system_logs...');
+    await supaDelete(env, 'system_logs', logStep);
+    logStep('Inventario, usuarios y configuración conservados.');
 
     // Reiniciar correlativos (COT-00001, despacho #1)
     logStep('Reiniciando correlativos...');

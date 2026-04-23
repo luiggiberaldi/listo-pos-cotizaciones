@@ -5,7 +5,7 @@ const ESTILOS = {
   aceptada:   'bg-emerald-50 text-emerald-700 border-emerald-200',
   rechazada:  'bg-orange-50 text-orange-600 border-orange-200',
   vencida:    'bg-amber-50 text-amber-700 border-amber-200',
-  anulada:    'bg-red-50 text-red-500 border-red-200 line-through',
+  anulada:    'bg-orange-50 text-orange-600 border-orange-200',
   // Estados de despacho
   pendiente:  'bg-amber-50 text-amber-700 border-amber-200',
   despachada: 'bg-indigo-50 text-indigo-700 border-indigo-200',

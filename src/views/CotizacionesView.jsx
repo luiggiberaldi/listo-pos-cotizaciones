@@ -21,7 +21,6 @@ import { Modal }         from '../components/ui/Modal'
 import EmptyState        from '../components/ui/EmptyState'
 import Skeleton          from '../components/ui/Skeleton'
 import { useVendedores } from '../hooks/useClientes'
-import CustomSelect      from '../components/ui/CustomSelect'
 import VendedorFilterPill from '../components/ui/VendedorFilterPill'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../utils/format'
 import { showToast } from '../components/ui/Toast'
@@ -29,6 +28,7 @@ import PageHeader from '../components/ui/PageHeader'
 import Pagination from '../components/ui/Pagination'
 import { OnboardingSequence } from '../components/ui/OnboardingTooltip'
 import { getAction } from '../utils/cotizacionActions'
+import ReciclarCotizacionModal from '../components/cotizaciones/ReciclarCotizacionModal'
 
 // ─── Filtros de estado ────────────────────────────────────────────────────────
 const ESTADOS_FILTRO = [
@@ -322,7 +322,7 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
   const [estadoFiltro, setEstadoFiltro] = useState('')
   const [vendedorFiltro, setVendedorFiltro] = useState('')
   const [pagina, setPagina] = useState(1)
-  const [vistaMode, setVistaMode] = useState(() => localStorage.getItem('cotizaciones_vista') || 'grid')
+  const [vistaMode, setVistaMode] = useState(() => localStorage.getItem('cotizaciones_vista') || (window.innerWidth < 768 ? 'list' : 'grid'))
   const [cotizacionAAnular, setCotizacionAAnular] = useState(null)
   const [cotizacionADespachar, setCotizacionADespachar] = useState(null)
   const [cotizacionAReciclar, setCotizacionAReciclar] = useState(null)
@@ -589,71 +589,16 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
       />
 
       {/* Modal reciclar cotización */}
-      <Modal
+      <ReciclarCotizacionModal
         isOpen={!!cotizacionAReciclar}
+        cotizacion={cotizacionAReciclar}
+        vendedores={vendedores}
+        vendedorSeleccionado={vendedorReciclar}
+        onVendedorChange={setVendedorReciclar}
+        onConfirm={confirmarReciclar}
         onClose={() => { setCotizacionAReciclar(null); setVendedorReciclar('') }}
-        title="Reciclar cotización"
-      >
-        {cotizacionAReciclar && (
-          <div className="space-y-4">
-            {/* Info de la cotización original */}
-            <div className="bg-slate-50 rounded-xl p-4 space-y-2">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Cotización original</p>
-              <p className="text-sm font-bold text-slate-800">
-                COT-{String(cotizacionAReciclar.numero).padStart(5, '0')}
-                <span className="ml-2 text-xs font-normal text-slate-500">({cotizacionAReciclar.estado})</span>
-              </p>
-              <p className="text-sm text-slate-600">{cotizacionAReciclar.cliente?.nombre ?? '—'}</p>
-              <p className="text-sm text-slate-500">
-                Vendedor anterior: <span className="font-semibold text-slate-700">{cotizacionAReciclar.vendedor?.nombre ?? '—'}</span>
-              </p>
-              <p className="text-sm font-bold text-slate-800">${Number(cotizacionAReciclar.total_usd || 0).toFixed(2)} USD</p>
-            </div>
-
-            {/* Selector de vendedor */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-500 ml-1">Asignar a vendedor *</label>
-              <CustomSelect
-                options={vendedores.map(v => ({
-                  value: v.id,
-                  label: `${v.nombre}${v.id === cotizacionAReciclar.vendedor_id ? ' (anterior)' : ''}`,
-                }))}
-                value={vendedorReciclar}
-                onChange={setVendedorReciclar}
-                placeholder="Seleccionar vendedor..."
-              />
-            </div>
-
-            <p className="text-xs text-slate-400">
-              Se creará una nueva cotización en borrador con nuevo número de correlativo, asignada al vendedor seleccionado.
-              La cotización original no se modifica.
-            </p>
-
-            {/* Botones */}
-            <div className="flex gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => { setCotizacionAReciclar(null); setVendedorReciclar('') }}
-                className="flex-1 py-2.5 px-4 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={confirmarReciclar}
-                disabled={!vendedorReciclar || reciclar.isPending}
-                className="flex-1 py-2.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {reciclar.isPending ? (
-                  <><Loader2 size={16} className="animate-spin" /> Reciclando...</>
-                ) : (
-                  <><RefreshCw size={16} /> Reciclar</>
-                )}
-              </button>
-            </div>
-          </div>
-        )}
-      </Modal>
+        isPending={reciclar.isPending}
+      />
     </div>
   )
 }
