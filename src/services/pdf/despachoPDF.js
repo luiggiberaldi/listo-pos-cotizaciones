@@ -170,14 +170,15 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
 
   doc.setFontSize(9.5)
   clienteRows.forEach(row => {
-    // Si algún campo de la fila tiene highlight, dibujar fondo gris
-    if (row.some(item => item.highlight)) {
-      doc.setFillColor(235, 235, 235)
-      doc.rect(MARGIN, y - 3.5, CONTENT_W, 8, 'F')
-    }
     row.forEach((item, colIdx) => {
       const baseX = colIdx === 0 ? MARGIN : col2X
       const lineEndX = row.length === 1 ? PAGE_W - MARGIN : (colIdx === 0 ? MARGIN + halfW : PAGE_W - MARGIN)
+
+      // Highlight solo en la celda marcada
+      if (item.highlight) {
+        doc.setFillColor(230, 230, 230)
+        doc.rect(baseX - 1, y - 3.5, lineEndX - baseX + 2, 8, 'F')
+      }
 
       doc.setFont('helvetica', 'normal')
       doc.setTextColor(...C_DARK)
