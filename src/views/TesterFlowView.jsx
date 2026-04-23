@@ -472,8 +472,16 @@ export default function TesterFlowView() {
   }
 
   async function stepAssertKardexEgreso(id) {
-    const { data: movs } = await supabase.from('inventario_movimientos').select('*')
-      .eq('producto_id', dataRef.current.productoId).eq('tipo', 'egreso').order('creado_en', { ascending: false }).limit(1)
+    // Query ALL movements for this product to diagnose
+    const { data: allMovs, error: allErr } = await supabase.from('inventario_movimientos').select('*')
+      .eq('producto_id', dataRef.current.productoId).order('creado_en', { ascending: true })
+    addLog(id, `Total movimientos para este producto: ${allMovs?.length || 0}`)
+    if (allMovs && allMovs.length > 0) {
+      allMovs.forEach((m, i) => addLog(id, `  mov[${i}]: tipo=${m.tipo}, motivo_tipo=${m.motivo_tipo}, cant=${m.cantidad}, ${m.stock_anterior}→${m.stock_nuevo}`))
+    }
+    if (allErr) addLog(id, `Error consultando movimientos: ${JSON.stringify(allErr)}`, 'error')
+
+    const movs = (allMovs || []).filter(m => m.tipo === 'egreso')
     assert(movs && movs.length >= 1, '>=1', movs?.length, 'Debe existir al menos 1 egreso')
     const mov = movs[0]
 

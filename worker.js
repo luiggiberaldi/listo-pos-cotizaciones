@@ -2008,10 +2008,14 @@ async function handleCrearDespacho(request, env) {
 
       // Insertar movimientos de kardex
       if (movimientos.length > 0) {
-        await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos`, {
+        const kardexRes = await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos`, {
           method: 'POST', headers,
           body: JSON.stringify(movimientos),
         });
+        if (!kardexRes.ok) {
+          const kardexErr = await kardexRes.text();
+          return jsonError(`Error al registrar kardex: ${kardexErr}`, 500, request);
+        }
       }
     }
 
