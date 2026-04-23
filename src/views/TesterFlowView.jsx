@@ -208,7 +208,7 @@ export default function TesterFlowView() {
         if (oldItems && oldItems.length > 0) {
           const cotIds = [...new Set(oldItems.map(i => i.cotizacion_id))]
           for (const cotId of cotIds) {
-            await supabase.from('cuentas_cobrar').delete().eq('cotizacion_id', cotId)
+            await supabase.from('cuentas_por_cobrar').delete().eq('cotizacion_id', cotId)
             await supabase.from('comisiones').delete().eq('cotizacion_id', cotId)
             await supabase.from('notas_despacho').delete().eq('cotizacion_id', cotId)
             await supabase.from('cotizacion_items').delete().eq('cotizacion_id', cotId)
@@ -226,7 +226,7 @@ export default function TesterFlowView() {
     const { data: oldClients } = await supabase.from('clientes').select('id').eq('rif_cedula', TEST.cliente.rif_cedula)
     if (oldClients && oldClients.length > 0) {
       for (const c of oldClients) {
-        await supabase.from('cuentas_cobrar').delete().eq('cliente_id', c.id)
+        await supabase.from('cuentas_por_cobrar').delete().eq('cliente_id', c.id)
         await supabase.from('clientes').update({ saldo_pendiente: 0 }).eq('id', c.id)
         await supabase.from('clientes').delete().eq('id', c.id)
       }
@@ -563,7 +563,7 @@ export default function TesterFlowView() {
     addLog(id, `  saldo_pendiente = $${saldo.toFixed(2)} ✓`)
 
     // Verificar la transacción CxC
-    const { data: txs } = await supabase.from('cuentas_cobrar').select('*').eq('cliente_id', dataRef.current.clienteId).eq('tipo', 'cargo')
+    const { data: txs } = await supabase.from('cuentas_por_cobrar').select('*').eq('cliente_id', dataRef.current.clienteId).eq('tipo', 'cargo')
     assert(txs && txs.length >= 1, '>=1', txs?.length, 'Debe existir al menos 1 cargo CxC')
     const cargo = txs[0]
     addLog(id, `Raw cargo CxC: ${JSON.stringify(cargo)}`)
@@ -681,7 +681,7 @@ export default function TesterFlowView() {
     addLog(id, `  saldo_pendiente = $${saldo} ($260.00 - $100 = $160.00) ✓`)
 
     // Verificar transacción abono
-    const { data: txs } = await supabase.from('cuentas_cobrar').select('*').eq('cliente_id', dataRef.current.clienteId).eq('tipo', 'abono')
+    const { data: txs } = await supabase.from('cuentas_por_cobrar').select('*').eq('cliente_id', dataRef.current.clienteId).eq('tipo', 'abono')
     assert(txs && txs.length >= 1, '>=1', txs?.length, 'Debe existir al menos 1 abono')
     assert(Number(txs[0].monto_usd) === dataRef.current.montoAbono, dataRef.current.montoAbono, txs[0].monto_usd, 'monto_usd abono')
     addLog(id, `  abono CxC = $${txs[0].monto_usd} ✓`)
@@ -724,7 +724,7 @@ export default function TesterFlowView() {
     const d = dataRef.current
     // Orden inverso de dependencias
     if (d.comisionId) { await supabase.from('comisiones').delete().eq('id', d.comisionId); addLog(id, 'DELETE comisiones ✓') }
-    if (d.clienteId) { await supabase.from('cuentas_cobrar').delete().eq('cliente_id', d.clienteId); addLog(id, 'DELETE cuentas_cobrar ✓') }
+    if (d.clienteId) { await supabase.from('cuentas_por_cobrar').delete().eq('cliente_id', d.clienteId); addLog(id, 'DELETE cuentas_por_cobrar ✓') }
     if (d.despachoId) { await supabase.from('notas_despacho').delete().eq('id', d.despachoId); addLog(id, 'DELETE notas_despacho ✓') }
     if (d.cotizacionId) {
       await supabase.from('cotizacion_items').delete().eq('cotizacion_id', d.cotizacionId)
