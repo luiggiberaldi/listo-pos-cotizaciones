@@ -170,7 +170,7 @@ function ItemLinea({ item, idx, onChange, onDelete, tasa = 0, precios }) {
   return (
     <tr className="border-b border-slate-100 hover:bg-slate-50/60 group">
       <td className="py-3 px-3 max-w-[200px]">
-        <div className="font-semibold text-sm text-slate-800 truncate">{item.nombreSnap}</div>
+        <div className="font-semibold text-sm text-slate-800 line-clamp-2">{item.nombreSnap}</div>
         {item.codigoSnap && <div className="text-[11px] text-slate-400 font-mono mt-0.5">{item.codigoSnap}</div>}
       </td>
       <td className="py-3 px-2">
@@ -225,7 +225,7 @@ function ItemCard({ item, idx, onChange, onDelete, tasa = 0, precios }) {
     <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 space-y-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="font-medium text-sm text-slate-800 truncate">{item.nombreSnap}</p>
+          <p className="font-medium text-sm text-slate-800 line-clamp-2">{item.nombreSnap}</p>
           {item.codigoSnap && <p className="text-xs text-slate-400 font-mono">{item.codigoSnap}</p>}
           <p className="text-xs text-slate-400">{item.unidadSnap}</p>
         </div>
@@ -950,7 +950,7 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
               <Trash2 size={14} className="text-red-400" />
             </button>
             <div className="flex-1 min-w-0">
-              <p className="text-xs sm:text-sm font-bold text-slate-700 leading-tight truncate">{it.nombreSnap}</p>
+              <p className="text-[10px] sm:text-xs font-bold text-slate-700 leading-snug line-clamp-2">{it.nombreSnap}</p>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <span className="text-[10px] sm:text-[11px] font-bold text-emerald-600 bg-emerald-50 px-1 rounded">{fmtUsd(it.precioUnitUsd)}</span>
                 <span className="text-[10px] text-slate-400">{it.unidadSnap}</span>
@@ -1855,7 +1855,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                     return (
                       <div key={it._id ?? i} className="px-4 py-2.5 flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs font-semibold text-slate-700 leading-tight truncate">{it.nombreSnap}</p>
+                          <p className="text-xs font-semibold text-slate-700 leading-tight line-clamp-2">{it.nombreSnap}</p>
                           <p className="text-[11px] text-slate-400 mt-0.5">
                             {it.cantidad} {it.unidadSnap}
                           </p>
