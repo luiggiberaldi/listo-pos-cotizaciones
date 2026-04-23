@@ -359,45 +359,48 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   y = Math.max(condY, totTopY + 18) + 2
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 5. DATOS DEL CHOFER Y VEHÍCULO
+  // 5. DATOS DEL CHOFER Y VEHÍCULO (solo si hay transportista)
   // ══════════════════════════════════════════════════════════════════════════
-  if (y > PAGE_H - 60) { doc.addPage(); y = MARGIN }
-
   const transportista = despacho.transportista || null
-  const col6W = (CONTENT_W - 10) / 6
 
-  // Cabecera gris compacta
-  doc.setFillColor(240, 240, 240)
-  doc.rect(MARGIN, y, CONTENT_W, 6, 'F')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8)
-  doc.setTextColor(...C_DARK)
-  doc.text('DATOS DEL CHOFER Y DEL VEHÍCULO', MARGIN + 2, y + 4)
-  y += 10
+  if (transportista) {
+    if (y > PAGE_H - 60) { doc.addPage(); y = MARGIN }
 
-  // Una sola fila con 6 campos
-  const choferFields = [
-    { label: 'CHOFER', val: transportista?.nombre || '' },
-    { label: 'C.I.', val: transportista?.rif || '' },
-    { label: 'TELÉFONO', val: transportista?.telefono || '' },
-    { label: 'VEHÍCULO', val: transportista?.vehiculo || '' },
-    { label: 'PLACA CHUTO', val: transportista?.placa_chuto || '' },
-    { label: 'PLACA BATEA', val: transportista?.placa_batea || '' },
-  ]
-  choferFields.forEach((f, i) => {
-    const fx = MARGIN + i * (col6W + 2)
+    const col6W = (CONTENT_W - 10) / 6
+
+    // Cabecera gris compacta
+    doc.setFillColor(240, 240, 240)
+    doc.rect(MARGIN, y, CONTENT_W, 6, 'F')
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7)
-    doc.setTextColor(...C_DARK)
-    doc.text(`${f.label}:`, fx, y)
-    doc.setFont('helvetica', 'normal')
     doc.setFontSize(8)
-    if (f.val) doc.text(f.val, fx, y + 4)
-    doc.setLineWidth(0.2)
-    doc.setDrawColor(150, 150, 150)
-    doc.line(fx, y + 5.5, fx + col6W, y + 5.5)
-  })
-  y += 8
+    doc.setTextColor(...C_DARK)
+    doc.text('DATOS DEL CHOFER Y DEL VEHÍCULO', MARGIN + 2, y + 4)
+    y += 10
+
+    // Una sola fila con 6 campos
+    const choferFields = [
+      { label: 'CHOFER', val: transportista?.nombre || '' },
+      { label: 'C.I.', val: transportista?.rif || '' },
+      { label: 'TELÉFONO', val: transportista?.telefono || '' },
+      { label: 'VEHÍCULO', val: transportista?.vehiculo || '' },
+      { label: 'PLACA CHUTO', val: transportista?.placa_chuto || '' },
+      { label: 'PLACA BATEA', val: transportista?.placa_batea || '' },
+    ]
+    choferFields.forEach((f, i) => {
+      const fx = MARGIN + i * (col6W + 2)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(7)
+      doc.setTextColor(...C_DARK)
+      doc.text(`${f.label}:`, fx, y)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(8)
+      if (f.val) doc.text(f.val, fx, y + 4)
+      doc.setLineWidth(0.2)
+      doc.setDrawColor(150, 150, 150)
+      doc.line(fx, y + 5.5, fx + col6W, y + 5.5)
+    })
+    y += 8
+  }
 
   // ── Slogan ──
   y += 4
