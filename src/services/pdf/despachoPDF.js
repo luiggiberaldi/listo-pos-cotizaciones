@@ -323,11 +323,16 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
 
   y += 2
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // 4. CONDICIONES + CUENTAS BANCARIAS (izq) + TOTALES (der)
-  // ══════════════════════════════════════════════════════════════════════════
-  if (y > PAGE_H - 75) { doc.addPage(); y = MARGIN }
+  // ── Layout fijo: posiciones calculadas desde el fondo ──
+  const sloganY = PAGE_H - 33
+  const TRANS_H = 18
+  const transportistaStartY = sloganY - 5 - TRANS_H   // fijo sobre slogan
+  const TOTALES_H = 46
+  const ty = transportistaStartY - 5 - TOTALES_H       // fijo sobre transportista
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // 4. CONDICIONES + CUENTAS BANCARIAS (izq) + TOTALES (der) — fijo
+  // ══════════════════════════════════════════════════════════════════════════
   const totW = (monedaPDF === 'mixto' || monedaPDF === 'mixto_bcv') ? 90 : 75
   const totX = PAGE_W - MARGIN - totW
   const leftW = totX - MARGIN - 5
@@ -345,26 +350,26 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.setFillColor(245, 245, 245)
   doc.setDrawColor(100, 100, 100)
   doc.setLineWidth(0.4)
-  doc.roundedRect(MARGIN, y, leftW, condBoxH, 1, 1, 'FD')
+  doc.roundedRect(MARGIN, ty, leftW, condBoxH, 1, 1, 'FD')
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(9)
   doc.setTextColor(...C_DARK)
-  doc.text('CONDICIONES GENERALES:', MARGIN + condPadding, y + condPadding + 3.5)
+  doc.text('CONDICIONES GENERALES:', MARGIN + condPadding, ty + condPadding + 3.5)
 
   doc.setDrawColor(100, 100, 100)
   doc.setLineWidth(0.2)
-  doc.line(MARGIN + condPadding, y + condPadding + 5.5, MARGIN + leftW - condPadding, y + condPadding + 5.5)
+  doc.line(MARGIN + condPadding, ty + condPadding + 5.5, MARGIN + leftW - condPadding, ty + condPadding + 5.5)
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8.5)
-  let condY = y + condPadding + 9.5
+  let condY = ty + condPadding + 9.5
   condiciones.forEach(c => {
     doc.text(`• ${c}`, MARGIN + condPadding, condY)
     condY += condLineH
   })
 
-  condY = y + condBoxH + 1
+  condY = ty + condBoxH + 1
 
   // Cuentas bancarias (compactas)
   doc.setFont('helvetica', 'bold')
@@ -380,21 +385,20 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   })
 
   // ── Totales (derecha) ──
-  // Forma de pago
   const fp = (formaPago || despacho.forma_pago || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(9)
   doc.setTextColor(...C_DARK)
-  doc.text('FORMA DE PAGO:', totX, y + 4)
-  drawCheck(doc, 'EFECTIVO',   totX,      y + 12, fp === 'efectivo')
-  drawCheck(doc, 'ZELLE',      totX + 25, y + 12, fp === 'zelle')
-  drawCheck(doc, 'P. MÓVIL',   totX + 45, y + 12, fp === 'pago movil')
-  drawCheck(doc, 'USDT',       totX + 65, y + 12, fp === 'usdt')
-  drawCheck(doc, 'TRANSF.',    totX,      y + 19, fp === 'transferencia')
-  drawCheck(doc, 'CTA X COB.', totX + 25, y + 19, fp === 'cta por cobrar')
+  doc.text('FORMA DE PAGO:', totX, ty + 4)
+  drawCheck(doc, 'EFECTIVO',   totX,      ty + 12, fp === 'efectivo')
+  drawCheck(doc, 'ZELLE',      totX + 25, ty + 12, fp === 'zelle')
+  drawCheck(doc, 'P. MÓVIL',   totX + 45, ty + 12, fp === 'pago movil')
+  drawCheck(doc, 'USDT',       totX + 65, ty + 12, fp === 'usdt')
+  drawCheck(doc, 'TRANSF.',    totX,      ty + 19, fp === 'transferencia')
+  drawCheck(doc, 'CTA X COB.', totX + 25, ty + 19, fp === 'cta por cobrar')
 
   // Total grande
-  const totTopY = y + 26
+  const totTopY = ty + 26
   doc.setFillColor(60, 60, 60)
   doc.rect(totX, totTopY, totW, 14, 'F')
 
@@ -403,12 +407,6 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.setTextColor(...C_WHITE)
   doc.text('TOTAL', totX + 4, totTopY + 9)
   doc.text(fmtTotal(total, monedaPDF, tasa, factorBcv), totX + totW - 4, totTopY + 9, { align: 'right' })
-
-  // Avanzar Y
-  y = Math.max(condY, totTopY + 18) + 2
-
-  // ── Slogan — fijo 10mm sobre el footer (footerY = PAGE_H - 28) ──
-  const sloganY = PAGE_H - 33
 
   // ══════════════════════════════════════════════════════════════════════════
   // 5. DATOS DEL CHOFER Y VEHÍCULO — fijo 5mm sobre el slogan
