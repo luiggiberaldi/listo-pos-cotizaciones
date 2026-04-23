@@ -183,7 +183,15 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
 
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(10.5)
-      doc.text(String(item.val), baseX + lblW + 2, y)
+      // Truncar valor si excede el ancho disponible
+      const valX = baseX + lblW + 2
+      const maxValW = lineEndX - valX - 1
+      let valStr = String(item.val)
+      while (valStr.length > 1 && doc.getTextWidth(valStr) > maxValW) {
+        valStr = valStr.slice(0, -1)
+      }
+      if (valStr !== String(item.val)) valStr += '…'
+      doc.text(valStr, valX, y)
       doc.setFontSize(9.5)
 
       doc.setLineWidth(0.3)
@@ -362,7 +370,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   // ══════════════════════════════════════════════════════════════════════════
   // 5. DATOS DEL CHOFER Y VEHÍCULO (solo si hay transportista)
   // ══════════════════════════════════════════════════════════════════════════
-  const transportista = despacho.transportista || null
+  const transportista = despacho.transportista_id ? (despacho.transportista || null) : null
 
   if (transportista) {
     if (y > PAGE_H - 60) { doc.addPage(); y = MARGIN }
