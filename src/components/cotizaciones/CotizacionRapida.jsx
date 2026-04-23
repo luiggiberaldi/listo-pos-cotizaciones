@@ -534,7 +534,7 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
                   <Package size={13} className="text-slate-300" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[11px] sm:text-xs font-bold text-slate-700 leading-tight truncate">{it.nombreSnap}</p>
+                  <p className="text-[11px] sm:text-xs font-bold text-slate-700 leading-tight line-clamp-2">{it.nombreSnap}</p>
                   <div className="flex items-center gap-1 sm:gap-1.5 mt-0.5">
                     <span className="text-[9px] sm:text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1 rounded">{fmtUsd(it.precioUnitUsd)}</span>
                   </div>
