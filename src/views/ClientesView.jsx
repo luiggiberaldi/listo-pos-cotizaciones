@@ -103,7 +103,6 @@ export default function ClientesView() {
   const [textoBusqueda, setTextoBusqueda] = useState('')
   const [filtroTipo, setFiltroTipo]         = useState('')
   const [filtroVendedor, setFiltroVendedor] = useState('')
-  const [filtroCiudad, setFiltroCiudad]     = useState('')
   const [vistaMode, setVistaMode] = useState(() => localStorage.getItem('clientes_vista') || (window.innerWidth < 768 ? 'list' : 'grid'))
   const [pagina, setPagina] = useState(1)
 
@@ -122,27 +121,20 @@ export default function ClientesView() {
   const { data: vendedores = [] } = useVendedores()
   const desactivar = useDesactivarCliente()
 
-  // Opciones dinámicas de ciudad
-  const ciudadesDisponibles = useMemo(() =>
-    [...new Set(clientes.map(c => c.ciudad).filter(Boolean))].sort()
-  , [clientes])
-
   // Filtrado local
   const clientesFiltrados = useMemo(() => {
     return clientes.filter(c => {
       if (filtroTipo     && c.tipo_cliente !== filtroTipo)               return false
       if (filtroVendedor && c.vendedor_id  !== filtroVendedor)           return false
-      if (filtroCiudad   && (c.ciudad || '').toLowerCase() !== filtroCiudad.toLowerCase()) return false
       return true
     })
-  }, [clientes, filtroTipo, filtroVendedor, filtroCiudad])
+  }, [clientes, filtroTipo, filtroVendedor])
 
-  const hayFiltros = filtroTipo || filtroVendedor || filtroCiudad
+  const hayFiltros = filtroTipo || filtroVendedor
 
   function limpiarFiltros() {
     setFiltroTipo('')
     setFiltroVendedor('')
-    setFiltroCiudad('')
     setPagina(1)
   }
 
@@ -310,23 +302,13 @@ export default function ClientesView() {
           ]}
         />
 
-        {/* Ciudad */}
+        {/* Vendedor */}
         <Dropdown
-          value={filtroCiudad}
-          onChange={v => { setFiltroCiudad(v); setPagina(1) }}
-          placeholder="Todas las ciudades"
-          options={ciudadesDisponibles.map(c => ({ value: c, label: c }))}
+          value={filtroVendedor}
+          onChange={v => { setFiltroVendedor(v); setPagina(1) }}
+          placeholder="Todos los vendedores"
+          options={vendedores.map(v => ({ value: v.id, label: v.nombre }))}
         />
-
-        {/* Vendedor (solo supervisor) */}
-        {perfil?.rol === 'supervisor' && (
-          <Dropdown
-            value={filtroVendedor}
-            onChange={v => { setFiltroVendedor(v); setPagina(1) }}
-            placeholder="Todos los vendedores"
-            options={vendedores.map(v => ({ value: v.id, label: v.nombre }))}
-          />
-        )}
 
         {/* Limpiar filtros */}
         {hayFiltros && (
