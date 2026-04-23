@@ -320,7 +320,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
                   </button>
                   <button onClick={() => descargarPDF('mixto')}
                     className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
-                    <span className="text-sm font-bold text-amber-500 w-[14px] text-center">$Bs</span> Mixto
+                    <span className="text-xs font-bold text-amber-500 w-[18px] text-center shrink-0">$Bs</span> Mixto
                   </button>
                 </div>
               )}
@@ -385,7 +385,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
                 </button>
                 <button onClick={() => descargarPDF('mixto')}
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
-                  <span className="text-sm font-bold text-amber-500 w-[14px] text-center">$Bs</span> Mixto
+                  <span className="text-xs font-bold text-amber-500 w-[18px] text-center shrink-0">$Bs</span> Mixto
                 </button>
               </div>
             )}
