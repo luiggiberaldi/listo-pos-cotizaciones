@@ -136,25 +136,24 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.text(numDes, PAGE_W - MARGIN - 3, notaBarY + 5, { align: 'right' })
 
   // Fechas dentro de la barra
-  doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
   let fechaX = MARGIN + 55
-  doc.setFont('helvetica', 'bold')
-  doc.text('Emisión:', fechaX, notaBarY + 5)
   doc.setFont('helvetica', 'normal')
+  doc.text('Emisión:', fechaX, notaBarY + 5)
+  doc.setFont('helvetica', 'bold')
   doc.text(fmtFecha(despacho.creado_en), fechaX + 17, notaBarY + 5)
   if (despacho.despachada_en) {
     fechaX += 45
-    doc.setFont('helvetica', 'bold')
-    doc.text('Despachada:', fechaX, notaBarY + 5)
     doc.setFont('helvetica', 'normal')
+    doc.text('Despachada:', fechaX, notaBarY + 5)
+    doc.setFont('helvetica', 'bold')
     doc.text(fmtFecha(despacho.despachada_en), fechaX + 22, notaBarY + 5)
   }
   if (despacho.entregada_en) {
     fechaX += 45
-    doc.setFont('helvetica', 'bold')
-    doc.text('Entregada:', fechaX, notaBarY + 5)
     doc.setFont('helvetica', 'normal')
+    doc.text('Entregada:', fechaX, notaBarY + 5)
+    doc.setFont('helvetica', 'bold')
     doc.text(fmtFecha(despacho.entregada_en), fechaX + 20, notaBarY + 5)
   }
   y += 8
@@ -175,13 +174,13 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
       const baseX = colIdx === 0 ? MARGIN : col2X
       const lineEndX = row.length === 1 ? PAGE_W - MARGIN : (colIdx === 0 ? MARGIN + halfW : PAGE_W - MARGIN)
 
-      doc.setFont('helvetica', 'bold')
+      doc.setFont('helvetica', 'normal')
       doc.setTextColor(...C_DARK)
       doc.setFontSize(9.5)
       doc.text(`${item.label}: `, baseX, y)
       const lblW = doc.getTextWidth(`${item.label}: `)
 
-      doc.setFont('helvetica', 'normal')
+      doc.setFont('helvetica', 'bold')
       doc.setFontSize(10.5)
       const valX = baseX + lblW + 2
       const maxValW = lineEndX - valX - 1
@@ -424,11 +423,11 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     ]
     choferFields.forEach((f, i) => {
       const fx = MARGIN + i * (col7W + 2)
-      doc.setFont('helvetica', 'bold')
+      doc.setFont('helvetica', 'normal')
       doc.setFontSize(7)
       doc.setTextColor(...C_DARK)
       doc.text(`${f.label}:`, fx, y)
-      doc.setFont('helvetica', 'normal')
+      doc.setFont('helvetica', 'bold')
       doc.setFontSize(8)
       if (f.val) doc.text(f.val, fx, y + 4)
       doc.setLineWidth(0.2)

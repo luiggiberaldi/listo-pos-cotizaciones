@@ -160,10 +160,10 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   y += 9
 
   // Fila de fecha de emisión
-  doc.setFont('helvetica', 'bold')
+  doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
   doc.text('Emisión:', MARGIN, y)
-  doc.setFont('helvetica', 'normal')
+  doc.setFont('helvetica', 'bold')
   doc.text(fmtFecha(cotizacion.creado_en), MARGIN + 20, y)
   y += 7
 
@@ -183,12 +183,12 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
       const baseX = colIdx === 0 ? MARGIN : col2X
       const lineEndX = row.length === 1 ? PAGE_W - MARGIN : (colIdx === 0 ? MARGIN + halfW : PAGE_W - MARGIN)
 
-      doc.setFont('helvetica', 'bold')
+      doc.setFont('helvetica', 'normal')
       doc.setTextColor(...C_DARK)
       doc.text(`${item.label}: `, baseX, y)
       const lblW = doc.getTextWidth(`${item.label}: `)
 
-      doc.setFont('helvetica', 'normal')
+      doc.setFont('helvetica', 'bold')
       doc.setFontSize(10.5)
       doc.text(String(item.val), baseX + lblW + 3, y)
       doc.setFontSize(9.5)
