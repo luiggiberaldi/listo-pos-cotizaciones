@@ -26,6 +26,7 @@ import { compartirPorWhatsApp, generarMensaje } from '../../utils/whatsapp'
 import { round2, round4, mulR } from '../../utils/dinero'
 import { calcTotales } from '../../utils/calcTotales'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../../utils/format'
+import { showToast } from '../ui/Toast'
 
 import supabase from '../../services/supabase/client'
 import CustomSelect from '../ui/CustomSelect'
@@ -1266,15 +1267,31 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
     return m
   }, [inventarioParaPrecios])
 
+  // Mapa de stock por producto (para limitar cantidad en la cesta)
+  const stockMap = useMemo(() => {
+    const prods = inventarioParaPrecios?.productos ?? inventarioParaPrecios ?? []
+    const m = {}
+    for (const p of prods) m[p.id] = Number(p.stock_actual) || 0
+    return m
+  }, [inventarioParaPrecios])
+
+  function getStockMax(productoId) {
+    return stockMap[productoId] ?? Infinity
+  }
+
   // Cliente seleccionado (para mostrar datos)
   const clienteSeleccionado = clientes.find(c => c.id === clienteId)
 
   // ── Agregar producto ─────────────────────────────────────────────────────
   function agregarProducto(p) {
+    const stock = Number(p.stock_actual) || 0
     setItems(prev => {
       const idx = prev.findIndex(it => it.productoId === p.id)
       if (idx !== -1) {
-        // Ya existe → sumar 1 a la cantidad
+        if (prev[idx].cantidad >= stock) {
+          showToast(`Stock máximo: ${stock} ${p.unidad ?? 'und'}`, 'error')
+          return prev
+        }
         return prev.map((it, i) => i === idx ? { ...it, cantidad: it.cantidad + 1 } : it)
       }
       return [...prev, {
@@ -1291,7 +1308,18 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
   }
 
   function cambiarItem(idx, campo, valor) {
-    setItems(prev => prev.map((it, i) => i === idx ? { ...it, [campo]: valor } : it))
+    setItems(prev => prev.map((it, i) => {
+      if (i !== idx) return it
+      if (campo === 'cantidad') {
+        const num = parseFloat(String(valor).replace(',', '.'))
+        const max = getStockMax(it.productoId)
+        if (!isNaN(num) && num > max) {
+          showToast(`Stock máximo: ${max}`, 'error')
+          return { ...it, cantidad: max }
+        }
+      }
+      return { ...it, [campo]: valor }
+    }))
   }
 
   function eliminarItem(idx) {
