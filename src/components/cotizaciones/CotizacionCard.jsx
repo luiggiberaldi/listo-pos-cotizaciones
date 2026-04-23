@@ -43,6 +43,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
   const [showDetalle, setShowDetalle] = useState(false)
   const [showSheet, setShowSheet]     = useState(false)
   const [showPdfMenu, setShowPdfMenu] = useState(false)
+  const [monedaPdf, setMonedaPdf] = useState(() => localStorage.getItem('construacero_moneda_pdf') || '$')
   const { data: config = {} } = useConfigNegocio()
   const { tasaBcv, tasaUsdt } = useTasaCambio()
 
@@ -53,6 +54,8 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
   async function descargarPDF(monedaPDF = '$') {
     setPdfLoading(true)
     setShowPdfMenu(false)
+    setMonedaPdf(monedaPDF)
+    localStorage.setItem('construacero_moneda_pdf', monedaPDF)
     try {
       const [{ generarPDF }, itemsRes, clienteData, vendedorRes] = await Promise.all([
         import('../../services/pdf/cotizacionPDF'),
@@ -87,7 +90,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
       const cliente = clienteData || cotizacion.cliente
       const vendedor = vendedorRes.data || cotizacion.vendedor
       const cotConDatos = { ...cotizacion, cliente, vendedor }
-      const pdfBlob = await generarPDF({ cotizacion: cotConDatos, items: itemsRes.data ?? [], config, returnBlob: true })
+      const pdfBlob = await generarPDF({ cotizacion: cotConDatos, items: itemsRes.data ?? [], config, returnBlob: true, monedaPDF: monedaPdf, tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio })
       const mensajeParams = {
         nombreNegocio: config.nombre_negocio,
         nombreCliente: cliente?.nombre,
@@ -304,24 +307,19 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
                 PDF <ChevronDown size={10} />
               </button>
               {showPdfMenu && (
-                <div className="absolute left-0 bottom-full mb-1 w-36 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
+                <div className="absolute left-0 bottom-full mb-1 w-40 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
                   onMouseDown={e => e.preventDefault()}>
-                  <button onClick={() => descargarPDF('$')}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
-                    <DollarSign size={14} className="text-emerald-500" /> Dólares ($)
-                  </button>
-                  <button onClick={() => descargarPDF('bcv')}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
-                    <span className="text-sm font-bold text-teal-500 w-[14px] text-center">$</span> Dólar BCV
-                  </button>
-                  <button onClick={() => descargarPDF('bs')}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
-                    <span className="text-sm font-bold text-blue-500 w-[14px] text-center">Bs</span> Bolívares
-                  </button>
-                  <button onClick={() => descargarPDF('mixto')}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
-                    <span className="text-xs font-bold text-amber-500 w-[18px] text-center shrink-0">$Bs</span> Mixto
-                  </button>
+                  {[
+                    { key: '$', icon: <DollarSign size={14} className="text-emerald-500" />, label: 'Dólares ($)' },
+                    { key: 'bcv', icon: <span className="text-sm font-bold text-teal-500 w-[14px] text-center">$</span>, label: 'Dólar BCV' },
+                    { key: 'bs', icon: <span className="text-sm font-bold text-blue-500 w-[14px] text-center">Bs</span>, label: 'Bolívares' },
+                    { key: 'mixto', icon: <span className="text-xs font-bold text-amber-500 w-[18px] text-center shrink-0">$Bs</span>, label: 'Mixto' },
+                  ].map(opt => (
+                    <button key={opt.key} onClick={() => descargarPDF(opt.key)}
+                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left ${monedaPdf === opt.key ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-700 hover:bg-slate-50'}`}>
+                      {opt.icon} {opt.label}
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
@@ -369,24 +367,19 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
               PDF <ChevronDown size={10} />
             </button>
             {showPdfMenu && (
-              <div className="absolute left-0 bottom-full mb-1 w-36 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
+              <div className="absolute left-0 bottom-full mb-1 w-40 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
                 onMouseDown={e => e.preventDefault()}>
-                <button onClick={() => descargarPDF('$')}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
-                  <DollarSign size={14} className="text-emerald-500" /> Dólares ($)
-                </button>
-                <button onClick={() => descargarPDF('bcv')}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
-                  <span className="text-sm font-bold text-teal-500 w-[14px] text-center">$</span> Dólar BCV
-                </button>
-                <button onClick={() => descargarPDF('bs')}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
-                  <span className="text-sm font-bold text-blue-500 w-[14px] text-center">Bs</span> Bolívares
-                </button>
-                <button onClick={() => descargarPDF('mixto')}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
-                  <span className="text-xs font-bold text-amber-500 w-[18px] text-center shrink-0">$Bs</span> Mixto
-                </button>
+                {[
+                  { key: '$', icon: <DollarSign size={14} className="text-emerald-500" />, label: 'Dólares ($)' },
+                  { key: 'bcv', icon: <span className="text-sm font-bold text-teal-500 w-[14px] text-center">$</span>, label: 'Dólar BCV' },
+                  { key: 'bs', icon: <span className="text-sm font-bold text-blue-500 w-[14px] text-center">Bs</span>, label: 'Bolívares' },
+                  { key: 'mixto', icon: <span className="text-xs font-bold text-amber-500 w-[18px] text-center shrink-0">$Bs</span>, label: 'Mixto' },
+                ].map(opt => (
+                  <button key={opt.key} onClick={() => descargarPDF(opt.key)}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left ${monedaPdf === opt.key ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-700 hover:bg-slate-50'}`}>
+                    {opt.icon} {opt.label}
+                  </button>
+                ))}
               </div>
             )}
           </div>
