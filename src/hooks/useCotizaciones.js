@@ -23,7 +23,7 @@ export function useCotizaciones({ estado = '', clienteId = '' } = {}) {
   const esSupervisor = perfil?.rol === 'supervisor'
 
   return useQuery({
-    queryKey: [...COTIZACIONES_KEY, estado, clienteId, esSupervisor],
+    queryKey: [...COTIZACIONES_KEY, estado, clienteId, esSupervisor, perfil?.id],
     queryFn: async () => {
       // Supervisor: tabla directa; Vendedor: vista (sin notas_internas)
       const tabla = esSupervisor ? 'cotizaciones' : 'v_cotizaciones_vendedor'

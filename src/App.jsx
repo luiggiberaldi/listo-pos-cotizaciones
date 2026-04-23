@@ -12,6 +12,7 @@ import {
 import { QueryClient } from '@tanstack/react-query'
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
 import { indexedDbPersister, CACHE_BUSTER } from './lib/queryPersister'
+import queryClient from './lib/queryClient'
 import OfflineBanner from './components/ui/OfflineBanner'
 import useAuthStore from './store/useAuthStore'
 import { ToastProvider } from './components/ui/Toast'
@@ -67,17 +68,7 @@ const ComisionesView    = lazyRetry(() => import('./views/ComisionesView'))
 const ReportesView      = lazyRetry(() => import('./views/ReportesView'))
 const LogsView          = lazyRetry(() => import('./views/LogsView'))
 
-// ─── QueryClient (instancia única) ────────────────────────────────────────────
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 1000 * 60 * 5,        // 5 minutos — datos frescos sin refetch
-      gcTime: 1000 * 60 * 60 * 24,     // 24h — requerido para persistencia IndexedDB
-      retry: 1,
-      refetchOnWindowFocus: false,       // don't refetch on tab switch — save egress
-    },
-  },
-})
+// ─── QueryClient — importado desde lib/queryClient.js ────────────────────────
 
 const persistOptions = {
   persister: indexedDbPersister,

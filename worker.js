@@ -1379,7 +1379,7 @@ async function handleClientesLookup(request, env) {
     return jsonError('ids debe ser un array de 1-200 UUIDs', 400, request);
   }
 
-  const queryUrl = `${env.SUPABASE_URL}/rest/v1/clientes?id=in.(${ids.map(encodeURIComponent).join(',')})&select=id,nombre,rif_cedula,telefono,email,direccion,tipo_cliente,vendedor_id`;
+  const queryUrl = `${env.SUPABASE_URL}/rest/v1/clientes?id=in.(${ids.map(encodeURIComponent).join(',')})&select=id,nombre,rif_cedula,telefono,email,direccion,tipo_cliente,vendedor_id,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color)`;
 
   const res = await fetch(queryUrl, {
     headers: {

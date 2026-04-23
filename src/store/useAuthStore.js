@@ -5,6 +5,7 @@
 import { create } from 'zustand'
 import supabase from '../services/supabase/client'
 import { apiUrl } from '../services/apiBase'
+import queryClient from '../lib/queryClient'
 
 // ─── Mapear mensajes de error de Supabase a español ───────────────────────────
 function traducirError(mensaje) {
@@ -247,6 +248,9 @@ const useAuthStore = create((set, get) => ({
       // Setear perfil inmediatamente con datos del worker (sin esperar refresh)
       const op = result.operator
       if (op) {
+        // Limpiar cache de datos del operador anterior
+        queryClient.clear()
+
         set({
           perfil: {
             id: op.id,
@@ -290,6 +294,9 @@ const useAuthStore = create((set, get) => ({
 
       // Refrescar para limpiar app_metadata del JWT
       await supabase.auth.refreshSession()
+
+      // Limpiar cache de datos del operador anterior
+      queryClient.clear()
 
       set({ perfil: null, loading: false, error: null })
     } catch {
