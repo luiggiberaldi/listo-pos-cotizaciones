@@ -38,25 +38,37 @@ let _itemCounter = 0
 
 const STEP_LABELS = ['Cliente', 'Productos', 'Resumen', 'Enviada']
 
-// ─── Auto-guardado en localStorage ──────────────────────────────────────────
-const DRAFT_KEY = 'construacero_cotizacion_draft'
+// ─── Auto-guardado en localStorage (por usuario) ──────────────────────────
+const DRAFT_KEY_BASE = 'construacero_cotizacion_draft'
 
-function saveDraft(state) {
-  try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...state, _ts: Date.now() })) } catch {}
+function getDraftKey(userId) {
+  return userId ? `${DRAFT_KEY_BASE}_${userId}` : DRAFT_KEY_BASE
 }
 
-function loadDraft() {
+function saveDraft(state, userId) {
+  try { localStorage.setItem(getDraftKey(userId), JSON.stringify({ ...state, _ts: Date.now(), _userId: userId })) } catch {}
+}
+
+function loadDraft(userId) {
   try {
-    const raw = localStorage.getItem(DRAFT_KEY)
+    const key = getDraftKey(userId)
+    const raw = localStorage.getItem(key)
     if (!raw) return null
     const draft = JSON.parse(raw)
-    if (Date.now() - draft._ts > 24 * 60 * 60 * 1000) { localStorage.removeItem(DRAFT_KEY); return null }
+    // Expirar después de 24h
+    if (Date.now() - draft._ts > 24 * 60 * 60 * 1000) { localStorage.removeItem(key); return null }
+    // Verificar que el draft pertenece al usuario actual
+    if (draft._userId && draft._userId !== userId) { localStorage.removeItem(key); return null }
     return draft
   } catch { return null }
 }
 
-function clearDraft() {
-  try { localStorage.removeItem(DRAFT_KEY) } catch {}
+function clearDraft(userId) {
+  try {
+    localStorage.removeItem(getDraftKey(userId))
+    // También limpiar el draft viejo sin userId (migración)
+    localStorage.removeItem(DRAFT_KEY_BASE)
+  } catch {}
 }
 
 // ─── Indicador de pasos ──────────────────────────────────────────────────────
@@ -1121,7 +1133,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
 
   useEffect(() => {
     if (esEdicion) return
-    const draft = loadDraft()
+    const draft = loadDraft(perfil?.id)
     if (draft && (draft.items?.length > 0 || draft.clienteId)) {
       draftRef.current = draft
       setShowDraftBanner(true)
@@ -1145,7 +1157,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
   }
 
   function discardDraft() {
-    clearDraft()
+    clearDraft(perfil?.id)
     setShowDraftBanner(false)
     draftRef.current = null
   }
@@ -1155,7 +1167,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
     if (esEdicion || paso === 4 || enviada) return
     const timer = setTimeout(() => {
       if (items.length > 0 || clienteId) {
-        saveDraft({ paso, clienteId, vendedorId, notasCliente, notasInternas, monedaPDF, items })
+        saveDraft({ paso, clienteId, vendedorId, notasCliente, notasInternas, monedaPDF, items }, perfil?.id)
       }
     }, 1500)
     return () => clearTimeout(timer)
@@ -1248,7 +1260,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
         items,
       })
       setCotizacionId(id)
-      clearDraft()
+      clearDraft(perfil?.id)
       onGuardado?.()
     } catch (e) {
       setErrorGeneral(e.message ?? 'Error al guardar')
@@ -1293,7 +1305,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
       }
 
       setEnviada(true)
-      clearDraft()
+      clearDraft(perfil?.id)
       setPaso(4)
 
       // Notificar al supervisor si el vendedor usó un cliente ajeno
