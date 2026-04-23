@@ -271,7 +271,7 @@ export async function generarDespachoPlantillaPDF({ config = {} } = {}) {
   y = Math.max(condY, totTopY + 18) + 2
 
   // Slogan — fijo 10mm sobre el footer (footerY = PAGE_H - 22)
-  const sloganY = PAGE_H - 29
+  const sloganY = PAGE_H - 27
 
   // ══════════════════════════════════════════════════════════════════════════
   // 7. DATOS DEL CHOFER Y VEHÍCULO — fijo 5mm sobre el slogan

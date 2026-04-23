@@ -408,7 +408,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   y = Math.max(condY, totTopY + 18) + 2
 
   // ── Slogan — fijo 10mm sobre el footer (footerY = PAGE_H - 28) ──
-  const sloganY = PAGE_H - 35
+  const sloganY = PAGE_H - 33
 
   // ══════════════════════════════════════════════════════════════════════════
   // 5. DATOS DEL CHOFER Y VEHÍCULO — fijo 5mm sobre el slogan

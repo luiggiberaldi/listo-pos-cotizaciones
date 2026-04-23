@@ -391,7 +391,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   // ── (Sección de firma eliminada) ──
 
   // ── Slogan — fijo 10mm sobre el footer (hazardY = PAGE_H - 30) ──
-  const sloganY = PAGE_H - 37
+  const sloganY = PAGE_H - 35
   if (y < sloganY) {
     doc.setFont('helvetica', 'bolditalic')
     doc.setFontSize(16)
