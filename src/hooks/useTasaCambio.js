@@ -2,6 +2,7 @@
 // Hook de tasas de cambio — BCV + USDT (Binance P2P) + Manual
 // Construacero Carabobo
 import { useState, useEffect, useCallback, useRef } from 'react'
+import supabase from '../services/supabase/client'
 
 const STORAGE_KEY = 'construacero_tasa_v1'
 const STORAGE_KEY_USDT = 'construacero_tasa_usdt_v1'
@@ -201,15 +202,64 @@ export function useTasaCambio() {
     return () => clearInterval(intervalId)
   }, [fetchTasa])
 
+  // ─── Realtime sync: broadcast cambios de tasa a otros dispositivos ──────────
+  const _ignoreNextBroadcast = useRef(false)
+
+  // Wrappers que broadcast al cambiar
+  const setModoTasaSync = useCallback((modo) => {
+    setModoTasa(modo)
+    _ignoreNextBroadcast.current = true
+    try {
+      supabase.channel('tasa-sync').send({
+        type: 'broadcast',
+        event: 'tasa_change',
+        payload: { modoTasa: modo, tasaManual: modo === 'manual' ? tasaManual : null, ts: Date.now() },
+      })
+    } catch { /* silencioso */ }
+  }, [tasaManual])
+
+  const setTasaManualSync = useCallback((val) => {
+    setTasaManual(val)
+    _ignoreNextBroadcast.current = true
+    try {
+      supabase.channel('tasa-sync').send({
+        type: 'broadcast',
+        event: 'tasa_change',
+        payload: { modoTasa: 'manual', tasaManual: val, ts: Date.now() },
+      })
+    } catch { /* silencioso */ }
+  }, [])
+
+  // Escuchar cambios de otros dispositivos
+  useEffect(() => {
+    const channel = supabase
+      .channel('tasa-sync')
+      .on('broadcast', { event: 'tasa_change' }, ({ payload }) => {
+        if (!payload || _ignoreNextBroadcast.current) {
+          _ignoreNextBroadcast.current = false
+          return
+        }
+        if (payload.modoTasa && MODOS_VALIDOS.includes(payload.modoTasa)) {
+          setModoTasa(payload.modoTasa)
+        }
+        if (payload.tasaManual !== null && payload.tasaManual !== undefined) {
+          setTasaManual(String(payload.tasaManual))
+        }
+      })
+      .subscribe()
+
+    return () => supabase.removeChannel(channel)
+  }, [])
+
   return {
-    tasaBcv,          // { precio, fuente, ultimaActualizacion }
-    tasaUsdt,         // { precio, fuente, ultimaActualizacion }
-    tasaEfectiva,     // número: la tasa activa según modo
-    modoTasa,         // 'bcv' | 'usdt' | 'manual'
-    setModoTasa,      // setter para cambiar modo
-    modoAuto,         // backward compat: true si no es manual
-    tasaManual,       // string (input value)
-    setTasaManual,
+    tasaBcv,
+    tasaUsdt,
+    tasaEfectiva,
+    modoTasa,
+    setModoTasa: setModoTasaSync,
+    modoAuto,
+    tasaManual,
+    setTasaManual: setTasaManualSync,
     cargando,
     error,
     refrescar: () => fetchTasa(false),
