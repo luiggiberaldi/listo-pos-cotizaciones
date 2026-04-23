@@ -2,7 +2,6 @@
 import { useState, memo } from 'react'
 import { FileText, Calendar, Truck, CheckCircle, Ban, RefreshCcw, Download, Loader2, Eye, MoreHorizontal, ChevronDown, DollarSign, Printer, Check } from 'lucide-react'
 import EstadoBadge from '../cotizaciones/EstadoBadge'
-import DespachoFlowIndicator from './DespachoFlowIndicator'
 import MobileActionSheet from '../cotizaciones/MobileActionSheet'
 import ConfirmModal from '../ui/ConfirmModal'
 import useAuthStore from '../../store/useAuthStore'
@@ -212,11 +211,6 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             <><span className="text-slate-300">·</span><span className="text-teal-500">Entregada {fmtFecha(despacho.entregada_en)}</span></>
           )}
         </div>
-      </div>
-
-      {/* ── Flow indicator ── */}
-      <div className="px-4 pb-2">
-        <DespachoFlowIndicator estado={despacho.estado} compact />
       </div>
 
       {/* ── Cliente ── */}
