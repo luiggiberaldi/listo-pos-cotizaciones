@@ -352,6 +352,12 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
             <RefreshCw size={13} /> {getAction('reciclar', rol).label}
           </button>
         )}
+        {canDespachar && (
+          <button onClick={() => onDespachar(cotizacion)}
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-indigo-600 hover:bg-indigo-50 transition-colors">
+            <Truck size={13} /> {getAction('despachar', rol).label || 'Despachar'}
+          </button>
+        )}
 
         {/* Desktop secondary dropdown */}
         {hasSecondaryActions && (
