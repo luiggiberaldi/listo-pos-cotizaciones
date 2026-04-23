@@ -186,17 +186,6 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
           }} />
         <div className="relative z-10 min-w-0">
           <p className="font-black text-white text-sm font-mono leading-tight drop-shadow">{numDisplay}</p>
-          {cotizacion.cliente?.nombre && (
-            <p className="text-[11px] font-semibold truncate max-w-[120px] sm:max-w-[160px] flex items-center gap-1" style={{ color: 'rgba(255,255,255,0.85)' }}>
-              <User size={10} className="shrink-0" />
-              {cotizacion.cliente.nombre}
-              {clienteAjeno && (
-                <span title="Cliente de otro vendedor">
-                  <AlertTriangle size={10} className="shrink-0 text-amber-300" />
-                </span>
-              )}
-            </p>
-          )}
         </div>
         <div className="relative z-10 shrink-0 flex flex-col items-end gap-1">
           <EstadoBadge estado={cotizacion.estado} />
