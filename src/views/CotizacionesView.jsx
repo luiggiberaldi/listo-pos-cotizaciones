@@ -3,7 +3,7 @@
 // El builder reemplaza la lista in-page (sin navegación adicional)
 import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { FileText, Plus, RefreshCw, Copy, AlertTriangle, PackageCheck, Loader2, X, AlertCircle, LayoutGrid, List } from 'lucide-react'
+import { FileText, Plus, RefreshCw, Copy, AlertTriangle, PackageCheck, Loader2, X, AlertCircle, LayoutGrid, List, ChevronDown, Truck } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import supabase from '../services/supabase/client'
 import { useTasaCambio } from '../hooks/useTasaCambio'
@@ -21,6 +21,7 @@ import { Modal }         from '../components/ui/Modal'
 import EmptyState        from '../components/ui/EmptyState'
 import Skeleton          from '../components/ui/Skeleton'
 import { useVendedores } from '../hooks/useClientes'
+import { useTransportistas } from '../hooks/useTransportistas'
 import VendedorFilterPill from '../components/ui/VendedorFilterPill'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../utils/format'
 import { showToast } from '../components/ui/Toast'
@@ -63,7 +64,10 @@ const FORMAS_PAGO = ['Efectivo', 'Zelle', 'Pago Móvil', 'USDT', 'Transferencia'
 function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 }) {
   const { data: detalle } = useCotizacion(cotizacion?.id)
   const [formaPago, setFormaPago] = useState('')
+  const [transportistaId, setTransportistaId] = useState('')
+  const [showTransportistaMenu, setShowTransportistaMenu] = useState(false)
   const [stockMap, setStockMap] = useState({})
+  const { data: transportistas = [] } = useTransportistas()
 
   const items = detalle?.items ?? []
 
@@ -256,13 +260,73 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
           )}
         </div>
 
+        {/* Transportista */}
+        <div className="space-y-2">
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+            Transportista
+          </p>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowTransportistaMenu(v => !v)}
+              onBlur={() => setTimeout(() => setShowTransportistaMenu(false), 200)}
+              className="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-slate-200 bg-white hover:border-indigo-300 transition-colors text-left min-h-[44px]"
+            >
+              <span className="flex items-center gap-2 truncate">
+                <Truck size={15} className="text-slate-400 shrink-0" />
+                {transportistaId
+                  ? <span className="text-slate-700">{transportistas.find(t => t.id === transportistaId)?.nombre || 'Seleccionado'}</span>
+                  : <span className="text-slate-400">Sin transportista (opcional)</span>
+                }
+              </span>
+              <ChevronDown size={14} className={`text-slate-400 shrink-0 transition-transform ${showTransportistaMenu ? 'rotate-180' : ''}`} />
+            </button>
+            {showTransportistaMenu && (
+              <div className="absolute left-0 right-0 bottom-full mb-1 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20 max-h-48 overflow-y-auto"
+                onMouseDown={e => e.preventDefault()}>
+                <button
+                  onClick={() => { setTransportistaId(''); setShowTransportistaMenu(false) }}
+                  className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left transition-colors ${
+                    !transportistaId ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-500 hover:bg-slate-50'
+                  }`}
+                >
+                  Sin transportista
+                </button>
+                {transportistas.map(t => (
+                  <button key={t.id}
+                    onClick={() => { setTransportistaId(t.id); setShowTransportistaMenu(false) }}
+                    className={`w-full flex items-center justify-between gap-2 px-4 py-2.5 text-sm text-left transition-colors ${
+                      transportistaId === t.id ? 'bg-indigo-50 font-semibold text-indigo-700' : 'text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{t.nombre}</p>
+                      {(t.vehiculo || t.placa_chuto) && (
+                        <p className="text-xs text-slate-400 truncate">
+                          {[t.vehiculo, t.placa_chuto].filter(Boolean).join(' · ')}
+                        </p>
+                      )}
+                    </div>
+                    {transportistaId === t.id && (
+                      <span className="text-indigo-500 shrink-0">✓</span>
+                    )}
+                  </button>
+                ))}
+                {transportistas.length === 0 && (
+                  <p className="px-4 py-2.5 text-sm text-slate-400">No hay transportistas registrados</p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Botones — despachar */}
         <div className="flex flex-col-reverse sm:flex-row gap-3 pt-1">
           <button onClick={onCancel} disabled={cargando}
             className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-700 font-semibold text-base hover:bg-slate-50 transition-colors disabled:opacity-50">
             Cancelar
           </button>
-          <button onClick={() => onConfirm(formaPago)} disabled={cargando || items.length === 0 || !formaPago}
+          <button onClick={() => onConfirm(formaPago, transportistaId || null)} disabled={cargando || items.length === 0 || !formaPago}
             title={!formaPago ? 'Selecciona una forma de pago' : undefined}
             className="flex-1 py-3 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-semibold text-base transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20">
             {cargando
@@ -360,12 +424,13 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
     setCotizacionAAnular(null)
   }
 
-  async function confirmarDespachar(formaPago = '') {
+  async function confirmarDespachar(formaPago = '', transportistaId = null) {
     if (!cotizacionADespachar) return
     try {
       await crearDespacho.mutateAsync({
         cotizacionId: cotizacionADespachar.id,
         formaPago: formaPago || null,
+        transportistaId: transportistaId || null,
       })
       setCotizacionADespachar(null)
     } catch (err) {

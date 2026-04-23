@@ -1915,7 +1915,7 @@ async function handleCrearDespacho(request, env) {
 
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
-  const { cotizacionId, notas, formaPago } = body;
+  const { cotizacionId, notas, formaPago, transportistaId } = body;
   if (!cotizacionId) return jsonError('Falta cotizacionId', 400, request);
   if (!isValidUuid(cotizacionId)) return jsonError('cotizacionId inválido', 400, request);
 
@@ -2024,7 +2024,7 @@ async function handleCrearDespacho(request, env) {
         cotizacion_id: cotizacionId,
         cliente_id: cot.cliente_id,
         vendedor_id: cot.vendedor_id,
-        transportista_id: cot.transportista_id,
+        transportista_id: transportistaId || cot.transportista_id,
         estado: 'pendiente',
         total_usd: cot.total_usd,
         notas: notas || null,

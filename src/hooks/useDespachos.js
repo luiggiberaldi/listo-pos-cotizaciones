@@ -87,7 +87,7 @@ export function useCrearDespacho() {
   const rol = useAuthStore.getState().perfil?.rol
 
   return useMutation({
-    mutationFn: async ({ cotizacionId, notas = null, formaPago = null, numeroCotizacion, clienteNombre }) => {
+    mutationFn: async ({ cotizacionId, notas = null, formaPago = null, transportistaId = null, numeroCotizacion, clienteNombre }) => {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session?.access_token) throw new Error('No autenticado')
 
@@ -97,7 +97,7 @@ export function useCrearDespacho() {
           Authorization: `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ cotizacionId, notas: notas || null, formaPago: formaPago || null }),
+        body: JSON.stringify({ cotizacionId, notas: notas || null, formaPago: formaPago || null, transportistaId: transportistaId || null }),
       })
       const result = await res.json()
       if (!res.ok) throw new Error(result.error || 'Error al crear despacho')
