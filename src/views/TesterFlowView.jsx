@@ -227,10 +227,9 @@ export default function TesterFlowView() {
     if (oldClients && oldClients.length > 0) {
       for (const c of oldClients) {
         await supabase.from('cuentas_por_cobrar').delete().eq('cliente_id', c.id)
-        await supabase.from('clientes').update({ saldo_pendiente: 0 }).eq('id', c.id)
-        await supabase.from('clientes').delete().eq('id', c.id)
+        await supabase.from('clientes').update({ saldo_pendiente: 0, activo: false }).eq('id', c.id)
       }
-      addLog(id, `  Eliminados ${oldClients.length} clientes residuales (${TEST.cliente.rif_cedula})`)
+      addLog(id, `  Desactivados ${oldClients.length} clientes residuales (${TEST.cliente.rif_cedula})`)
     }
 
     if ((!oldProds || oldProds.length === 0) && (!oldClients || oldClients.length === 0)) {
@@ -737,9 +736,8 @@ export default function TesterFlowView() {
       addLog(id, 'DELETE inventario_movimientos + productos ✓')
     }
     if (d.clienteId) {
-      await supabase.from('clientes').update({ saldo_pendiente: 0 }).eq('id', d.clienteId)
-      await supabase.from('clientes').delete().eq('id', d.clienteId)
-      addLog(id, 'DELETE clientes ✓')
+      await supabase.from('clientes').update({ saldo_pendiente: 0, activo: false }).eq('id', d.clienteId)
+      addLog(id, 'DEACTIVATE clientes (RLS no permite DELETE) ✓')
     }
     addLog(id, 'Limpieza completa', 'success')
   }
@@ -752,9 +750,9 @@ export default function TesterFlowView() {
       addLog(id, '  producto eliminado ✓')
     }
     if (d.clienteId) {
-      const { data: c } = await supabase.from('clientes').select('id').eq('id', d.clienteId)
-      assert(!c || c.length === 0, 0, c?.length, 'cliente eliminado')
-      addLog(id, '  cliente eliminado ✓')
+      const { data: c } = await supabase.from('clientes').select('id,activo').eq('id', d.clienteId)
+      assert(!c || c.length === 0 || c[0].activo === false, 'inactivo', c?.[0]?.activo, 'cliente desactivado')
+      addLog(id, '  cliente desactivado ✓')
     }
     if (d.cotizacionId) {
       const { data: co } = await supabase.from('cotizaciones').select('id').eq('id', d.cotizacionId)
