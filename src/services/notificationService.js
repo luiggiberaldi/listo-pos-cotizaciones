@@ -33,7 +33,7 @@ const NOTIF_TARGET_ROLE = {
   [NOTIF_TYPES.COTIZACION_CREADA]:         null,         // ambos
   [NOTIF_TYPES.DESPACHO_CREADO]:           'supervisor',
   [NOTIF_TYPES.COTIZACION_ANULADA]:        null,         // ambos
-  [NOTIF_TYPES.CLIENTE_AJENO]:             'supervisor',
+  [NOTIF_TYPES.CLIENTE_AJENO]:             null,         // se muestra al vendedor que la creó + push al supervisor
   [NOTIF_TYPES.COTIZACION_SIN_RESPUESTA]:  null,         // ya filtrado en query
   [NOTIF_TYPES.COTIZACION_POR_VENCER]:     null,         // ya filtrado en query
 }

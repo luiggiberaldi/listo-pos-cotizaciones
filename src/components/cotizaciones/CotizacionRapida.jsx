@@ -19,6 +19,8 @@ import { calcTotales } from '../../utils/calcTotales'
 import { fmtUsdSimple as fmtUsd, fmtBs } from '../../utils/format'
 import { guardarProductoReciente, getProductosRecientes } from './ProductosRecientes'
 import { showToast } from '../ui/Toast'
+import { notifyClienteAjeno } from '../../services/notificationService'
+import { sendPushNotification } from '../../hooks/usePushNotifications'
 
 let _qCounter = 0
 
@@ -201,6 +203,26 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
         timeout,
       ])
       showToast('Cotización enviada exitosamente', 'success')
+
+      // Notificar al supervisor si el vendedor usó un cliente ajeno
+      const clienteUsado = clientes.find(c => c.id === clienteId)
+      if (clienteUsado && perfil?.rol !== 'supervisor' && clienteUsado.vendedor_id && clienteUsado.vendedor_id !== perfil?.id) {
+        notifyClienteAjeno(
+          perfil?.nombre || 'Vendedor',
+          clienteUsado.nombre,
+          clienteUsado.vendedor?.nombre || 'otro vendedor',
+          '—',
+          perfil?.rol
+        )
+        sendPushNotification({
+          title: 'Cliente Ajeno Usado',
+          message: `${perfil?.nombre} creó cotización con ${clienteUsado.nombre} (cliente de ${clienteUsado.vendedor?.nombre || 'otro vendedor'})`,
+          tag: `cliente-ajeno-rapida`,
+          url: '/cotizaciones',
+          targetRole: 'supervisor',
+        })
+      }
+
       onGuardado?.()
     } catch (e) {
       setError(e.message ?? 'Error al enviar')
