@@ -173,7 +173,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   const clienteRows = [
     [{ label: 'Cliente', val: cliente.nombre || '—' },         { label: 'R.I.F / Cédula', val: cliente.rif_cedula || '—' }],
     [{ label: 'Teléfono', val: cliente.telefono || '—' },      { label: 'Correo', val: cliente.email || '—' }],
-    [{ label: 'Vendedor', val: cotizacion.vendedor?.nombre || '—' }, { label: 'Tlf. Vendedor', val: cotizacion.vendedor?.telefono || '—' }],
+    [{ label: 'Vendedor', val: (cotizacion.vendedor?.nombre || '—') + (cotizacion.vendedor?.telefono ? ` — ${cotizacion.vendedor.telefono}` : '') }, { label: 'Correo', val: cliente.email || '—' }],
     [{ label: 'Dirección Fiscal', val: cliente.direccion || '—' }],
   ]
 
