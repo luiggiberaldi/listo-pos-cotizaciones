@@ -9,6 +9,7 @@ import useAuthStore from '../../store/useAuthStore'
 import { getDespachoAction, PRIMARY_ACTION_COLORS } from '../../utils/despachoActions'
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs } from '../../utils/format'
 import supabase from '../../services/supabase/client'
+import { apiUrl } from '../../services/apiBase'
 import DetalleModal from '../ui/DetalleModal'
 import { showToast } from '../ui/Toast'
 
@@ -38,17 +39,24 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   async function descargarPDF() {
     setPdfLoading(true)
     try {
-      const [{ generarDespachoPDF }, itemsRes, clienteRes, vendedorRes, transportistaRes] = await Promise.all([
+      const session = (await supabase.auth.getSession()).data.session
+      const [{ generarDespachoPDF }, itemsRes, clienteData, vendedorRes, transportistaRes] = await Promise.all([
         import('../../services/pdf/despachoPDF'),
         supabase.from('cotizacion_items').select('codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, total_linea_usd, orden').eq('cotizacion_id', despacho.cotizacion_id).order('orden'),
-        despacho.cliente_id ? supabase.from('clientes').select('id, nombre, rif_cedula, telefono, direccion').eq('id', despacho.cliente_id).single() : Promise.resolve({ data: null }),
+        despacho.cliente_id
+          ? fetch(apiUrl('/api/clientes/lookup'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+              body: JSON.stringify({ ids: [despacho.cliente_id] }),
+            }).then(r => r.ok ? r.json() : [])
+          : Promise.resolve([]),
         despacho.vendedor_id ? supabase.from('usuarios').select('id, nombre, color').eq('id', despacho.vendedor_id).single() : Promise.resolve({ data: null }),
         despacho.transportista_id ? supabase.from('transportistas').select('id, nombre, rif, telefono').eq('id', despacho.transportista_id).single() : Promise.resolve({ data: null }),
       ])
       if (itemsRes.error) throw itemsRes.error
       const desConDatos = {
         ...despacho,
-        cliente: clienteRes.data || despacho.cliente,
+        cliente: clienteData?.[0] || despacho.cliente,
         vendedor: vendedorRes.data || despacho.vendedor,
         transportista: transportistaRes.data || despacho.transportista,
       }

@@ -2,6 +2,7 @@
 // Hook para datos del reporte de despachos y cobranza
 import { useQuery } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
+import { apiUrl } from '../services/apiBase'
 import useAuthStore from '../store/useAuthStore'
 
 export const REPORTE_DESPACHOS_KEY = ['reporte-despachos']
@@ -23,8 +24,8 @@ export function useReporteDespachos({ from, to }) {
         .select(`
           id, numero, cotizacion_id, total_usd, forma_pago, estado,
           creado_en, despachada_en, entregada_en,
-          vendedor:usuarios!notas_despacho_vendedor_id_fkey(id, nombre, color),
-          cliente:clientes!notas_despacho_cliente_id_fkey(id, nombre)
+          cliente_id,
+          vendedor:usuarios!notas_despacho_vendedor_id_fkey(id, nombre, color)
         `)
         .gte('creado_en', `${from}T00:00:00${tzStr}`)
         .lte('creado_en', `${to}T23:59:59${tzStr}`)
@@ -34,7 +35,25 @@ export function useReporteDespachos({ from, to }) {
 
       const { data: despachos, error } = await q
       if (error) throw error
-      const lista = despachos || []
+      let lista = despachos || []
+
+      // Fetch clientes via Worker API (bypasses RLS)
+      const clienteIds = [...new Set(lista.map(r => r.cliente_id).filter(Boolean))]
+      if (clienteIds.length) {
+        const session = (await supabase.auth.getSession()).data.session
+        try {
+          const res = await fetch(apiUrl('/api/clientes/lookup'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+            body: JSON.stringify({ ids: clienteIds }),
+          })
+          if (res.ok) {
+            const clientesData = await res.json()
+            const clientesMap = Object.fromEntries((clientesData ?? []).map(c => [c.id, c]))
+            lista = lista.map(r => ({ ...r, cliente: clientesMap[r.cliente_id] ?? null }))
+          }
+        } catch { /* fallback */ }
+      }
 
       // Por estado
       const estadosList = ['pendiente', 'despachada', 'entregada', 'anulada']

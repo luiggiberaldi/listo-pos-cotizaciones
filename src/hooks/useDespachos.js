@@ -31,7 +31,6 @@ export function useDespachos({ estado = '' } = {}) {
           total_usd, notas, forma_pago,
           creado_en, despachada_en, entregada_en,
           cliente_id, vendedor_id, transportista_id,
-          cliente:clientes!notas_despacho_cliente_id_fkey(id, nombre, rif_cedula, telefono, direccion),
           vendedor:usuarios!notas_despacho_vendedor_id_fkey(id, nombre, color, telefono),
           transportista:transportistas!notas_despacho_transportista_id_fkey(id, nombre, rif, telefono),
           cotizacion:cotizaciones!notas_despacho_cotizacion_id_fkey(id, numero, version)
@@ -46,7 +45,26 @@ export function useDespachos({ estado = '' } = {}) {
 
       const { data, error } = await query
       if (error) throw error
-      return data ?? []
+      if (!data?.length) return []
+
+      // Fetch clientes via Worker API (service key, bypasses RLS)
+      const clienteIds = [...new Set(data.map(r => r.cliente_id).filter(Boolean))]
+      if (clienteIds.length) {
+        const session = (await supabase.auth.getSession()).data.session
+        try {
+          const res = await fetch(apiUrl('/api/clientes/lookup'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+            body: JSON.stringify({ ids: clienteIds }),
+          })
+          if (res.ok) {
+            const clientesData = await res.json()
+            const clientesMap = Object.fromEntries((clientesData ?? []).map(c => [c.id, c]))
+            return data.map(r => ({ ...r, cliente: clientesMap[r.cliente_id] ?? null }))
+          }
+        } catch { /* fallback: return without client data */ }
+      }
+      return data
     },
     enabled: !!perfil,
     staleTime: 1000 * 60 * 5,
