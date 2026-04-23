@@ -190,6 +190,7 @@ export function useGuardarBorrador() {
 // ─── Enviar cotización (via Worker API) ──────────────────────────────────────
 export function useEnviarCotizacion() {
   const qc = useQueryClient()
+  const rol = useAuthStore.getState().perfil?.rol
 
   return useMutation({
     mutationFn: async ({ cotizacionId, tasaBcv }) => {
@@ -223,7 +224,7 @@ export function useEnviarCotizacion() {
       qc.invalidateQueries({ queryKey: COTIZACIONES_KEY })
       qc.invalidateQueries({ queryKey: STOCK_COMPROMETIDO_KEY })
       showToast(`Cotización #${numero} enviada`, 'success')
-      notifyCotizacionEnviada(numero, clienteNombre, vendedorNombre, totalUsd)
+      notifyCotizacionEnviada(numero, clienteNombre, vendedorNombre, totalUsd, rol)
       sendPushNotification({
         title: '🔔 Cotización pendiente de aprobación',
         message: `${vendedorNombre} envió COT-${numero} para ${clienteNombre} — $${totalUsd}. Requiere tu revisión.`,
@@ -238,6 +239,7 @@ export function useEnviarCotizacion() {
 // ─── Anular cotización ────────────────────────────────────────────────────────
 export function useAnularCotizacion() {
   const qc = useQueryClient()
+  const rol = useAuthStore.getState().perfil?.rol
 
   return useMutation({
     mutationFn: async ({ id, numero }) => {
@@ -252,7 +254,7 @@ export function useAnularCotizacion() {
       qc.invalidateQueries({ queryKey: COTIZACIONES_KEY })
       qc.invalidateQueries({ queryKey: STOCK_COMPROMETIDO_KEY })
       showToast(`Cotización #${numero} anulada`, 'warning')
-      notifyCotizacionAnulada(numero)
+      notifyCotizacionAnulada(numero, rol)
     },
   })
 }
@@ -260,6 +262,7 @@ export function useAnularCotizacion() {
 // ─── Actualizar estado (supervisor) ──────────────────────────────────────────
 export function useActualizarEstado() {
   const qc = useQueryClient()
+  const rol = useAuthStore.getState().perfil?.rol
 
   return useMutation({
     mutationFn: async ({ id, estado, numero, clienteNombre, totalUsd, vendedorId }) => {
@@ -275,7 +278,7 @@ export function useActualizarEstado() {
       qc.invalidateQueries({ queryKey: STOCK_COMPROMETIDO_KEY })
       if (estado === 'aceptada') {
         showToast(`Cotización #${numero} aceptada`, 'success')
-        notifyCotizacionAceptada(numero, clienteNombre ?? 'cliente', totalUsd ?? 0)
+        notifyCotizacionAceptada(numero, clienteNombre ?? 'cliente', totalUsd ?? 0, rol)
         sendPushNotification({
           title: '✅ Cotización Aceptada',
           message: `Cotización #${numero} — ${clienteNombre ?? 'cliente'} — $${Number(totalUsd).toFixed(2)}`,

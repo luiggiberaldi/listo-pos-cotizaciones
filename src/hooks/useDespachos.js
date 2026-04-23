@@ -57,6 +57,7 @@ export function useDespachos({ estado = '' } = {}) {
 // ─── Crear nota de despacho (via Worker API) ───────────────────────────────
 export function useCrearDespacho() {
   const qc = useQueryClient()
+  const rol = useAuthStore.getState().perfil?.rol
 
   return useMutation({
     mutationFn: async ({ cotizacionId, notas = null, formaPago = null, numeroCotizacion, clienteNombre }) => {
@@ -126,7 +127,7 @@ export function useCrearDespacho() {
             const bajos = (productos ?? []).filter(p =>
               p.stock_actual <= 0 || (p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo)
             )
-            if (bajos.length > 0) notifyStockBajo(bajos)
+            if (bajos.length > 0) notifyStockBajo(bajos, rol)
           }
         } catch (kardexErr) {
           console.error('[Kardex] Error inesperado:', kardexErr)
@@ -143,7 +144,7 @@ export function useCrearDespacho() {
       qc.invalidateQueries({ queryKey: STOCK_COMPROMETIDO_KEY })
       qc.invalidateQueries({ queryKey: CXC_KEY })
       showToast('Nota de despacho creada', 'success')
-      notifyDespachoCreado(numeroCotizacion ?? '—', clienteNombre ?? 'cliente')
+      notifyDespachoCreado(numeroCotizacion ?? '—', clienteNombre ?? 'cliente', rol)
       sendPushNotification({
         title: '🚚 Orden de Despacho Creada',
         message: `Despacho para cotización #${numeroCotizacion ?? '—'} — ${clienteNombre ?? 'cliente'}`,

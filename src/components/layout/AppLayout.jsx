@@ -22,7 +22,7 @@ import { useAdminAlerts } from '../../hooks/useAdminAlerts'
 import { useRecordatoriosCotizaciones } from '../../hooks/useRecordatoriosCotizaciones'
 import { usePushNotifications } from '../../hooks/usePushNotifications'
 import { showToast } from '../ui/Toast'
-import { NOTIF_TYPES } from '../../services/notificationService'
+import { NOTIF_TYPES, setNotificationUserId } from '../../services/notificationService'
 
 // ─── Iconos por tipo de notificación ────────────────────────────────────────
 const NOTIF_ICON_MAP = {
@@ -112,6 +112,11 @@ export default function AppLayout() {
 
   // Realtime: escucha cambios en tablas y refresca cache automáticamente
   useRealtimeSync()
+
+  // Configurar userId para notificaciones per-user
+  useEffect(() => {
+    if (perfil?.id) setNotificationUserId(perfil.id)
+  }, [perfil?.id])
 
   // Recordatorios de vencimiento deshabilitados (cotizaciones y despachos no vencen)
   // useRecordatoriosCotizaciones()

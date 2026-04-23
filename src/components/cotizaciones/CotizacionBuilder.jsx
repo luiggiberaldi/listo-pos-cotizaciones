@@ -1385,7 +1385,8 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
           perfil?.nombre || 'Vendedor',
           clienteUsado.nombre,
           clienteUsado.vendedor?.nombre || 'otro vendedor',
-          numCot
+          numCot,
+          perfil?.rol
         )
         sendPushNotification({
           title: 'Cliente Ajeno Usado',

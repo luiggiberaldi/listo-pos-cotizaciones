@@ -1,8 +1,17 @@
 // src/services/notificationService.js
 // Sistema de alertas internas — Construacero Carabobo
+// Notificaciones separadas por usuario (localStorage per-user)
 
-const NOTIF_KEY = 'construacero_notifications_v1'
+const NOTIF_KEY_BASE = 'construacero_notifications_v2'
 const MAX_NOTIFS = 100
+
+// ─── userId global para la sesión ─────────────────────────────────────────────
+let _currentUserId = null
+export function setNotificationUserId(userId) { _currentUserId = userId }
+
+function getKey() {
+  return _currentUserId ? `${NOTIF_KEY_BASE}_${_currentUserId}` : NOTIF_KEY_BASE
+}
 
 export const NOTIF_TYPES = {
   STOCK_BAJO:                'stock_bajo',
@@ -16,19 +25,44 @@ export const NOTIF_TYPES = {
   COTIZACION_POR_VENCER:     'cotizacion_por_vencer',
 }
 
+// Qué rol ve cada tipo de notificación
+const NOTIF_TARGET_ROLE = {
+  [NOTIF_TYPES.STOCK_BAJO]:                'supervisor',
+  [NOTIF_TYPES.COTIZACION_ENVIADA]:        'supervisor',
+  [NOTIF_TYPES.COTIZACION_ACEPTADA]:       'vendedor',
+  [NOTIF_TYPES.COTIZACION_CREADA]:         null,         // ambos
+  [NOTIF_TYPES.DESPACHO_CREADO]:           'supervisor',
+  [NOTIF_TYPES.COTIZACION_ANULADA]:        null,         // ambos
+  [NOTIF_TYPES.CLIENTE_AJENO]:             'supervisor',
+  [NOTIF_TYPES.COTIZACION_SIN_RESPUESTA]:  null,         // ya filtrado en query
+  [NOTIF_TYPES.COTIZACION_POR_VENCER]:     null,         // ya filtrado en query
+}
+
 function readNotifs() {
   try {
-    return JSON.parse(localStorage.getItem(NOTIF_KEY) || '[]')
+    return JSON.parse(localStorage.getItem(getKey()) || '[]')
   } catch { return [] }
 }
 
 function saveNotifs(notifs) {
   try {
-    localStorage.setItem(NOTIF_KEY, JSON.stringify(notifs))
+    localStorage.setItem(getKey(), JSON.stringify(notifs))
   } catch { /* silencioso */ }
 }
 
-export function createNotification(type, title, body, meta = null) {
+/**
+ * Crea una notificación solo si el rol actual debe verla.
+ * @param {string} type - Tipo de notificación (NOTIF_TYPES)
+ * @param {string} title
+ * @param {string|null} body
+ * @param {object|null} meta
+ * @param {string|null} currentRole - Rol del usuario actual ('supervisor'|'vendedor')
+ */
+export function createNotification(type, title, body, meta = null, currentRole = null) {
+  // Filtrar por rol: si la notificación es para un rol específico, solo crearla si coincide
+  const targetRole = NOTIF_TARGET_ROLE[type]
+  if (targetRole && currentRole && targetRole !== currentRole) return null
+
   const notif = {
     id: crypto.randomUUID(),
     ts: Date.now(),
@@ -74,7 +108,7 @@ export function clearNotifications() {
 
 const STOCK_BAJO_COOLDOWN_MS = 6 * 60 * 60 * 1000 // 6 horas
 
-export function notifyStockBajo(productos) {
+export function notifyStockBajo(productos, currentRole = null) {
   const bajos = productos.filter(p => p.stock_actual <= 0 || (p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo))
   if (!bajos.length) return
 
@@ -102,49 +136,60 @@ export function notifyStockBajo(productos) {
         minimo: p.stock_minimo,
       })),
       total: bajos.length,
-    }
+    },
+    currentRole,
   )
 }
 
-export function notifyCotizacionEnviada(numero, clienteNombre, vendedorNombre, totalUsd) {
+export function notifyCotizacionEnviada(numero, clienteNombre, vendedorNombre, totalUsd, currentRole = null) {
   const total = totalUsd ? ` — $${Number(totalUsd).toFixed(2)}` : ''
   const de = vendedorNombre ? ` de ${vendedorNombre}` : ''
   createNotification(
     NOTIF_TYPES.COTIZACION_ENVIADA,
     `COT-${numero} pendiente de aprobación`,
     `${clienteNombre}${total}${de}`,
+    null,
+    currentRole,
   )
 }
 
-export function notifyCotizacionAceptada(numero, clienteNombre, totalUsd) {
+export function notifyCotizacionAceptada(numero, clienteNombre, totalUsd, currentRole = null) {
   createNotification(
     NOTIF_TYPES.COTIZACION_ACEPTADA,
     'Cotización Aceptada',
     `Cotización #${numero} — ${clienteNombre} — $${Number(totalUsd).toFixed(2)}`,
+    null,
+    currentRole,
   )
 }
 
-export function notifyDespachoCreado(numero, clienteNombre) {
+export function notifyDespachoCreado(numero, clienteNombre, currentRole = null) {
   createNotification(
     NOTIF_TYPES.DESPACHO_CREADO,
     'Orden de Despacho Creada',
     `Despacho para cotización #${numero} — ${clienteNombre}`,
+    null,
+    currentRole,
   )
 }
 
-export function notifyCotizacionAnulada(numero) {
+export function notifyCotizacionAnulada(numero, currentRole = null) {
   createNotification(
     NOTIF_TYPES.COTIZACION_ANULADA,
     'Cotización Anulada',
     `Cotización #${numero} fue anulada`,
+    null,
+    currentRole,
   )
 }
 
-export function notifyClienteAjeno(vendedorNombre, clienteNombre, clienteVendedorNombre, numero) {
+export function notifyClienteAjeno(vendedorNombre, clienteNombre, clienteVendedorNombre, numero, currentRole = null) {
   createNotification(
     NOTIF_TYPES.CLIENTE_AJENO,
     'Cotización con Cliente Ajeno',
     `${vendedorNombre} creó cotización #${numero} con el cliente ${clienteNombre} (asignado a ${clienteVendedorNombre})`,
+    null,
+    currentRole,
   )
 }
 
@@ -217,4 +262,3 @@ export function notifyCotizacionPorVencer(numero, clienteNombre, diasRestantes) 
     { numero, clienteNombre, diasRestantes },
   )
 }
-

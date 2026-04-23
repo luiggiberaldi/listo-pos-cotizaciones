@@ -104,7 +104,7 @@ export function useAplicarMovimientoLote() {
           const bajos = productos.filter(p =>
             p.stock_actual <= 0 || (p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo)
           )
-          if (bajos.length > 0) notifyStockBajo(bajos)
+          if (bajos.length > 0) notifyStockBajo(bajos, 'supervisor')
         }
       } catch (_) {}
     },

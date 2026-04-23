@@ -52,7 +52,7 @@ export function useInventario({ busqueda = '', categoria = '', page = 0, pageSiz
         // Stock bajo (solo supervisor, sin filtros, primera página)
         if (esSupervisor && !busqueda && !categoria && page === 0) {
           const bajos = productos.filter(p => p.stock_actual <= 0 || (p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo))
-          if (bajos.length > 0) notifyStockBajo(bajos)
+          if (bajos.length > 0) notifyStockBajo(bajos, 'supervisor')
         }
 
         return { productos, totalCount: count ?? productos.length }
@@ -210,7 +210,7 @@ export function useActualizarProducto() {
       qc.invalidateQueries({ queryKey: MOVIMIENTOS_KEY })
       showToast('Producto actualizado', 'success')
       if (data?.stock_actual <= 0 || (data?.stock_minimo > 0 && data?.stock_actual <= data?.stock_minimo)) {
-        notifyStockBajo([data])
+        notifyStockBajo([data], 'supervisor')
       }
     },
   })
