@@ -162,10 +162,11 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   // Datos del cliente en 2 columnas
   const halfW = CONTENT_W / 2 - 2
   const col2X = MARGIN + halfW + 4
+  const vendedorTlf = despacho.vendedor?.telefono ? ` — ${despacho.vendedor.telefono}` : ''
   const clienteRows = [
     [{ label: 'Cliente', val: cliente.nombre || '—' },         { label: 'R.I.F / Cédula', val: cliente.rif_cedula || '—' }],
-    [{ label: 'Teléfono', val: cliente.telefono || '—' },      { label: 'Vendedor', val: despacho.vendedor?.nombre || '—' }],
-    [{ label: 'Dirección Fiscal', val: cliente.direccion || '—' }, { label: 'Tlf. Vendedor', val: despacho.vendedor?.telefono || '—' }],
+    [{ label: 'Teléfono', val: cliente.telefono || '—' },      { label: 'Vendedor', val: (despacho.vendedor?.nombre || '—') + vendedorTlf }],
+    [{ label: 'Dirección Fiscal', val: cliente.direccion || '—' }],
   ]
 
   doc.setFontSize(9.5)
