@@ -23,6 +23,8 @@ export default function BcvWidget({ soloLectura = false }) {
   const [showConfig, setShowConfig] = useState(false)
   const [tasaInput, setTasaInput] = useState(tasaManual)
   const [tasaConfirmada, setTasaConfirmada] = useState(!!tasaManual)
+  // Modo pendiente de confirmación (para sincronizar con botón Listo)
+  const [modoPendiente, setModoPendiente] = useState(null)
   const bcvRef = useRef(null)
 
   // Cerrar popover al hacer click fuera
@@ -50,8 +52,31 @@ export default function BcvWidget({ soloLectura = false }) {
     if (parseFloat(tasaInput) > 0) {
       setTasaManual(tasaInput)
       setTasaConfirmada(true)
+      setModoPendiente(null)
     }
   }
+
+  // Seleccionar modo (pendiente hasta confirmar con Listo)
+  function seleccionarModo(key) {
+    if (key === modoTasa) {
+      setModoPendiente(null)
+      return
+    }
+    setModoPendiente(key)
+  }
+
+  // Confirmar cambio de modo
+  function confirmarModo() {
+    if (!modoPendiente) return
+    setModoTasa(modoPendiente)
+    if (modoPendiente === 'manual') {
+      setTasaConfirmada(false)
+    }
+    setModoPendiente(null)
+  }
+
+  // Modo visual: el pendiente o el actual
+  const modoVisual = modoPendiente || modoTasa
 
   const modoActual = MODO_CONFIG_FULL[modoTasa] || MODO_CONFIG.usdt
 
@@ -79,13 +104,13 @@ export default function BcvWidget({ soloLectura = false }) {
         {Object.entries(MODO_CONFIG).map(([key, cfg]) => (
           <button
             key={key}
-            onClick={() => setModoTasa(key)}
+            onClick={() => seleccionarModo(key)}
             className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
-              modoTasa === key
+              modoVisual === key
                 ? `bg-${cfg.color}-500/20 text-${cfg.color}-400 border border-${cfg.color}-500/30`
                 : 'text-white/40 hover:text-white/60 hover:bg-white/5 border border-transparent'
             }`}
-            style={modoTasa === key ? {
+            style={modoVisual === key ? {
               background: key === 'bcv' ? 'rgba(52,211,153,0.15)' : key === 'usdt' ? 'rgba(99,102,241,0.15)' : 'rgba(251,191,36,0.15)',
               borderColor: key === 'bcv' ? 'rgba(52,211,153,0.3)' : key === 'usdt' ? 'rgba(99,102,241,0.3)' : 'rgba(251,191,36,0.3)',
               color: key === 'bcv' ? '#34d399' : key === 'usdt' ? '#818cf8' : '#fbbf24',
@@ -96,8 +121,19 @@ export default function BcvWidget({ soloLectura = false }) {
         ))}
       </div>
 
+      {/* Botón Listo para confirmar cambio de modo */}
+      {modoPendiente && modoPendiente !== 'manual' && (
+        <button
+          onClick={confirmarModo}
+          className="w-full py-2.5 rounded-xl text-sm font-bold text-white transition-all active:scale-[0.98]"
+          style={{ background: 'linear-gradient(135deg, #6366f1, #818cf8)', boxShadow: '0 4px 15px rgba(99,102,241,0.3)' }}
+        >
+          Listo — Cambiar a {MODO_CONFIG[modoPendiente]?.label}
+        </button>
+      )}
+
       {/* Contenido según modo */}
-      {modoTasa === 'usdt' && (
+      {modoVisual === 'usdt' && (
         <div className="p-3 rounded-xl space-y-2" style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)' }}>
           <div className="flex items-center justify-between">
             <div>
@@ -123,38 +159,53 @@ export default function BcvWidget({ soloLectura = false }) {
         </div>
       )}
 
-      {modoTasa === 'manual' && (
+      {modoVisual === 'manual' && (
         <div className="p-3 rounded-xl space-y-3" style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.12)' }}>
           <p className="text-xs font-bold text-amber-400">Tasa manual</p>
-          <div className="flex gap-2 items-center">
-            <div className="relative flex-1">
-              <input type="number" min="0.01" step="0.01"
-                value={tasaInput}
-                onChange={e => { setTasaInput(e.target.value); setTasaConfirmada(false) }}
-                placeholder="Ej: 48.50"
-                className="w-full px-3 py-2.5 rounded-xl text-sm font-bold text-white/90 focus:outline-none focus:ring-2 focus:ring-amber-500/40 placeholder:text-white/20"
-                style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)' }}
-                onKeyDown={e => e.key === 'Enter' && confirmarTasaManual()}
-              />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-white/25">Bs/$</span>
-            </div>
+          {/* Si es modo pendiente (aún no confirmado), mostrar botón Listo primero */}
+          {modoPendiente === 'manual' && (
             <button
-              onClick={confirmarTasaManual}
-              disabled={!tasaInput || parseFloat(tasaInput) <= 0 || tasaConfirmada}
-              className={`shrink-0 px-4 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95 ${
-                tasaConfirmada
-                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/20'
-                  : 'text-white disabled:opacity-30'
-              }`}
-              style={!tasaConfirmada ? { background: 'linear-gradient(135deg, #B8860B, #d4a017)' } : {}}
+              onClick={confirmarModo}
+              className="w-full py-2.5 rounded-xl text-sm font-bold text-white transition-all active:scale-[0.98] mb-2"
+              style={{ background: 'linear-gradient(135deg, #B8860B, #d4a017)', boxShadow: '0 4px 15px rgba(180,135,11,0.3)' }}
             >
-              {tasaConfirmada ? 'Listo' : 'Aplicar'}
+              Listo — Cambiar a Manual
             </button>
-          </div>
-          <div className="flex gap-3 text-[10px] text-white/30">
-            {tasaBcv.precio > 0 && <span>BCV: {fmtRate(tasaBcv.precio)}</span>}
-            {tasaUsdt.precio > 0 && <span>USDT: {fmtRate(tasaUsdt.precio)}</span>}
-          </div>
+          )}
+          {/* Solo mostrar input si ya está en modo manual confirmado */}
+          {modoTasa === 'manual' && (
+            <>
+              <div className="flex gap-2 items-center">
+                <div className="relative flex-1">
+                  <input type="number" min="0.01" step="0.01"
+                    value={tasaInput}
+                    onChange={e => { setTasaInput(e.target.value); setTasaConfirmada(false) }}
+                    placeholder="Ej: 48.50"
+                    className="w-full px-3 py-2.5 rounded-xl text-sm font-bold text-white/90 focus:outline-none focus:ring-2 focus:ring-amber-500/40 placeholder:text-white/20"
+                    style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)' }}
+                    onKeyDown={e => e.key === 'Enter' && confirmarTasaManual()}
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-white/25">Bs/$</span>
+                </div>
+                <button
+                  onClick={confirmarTasaManual}
+                  disabled={!tasaInput || parseFloat(tasaInput) <= 0 || tasaConfirmada}
+                  className={`shrink-0 px-4 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95 ${
+                    tasaConfirmada
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/20'
+                      : 'text-white disabled:opacity-30'
+                  }`}
+                  style={!tasaConfirmada ? { background: 'linear-gradient(135deg, #B8860B, #d4a017)' } : {}}
+                >
+                  {tasaConfirmada ? 'Listo' : 'Aplicar'}
+                </button>
+              </div>
+              <div className="flex gap-3 text-[10px] text-white/30">
+                {tasaBcv.precio > 0 && <span>BCV: {fmtRate(tasaBcv.precio)}</span>}
+                {tasaUsdt.precio > 0 && <span>USDT: {fmtRate(tasaUsdt.precio)}</span>}
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
