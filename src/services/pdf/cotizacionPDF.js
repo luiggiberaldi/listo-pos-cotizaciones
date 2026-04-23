@@ -11,18 +11,23 @@ function fmtUsd(n) {
 function fmtBs(n) {
   return `Bs ${Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
+function fmtBcvUsd(n) {
+  return `$${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
 function fmtFecha(f) {
   if (!f) return '—'
   return new Date(f + (f.includes('T') ? '' : 'T12:00:00')).toLocaleDateString('es-VE', {
     day: '2-digit', month: '2-digit', year: 'numeric',
   })
 }
-function fmtPrecio(n, moneda, tasa) {
+function fmtPrecio(n, moneda, tasa, factorBcv) {
   if (moneda === 'bs' && tasa > 0) return fmtBs(Number(n || 0) * tasa)
+  if (moneda === 'bcv' && factorBcv > 0) return fmtBcvUsd(Number(n || 0) * factorBcv)
   return fmtUsd(n)
 }
-function fmtTotalLinea(n, moneda, tasa) {
+function fmtTotalLinea(n, moneda, tasa, factorBcv) {
   if (moneda === 'bs' && tasa > 0) return fmtBs(Number(n || 0) * tasa)
+  if (moneda === 'bcv' && factorBcv > 0) return fmtBcvUsd(Number(n || 0) * factorBcv)
   if (moneda === 'mixto' && tasa > 0) return `${fmtUsd(n)} / ${fmtBs(Number(n || 0) * tasa)}`
   return fmtUsd(n)
 }
@@ -50,9 +55,12 @@ const CUENTAS_BANCARIAS = [
   'CTA. CTE. PROVINCIAL 0108 0071 4901 0129 1305',
 ]
 
-export async function generarPDF({ cotizacion, items = [], config = {}, returnBlob = false, monedaPDF = '$', tasa = 0 }) {
+export async function generarPDF({ cotizacion, items = [], config = {}, returnBlob = false, monedaPDF = '$', tasa = 0, tasaUsdt = 0, tasaBcv = 0 }) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
   let y = 0
+
+  // Factor BCV: cuántos dólares BCV equivale 1 USDT (ej: 1.30)
+  const factorBcv = (tasaUsdt > 0 && tasaBcv > 0) ? tasaUsdt / tasaBcv : 0
 
   const logoData = await cargarLogo(config.logo_url)
   const rif = config.rif_negocio || 'J-50115913-0'
@@ -195,8 +203,8 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   // ══════════════════════════════════════════════════════════════════════════
   // 3. TABLA DE PRODUCTOS
   // ══════════════════════════════════════════════════════════════════════════
-  const precioLabel = monedaPDF === 'bs' ? 'PRECIO Bs' : 'PRECIO'
-  const totalLabel  = monedaPDF === 'bs' ? 'TOTAL Bs'  : 'TOTAL'
+  const precioLabel = monedaPDF === 'bs' ? 'PRECIO Bs' : monedaPDF === 'bcv' ? 'PRECIO BCV' : 'PRECIO'
+  const totalLabel  = monedaPDF === 'bs' ? 'TOTAL Bs'  : monedaPDF === 'bcv' ? 'TOTAL BCV'  : 'TOTAL'
   const COLS = [
     { label: 'CANT.',       x: MARGIN,        w: 16,  align: 'center' },
     { label: 'CÓD.',        x: MARGIN + 16,   w: 24,  align: 'center' },
@@ -244,10 +252,10 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     doc.text(item.unidad_snap || '—', COLS[3].x + COLS[3].w / 2, midY, { align: 'center' })
 
     const tasaEfectiva = tasa > 0 ? tasa : Number(cotizacion.tasa_bcv_snapshot || 0)
-    doc.text(fmtPrecio(item.precio_unit_usd, monedaPDF, tasaEfectiva), COLS[4].x + COLS[4].w - 2, midY, { align: 'right' })
+    doc.text(fmtPrecio(item.precio_unit_usd, monedaPDF, tasaEfectiva, factorBcv), COLS[4].x + COLS[4].w - 2, midY, { align: 'right' })
 
     doc.setFont('helvetica', 'bold')
-    doc.text(fmtPrecio(item.total_linea_usd, monedaPDF, tasaEfectiva), COLS[5].x + COLS[5].w - 2, midY, { align: 'right' })
+    doc.text(fmtPrecio(item.total_linea_usd, monedaPDF, tasaEfectiva, factorBcv), COLS[5].x + COLS[5].w - 2, midY, { align: 'right' })
 
     y += ROW_H
   })
@@ -336,7 +344,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
 
   const totLines = []
   if (ivaPct > 0) {
-    totLines.push({ label: `IVA (${ivaPct}%):`, val: fmtTotalLinea(ivaUsd, monedaPDF, tasaEfectivaTot), bold: false })
+    totLines.push({ label: `IVA (${ivaPct}%):`, val: fmtTotalLinea(ivaUsd, monedaPDF, tasaEfectivaTot, factorBcv), bold: false })
   }
 
   // Borde del cuadro de totales
@@ -366,7 +374,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   doc.setFontSize(11)
   doc.setTextColor(...C_WHITE)
   doc.text('TOTAL', totX + 4, ty + 5)
-  doc.text(fmtTotalLinea(total, monedaPDF, tasaEfectivaTot), totX + totW - 4, ty + 5, { align: 'right' })
+  doc.text(fmtTotalLinea(total, monedaPDF, tasaEfectivaTot, factorBcv), totX + totW - 4, ty + 5, { align: 'right' })
 
   // (Total en Bs omitido en modo USD — solo se muestra en mixto/bs)
 

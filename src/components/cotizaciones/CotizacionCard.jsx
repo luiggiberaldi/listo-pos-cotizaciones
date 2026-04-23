@@ -7,6 +7,7 @@ import MobileActionSheet from './MobileActionSheet'
 import useAuthStore from '../../store/useAuthStore'
 import supabase from '../../services/supabase/client'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
+import { useTasaCambio } from '../../hooks/useTasaCambio'
 import { compartirPorWhatsApp, generarMensaje } from '../../utils/whatsapp'
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs } from '../../utils/format'
 import { getAction, PRIMARY_ACTION_COLORS } from '../../utils/cotizacionActions'
@@ -43,6 +44,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
   const [showSheet, setShowSheet]     = useState(false)
   const [showPdfMenu, setShowPdfMenu] = useState(false)
   const { data: config = {} } = useConfigNegocio()
+  const { tasaBcv, tasaUsdt } = useTasaCambio()
 
   const numDisplay = cotizacion.version > 1
     ? `COT-${String(cotizacion.numero).padStart(5, '0')} Rev.${cotizacion.version}`
@@ -64,7 +66,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         cliente: clienteData || cotizacion.cliente,
         vendedor: vendedorRes.data || cotizacion.vendedor,
       }
-      await generarPDF({ cotizacion: cotConDatos, items: itemsRes.data ?? [], config, monedaPDF, tasa })
+      await generarPDF({ cotizacion: cotConDatos, items: itemsRes.data ?? [], config, monedaPDF, tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio })
     } catch (err) {
       showToast('Error al generar PDF: ' + (err.message || 'Error desconocido'), 'error')
     } finally {
@@ -308,6 +310,10 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
                     className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
                     <DollarSign size={14} className="text-emerald-500" /> Dólares ($)
                   </button>
+                  <button onClick={() => descargarPDF('bcv')}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
+                    <span className="text-sm font-bold text-teal-500 w-[14px] text-center">$</span> Dólar BCV
+                  </button>
                   <button onClick={() => descargarPDF('bs')}
                     className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
                     <span className="text-sm font-bold text-blue-500 w-[14px] text-center">Bs</span> Bolívares
@@ -368,6 +374,10 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
                 <button onClick={() => descargarPDF('$')}
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
                   <DollarSign size={14} className="text-emerald-500" /> Dólares ($)
+                </button>
+                <button onClick={() => descargarPDF('bcv')}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
+                  <span className="text-sm font-bold text-teal-500 w-[14px] text-center">$</span> Dólar BCV
                 </button>
                 <button onClick={() => descargarPDF('bs')}
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
