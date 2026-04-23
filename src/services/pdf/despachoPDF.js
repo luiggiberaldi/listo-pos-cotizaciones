@@ -87,26 +87,26 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const HDR_H = 20
 
   // Logo a la izquierda (más pequeño)
-  try { doc.addImage(LOGO_DESPACHO, 'PNG', MARGIN - 2, 1, 22, 22) } catch (_) {}
+  try { doc.addImage(LOGO_DESPACHO, 'PNG', MARGIN - 2, 6, 22, 22) } catch (_) {}
 
   // Nombre del negocio centrado
   const centerX = PAGE_W / 2
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(20)
   doc.setTextColor(...C_DARK)
-  doc.text('CONSTRUACERO CARABOBO, C.A.', centerX, 11, { align: 'center' })
+  doc.text('CONSTRUACERO CARABOBO, C.A.', centerX, 16, { align: 'center' })
 
   // RIF centrado
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(12)
-  doc.text('RIF.: J-50115913-0', centerX, 16, { align: 'center' })
+  doc.text('RIF.: J-50115913-0', centerX, 22, { align: 'center' })
 
   // Línea separadora
   doc.setLineWidth(0.8)
   doc.setDrawColor(...C_DARK)
-  doc.line(MARGIN, HDR_H + 4, PAGE_W - MARGIN, HDR_H + 4)
+  doc.line(MARGIN, HDR_H + 10, PAGE_W - MARGIN, HDR_H + 10)
 
-  y = HDR_H + 11
+  y = HDR_H + 17
 
   // ── Marca de agua central ──
   try {
@@ -470,7 +470,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     const ph = PAGE_H
 
     // Línea separadora
-    const footerY = ph - 22
+    const footerY = ph - 28
     doc.setLineWidth(0.8)
     doc.setDrawColor(...C_DARK)
     doc.line(MARGIN, footerY, PAGE_W - MARGIN, footerY)

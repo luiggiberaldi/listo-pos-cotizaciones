@@ -98,7 +98,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-lg p-4 sm:p-6 space-y-4 max-h-[90vh] flex flex-col">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-lg p-4 sm:p-6 max-h-[90vh] flex flex-col gap-4">
 
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -118,6 +118,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
         </div>
 
         {/* Aviso */}
+        <div className="flex-1 min-h-0 overflow-y-auto space-y-4">
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-2.5">
           <AlertTriangle size={15} className="text-amber-600 shrink-0 mt-0.5" />
           <p className="text-sm text-amber-800">
@@ -133,7 +134,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
         </div>
 
         {/* Tabla de items */}
-        <div className="flex-1 min-h-0 overflow-y-auto">
+        <div>
           {items.length === 0 ? (
             <div className="flex items-center justify-center py-6">
               <div className="w-5 h-5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
@@ -344,6 +345,8 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
             )}
           </div>
         )}
+
+        </div>{/* fin scrollable */}
 
         {/* Botones — despachar */}
         <div className="flex flex-col-reverse sm:flex-row gap-3 pt-1">
