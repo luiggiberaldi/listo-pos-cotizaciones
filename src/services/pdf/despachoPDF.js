@@ -326,7 +326,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   // ── Layout fijo: posiciones calculadas desde el fondo ──
   const sloganY = PAGE_H - 33
   const TRANS_H = 18
-  const transportistaStartY = sloganY - 8 - TRANS_H   // fijo sobre slogan
+  const transportistaStartY = sloganY - 13 - TRANS_H   // fijo sobre slogan
   const TOTALES_H = 46
   const ty = transportistaStartY - 5 - TOTALES_H       // fijo sobre transportista
 
