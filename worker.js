@@ -1993,8 +1993,8 @@ async function handleCrearDespacho(request, env) {
         movimientos.push({
           lote_id: loteId,
           tipo: 'egreso',
-          motivo: `Nota de despacho #${cot.numero}`,
-          motivo_tipo: 'venta',
+          motivo: `Venta — Nota de despacho #${cot.numero}`,
+          motivo_tipo: 'otro',
           producto_id: item.producto_id,
           producto_nombre: item.nombre_snap || prod.nombre,
           cantidad: Number(item.cantidad),

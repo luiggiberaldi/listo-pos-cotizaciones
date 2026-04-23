@@ -535,8 +535,8 @@ export default function TesterFlowView() {
     addLog(id, `  stock_anterior = ${mov.stock_anterior} ✓`)
     assert(Number(mov.stock_nuevo) === TEST.despacho.stock_esperado_post, TEST.despacho.stock_esperado_post, mov.stock_nuevo, 'stock_nuevo')
     addLog(id, `  stock_nuevo = ${mov.stock_nuevo} ✓`)
-    assert(mov.motivo_tipo === 'venta', 'venta', mov.motivo_tipo, 'motivo_tipo')
-    addLog(id, `  motivo_tipo = "venta" ✓`)
+    assert(mov.motivo_tipo === 'otro', 'otro', mov.motivo_tipo, 'motivo_tipo')
+    addLog(id, `  motivo_tipo = "otro" ✓`)
     addLog(id, 'Kardex egreso correcto', 'success')
   }
 
