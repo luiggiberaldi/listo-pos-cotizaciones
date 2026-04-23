@@ -161,7 +161,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
 
   // Fila de fecha de emisión
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(16)
+  doc.setFontSize(9)
   doc.text('Emisión:', MARGIN, y)
   doc.setFont('helvetica', 'bold')
   doc.text(fmtFecha(cotizacion.creado_en), MARGIN + 20, y)
@@ -249,7 +249,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
 
     const midY = y + ROW_H / 2 + 1.2
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(16)
+    doc.setFontSize(9)
     doc.setTextColor(...C_DARK)
 
     doc.text(String(item.cantidad), COLS[0].x + COLS[0].w / 2, midY, { align: 'center' })
@@ -277,7 +277,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     doc.text('NOTAS:', MARGIN, y + 4)
 
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(16)
+    doc.setFontSize(9)
     doc.setTextColor(...C_DARK)
     const lineas = doc.splitTextToSize(cotizacion.notas_cliente.trim(), CONTENT_W)
     lineas.forEach(lin => {
@@ -447,7 +447,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     doc.text(addr2, PAGE_W/2, ph - 15, { align: 'center' })
 
     // ── Icono teléfono + icono correo en la línea de contacto ──
-    doc.setFontSize(16)
+    doc.setFontSize(9)
     const tel = config.telefono_negocio || ''
     const email = config.email_negocio || ''
     if (tel || email) {

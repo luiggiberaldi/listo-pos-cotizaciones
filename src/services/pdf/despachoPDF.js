@@ -130,7 +130,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.setLineWidth(0.3)
   doc.rect(MARGIN, notaBarY, CONTENT_W, 7, 'S')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(16)
+  doc.setFontSize(9)
   doc.setTextColor(...C_DARK)
   doc.text('ORDEN DE DESPACHO', MARGIN + 3, notaBarY + 5)
   doc.text(numDes, PAGE_W - MARGIN - 3, notaBarY + 5, { align: 'right' })
@@ -280,7 +280,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
 
     const midY = y + (lineCount === 1 ? ROW_H / 2 + 1.2 : 4.5)
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(16)
+    doc.setFontSize(9)
     doc.setTextColor(...C_DARK)
 
     const singleMidY = y + ROW_H / 2 + 1.2
@@ -311,7 +311,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     doc.text('NOTAS:', MARGIN, y + 4)
 
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(16)
+    doc.setFontSize(9)
     doc.setTextColor(...C_DARK)
     const lineas = doc.splitTextToSize(despacho.notas.trim(), CONTENT_W)
     lineas.forEach(lin => {
@@ -348,7 +348,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.roundedRect(MARGIN, y, leftW, condBoxH, 1, 1, 'FD')
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(16)
+  doc.setFontSize(9)
   doc.setTextColor(...C_DARK)
   doc.text('CONDICIONES GENERALES:', MARGIN + condPadding, y + condPadding + 3.5)
 
@@ -383,7 +383,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   // Forma de pago
   const fp = (formaPago || despacho.forma_pago || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(16)
+  doc.setFontSize(9)
   doc.setTextColor(...C_DARK)
   doc.text('FORMA DE PAGO:', totX, y + 4)
   drawCheck(doc, 'EFECTIVO',   totX,      y + 12, fp === 'efectivo')

@@ -70,7 +70,7 @@ export async function generarDespachoPlantillaPDF({ config = {} } = {}) {
   doc.rect(MARGIN, notaBarY, CONTENT_W, 7, 'S')
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(16)
+  doc.setFontSize(9)
   doc.setTextColor(...C_DARK)
   doc.text('ORDEN DE DESPACHO', MARGIN + 3, notaBarY + 5)
   doc.text('N°-', PAGE_W - MARGIN - 40, notaBarY + 5)
@@ -209,7 +209,7 @@ export async function generarDespachoPlantillaPDF({ config = {} } = {}) {
   doc.roundedRect(MARGIN, y, leftW, condBoxH, 1, 1, 'FD')
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(16)
+  doc.setFontSize(9)
   doc.setTextColor(...C_DARK)
   doc.text('CONDICIONES GENERALES:', MARGIN + condPadding, y + condPadding + 3.5)
 
@@ -245,7 +245,7 @@ export async function generarDespachoPlantillaPDF({ config = {} } = {}) {
 
   // Forma de pago — todos sin marcar
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(16)
+  doc.setFontSize(9)
   doc.setTextColor(...C_DARK)
   doc.text('FORMA DE PAGO:', totX, y + 4)
   drawCheck(doc, 'EFECTIVO',   totX,      y + 12)
