@@ -39,7 +39,7 @@ export default memo(function DespachoRow({ despacho, onVer, tasa = 0 }) {
           </div>
           <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-400">
             {despacho.cliente?.nombre && (
-              <span className="truncate max-w-[200px]">{despacho.cliente.nombre}</span>
+              <span className="truncate max-w-[200px] font-medium" style={{ color: despacho.cliente?.vendedor?.color || vendedorColor }}>{despacho.cliente.nombre}</span>
             )}
             {esSupervisor && despacho.vendedor && (
               <>
