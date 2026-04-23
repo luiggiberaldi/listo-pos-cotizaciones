@@ -164,8 +164,8 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const vendedorTlf = despacho.vendedor?.telefono ? ` — ${despacho.vendedor.telefono}` : ''
   const clienteRows = [
     [{ label: 'Cliente', val: cliente.nombre || '—' },         { label: 'R.I.F / Cédula', val: cliente.rif_cedula || '—' }],
-    [{ label: 'Teléfono', val: cliente.telefono || '—' },      { label: 'Vendedor', val: (despacho.vendedor?.nombre || '—') + vendedorTlf, highlight: true }],
     [{ label: 'Dirección Fiscal', val: cliente.direccion || '—' }],
+    [{ label: 'Teléfono', val: cliente.telefono || '—' },      { label: 'Vendedor', val: (despacho.vendedor?.nombre || '—') + vendedorTlf, highlight: true }],
   ]
 
   doc.setFontSize(9.5)
