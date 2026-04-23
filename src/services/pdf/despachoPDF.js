@@ -177,7 +177,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
       // Highlight solo en la celda marcada
       if (item.highlight) {
         doc.setFillColor(230, 230, 230)
-        doc.rect(baseX - 1, y - 3.5, lineEndX - baseX + 2, 6, 'F')
+        doc.rect(baseX - 1, y - 4.5, lineEndX - baseX + 2, 6, 'F')
       }
 
       doc.setFont('helvetica', 'normal')
