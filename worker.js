@@ -2008,9 +2008,8 @@ async function handleCrearDespacho(request, env) {
     // 7. Crear nota de despacho
     const despRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?select=id,numero`, {
       method: 'POST',
-      headers: { ...headers, Prefer: 'return=representation', 'X-Skip-Trigger': 'numero' },
+      headers: { ...headers, Prefer: 'return=representation' },
       body: JSON.stringify({
-        numero: cot.numero,
         cotizacion_id: cotizacionId,
         cliente_id: cot.cliente_id,
         vendedor_id: cot.vendedor_id,
