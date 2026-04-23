@@ -244,7 +244,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         <div className="px-4 pb-2 flex items-center justify-between">
           <span className="text-xs text-slate-400">Cliente</span>
           <span className="text-xs font-semibold truncate max-w-[200px]"
-            style={{ color: vendedorColor }}>
+            style={{ color: cotizacion.cliente?.vendedor?.color || vendedorColor }}>
             {cotizacion.cliente.nombre}
           </span>
         </div>

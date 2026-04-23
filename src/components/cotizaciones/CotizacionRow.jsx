@@ -47,7 +47,7 @@ export default memo(function CotizacionRow({ cotizacion, onEditar, onVer, tasa =
           </div>
           <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-400">
             {cotizacion.cliente?.nombre && (
-              <span className="truncate max-w-[200px] font-medium" style={{ color: vendedorColor }}>{cotizacion.cliente.nombre}</span>
+              <span className="truncate max-w-[200px] font-medium" style={{ color: cotizacion.cliente?.vendedor?.color || vendedorColor }}>{cotizacion.cliente.nombre}</span>
             )}
             {esSupervisor && cotizacion.vendedor && (
               <>
