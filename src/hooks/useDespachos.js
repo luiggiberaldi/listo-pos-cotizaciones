@@ -31,7 +31,6 @@ export function useDespachos({ estado = '' } = {}) {
           total_usd, notas, forma_pago,
           creado_en, despachada_en, entregada_en,
           cliente_id, vendedor_id, transportista_id,
-          vendedor:usuarios!notas_despacho_vendedor_id_fkey(id, nombre, color, telefono),
           transportista:transportistas!notas_despacho_transportista_id_fkey(id, nombre, rif, telefono),
           cotizacion:cotizaciones!notas_despacho_cotizacion_id_fkey(id, numero, version)
         `)
@@ -49,22 +48,32 @@ export function useDespachos({ estado = '' } = {}) {
 
       // Fetch clientes via Worker API (service key, bypasses RLS)
       const clienteIds = [...new Set(data.map(r => r.cliente_id).filter(Boolean))]
-      if (clienteIds.length) {
-        const session = (await supabase.auth.getSession()).data.session
-        try {
-          const res = await fetch(apiUrl('/api/clientes/lookup'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-            body: JSON.stringify({ ids: clienteIds }),
-          })
-          if (res.ok) {
-            const clientesData = await res.json()
-            const clientesMap = Object.fromEntries((clientesData ?? []).map(c => [c.id, c]))
-            return data.map(r => ({ ...r, cliente: clientesMap[r.cliente_id] ?? null }))
-          }
-        } catch { /* fallback: return without client data */ }
-      }
-      return data
+      // Siempre cargar vendedores por separado (el join puede fallar por RLS)
+      const vendedorIds = [...new Set(data.map(r => r.vendedor_id).filter(Boolean))]
+
+      const session = (await supabase.auth.getSession()).data.session
+
+      const [clientesData, vendedoresRes] = await Promise.all([
+        clienteIds.length
+          ? fetch(apiUrl('/api/clientes/lookup'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+              body: JSON.stringify({ ids: clienteIds }),
+            }).then(r => r.ok ? r.json() : [])
+          : [],
+        vendedorIds.length
+          ? supabase.from('usuarios').select('id, nombre, color, telefono').in('id', vendedorIds)
+          : { data: [] },
+      ])
+
+      const clientesMap = Object.fromEntries((clientesData ?? []).map(c => [c.id, c]))
+      const vendedoresMap = Object.fromEntries((vendedoresRes.error ? [] : vendedoresRes.data ?? []).map(v => [v.id, v]))
+
+      return data.map(r => ({
+        ...r,
+        cliente: clientesMap[r.cliente_id] ?? null,
+        vendedor: vendedoresMap[r.vendedor_id] ?? r.vendedor ?? null,
+      }))
     },
     enabled: !!perfil,
     staleTime: 1000 * 60 * 5,

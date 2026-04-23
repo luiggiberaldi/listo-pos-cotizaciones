@@ -128,11 +128,6 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           }} />
         <div className="relative z-10 min-w-0">
           <p className="font-black text-white text-sm font-mono leading-tight drop-shadow">{numDisplay}</p>
-          {despacho.cliente?.nombre && (
-            <p className="text-[11px] font-medium truncate max-w-[120px] sm:max-w-[160px]" style={{ color: 'rgba(255,255,255,0.75)' }}>
-              {despacho.cliente.nombre}
-            </p>
-          )}
         </div>
         <div className="relative z-10 shrink-0">
           <EstadoBadge estado={despacho.estado} />
@@ -162,6 +157,17 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       <div className="px-4 pb-2">
         <DespachoFlowIndicator estado={despacho.estado} compact />
       </div>
+
+      {/* ── Cliente ── */}
+      {despacho.cliente?.nombre && (
+        <div className="px-4 pb-2 flex items-center justify-between">
+          <span className="text-xs text-slate-400">Cliente</span>
+          <span className="text-xs font-semibold truncate max-w-[200px]"
+            style={{ color: despacho.cliente?.vendedor?.color || vendedorColor }}>
+            {despacho.cliente.nombre}
+          </span>
+        </div>
+      )}
 
       {/* ── Total ── */}
       <div className="mx-4 mb-3 bg-slate-50 rounded-xl px-3.5 py-2.5 flex items-center justify-between">
