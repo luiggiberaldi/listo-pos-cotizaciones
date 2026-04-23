@@ -165,7 +165,7 @@ function PrecioSelector({ precios, currentPrice, onSelect, tasa = 0, mobile = fa
 
 // ─── Línea de ítem (desktop) ────────────────────────────────────────────────
 function ItemLinea({ item, idx, onChange, onDelete, tasa = 0, precios }) {
-  const lineTotal = round2(item.cantidad * item.precioUnitUsd * (1 - item.descuentoPct / 100))
+  const lineTotal = round2(item.cantidad * item.precioUnitUsd)
 
   return (
     <tr className="border-b border-slate-100 hover:bg-slate-50/60 group">
@@ -203,17 +203,6 @@ function ItemLinea({ item, idx, onChange, onDelete, tasa = 0, precios }) {
         <PrecioSelector precios={precios} currentPrice={item.precioUnitUsd} onSelect={v => onChange(idx, 'precioUnitUsd', v)} />
         {tasa > 0 && <p className="text-[10px] text-slate-400 text-right pr-1 mt-0.5">{fmtBs(usdToBs(item.precioUnitUsd, tasa))}</p>}
       </td>
-      <td className="py-3 px-2">
-        <div className="flex items-center gap-1">
-          <input type="number" min="0" max="100" step="0.5"
-            value={item.descuentoPct}
-            onChange={e => onChange(idx, 'descuentoPct', Math.min(100, Math.max(0, Number(e.target.value))))}
-            onFocus={e => e.target.select()}
-            className="w-14 px-2 py-1.5 text-sm text-right border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary bg-white transition-all"
-          />
-          <span className="text-xs text-slate-400">%</span>
-        </div>
-      </td>
       <td className="py-3 px-3 text-right">
         <p className="text-sm font-black text-slate-800">{fmtUsd(lineTotal)}</p>
         {tasa > 0 && <p className="text-[10px] text-slate-400">{fmtBs(usdToBs(lineTotal, tasa))}</p>}
@@ -230,7 +219,7 @@ function ItemLinea({ item, idx, onChange, onDelete, tasa = 0, precios }) {
 
 // ─── Tarjeta de ítem (móvil) ────────────────────────────────────────────────
 function ItemCard({ item, idx, onChange, onDelete, tasa = 0, precios }) {
-  const lineTotal = round2(item.cantidad * item.precioUnitUsd * (1 - item.descuentoPct / 100))
+  const lineTotal = round2(item.cantidad * item.precioUnitUsd)
 
   return (
     <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 space-y-3">
@@ -274,14 +263,6 @@ function ItemCard({ item, idx, onChange, onDelete, tasa = 0, precios }) {
           {tasa > 0 && <p className="text-[10px] text-slate-400 text-right">{fmtBs(usdToBs(item.precioUnitUsd, tasa))}</p>}
         </div>
         <PrecioSelector precios={precios} currentPrice={item.precioUnitUsd} onSelect={v => onChange(idx, 'precioUnitUsd', v)} tasa={tasa} mobile />
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-slate-500">Desc. %</label>
-          <input type="number" min="0" max="100" step="0.5"
-            value={item.descuentoPct}
-            onChange={e => onChange(idx, 'descuentoPct', Math.min(100, Math.max(0, Number(e.target.value))))}
-            className="w-full px-3 py-2.5 text-sm text-right border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-primary-focus bg-white"
-          />
-        </div>
         <div className="space-y-1">
           <label className="text-xs font-medium text-slate-500">Total</label>
           <div className="px-3 py-2.5 text-right bg-white border border-slate-200 rounded-xl">
@@ -958,7 +939,7 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
         </div>
       )}
       {items.map((it, idx) => {
-        const linea = mulR(it.cantidad, mulR(it.precioUnitUsd, 1 - it.descuentoPct / 100))
+        const linea = mulR(it.cantidad, it.precioUnitUsd)
         const precios = preciosMap[it.productoId]
         const tieneMultiprecios = precios && [precios.p1, precios.p2, precios.p3].filter(v => v != null && Number(v) > 0).length > 1
         return (
@@ -973,7 +954,6 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
               <div className="flex items-center gap-1.5 mt-0.5">
                 <span className="text-[10px] sm:text-[11px] font-bold text-emerald-600 bg-emerald-50 px-1 rounded">{fmtUsd(it.precioUnitUsd)}</span>
                 <span className="text-[10px] text-slate-400">{it.unidadSnap}</span>
-                {it.descuentoPct > 0 && <span className="text-[10px] text-amber-500 font-semibold">-{it.descuentoPct}%</span>}
               </div>
             </div>
             <div className="flex flex-col items-end gap-1.5 shrink-0">
@@ -1172,7 +1152,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
   const [notasCliente,       setNotasCliente]       = useState(cotizacionExistente?.notas_cliente ?? '')
   const [notasInternas,      setNotasInternas]      = useState(cotizacionExistente?.notas_internas ?? '')
   const [monedaPDF,          setMonedaPDF]          = useState('$')
-  const [descuentoGlobalPct, setDescuentoGlobalPct] = useState(cotizacionExistente?.descuento_global_pct ?? 0)
+  const descuentoGlobalPct = 0 // Discount disabled — always 0
   const [costoEnvioUsd,      setCostoEnvioUsd]      = useState(cotizacionExistente?.costo_envio_usd ?? 0)
   const [items,              setItems]              = useState(
     (cotizacionExistente?.items ?? []).map(it => ({
@@ -1183,7 +1163,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
       unidadSnap:    it.unidad_snap,
       cantidad:      Number(it.cantidad),
       precioUnitUsd: Number(it.precio_unit_usd),
-      descuentoPct:  Number(it.descuento_pct),
+      descuentoPct:  0, // Discount disabled — always 0
     }))
   )
 
@@ -1871,14 +1851,13 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                 </div>
                 <div className="divide-y divide-slate-50 max-h-52 overflow-y-auto">
                   {items.map((it, i) => {
-                    const lineTotal = round2(it.cantidad * it.precioUnitUsd * (1 - it.descuentoPct / 100))
+                    const lineTotal = round2(it.cantidad * it.precioUnitUsd)
                     return (
                       <div key={it._id ?? i} className="px-4 py-2.5 flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-semibold text-slate-700 leading-tight truncate">{it.nombreSnap}</p>
                           <p className="text-[11px] text-slate-400 mt-0.5">
                             {it.cantidad} {it.unidadSnap}
-                            {it.descuentoPct > 0 && <span className="text-emerald-500 ml-1">· -{it.descuentoPct}%</span>}
                           </p>
                         </div>
                         <span className="text-xs font-bold text-slate-700 shrink-0">{fmtUsd(lineTotal)}</span>
@@ -1894,12 +1873,6 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                   <span>Subtotal</span>
                   <span className="font-medium text-slate-700">{fmtUsd(subtotal)}</span>
                 </div>
-                {descuentoUsd > 0 && (
-                  <div className="flex justify-between text-sm text-emerald-600">
-                    <span>Descuento ({descuentoGlobalPct}%)</span>
-                    <span className="font-medium">−{fmtUsd(descuentoUsd)}</span>
-                  </div>
-                )}
                 {ivaUsd > 0 && (
                   <div className="flex justify-between text-sm text-blue-600">
                     <span>IVA ({config.iva_pct}%)</span>

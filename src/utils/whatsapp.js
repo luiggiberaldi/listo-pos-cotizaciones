@@ -66,10 +66,8 @@ export function generarMensaje({ nombreNegocio, nombreCliente, numDisplay, total
   const lineasProductos = items.slice(0, 15).map(it => {
     const cant = Number(it.cantidad || 1)
     const precio = Number(it.precio_unit_usd || it.precioUnitUsd || 0)
-    const desc = Number(it.descuento_pct || it.descuentoPct || 0)
-    const subtotal = cant * precio * (1 - desc / 100)
-    const descStr = desc > 0 ? ` (-${desc}%)` : ''
-    return `- ${it.nombre_snap || it.nombreSnap} x${cant}${descStr} -- *$${subtotal.toFixed(2)}*`
+    const subtotal = cant * precio
+    return `- ${it.nombre_snap || it.nombreSnap} x${cant} -- *$${subtotal.toFixed(2)}*`
   })
 
   const hayMas = items.length > 15

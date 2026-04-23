@@ -156,10 +156,10 @@ export function useGuardarBorrador() {
         valida_hasta:         campos.validaHasta    || null,
         notas_cliente:        campos.notasCliente?.trim()  || null,
         notas_internas:       campos.notasInternas?.trim() || null,
-        descuento_global_pct: round2(Number(campos.descuentoGlobalPct) || 0),
+        descuento_global_pct: 0,
         costo_envio_usd:      round2(Number(campos.costoEnvioUsd)      || 0),
         subtotal_usd:         subtotal,
-        descuento_usd:        descuentoUsd,
+        descuento_usd:        0,
         total_usd:            totalUsd,
       }
 
@@ -170,8 +170,8 @@ export function useGuardarBorrador() {
         unidad_snap:     it.unidadSnap  || 'und',
         cantidad:        it.cantidad,
         precio_unit_usd: it.precioUnitUsd,
-        descuento_pct:   it.descuentoPct,
-        total_linea_usd: round2(it.cantidad * it.precioUnitUsd * (1 - it.descuentoPct / 100)),
+        descuento_pct:   0,
+        total_linea_usd: round2(it.cantidad * it.precioUnitUsd),
         orden:           idx,
       }))
 

@@ -1,9 +1,9 @@
 // src/views/TesterFlowView.jsx
 // Tester 100% determinista: cada paso calcula valores esperados y los valida
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   FlaskConical, Play, RotateCcw, CheckCircle, XCircle, Loader2,
-  ChevronDown, ChevronRight, Clock, Truck,
+  ChevronDown, ChevronRight, Clock, Truck, Copy, ClipboardCheck,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import supabase from '../services/supabase/client'
@@ -58,18 +58,17 @@ const TEST = {
     cantidad: 10,
     precio_unit: 25.00,
     descuento_linea_pct: 0,
-    descuento_global_pct: 5,
+    descuento_global_pct: 0,
     costo_envio: 10.00,
-    // Cálculos exactos:
-    // total_linea = 10 × 25 × (1 - 0/100) = 250.00
+    // Cálculos exactos (sin descuentos):
+    // total_linea = 10 × 25 = 250.00
     // subtotal = 250.00
-    // descuento_usd = round2(250 × 5/100) = 12.50
-    // base = 250 - 12.50 = 237.50
-    // total_usd = 237.50 + 10 = 247.50
+    // descuento_usd = 0
+    // total_usd = 250 + 10 = 260.00
     total_linea: 250.00,
     subtotal: 250.00,
-    descuento_usd: 12.50,
-    total_usd: 247.50,
+    descuento_usd: 0,
+    total_usd: 260.00,
   },
   despacho: {
     forma_pago: 'Cta por cobrar',
@@ -85,7 +84,7 @@ const STEPS = [
   { id: 'create_client', label: '4. Crear cliente', group: 'Clientes' },
   { id: 'assert_client', label: '5. Assert: cliente en BD con saldo_pendiente=0', group: 'Clientes' },
   { id: 'create_draft', label: '6. Crear cotización borrador', group: 'Cotizaciones' },
-  { id: 'assert_draft', label: '7. Assert: cotización estado=borrador, total=$247.50', group: 'Cotizaciones' },
+  { id: 'assert_draft', label: '7. Assert: cotización estado=borrador, total=$260.00', group: 'Cotizaciones' },
   { id: 'assert_items', label: '8. Assert: items con total_linea=$250.00', group: 'Cotizaciones' },
   { id: 'assert_stock_comprometido_pre', label: '9. Assert: stock comprometido tras borrador', group: 'Cotizaciones' },
   { id: 'send_quote', label: '10. Enviar cotización', group: 'Cotizaciones' },
@@ -94,11 +93,11 @@ const STEPS = [
   { id: 'assert_accepted', label: '13. Assert: estado=aceptada', group: 'Cotizaciones' },
   { id: 'assert_stock_comprometido_aceptada', label: '14. Assert: stock comprometido tras aceptar', group: 'Cotizaciones' },
   { id: 'create_despacho', label: '15. Crear despacho (Cta por cobrar)', group: 'Despachos' },
-  { id: 'assert_despacho', label: '16. Assert: despacho estado=pendiente, total=$247.50', group: 'Despachos' },
+  { id: 'assert_despacho', label: '16. Assert: despacho estado=pendiente, total=$260.00', group: 'Despachos' },
   { id: 'assert_stock_post', label: '17. Assert: stock_actual=90 (100-10)', group: 'Despachos' },
   { id: 'assert_kardex_egreso', label: '18. Assert: kardex egreso 100→90, motivo=venta', group: 'Despachos' },
   { id: 'assert_stock_comprometido_post', label: '19. Assert: stock comprometido=0 (liberado)', group: 'Despachos' },
-  { id: 'assert_cxc_cargo', label: '20. Assert: CxC cargo=$247.50, saldo=$247.50', group: 'Cuentas por Cobrar' },
+  { id: 'assert_cxc_cargo', label: '20. Assert: CxC cargo=$260.00, saldo=$260.00', group: 'Cuentas por Cobrar' },
   { id: 'mark_dispatched', label: '21. Marcar despachada', group: 'Despachos' },
   { id: 'assert_dispatched', label: '22. Assert: estado=despachada, despachada_en≠null', group: 'Despachos' },
   { id: 'mark_delivered', label: '23. Marcar entregada', group: 'Despachos' },
@@ -107,7 +106,7 @@ const STEPS = [
   { id: 'pay_commission', label: '26. Pagar comisión', group: 'Comisiones' },
   { id: 'assert_commission_paid', label: '27. Assert: comisión estado=pagada', group: 'Comisiones' },
   { id: 'register_payment', label: '28. Registrar abono CxC ($100)', group: 'Cuentas por Cobrar' },
-  { id: 'assert_cxc_abono', label: '29. Assert: saldo=$147.50 (247.50-100)', group: 'Cuentas por Cobrar' },
+  { id: 'assert_cxc_abono', label: '29. Assert: saldo=$160.00 (260.00-100)', group: 'Cuentas por Cobrar' },
   { id: 'assert_report_ventas', label: '30. Assert: reporte ventas incluye despacho', group: 'Reportes' },
   { id: 'assert_report_pipeline', label: '31. Assert: reporte pipeline incluye cotización', group: 'Reportes' },
   { id: 'assert_report_inventario', label: '32. Assert: reporte inventario stock=90', group: 'Reportes' },
@@ -137,6 +136,8 @@ export default function TesterFlowView() {
   const abortRef = useRef(false)
   const dataRef = useRef({})
   const logEndRef = useRef(null)
+  const fullLogRef = useRef([])
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
@@ -144,11 +145,14 @@ export default function TesterFlowView() {
 
   // ─── Logging helper ───────────────────────────────────────────────────────
   function addLog(id, msg, type = 'info') {
+    const time = ts()
+    const stepLabel = STEPS.find(s => s.id === id)?.label || id
+    fullLogRef.current.push({ time, stepId: id, stepLabel, msg, type })
     setStepStates(prev => ({
       ...prev,
       [id]: {
         ...prev[id],
-        logs: [...(prev[id]?.logs || []), { msg, type, time: ts() }],
+        logs: [...(prev[id]?.logs || []), { msg, type, time }],
       },
     }))
   }
@@ -160,16 +164,20 @@ export default function TesterFlowView() {
   // ─── Step runner ──────────────────────────────────────────────────────────
   async function runStep(id, fn) {
     if (abortRef.current) throw new Error('Abortado')
+    const stepLabel = STEPS.find(s => s.id === id)?.label || id
     setCurrentStep(id)
     setExpandedSteps(prev => ({ ...prev, [id]: true }))
     setStepStates(prev => ({ ...prev, [id]: { status: 'running', logs: [], duration: null } }))
+    fullLogRef.current.push({ time: ts(), stepId: id, stepLabel, msg: `═══ INICIO: ${stepLabel} ═══`, type: 'header' })
     const start = performance.now()
     try {
       await fn(id)
       const duration = Math.round(performance.now() - start)
+      fullLogRef.current.push({ time: ts(), stepId: id, stepLabel, msg: `═══ PASS: ${stepLabel} (${duration}ms) ═══`, type: 'pass' })
       setStepStates(prev => ({ ...prev, [id]: { ...prev[id], status: 'pass', duration } }))
     } catch (err) {
       const duration = Math.round(performance.now() - start)
+      fullLogRef.current.push({ time: ts(), stepId: id, stepLabel, msg: `═══ FAIL: ${stepLabel} (${duration}ms) ═══\n  Error: ${err.message}\n  Stack: ${err.stack || 'N/A'}`, type: 'fail' })
       setStepStates(prev => ({
         ...prev,
         [id]: {
@@ -189,6 +197,7 @@ export default function TesterFlowView() {
 
   async function stepCreateProduct(id) {
     addLog(id, `RPC crear_producto_con_kardex(codigo=${TEST.producto.codigo}, stock=${TEST.producto.stock_inicial})`)
+    addLog(id, `Params: ${JSON.stringify({ p_codigo: TEST.producto.codigo, p_nombre: TEST.producto.nombre, p_unidad: TEST.producto.unidad, p_precio_usd: TEST.producto.precio_usd, p_costo_usd: TEST.producto.costo_usd, p_stock_actual: TEST.producto.stock_inicial, p_stock_minimo: TEST.producto.stock_minimo, p_categoria: TEST.producto.categoria })}`)
     const { data: result, error } = await supabase.rpc('crear_producto_con_kardex', {
       p_codigo: TEST.producto.codigo,
       p_nombre: TEST.producto.nombre,
@@ -209,7 +218,8 @@ export default function TesterFlowView() {
   async function stepAssertProduct(id) {
     const { data: prod, error } = await supabase.from('productos').select('*').eq('id', dataRef.current.productoId).single()
     if (error) throw error
-    addLog(id, `Verificando producto ${prod.id.slice(0,8)}...`)
+    addLog(id, `Verificando producto ${prod.id}`)
+    addLog(id, `Raw DB: ${JSON.stringify(prod)}`)
 
     assert(prod.codigo === TEST.producto.codigo, TEST.producto.codigo, prod.codigo, 'codigo')
     addLog(id, `  codigo = "${prod.codigo}" ✓`)
@@ -234,7 +244,8 @@ export default function TesterFlowView() {
     if (error) throw error
     assert(movs && movs.length === 1, 1, movs?.length, 'Debe existir exactamente 1 ingreso')
     const mov = movs[0]
-    addLog(id, `Movimiento: ${mov.id.slice(0,8)}...`)
+    addLog(id, `Raw DB: ${JSON.stringify(mov)}`)
+    addLog(id, `Movimiento: ${mov.id}`)
 
     assert(mov.tipo === 'ingreso', 'ingreso', mov.tipo, 'tipo')
     addLog(id, `  tipo = "ingreso" ✓`)
@@ -255,12 +266,13 @@ export default function TesterFlowView() {
     }).select('id').single()
     if (error) throw error
     dataRef.current.clienteId = client.id
-    addLog(id, `OK → clienteId=${client.id.slice(0,8)}...`, 'success')
+    addLog(id, `OK → clienteId=${client.id}`, 'success')
   }
 
   async function stepAssertClient(id) {
     const { data: cl, error } = await supabase.from('clientes').select('*').eq('id', dataRef.current.clienteId).single()
     if (error) throw error
+    addLog(id, `Raw DB: ${JSON.stringify(cl)}`)
 
     assert(cl.nombre === TEST.cliente.nombre, TEST.cliente.nombre, cl.nombre, 'nombre')
     addLog(id, `  nombre = "${cl.nombre}" ✓`)
@@ -277,7 +289,7 @@ export default function TesterFlowView() {
 
   async function stepCreateDraft(id) {
     const T = TEST.cotizacion
-    addLog(id, `POST /api/cotizaciones/guardar (${T.cantidad}×$${T.precio_unit}, desc ${T.descuento_global_pct}%, envío $${T.costo_envio})`)
+    addLog(id, `POST /api/cotizaciones/guardar (${T.cantidad}×$${T.precio_unit}, envío $${T.costo_envio})`)
     const result = await apiCall('/api/cotizaciones/guardar', 'POST', {
       headerData: {
         cliente_id: dataRef.current.clienteId,
@@ -303,13 +315,15 @@ export default function TesterFlowView() {
       }],
     })
     dataRef.current.cotizacionId = result.id
-    addLog(id, `OK → cotizacionId=${result.id.slice(0,8)}...`, 'success')
+    addLog(id, `OK → cotizacionId=${result.id}`, 'success')
+    addLog(id, `Response: ${JSON.stringify(result)}`)
   }
 
   async function stepAssertDraft(id) {
     const { data: cot, error } = await supabase.from('cotizaciones').select('*').eq('id', dataRef.current.cotizacionId).single()
     if (error) throw error
     dataRef.current.cotizacionNumero = cot.numero
+    addLog(id, `Raw DB: ${JSON.stringify(cot)}`)
 
     assert(cot.estado === 'borrador', 'borrador', cot.estado, 'estado')
     addLog(id, `  estado = "borrador" ✓`)
@@ -317,9 +331,9 @@ export default function TesterFlowView() {
     addLog(id, `  total_usd = $${cot.total_usd} ✓`)
     assert(Number(cot.subtotal_usd) === TEST.cotizacion.subtotal, TEST.cotizacion.subtotal, cot.subtotal_usd, 'subtotal_usd')
     addLog(id, `  subtotal_usd = $${cot.subtotal_usd} ✓`)
-    assert(Number(cot.descuento_usd) === TEST.cotizacion.descuento_usd, TEST.cotizacion.descuento_usd, cot.descuento_usd, 'descuento_usd')
+    assert(Number(cot.descuento_usd) === 0, 0, cot.descuento_usd, 'descuento_usd')
     addLog(id, `  descuento_usd = $${cot.descuento_usd} ✓`)
-    assert(Number(cot.descuento_global_pct) === TEST.cotizacion.descuento_global_pct, TEST.cotizacion.descuento_global_pct, cot.descuento_global_pct, 'descuento_global_pct')
+    assert(Number(cot.descuento_global_pct) === 0, 0, cot.descuento_global_pct, 'descuento_global_pct')
     addLog(id, `  descuento_global_pct = ${cot.descuento_global_pct}% ✓`)
     assert(Number(cot.costo_envio_usd) === TEST.cotizacion.costo_envio, TEST.cotizacion.costo_envio, cot.costo_envio_usd, 'costo_envio_usd')
     addLog(id, `  costo_envio_usd = $${cot.costo_envio_usd} ✓`)
@@ -336,6 +350,7 @@ export default function TesterFlowView() {
     assert(items.length === 1, 1, items.length, 'Debe haber exactamente 1 item')
     addLog(id, `  items.length = 1 ✓`)
     const item = items[0]
+    addLog(id, `Raw DB item: ${JSON.stringify(item)}`)
     assert(Number(item.cantidad) === TEST.cotizacion.cantidad, TEST.cotizacion.cantidad, item.cantidad, 'cantidad')
     addLog(id, `  cantidad = ${item.cantidad} ✓`)
     assert(Number(item.precio_unit_usd) === TEST.cotizacion.precio_unit, TEST.cotizacion.precio_unit, item.precio_unit_usd, 'precio_unit_usd')
@@ -420,12 +435,14 @@ export default function TesterFlowView() {
     })
     dataRef.current.despachoId = result.id
     dataRef.current.despachoNumero = result.numero
-    addLog(id, `OK → despachoId=${result.id.slice(0,8)}..., DES-${String(result.numero).padStart(5,'0')}`, 'success')
+    addLog(id, `OK → despachoId=${result.id}, DES-${String(result.numero).padStart(5,'0')}`, 'success')
+    addLog(id, `Response: ${JSON.stringify(result)}`)
   }
 
   async function stepAssertDespacho(id) {
     const { data: des, error } = await supabase.from('notas_despacho').select('*').eq('id', dataRef.current.despachoId).single()
     if (error) throw error
+    addLog(id, `Raw DB: ${JSON.stringify(des)}`)
 
     assert(des.estado === 'pendiente', 'pendiente', des.estado, 'estado')
     addLog(id, `  estado = "pendiente" ✓`)
@@ -485,6 +502,7 @@ export default function TesterFlowView() {
 
   async function stepAssertCxCCargo(id) {
     const { data: cl } = await supabase.from('clientes').select('saldo_pendiente').eq('id', dataRef.current.clienteId).single()
+    addLog(id, `Raw saldo_pendiente: ${JSON.stringify(cl)}`)
     const saldo = Number(cl.saldo_pendiente || 0)
     assert(saldo === TEST.cotizacion.total_usd, TEST.cotizacion.total_usd, saldo, 'saldo_pendiente post-despacho CxC')
     addLog(id, `  saldo_pendiente = $${saldo.toFixed(2)} ✓`)
@@ -493,6 +511,7 @@ export default function TesterFlowView() {
     const { data: txs } = await supabase.from('cuentas_cobrar').select('*').eq('cliente_id', dataRef.current.clienteId).eq('tipo', 'cargo')
     assert(txs && txs.length >= 1, '>=1', txs?.length, 'Debe existir al menos 1 cargo CxC')
     const cargo = txs[0]
+    addLog(id, `Raw cargo CxC: ${JSON.stringify(cargo)}`)
     assert(Number(cargo.monto_usd) === TEST.cotizacion.total_usd, TEST.cotizacion.total_usd, cargo.monto_usd, 'monto_usd cargo')
     addLog(id, `  cargo CxC = $${cargo.monto_usd} ✓`)
     addLog(id, 'CxC cargo correcto', 'success')
@@ -534,6 +553,7 @@ export default function TesterFlowView() {
     addLog(id, `Config: pct_cabilla=${config?.comision_pct_cabilla}%, pct_otros=${config?.comision_pct_otros}%, cat_cabilla="${config?.comision_categoria_cabilla}"`)
 
     const { data: coms } = await supabase.from('comisiones').select('*').eq('despacho_id', dataRef.current.despachoId)
+    addLog(id, `Raw comisiones: ${JSON.stringify(coms)}`)
     assert(coms && coms.length === 1, 1, coms?.length, 'Debe existir exactamente 1 comisión')
     const com = coms[0]
     dataRef.current.comisionId = com.id
@@ -567,13 +587,14 @@ export default function TesterFlowView() {
 
   async function stepPayCommission(id) {
     if (!dataRef.current.comisionId) throw new Error('No hay comisión para pagar')
-    addLog(id, `POST /api/comisiones/pagar (comisionId=${dataRef.current.comisionId.slice(0,8)}...)`)
+    addLog(id, `POST /api/comisiones/pagar (comisionId=${dataRef.current.comisionId})`)
     await apiCall('/api/comisiones/pagar', 'POST', { comisionId: dataRef.current.comisionId })
     addLog(id, 'OK', 'success')
   }
 
   async function stepAssertCommissionPaid(id) {
-    const { data: com } = await supabase.from('comisiones').select('estado, pagada_en').eq('id', dataRef.current.comisionId).single()
+    const { data: com } = await supabase.from('comisiones').select('*').eq('id', dataRef.current.comisionId).single()
+    addLog(id, `Raw comisión post-pago: ${JSON.stringify(com)}`)
     assert(com.estado === 'pagada', 'pagada', com.estado, 'estado')
     addLog(id, `  estado = "pagada" ✓`)
     assert(com.pagada_en !== null, 'no null', com.pagada_en, 'pagada_en')
@@ -598,9 +619,11 @@ export default function TesterFlowView() {
   async function stepAssertCxCAbono(id) {
     const expectedSaldo = round2(TEST.cotizacion.total_usd - dataRef.current.montoAbono)
     const { data: cl } = await supabase.from('clientes').select('saldo_pendiente').eq('id', dataRef.current.clienteId).single()
+    addLog(id, `Raw saldo post-abono: ${JSON.stringify(cl)}`)
     const saldo = round2(Number(cl.saldo_pendiente || 0))
+    addLog(id, `Cálculo: $${TEST.cotizacion.total_usd} - $${dataRef.current.montoAbono} = $${expectedSaldo} | Actual: $${saldo}`)
     assert(saldo === expectedSaldo, expectedSaldo, saldo, `saldo_pendiente ($${TEST.cotizacion.total_usd} - $${dataRef.current.montoAbono})`)
-    addLog(id, `  saldo_pendiente = $${saldo} ($247.50 - $100 = $147.50) ✓`)
+    addLog(id, `  saldo_pendiente = $${saldo} ($260.00 - $100 = $160.00) ✓`)
 
     // Verificar transacción abono
     const { data: txs } = await supabase.from('cuentas_cobrar').select('*').eq('cliente_id', dataRef.current.clienteId).eq('tipo', 'abono')
@@ -741,8 +764,12 @@ export default function TesterFlowView() {
     abortRef.current = false
     setStepStates({})
     setSummary(null)
+    setCopied(false)
     dataRef.current = {}
+    fullLogRef.current = []
     const startTime = performance.now()
+    const runDate = new Date().toISOString()
+    fullLogRef.current.push({ time: ts(), stepId: '_header', stepLabel: 'SISTEMA', msg: `╔══════════════════════════════════════════════════════════════╗\n║  TESTER DETERMINISTA — LOG COMPLETO                         ║\n╚══════════════════════════════════════════════════════════════╝\nFecha: ${runDate}\nUsuario: ${perfil.nombre} (${perfil.email || perfil.id})\nRol: ${perfil.rol}\nConstantes de prueba:\n  Producto: ${TEST.producto.codigo} | $${TEST.producto.precio_usd} | stock=${TEST.producto.stock_inicial} | cat=${TEST.producto.categoria}\n  Cotización: ${TEST.cotizacion.cantidad}×$${TEST.cotizacion.precio_unit} | envío=$${TEST.cotizacion.costo_envio}\n  Esperado: subtotal=$${TEST.cotizacion.subtotal} | total=$${TEST.cotizacion.total_usd}\n  Despacho: forma_pago="${TEST.despacho.forma_pago}" | stock_post=${TEST.despacho.stock_esperado_post}`, type: 'header' })
     let passed = 0, failed = 0, failedAt = null
 
     for (const step of STEPS) {
@@ -767,9 +794,49 @@ export default function TesterFlowView() {
 
     const totalTime = Math.round(performance.now() - startTime)
     const totalAssertions = Object.values(STEP_FNS).length
+    fullLogRef.current.push({ time: ts(), stepId: '_footer', stepLabel: 'RESUMEN', msg: `\n╔══════════════════════════════════════════════════════════════╗\n║  RESUMEN FINAL                                              ║\n╚══════════════════════════════════════════════════════════════╝\nResultado: ${failed === 0 && !abortRef.current ? 'TODOS PASARON ✓' : abortRef.current ? 'ABORTADO' : `FALLÓ en: ${failedAt}`}\nPasos pasados: ${passed}/${STEPS.length}\nPasos fallidos: ${failed}\nTiempo total: ${(totalTime / 1000).toFixed(2)}s\nIDs creados: ${JSON.stringify(dataRef.current, null, 2)}`, type: failed === 0 ? 'pass' : 'fail' })
     setSummary({ passed, failed, totalTime, failedAt, aborted: abortRef.current, totalAssertions })
     setCurrentStep(null)
     setRunning(false)
+  }
+
+  // ─── Generate full log text ─────────────────────────────────────────────
+  function generateFullLog() {
+    const lines = []
+    for (const entry of fullLogRef.current) {
+      const prefix = entry.type === 'header' || entry.type === 'pass' || entry.type === 'fail'
+        ? ''
+        : `[${entry.time}] `
+      const typeTag = entry.type === 'error' ? '[ERROR] '
+        : entry.type === 'success' ? '[OK] '
+        : entry.type === 'warn' ? '[WARN] '
+        : entry.type === 'header' || entry.type === 'pass' || entry.type === 'fail' ? ''
+        : '[INFO] '
+      const stepCtx = entry.stepId && !entry.stepId.startsWith('_') ? `[${entry.stepLabel}] ` : ''
+      lines.push(`${prefix}${typeTag}${stepCtx}${entry.msg}`)
+    }
+    return lines.join('\n')
+  }
+
+  async function copyLog() {
+    const text = generateFullLog()
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 3000)
+    } catch {
+      // Fallback
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 3000)
+    }
   }
 
   function reset() {
@@ -777,7 +844,9 @@ export default function TesterFlowView() {
     setSummary(null)
     setCurrentStep(null)
     setExpandedSteps({})
+    setCopied(false)
     dataRef.current = {}
+    fullLogRef.current = []
   }
 
   if (perfil?.rol !== 'supervisor') {
@@ -817,13 +886,12 @@ export default function TesterFlowView() {
           <div><span className="text-slate-400">Stock inicial:</span> <span className="font-mono font-bold">{TEST.producto.stock_inicial}</span></div>
           <div><span className="text-slate-400">Cantidad:</span> <span className="font-mono font-bold">{TEST.cotizacion.cantidad}</span></div>
           <div><span className="text-slate-400">Subtotal:</span> <span className="font-mono font-bold">${TEST.cotizacion.subtotal}</span></div>
-          <div><span className="text-slate-400">Desc {TEST.cotizacion.descuento_global_pct}%:</span> <span className="font-mono font-bold">-${TEST.cotizacion.descuento_usd}</span></div>
           <div><span className="text-slate-400">Envío:</span> <span className="font-mono font-bold">+${TEST.cotizacion.costo_envio}</span></div>
           <div><span className="text-slate-400 font-bold">Total:</span> <span className="font-mono font-black text-indigo-600">${TEST.cotizacion.total_usd}</span></div>
           <div><span className="text-slate-400">Stock post:</span> <span className="font-mono font-bold">{TEST.despacho.stock_esperado_post}</span></div>
           <div><span className="text-slate-400">Forma pago:</span> <span className="font-mono font-bold">{TEST.despacho.forma_pago}</span></div>
           <div><span className="text-slate-400">Abono:</span> <span className="font-mono font-bold">$100</span></div>
-          <div><span className="text-slate-400">Saldo final:</span> <span className="font-mono font-bold">$147.50</span></div>
+          <div><span className="text-slate-400">Saldo final:</span> <span className="font-mono font-bold">$160.00</span></div>
         </div>
       </div>
 
@@ -836,10 +904,21 @@ export default function TesterFlowView() {
               <Play size={16} /> Ejecutar 34 pasos
             </button>
             {Object.keys(stepStates).length > 0 && (
-              <button onClick={reset}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50">
-                <RotateCcw size={14} /> Reiniciar
-              </button>
+              <>
+                <button onClick={reset}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50">
+                  <RotateCcw size={14} /> Reiniciar
+                </button>
+                <button onClick={copyLog}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all ${
+                    copied
+                      ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                      : 'bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200'
+                  }`}>
+                  {copied ? <ClipboardCheck size={14} /> : <Copy size={14} />}
+                  {copied ? 'Log copiado!' : 'Copiar Log completo'}
+                </button>
+              </>
             )}
           </>
         ) : (
@@ -857,7 +936,7 @@ export default function TesterFlowView() {
             {summary.failed === 0 && !summary.aborted
               ? <CheckCircle size={20} className="text-emerald-500" />
               : <XCircle size={20} className="text-red-500" />}
-            <div>
+            <div className="flex-1">
               <p className="font-bold text-sm">
                 {summary.failed === 0 && !summary.aborted
                   ? '34/34 pasos — TODAS LAS ASERCIONES PASARON'
@@ -867,7 +946,21 @@ export default function TesterFlowView() {
                 {summary.passed} pass · {summary.failed} fail · {(summary.totalTime / 1000).toFixed(2)}s
               </p>
             </div>
+            <button onClick={copyLog}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg font-bold text-xs transition-all ${
+                copied
+                  ? 'bg-emerald-200 text-emerald-800'
+                  : 'bg-white/80 hover:bg-white text-slate-700 border border-slate-200'
+              }`}>
+              {copied ? <ClipboardCheck size={12} /> : <Copy size={12} />}
+              {copied ? 'Copiado!' : 'Copiar Log'}
+            </button>
           </div>
+          {summary.failed > 0 && (
+            <p className="text-xs text-red-600 mt-2 font-medium">
+              Copia el log completo y pégalo a Claude para diagnosticar el error.
+            </p>
+          )}
         </div>
       )}
 

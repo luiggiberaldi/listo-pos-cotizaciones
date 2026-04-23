@@ -1415,7 +1415,6 @@ async function handleGuardarCotizacion(request, env) {
     if (!it.nombre_snap) return jsonError(`Item ${i + 1}: nombre requerido`, 400, request);
     if (typeof it.cantidad !== 'number' || it.cantidad <= 0) return jsonError(`Item ${i + 1}: cantidad debe ser > 0`, 400, request);
     if (typeof it.precio_unit_usd !== 'number' || it.precio_unit_usd < 0) return jsonError(`Item ${i + 1}: precio inválido`, 400, request);
-    if (it.descuento_pct != null && (it.descuento_pct < 0 || it.descuento_pct > 100)) return jsonError(`Item ${i + 1}: descuento debe estar entre 0 y 100`, 400, request);
   }
 
   // Force vendedor_id to authenticated operator
@@ -3032,8 +3031,8 @@ async function handleTesterStressSeed(request, env) {
       for (let j = 0; j < numItems; j++) {
         const prod = pick(prods);
         const cant = rand(1, 50);
-        const desc = Math.random() < 0.2 ? rand(1, 10) : 0;
-        const total = +(cant * prod.precio_usd * (1 - desc / 100)).toFixed(2);
+        const desc = 0;
+        const total = +(cant * prod.precio_usd).toFixed(2);
         subtotal += total;
         allItems.push({
           cotizacion_id: cots[i].id,

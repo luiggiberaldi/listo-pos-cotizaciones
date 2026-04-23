@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import {
   Zap, User, X, Plus, Minus, Package, ArrowLeft, Save, Send, Loader2,
-  RefreshCw, Search, CheckCircle, ShoppingCart, Tag, DollarSign,
+  RefreshCw, Search, CheckCircle, ShoppingCart, DollarSign,
   AlertCircle, ChevronRight, UserPlus, ChevronUp,
 } from 'lucide-react'
 import { useClientes } from '../../hooks/useClientes'
@@ -42,7 +42,7 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
   const [productoBusqueda, setProductoBusqueda] = useState('')
   const [catActiva, setCatActiva] = useState('')
   const [items, setItems] = useState([])
-  const [descuentoGlobalPct, setDescuentoGlobalPct] = useState(0)
+  const descuentoGlobalPct = 0
   const [error, setError] = useState('')
   const [guardando, setGuardando] = useState(false)
   const [enviando, setEnviando] = useState(false)
@@ -54,7 +54,7 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
   const clienteRef = useRef(null)
   const productoInputRef = useRef(null)
 
-  const { subtotal, descuentoUsd, ivaUsd, totalUsd } = calcTotales(items, descuentoGlobalPct, 0, config.iva_pct ?? 0)
+  const { subtotal, descuentoUsd: _descuentoUsd, ivaUsd, totalUsd } = calcTotales(items, descuentoGlobalPct, 0, config.iva_pct ?? 0)
   const tasa = tasaHook.tasaEfectiva || 0
   const totalBs = tasa > 0 ? mulR(totalUsd, tasa) : 0
 
@@ -526,7 +526,7 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
       ) : (
         <div className="divide-y divide-slate-50 max-h-[40vh] lg:max-h-[280px] overflow-y-auto">
           {items.map((it, idx) => {
-            const linea = mulR(it.cantidad, mulR(it.precioUnitUsd, (1 - it.descuentoPct / 100)))
+            const linea = mulR(it.cantidad, it.precioUnitUsd)
             return (
               <div key={it._key} className="px-2.5 sm:px-3 py-2 sm:py-2.5 flex items-center gap-1.5 sm:gap-2 group hover:bg-slate-50/50 transition-colors">
                 {/* Icono — oculto en móvil chico */}
@@ -537,7 +537,6 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
                   <p className="text-[11px] sm:text-xs font-bold text-slate-700 leading-tight truncate">{it.nombreSnap}</p>
                   <div className="flex items-center gap-1 sm:gap-1.5 mt-0.5">
                     <span className="text-[9px] sm:text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1 rounded">{fmtUsd(it.precioUnitUsd)}</span>
-                    {it.descuentoPct > 0 && <span className="text-[9px] sm:text-[10px] text-amber-500 font-semibold">-{it.descuentoPct}%</span>}
                   </div>
                 </div>
                 <div className="flex items-center shrink-0">
@@ -575,36 +574,11 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
   // ── Totales panel ──
   const totalsPanel = (
     <div className="space-y-2 sm:space-y-2.5">
-      {/* Descuento */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          <Tag size={11} className="text-slate-400" />
-          <span className="text-[11px] sm:text-xs font-bold text-slate-500">Descuento</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <input
-            type="number" inputMode="decimal" min="0" max="100" step="1"
-            value={descuentoGlobalPct || ''}
-            onChange={e => setDescuentoGlobalPct(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
-            onBlur={e => setDescuentoGlobalPct(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
-            className="w-12 sm:w-14 px-1.5 sm:px-2 py-1 text-[11px] sm:text-xs text-center font-bold border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-focus bg-slate-50"
-            placeholder="0"
-          />
-          <span className="text-[11px] sm:text-xs text-slate-400">%</span>
-        </div>
-      </div>
-
       <div className="border-t border-slate-100 pt-2 sm:pt-2.5 space-y-1 sm:space-y-1.5">
         {items.length > 0 && (
           <div className="flex justify-between text-[11px] sm:text-xs">
             <span className="text-slate-400">Subtotal ({items.length} prod.)</span>
             <span className="font-semibold text-slate-600">{fmtUsd(subtotal)}</span>
-          </div>
-        )}
-        {descuentoGlobalPct > 0 && descuentoUsd > 0 && (
-          <div className="flex justify-between text-[11px] sm:text-xs">
-            <span className="text-emerald-500 font-medium">Desc. ({descuentoGlobalPct}%)</span>
-            <span className="font-semibold text-emerald-500">-{fmtUsd(descuentoUsd)}</span>
           </div>
         )}
         {ivaUsd > 0 && (

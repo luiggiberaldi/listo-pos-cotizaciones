@@ -340,8 +340,8 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   const tasaEfectivaTot = tasa > 0 ? tasa : Number(cotizacion.tasa_bcv_snapshot || 0)
   const totalBs = Number(cotizacion.total_bs_snapshot || 0) || (tasaEfectivaTot > 0 ? total * tasaEfectivaTot : 0)
   const ivaPct = Number(config.iva_pct || 0)
-  // Base imponible = subtotal - descuento
-  const baseImponible = subtotal - descuento
+  // Base imponible = subtotal (descuento deshabilitado)
+  const baseImponible = subtotal
   const ivaUsd = ivaPct > 0 ? baseImponible * (ivaPct / 100) : 0
 
   const totLines = []
