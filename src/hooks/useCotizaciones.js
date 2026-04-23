@@ -29,7 +29,7 @@ export function useCotizaciones({ estado = '', clienteId = '' } = {}) {
       const tabla = esSupervisor ? 'cotizaciones' : 'v_cotizaciones_vendedor'
       const selectCols = esSupervisor
         ? 'id, numero, version, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, creado_en, enviada_en, notas_cliente, cliente_id, vendedor_id, despacho:notas_despacho!notas_despacho_cotizacion_id_fkey(id, estado)'
-        : 'id, numero, version, cliente_id, vendedor_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, notas_cliente, creado_en, enviada_en'
+        : 'id, numero, version, cliente_id, vendedor_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, notas_cliente, creado_en, enviada_en, despacho:notas_despacho!notas_despacho_cotizacion_id_fkey(id, estado)'
 
       let query = supabase
         .from(tabla)
