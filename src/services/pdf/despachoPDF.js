@@ -71,7 +71,7 @@ function drawCheck(doc, label, x, y, checked = false) {
   doc.text(label, x + 4.5, y)
 }
 
-export async function generarDespachoPDF({ despacho, items = [], config = {}, formaPago = '', monedaPDF = '$', tasa = 0, tasaUsdt = 0, tasaBcv = 0 }) {
+export async function generarDespachoPDF({ despacho, items = [], config = {}, formaPago = '', monedaPDF = '$', tasa = 0, tasaUsdt = 0, tasaBcv = 0, returnBlob = false }) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
 
   const factorBcv = (tasaUsdt > 0 && tasaBcv > 0) ? tasaUsdt / tasaBcv : 0
@@ -445,6 +445,8 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     }
   }
 
-  // ── Guardar ───────────────────────────────────────────────────────────────
-  doc.save(`${numDes.replace(/ /g, '_')}.pdf`)
+  // ── Guardar o devolver blob ──────────────────────────────────────────────
+  const filename = `${numDes.replace(/ /g, '_')}.pdf`
+  if (returnBlob) return doc.output('blob')
+  doc.save(filename)
 }
