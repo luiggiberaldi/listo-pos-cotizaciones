@@ -283,6 +283,14 @@ export function useAnularCotizacion() {
       qc.invalidateQueries({ queryKey: STOCK_COMPROMETIDO_KEY })
       showToast(`Cotización #${numero} anulada`, 'warning')
       notifyCotizacionAnulada(numero, rol)
+      // Push al otro rol
+      sendPushNotification({
+        title: '🚫 Cotización Anulada',
+        message: `Cotización #${numero} fue anulada`,
+        tag: `cotizacion-anulada-${numero}`,
+        url: '/cotizaciones',
+        targetRole: rol === 'supervisor' ? 'vendedor' : 'supervisor',
+      })
     },
   })
 }

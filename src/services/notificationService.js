@@ -5,6 +5,19 @@
 const NOTIF_KEY_BASE = 'construacero_notifications_v2'
 const MAX_NOTIFS = 100
 
+// ─── Sonido de notificación ─────────────────────────────────────────────────
+let _notifAudio = null
+function playNotifSound() {
+  try {
+    if (!_notifAudio) {
+      _notifAudio = new Audio('/notif-sound.wav')
+      _notifAudio.volume = 0.5
+    }
+    _notifAudio.currentTime = 0
+    _notifAudio.play().catch(() => {}) // ignorar si el browser bloquea autoplay
+  } catch { /* silencioso */ }
+}
+
 // ─── userId global para la sesión ─────────────────────────────────────────────
 let _currentUserId = null
 export function setNotificationUserId(userId) { _currentUserId = userId }
@@ -79,6 +92,7 @@ export function createNotification(type, title, body, meta = null, currentRole =
   saveNotifs(notifs)
 
   window.dispatchEvent(new CustomEvent('construacero-notification', { detail: notif }))
+  playNotifSound()
   return notif
 }
 

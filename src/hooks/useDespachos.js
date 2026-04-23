@@ -154,7 +154,18 @@ export function useCrearDespacho() {
             const bajos = (productos ?? []).filter(p =>
               p.stock_actual <= 0 || (p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo)
             )
-            if (bajos.length > 0) notifyStockBajo(bajos, rol)
+            if (bajos.length > 0) {
+              notifyStockBajo(bajos, rol)
+              sendPushNotification({
+                title: '⚠️ Stock Bajo',
+                message: bajos.length === 1
+                  ? `${bajos[0].nombre}: ${bajos[0].stock_actual} ${bajos[0].unidad || 'und'}`
+                  : `${bajos.length} productos con stock bajo`,
+                tag: 'stock-bajo',
+                url: '/inventario',
+                targetRole: 'supervisor',
+              })
+            }
           }
         } catch (kardexErr) {
           console.error('[Kardex] Error inesperado:', kardexErr)
