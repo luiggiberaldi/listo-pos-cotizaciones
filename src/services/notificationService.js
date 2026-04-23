@@ -26,14 +26,15 @@ export const NOTIF_TYPES = {
 }
 
 // Qué rol ve cada tipo de notificación
+// null = ambos roles ven la notificación local (el push se encarga del cross-role)
 const NOTIF_TARGET_ROLE = {
   [NOTIF_TYPES.STOCK_BAJO]:                'supervisor',
-  [NOTIF_TYPES.COTIZACION_ENVIADA]:        'supervisor',
-  [NOTIF_TYPES.COTIZACION_ACEPTADA]:       'vendedor',
+  [NOTIF_TYPES.COTIZACION_ENVIADA]:        null,         // vendedor crea → push llega al supervisor
+  [NOTIF_TYPES.COTIZACION_ACEPTADA]:       null,         // supervisor crea → push llega al vendedor
   [NOTIF_TYPES.COTIZACION_CREADA]:         null,         // ambos
-  [NOTIF_TYPES.DESPACHO_CREADO]:           'supervisor',
+  [NOTIF_TYPES.DESPACHO_CREADO]:           null,         // quien despacha crea → push al supervisor
   [NOTIF_TYPES.COTIZACION_ANULADA]:        null,         // ambos
-  [NOTIF_TYPES.CLIENTE_AJENO]:             null,         // se muestra al vendedor que la creó + push al supervisor
+  [NOTIF_TYPES.CLIENTE_AJENO]:             null,         // vendedor crea → push al supervisor
   [NOTIF_TYPES.COTIZACION_SIN_RESPUESTA]:  null,         // ya filtrado en query
   [NOTIF_TYPES.COTIZACION_POR_VENCER]:     null,         // ya filtrado en query
 }

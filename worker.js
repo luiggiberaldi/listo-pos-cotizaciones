@@ -1909,7 +1909,7 @@ async function handleEnviarCotizacion(request, env) {
 // 2. CREAR NOTA DE DESPACHO (+ cargo CxC + comisión)
 // ══════════════════════════════════════════════════════════════════════════════
 async function handleCrearDespacho(request, env) {
-  const v = await validateOperator(request, env, { requireSupervisor: true });
+  const v = await validateOperator(request, env);
   if (v.error) return v.error;
   const { user, operador, headers } = v;
 
@@ -1925,7 +1925,18 @@ async function handleCrearDespacho(request, env) {
     const [cot] = await cotRes.json();
     if (!cot) return jsonError('Cotización no encontrada', 404, request);
 
-    if (!['enviada', 'aceptada'].includes(cot.estado)) {
+    const esSupervisorOp = operador.rol === 'supervisor';
+    const esPropietario = cot.vendedor_id === (user.operator_id || user.id);
+
+    // Vendedores solo pueden despachar cotizaciones aceptadas y propias
+    if (!esSupervisorOp) {
+      if (cot.estado !== 'aceptada') {
+        return jsonError('Solo puedes despachar cotizaciones ya aceptadas por el supervisor', 400, request);
+      }
+      if (!esPropietario) {
+        return jsonError('Solo puedes despachar tus propias cotizaciones', 400, request);
+      }
+    } else if (!['enviada', 'aceptada'].includes(cot.estado)) {
       return jsonError('La cotización debe estar enviada o aceptada para despachar', 400, request);
     }
 
@@ -1936,8 +1947,8 @@ async function handleCrearDespacho(request, env) {
       return jsonError('Ya existe una nota de despacho para esta cotización', 400, request);
     }
 
-    // 3. Si está enviada, aceptarla
-    if (cot.estado === 'enviada') {
+    // 3. Si está enviada, aceptarla (solo supervisor)
+    if (cot.estado === 'enviada' && esSupervisorOp) {
       await fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${cotizacionId}`, {
         method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
         body: JSON.stringify({ estado: 'aceptada' }),
