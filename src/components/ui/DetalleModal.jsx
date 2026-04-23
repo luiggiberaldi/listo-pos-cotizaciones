@@ -9,8 +9,7 @@ import useAuthStore from '../../store/useAuthStore'
 function ItemRow({ item, tasa = 0 }) {
   const cant     = Number(item.cantidad || 1)
   const precio   = Number(item.precio_unit_usd || 0)
-  const desc     = Number(item.descuento_pct || 0)
-  const total    = Number(item.total_linea_usd || cant * precio * (1 - desc / 100))
+  const total    = Number(item.total_linea_usd || cant * precio)
 
   return (
     <tr className="border-b border-slate-100 last:border-0">
@@ -22,9 +21,6 @@ function ItemRow({ item, tasa = 0 }) {
         {cant} <span className="text-slate-400 text-[11px]">{item.unidad_snap || 'und'}</span>
       </td>
       <td className="py-3 px-3 text-right text-sm text-slate-600 whitespace-nowrap">{fmtUsd(precio)}</td>
-      <td className="py-3 px-3 text-center text-sm text-slate-500 whitespace-nowrap hidden sm:table-cell">
-        {desc > 0 ? `${desc}%` : <span className="text-slate-300">—</span>}
-      </td>
       <td className="py-3 pl-3 text-right text-sm font-bold text-slate-800 whitespace-nowrap">{fmtUsd(total)}</td>
     </tr>
   )
@@ -33,8 +29,7 @@ function ItemRow({ item, tasa = 0 }) {
 function ItemCard({ item }) {
   const cant     = Number(item.cantidad || 1)
   const precio   = Number(item.precio_unit_usd || 0)
-  const desc     = Number(item.descuento_pct || 0)
-  const total    = Number(item.total_linea_usd || cant * precio * (1 - desc / 100))
+  const total    = Number(item.total_linea_usd || cant * precio)
 
   return (
     <div className="py-3 border-b border-slate-100 last:border-0">
@@ -48,7 +43,6 @@ function ItemCard({ item }) {
       <div className="flex gap-3 mt-1 text-xs text-slate-500">
         <span>{cant} {item.unidad_snap || 'und'}</span>
         <span>× {fmtUsd(precio)}</span>
-        {desc > 0 && <span className="text-emerald-600">-{desc}%</span>}
       </div>
     </div>
   )
@@ -102,8 +96,6 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
     : `DES-${String(registro.numero).padStart(5, '0')}`
 
   const vendedorColor = registro.vendedor?.color || '#64748b'
-  const subtotal  = Number(registro.subtotal_usd  || 0)
-  const descuento = Number(registro.descuento_usd || 0)
   const envio     = Number(registro.costo_envio_usd || 0)
   const total     = Number(registro.total_usd     || 0)
   const notas     = registro.notas_cliente || registro.observaciones || ''
@@ -177,7 +169,6 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
                       <th className="pb-2 text-left pr-3">Producto</th>
                       <th className="pb-2 text-center px-3">Cant.</th>
                       <th className="pb-2 text-right px-3">Precio</th>
-                      <th className="pb-2 text-center px-3">Desc.</th>
                       <th className="pb-2 text-right pl-3">Total</th>
                     </tr>
                   </thead>
@@ -244,16 +235,6 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
         {/* Totales */}
         {esCot && (
           <div className="border-t border-slate-100 px-5 py-3 bg-slate-50 space-y-1.5 shrink-0">
-            {subtotal > 0 && descuento > 0 && (
-              <div className="flex justify-between text-xs text-slate-500">
-                <span>Subtotal</span><span>{fmtUsd(subtotal)}</span>
-              </div>
-            )}
-            {descuento > 0 && (
-              <div className="flex justify-between text-xs text-emerald-600">
-                <span>Descuento ({registro.descuento_global_pct}%)</span><span>-{fmtUsd(descuento)}</span>
-              </div>
-            )}
             {envio > 0 && (
               <div className="flex justify-between text-xs text-slate-500">
                 <span>Costo de envío</span><span>{fmtUsd(envio)}</span>
