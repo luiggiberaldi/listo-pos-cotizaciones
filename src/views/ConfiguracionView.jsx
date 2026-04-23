@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import {
   Settings, Building2, Phone, Mail, MapPin, FileText, Save, CheckCircle,
-  Lock, Eye, EyeOff, Accessibility, HardDrive, Download, Upload,
+  Eye, EyeOff, Accessibility, HardDrive, Download, Upload,
   AlertCircle, AlertTriangle, Percent, Users, Database, Copy, Check, DollarSign,
 } from 'lucide-react'
 import { useConfigNegocio, useActualizarConfig, hashSHA256 } from '../hooks/useConfigNegocio'
@@ -17,7 +17,6 @@ import PageHeader  from '../components/ui/PageHeader'
 // ─── Tabs ───────────────────────────────────────────────────────────────────
 const TABS = [
   { id: 'comisiones', label: 'Comisiones', icon: DollarSign },
-  { id: 'sistema',    label: 'Sistema',    icon: Lock      },
   { id: 'usuarios',   label: 'Usuarios',   icon: Users     },
   { id: 'datos',      label: 'Datos',      icon: Database  },
 ]
@@ -356,7 +355,7 @@ export default function ConfiguracionView() {
 
   const inputCls = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400'
   const cargando = actualizar.isPending
-  const esTabForm = ['sistema', 'comisiones'].includes(tab)
+  const esTabForm = tab === 'comisiones'
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-4xl space-y-5">
@@ -399,12 +398,6 @@ export default function ConfiguracionView() {
       {/* Tabs de formulario — Negocio, Fiscal, Sistema */}
       {esTabForm && (
         <form onSubmit={handleGuardar} className="space-y-5">
-
-          {/* ── Sistema ─────────────────────────────────────────────────── */}
-          {tab === 'sistema' && (
-            <>
-            </>
-          )}
 
           {/* ── Comisiones ────────────────────────────────────────────────── */}
           {tab === 'comisiones' && <ComisionesTab campos={campos} cambiar={cambiar} isLoading={isLoading} cargando={cargando} />}
