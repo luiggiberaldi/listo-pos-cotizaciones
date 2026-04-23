@@ -120,9 +120,6 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
             style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '12px 12px' }} />
           <div className="relative z-10">
             <p className="font-black text-white text-base font-mono leading-tight drop-shadow">{numDisplay}</p>
-            {registro.cliente?.nombre && (
-              <p className="text-[11px] font-medium" style={{ color: 'rgba(255,255,255,0.8)' }}>{registro.cliente.nombre}</p>
-            )}
           </div>
           <button onClick={onClose}
             className="relative z-10 p-1.5 rounded-lg transition-colors"
@@ -146,6 +143,17 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
             </strong></span>
           )}
         </div>
+
+        {/* Cliente */}
+        {registro.cliente?.nombre && (
+          <div className="px-5 py-2.5 border-b border-slate-100 flex items-center justify-between">
+            <span className="text-xs text-slate-400">Cliente</span>
+            <span className="text-xs font-semibold truncate max-w-[300px]"
+              style={{ color: registro.cliente?.vendedor?.color || vendedorColor }}>
+              {registro.cliente.nombre}
+            </span>
+          </div>
+        )}
 
         {/* Tabla de productos */}
         <div className="flex-1 overflow-y-auto px-5 py-4">
