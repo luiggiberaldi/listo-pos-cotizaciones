@@ -234,14 +234,14 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const precioLabel = monedaPDF === 'bs' ? 'PRECIO Bs' : (monedaPDF === 'bcv' || monedaPDF === 'mixto_bcv') ? 'PRECIO BCV' : 'PRECIO'
   const totalLabel  = monedaPDF === 'bs' ? 'TOTAL Bs'  : (monedaPDF === 'bcv' || monedaPDF === 'mixto_bcv') ? 'TOTAL BCV'  : 'TOTAL'
   const COLS = [
-    { label: 'CANT.',       x: MARGIN,        w: 16,  align: 'center' },
-    { label: 'CÓD.',        x: MARGIN + 16,   w: 24,  align: 'center' },
-    { label: 'DESCRIPCIÓN', x: MARGIN + 40,   w: 68,  align: 'center' },
-    { label: 'UNID.',       x: MARGIN + 108,  w: 16,  align: 'center' },
-    { label: precioLabel,    x: MARGIN + 124,  w: 26,  align: 'center' },
-    { label: totalLabel,     x: MARGIN + 150,  w: 32,  align: 'right'  },
+    { label: 'CANT.',       x: MARGIN,        w: 11,  align: 'center' },
+    { label: 'CÓD.',        x: MARGIN + 11,   w: 20,  align: 'center' },
+    { label: 'DESCRIPCIÓN', x: MARGIN + 31,   w: 97,  align: 'center' },
+    { label: 'UNID.',       x: MARGIN + 128,  w: 11,  align: 'center' },
+    { label: precioLabel,    x: MARGIN + 139,  w: 22,  align: 'center' },
+    { label: totalLabel,     x: MARGIN + 161,  w: 21,  align: 'right'  },
   ]
-  const ROW_H = 9
+  const ROW_H_BASE = 7
 
   // Cabecera tabla
   doc.setFillColor(60, 60, 60)
@@ -263,25 +263,34 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.setDrawColor(200, 200, 200)
 
   items.forEach((item) => {
+    const descLines = doc.splitTextToSize(item.nombre_snap || '', COLS[2].w - 4)
+    const lineCount = Math.min(descLines.length, 3)
+    const ROW_H = Math.max(ROW_H_BASE, lineCount * 4 + 3)
+
     if (y > PAGE_H - 55) { doc.addPage(); y = MARGIN }
 
     doc.rect(MARGIN, y, CONTENT_W, ROW_H, 'S')
     COLS.forEach(col => { doc.line(col.x, y, col.x, y + ROW_H) })
 
-    const midY = y + ROW_H / 2 + 1.2
+    const midY = y + (lineCount === 1 ? ROW_H / 2 + 1.2 : 4.5)
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
     doc.setTextColor(...C_DARK)
 
-    doc.text(String(item.cantidad), COLS[0].x + COLS[0].w / 2, midY, { align: 'center' })
-    doc.text(item.codigo_snap || '—', COLS[1].x + COLS[1].w / 2, midY, { align: 'center' })
-    const descLines = doc.splitTextToSize(item.nombre_snap || '', COLS[2].w - 4)
-    doc.text(descLines[0], COLS[2].x + 2, midY)
-    doc.text(item.unidad_snap || '—', COLS[3].x + COLS[3].w / 2, midY, { align: 'center' })
-    doc.text(fmtPrecio(item.precio_unit_usd, monedaPDF, tasa, factorBcv), COLS[4].x + COLS[4].w - 2, midY, { align: 'right' })
+    const singleMidY = y + ROW_H / 2 + 1.2
+    doc.text(String(item.cantidad), COLS[0].x + COLS[0].w / 2, singleMidY, { align: 'center' })
+    doc.text(item.codigo_snap || '—', COLS[1].x + COLS[1].w / 2, singleMidY, { align: 'center' })
+
+    // Descripción multi-línea
+    for (let li = 0; li < lineCount; li++) {
+      doc.text(descLines[li], COLS[2].x + 2, midY + li * 4)
+    }
+
+    doc.text(item.unidad_snap || '—', COLS[3].x + COLS[3].w / 2, singleMidY, { align: 'center' })
+    doc.text(fmtPrecio(item.precio_unit_usd, monedaPDF, tasa, factorBcv), COLS[4].x + COLS[4].w - 2, singleMidY, { align: 'right' })
 
     doc.setFont('helvetica', 'bold')
-    doc.text(fmtPrecio(item.total_linea_usd, monedaPDF, tasa, factorBcv), COLS[5].x + COLS[5].w - 2, midY, { align: 'right' })
+    doc.text(fmtPrecio(item.total_linea_usd, monedaPDF, tasa, factorBcv), COLS[5].x + COLS[5].w - 2, singleMidY, { align: 'right' })
 
     y += ROW_H
   })
