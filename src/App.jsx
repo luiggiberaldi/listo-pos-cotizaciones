@@ -67,6 +67,7 @@ const ConfiguracionView = lazyRetry(() => import('./views/ConfiguracionView'))
 const ComisionesView    = lazyRetry(() => import('./views/ComisionesView'))
 const ReportesView      = lazyRetry(() => import('./views/ReportesView'))
 const LogsView          = lazyRetry(() => import('./views/LogsView'))
+const TesterFlowView    = lazyRetry(() => import('./views/TesterFlowView'))
 
 // ─── QueryClient — importado desde lib/queryClient.js ────────────────────────
 
@@ -184,6 +185,7 @@ function AppRoutes() {
               <Route path="/reportes"      element={<ReportesView />} />
               <Route path="/configuracion" element={<ConfiguracionView />} />
               <Route path="/logs"          element={<LogsView />} />
+              <Route path="/tester-flow"  element={<TesterFlowView />} />
             </Route>
           </Route>
         </Route>

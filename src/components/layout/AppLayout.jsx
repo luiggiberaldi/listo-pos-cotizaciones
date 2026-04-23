@@ -60,6 +60,7 @@ const NAV_TODOS = [
 const NAV_SUPERVISOR = [
   { path: '/reportes',      label: 'Reportes',      icono: BarChart3 },
   { path: '/configuracion', label: 'Configuración', icono: Settings },
+  { path: '/tester-flow',   label: 'Tester Flow',   icono: FlaskConical },
 ]
 
 // ─── Badge de rol ──────────────────────────────────────────────────────────────
