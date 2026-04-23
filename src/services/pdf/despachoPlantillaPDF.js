@@ -285,7 +285,7 @@ export async function generarDespachoPlantillaPDF({ config = {} } = {}) {
   doc.text('DATOS DEL CHOFER Y DEL VEHÍCULO', MARGIN + 2, y + 4)
   y += 10
 
-  const choferFields = ['CHOFER', 'C.I.', 'TELÉFONO', 'VEHÍCULO', 'COLOR', 'PLACA']
+  const choferFields = ['CHOFER', 'C.I.', 'TELÉFONO', 'VEHÍCULO', 'PLACA CHUTO', 'PLACA BATEA']
   choferFields.forEach((label, i) => {
     const fx = MARGIN + i * (col6W + 2)
     doc.setFont('helvetica', 'bold')
