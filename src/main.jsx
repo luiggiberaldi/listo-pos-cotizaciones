@@ -21,7 +21,19 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 
 // Registrar Service Worker para soporte offline (precache de assets)
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+  // Recargar cuando un nuevo SW tome el control (nueva versión desplegada)
+  let refreshing = false
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!refreshing) {
+      refreshing = true
+      window.location.reload()
+    }
+  })
+
+  window.addEventListener('load', async () => {
+    const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' })
+    // Forzar chequeo de actualización inmediato y periódico
+    reg.update()
+    setInterval(() => reg.update(), 60 * 1000)
   })
 }
