@@ -67,20 +67,26 @@ export function useCotizaciones({ estado = '', clienteId = '' } = {}) {
       if (error) throw error
       if (!rows?.length) return []
 
-      // Fetch related clients and vendors in batch
+      // Fetch related clients (via Worker API to bypass RLS) and vendors in batch
       const clienteIds  = [...new Set(rows.map(r => r.cliente_id).filter(Boolean))]
       const vendedorIds = [...new Set(rows.map(r => r.vendedor_id).filter(Boolean))]
 
-      const [clientesRes, vendedoresRes] = await Promise.all([
+      const session = (await supabase.auth.getSession()).data.session
+
+      const [clientesData, vendedoresRes] = await Promise.all([
         clienteIds.length
-          ? supabase.from('clientes').select('id, nombre, rif_cedula, telefono, tipo_cliente, vendedor_id').in('id', clienteIds)
-          : { data: [] },
+          ? fetch(apiUrl('/api/clientes/lookup'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+              body: JSON.stringify({ ids: clienteIds }),
+            }).then(r => r.ok ? r.json() : [])
+          : [],
         vendedorIds.length
           ? supabase.from('usuarios').select('id, nombre, color').in('id', vendedorIds)
           : { data: [] },
       ])
 
-      const clientesMap  = Object.fromEntries((clientesRes.error ? [] : clientesRes.data ?? []).map(c => [c.id, c]))
+      const clientesMap  = Object.fromEntries((clientesData ?? []).map(c => [c.id, c]))
       const vendedoresMap = Object.fromEntries((vendedoresRes.error ? [] : vendedoresRes.data ?? []).map(v => [v.id, v]))
 
       return rows.map(r => ({
@@ -127,17 +133,22 @@ export function useCotizacion(id) {
 
       let cot = cotRes.data
 
-      // Para vendedores (vista), hacer lookup de cliente y vendedor aparte
+      // Para vendedores (vista), hacer lookup de cliente via Worker API (bypass RLS) y vendedor
       if (!esSupervisor) {
-        const [cliRes, vendRes] = await Promise.all([
+        const session = (await supabase.auth.getSession()).data.session
+        const [clienteData, vendRes] = await Promise.all([
           cot.cliente_id
-            ? supabase.from('clientes').select('id, nombre, rif_cedula, telefono, tipo_cliente, direccion, vendedor_id').eq('id', cot.cliente_id).single()
-            : { data: null },
+            ? fetch(apiUrl('/api/clientes/lookup'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+                body: JSON.stringify({ ids: [cot.cliente_id] }),
+              }).then(r => r.ok ? r.json() : [])
+            : [],
           cot.vendedor_id
             ? supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', cot.vendedor_id).single()
             : { data: null },
         ])
-        cot = { ...cot, cliente: cliRes.data ?? null, vendedor: vendRes.data ?? null }
+        cot = { ...cot, cliente: clienteData?.[0] ?? null, vendedor: vendRes.data ?? null }
       }
 
       return { ...cot, items: itemsRes.data ?? [] }

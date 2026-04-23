@@ -116,6 +116,11 @@ export default {
       return handleListarClientes(request, env);
     }
 
+    // ── API: lookup clientes por IDs (bypass RLS para vendedores) ──────────
+    if (url.pathname === '/api/clientes/lookup' && request.method === 'POST') {
+      return handleClientesLookup(request, env);
+    }
+
     // ── API: guardar cotización (bypass RLS para clientes ajenos) ─────────
     if (url.pathname === '/api/cotizaciones/guardar' && request.method === 'POST') {
       return handleGuardarCotizacion(request, env);
@@ -1356,6 +1361,35 @@ async function handleListarClientes(request, env) {
     const errText = await res.text();
     console.error('Error fetching clientes:', res.status, errText);
     return jsonError(`Error al cargar clientes: ${errText}`, res.status, request);
+  }
+
+  const data = await res.json();
+  return new Response(JSON.stringify(data), {
+    headers: { 'Content-Type': 'application/json', ...corsHeaders(request) },
+  });
+}
+
+// ── Lookup clientes by IDs (service key, bypasses RLS) ──────────────────────
+async function handleClientesLookup(request, env) {
+  const user = await verifyAuth(request, env);
+  if (!user?.id) return jsonError('No autenticado', 401, request);
+
+  const { ids } = await request.json();
+  if (!Array.isArray(ids) || !ids.length || ids.length > 200) {
+    return jsonError('ids debe ser un array de 1-200 UUIDs', 400, request);
+  }
+
+  const queryUrl = `${env.SUPABASE_URL}/rest/v1/clientes?id=in.(${ids.map(encodeURIComponent).join(',')})&select=id,nombre,rif_cedula,telefono,tipo_cliente,vendedor_id`;
+
+  const res = await fetch(queryUrl, {
+    headers: {
+      apikey: env.SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    },
+  });
+
+  if (!res.ok) {
+    return jsonError('Error al buscar clientes', res.status, request);
   }
 
   const data = await res.json();
