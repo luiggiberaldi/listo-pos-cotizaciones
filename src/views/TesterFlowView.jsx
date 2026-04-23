@@ -206,6 +206,8 @@ export default function TesterFlowView() {
       p_stock_actual: TEST.producto.stock_inicial,
       p_stock_minimo: TEST.producto.stock_minimo,
       p_categoria: TEST.producto.categoria,
+      p_precio_2: null,
+      p_precio_3: null,
     }
     addLog(id, `Params: ${JSON.stringify(rpcParams)}`)
     const { data: result, error } = await supabase.rpc('crear_producto_con_kardex', rpcParams)
