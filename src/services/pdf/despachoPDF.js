@@ -403,7 +403,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.rect(totX, totTopY, totW, 14, 'F')
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
+  doc.setFontSize(13)
   doc.setTextColor(...C_WHITE)
   doc.text('TOTAL', totX + 4, totTopY + 9)
   doc.text(fmtTotal(total, monedaPDF, tasa, factorBcv), totX + totW - 4, totTopY + 9, { align: 'right' })
