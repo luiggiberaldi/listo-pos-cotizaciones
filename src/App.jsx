@@ -9,7 +9,10 @@ import {
   Navigate,
   Outlet,
 } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient } from '@tanstack/react-query'
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
+import { indexedDbPersister, CACHE_BUSTER } from './lib/queryPersister'
+import OfflineBanner from './components/ui/OfflineBanner'
 import useAuthStore from './store/useAuthStore'
 import { ToastProvider } from './components/ui/Toast'
 import { ErrorBoundary } from './components/ui/ErrorBoundary'
@@ -68,13 +71,30 @@ const LogsView          = lazyRetry(() => import('./views/LogsView'))
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5,  // 5 minutos — datos frescos sin refetch
-      gcTime: 1000 * 60 * 15,    // 15 min garbage collection
+      staleTime: 1000 * 60 * 5,        // 5 minutos — datos frescos sin refetch
+      gcTime: 1000 * 60 * 60 * 24,     // 24h — requerido para persistencia IndexedDB
       retry: 1,
-      refetchOnWindowFocus: false, // don't refetch on tab switch — save egress
+      refetchOnWindowFocus: false,       // don't refetch on tab switch — save egress
     },
   },
 })
+
+const persistOptions = {
+  persister: indexedDbPersister,
+  maxAge: 1000 * 60 * 60 * 24,          // 24h — datos persisten hasta 24h
+  buster: CACHE_BUSTER,                  // Invalida caché al hacer deploy
+  dehydrateOptions: {
+    shouldDehydrateQuery: (query) => {
+      const key = query.queryKey
+      // No persistir stock comprometido (30s staleTime = peligroso offline)
+      if (Array.isArray(key) && key[0] === 'stock_comprometido') return false
+      // No persistir logs del sistema (grandes, no útiles offline)
+      if (Array.isArray(key) && (key[0] === 'system-logs' || key[0] === 'system-logs-stats')) return false
+      // Persistir solo queries exitosas
+      return query.state.status === 'success'
+    },
+  },
+}
 
 // ─── Pantalla de carga mientras se verifica la sesión ─────────────────────────
 function PantallaCarga() {
@@ -189,13 +209,14 @@ function AppRoutes() {
 export default function App() {
   return (
     <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
+      <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
         <BrowserRouter>
           <ToastProvider>
+            <OfflineBanner />
             <AppRoutes />
           </ToastProvider>
         </BrowserRouter>
-      </QueryClientProvider>
+      </PersistQueryClientProvider>
     </ErrorBoundary>
   )
 }

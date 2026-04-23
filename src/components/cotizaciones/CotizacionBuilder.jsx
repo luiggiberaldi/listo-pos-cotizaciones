@@ -336,6 +336,11 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
     const coincideTexto = !searchTerms || smartMatchProducto(p, searchTerms)
     const coincideCat = !catActiva || (p.categoria ?? '').toUpperCase().startsWith(catActiva.toUpperCase())
     return coincideTexto && coincideCat
+  }).sort((a, b) => {
+    // Productos con stock disponible primero
+    const aDisp = (a.stock_actual ?? 0) > 0 ? 0 : 1
+    const bDisp = (b.stock_actual ?? 0) > 0 ? 0 : 1
+    return aDisp - bDisp
   })
 
   const idsAgregados = new Set(itemsAgregados.map(it => it.productoId))
@@ -426,10 +431,74 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
         </div>
       )}
 
-      {/* Grid de productos */}
+      {/* Productos: lista compacta en móvil, grid con fotos en desktop */}
       {!isLoading && visibles.length > 0 && (
         <>
-          <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+          {/* ── Vista lista compacta (móvil < md) ── */}
+          <div className="flex flex-col gap-1.5 md:hidden">
+            {visibles.map(p => {
+              const yaAgregado = idsAgregados.has(p.id)
+              const sinStock   = p.stock_actual != null && p.stock_actual <= 0
+              const sinPrecio  = !p.precio_usd || Number(p.precio_usd) <= 0
+              const bloqueado  = sinStock || sinPrecio
+              const comprometido = stockComprometido[p.id] || 0
+              const disponibleReal = (p.stock_actual ?? 0) - comprometido
+              return (
+                <button key={p.id} type="button"
+                  onClick={() => !bloqueado && agregarConReciente(p)}
+                  disabled={bloqueado}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-all active:scale-[0.98] min-h-[48px] ${
+                    bloqueado
+                      ? 'opacity-40 cursor-not-allowed border-slate-100 bg-white'
+                      : yaAgregado
+                        ? 'border-emerald-300 bg-emerald-50/50 shadow-sm shadow-emerald-100/80'
+                        : disponibleReal <= 0 && comprometido > 0
+                          ? 'border-amber-300 bg-amber-50/30 shadow-sm shadow-amber-100/80'
+                          : 'border-slate-200 bg-white hover:border-primary/50'
+                  }`}>
+                  {/* Indicador izquierdo */}
+                  <div className={`w-7 h-7 rounded-lg shrink-0 flex items-center justify-center ${
+                    yaAgregado ? 'bg-emerald-100' : 'bg-slate-100'
+                  }`}>
+                    {yaAgregado
+                      ? <CheckCircle size={14} className="text-emerald-500" />
+                      : <Package size={14} className="text-slate-400" />
+                    }
+                  </div>
+                  {/* Nombre */}
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-xs font-bold leading-tight truncate ${
+                      yaAgregado ? 'text-emerald-700' : 'text-slate-700'
+                    }`}>
+                      {p.nombre}
+                    </p>
+                    {(p.precio_2 != null || p.precio_3 != null) && (
+                      <p className="text-[9px] font-bold text-primary/60">{[p.precio_2 != null && 'P2', p.precio_3 != null && 'P3'].filter(Boolean).length + 1} precios</p>
+                    )}
+                  </div>
+                  {/* Precio + stock */}
+                  <div className="shrink-0 text-right">
+                    <p className={`text-xs font-black ${yaAgregado ? 'text-emerald-600' : 'text-slate-800'}`}>
+                      {fmtUsd(p.precio_usd)}
+                    </p>
+                    {tasa > 0 && (
+                      <p className="text-[9px] text-slate-400">{fmtBs(usdToBs(p.precio_usd, tasa))}</p>
+                    )}
+                    <p className={`text-[9px] font-medium ${
+                      sinStock ? 'text-red-500' :
+                      disponibleReal <= 0 && comprometido > 0 ? 'text-amber-600' :
+                      (p.stock_actual <= (p.stock_minimo || 5)) ? 'text-amber-500' : 'text-emerald-500'
+                    }`}>
+                      {sinStock ? 'Agotado' : comprometido > 0 ? `${p.stock_actual ?? 0} (${comprometido} comp.)` : `${p.stock_actual ?? 0} disp.`}
+                    </p>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* ── Vista grid con fotos (desktop md+) ── */}
+          <div className="hidden md:grid md:grid-cols-4 lg:grid-cols-5 gap-2">
             {visibles.map(p => {
               const yaAgregado = idsAgregados.has(p.id)
               const sinStock   = p.stock_actual != null && p.stock_actual <= 0

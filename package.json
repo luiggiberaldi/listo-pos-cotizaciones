@@ -13,7 +13,9 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.97.0",
     "@tanstack/react-query": "^5.80.2",
+    "@tanstack/react-query-persist-client": "^5.99.2",
     "html2canvas": "^1.4.1",
+    "idb-keyval": "^6.2.2",
     "jspdf": "^4.2.0",
     "lucide-react": "^0.575.0",
     "pg": "^8.20.0",
@@ -21,6 +23,7 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.14.1",
+    "vite-plugin-pwa": "^1.2.0",
     "zustand": "^5.0.11"
   },
   "devDependencies": {
