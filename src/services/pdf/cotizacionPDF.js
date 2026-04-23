@@ -23,12 +23,14 @@ function fmtFecha(f) {
 function fmtPrecio(n, moneda, tasa, factorBcv) {
   if (moneda === 'bs' && tasa > 0) return fmtBs(Number(n || 0) * tasa)
   if (moneda === 'bcv' && factorBcv > 0) return fmtBcvUsd(Number(n || 0) * factorBcv)
+  if (moneda === 'mixto_bcv' && factorBcv > 0) return fmtBcvUsd(Number(n || 0) * factorBcv)
   return fmtUsd(n)
 }
 function fmtTotalLinea(n, moneda, tasa, factorBcv) {
   if (moneda === 'bs' && tasa > 0) return fmtBs(Number(n || 0) * tasa)
   if (moneda === 'bcv' && factorBcv > 0) return fmtBcvUsd(Number(n || 0) * factorBcv)
   if (moneda === 'mixto' && tasa > 0) return `${fmtUsd(n)} / ${fmtBs(Number(n || 0) * tasa)}`
+  if (moneda === 'mixto_bcv' && factorBcv > 0 && tasa > 0) return `${fmtBcvUsd(Number(n || 0) * factorBcv)} / ${fmtBs(Number(n || 0) * tasa)}`
   return fmtUsd(n)
 }
 
@@ -203,8 +205,8 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   // ══════════════════════════════════════════════════════════════════════════
   // 3. TABLA DE PRODUCTOS
   // ══════════════════════════════════════════════════════════════════════════
-  const precioLabel = monedaPDF === 'bs' ? 'PRECIO Bs' : monedaPDF === 'bcv' ? 'PRECIO BCV' : 'PRECIO'
-  const totalLabel  = monedaPDF === 'bs' ? 'TOTAL Bs'  : monedaPDF === 'bcv' ? 'TOTAL BCV'  : 'TOTAL'
+  const precioLabel = monedaPDF === 'bs' ? 'PRECIO Bs' : monedaPDF === 'bcv' ? 'PRECIO BCV' : monedaPDF === 'mixto_bcv' ? 'PRECIO BCV' : 'PRECIO'
+  const totalLabel  = monedaPDF === 'bs' ? 'TOTAL Bs'  : monedaPDF === 'bcv' ? 'TOTAL BCV'  : monedaPDF === 'mixto_bcv' ? 'TOTAL BCV' : 'TOTAL'
   const COLS = [
     { label: 'CANT.',       x: MARGIN,        w: 16,  align: 'center' },
     { label: 'CÓD.',        x: MARGIN + 16,   w: 24,  align: 'center' },
@@ -288,7 +290,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   if (y > PAGE_H - 75) { doc.addPage(); y = MARGIN }
 
   // Layout: izquierda condiciones+cuentas, derecha totales
-  const totW = monedaPDF === 'mixto' ? 90 : 75
+  const totW = (monedaPDF === 'mixto' || monedaPDF === 'mixto_bcv') ? 90 : 75
   const totX = PAGE_W - MARGIN - totW
   const leftW = totX - MARGIN - 5
 
