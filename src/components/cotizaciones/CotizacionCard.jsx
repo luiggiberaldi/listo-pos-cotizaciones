@@ -353,11 +353,11 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
                   {monedaLabel} <ChevronDown size={10} />
                 </button>
                 {showMonedaMenu && (
-                  <div className="absolute left-0 bottom-full mb-1 w-40 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
+                  <div className="absolute left-0 right-auto sm:left-0 bottom-full mb-1 w-44 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20 max-w-[calc(100vw-2rem)]"
                     onMouseDown={e => e.preventDefault()}>
                     {MONEDA_OPTIONS.map(opt => (
                       <button key={opt.key} onClick={() => seleccionarMoneda(opt.key)}
-                        className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left ${monedaPdf === opt.key ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-700 hover:bg-slate-50'}`}>
+                        className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left whitespace-nowrap ${monedaPdf === opt.key ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-700 hover:bg-slate-50'}`}>
                         {opt.icon} {opt.label}
                         {monedaPdf === opt.key && <Check size={14} className="ml-auto text-emerald-500" />}
                       </button>
