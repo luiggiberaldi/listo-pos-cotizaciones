@@ -2,6 +2,7 @@
 // Tooltips de primera vez para guiar al usuario nuevo
 import { useState, useEffect } from 'react'
 import { X, Lightbulb } from 'lucide-react'
+import { TIPS } from '../../utils/onboardingConfig'
 
 const STORAGE_KEY = 'construacero_onboarding_done'
 
@@ -66,4 +67,13 @@ export default function OnboardingTip({ tipId, children, className = '' }) {
       </button>
     </div>
   )
+}
+
+// Secuencia de tips por rol — muestra el primer tip no visto para la página actual
+export function OnboardingSequence({ rol, page }) {
+  const tips = (TIPS[rol] || []).filter(t => t.page === page)
+  // Encontrar el primer tip no mostrado
+  const nextTip = tips.find(t => !isTipShown(t.id))
+  if (!nextTip) return null
+  return <OnboardingTip tipId={nextTip.id} className="mb-3">{nextTip.text}</OnboardingTip>
 }

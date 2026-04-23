@@ -1,24 +1,29 @@
 // src/components/cotizaciones/CotizacionCard.jsx
 import { useState, memo } from 'react'
-import { FileText, User, Calendar, Pencil, Ban, CheckCircle, XCircle, FileDown, MessageCircle, Loader2, Truck, ChevronDown, DollarSign, RefreshCw, Eye, Clock, PackageCheck } from 'lucide-react'
+import { FileText, User, Calendar, Pencil, Ban, CheckCircle, XCircle, FileDown, MessageCircle, Loader2, Truck, ChevronDown, DollarSign, RefreshCw, Eye, Clock, PackageCheck, MoreHorizontal } from 'lucide-react'
 import EstadoBadge from './EstadoBadge'
+import QuoteFlowIndicator from './QuoteFlowIndicator'
+import MobileActionSheet from './MobileActionSheet'
 import useAuthStore from '../../store/useAuthStore'
 import supabase from '../../services/supabase/client'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import { compartirPorWhatsApp, generarMensaje } from '../../utils/whatsapp'
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs } from '../../utils/format'
+import { getAction, PRIMARY_ACTION_COLORS } from '../../utils/cotizacionActions'
 import DetalleModal from '../ui/DetalleModal'
 import { showToast } from '../ui/Toast'
 
 export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, onCambiarEstado, onDespachar, onReciclar, tasa = 0 }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
+  const rol = perfil?.rol || 'vendedor'
   const esBorrador = cotizacion.estado === 'borrador'
   const esEnviada  = cotizacion.estado === 'enviada'
   const [pdfLoading, setPdfLoading]   = useState(false)
   const [waLoading, setWaLoading]     = useState(false)
   const [showActions, setShowActions] = useState(false)
   const [showDetalle, setShowDetalle] = useState(false)
+  const [showSheet, setShowSheet]     = useState(false)
   const { data: config = {} } = useConfigNegocio()
 
   const numDisplay = cotizacion.version > 1
@@ -60,11 +65,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
       if (itemsRes.error) throw itemsRes.error
       const cliente = clienteRes.data || cotizacion.cliente
       const vendedor = vendedorRes.data || cotizacion.vendedor
-      const cotConDatos = {
-        ...cotizacion,
-        cliente,
-        vendedor,
-      }
+      const cotConDatos = { ...cotizacion, cliente, vendedor }
       const pdfBlob = await generarPDF({ cotizacion: cotConDatos, items: itemsRes.data ?? [], config, returnBlob: true })
       const mensajeParams = {
         nombreNegocio: config.nombre_negocio,
@@ -98,7 +99,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
   }
 
   const vendedorColor = cotizacion.vendedor?.color || '#64748b'
-  const despacho = cotizacion.despacho   // { id, estado } si existe
+  const despacho = cotizacion.despacho
   const despachoAnulado = despacho?.estado === 'anulada'
   const canEdit = esBorrador
   const esPropietario = cotizacion.vendedor_id === perfil?.id
@@ -111,6 +112,48 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
   const canReciclar = esSupervisor && (despachoAnulado || ['rechazada', 'anulada', 'vencida'].includes(cotizacion.estado))
   const hasSecondaryActions = canAcceptReject || canDespachar || canAnular
 
+  // ── Acción primaria para móvil ──
+  function getPrimaryAction() {
+    if (esBorrador && canEdit)
+      return { key: 'editar', label: getAction('editar', rol).label || 'Editar', icon: Pencil, action: () => onEditar(cotizacion) }
+    if (esEnviada && esSupervisor)
+      return { key: 'aceptar', label: getAction('aceptar', rol).label || 'Aprobar', icon: CheckCircle, action: () => onCambiarEstado(cotizacion.id, 'aceptada', cotizacion.numero, cotizacion.cliente?.nombre, cotizacion.total_usd, cotizacion.vendedor_id) }
+    if (cotizacion.estado === 'aceptada' && canDespachar)
+      return { key: 'despachar', label: getAction('despachar', rol).label || 'Despachar', icon: Truck, action: () => onDespachar(cotizacion) }
+    if (canWhatsApp)
+      return { key: 'whatsapp', label: 'WhatsApp', icon: MessageCircle, action: handleWhatsApp, loading: waLoading }
+    if (canReciclar)
+      return { key: 'reciclar', label: getAction('reciclar', rol).label || 'Reutilizar', icon: RefreshCw, action: () => onReciclar(cotizacion) }
+    return { key: 'ver', label: 'Ver detalle', icon: Eye, action: () => setShowDetalle(true) }
+  }
+
+  const primaryAction = getPrimaryAction()
+  const pColors = PRIMARY_ACTION_COLORS[primaryAction.key] || PRIMARY_ACTION_COLORS.ver
+
+  // ── Acciones para el bottom sheet móvil ──
+  function getMobileSheetActions() {
+    const actions = []
+    if (primaryAction.key !== 'ver')
+      actions.push({ label: 'Ver detalle', icon: Eye, onClick: () => setShowDetalle(true) })
+    if ((canEdit || canVersion) && primaryAction.key !== 'editar')
+      actions.push({ label: canVersion ? (getAction('revisar', rol).label || 'Nueva versión') : (getAction('editar', rol).label || 'Editar'), icon: Pencil, onClick: () => onEditar(cotizacion), textColor: 'text-sky-600' })
+    if (canPdf)
+      actions.push({ label: 'Descargar PDF', icon: FileDown, onClick: descargarPDF, disabled: pdfLoading })
+    if (canWhatsApp && primaryAction.key !== 'whatsapp')
+      actions.push({ label: 'Compartir por WhatsApp', icon: MessageCircle, onClick: handleWhatsApp, disabled: waLoading, textColor: 'text-emerald-600' })
+    if (canAcceptReject && primaryAction.key !== 'aceptar') {
+      actions.push({ label: getAction('aceptar', rol).label || 'Aprobar', icon: CheckCircle, onClick: () => onCambiarEstado(cotizacion.id, 'aceptada', cotizacion.numero, cotizacion.cliente?.nombre, cotizacion.total_usd, cotizacion.vendedor_id), textColor: 'text-emerald-600' })
+      actions.push({ label: getAction('rechazar', rol).label || 'Rechazar', icon: XCircle, onClick: () => onCambiarEstado(cotizacion.id, 'rechazada', cotizacion.numero, null, null, cotizacion.vendedor_id), textColor: 'text-orange-600' })
+    }
+    if (canDespachar && primaryAction.key !== 'despachar')
+      actions.push({ label: getAction('despachar', rol).label || 'Despachar', icon: Truck, onClick: () => onDespachar(cotizacion), textColor: 'text-indigo-600' })
+    if (canReciclar && primaryAction.key !== 'reciclar')
+      actions.push({ label: getAction('reciclar', rol).label || 'Reutilizar', icon: RefreshCw, onClick: () => onReciclar(cotizacion), textColor: 'text-teal-600' })
+    if (canAnular)
+      actions.push({ label: getAction('anular', rol).label || 'Cancelar', icon: Ban, onClick: () => onAnular(cotizacion), danger: true })
+    return actions
+  }
+
   return (
     <div className="group bg-white rounded-2xl border border-slate-200 hover:shadow-lg transition-all duration-200 overflow-hidden flex flex-col">
 
@@ -118,13 +161,11 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
       <div className="relative h-16 shrink-0 flex items-end justify-between px-4 pb-2"
         title={cotizacion.vendedor?.nombre ? `Vendedor: ${cotizacion.vendedor.nombre}` : undefined}
         style={{ background: `linear-gradient(135deg, ${vendedorColor}ee 0%, ${vendedorColor}99 100%)` }}>
-        {/* Patrón de puntos */}
         <div className="absolute inset-0 opacity-10"
           style={{
             backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)',
             backgroundSize: '12px 12px',
           }} />
-        {/* Número + cliente */}
         <div className="relative z-10 min-w-0">
           <p className="font-black text-white text-sm font-mono leading-tight drop-shadow">{numDisplay}</p>
           {cotizacion.cliente?.nombre && (
@@ -133,7 +174,6 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
             </p>
           )}
         </div>
-        {/* Estado badge adaptado */}
         <div className="relative z-10 shrink-0 flex flex-col items-end gap-1">
           <EstadoBadge estado={cotizacion.estado} />
           {despacho && (
@@ -170,6 +210,11 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         </div>
       </div>
 
+      {/* ── Flow indicator ── */}
+      <div className="px-4 pb-2">
+        <QuoteFlowIndicator estado={cotizacion.estado} despacho={despacho} compact />
+      </div>
+
       {/* ── Total ── */}
       <div className="mx-4 mb-3 bg-slate-50 rounded-xl px-3.5 py-2.5 flex items-center justify-between">
         <span className="text-xs font-medium text-slate-500">Total</span>
@@ -192,50 +237,92 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         </div>
       )}
 
-      {/* ── Acciones principales ── */}
-      <div className="mt-auto border-t border-slate-100 px-2 sm:px-3 py-2 flex items-center gap-1.5 sm:gap-1 flex-wrap">
-        {/* Ver detalle — siempre visible */}
+      {/* ══════════ MOBILE ACTIONS (< md) ══════════ */}
+      <div className="md:hidden mt-auto border-t border-slate-100 p-2.5">
+        {/* Botón primario — full width, thumb-friendly */}
+        <button
+          onClick={primaryAction.action}
+          disabled={primaryAction.loading}
+          className={`w-full flex items-center justify-center gap-2 min-h-[44px] rounded-xl text-sm font-bold transition-all active:scale-[0.98] disabled:opacity-50 ${pColors.bg} ${pColors.text} ${pColors.active}`}
+        >
+          {primaryAction.loading
+            ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+            : <primaryAction.icon size={16} />
+          }
+          {primaryAction.label}
+        </button>
+
+        {/* Fila secundaria: Ver + PDF + más */}
+        <div className="flex items-center gap-1.5 mt-2">
+          {primaryAction.key !== 'ver' && (
+            <button onClick={() => setShowDetalle(true)}
+              className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 active:bg-slate-100 transition-colors">
+              <Eye size={14} /> Ver
+            </button>
+          )}
+          {canPdf && (
+            <button onClick={descargarPDF} disabled={pdfLoading}
+              className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40">
+              {pdfLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <FileDown size={14} />}
+              PDF
+            </button>
+          )}
+          {getMobileSheetActions().length > 0 && (
+            <button onClick={() => setShowSheet(true)}
+              className="ml-auto flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:bg-slate-50 active:bg-slate-100 transition-colors">
+              <MoreHorizontal size={14} /> Más
+            </button>
+          )}
+        </div>
+
+        <MobileActionSheet
+          isOpen={showSheet}
+          onClose={() => setShowSheet(false)}
+          actions={getMobileSheetActions()}
+        />
+      </div>
+
+      {/* ══════════ DESKTOP ACTIONS (md+) ══════════ */}
+      <div className="hidden md:flex mt-auto border-t border-slate-100 px-3 py-2 items-center gap-1.5 flex-wrap">
+        {/* Ver detalle */}
         <button onClick={() => setShowDetalle(true)}
-          className="flex items-center gap-1 px-3 py-2.5 sm:px-2 sm:py-1.5 rounded-lg text-xs font-medium text-primary hover:bg-primary-light transition-colors">
-          <Eye size={15} className="sm:w-[13px] sm:h-[13px]" /><span className="hidden xs:inline">Ver</span>
+          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-primary hover:bg-primary-light transition-colors">
+          <Eye size={13} /> Ver
         </button>
         {canEdit && (
           <button onClick={() => onEditar(cotizacion)}
-            className="flex items-center gap-1 px-3 py-2.5 sm:px-2 sm:py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
-            <Pencil size={15} className="sm:w-[13px] sm:h-[13px]" /><span className="hidden xs:inline">Editar</span>
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
+            <Pencil size={13} /> {getAction('editar', rol).label}
           </button>
         )}
         {canVersion && (
           <button onClick={() => onEditar(cotizacion)}
-            className="flex items-center gap-1 px-3 py-2.5 sm:px-2 sm:py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
-            <Pencil size={15} className="sm:w-[13px] sm:h-[13px]" /><span className="hidden xs:inline">Revisar</span>
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
+            <Pencil size={13} /> {getAction('revisar', rol).label}
           </button>
         )}
         {canPdf && (
           <button onClick={descargarPDF} disabled={pdfLoading}
-            title={pdfLoading ? 'Generando PDF...' : 'Descargar PDF'}
-            className="flex items-center gap-1 px-3 py-2.5 sm:px-2 sm:py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-40">
-            {pdfLoading ? <div className="w-3.5 h-3.5 sm:w-3 sm:h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <FileDown size={15} className="sm:w-[13px] sm:h-[13px]" />}
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-40">
+            {pdfLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <FileDown size={13} />}
             PDF
           </button>
         )}
         {canWhatsApp && (
           <button onClick={handleWhatsApp} disabled={waLoading}
-            title={waLoading ? 'Preparando...' : 'Enviar por WhatsApp'}
-            className="flex items-center gap-1 px-3 py-2.5 sm:px-2 sm:py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-40">
-            {waLoading ? <div className="w-3.5 h-3.5 sm:w-3 sm:h-3 border-[1.5px] border-emerald-400 border-t-transparent rounded-full animate-spin" /> : <MessageCircle size={15} className="sm:w-[13px] sm:h-[13px]" />}
-            <span className="hidden sm:inline">WhatsApp</span><span className="sm:hidden">WA</span>
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-40">
+            {waLoading ? <div className="w-3 h-3 border-[1.5px] border-emerald-400 border-t-transparent rounded-full animate-spin" /> : <MessageCircle size={13} />}
+            WhatsApp
           </button>
         )}
         {canReciclar && (
           <button onClick={() => onReciclar(cotizacion)}
-            title="Crear nueva cotización basada en esta"
-            className="flex items-center gap-1 px-3 py-2.5 sm:px-2 sm:py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 transition-colors">
-            <RefreshCw size={15} className="sm:w-[13px] sm:h-[13px]" />
-            <span className="hidden sm:inline">Reutilizar</span>
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-teal-600 hover:bg-teal-50 transition-colors">
+            <RefreshCw size={13} /> {getAction('reciclar', rol).label}
           </button>
         )}
 
+        {/* Desktop secondary dropdown */}
         {hasSecondaryActions && (
           <div className="relative ml-auto">
             <button
@@ -247,24 +334,24 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
               <ChevronDown size={14} className={`transition-transform ${showActions ? 'rotate-180' : ''}`} />
             </button>
             {showActions && (
-              <div className="absolute right-0 bottom-full mb-1 w-44 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
+              <div className="absolute right-0 bottom-full mb-1 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
                 onMouseDown={e => e.preventDefault()}>
                 {canAcceptReject && (
                   <>
                     <button onClick={() => { onCambiarEstado(cotizacion.id, 'aceptada', cotizacion.numero, cotizacion.cliente?.nombre, cotizacion.total_usd, cotizacion.vendedor_id); setShowActions(false) }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-emerald-700 hover:bg-emerald-50 transition-colors text-left">
-                      <CheckCircle size={14} />Aceptar
+                      <CheckCircle size={14} />{getAction('aceptar', rol).label || 'Aprobar'}
                     </button>
                     <button onClick={() => { onCambiarEstado(cotizacion.id, 'rechazada', cotizacion.numero, null, null, cotizacion.vendedor_id); setShowActions(false) }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors text-left">
-                      <XCircle size={14} />Rechazar
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-orange-600 hover:bg-orange-50 transition-colors text-left">
+                      <XCircle size={14} />{getAction('rechazar', rol).label || 'Rechazar'}
                     </button>
                   </>
                 )}
                 {canDespachar && (
                   <button onClick={() => { onDespachar(cotizacion); setShowActions(false) }}
                     className="w-full flex items-center gap-2 px-3 py-2 text-sm text-indigo-600 hover:bg-indigo-50 transition-colors text-left">
-                    <Truck size={14} />Despachar
+                    <Truck size={14} />{getAction('despachar', rol).label || 'Despachar'}
                   </button>
                 )}
                 {canAnular && (
@@ -272,7 +359,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
                     {(canAcceptReject || canDespachar) && <div className="my-1 border-t border-slate-100" />}
                     <button onClick={() => { onAnular(cotizacion); setShowActions(false) }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-500 hover:bg-red-50 transition-colors text-left">
-                      <Ban size={14} />Anular
+                      <Ban size={14} />{getAction('anular', rol).label || 'Anular'}
                     </button>
                   </>
                 )}

@@ -102,6 +102,15 @@ export default {
       return new Response(null, { headers: corsHeaders(request) });
     }
 
+    // ── API routes (wrapped in error logging) ────
+    if (url.pathname.startsWith('/api/')) {
+      try {
+
+    // ── API: recibir log del frontend ─────────────────────────────────────
+    if (url.pathname === '/api/logs' && request.method === 'POST') {
+      return handleLogFromClient(request, env);
+    }
+
     // ── API: listar todos los clientes (bypass RLS para vendedores) ───────
     if (url.pathname === '/api/clientes' && request.method === 'GET') {
       return handleListarClientes(request, env);
@@ -162,6 +171,23 @@ export default {
       return handleAplicarMovimientoLote(request, env);
     }
 
+    // ── API: admin logs (CRUD + análisis AI) ──────────────────────────────
+    if (url.pathname === '/api/admin/logs' && request.method === 'GET') {
+      return handleGetLogs(request, env, url);
+    }
+    if (url.pathname === '/api/admin/logs/stats' && request.method === 'GET') {
+      return handleGetLogStats(request, env);
+    }
+    if (url.pathname === '/api/admin/logs/download' && request.method === 'GET') {
+      return handleDownloadLogs(request, env);
+    }
+    if (url.pathname === '/api/admin/logs/analyze' && request.method === 'POST') {
+      return handleAnalyzeLogs(request, env);
+    }
+    if (url.pathname === '/api/admin/logs/purge' && request.method === 'DELETE') {
+      return handlePurgeLogs(request, env);
+    }
+
     // ── API: backup completo del sistema ───────────────────────────────────
     if (url.pathname === '/api/admin/backup' && request.method === 'GET') {
       return handleBackup(request, env);
@@ -199,6 +225,9 @@ export default {
     if (url.pathname === '/api/auth/clear-operator' && request.method === 'POST') {
       return handleClearOperator(request, env);
     }
+    if (url.pathname === '/api/auth/super-admin' && request.method === 'POST') {
+      return handleSuperAdmin(request, env);
+    }
 
     // ── API: subir PDF temporal (para WhatsApp) ─────────────────────────
     if (url.pathname === '/api/pdf-temp' && request.method === 'POST') {
@@ -213,6 +242,27 @@ export default {
     // ── API routes para push notifications ────────────────────────────────
     if (url.pathname.startsWith('/api/push/')) {
       return handlePush(request, env, url);
+    }
+
+    // API route not found
+    return jsonError('Ruta API no encontrada', 404, request);
+
+      } catch (e) {
+        // Log unhandled API errors to system_logs
+        const user = await verifyAuth(request, env).catch(() => null)
+        await logToSystem(env, {
+          nivel: 'error',
+          origen: 'worker',
+          categoria: 'SISTEMA',
+          mensaje: `Unhandled: ${e.message}`,
+          stack: e.stack?.slice(0, 3000),
+          endpoint: `${request.method} ${url.pathname}`,
+          usuario_id: user?.operator_id || user?.id || null,
+          usuario_nombre: user?.app_metadata?.operator_nombre || user?.email || null,
+          meta: { method: request.method, pathname: url.pathname },
+        })
+        return jsonError('Error interno del servidor', 500, request)
+      }
     }
 
     // ── Security headers para assets estáticos ─────────────────────────────
@@ -284,6 +334,75 @@ function jsonError(message, status = 400, request = null) {
   return json({ error: message }, status, request);
 }
 
+// ── System Logging ─────────────────────────────────────────────────────────
+// Inserta logs persistentes en system_logs via service_role
+async function logToSystem(env, { nivel = 'error', origen = 'worker', categoria, mensaje, stack, endpoint, usuario_id, usuario_nombre, meta }) {
+  try {
+    const body = { nivel, origen, categoria, mensaje, stack: stack || null, endpoint: endpoint || null, usuario_id: usuario_id || null, usuario_nombre: usuario_nombre || null, meta: meta || {} }
+    await fetch(`${env.SUPABASE_URL}/rest/v1/system_logs`, {
+      method: 'POST',
+      headers: {
+        apikey: env.SUPABASE_SERVICE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify(body),
+    })
+  } catch { /* silencioso — no queremos loop de errores */ }
+}
+
+// ── Groq Round-Robin ───────────────────────────────────────────────────────
+const groqCounters = { A: 0, B: 0, C: 0 }
+
+async function groqFetch(env, grupo, messages, { maxTokens = 2048, temperature = 0.3 } = {}) {
+  const envKey = `GROQ_KEYS_${grupo}`
+  const raw = env[envKey]
+  if (!raw) throw new Error(`No hay keys configuradas para grupo ${grupo}`)
+  const keys = raw.split(',').map(k => k.trim()).filter(Boolean)
+  if (!keys.length) throw new Error(`Keys vacías para grupo ${grupo}`)
+
+  const startIdx = groqCounters[grupo] % keys.length
+  groqCounters[grupo]++
+
+  // Intentar round-robin: si una falla (429), probar la siguiente
+  for (let i = 0; i < keys.length; i++) {
+    const idx = (startIdx + i) % keys.length
+    const key = keys[idx]
+    try {
+      const ctrl = new AbortController()
+      const timeout = setTimeout(() => ctrl.abort(), 20_000)
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${key}`,
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages,
+          max_completion_tokens: maxTokens,
+          temperature,
+        }),
+        signal: ctrl.signal,
+      })
+      clearTimeout(timeout)
+
+      if (res.status === 429) continue  // rate limited → next key
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '')
+        throw new Error(`Groq API error ${res.status}: ${errText.slice(0, 200)}`)
+      }
+      const data = await res.json()
+      return data.choices?.[0]?.message?.content || ''
+    } catch (e) {
+      if (e.name === 'AbortError') continue // timeout → next key
+      if (i === keys.length - 1) throw e    // last key → propagate
+    }
+  }
+  throw new Error(`Todas las keys del grupo ${grupo} fallaron (rate limit)`)
+}
+
 // Verifica el JWT del usuario autenticado contra Supabase
 // Extrae operator_id/operator_rol de app_metadata si están presentes
 async function verifyAuth(request, env) {
@@ -307,8 +426,12 @@ async function verifyAuth(request, env) {
 }
 
 // Verifica que el operador sea supervisor consultando la tabla usuarios
+// UUID especial para Super Admin virtual (easter egg del logo)
+const SUPER_ADMIN_UUID = '00000000-0000-0000-0000-000000000000'
+
 async function verifySupervisor(operatorId, env) {
   if (!operatorId) return false;
+  if (operatorId === SUPER_ADMIN_UUID) return true; // Super Admin virtual
   const res = await fetch(
     `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${operatorId}&activo=eq.true&select=rol`,
     {
@@ -616,6 +739,55 @@ async function handleClearOperator(request, env) {
   });
 
   return json({ ok: true }, 200, request);
+}
+
+// Super Admin virtual — activa el operador especial sin usuario en DB
+const SUPER_ADMIN_CODE = '794848'
+
+async function handleSuperAdmin(request, env) {
+  const user = await verifyAuth(request, env);
+  if (!user?.id) return jsonError('No autenticado', 401, request);
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+
+  if (body.code !== SUPER_ADMIN_CODE) {
+    return jsonError('Código incorrecto', 401, request);
+  }
+
+  // Set super admin in app_metadata
+  const metaRes = await fetch(`${env.SUPABASE_URL}/auth/v1/admin/users/${user.id}`, {
+    method: 'PUT',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      app_metadata: {
+        operator_id: SUPER_ADMIN_UUID,
+        operator_rol: 'supervisor',
+        operator_nombre: 'Super Admin',
+      },
+    }),
+  });
+
+  if (!metaRes.ok) return jsonError('Error activando Super Admin', 500, request);
+
+  await logToSystem(env, {
+    nivel: 'info',
+    origen: 'worker',
+    categoria: 'AUTH',
+    mensaje: 'Super Admin activado',
+    usuario_id: SUPER_ADMIN_UUID,
+    usuario_nombre: 'Super Admin',
+    meta: { ip: request.headers.get('CF-Connecting-IP') || 'unknown' },
+  })
+
+  return json({
+    ok: true,
+    operator: { id: SUPER_ADMIN_UUID, nombre: 'Super Admin', rol: 'supervisor', color: '#ef4444' },
+  }, 200, request);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -2855,4 +3027,256 @@ async function handleTesterStressSeed(request, env) {
     logStep(`  Stack: ${e.stack?.split('\n').slice(0, 3).join(' | ') || 'N/A'}`);
     return json({ ok: false, error: `Error en stress seed: ${e.message}`, log }, 500, request);
   }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// ── System Logs Handlers ─────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════
+
+// POST /api/logs — recibir log del frontend (cualquier usuario autenticado)
+async function handleLogFromClient(request, env) {
+  const user = await verifyAuth(request, env)
+  if (!user?.id) return jsonError('No autenticado', 401, request)
+
+  let body
+  try { body = await request.json() } catch { return jsonError('JSON inválido', 400, request) }
+
+  const { nivel = 'error', origen = 'frontend', categoria, mensaje, stack, meta } = body
+  if (!mensaje) return jsonError('mensaje requerido', 400, request)
+
+  await logToSystem(env, {
+    nivel: ['error', 'warn', 'info'].includes(nivel) ? nivel : 'error',
+    origen: ['frontend', 'worker', 'supabase'].includes(origen) ? origen : 'frontend',
+    categoria: categoria || 'GENERAL',
+    mensaje: String(mensaje).slice(0, 2000),
+    stack: stack ? String(stack).slice(0, 5000) : null,
+    endpoint: request.headers.get('Referer') || null,
+    usuario_id: user.operator_id || user.id,
+    usuario_nombre: user.app_metadata?.operator_nombre || user.email,
+    meta: meta || {},
+  })
+
+  return json({ ok: true }, 200, request)
+}
+
+// GET /api/admin/logs — listar logs paginados (supervisor)
+async function handleGetLogs(request, env, url) {
+  const user = await verifyAuth(request, env)
+  if (!user?.operator_id) return jsonError('No autenticado', 401, request)
+  const isSup = await verifySupervisor(user.operator_id, env)
+  if (!isSup) return jsonError('Solo supervisores', 403, request)
+
+  const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'))
+  const limit = Math.min(100, Math.max(10, parseInt(url.searchParams.get('limit') || '50')))
+  const offset = (page - 1) * limit
+
+  let filter = ''
+  const nivel = url.searchParams.get('nivel')
+  if (nivel && ['error', 'warn', 'info'].includes(nivel)) filter += `&nivel=eq.${nivel}`
+  const origen = url.searchParams.get('origen')
+  if (origen && ['frontend', 'worker', 'supabase'].includes(origen)) filter += `&origen=eq.${origen}`
+  const categoria = url.searchParams.get('categoria')
+  if (categoria) filter += `&categoria=eq.${encodeURIComponent(categoria)}`
+  const desde = url.searchParams.get('desde')
+  if (desde) filter += `&ts=gte.${encodeURIComponent(desde)}`
+  const hasta = url.searchParams.get('hasta')
+  if (hasta) filter += `&ts=lte.${encodeURIComponent(hasta)}`
+
+  const h = {
+    apikey: env.SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    Prefer: 'count=exact',
+  }
+
+  const res = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/system_logs?select=*&order=ts.desc&offset=${offset}&limit=${limit}${filter}`,
+    { headers: h }
+  )
+  if (!res.ok) return jsonError('Error leyendo logs', 500, request)
+
+  const total = parseInt(res.headers.get('content-range')?.split('/')[1] || '0')
+  const logs = await res.json()
+
+  return json({ logs, total, page, limit, pages: Math.ceil(total / limit) }, 200, request)
+}
+
+// GET /api/admin/logs/stats — estadísticas de logs
+async function handleGetLogStats(request, env) {
+  const user = await verifyAuth(request, env)
+  if (!user?.operator_id) return jsonError('No autenticado', 401, request)
+  const isSup = await verifySupervisor(user.operator_id, env)
+  if (!isSup) return jsonError('Solo supervisores', 403, request)
+
+  const h = {
+    apikey: env.SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+  }
+
+  // Obtener conteo por nivel y origen en paralelo
+  const hoy = new Date().toISOString().split('T')[0]
+  const [totalRes, erroresHoyRes, warnHoyRes] = await Promise.all([
+    fetch(`${env.SUPABASE_URL}/rest/v1/system_logs?select=id&limit=1`, { headers: { ...h, Prefer: 'count=exact' } }),
+    fetch(`${env.SUPABASE_URL}/rest/v1/system_logs?select=id&nivel=eq.error&ts=gte.${hoy}T00:00:00&limit=1`, { headers: { ...h, Prefer: 'count=exact' } }),
+    fetch(`${env.SUPABASE_URL}/rest/v1/system_logs?select=id&nivel=eq.warn&ts=gte.${hoy}T00:00:00&limit=1`, { headers: { ...h, Prefer: 'count=exact' } }),
+  ])
+
+  const total = parseInt(totalRes.headers.get('content-range')?.split('/')[1] || '0')
+  const erroresHoy = parseInt(erroresHoyRes.headers.get('content-range')?.split('/')[1] || '0')
+  const warningsHoy = parseInt(warnHoyRes.headers.get('content-range')?.split('/')[1] || '0')
+
+  // Top 5 categorías con más errores (últimos 7 días)
+  const hace7d = new Date(Date.now() - 7 * 86400000).toISOString()
+  const topRes = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/system_logs?select=categoria&nivel=eq.error&ts=gte.${hace7d}&limit=500`,
+    { headers: h }
+  )
+  const topLogs = topRes.ok ? await topRes.json() : []
+  const catCount = {}
+  for (const l of topLogs) catCount[l.categoria || 'SIN_CATEGORIA'] = (catCount[l.categoria || 'SIN_CATEGORIA'] || 0) + 1
+  const topCategorias = Object.entries(catCount).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([cat, count]) => ({ categoria: cat, count }))
+
+  return json({ total, erroresHoy, warningsHoy, topCategorias }, 200, request)
+}
+
+// GET /api/admin/logs/download — descargar logs como JSON
+async function handleDownloadLogs(request, env) {
+  const user = await verifyAuth(request, env)
+  if (!user?.operator_id) return jsonError('No autenticado', 401, request)
+  const isSup = await verifySupervisor(user.operator_id, env)
+  if (!isSup) return jsonError('Solo supervisores', 403, request)
+
+  const h = {
+    apikey: env.SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+  }
+
+  const res = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/system_logs?select=*&order=ts.desc&limit=10000`,
+    { headers: h }
+  )
+  if (!res.ok) return jsonError('Error descargando logs', 500, request)
+  const logs = await res.json()
+
+  const fecha = new Date().toISOString().split('T')[0]
+  const filename = `system-logs-${fecha}.json`
+
+  return new Response(JSON.stringify({ generado_en: new Date().toISOString(), total: logs.length, logs }, null, 2), {
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      ...corsHeaders(request),
+    },
+  })
+}
+
+// POST /api/admin/logs/analyze — análisis AI con Groq
+async function handleAnalyzeLogs(request, env) {
+  const user = await verifyAuth(request, env)
+  if (!user?.operator_id) return jsonError('No autenticado', 401, request)
+  const isSup = await verifySupervisor(user.operator_id, env)
+  if (!isSup) return jsonError('Solo supervisores', 403, request)
+
+  let body
+  try { body = await request.json() } catch { return jsonError('JSON inválido', 400, request) }
+
+  const tipo = body.tipo || 'errores'
+  if (!['errores', 'mejoras', 'seguridad'].includes(tipo)) {
+    return jsonError('tipo debe ser: errores, mejoras, seguridad', 400, request)
+  }
+
+  const h = {
+    apikey: env.SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+  }
+
+  // Obtener logs según tipo de análisis
+  let logsFilter = ''
+  let grupo = 'A'
+  let systemPrompt = ''
+
+  if (tipo === 'errores') {
+    logsFilter = '&nivel=eq.error'
+    grupo = 'A'
+    systemPrompt = `Eres un experto en diagnóstico de sistemas POS (Punto de Venta). Analiza los errores del sistema y:
+1. Agrupa por causa raíz
+2. Identifica patrones recurrentes
+3. Prioriza por impacto al negocio (alto/medio/bajo)
+4. Sugiere soluciones concretas para cada grupo
+Responde en español, de forma clara y accionable. Usa formato markdown.`
+  } else if (tipo === 'mejoras') {
+    logsFilter = '&nivel=in.(warn,info)'
+    grupo = 'B'
+    systemPrompt = `Eres un consultor de optimización de sistemas POS. Analiza los logs de uso y advertencias para:
+1. Identificar cuellos de botella y operaciones lentas
+2. Detectar funciones poco usadas o con problemas frecuentes
+3. Sugerir mejoras de UX y rendimiento
+4. Recomendar optimizaciones de base de datos
+Responde en español con recomendaciones priorizadas. Usa formato markdown.`
+  } else {
+    logsFilter = '&or=(categoria.eq.AUTH,categoria.eq.SISTEMA,nivel.eq.error)'
+    grupo = 'C'
+    systemPrompt = `Eres un auditor de seguridad especializado en sistemas POS. Analiza los logs para:
+1. Detectar intentos de acceso no autorizado
+2. Identificar patrones sospechosos (muchos errores de auth, IPs inusuales)
+3. Evaluar vulnerabilidades potenciales
+4. Recomendar medidas de seguridad
+Responde en español con nivel de riesgo (crítico/alto/medio/bajo). Usa formato markdown.`
+  }
+
+  const logsRes = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/system_logs?select=ts,nivel,origen,categoria,mensaje,endpoint,usuario_nombre,meta&order=ts.desc&limit=150${logsFilter}`,
+    { headers: h }
+  )
+  if (!logsRes.ok) return jsonError('Error leyendo logs para análisis', 500, request)
+  const logs = await logsRes.json()
+
+  if (!logs.length) {
+    return json({ tipo, resultado: 'No hay logs suficientes para análisis. El sistema necesita más datos de uso.', logs_count: 0 }, 200, request)
+  }
+
+  // Resumir logs para no exceder el contexto del LLM
+  const resumen = logs.map(l => `[${l.ts}] ${l.nivel} | ${l.origen} | ${l.categoria || '-'} | ${l.mensaje}${l.endpoint ? ` (${l.endpoint})` : ''}${l.usuario_nombre ? ` — ${l.usuario_nombre}` : ''}`).join('\n')
+
+  try {
+    const resultado = await groqFetch(env, grupo, [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: `Aquí están los ${logs.length} logs más recientes del sistema POS "Listo Cotizaciones" (Construacero Carabobo):\n\n${resumen}` },
+    ], { maxTokens: 3000 })
+
+    // Guardar resultado en cache
+    await fetch(`${env.SUPABASE_URL}/rest/v1/system_log_analysis`, {
+      method: 'POST',
+      headers: { ...h, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ tipo, resultado, logs_count: logs.length }),
+    }).catch(() => {})
+
+    return json({ tipo, resultado, logs_count: logs.length, modelo: 'llama-3.3-70b-versatile' }, 200, request)
+  } catch (e) {
+    await logToSystem(env, { nivel: 'error', origen: 'worker', categoria: 'SISTEMA', mensaje: `Error en análisis AI (${tipo}): ${e.message}`, stack: e.stack })
+    return jsonError(`Error en análisis AI: ${e.message}`, 500, request)
+  }
+}
+
+// DELETE /api/admin/logs/purge — limpiar logs > 90 días
+async function handlePurgeLogs(request, env) {
+  const user = await verifyAuth(request, env)
+  if (!user?.operator_id) return jsonError('No autenticado', 401, request)
+  const isSup = await verifySupervisor(user.operator_id, env)
+  if (!isSup) return jsonError('Solo supervisores', 403, request)
+
+  const h = {
+    apikey: env.SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+  }
+
+  const corte = new Date(Date.now() - 90 * 86400000).toISOString()
+  const res = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/system_logs?ts=lt.${corte}`,
+    { method: 'DELETE', headers: { ...h, Prefer: 'return=representation' } }
+  )
+
+  if (!res.ok) return jsonError('Error purgando logs', 500, request)
+  const deleted = await res.json()
+
+  return json({ ok: true, eliminados: deleted.length }, 200, request)
 }

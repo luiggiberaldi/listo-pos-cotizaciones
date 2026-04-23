@@ -1,4 +1,5 @@
 import React from 'react'
+import { logClientError } from '../../utils/errorLogger'
 
 export class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -10,8 +11,17 @@ export class ErrorBoundary extends React.Component {
     return { hasError: true, error }
   }
 
-  componentDidCatch() {
-    // Error capturado por el boundary — se muestra UI de fallback
+  componentDidCatch(error, errorInfo) {
+    // Enviar error al sistema de logs persistente
+    logClientError({
+      mensaje: error?.message || 'Error desconocido en render',
+      stack: error?.stack || '',
+      categoria: 'RENDER',
+      meta: {
+        componentStack: errorInfo?.componentStack?.slice(0, 1000) || '',
+        url: window.location.href,
+      },
+    })
   }
 
   render() {

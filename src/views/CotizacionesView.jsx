@@ -27,16 +27,18 @@ import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../utils/format'
 import { showToast } from '../components/ui/Toast'
 import PageHeader from '../components/ui/PageHeader'
 import Pagination from '../components/ui/Pagination'
+import { OnboardingSequence } from '../components/ui/OnboardingTooltip'
+import { getAction } from '../utils/cotizacionActions'
 
 // ─── Filtros de estado ────────────────────────────────────────────────────────
 const ESTADOS_FILTRO = [
   { valor: '',          label: 'Todas' },
   { valor: 'borrador',  label: 'Borradores' },
   { valor: 'enviada',   label: 'Enviadas' },
-  { valor: 'aceptada',  label: 'Aceptadas' },
-  { valor: 'rechazada', label: 'Rechazadas' },
+  { valor: 'aceptada',  label: 'Aprobadas' },
+  { valor: 'rechazada', label: 'No aceptadas' },
   { valor: 'vencida',   label: 'Vencidas' },
-  { valor: 'anulada',   label: 'Anuladas' },
+  { valor: 'anulada',   label: 'Canceladas' },
 ]
 
 function SkeletonCotizaciones() {
@@ -326,6 +328,8 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
   const [cotizacionAReciclar, setCotizacionAReciclar] = useState(null)
   const [vendedorReciclar, setVendedorReciclar] = useState('')
   const [cotizacionDetalle, setCotizacionDetalle] = useState(null)
+  const [cotizacionAAceptar, setCotizacionAAceptar] = useState(null)
+  const [cotizacionARechazar, setCotizacionARechazar] = useState(null)
 
   const { data: cotizaciones = [], isLoading, isError, refetch } = useCotizaciones({ estado: estadoFiltro })
   const { data: vendedores = [] } = useVendedores()
@@ -389,6 +393,26 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
     setVendedorReciclar(cot.vendedor_id || '')
   }
 
+  // Interceptar cambio de estado para pedir confirmación
+  function handleCambiarEstado(id, estado, numero, clienteNombre, totalUsd, vendedorId) {
+    const payload = { id, estado, numero, clienteNombre, totalUsd, vendedorId }
+    if (estado === 'aceptada') setCotizacionAAceptar(payload)
+    else if (estado === 'rechazada') setCotizacionARechazar(payload)
+    else cambiarEstado.mutate(payload)
+  }
+
+  async function confirmarAceptar() {
+    if (!cotizacionAAceptar) return
+    await cambiarEstado.mutateAsync(cotizacionAAceptar)
+    setCotizacionAAceptar(null)
+  }
+
+  async function confirmarRechazar() {
+    if (!cotizacionARechazar) return
+    await cambiarEstado.mutateAsync(cotizacionARechazar)
+    setCotizacionARechazar(null)
+  }
+
   // Al hacer click en "editar": si es borrador → editar directo; si no → versionar
   function handleEditar(cot) {
     if (cot.estado === 'borrador') {
@@ -415,6 +439,9 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
           </div>
         }
       />
+
+      {/* Onboarding tips por rol */}
+      <OnboardingSequence rol={perfil?.rol} page="/cotizaciones" />
 
       {/* Filtros: fila 1 — tabs de estado (scroll horizontal) */}
       <div className="overflow-x-auto scrollbar-hide -mx-1 px-1">
@@ -482,7 +509,7 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
                 cotizacion={c}
                 onEditar={handleEditar}
                 onAnular={setCotizacionAAnular}
-                onCambiarEstado={(id, estado, numero, clienteNombre, totalUsd, vendedorId) => cambiarEstado.mutate({ id, estado, numero, clienteNombre, totalUsd, vendedorId })}
+                onCambiarEstado={handleCambiarEstado}
                 onDespachar={setCotizacionADespachar}
                 onReciclar={abrirReciclar}
                 tasa={tasaEfectiva}
@@ -517,15 +544,39 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
         tasa={tasaEfectiva}
       />
 
-      {/* Confirm anular */}
+      {/* Confirm anular — mensaje diferente según rol */}
       <ConfirmModal
         isOpen={!!cotizacionAAnular}
         onClose={() => setCotizacionAAnular(null)}
         onConfirm={confirmarAnular}
-        title="¿Anular cotización?"
-        message={`La cotización quedará anulada y no podrá editarse.\nEsta acción no se puede deshacer.`}
-        confirmText="Sí, anular"
-        variant="danger"
+        title={getAction('anular', perfil?.rol).confirmTitle || '¿Anular cotización?'}
+        message={getAction('anular', perfil?.rol).confirmMessage || 'Esta acción no se puede deshacer.'}
+        confirmText={getAction('anular', perfil?.rol).confirmText || 'Sí, anular'}
+        variant={getAction('anular', perfil?.rol).variant || 'danger'}
+      />
+
+      {/* Confirm aprobar cotización */}
+      <ConfirmModal
+        isOpen={!!cotizacionAAceptar}
+        onClose={() => setCotizacionAAceptar(null)}
+        onConfirm={confirmarAceptar}
+        title={getAction('aceptar', 'supervisor').confirmTitle}
+        message={cotizacionAAceptar ? `COT-${String(cotizacionAAceptar.numero).padStart(5, '0')}${cotizacionAAceptar.clienteNombre ? ` — ${cotizacionAAceptar.clienteNombre}` : ''}` : ''}
+        details={getAction('aceptar', 'supervisor').confirmMessage}
+        confirmText={getAction('aceptar', 'supervisor').confirmText}
+        variant="success"
+      />
+
+      {/* Confirm rechazar cotización */}
+      <ConfirmModal
+        isOpen={!!cotizacionARechazar}
+        onClose={() => setCotizacionARechazar(null)}
+        onConfirm={confirmarRechazar}
+        title={getAction('rechazar', 'supervisor').confirmTitle}
+        message={cotizacionARechazar ? `COT-${String(cotizacionARechazar.numero).padStart(5, '0')}${cotizacionARechazar.clienteNombre ? ` — ${cotizacionARechazar.clienteNombre}` : ''}` : ''}
+        details={getAction('rechazar', 'supervisor').confirmMessage}
+        confirmText={getAction('rechazar', 'supervisor').confirmText}
+        variant="warning"
       />
 
       {/* Modal despachar con resumen */}

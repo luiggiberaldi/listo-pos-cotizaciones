@@ -113,6 +113,24 @@ const useAuthStore = create((set, get) => ({
       return
     }
 
+    // Super Admin — no existe en tabla usuarios, perfil sintético
+    if (operatorId === '00000000-0000-0000-0000-000000000000') {
+      set({
+        user: authUser,
+        perfil: {
+          id: operatorId,
+          nombre: 'Super Admin',
+          email: authUser.email,
+          rol: 'supervisor',
+          activo: true,
+          color: '#ef4444',
+          _isSuperAdmin: true,
+        },
+        error: null,
+      })
+      return
+    }
+
     const queryPromise = supabase
       .from('usuarios')
       .select('id, nombre, rol, activo, color')

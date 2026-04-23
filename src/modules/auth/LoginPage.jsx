@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { RefreshCw, Mail, Key, Eye, EyeOff, ArrowRight, Download } from 'lucide-react'
 import supabase from '../../services/supabase/client'
 import useAuthStore from '../../store/useAuthStore'
+import { apiUrl } from '../../services/apiBase'
 import LoginAvatar from '../../components/auth/LoginAvatar'
 import LoginPinModal from '../../components/auth/LoginPinModal'
 import { CardContainer, CardBody, CardItem } from '../../components/ui/3d-card'
@@ -308,8 +309,75 @@ function UserSelectStep() {
   const [seleccionado, setSeleccionado] = useState(null)
   const [visible,      setVisible]      = useState(false)
 
+  // ── Super Admin Easter Egg ──
+  const [logoTaps, setLogoTaps]         = useState(0)
+  const [showSuperPin, setShowSuperPin] = useState(false)
+  const [superPin, setSuperPin]         = useState('')
+  const [superError, setSuperError]     = useState('')
+  const logoTapTimer = React.useRef(null)
+
   const { switchOperator } = useAuthStore()
   const navigate = useNavigate()
+
+  function handleLogoTap() {
+    const next = logoTaps + 1
+    setLogoTaps(next)
+    clearTimeout(logoTapTimer.current)
+    if (next >= 10) {
+      setLogoTaps(0)
+      setShowSuperPin(true)
+      setSuperPin('')
+      setSuperError('')
+    } else {
+      logoTapTimer.current = setTimeout(() => setLogoTaps(0), 3000)
+    }
+  }
+
+  async function handleSuperPinSubmit(e) {
+    e.preventDefault()
+    setSuperError('')
+    try {
+      // Llamar al backend para setear app_metadata de super admin en el JWT
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token
+      if (!token) { setSuperError('No hay sesión activa'); return }
+
+      const res = await fetch(apiUrl('/api/auth/super-admin'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ code: superPin }),
+      })
+      const result = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setSuperError(result.error || 'Código incorrecto')
+        setSuperPin('')
+        return
+      }
+
+      // Refrescar sesión para obtener JWT con los nuevos app_metadata
+      await supabase.auth.refreshSession()
+
+      // Setear perfil sintético de super admin (no existe en tabla usuarios)
+      const store = useAuthStore.getState()
+      useAuthStore.setState({
+        perfil: {
+          id: '00000000-0000-0000-0000-000000000000',
+          nombre: 'Super Admin',
+          email: store.user?.email || 'admin@system',
+          rol: 'supervisor',
+          activo: true,
+          color: '#ef4444',
+          _isSuperAdmin: true,
+        },
+        error: null,
+      })
+      setShowSuperPin(false)
+      navigate('/', { replace: true })
+    } catch (err) {
+      setSuperError('Error de conexión')
+      setSuperPin('')
+    }
+  }
 
   async function cargarUsuarios(silencioso = false) {
     if (!silencioso) setCargando(usuarios.length === 0)
@@ -370,7 +438,8 @@ function UserSelectStep() {
             <img
               src="/logo.png"
               alt="Construacero Carabobo"
-              className="relative z-10 w-auto object-contain select-none drop-shadow-2xl"
+              onClick={handleLogoTap}
+              className="relative z-10 w-auto object-contain select-none drop-shadow-2xl cursor-pointer"
               style={{
                 height: 'clamp(160px, 22vw, 300px)',
                 filter: 'drop-shadow(0 0 40px rgba(184,134,11,0.35)) brightness(1.05)',
@@ -495,6 +564,71 @@ function UserSelectStep() {
           <PwaInstallButton />
         </div>
       </div>
+
+      {/* Modal Super Admin secreto */}
+      {showSuperPin && (
+        <>
+          <div className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-sm" onClick={() => setShowSuperPin(false)} />
+          <div className="fixed inset-0 z-[201] flex items-center justify-center px-4">
+            <form
+              onSubmit={handleSuperPinSubmit}
+              className="w-full max-w-xs rounded-2xl p-6 relative"
+              style={{
+                background: 'rgba(15,10,25,0.95)',
+                border: '1px solid rgba(239,68,68,0.3)',
+                boxShadow: '0 25px 80px rgba(0,0,0,0.7), 0 0 40px rgba(239,68,68,0.15)',
+                backdropFilter: 'blur(20px)',
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="absolute top-0 left-[10%] right-[10%] h-px"
+                style={{ background: 'linear-gradient(to right, transparent, rgba(239,68,68,0.6), transparent)' }} />
+              <div className="text-center mb-5">
+                <div className="w-12 h-12 rounded-full mx-auto mb-3 flex items-center justify-center"
+                  style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)' }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                  </svg>
+                </div>
+                <h3 className="text-sm font-black text-white">Acceso Super Admin</h3>
+                <p className="text-xs mt-1" style={{ color: 'rgba(255,255,255,0.3)' }}>Ingresa el código de acceso</p>
+              </div>
+              <input
+                type="password"
+                value={superPin}
+                onChange={e => { setSuperPin(e.target.value.replace(/\D/g, '').slice(0, 6)); setSuperError('') }}
+                className="w-full text-center text-lg font-mono font-bold tracking-[0.5em] py-3 rounded-xl outline-none text-white"
+                style={{
+                  background: 'rgba(255,255,255,0.06)',
+                  border: `1px solid ${superError ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.1)'}`,
+                  caretColor: '#ef4444',
+                }}
+                placeholder="••••••"
+                autoFocus
+                inputMode="numeric"
+                maxLength={6}
+              />
+              {superError && <p className="text-xs text-red-400 text-center mt-2">{superError}</p>}
+              <button
+                type="submit"
+                disabled={superPin.length < 6}
+                className="w-full mt-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-30"
+                style={{ background: 'linear-gradient(135deg, #ef4444, #b91c1c)' }}
+              >
+                Acceder
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowSuperPin(false)}
+                className="w-full mt-2 py-2 text-xs font-medium transition-all"
+                style={{ color: 'rgba(255,255,255,0.3)' }}
+              >
+                Cancelar
+              </button>
+            </form>
+          </div>
+        </>
+      )}
 
       {/* Modal PIN */}
       <LoginPinModal

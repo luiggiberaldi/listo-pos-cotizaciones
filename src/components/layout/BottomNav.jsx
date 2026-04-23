@@ -3,7 +3,7 @@
 import { NavLink } from 'react-router-dom'
 import { LayoutDashboard, FileText, Users, Package, MoreHorizontal } from 'lucide-react'
 import { useState } from 'react'
-import { PackageCheck, Truck, DollarSign, BarChart3, Settings } from 'lucide-react'
+import { PackageCheck, Truck, DollarSign, BarChart3, Settings, AlertCircle } from 'lucide-react'
 
 const BOTTOM_ITEMS = [
   { path: '/', label: 'Inicio', icon: LayoutDashboard },
@@ -18,6 +18,7 @@ const MORE_ITEMS = [
   { path: '/comisiones', label: 'Comisiones', icon: DollarSign },
   { path: '/reportes', label: 'Reportes', icon: BarChart3 },
   { path: '/configuracion', label: 'Configuración', icon: Settings },
+  { path: '/logs', label: 'System Logs', icon: AlertCircle, supervisorOnly: true },
 ]
 
 export default function BottomNav({ esSupervisor }) {
@@ -36,7 +37,8 @@ export default function BottomNav({ esSupervisor }) {
           style={{ background: '#0f1f3c', border: '1px solid rgba(255,255,255,0.1)' }}>
           <div className="grid grid-cols-3 gap-1 p-3">
             {MORE_ITEMS.filter(item => {
-              if (!esSupervisor && ['/reportes', '/auditoria', '/configuracion'].includes(item.path)) return false
+              if (!esSupervisor && ['/reportes', '/auditoria', '/configuracion', '/logs'].includes(item.path)) return false
+              if (item.supervisorOnly && !esSupervisor) return false
               return true
             }).map(({ path, label, icon: Icon }) => (
               <NavLink

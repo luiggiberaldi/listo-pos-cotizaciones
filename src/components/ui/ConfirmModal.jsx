@@ -46,6 +46,7 @@ export default function ConfirmModal({
   onConfirm,
   title = '¿Estás seguro?',
   message = '',
+  details = '',
   confirmText = 'Confirmar',
   cancelText = 'Cancelar',
   variant = 'danger',
@@ -117,8 +118,16 @@ export default function ConfirmModal({
           <h3 className="text-lg font-black text-slate-800 text-center mb-2">{title}</h3>
 
           {message && (
-            <p className="text-sm text-slate-500 text-center leading-relaxed mb-6 whitespace-pre-line">{message}</p>
+            typeof message === 'string'
+              ? <p className="text-sm text-slate-500 text-center leading-relaxed mb-2 whitespace-pre-line">{message}</p>
+              : <div className="text-sm text-slate-500 text-center leading-relaxed mb-2">{message}</div>
           )}
+
+          {details && (
+            <p className="text-xs text-slate-400 text-center leading-relaxed mb-4">{details}</p>
+          )}
+
+          {!details && message && <div className="mb-4" />}
 
           {/* Actions */}
           <div className="flex gap-3">

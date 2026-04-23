@@ -95,4 +95,53 @@ export const adminAPI = {
     if (!res.ok) throw new Error(data.error || `Error ${res.status}`)
     return data.resumen
   },
+
+  // ── System Logs ──────────────────────────────────────────────────────
+  getLogs: (params = {}) => {
+    const qs = new URLSearchParams()
+    if (params.page) qs.set('page', params.page)
+    if (params.limit) qs.set('limit', params.limit)
+    if (params.nivel) qs.set('nivel', params.nivel)
+    if (params.origen) qs.set('origen', params.origen)
+    if (params.categoria) qs.set('categoria', params.categoria)
+    if (params.desde) qs.set('desde', params.desde)
+    if (params.hasta) qs.set('hasta', params.hasta)
+    return adminFetch(`logs?${qs.toString()}`, 'GET')
+  },
+
+  getLogStats: () => adminFetch('logs/stats', 'GET'),
+
+  async downloadLogs() {
+    const token = await getAuthToken()
+    if (!token) throw new Error('No autenticado')
+
+    const res = await fetch(apiUrl('/api/admin/logs/download'), {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+
+    if (!res.ok) {
+      const text = await res.text()
+      let data = {}
+      try { data = JSON.parse(text) } catch {}
+      throw new Error(data.error || `Error ${res.status}`)
+    }
+
+    const blob = await res.blob()
+    const disposition = res.headers.get('Content-Disposition') || ''
+    const match = disposition.match(/filename="([^"]+)"/)
+    const filename = match ? match[1] : `system-logs-${new Date().toISOString().slice(0, 10)}.json`
+
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+
+    return filename
+  },
+
+  analyzeLogs: (tipo) => adminFetch('logs/analyze', 'POST', { tipo }),
+
+  purgeLogs: () => adminFetch('logs/purge', 'DELETE'),
 }
