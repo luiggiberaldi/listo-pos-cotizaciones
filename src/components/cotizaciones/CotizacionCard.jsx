@@ -1,6 +1,6 @@
 // src/components/cotizaciones/CotizacionCard.jsx
 import { useState, memo } from 'react'
-import { FileText, User, Calendar, Pencil, Ban, CheckCircle, XCircle, FileDown, MessageCircle, Loader2, Truck, ChevronDown, DollarSign, RefreshCw, Eye, Clock, PackageCheck, MoreHorizontal } from 'lucide-react'
+import { FileText, User, Calendar, Pencil, Ban, CheckCircle, XCircle, FileDown, MessageCircle, Loader2, Truck, ChevronDown, DollarSign, RefreshCw, Eye, Clock, PackageCheck, MoreHorizontal, AlertTriangle } from 'lucide-react'
 import EstadoBadge from './EstadoBadge'
 import QuoteFlowIndicator from './QuoteFlowIndicator'
 import MobileActionSheet from './MobileActionSheet'
@@ -103,6 +103,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
   const despachoAnulado = despacho?.estado === 'anulada'
   const canEdit = esBorrador
   const esPropietario = cotizacion.vendedor_id === perfil?.id
+  const clienteAjeno = cotizacion.cliente?.vendedor_id && cotizacion.cliente.vendedor_id !== cotizacion.vendedor_id
   const canVersion = !esBorrador && !despachoAnulado && ['enviada', 'aceptada', 'rechazada'].includes(cotizacion.estado) && (!esSupervisor || esPropietario)
   const canPdf = cotizacion.estado !== 'borrador' && cotizacion.estado !== 'anulada'
   const canWhatsApp = !despachoAnulado && (cotizacion.estado === 'enviada' || cotizacion.estado === 'aceptada')
@@ -169,8 +170,14 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         <div className="relative z-10 min-w-0">
           <p className="font-black text-white text-sm font-mono leading-tight drop-shadow">{numDisplay}</p>
           {cotizacion.cliente?.nombre && (
-            <p className="text-[11px] font-medium truncate max-w-[120px] sm:max-w-[160px]" style={{ color: 'rgba(255,255,255,0.75)' }}>
+            <p className="text-[11px] font-semibold truncate max-w-[120px] sm:max-w-[160px] flex items-center gap-1" style={{ color: 'rgba(255,255,255,0.85)' }}>
+              <User size={10} className="shrink-0" />
               {cotizacion.cliente.nombre}
+              {clienteAjeno && (
+                <span title="Cliente de otro vendedor">
+                  <AlertTriangle size={10} className="shrink-0 text-amber-300" />
+                </span>
+              )}
             </p>
           )}
         </div>
@@ -194,6 +201,12 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
 
       {/* ── Fechas ── */}
       <div className="px-4 pt-3 pb-2">
+        {clienteAjeno && (
+          <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 mb-2">
+            <AlertTriangle size={12} className="shrink-0" />
+            Cliente de otro vendedor
+          </div>
+        )}
         <div className="flex items-center gap-3 text-xs text-slate-400">
           <span className="flex items-center gap-1">
             <Calendar size={11} />
