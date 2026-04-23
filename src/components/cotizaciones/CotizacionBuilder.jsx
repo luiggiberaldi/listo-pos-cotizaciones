@@ -943,26 +943,21 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
         const precios = preciosMap[it.productoId]
         const tieneMultiprecios = precios && [precios.p1, precios.p2, precios.p3].filter(v => v != null && Number(v) > 0).length > 1
         return (
-          <div key={it._key} className="px-3 sm:px-4 py-2.5 space-y-2 group">
-            <div className="flex items-center gap-2 sm:gap-3">
-            <button type="button" onClick={() => onEliminar(idx)}
-              className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-red-50 hover:bg-red-100 flex items-center justify-center shrink-0 transition-colors active:scale-95">
-              <Trash2 size={14} className="text-red-400" />
-            </button>
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] sm:text-xs font-bold text-slate-700 leading-snug line-clamp-2">{it.nombreSnap}</p>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="text-[10px] sm:text-[11px] font-bold text-emerald-600 bg-emerald-50 px-1 rounded">{fmtUsd(it.precioUnitUsd)}</span>
-                <span className="text-[10px] text-slate-400">{it.unidadSnap}</span>
-              </div>
+          <div key={it._key} className="px-3 sm:px-4 py-2 group">
+            {/* Fila 1: nombre completo + total línea */}
+            <div className="flex items-start justify-between gap-2 mb-1">
+              <p className="flex-1 text-[10px] sm:text-[11px] font-bold text-slate-700 leading-snug line-clamp-2">{it.nombreSnap}</p>
+              <span className="text-[11px] sm:text-xs font-black text-slate-800 shrink-0">{fmtUsd(linea)}</span>
             </div>
-            <div className="flex flex-col items-end gap-1.5 shrink-0">
-              <span className="text-xs sm:text-sm font-black text-slate-800">{fmtUsd(linea)}</span>
-              <div className="flex items-center bg-slate-50 rounded-lg p-0.5 border border-slate-100">
+            {/* Fila 2: precio unitario + unidad + controles */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[9px] sm:text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1 rounded">{fmtUsd(it.precioUnitUsd)}</span>
+              <span className="text-[9px] text-slate-400">{it.unidadSnap}</span>
+              <div className="flex items-center bg-slate-50 rounded-lg border border-slate-100 overflow-hidden ml-auto">
                 <button type="button"
                   onClick={() => it.cantidad <= 1 ? onEliminar(idx) : onCambiar(idx, 'cantidad', Math.max(0.01, it.cantidad - 1))}
-                  className="min-w-[44px] min-h-[44px] w-11 h-11 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors rounded-l-md active:bg-slate-200">
-                  <Minus size={14} strokeWidth={3} />
+                  className="w-8 h-7 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors active:scale-90">
+                  <Minus size={12} strokeWidth={3} />
                 </button>
                 <input
                   type="text" inputMode="decimal"
@@ -978,18 +973,21 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
                     const v = parseFloat(String(e.target.value).replace(',', '.'))
                     onCambiar(idx, 'cantidad', (!isNaN(v) && v > 0) ? v : 1)
                   }}
-                  className="w-10 sm:w-12 h-11 text-center text-xs font-black text-slate-700 bg-white border-x border-slate-100 outline-none"
+                  className="w-8 h-7 text-center text-[11px] font-black text-slate-700 bg-white border-x border-slate-100 outline-none"
                 />
                 <button type="button"
                   onClick={() => onCambiar(idx, 'cantidad', it.cantidad + 1)}
-                  className="min-w-[44px] min-h-[44px] w-11 h-11 flex items-center justify-center text-slate-400 hover:text-emerald-500 transition-colors rounded-r-md active:bg-slate-200">
+                  className="w-8 h-7 flex items-center justify-center text-slate-400 hover:text-emerald-500 transition-colors active:scale-90">
                   <Plus size={12} strokeWidth={3} />
                 </button>
               </div>
-            </div>
+              <button type="button" onClick={() => onEliminar(idx)}
+                className="w-7 h-7 rounded-md bg-red-50 hover:bg-red-100 flex items-center justify-center shrink-0 transition-colors active:scale-95">
+                <Trash2 size={12} className="text-red-400" />
+              </button>
             </div>
             {tieneMultiprecios && (
-              <div className="grid gap-2 pl-10" style={{ gridTemplateColumns: `repeat(${[precios.p1, precios.p2, precios.p3].filter(v => v != null && Number(v) > 0).length}, 1fr)` }}>
+              <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${[precios.p1, precios.p2, precios.p3].filter(v => v != null && Number(v) > 0).length}, 1fr)` }}>
                 {[{ label: 'P1', value: precios.p1 }, { label: 'P2', value: precios.p2 }, { label: 'P3', value: precios.p3 }]
                   .filter(n => n.value != null && Number(n.value) > 0)
                   .map(n => {
