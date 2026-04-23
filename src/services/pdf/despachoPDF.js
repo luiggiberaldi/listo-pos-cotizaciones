@@ -164,12 +164,17 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const vendedorTlf = despacho.vendedor?.telefono ? ` — ${despacho.vendedor.telefono}` : ''
   const clienteRows = [
     [{ label: 'Cliente', val: cliente.nombre || '—' },         { label: 'R.I.F / Cédula', val: cliente.rif_cedula || '—' }],
-    [{ label: 'Teléfono', val: cliente.telefono || '—' },      { label: 'Vendedor', val: (despacho.vendedor?.nombre || '—') + vendedorTlf }],
+    [{ label: 'Teléfono', val: cliente.telefono || '—' },      { label: 'Vendedor', val: (despacho.vendedor?.nombre || '—') + vendedorTlf, highlight: true }],
     [{ label: 'Dirección Fiscal', val: cliente.direccion || '—' }],
   ]
 
   doc.setFontSize(9.5)
   clienteRows.forEach(row => {
+    // Si algún campo de la fila tiene highlight, dibujar fondo gris
+    if (row.some(item => item.highlight)) {
+      doc.setFillColor(235, 235, 235)
+      doc.rect(MARGIN, y - 3.5, CONTENT_W, 8, 'F')
+    }
     row.forEach((item, colIdx) => {
       const baseX = colIdx === 0 ? MARGIN : col2X
       const lineEndX = row.length === 1 ? PAGE_W - MARGIN : (colIdx === 0 ? MARGIN + halfW : PAGE_W - MARGIN)
