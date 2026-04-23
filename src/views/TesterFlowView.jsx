@@ -78,6 +78,7 @@ const TEST = {
 
 // ─── Step definitions ─────────────────────────────────────────────────────────
 const STEPS = [
+  { id: 'pre_cleanup', label: '0. Limpiar datos residuales', group: 'Limpieza' },
   { id: 'create_product', label: '1. Crear producto', group: 'Inventario' },
   { id: 'assert_product', label: '2. Assert: producto en BD con valores exactos', group: 'Inventario' },
   { id: 'assert_kardex_ingreso', label: '3. Assert: kardex tiene ingreso 0→100', group: 'Inventario' },
@@ -194,6 +195,49 @@ export default function TesterFlowView() {
   // ═══════════════════════════════════════════════════════════════════════════
   // STEP IMPLEMENTATIONS
   // ═══════════════════════════════════════════════════════════════════════════
+
+  async function stepPreCleanup(id) {
+    addLog(id, 'Buscando datos residuales de corridas anteriores...')
+
+    // 1. Buscar producto test por código
+    const { data: oldProds } = await supabase.from('productos').select('id').eq('codigo', TEST.producto.codigo)
+    if (oldProds && oldProds.length > 0) {
+      for (const p of oldProds) {
+        // Borrar items de cotizaciones que referencien este producto
+        const { data: oldItems } = await supabase.from('cotizacion_items').select('cotizacion_id').eq('producto_id', p.id)
+        if (oldItems && oldItems.length > 0) {
+          const cotIds = [...new Set(oldItems.map(i => i.cotizacion_id))]
+          for (const cotId of cotIds) {
+            await supabase.from('cuentas_cobrar').delete().eq('cotizacion_id', cotId)
+            await supabase.from('comisiones').delete().eq('cotizacion_id', cotId)
+            await supabase.from('notas_despacho').delete().eq('cotizacion_id', cotId)
+            await supabase.from('cotizacion_items').delete().eq('cotizacion_id', cotId)
+            await supabase.from('cotizaciones').delete().eq('id', cotId)
+          }
+          addLog(id, `  Eliminadas ${cotIds.length} cotizaciones residuales`)
+        }
+        await supabase.from('inventario_movimientos').delete().eq('producto_id', p.id)
+        await supabase.from('productos').delete().eq('id', p.id)
+      }
+      addLog(id, `  Eliminados ${oldProds.length} productos residuales (${TEST.producto.codigo})`)
+    }
+
+    // 2. Buscar cliente test por rif_cedula
+    const { data: oldClients } = await supabase.from('clientes').select('id').eq('rif_cedula', TEST.cliente.rif_cedula)
+    if (oldClients && oldClients.length > 0) {
+      for (const c of oldClients) {
+        await supabase.from('cuentas_cobrar').delete().eq('cliente_id', c.id)
+        await supabase.from('clientes').update({ saldo_pendiente: 0 }).eq('id', c.id)
+        await supabase.from('clientes').delete().eq('id', c.id)
+      }
+      addLog(id, `  Eliminados ${oldClients.length} clientes residuales (${TEST.cliente.rif_cedula})`)
+    }
+
+    if ((!oldProds || oldProds.length === 0) && (!oldClients || oldClients.length === 0)) {
+      addLog(id, '  No se encontraron datos residuales')
+    }
+    addLog(id, 'Pre-limpieza completa', 'success')
+  }
 
   async function stepCreateProduct(id) {
     addLog(id, `RPC crear_producto_con_kardex(codigo=${TEST.producto.codigo}, stock=${TEST.producto.stock_inicial})`)
@@ -733,6 +777,7 @@ export default function TesterFlowView() {
 
   // ─── Step map ─────────────────────────────────────────────────────────────
   const STEP_FNS = {
+    pre_cleanup: stepPreCleanup,
     create_product: stepCreateProduct,
     assert_product: stepAssertProduct,
     assert_kardex_ingreso: stepAssertKardexIngreso,
