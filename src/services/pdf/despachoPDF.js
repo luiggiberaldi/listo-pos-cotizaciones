@@ -401,7 +401,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   if (transportista) {
     if (y > PAGE_H - 60) { doc.addPage(); y = MARGIN }
 
-    const col6W = (CONTENT_W - 10) / 6
+    const col7W = (CONTENT_W - 12) / 7
 
     // Cabecera gris compacta
     doc.setFillColor(240, 240, 240)
@@ -412,17 +412,18 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     doc.text('DATOS DEL CHOFER Y DEL VEHÍCULO', MARGIN + 2, y + 4)
     y += 10
 
-    // Una sola fila con 6 campos
+    // Una sola fila con 7 campos
     const choferFields = [
       { label: 'CHOFER', val: transportista?.nombre || '' },
       { label: 'C.I.', val: transportista?.rif || '' },
-      { label: 'TELÉFONO', val: transportista?.telefono || '' },
+      { label: 'COLOR', val: transportista?.telefono || '' },
       { label: 'VEHÍCULO', val: transportista?.vehiculo || '' },
+      { label: 'PLACA', val: transportista?.zona_cobertura || '' },
       { label: 'PLACA CHUTO', val: transportista?.placa_chuto || '' },
       { label: 'PLACA BATEA', val: transportista?.placa_batea || '' },
     ]
     choferFields.forEach((f, i) => {
-      const fx = MARGIN + i * (col6W + 2)
+      const fx = MARGIN + i * (col7W + 2)
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(7)
       doc.setTextColor(...C_DARK)
@@ -432,7 +433,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
       if (f.val) doc.text(f.val, fx, y + 4)
       doc.setLineWidth(0.2)
       doc.setDrawColor(150, 150, 150)
-      doc.line(fx, y + 5.5, fx + col6W, y + 5.5)
+      doc.line(fx, y + 5.5, fx + col7W, y + 5.5)
     })
     y += 8
   }

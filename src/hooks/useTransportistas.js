@@ -14,7 +14,7 @@ export function useTransportistas({ soloActivos = true } = {}) {
     queryFn: async () => {
       let q = supabase
         .from('transportistas')
-        .select('id, nombre, rif, telefono, zona_cobertura, tarifa_base, vehiculo, placa_chuto, placa_batea, activo')
+        .select('id, nombre, rif, telefono, zona_cobertura, vehiculo, placa_chuto, placa_batea, activo')
         .order('nombre')
       if (soloActivos) q = q.eq('activo', true)
       const { data, error } = await q
@@ -37,7 +37,6 @@ export function useCrearTransportista() {
         rif:            campos.rif?.trim()           || null,
         telefono:       campos.telefono?.trim()       || null,
         zona_cobertura: campos.zona_cobertura?.trim() || null,
-        tarifa_base:    Number(campos.tarifa_base)    || 0,
         vehiculo:       campos.vehiculo?.trim()       || null,
         placa_chuto:    campos.placa_chuto?.trim()    || null,
         placa_batea:    campos.placa_batea?.trim()    || null,
@@ -58,7 +57,6 @@ export function useActualizarTransportista() {
         rif:            campos.rif?.trim()           || null,
         telefono:       campos.telefono?.trim()       || null,
         zona_cobertura: campos.zona_cobertura?.trim() || null,
-        tarifa_base:    Number(campos.tarifa_base)    || 0,
         vehiculo:       campos.vehiculo?.trim()       || null,
         placa_chuto:    campos.placa_chuto?.trim()    || null,
         placa_batea:    campos.placa_batea?.trim()    || null,

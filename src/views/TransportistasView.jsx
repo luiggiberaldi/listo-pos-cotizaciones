@@ -1,7 +1,7 @@
 // src/views/TransportistasView.jsx
 // Gestión de transportistas — solo supervisores pueden crear/editar/desactivar
 import { useState } from 'react'
-import { Truck, Plus, Pencil, Ban, RefreshCw, MapPin, Phone, DollarSign } from 'lucide-react'
+import { Truck, Plus, Pencil, Ban, RefreshCw } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import {
   useTransportistas,
@@ -19,9 +19,8 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
   const [campos, setCampos] = useState({
     nombre:         inicial.nombre         ?? '',
     rif:            inicial.rif            ?? '',
-    telefono:       inicial.telefono       ?? '',
-    zona_cobertura: inicial.zona_cobertura ?? '',
-    tarifa_base:    inicial.tarifa_base    ?? '',
+    telefono:       inicial.telefono       ?? '',  // repurposed as "color"
+    zona_cobertura: inicial.zona_cobertura ?? '',  // repurposed as "placa"
     vehiculo:       inicial.vehiculo       ?? '',
     placa_chuto:    inicial.placa_chuto    ?? '',
     placa_batea:    inicial.placa_batea    ?? '',
@@ -50,30 +49,24 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
             placeholder="Nombre del transportista" className={inputCls} disabled={cargando} />
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">RIF</label>
+          <label className="text-sm font-medium text-slate-700">Cédula / RIF</label>
           <input value={campos.rif} onChange={e => cambiar('rif', e.target.value)}
-            placeholder="J-00000000-0" className={inputCls} disabled={cargando} />
+            placeholder="V-00000000 / J-00000000-0" className={inputCls} disabled={cargando} />
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Teléfono</label>
+          <label className="text-sm font-medium text-slate-700">Color</label>
           <input value={campos.telefono} onChange={e => cambiar('telefono', e.target.value)}
-            placeholder="0414-000-0000" className={inputCls} disabled={cargando} />
-        </div>
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Zona de cobertura</label>
-          <input value={campos.zona_cobertura} onChange={e => cambiar('zona_cobertura', e.target.value)}
-            placeholder="Ej: Caracas y Miranda" className={inputCls} disabled={cargando} />
-        </div>
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Tarifa base (USD)</label>
-          <input type="number" min="0" step="0.01"
-            value={campos.tarifa_base} onChange={e => cambiar('tarifa_base', e.target.value)}
-            placeholder="0.00" className={inputCls} disabled={cargando} />
+            placeholder="Ej: Rojo, Blanco" className={inputCls} disabled={cargando} />
         </div>
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-slate-700">Vehículo</label>
           <input value={campos.vehiculo} onChange={e => cambiar('vehiculo', e.target.value)}
             placeholder="Ej: Mack Granite 2020" className={inputCls} disabled={cargando} />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-slate-700">Placa</label>
+          <input value={campos.zona_cobertura} onChange={e => cambiar('zona_cobertura', e.target.value)}
+            placeholder="Ej: AB123CD" className={inputCls} disabled={cargando} />
         </div>
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-slate-700">Placa chuto</label>
@@ -198,25 +191,23 @@ function TransportistaCard({ transportista, esSupervisor, onEditar, onDesactivar
       <div className="px-4 pb-3 mt-1 space-y-1.5">
         {transportista.telefono && (
           <div className="flex items-center gap-1.5 text-xs text-slate-500">
-            <Phone size={11} className="text-slate-400 shrink-0" />
+            <span className="font-medium text-slate-400">Color:</span>
             <span>{transportista.telefono}</span>
           </div>
         )}
-        {transportista.zona_cobertura && (
+        {transportista.vehiculo && (
           <div className="flex items-center gap-1.5 text-xs text-slate-500">
-            <MapPin size={11} className="text-slate-400 shrink-0" />
-            <span className="truncate">{transportista.zona_cobertura}</span>
+            <Truck size={11} className="text-slate-400 shrink-0" />
+            <span>{transportista.vehiculo}</span>
           </div>
         )}
-      </div>
-
-      {/* ── Tarifa ── */}
-      <div className="mx-4 mb-3 rounded-xl px-3.5 py-2.5 flex items-center justify-between mt-auto"
-        style={{ background: color + '10', border: `1px solid ${color}25` }}>
-        <span className="text-xs font-medium text-slate-500">Tarifa base</span>
-        <span className="text-base font-bold" style={{ color }}>
-          $ {Number(transportista.tarifa_base || 0).toFixed(2)}
-        </span>
+        {(transportista.zona_cobertura || transportista.placa_chuto || transportista.placa_batea) && (
+          <div className="flex items-center gap-1.5 text-xs text-slate-500 flex-wrap">
+            {transportista.zona_cobertura && <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded">{transportista.zona_cobertura}</span>}
+            {transportista.placa_chuto && <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded">Chuto: {transportista.placa_chuto}</span>}
+            {transportista.placa_batea && <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded">Batea: {transportista.placa_batea}</span>}
+          </div>
+        )}
       </div>
 
       {/* ── Acciones (solo supervisor) ── */}
