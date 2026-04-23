@@ -94,10 +94,12 @@ export default function ClienteRow({ cliente, onEditar, onDesactivar, onReasigna
             <ArrowRightLeft size={15} />
           </button>
         )}
-        <button onClick={() => onDesactivar(cliente)}
-          className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
-          <UserMinus size={15} />
-        </button>
+        {esSupervisor && (
+          <button onClick={() => onDesactivar(cliente)}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+            <UserMinus size={15} />
+          </button>
+        )}
       </div>
     </div>
   )

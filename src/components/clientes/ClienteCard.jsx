@@ -147,10 +147,12 @@ export default function ClienteCard({ cliente, onEditar, onDesactivar, onReasign
             Reasignar
           </button>
         )}
-        <button onClick={() => onDesactivar(cliente)} title="Desactivar cliente"
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 transition-colors ml-auto">
-          <UserMinus size={13} />
-        </button>
+        {esSupervisor && (
+          <button onClick={() => onDesactivar(cliente)} title="Desactivar cliente"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 transition-colors ml-auto">
+            <UserMinus size={13} />
+          </button>
+        )}
       </div>
     </div>
   )
