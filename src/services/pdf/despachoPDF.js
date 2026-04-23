@@ -441,11 +441,11 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     choferFields.forEach((f, i) => {
       const fx = MARGIN + i * (col7W + 2)
       doc.setFont('helvetica', 'normal')
-      doc.setFontSize(7)
+      doc.setFontSize(9)
       doc.setTextColor(...C_DARK)
       doc.text(`${f.label}:`, fx, fieldsY)
       doc.setFont('helvetica', 'bold')
-      doc.setFontSize(8)
+      doc.setFontSize(10)
       if (f.val) doc.text(f.val, fx, fieldsY + 4)
       doc.setLineWidth(0.2)
       doc.setDrawColor(150, 150, 150)
