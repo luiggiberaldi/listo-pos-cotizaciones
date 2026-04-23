@@ -214,10 +214,13 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(7)
     doc.setTextColor(...C_PRIMARY)
-    doc.text(`▌ ${cat.toUpperCase()}`, MARGIN + 2, y + 3.5)
+    // Indicador visual: rectángulo azul oscuro en vez de caracter Unicode
+    doc.setFillColor(...C_PRIMARY)
+    doc.rect(MARGIN + 2, y - 0.5, 1.5, 5, 'F')
+    doc.text(cat.toUpperCase(), MARGIN + 5.5, y + 3.5)
     doc.setFontSize(6)
     doc.setTextColor(...C_GRAY)
-    doc.text(`(${items.length})`, MARGIN + 4 + doc.getTextWidth(`▌ ${cat.toUpperCase()}`), y + 3.5)
+    doc.text(`(${items.length})`, MARGIN + 7 + doc.getTextWidth(cat.toUpperCase()), y + 3.5)
     y += 7.5
 
     // Filas de productos
