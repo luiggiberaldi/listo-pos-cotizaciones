@@ -528,41 +528,38 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
           {items.map((it, idx) => {
             const linea = mulR(it.cantidad, it.precioUnitUsd)
             return (
-              <div key={it._key} className="px-2.5 sm:px-3 py-2 sm:py-2.5 flex items-center gap-1.5 sm:gap-2 group hover:bg-slate-50/50 transition-colors">
-                {/* Icono — oculto en móvil chico */}
-                <div className="hidden sm:flex w-8 h-8 rounded-lg bg-slate-50 items-center justify-center shrink-0">
-                  <Package size={13} className="text-slate-300" />
+              <div key={it._key} className="px-2.5 sm:px-3 py-2 sm:py-2.5 group hover:bg-slate-50/50 transition-colors">
+                {/* Fila 1: nombre completo + precio línea */}
+                <div className="flex items-start gap-1.5 mb-1">
+                  <p className="flex-1 text-[10px] sm:text-[11px] font-bold text-slate-700 leading-snug line-clamp-2">{it.nombreSnap}</p>
+                  <span className="text-[11px] sm:text-xs font-bold text-slate-800 shrink-0">{fmtUsd(linea)}</span>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[11px] sm:text-xs font-bold text-slate-700 leading-tight line-clamp-2">{it.nombreSnap}</p>
-                  <div className="flex items-center gap-1 sm:gap-1.5 mt-0.5">
-                    <span className="text-[9px] sm:text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1 rounded">{fmtUsd(it.precioUnitUsd)}</span>
-                  </div>
-                </div>
-                <div className="flex items-center shrink-0">
-                  <div className="flex items-center bg-slate-50 rounded-lg border border-slate-100 overflow-hidden">
+                {/* Fila 2: precio unitario + controles cantidad */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] sm:text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1 rounded">{fmtUsd(it.precioUnitUsd)}</span>
+                  <span className="text-[8px] text-slate-400">{it.unidadSnap || 'und'}</span>
+                  <div className="flex items-center bg-slate-50 rounded-lg border border-slate-100 overflow-hidden ml-auto">
                     <button type="button"
                       onClick={() => it.cantidad <= 1 ? eliminarItem(idx) : cambiarItem(idx, 'cantidad', it.cantidad - 1)}
-                      className="min-w-[44px] min-h-[44px] w-11 h-11 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors active:scale-90">
-                      <Minus size={14} strokeWidth={3} />
+                      className="w-9 h-8 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors active:scale-90">
+                      <Minus size={13} strokeWidth={3} />
                     </button>
-                    <span className="w-8 sm:w-9 text-center text-xs font-black text-slate-700 border-x border-slate-100 py-1">{it.cantidad}</span>
+                    <span className="w-7 text-center text-[11px] font-black text-slate-700 border-x border-slate-100 py-0.5">{it.cantidad}</span>
                     <button type="button"
                       onClick={() => {
                         const max = stockDisponible(it.productoId)
                         if (it.cantidad >= max) { showToast(`Stock máximo: ${max}`, 'error'); return }
                         cambiarItem(idx, 'cantidad', it.cantidad + 1)
                       }}
-                      className={`min-w-[44px] min-h-[44px] w-11 h-11 flex items-center justify-center transition-colors active:scale-90 ${
+                      className={`w-9 h-8 flex items-center justify-center transition-colors active:scale-90 ${
                         it.cantidad >= stockDisponible(it.productoId)
                           ? 'text-slate-200 cursor-not-allowed'
                           : 'text-slate-400 hover:text-emerald-500 hover:bg-emerald-50'
                       }`}>
-                      <Plus size={14} strokeWidth={3} />
+                      <Plus size={13} strokeWidth={3} />
                     </button>
                   </div>
                 </div>
-                <span className="text-[11px] sm:text-xs font-bold text-slate-800 w-14 sm:w-16 text-right shrink-0">{fmtUsd(linea)}</span>
               </div>
             )
           })}
