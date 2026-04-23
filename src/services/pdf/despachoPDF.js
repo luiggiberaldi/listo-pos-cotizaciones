@@ -183,15 +183,41 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
 
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(10.5)
-      // Truncar valor si excede el ancho disponible
       const valX = baseX + lblW + 2
       const maxValW = lineEndX - valX - 1
-      let valStr = String(item.val)
-      while (valStr.length > 1 && doc.getTextWidth(valStr) > maxValW) {
-        valStr = valStr.slice(0, -1)
+      const valStr = String(item.val)
+
+      // Si el texto cabe en una línea, renderizar normal
+      if (doc.getTextWidth(valStr) <= maxValW) {
+        doc.text(valStr, valX, y)
+      } else {
+        // Wrap: primera línea después del label, segunda línea alineada al inicio
+        const words = valStr.split(' ')
+        let line1 = '', line2 = ''
+        for (const word of words) {
+          const test = line1 ? line1 + ' ' + word : word
+          if (doc.getTextWidth(test) <= maxValW) {
+            line1 = test
+          } else {
+            line2 += (line2 ? ' ' : '') + word
+          }
+        }
+        doc.text(line1, valX, y)
+        if (line2) {
+          // Segunda línea al ancho completo desde el margen
+          const line2MaxW = lineEndX - baseX - 1
+          let line2Str = line2
+          while (line2Str.length > 1 && doc.getTextWidth(line2Str) > line2MaxW) {
+            line2Str = line2Str.slice(0, -1)
+          }
+          if (line2Str !== line2) line2Str += '…'
+          doc.setLineWidth(0.3)
+          doc.setDrawColor(150, 150, 150)
+          doc.line(baseX, y + 1.5, lineEndX, y + 1.5)
+          y += 5
+          doc.text(line2Str, baseX, y)
+        }
       }
-      if (valStr !== String(item.val)) valStr += '…'
-      doc.text(valStr, valX, y)
       doc.setFontSize(9.5)
 
       doc.setLineWidth(0.3)
