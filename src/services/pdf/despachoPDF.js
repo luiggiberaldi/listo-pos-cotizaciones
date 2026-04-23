@@ -452,13 +452,13 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     y += 8
   }
 
-  // ── Slogan ──
-  y += 4
-  if (y < PAGE_H - 40) {
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(14)
+  // ── Slogan — fijo 10mm sobre el footer (footerY = PAGE_H - 28) ──
+  const sloganY = PAGE_H - 38
+  if (y < sloganY) {
+    doc.setFont('helvetica', 'bolditalic')
+    doc.setFontSize(9)
     doc.setTextColor(...C_DARK)
-    doc.text('A sus ordenes para cualquier duda. Gracias por preferirnos.', PAGE_W / 2, y, { align: 'center' })
+    doc.text('"Todo lo puedo en Cristo que me fortalece" — Filipenses 4:13', PAGE_W / 2, sloganY, { align: 'center' })
   }
 
   // ══════════════════════════════════════════════════════════════════════════

@@ -323,13 +323,13 @@ export async function generarDespachoPlantillaPDF({ config = {} } = {}) {
     y = sigY + 10
   }
 
-  // Slogan
-  y += 2
-  if (y < PAGE_H - 30) {
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(14)
+  // Slogan — fijo 10mm sobre el footer (footerY = PAGE_H - 22)
+  const sloganY = PAGE_H - 32
+  if (y < sloganY) {
+    doc.setFont('helvetica', 'bolditalic')
+    doc.setFontSize(9)
     doc.setTextColor(...C_DARK)
-    doc.text('A sus ordenes para cualquier duda. Gracias por preferirnos.', PAGE_W / 2, y, { align: 'center' })
+    doc.text('"Todo lo puedo en Cristo que me fortalece" — Filipenses 4:13', PAGE_W / 2, sloganY, { align: 'center' })
   }
 
   // ══════════════════════════════════════════════════════════════════════════

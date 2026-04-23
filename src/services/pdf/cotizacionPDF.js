@@ -390,13 +390,13 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
 
   // ── (Sección de firma eliminada) ──
 
-  // ── Slogan ──
-  y += 8
-  if (y < PAGE_H - 40) {
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(14)
+  // ── Slogan — fijo 10mm sobre el footer (hazardY = PAGE_H - 30) ──
+  const sloganY = PAGE_H - 40
+  if (y < sloganY) {
+    doc.setFont('helvetica', 'bolditalic')
+    doc.setFontSize(9)
     doc.setTextColor(...C_DARK)
-    doc.text('A sus ordenes para cualquier duda. Gracias por preferirnos.', PAGE_W / 2, y, { align: 'center' })
+    doc.text('"Todo lo puedo en Cristo que me fortalece" — Filipenses 4:13', PAGE_W / 2, sloganY, { align: 'center' })
   }
 
   // ══════════════════════════════════════════════════════════════════════════
