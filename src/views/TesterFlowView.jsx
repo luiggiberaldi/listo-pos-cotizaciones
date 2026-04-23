@@ -49,7 +49,7 @@ const TEST = {
   },
   cliente: {
     nombre: 'Cliente Determinista Test',
-    rif: 'J-88888888-0',
+    rif_cedula: 'J-88888888-0',
     telefono: '0414-0000001',
     email: 'determinista@test.local',
     direccion: 'Calle Test #1, Determinista',
@@ -279,8 +279,8 @@ export default function TesterFlowView() {
 
     assert(cl.nombre === TEST.cliente.nombre, TEST.cliente.nombre, cl.nombre, 'nombre')
     addLog(id, `  nombre = "${cl.nombre}" ✓`)
-    assert(cl.rif === TEST.cliente.rif, TEST.cliente.rif, cl.rif, 'rif')
-    addLog(id, `  rif = "${cl.rif}" ✓`)
+    assert(cl.rif_cedula === TEST.cliente.rif_cedula, TEST.cliente.rif_cedula, cl.rif_cedula, 'rif_cedula')
+    addLog(id, `  rif_cedula = "${cl.rif_cedula}" ✓`)
     assert(Number(cl.saldo_pendiente || 0) === 0, 0, cl.saldo_pendiente, 'saldo_pendiente')
     addLog(id, `  saldo_pendiente = $0.00 ✓`)
     assert(cl.vendedor_id === perfil.id, perfil.id, cl.vendedor_id, 'vendedor_id')
