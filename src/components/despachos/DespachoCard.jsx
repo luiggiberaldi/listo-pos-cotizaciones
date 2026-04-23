@@ -1,6 +1,6 @@
 // src/components/despachos/DespachoCard.jsx
 import { useState, memo } from 'react'
-import { FileText, Calendar, Truck, CheckCircle, Ban, RefreshCcw, Download, Loader2, Eye, MoreHorizontal, ChevronDown, DollarSign, Printer } from 'lucide-react'
+import { FileText, Calendar, Truck, CheckCircle, Ban, RefreshCcw, Download, Loader2, Eye, MoreHorizontal, ChevronDown, DollarSign, Printer, Check } from 'lucide-react'
 import EstadoBadge from '../cotizaciones/EstadoBadge'
 import DespachoFlowIndicator from './DespachoFlowIndicator'
 import MobileActionSheet from '../cotizaciones/MobileActionSheet'
@@ -22,7 +22,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const [printLoading, setPrintLoading] = useState(false)
   const [showDetalle, setShowDetalle] = useState(false)
   const [showSheet, setShowSheet]     = useState(false)
-  const [showPdfMenu, setShowPdfMenu] = useState(false)
+  const [showMonedaMenu, setShowMonedaMenu] = useState(false)
   const [monedaPdf, setMonedaPdf] = useState(() => localStorage.getItem('construacero_moneda_pdf') || '$')
   const [accionPendiente, setAccionPendiente] = useState(null) // { id, estado, actionConfig }
   const { tasaBcv, tasaUsdt } = useTasaCambio()
@@ -41,11 +41,24 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const canAnular = esSupervisor && (despacho.estado === 'pendiente' || despacho.estado === 'despachada')
   const canReciclar = esSupervisor && despacho.estado === 'anulada' && onReciclar
 
-  async function descargarPDF(monedaPDF = '$') {
+  function seleccionarMoneda(moneda) {
+    setMonedaPdf(moneda)
+    localStorage.setItem('construacero_moneda_pdf', moneda)
+    setShowMonedaMenu(false)
+  }
+
+  const MONEDA_OPTIONS = [
+    { key: '$', icon: <DollarSign size={14} className="text-emerald-500" />, label: 'USDT ($)' },
+    { key: 'bcv', icon: <span className="text-sm font-bold text-teal-500 w-[14px] text-center">$</span>, label: 'Dólar BCV' },
+    { key: 'bs', icon: <span className="text-sm font-bold text-blue-500 w-[14px] text-center">Bs</span>, label: 'Bolívares' },
+    { key: 'mixto', icon: <span className="text-xs font-bold text-amber-500 w-[18px] text-center shrink-0">$Bs</span>, label: 'Mixto USDT' },
+    { key: 'mixto_bcv', icon: <span className="text-xs font-bold text-orange-500 w-[18px] text-center shrink-0">$Bs</span>, label: 'Mixto BCV' },
+  ]
+
+  const monedaLabel = MONEDA_OPTIONS.find(o => o.key === monedaPdf)?.label || 'USDT ($)'
+
+  async function descargarPDF() {
     setPdfLoading(true)
-    setShowPdfMenu(false)
-    setMonedaPdf(monedaPDF)
-    localStorage.setItem('construacero_moneda_pdf', monedaPDF)
     try {
       const session = (await supabase.auth.getSession()).data.session
       const [{ generarDespachoPDF }, itemsRes, clienteData, vendedorRes, transportistaRes] = await Promise.all([
@@ -68,7 +81,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         vendedor: vendedorRes.data || despacho.vendedor,
         transportista: transportistaRes.data || despacho.transportista,
       }
-      await generarDespachoPDF({ despacho: desConDatos, items: itemsRes.data ?? [], config, formaPago: despacho.forma_pago || '', monedaPDF, tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio })
+      await generarDespachoPDF({ despacho: desConDatos, items: itemsRes.data ?? [], config, formaPago: despacho.forma_pago || '', monedaPDF: monedaPdf, tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio })
     } catch (err) {
       showToast('Error al generar PDF: ' + (err.message || 'Error desconocido'), 'error')
     } finally {
@@ -263,30 +276,30 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             </button>
           )}
           <div className="relative">
-            <button onClick={() => setShowPdfMenu(v => !v)} disabled={pdfLoading}
-              onBlur={() => setTimeout(() => setShowPdfMenu(false), 200)}
-              className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40">
-              {pdfLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Download size={14} />}
-              PDF <ChevronDown size={10} />
+            <button onClick={() => setShowMonedaMenu(v => !v)}
+              onBlur={() => setTimeout(() => setShowMonedaMenu(false), 200)}
+              className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors">
+              <DollarSign size={14} />
+              {monedaLabel} <ChevronDown size={10} />
             </button>
-            {showPdfMenu && (
+            {showMonedaMenu && (
               <div className="absolute left-0 bottom-full mb-1 w-40 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
                 onMouseDown={e => e.preventDefault()}>
-                {[
-                  { key: '$', icon: <DollarSign size={14} className="text-emerald-500" />, label: 'USDT ($)' },
-                  { key: 'bcv', icon: <span className="text-sm font-bold text-teal-500 w-[14px] text-center">$</span>, label: 'Dólar BCV' },
-                  { key: 'bs', icon: <span className="text-sm font-bold text-blue-500 w-[14px] text-center">Bs</span>, label: 'Bolívares' },
-                  { key: 'mixto', icon: <span className="text-xs font-bold text-amber-500 w-[18px] text-center shrink-0">$Bs</span>, label: 'Mixto USDT' },
-                  { key: 'mixto_bcv', icon: <span className="text-xs font-bold text-orange-500 w-[18px] text-center shrink-0">$Bs</span>, label: 'Mixto BCV' },
-                ].map(opt => (
-                  <button key={opt.key} onClick={() => descargarPDF(opt.key)}
+                {MONEDA_OPTIONS.map(opt => (
+                  <button key={opt.key} onClick={() => seleccionarMoneda(opt.key)}
                     className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left ${monedaPdf === opt.key ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-700 hover:bg-slate-50'}`}>
                     {opt.icon} {opt.label}
+                    {monedaPdf === opt.key && <Check size={14} className="ml-auto text-emerald-500" />}
                   </button>
                 ))}
               </div>
             )}
           </div>
+          <button onClick={descargarPDF} disabled={pdfLoading}
+            className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40">
+            {pdfLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Download size={14} />}
+            PDF
+          </button>
           <button onClick={imprimirDespacho} disabled={printLoading}
             className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40">
             {printLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Printer size={14} />}
@@ -344,31 +357,32 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         )}
         <div className="ml-auto flex items-center gap-1">
           <div className="relative">
-            <button onClick={() => setShowPdfMenu(v => !v)} disabled={pdfLoading}
-              onBlur={() => setTimeout(() => setShowPdfMenu(false), 200)}
-              title={pdfLoading ? 'Generando PDF...' : 'Descargar PDF'}
-              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-50">
-              {pdfLoading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-              PDF <ChevronDown size={10} />
+            <button onClick={() => setShowMonedaMenu(v => !v)}
+              onBlur={() => setTimeout(() => setShowMonedaMenu(false), 200)}
+              title="Seleccionar moneda"
+              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors">
+              <DollarSign size={14} />
+              {monedaLabel} <ChevronDown size={10} />
             </button>
-            {showPdfMenu && (
+            {showMonedaMenu && (
               <div className="absolute right-0 bottom-full mb-1 w-40 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
                 onMouseDown={e => e.preventDefault()}>
-                {[
-                  { key: '$', icon: <DollarSign size={14} className="text-emerald-500" />, label: 'USDT ($)' },
-                  { key: 'bcv', icon: <span className="text-sm font-bold text-teal-500 w-[14px] text-center">$</span>, label: 'Dólar BCV' },
-                  { key: 'bs', icon: <span className="text-sm font-bold text-blue-500 w-[14px] text-center">Bs</span>, label: 'Bolívares' },
-                  { key: 'mixto', icon: <span className="text-xs font-bold text-amber-500 w-[18px] text-center shrink-0">$Bs</span>, label: 'Mixto USDT' },
-                  { key: 'mixto_bcv', icon: <span className="text-xs font-bold text-orange-500 w-[18px] text-center shrink-0">$Bs</span>, label: 'Mixto BCV' },
-                ].map(opt => (
-                  <button key={opt.key} onClick={() => descargarPDF(opt.key)}
+                {MONEDA_OPTIONS.map(opt => (
+                  <button key={opt.key} onClick={() => seleccionarMoneda(opt.key)}
                     className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left ${monedaPdf === opt.key ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-700 hover:bg-slate-50'}`}>
                     {opt.icon} {opt.label}
+                    {monedaPdf === opt.key && <Check size={14} className="ml-auto text-emerald-500" />}
                   </button>
                 ))}
               </div>
             )}
           </div>
+          <button onClick={descargarPDF} disabled={pdfLoading}
+            title="Descargar PDF"
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-50">
+            {pdfLoading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+            PDF
+          </button>
           <button onClick={imprimirDespacho} disabled={printLoading}
             title="Imprimir despacho"
             className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-50">

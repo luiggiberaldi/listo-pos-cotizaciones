@@ -1,6 +1,6 @@
 // src/components/cotizaciones/CotizacionCard.jsx
 import { useState, memo } from 'react'
-import { FileText, User, Calendar, Pencil, Ban, CheckCircle, XCircle, FileDown, MessageCircle, Loader2, Truck, ChevronDown, DollarSign, RefreshCw, Eye, Clock, PackageCheck, MoreHorizontal, AlertTriangle } from 'lucide-react'
+import { FileText, User, Calendar, Pencil, Ban, CheckCircle, XCircle, FileDown, MessageCircle, Loader2, Truck, ChevronDown, DollarSign, RefreshCw, Eye, Clock, PackageCheck, MoreHorizontal, AlertTriangle, Printer, Check } from 'lucide-react'
 import EstadoBadge from './EstadoBadge'
 import QuoteFlowIndicator from './QuoteFlowIndicator'
 import MobileActionSheet from './MobileActionSheet'
@@ -38,11 +38,12 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
   const esBorrador = cotizacion.estado === 'borrador'
   const esEnviada  = cotizacion.estado === 'enviada'
   const [pdfLoading, setPdfLoading]   = useState(false)
+  const [printLoading, setPrintLoading] = useState(false)
   const [waLoading, setWaLoading]     = useState(false)
   const [showActions, setShowActions] = useState(false)
   const [showDetalle, setShowDetalle] = useState(false)
   const [showSheet, setShowSheet]     = useState(false)
-  const [showPdfMenu, setShowPdfMenu] = useState(false)
+  const [showMonedaMenu, setShowMonedaMenu] = useState(false)
   const [monedaPdf, setMonedaPdf] = useState(() => localStorage.getItem('construacero_moneda_pdf') || '$')
   const { data: config = {} } = useConfigNegocio()
   const { tasaBcv, tasaUsdt } = useTasaCambio()
@@ -51,11 +52,24 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
     ? `COT-${String(cotizacion.numero).padStart(5, '0')} Rev.${cotizacion.version}`
     : `COT-${String(cotizacion.numero).padStart(5, '0')}`
 
-  async function descargarPDF(monedaPDF = '$') {
+  function seleccionarMoneda(moneda) {
+    setMonedaPdf(moneda)
+    localStorage.setItem('construacero_moneda_pdf', moneda)
+    setShowMonedaMenu(false)
+  }
+
+  const MONEDA_OPTIONS = [
+    { key: '$', icon: <DollarSign size={14} className="text-emerald-500" />, label: 'USDT ($)' },
+    { key: 'bcv', icon: <span className="text-sm font-bold text-teal-500 w-[14px] text-center">$</span>, label: 'Dólar BCV' },
+    { key: 'bs', icon: <span className="text-sm font-bold text-blue-500 w-[14px] text-center">Bs</span>, label: 'Bolívares' },
+    { key: 'mixto', icon: <span className="text-xs font-bold text-amber-500 w-[18px] text-center shrink-0">$Bs</span>, label: 'Mixto USDT' },
+    { key: 'mixto_bcv', icon: <span className="text-xs font-bold text-orange-500 w-[18px] text-center shrink-0">$Bs</span>, label: 'Mixto BCV' },
+  ]
+
+  const monedaLabel = MONEDA_OPTIONS.find(o => o.key === monedaPdf)?.label || 'USDT ($)'
+
+  async function descargarPDF() {
     setPdfLoading(true)
-    setShowPdfMenu(false)
-    setMonedaPdf(monedaPDF)
-    localStorage.setItem('construacero_moneda_pdf', monedaPDF)
     try {
       const [{ generarPDF }, itemsRes, clienteData, vendedorRes] = await Promise.all([
         import('../../services/pdf/cotizacionPDF'),
@@ -69,11 +83,42 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         cliente: clienteData || cotizacion.cliente,
         vendedor: vendedorRes.data || cotizacion.vendedor,
       }
-      await generarPDF({ cotizacion: cotConDatos, items: itemsRes.data ?? [], config, monedaPDF, tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio })
+      await generarPDF({ cotizacion: cotConDatos, items: itemsRes.data ?? [], config, monedaPDF: monedaPdf, tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio })
     } catch (err) {
       showToast('Error al generar PDF: ' + (err.message || 'Error desconocido'), 'error')
     } finally {
       setPdfLoading(false)
+    }
+  }
+
+  async function imprimirCotizacion() {
+    setPrintLoading(true)
+    try {
+      const [{ generarPDF }, itemsRes, clienteData, vendedorRes] = await Promise.all([
+        import('../../services/pdf/cotizacionPDF'),
+        supabase.from('cotizacion_items').select('cantidad, codigo_snap, nombre_snap, unidad_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacion.id).order('orden'),
+        fetchClienteViaAPI(cotizacion.cliente_id),
+        cotizacion.vendedor_id ? supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', cotizacion.vendedor_id).single() : Promise.resolve({ data: null }),
+      ])
+      if (itemsRes.error) throw itemsRes.error
+      const cotConDatos = {
+        ...cotizacion,
+        cliente: clienteData || cotizacion.cliente,
+        vendedor: vendedorRes.data || cotizacion.vendedor,
+      }
+      const blob = await generarPDF({ cotizacion: cotConDatos, items: itemsRes.data ?? [], config, monedaPDF: monedaPdf, tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio, returnBlob: true })
+      const url = URL.createObjectURL(blob)
+      const printWindow = window.open(url)
+      if (printWindow) {
+        printWindow.addEventListener('load', () => {
+          printWindow.print()
+          URL.revokeObjectURL(url)
+        })
+      }
+    } catch (err) {
+      showToast('Error al imprimir: ' + (err.message || 'Error desconocido'), 'error')
+    } finally {
+      setPrintLoading(false)
     }
   }
 
@@ -299,31 +344,38 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
             </button>
           )}
           {canPdf && (
-            <div className="relative">
-              <button onClick={() => setShowPdfMenu(v => !v)} disabled={pdfLoading}
-                onBlur={() => setTimeout(() => setShowPdfMenu(false), 200)}
+            <>
+              <div className="relative">
+                <button onClick={() => setShowMonedaMenu(v => !v)}
+                  onBlur={() => setTimeout(() => setShowMonedaMenu(false), 200)}
+                  className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors">
+                  <DollarSign size={14} />
+                  {monedaLabel} <ChevronDown size={10} />
+                </button>
+                {showMonedaMenu && (
+                  <div className="absolute left-0 bottom-full mb-1 w-40 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
+                    onMouseDown={e => e.preventDefault()}>
+                    {MONEDA_OPTIONS.map(opt => (
+                      <button key={opt.key} onClick={() => seleccionarMoneda(opt.key)}
+                        className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left ${monedaPdf === opt.key ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-700 hover:bg-slate-50'}`}>
+                        {opt.icon} {opt.label}
+                        {monedaPdf === opt.key && <Check size={14} className="ml-auto text-emerald-500" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button onClick={descargarPDF} disabled={pdfLoading}
                 className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40">
                 {pdfLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <FileDown size={14} />}
-                PDF <ChevronDown size={10} />
+                PDF
               </button>
-              {showPdfMenu && (
-                <div className="absolute left-0 bottom-full mb-1 w-40 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
-                  onMouseDown={e => e.preventDefault()}>
-                  {[
-                    { key: '$', icon: <DollarSign size={14} className="text-emerald-500" />, label: 'USDT ($)' },
-                    { key: 'bcv', icon: <span className="text-sm font-bold text-teal-500 w-[14px] text-center">$</span>, label: 'Dólar BCV' },
-                    { key: 'bs', icon: <span className="text-sm font-bold text-blue-500 w-[14px] text-center">Bs</span>, label: 'Bolívares' },
-                    { key: 'mixto', icon: <span className="text-xs font-bold text-amber-500 w-[18px] text-center shrink-0">$Bs</span>, label: 'Mixto USDT' },
-                    { key: 'mixto_bcv', icon: <span className="text-xs font-bold text-orange-500 w-[18px] text-center shrink-0">$Bs</span>, label: 'Mixto BCV' },
-                  ].map(opt => (
-                    <button key={opt.key} onClick={() => descargarPDF(opt.key)}
-                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left ${monedaPdf === opt.key ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-700 hover:bg-slate-50'}`}>
-                      {opt.icon} {opt.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+              <button onClick={imprimirCotizacion} disabled={printLoading}
+                className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40">
+                {printLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Printer size={14} />}
+                Imprimir
+              </button>
+            </>
           )}
           {getMobileSheetActions().length > 0 && (
             <button onClick={() => setShowSheet(true)}
@@ -360,31 +412,38 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
           </button>
         )}
         {canPdf && (
-          <div className="relative">
-            <button onClick={() => setShowPdfMenu(v => !v)} disabled={pdfLoading}
-              onBlur={() => setTimeout(() => setShowPdfMenu(false), 200)}
+          <>
+            <div className="relative">
+              <button onClick={() => setShowMonedaMenu(v => !v)}
+                onBlur={() => setTimeout(() => setShowMonedaMenu(false), 200)}
+                className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">
+                <DollarSign size={13} />
+                {monedaLabel} <ChevronDown size={10} />
+              </button>
+              {showMonedaMenu && (
+                <div className="absolute left-0 bottom-full mb-1 w-40 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
+                  onMouseDown={e => e.preventDefault()}>
+                  {MONEDA_OPTIONS.map(opt => (
+                    <button key={opt.key} onClick={() => seleccionarMoneda(opt.key)}
+                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left ${monedaPdf === opt.key ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-700 hover:bg-slate-50'}`}>
+                      {opt.icon} {opt.label}
+                      {monedaPdf === opt.key && <Check size={14} className="ml-auto text-emerald-500" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button onClick={descargarPDF} disabled={pdfLoading}
               className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-40">
               {pdfLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <FileDown size={13} />}
-              PDF <ChevronDown size={10} />
+              PDF
             </button>
-            {showPdfMenu && (
-              <div className="absolute left-0 bottom-full mb-1 w-40 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
-                onMouseDown={e => e.preventDefault()}>
-                {[
-                  { key: '$', icon: <DollarSign size={14} className="text-emerald-500" />, label: 'USDT ($)' },
-                  { key: 'bcv', icon: <span className="text-sm font-bold text-teal-500 w-[14px] text-center">$</span>, label: 'Dólar BCV' },
-                  { key: 'bs', icon: <span className="text-sm font-bold text-blue-500 w-[14px] text-center">Bs</span>, label: 'Bolívares' },
-                  { key: 'mixto', icon: <span className="text-xs font-bold text-amber-500 w-[18px] text-center shrink-0">$Bs</span>, label: 'Mixto USDT' },
-                  { key: 'mixto_bcv', icon: <span className="text-xs font-bold text-orange-500 w-[18px] text-center shrink-0">$Bs</span>, label: 'Mixto BCV' },
-                ].map(opt => (
-                  <button key={opt.key} onClick={() => descargarPDF(opt.key)}
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left ${monedaPdf === opt.key ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-700 hover:bg-slate-50'}`}>
-                    {opt.icon} {opt.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+            <button onClick={imprimirCotizacion} disabled={printLoading}
+              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-40">
+              {printLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Printer size={13} />}
+              Imprimir
+            </button>
+          </>
         )}
         {canWhatsApp && (
           <button onClick={handleWhatsApp} disabled={waLoading}
