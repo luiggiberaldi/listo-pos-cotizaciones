@@ -24,7 +24,8 @@ function colorCategoria(str = '') {
 
 export default function ProductoRow({ producto, onEditar, onDesactivar, onBorrar, onKardex, tasa = 0, comprometido = 0 }) {
   const { perfil } = useAuthStore()
-  const esSupervisor = perfil?.rol === 'supervisor'
+  const esAdministracion = perfil?.rol === 'administracion'
+  const esPrivilegiado = perfil?.rol === 'supervisor' || esAdministracion
   const stockBajo = producto.stock_minimo > 0 && producto.stock_actual <= producto.stock_minimo
   const sobrecomprometido = comprometido > 0 && (producto.stock_actual - comprometido) < 0
   const catColor = colorCategoria(producto.categoria || '')
@@ -72,7 +73,7 @@ export default function ProductoRow({ producto, onEditar, onDesactivar, onBorrar
         <div className="text-right">
           <div>
             <span className="font-bold text-slate-800 text-sm">{fmtUsd(producto.precio_usd)}</span>
-            {esSupervisor && producto.costo_usd != null && (
+            {esPrivilegiado && producto.costo_usd != null && (
               <span className="text-xs text-slate-400 ml-2">C: {fmtUsd(producto.costo_usd)}</span>
             )}
           </div>
@@ -112,25 +113,29 @@ export default function ProductoRow({ producto, onEditar, onDesactivar, onBorrar
         )}
       </div>
 
-      {/* Acciones (solo supervisor) */}
-      {esSupervisor && (
+      {/* Acciones (kardex: supervisor y admin; CRUD: solo administracion) */}
+      {esPrivilegiado && (
         <div className="flex items-center gap-1 px-2 shrink-0">
           <button onClick={() => onKardex(producto)} title="Kardex"
             className="p-1.5 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors">
             <ClipboardList size={15} />
           </button>
-          <button onClick={() => onEditar(producto)} title="Editar producto"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-light transition-colors">
-            <Pencil size={15} />
-          </button>
-          <button onClick={() => onDesactivar(producto)} title="Desactivar producto"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 transition-colors">
-            <EyeOff size={15} />
-          </button>
-          <button onClick={() => onBorrar(producto)} title="Borrar producto"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
-            <Trash2 size={15} />
-          </button>
+          {esAdministracion && (
+            <>
+              <button onClick={() => onEditar(producto)} title="Editar producto"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-light transition-colors">
+                <Pencil size={15} />
+              </button>
+              <button onClick={() => onDesactivar(producto)} title="Desactivar producto"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 transition-colors">
+                <EyeOff size={15} />
+              </button>
+              <button onClick={() => onBorrar(producto)} title="Borrar producto"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+                <Trash2 size={15} />
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>

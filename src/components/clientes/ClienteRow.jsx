@@ -12,6 +12,7 @@ const TIPO_COLORS = {
 export default function ClienteRow({ cliente, onEditar, onDesactivar, onReasignar, onCotizar }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
+  const esAdministracion = perfil?.rol === 'administracion'
   const esPropio = cliente.vendedor_id === perfil?.id
   const color = cliente.vendedor?.color || null
 
@@ -77,12 +78,14 @@ export default function ClienteRow({ cliente, onEditar, onDesactivar, onReasigna
 
       {/* Acciones */}
       <div className="flex items-center gap-1 px-2 shrink-0">
-        <button onClick={() => onCotizar(cliente)} title="Cotizar"
-          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 active:bg-emerald-100 transition-colors">
-          <FileText size={13} />
-          Cotizar
-        </button>
-        {(esPropio || esSupervisor) && (
+        {!esAdministracion && (
+          <button onClick={() => onCotizar(cliente)} title="Cotizar"
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 active:bg-emerald-100 transition-colors">
+            <FileText size={13} />
+            Cotizar
+          </button>
+        )}
+        {!esAdministracion && (esPropio || esSupervisor) && (
           <button onClick={() => onEditar(cliente)}
             className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-light transition-colors">
             <Pencil size={15} />

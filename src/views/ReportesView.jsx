@@ -317,7 +317,7 @@ function TabInventario({ configNeg }) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard icon={Package} label="Total productos" value={String(kpis.totalProductos)}
           gradient="linear-gradient(135deg, #1B365D, #0d1f3c)" border="rgba(255,255,255,0.07)" />
-        {kpis.esSupervisor && (
+        {kpis.esPrivilegiado && (
           <KpiCard icon={DollarSign} label="Valor a costo" value={fmtUsd(kpis.totalValorCosto)}
             gradient="linear-gradient(135deg, #065f46, #047857)" border="rgba(255,255,255,0.10)" />
         )}
@@ -335,9 +335,9 @@ function TabInventario({ configNeg }) {
           { label: 'Categoría' },
           { label: 'Productos', align: 'text-center' },
           { label: 'Stock total', align: 'text-center' },
-          ...(kpis.esSupervisor ? [{ label: 'Valor costo', align: 'text-right' }] : []),
+          ...(kpis.esPrivilegiado ? [{ label: 'Valor costo', align: 'text-right' }] : []),
           { label: 'Valor venta', align: 'text-right' },
-          ...(kpis.esSupervisor ? [{ label: 'Margen', align: 'text-right' }] : []),
+          ...(kpis.esPrivilegiado ? [{ label: 'Margen', align: 'text-right' }] : []),
         ]}
         rows={porCategoria.map(cat => {
           const margen = cat.valorVenta > 0 && cat.valorCosto > 0
@@ -347,9 +347,9 @@ function TabInventario({ configNeg }) {
             { content: cat.categoria, className: 'font-semibold text-slate-700' },
             { content: cat.count, className: 'text-center text-slate-600' },
             { content: Number(cat.stockTotal).toLocaleString(), className: 'text-center text-slate-600' },
-            ...(kpis.esSupervisor ? [{ content: fmtUsd(cat.valorCosto), className: 'text-right text-slate-600' }] : []),
+            ...(kpis.esPrivilegiado ? [{ content: fmtUsd(cat.valorCosto), className: 'text-right text-slate-600' }] : []),
             { content: fmtUsd(cat.valorVenta), className: 'text-right font-bold text-slate-800' },
-            ...(kpis.esSupervisor ? [{
+            ...(kpis.esPrivilegiado ? [{
               content: margen ? `${margen}%` : '—',
               className: `text-right font-bold ${margen && Number(margen) > 0 ? 'text-emerald-600' : 'text-slate-400'}`
             }] : []),
@@ -599,8 +599,6 @@ function TabDespachos({ range, configNeg }) {
 // TAB: COMISIONES
 // ═══════════════════════════════════════════════════════════════════════════
 function TabComisiones({ configNeg }) {
-  const { perfil } = useAuthStore()
-  const esSupervisor = perfil?.rol === 'supervisor'
   const { data: comisiones = [], isLoading } = useComisiones({ estado: '' })
   const { data: resumen } = useComisionesResumen()
   const [exportando, setExportando] = useState(false)

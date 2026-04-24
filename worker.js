@@ -435,9 +435,10 @@ async function verifyAuth(request, env) {
 // UUID especial para Super Admin virtual (easter egg del logo)
 const SUPER_ADMIN_UUID = '00000000-0000-0000-0000-000000000000'
 
-async function verifySupervisor(operatorId, env) {
-  if (!operatorId) return false;
-  if (operatorId === SUPER_ADMIN_UUID) return true; // Super Admin virtual
+// Obtiene el rol del operador (supervisor | vendedor | administracion | null)
+async function getOperatorRole(operatorId, env) {
+  if (!operatorId) return null;
+  if (operatorId === SUPER_ADMIN_UUID) return 'supervisor'; // Super Admin virtual
   const res = await fetch(
     `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${operatorId}&activo=eq.true&select=rol`,
     {
@@ -447,9 +448,20 @@ async function verifySupervisor(operatorId, env) {
       },
     }
   );
-  if (!res.ok) return false;
+  if (!res.ok) return null;
   const rows = await res.json();
-  return rows.length === 1 && rows[0].rol === 'supervisor';
+  return rows.length === 1 ? rows[0].rol : null;
+}
+
+async function verifySupervisor(operatorId, env) {
+  const rol = await getOperatorRole(operatorId, env);
+  return rol === 'supervisor';
+}
+
+// Verifica supervisor O administracion (para endpoints compartidos como reportes)
+async function verifyPrivileged(operatorId, env) {
+  const rol = await getOperatorRole(operatorId, env);
+  return rol === 'supervisor' || rol === 'administracion';
 }
 
 // ── PDF temporal handler (para WhatsApp) ──────────────────────────────────
@@ -533,8 +545,8 @@ async function handleAdmin(request, env, url) {
     }
 
     // Validate rol
-    if (!['supervisor', 'vendedor'].includes(rol)) {
-      return jsonError('Rol inválido: debe ser supervisor o vendedor', 400, request);
+    if (!['supervisor', 'vendedor', 'administracion'].includes(rol)) {
+      return jsonError('Rol inválido: debe ser supervisor, vendedor o administracion', 400, request);
     }
 
     // Validate PIN length
@@ -584,7 +596,7 @@ async function handleAdmin(request, env, url) {
     const { nombre, rol, pin, color, telefono } = body;
 
     // Validate rol if provided
-    if (rol && !['supervisor', 'vendedor'].includes(rol)) {
+    if (rol && !['supervisor', 'vendedor', 'administracion'].includes(rol)) {
       return jsonError('Rol inválido', 400, request);
     }
 

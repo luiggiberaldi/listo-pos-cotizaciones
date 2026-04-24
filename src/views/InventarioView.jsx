@@ -50,6 +50,11 @@ function SkeletonProductos() {
 export default function InventarioView() {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
+  const esAdministracion = perfil?.rol === 'administracion'
+  // Solo administracion puede crear/editar/borrar productos
+  const puedeGestionarInventario = esAdministracion
+  // Supervisor y admin ven costo, tabs, kardex, etc.
+  const esPrivilegiado = esSupervisor || esAdministracion
   const { tasaEfectiva } = useTasaCambio()
   const { data: configNeg = {} } = useConfigNegocio()
 
@@ -189,8 +194,8 @@ export default function InventarioView() {
       <PageHeader
         icon={Package}
         title="Inventario"
-        subtitle={<>{isLoading ? 'Cargando...' : `${productosFiltrados.length} producto${productosFiltrados.length !== 1 ? 's' : ''}${stockBajo ? ' con stock bajo' : ''}`}{!esSupervisor && <span className="ml-1 opacity-60">(catálogo de precios)</span>}</>}
-        action={esSupervisor && (
+        subtitle={<>{isLoading ? 'Cargando...' : `${productosFiltrados.length} producto${productosFiltrados.length !== 1 ? 's' : ''}${stockBajo ? ' con stock bajo' : ''}`}{!esPrivilegiado && <span className="ml-1 opacity-60">(catálogo de precios)</span>}</>}
+        action={puedeGestionarInventario && (
           <div className="flex items-center gap-2">
             <button onClick={() => setModalLoteOpen(true)} className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98] bg-slate-700 hover:bg-slate-600">
               <ArrowLeftRight size={16} />
@@ -298,7 +303,7 @@ export default function InventarioView() {
       </div>
 
       {/* ── Tabs: Productos / Movimientos ─────────────────────────────────── */}
-      {esSupervisor && (
+      {esPrivilegiado && (
         <div className="flex bg-slate-100 rounded-xl p-1 w-fit">
           <button type="button" onClick={() => setTabActivo('productos')}
             className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${
@@ -316,7 +321,7 @@ export default function InventarioView() {
       )}
 
       {/* ── Contenido ──────────────────────────────────────────────────────── */}
-      {tabActivo === 'movimientos' && esSupervisor ? (
+      {tabActivo === 'movimientos' && esPrivilegiado ? (
         <MovimientosHistorial />
       ) : isLoading ? (
         <SkeletonProductos />
@@ -338,8 +343,8 @@ export default function InventarioView() {
                 ? 'Agrega tu primer producto con el botón "Nuevo producto".'
                 : 'El catálogo de productos está vacío.'
           }
-          actionLabel={hayFiltros ? 'Limpiar filtros' : esSupervisor ? 'Nuevo producto' : undefined}
-          onAction={hayFiltros ? limpiarFiltros : esSupervisor ? abrirCrear : undefined}
+          actionLabel={hayFiltros ? 'Limpiar filtros' : puedeGestionarInventario ? 'Nuevo producto' : undefined}
+          onAction={hayFiltros ? limpiarFiltros : puedeGestionarInventario ? abrirCrear : undefined}
         />
       ) : (
         vistaMode === 'grid' ? (
@@ -385,7 +390,7 @@ export default function InventarioView() {
       )}
 
       {/* ── Modal: Crear / Editar ───────────────────────────────────────────── */}
-      {esSupervisor && (
+      {puedeGestionarInventario && (
         <Modal
           isOpen={modalFormOpen}
           onClose={() => setModalFormOpen(false)}
@@ -423,7 +428,7 @@ export default function InventarioView() {
       />
 
       {/* ── Modal: Ingreso/Egreso por lotes ────────────────────────────────── */}
-      {esSupervisor && (
+      {puedeGestionarInventario && (
         <MovimientoLoteModal
           isOpen={modalLoteOpen}
           onClose={() => setModalLoteOpen(false)}
@@ -432,7 +437,7 @@ export default function InventarioView() {
       )}
 
       {/* ── Modal: Kardex ─────────────────────────────────────────────────── */}
-      {esSupervisor && (
+      {esPrivilegiado && (
         <KardexModal
           isOpen={!!kardexProducto}
           onClose={() => setKardexProducto(null)}

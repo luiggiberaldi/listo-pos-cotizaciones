@@ -26,6 +26,7 @@ function getIniciales(nombre = '') {
 export default function ClienteCard({ cliente, onEditar, onDesactivar, onReasignar, onCotizar, onVerFicha }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
+  const esAdministracion = perfil?.rol === 'administracion'
   const esPropio     = cliente.vendedor_id === perfil?.id
   const color        = cliente.vendedor?.color || '#64748b'
 
@@ -121,11 +122,13 @@ export default function ClienteCard({ cliente, onEditar, onDesactivar, onReasign
 
       {/* ── Acciones ── */}
       <div className="mt-auto border-t border-slate-100 px-2 py-2 flex items-center flex-wrap gap-1">
-        <button onClick={() => onCotizar(cliente)} title="Cotizar con este cliente"
-          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 active:bg-emerald-100 transition-colors">
-          <FileText size={13} />
-          Cotizar
-        </button>
+        {!esAdministracion && (
+          <button onClick={() => onCotizar(cliente)} title="Cotizar con este cliente"
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 active:bg-emerald-100 transition-colors">
+            <FileText size={13} />
+            Cotizar
+          </button>
+        )}
         {onVerFicha && (
           <button onClick={() => onVerFicha(cliente)} title="Ver ficha del cliente"
             className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-violet-600 hover:bg-violet-50 active:bg-violet-100 transition-colors">
@@ -133,7 +136,7 @@ export default function ClienteCard({ cliente, onEditar, onDesactivar, onReasign
             Ficha
           </button>
         )}
-        {(esPropio || esSupervisor) && (
+        {!esAdministracion && (esPropio || esSupervisor) && (
           <button onClick={() => onEditar(cliente)} title="Editar cliente"
             className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
             <Pencil size={13} />

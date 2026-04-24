@@ -141,7 +141,7 @@ export default function ProductoForm({ producto = null, onSuccess, onCancel }) {
     try {
       let productoResult
       if (esEdicion) {
-        productoResult = await actualizar.mutateAsync({ id: producto.id, campos })
+        productoResult = await actualizar.mutateAsync({ id: producto.id, campos, imagen_url: producto.imagen_url })
       } else {
         productoResult = await crear.mutateAsync(campos)
       }

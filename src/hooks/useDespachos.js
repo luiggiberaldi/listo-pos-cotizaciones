@@ -20,9 +20,10 @@ export const DESPACHOS_KEY = ['despachos']
 export function useDespachos({ estado = '' } = {}) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
+  const esPrivilegiado = esSupervisor || perfil?.rol === 'administracion'
 
   return useQuery({
-    queryKey: [...DESPACHOS_KEY, estado, esSupervisor, perfil?.id],
+    queryKey: [...DESPACHOS_KEY, estado, esPrivilegiado, perfil?.id],
     queryFn: async () => {
       let query = supabase
         .from('notas_despacho')
@@ -40,7 +41,7 @@ export function useDespachos({ estado = '' } = {}) {
       if (estado) query = query.eq('estado', estado)
 
       // Vendedores solo ven sus propios despachos
-      if (!esSupervisor) query = query.eq('vendedor_id', perfil.id)
+      if (!esPrivilegiado) query = query.eq('vendedor_id', perfil.id)
 
       const { data, error } = await query
       if (error) throw error

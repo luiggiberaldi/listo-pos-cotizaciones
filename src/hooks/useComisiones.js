@@ -11,10 +11,10 @@ export const COMISIONES_KEY = ['comisiones']
 // ─── Lista de comisiones ────────────────────────────────────────────────────
 export function useComisiones({ estado = '', vendedorId = '' } = {}) {
   const { perfil } = useAuthStore()
-  const esSupervisor = perfil?.rol === 'supervisor'
+  const esPrivilegiado = perfil?.rol === 'supervisor' || perfil?.rol === 'administracion'
 
   return useQuery({
-    queryKey: [...COMISIONES_KEY, estado, vendedorId, esSupervisor, perfil?.id],
+    queryKey: [...COMISIONES_KEY, estado, vendedorId, esPrivilegiado, perfil?.id],
     queryFn: async () => {
       let query = supabase
         .from('comisiones')
@@ -34,7 +34,7 @@ export function useComisiones({ estado = '', vendedorId = '' } = {}) {
         .limit(500)
 
       if (estado) query = query.eq('estado', estado)
-      if (!esSupervisor) query = query.eq('vendedor_id', perfil.id)
+      if (!esPrivilegiado) query = query.eq('vendedor_id', perfil.id)
       else if (vendedorId) query = query.eq('vendedor_id', vendedorId)
 
       const { data, error } = await query
@@ -50,10 +50,10 @@ export function useComisiones({ estado = '', vendedorId = '' } = {}) {
 // ─── Resumen de comisiones ──────────────────────────────────────────────────
 export function useComisionesResumen() {
   const { perfil } = useAuthStore()
-  const esSupervisor = perfil?.rol === 'supervisor'
+  const esPrivilegiado = perfil?.rol === 'supervisor' || perfil?.rol === 'administracion'
 
   return useQuery({
-    queryKey: [...COMISIONES_KEY, 'resumen', esSupervisor, perfil?.id],
+    queryKey: [...COMISIONES_KEY, 'resumen', esPrivilegiado, perfil?.id],
     queryFn: async () => {
       let query = supabase
         .from('comisiones')
@@ -61,7 +61,7 @@ export function useComisionesResumen() {
         .limit(1000)
 
       // Vendedores solo ven sus propias comisiones
-      if (!esSupervisor) query = query.eq('vendedor_id', perfil.id)
+      if (!esPrivilegiado) query = query.eq('vendedor_id', perfil.id)
 
       const { data, error } = await query
       if (error) throw error

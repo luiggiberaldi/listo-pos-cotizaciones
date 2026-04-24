@@ -37,8 +37,9 @@ function DarkBackground() {
 
 // ─── Colores de acento por rol ────────────────────────────────────────────────
 const ROL_ACCENT = {
-  supervisor: { color: '#3b82f6', glow: 'rgba(59,130,246,0.35)', chip: 'rgba(59,130,246,0.15)', chipBorder: 'rgba(59,130,246,0.3)', label: 'Supervisor' },
-  vendedor:   { color: '#14b8a6', glow: 'rgba(20,184,166,0.3)',  chip: 'rgba(20,184,166,0.12)', chipBorder: 'rgba(20,184,166,0.25)', label: 'Vendedor'   },
+  supervisor:     { color: '#3b82f6', glow: 'rgba(59,130,246,0.35)', chip: 'rgba(59,130,246,0.15)', chipBorder: 'rgba(59,130,246,0.3)', label: 'Supervisor' },
+  vendedor:       { color: '#14b8a6', glow: 'rgba(20,184,166,0.3)',  chip: 'rgba(20,184,166,0.12)', chipBorder: 'rgba(20,184,166,0.25)', label: 'Vendedor'   },
+  administracion: { color: '#f59e0b', glow: 'rgba(245,158,11,0.35)', chip: 'rgba(245,158,11,0.15)', chipBorder: 'rgba(245,158,11,0.3)', label: 'Administración' },
 }
 
 // ─── Tarjeta de usuario (Dark Premium) ───────────────────────────────────────
@@ -536,7 +537,7 @@ function UserSelectStep() {
                 'grid-cols-2 sm:grid-cols-3'
               }`}>
                 {[...usuarios].sort((a, b) => {
-                  const orden = { supervisor: 0, vendedor: 1 }
+                  const orden = { supervisor: 0, administracion: 1, vendedor: 2 }
                   return (orden[a.rol] ?? 2) - (orden[b.rol] ?? 2)
                 }).map((u, i) => (
                   <UserCard key={u.id} user={u} onClick={setSeleccionado} index={i} />

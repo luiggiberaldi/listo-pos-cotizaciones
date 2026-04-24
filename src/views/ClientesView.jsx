@@ -97,6 +97,7 @@ function SkeletonClientes() {
 export default function ClientesView() {
   const { perfil } = useAuthStore()
   const navigate = useNavigate()
+  const esAdministracion = perfil?.rol === 'administracion'
 
   // Búsqueda y filtros
   const [busqueda, setBusqueda] = useState('')
@@ -213,12 +214,12 @@ export default function ClientesView() {
         icon={Users}
         title="Clientes"
         subtitle={isLoading ? 'Cargando...' : `${clientesFiltrados.length} cliente${clientesFiltrados.length !== 1 ? 's' : ''}`}
-        action={
+        action={!esAdministracion && (
           <button onClick={abrirCrear} className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98]"
             style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
             <Plus size={16} />Nuevo cliente
           </button>
-        }
+        )}
       />
 
       {/* ── Barra de búsqueda ──────────────────────────────────────────────── */}
@@ -342,10 +343,10 @@ export default function ClientesView() {
           description={
             busqueda
               ? `No se encontraron clientes con "${busqueda}".`
-              : 'Crea tu primer cliente con el botón "Nuevo cliente".'
+              : esAdministracion ? 'No hay clientes registrados.' : 'Crea tu primer cliente con el botón "Nuevo cliente".'
           }
-          actionLabel={busqueda ? 'Limpiar búsqueda' : 'Nuevo cliente'}
-          onAction={busqueda ? limpiarBusqueda : abrirCrear}
+          actionLabel={busqueda ? 'Limpiar búsqueda' : !esAdministracion ? 'Nuevo cliente' : undefined}
+          onAction={busqueda ? limpiarBusqueda : !esAdministracion ? abrirCrear : undefined}
         />
       ) : clientesFiltrados.length === 0 ? (
         <EmptyState

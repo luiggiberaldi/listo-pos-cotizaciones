@@ -50,25 +50,26 @@ function NotifIcon({ type }) {
 const NAV_TODOS = [
   { path: '/',               label: 'Inicio',         icono: LayoutDashboard },
   { path: '/clientes',       label: 'Clientes',       icono: Users },
-  { path: '/cotizaciones',   label: 'Cotizaciones',   icono: FileText },
+  { path: '/cotizaciones',   label: 'Cotizaciones',   icono: FileText,   excludeRoles: ['administracion'] },
   { path: '/despachos',      label: 'Despachos',      icono: PackageCheck },
   { path: '/inventario',     label: 'Inventario',     icono: Package },
-  { path: '/transportistas', label: 'Transportistas', icono: Truck },
+  { path: '/transportistas', label: 'Transportistas', icono: Truck,      excludeRoles: ['administracion'] },
   { path: '/comisiones',     label: 'Comisiones',     icono: DollarSign },
 ]
 
 const NAV_SUPERVISOR = [
   { path: '/reportes',      label: 'Reportes',      icono: BarChart3 },
-  { path: '/configuracion', label: 'Configuración', icono: Settings },
+  { path: '/configuracion', label: 'Configuración', icono: Settings, excludeRoles: ['administracion'] },
 ]
 
 // ─── Badge de rol ──────────────────────────────────────────────────────────────
 function BadgeRol({ rol }) {
   const estilos = {
-    supervisor: 'bg-sky-500/20 text-sky-300 border border-sky-500/30',
-    vendedor:   'bg-teal-500/20 text-teal-300 border border-teal-500/30',
+    supervisor:      'bg-sky-500/20 text-sky-300 border border-sky-500/30',
+    vendedor:        'bg-teal-500/20 text-teal-300 border border-teal-500/30',
+    administracion:  'bg-amber-500/20 text-amber-300 border border-amber-500/30',
   }
-  const textos = { supervisor: 'Supervisor', vendedor: 'Vendedor' }
+  const textos = { supervisor: 'Supervisor', vendedor: 'Vendedor', administracion: 'Administración' }
   return (
     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${estilos[rol] ?? 'bg-white/10 text-white/50'}`}>
       {textos[rol] ?? rol}
@@ -160,6 +161,8 @@ export default function AppLayout() {
   }, [])
 
   const esSupervisor = perfil?.rol === 'supervisor'
+  const esAdministracion = perfil?.rol === 'administracion'
+  const esPrivilegiado = esSupervisor || esAdministracion
 
   // Página actual para título en topbar
   const location = useLocation()
@@ -398,10 +401,12 @@ export default function AppLayout() {
 
         {/* Navegación */}
         <nav className="relative z-10 flex-1 min-h-0 overflow-y-auto sidebar-scrollbar p-3 space-y-0.5">
-          {NAV_TODOS.map(({ path, label, icono: Icono }) => (
+          {NAV_TODOS
+            .filter(item => !item.excludeRoles || !item.excludeRoles.includes(perfil?.rol))
+            .map(({ path, label, icono: Icono }) => (
             <NavItem key={path} path={path} label={label} Icono={Icono} onClick={cerrarMenu} collapsed={sidebarCollapsed} />
           ))}
-          {esSupervisor && (
+          {esPrivilegiado && (
             <>
               {!sidebarCollapsed && (
                 <div className="pt-4 pb-1.5 px-3">
@@ -411,7 +416,9 @@ export default function AppLayout() {
                 </div>
               )}
               {sidebarCollapsed && <div className="pt-3 mt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }} />}
-              {NAV_SUPERVISOR.map(({ path, label, icono: Icono }) => (
+              {NAV_SUPERVISOR
+                .filter(item => !item.excludeRoles || !item.excludeRoles.includes(perfil?.rol))
+                .map(({ path, label, icono: Icono }) => (
                 <NavItem key={path} path={path} label={label} Icono={Icono} onClick={cerrarMenu} collapsed={sidebarCollapsed} />
               ))}
             </>
@@ -467,10 +474,10 @@ export default function AppLayout() {
       </main>
 
       {/* ── Bottom Navigation — solo móvil ──────────────────────────────── */}
-      <BottomNav esSupervisor={esSupervisor} />
+      <BottomNav esSupervisor={esSupervisor} esAdministracion={esAdministracion} />
 
-      {/* ── FAB Cotización Rápida — solo móvil ─────────────────────────── */}
-      <QuickQuoteFAB />
+      {/* ── FAB Cotización Rápida — solo móvil, no para administracion ── */}
+      {!esAdministracion && <QuickQuoteFAB />}
 
     </div>
   )

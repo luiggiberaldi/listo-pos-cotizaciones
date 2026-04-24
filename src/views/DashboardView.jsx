@@ -34,15 +34,16 @@ const ESTADO_LABEL = {
 function useMetricas() {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
+  const esPrivilegiado = esSupervisor || perfil?.rol === 'administracion'
 
   return useQuery({
-    queryKey: ['dashboard_metricas', perfil?.id, esSupervisor],
+    queryKey: ['dashboard_metricas', perfil?.id, esPrivilegiado],
     queryFn: async () => {
-      const tabla = esSupervisor ? 'cotizaciones' : 'v_cotizaciones_vendedor'
+      const tabla = esPrivilegiado ? 'cotizaciones' : 'v_cotizaciones_vendedor'
 
-      // Todas las cotizaciones del usuario (o todas si supervisor) — solo columnas necesarias
+      // Todas las cotizaciones del usuario (o todas si privilegiado) — solo columnas necesarias
       let q = supabase.from(tabla).select('id, estado, total_usd, creado_en').limit(1000)
-      if (!esSupervisor) q = q.eq('vendedor_id', perfil.id)
+      if (!esPrivilegiado) q = q.eq('vendedor_id', perfil.id)
       const { data: todas, error } = await q
       if (error) throw error
 
@@ -188,6 +189,8 @@ const MetricCard = memo(function MetricCard({ icon: Icon, label, value, sub, col
 export default function DashboardView() {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
+  const esAdministracion = perfil?.rol === 'administracion'
+  const esPrivilegiado = esSupervisor || esAdministracion
   const { data: m, isLoading } = useMetricas()
   const { data: comResumen } = useComisionesResumen()
   const { data: cxcResumen } = useResumenCxC()
@@ -269,7 +272,7 @@ export default function DashboardView() {
             sub={m?.tasaAceptacion !== null ? 'aceptadas vs rechazadas' : 'sin datos suficientes'}
             color="gold"
           />
-          {esSupervisor && cxcResumen?.totalDeuda > 0 && (
+          {esPrivilegiado && cxcResumen?.totalDeuda > 0 && (
             <MetricCard
               icon={AlertCircle}
               label="Cuentas por cobrar"
@@ -377,18 +380,18 @@ export default function DashboardView() {
             )}
           </div>
 
-          {/* Accesos rápidos (supervisor) / info simple (vendedor) */}
-          {esSupervisor ? (
+          {/* Accesos rápidos (privilegiado) / info simple (vendedor) */}
+          {esPrivilegiado ? (
             <div className="bg-white border border-slate-200 rounded-2xl p-5 flex flex-col gap-3">
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
                 <Users size={12} />Accesos rápidos
               </p>
               {[
-                { label: 'Gestionar usuarios', icon: UserCog, path: '/usuarios', colors: ['#1B365D', '#B8860B'] },
+                esSupervisor && { label: 'Gestionar usuarios', icon: UserCog, path: '/usuarios', colors: ['#1B365D', '#B8860B'] },
                 { label: 'Clientes',           icon: UserRound, path: '/clientes', colors: ['#0369a1', '#0ea5e9'] },
                 { label: 'Inventario',         icon: Package,  path: '/inventario', colors: ['#065f46', '#10b981'] },
                 { label: 'Reportes',           icon: BarChart2, path: '/reportes', colors: ['#7c3aed', '#a78bfa'] },
-              ].map(({ label, icon: Icon, path, colors }) => (
+              ].filter(Boolean).map(({ label, icon: Icon, path, colors }) => (
                 <button key={path} onClick={() => navigate(path)}
                   className="flex items-center justify-between w-full px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all group/btn hover:shadow-md"
                   style={{ background: 'linear-gradient(135deg, rgba(27,54,93,0.06), rgba(184,134,11,0.06))', border: '1px solid rgba(27,54,93,0.12)' }}>

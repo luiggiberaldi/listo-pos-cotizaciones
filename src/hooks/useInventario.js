@@ -15,12 +15,12 @@ export const INVENTARIO_KEY = ['inventario']
 // ─── Lista de productos ───────────────────────────────────────────────────────
 export function useInventario({ busqueda = '', categoria = '', page = 0, pageSize = 100 } = {}) {
   const { perfil } = useAuthStore()
-  const esSupervisor = perfil?.rol === 'supervisor'
+  const esPrivilegiado = perfil?.rol === 'supervisor' || perfil?.rol === 'administracion'
 
   return useQuery({
-    queryKey: [...INVENTARIO_KEY, busqueda, categoria, esSupervisor, page, pageSize],
+    queryKey: [...INVENTARIO_KEY, busqueda, categoria, esPrivilegiado, page, pageSize],
     queryFn: async () => {
-      if (esSupervisor) {
+      if (esPrivilegiado) {
         // Supervisor: tabla directa (con costo_usd)
         let query = supabase
           .from('productos')
@@ -50,9 +50,9 @@ export function useInventario({ busqueda = '', categoria = '', page = 0, pageSiz
         const productos = data ?? []
 
         // Stock bajo (solo supervisor, sin filtros, primera página)
-        if (esSupervisor && !busqueda && !categoria && page === 0) {
+        if (esPrivilegiado && !busqueda && !categoria && page === 0) {
           const bajos = productos.filter(p => p.stock_actual <= 0 || (p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo))
-          if (bajos.length > 0) notifyStockBajo(bajos, 'supervisor')
+          if (bajos.length > 0) notifyStockBajo(bajos, perfil?.rol ?? 'supervisor')
         }
 
         return { productos, totalCount: count ?? productos.length }
@@ -107,12 +107,12 @@ function getCategoryGroup(cat) {
 // ─── Categorías únicas (para el filtro) ──────────────────────────────────────
 export function useCategorias() {
   const { perfil } = useAuthStore()
-  const esSupervisor = perfil?.rol === 'supervisor'
+  const esPrivilegiado = perfil?.rol === 'supervisor' || perfil?.rol === 'administracion'
 
   return useQuery({
     queryKey: [...INVENTARIO_KEY, 'categorias'],
     queryFn: async () => {
-      if (esSupervisor) {
+      if (esPrivilegiado) {
         const { data, error } = await supabase
           .from('productos')
           .select('categoria')
@@ -182,7 +182,7 @@ export function useActualizarProducto() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ id, campos }) => {
+    mutationFn: async ({ id, campos, imagen_url }) => {
       const { data, error } = await supabase.rpc('actualizar_producto_con_kardex', {
         p_id:           id,
         p_codigo:       campos.codigo?.trim()      || null,
@@ -196,6 +196,7 @@ export function useActualizarProducto() {
         p_stock_minimo: Number(campos.stock_minimo) || 0,
         p_precio_2:     campos.precio_2 ? Number(campos.precio_2) : null,
         p_precio_3:     campos.precio_3 ? Number(campos.precio_3) : null,
+        p_imagen_url:   imagen_url ?? null,
       })
 
       if (error) {

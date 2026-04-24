@@ -8,21 +8,13 @@
     "binding": "ASSETS",
     "not_found_handling": "single-page-application"
   },
-  // Secrets are configured via `wrangler secret put <NAME>`:
-  //   SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEY,
-  //   VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY
-  // SUPABASE_SERVICE_KEY and VAPID_PRIVATE_KEY must be set via platform secrets.
-  // SUPABASE_ANON_KEY is safe in vars — it's public (also in the frontend bundle).
+  // Secrets must be configured in the deployment environment and never committed:
+  //   SUPABASE_SERVICE_KEY, VAPID_PRIVATE_KEY,
+  //   GROQ_KEYS_A, GROQ_KEYS_B, GROQ_KEYS_C
+  // Public values may stay in vars for local/deploy defaults.
   "vars": {
     "SUPABASE_URL": "https://oyfyuszgjwcepjpngclv.supabase.co",
     "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im95Znl1c3pnandjZXBqcG5nY2x2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0Mjk0NDMsImV4cCI6MjA5MTAwNTQ0M30.auhmnHCQ3a9wyv0nmhqWi1Q8iz0wavResvgsly6Gibs",
-    "SUPABASE_SERVICE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im95Znl1c3pnandjZXBqcG5nY2x2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTQyOTQ0MywiZXhwIjoyMDkxMDA1NDQzfQ.YoMbefzmBd7gbhRQeVNCagSXte_87OQIeYkwCasD8wk",
-    "VAPID_PUBLIC_KEY": "BBtDi5JNFg-JiIwE3ImrimyyiwcRY0-H8K7Q8PnvnOOHTAGBU5gpnU6SXjHN6MVg6tai7cmiGhpjHOsgFMWs5mc",
-    "VAPID_PRIVATE_KEY": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgLcgURm1jFsnJ9NN0q0STAP7qmxJfT2kOU77c_XJyswOhRANCAAQbQ4uSTRYPiYiMBNyJq4pssosHEWNPh_Cu0PD575zjh0wBgVOYKZ1Okl4xzejFYOrWou3JohoaYxzrIBTFrOZn",
-    // Groq API Keys — configurar via .env local o ya desplegadas en el Worker
-    // No incluir en el repo por seguridad
-    "GROQ_KEYS_A": "",
-    "GROQ_KEYS_B": "",
-    "GROQ_KEYS_C": ""
+    "VAPID_PUBLIC_KEY": "BBtDi5JNFg-JiIwE3ImrimyyiwcRY0-H8K7Q8PnvnOOHTAGBU5gpnU6SXjHN6MVg6tai7cmiGhpjHOsgFMWs5mc"
   }
 }

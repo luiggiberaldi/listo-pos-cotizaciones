@@ -16,6 +16,8 @@ import { showToast } from '../ui/Toast'
 export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular, onReciclar, tasa = 0, config = {}, estadoCambiando = false }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
+  const esAdministracion = perfil?.rol === 'administracion'
+  const esPrivilegiado = esSupervisor || esAdministracion
   const rol = perfil?.rol || 'vendedor'
   const [pdfLoading, setPdfLoading]   = useState(false)
   const [ordenLoading, setOrdenLoading] = useState(false)
@@ -311,8 +313,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         </div>
       </div>
 
-      {/* ── Vendedor (solo supervisor) ── */}
-      {esSupervisor && despacho.vendedor && (
+      {/* ── Vendedor (supervisor y administracion) ── */}
+      {esPrivilegiado && despacho.vendedor && (
         <div className="px-4 pb-3 flex items-center justify-between">
           <span className="text-xs text-slate-400">Vendedor</span>
           <span className="text-xs font-semibold px-2.5 py-1 rounded-full"

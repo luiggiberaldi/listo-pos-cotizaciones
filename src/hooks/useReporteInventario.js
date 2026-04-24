@@ -8,10 +8,10 @@ export const REPORTE_INVENTARIO_KEY = ['reporte-inventario']
 
 export function useReporteInventario() {
   const { perfil } = useAuthStore()
-  const esSupervisor = perfil?.rol === 'supervisor'
+  const esPrivilegiado = perfil?.rol === 'supervisor' || perfil?.rol === 'administracion'
 
   return useQuery({
-    queryKey: [...REPORTE_INVENTARIO_KEY, esSupervisor],
+    queryKey: [...REPORTE_INVENTARIO_KEY, esPrivilegiado],
     queryFn: async () => {
       // 1. Todos los productos activos
       const { data: productos, error: errProd } = await supabase
@@ -50,7 +50,7 @@ export function useReporteInventario() {
         const comprometido = stockComprometido[p.id] || 0
         const disponible = Math.max(0, Number(p.stock_actual) - comprometido)
         const valorVenta = Number(p.stock_actual) * Number(p.precio_usd)
-        const valorCosto = esSupervisor ? Number(p.stock_actual) * Number(p.costo_usd || 0) : null
+        const valorCosto = esPrivilegiado ? Number(p.stock_actual) * Number(p.costo_usd || 0) : null
         const ultimaActividad = ultimoMov[p.id] || null
         const diasSinMov = ultimaActividad
           ? Math.floor((Date.now() - new Date(ultimaActividad).getTime()) / (1000 * 60 * 60 * 24))
@@ -72,7 +72,7 @@ export function useReporteInventario() {
       // KPIs
       const totalProductos = items.length
       const totalValorVenta = items.reduce((s, i) => s + i.valorVenta, 0)
-      const totalValorCosto = esSupervisor ? items.reduce((s, i) => s + (i.valorCosto || 0), 0) : null
+      const totalValorCosto = esPrivilegiado ? items.reduce((s, i) => s + (i.valorCosto || 0), 0) : null
       const productosBajoStock = items.filter(i => i.bajStock)
       const productosSinMov30 = items.filter(i => i.diasSinMov >= 30 && Number(i.stock_actual) > 0)
       const productosSinMov60 = items.filter(i => i.diasSinMov >= 60 && Number(i.stock_actual) > 0)
@@ -86,7 +86,7 @@ export function useReporteInventario() {
         catMap[cat].count++
         catMap[cat].stockTotal += Number(i.stock_actual)
         catMap[cat].valorVenta += i.valorVenta
-        if (esSupervisor) catMap[cat].valorCosto += (i.valorCosto || 0)
+        if (esPrivilegiado) catMap[cat].valorCosto += (i.valorCosto || 0)
       })
       const porCategoria = Object.values(catMap).sort((a, b) => b.valorVenta - a.valorVenta)
 
@@ -98,7 +98,7 @@ export function useReporteInventario() {
           numBajoStock: productosBajoStock.length,
           numSinMov30: productosSinMov30.length,
           numSinMov90: productosSinMov90.length,
-          esSupervisor,
+          esPrivilegiado,
         },
         items,
         productosBajoStock,

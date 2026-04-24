@@ -28,6 +28,12 @@ const ROL_CONFIG = {
     text:     'text-primary',
     border:   'border-primary/20',
   },
+  administracion: {
+    label:    'Administración',
+    bg:       'bg-amber-50',
+    text:     'text-amber-700',
+    border:   'border-amber-200',
+  },
   vendedor: {
     label:    'Vendedor',
     bg:       'bg-slate-100',
@@ -114,6 +120,7 @@ function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
       <CustomSelect
         options={[
           { value: 'vendedor', label: 'Vendedor' },
+          { value: 'administracion', label: 'Administración' },
           { value: 'supervisor', label: 'Supervisor' },
         ]}
         value={campos.rol}
@@ -222,6 +229,7 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando, coloresUsados = 
       <CustomSelect
         options={[
           { value: 'vendedor', label: 'Vendedor' },
+          { value: 'administracion', label: 'Administración' },
           { value: 'supervisor', label: 'Supervisor' },
         ]}
         value={campos.rol}

@@ -14,8 +14,16 @@ function fmtBs(n) {
 function fmtPrecio(n, moneda, tasa) {
   const usd = Number(n || 0)
   if (moneda === 'bs' && tasa > 0) return fmtBs(usd * tasa)
-  if (moneda === 'mixto' && tasa > 0) return `${fmtUsd(usd)}  /  ${fmtBs(usd * tasa)}`
+  if ((moneda === 'mixto' || moneda === 'mixto_bcv') && tasa > 0) return `${fmtUsd(usd)}  /  ${fmtBs(usd * tasa)}`
   return fmtUsd(usd)
+}
+const MONEDA_LABELS = {
+  '$': 'Precio Detal USDT',
+  'bcv': 'Precio Detal BCV',
+  'bs': 'Precio Bs',
+  'mixto': 'Precio USDT / Bs',
+  'mixto_bcv': 'Precio BCV / Bs',
+  'usd': 'Precio Detal USD',
 }
 
 // ─── Layout y Colores ────────────────────────────────────────────────────────
@@ -84,7 +92,7 @@ function drawHeader(doc, logoData, config, moneda, tasa) {
   doc.setFontSize(8)
   doc.setFont('helvetica', 'normal')
   const fechaTxt = new Date().toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })
-  const tasaTxt = (moneda === 'bs' || moneda === 'mixto') && tasa > 0
+  const tasaTxt = (moneda === 'bs' || moneda === 'mixto' || moneda === 'mixto_bcv' || moneda === 'bcv') && tasa > 0
     ? `  ·  Tasa: Bs ${tasa.toFixed(2)}`
     : ''
   doc.text(fechaTxt + tasaTxt, PAGE_W - MARGIN, HDR_H - 3, { align: 'right' })
@@ -153,10 +161,10 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
   if (columnas.stock) rightCols.push({ key: 'stock', label: 'Disp.', w: 16 })
 
   // Precio principal — ancho depende de moneda
-  const precioW = moneda === 'mixto' ? 52 : 26
-  rightCols.push({ key: 'precio', label: moneda === 'bs' ? 'Precio Bs' : moneda === 'mixto' ? 'Precio USD / Bs' : 'Precio USD', w: precioW })
+  const precioW = (moneda === 'mixto' || moneda === 'mixto_bcv') ? 52 : 26
+  rightCols.push({ key: 'precio', label: MONEDA_LABELS[moneda] || 'Precio Detal USD', w: precioW })
 
-  if (columnas.precio2) rightCols.push({ key: 'precio2', label: 'Precio 2', w: 22 })
+  if (columnas.precio2) rightCols.push({ key: 'precio2', label: 'Precio Mayor USD', w: 26 })
   if (columnas.precio3) rightCols.push({ key: 'precio3', label: 'Precio 3', w: 22 })
 
   const rightTotalW = rightCols.reduce((sum, c) => sum + c.w, 0)
@@ -225,7 +233,7 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
 
     // Filas de productos
     items.forEach((p, idx) => {
-      y = checkPage(doc, y, 6.5)
+      y = checkPage(doc, y, 8)
       if (y < MARGIN + 14) {
         y = drawTableHeader(y)
         needsHeader = false
@@ -233,11 +241,11 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
 
       if (idx % 2 === 0) {
         doc.setFillColor(252, 252, 253)
-        doc.rect(MARGIN, y - 1, CONTENT_W, 6, 'F')
+        doc.rect(MARGIN, y - 1, CONTENT_W, 7.5, 'F')
       }
 
       doc.setFont('helvetica', 'normal')
-      doc.setFontSize(6)
+      doc.setFontSize(8)
       doc.setTextColor(...C_DARK)
 
       cols.forEach(col => {
@@ -278,7 +286,7 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
         doc.setTextColor(...C_DARK)
       })
 
-      y += 6
+      y += 7.5
     })
     y += 2
   })

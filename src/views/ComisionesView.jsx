@@ -308,6 +308,8 @@ export default function ComisionesView() {
   const navigate = useNavigate()
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
+  const esAdministracion = perfil?.rol === 'administracion'
+  const esPrivilegiado = esSupervisor || esAdministracion
 
   const [filtroEstado,   setFiltroEstado]   = useState('')
   const [filtroVendedor, setFiltroVendedor] = useState('')
@@ -316,7 +318,7 @@ export default function ComisionesView() {
 
   const { data: comisiones = [], isLoading } = useComisiones({
     estado:     filtroEstado,
-    vendedorId: esSupervisor ? filtroVendedor : '',
+    vendedorId: esPrivilegiado ? filtroVendedor : '',
   })
   const { data: resumen,   isLoading: resumenLoading } = useComisionesResumen()
   const { data: vendedores = [] } = useVendedores()
@@ -399,7 +401,7 @@ export default function ComisionesView() {
           <option value="pendiente">Pendientes</option>
           <option value="pagada">Pagadas</option>
         </select>
-        {esSupervisor && (
+        {esPrivilegiado && (
           <select value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)} className={selectCls}>
             <option value="">Todos los vendedores</option>
             {vendedores.map(v => (

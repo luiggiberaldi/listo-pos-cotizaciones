@@ -7,20 +7,22 @@ import { PackageCheck, Truck, DollarSign, BarChart3, Settings, AlertCircle } fro
 
 const BOTTOM_ITEMS = [
   { path: '/', label: 'Inicio', icon: LayoutDashboard },
-  { path: '/cotizaciones', label: 'Cotizaciones', icon: FileText },
+  { path: '/cotizaciones', label: 'Cotizaciones', icon: FileText, excludeRoles: ['administracion'] },
   { path: '/clientes', label: 'Clientes', icon: Users },
   { path: '/inventario', label: 'Inventario', icon: Package },
 ]
 
 const MORE_ITEMS = [
   { path: '/despachos', label: 'Despachos', icon: PackageCheck },
-  { path: '/transportistas', label: 'Transportistas', icon: Truck },
+  { path: '/transportistas', label: 'Transportistas', icon: Truck, excludeRoles: ['administracion'] },
   { path: '/comisiones', label: 'Comisiones', icon: DollarSign },
-  { path: '/reportes', label: 'Reportes', icon: BarChart3, supervisorOnly: true },
+  { path: '/reportes', label: 'Reportes', icon: BarChart3, requiresPrivileged: true },
   { path: '/configuracion', label: 'Configuración', icon: Settings, supervisorOnly: true },
 ]
 
-export default function BottomNav({ esSupervisor }) {
+export default function BottomNav({ esSupervisor, esAdministracion = false }) {
+  const esPrivilegiado = esSupervisor || esAdministracion
+  const rol = esAdministracion ? 'administracion' : esSupervisor ? 'supervisor' : 'vendedor'
   const [showMore, setShowMore] = useState(false)
 
   return (
@@ -36,8 +38,10 @@ export default function BottomNav({ esSupervisor }) {
           style={{ background: '#0f1f3c', border: '1px solid rgba(255,255,255,0.1)' }}>
           <div className="grid grid-cols-3 gap-1 p-3">
             {MORE_ITEMS.filter(item => {
-              if (!esSupervisor && ['/reportes', '/auditoria', '/configuracion', '/logs'].includes(item.path)) return false
+              if (item.excludeRoles && item.excludeRoles.includes(rol)) return false
               if (item.supervisorOnly && !esSupervisor) return false
+              if (item.requiresPrivileged && !esPrivilegiado) return false
+              if (!esSupervisor && ['/auditoria', '/logs'].includes(item.path)) return false
               return true
             }).map(({ path, label, icon: Icon }) => (
               <NavLink
@@ -66,7 +70,9 @@ export default function BottomNav({ esSupervisor }) {
           boxShadow: '0 -4px 24px rgba(0,0,0,0.3)',
         }}>
         <div className="flex items-center justify-around px-2 h-16">
-          {BOTTOM_ITEMS.map(({ path, label, icon: Icon }) => (
+          {BOTTOM_ITEMS
+            .filter(item => !item.excludeRoles || !item.excludeRoles.includes(rol))
+            .map(({ path, label, icon: Icon }) => (
             <NavLink
               key={path}
               to={path}

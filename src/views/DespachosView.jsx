@@ -94,6 +94,8 @@ export default function DespachosView() {
   const navigate = useNavigate()
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
+  const esAdministracion = perfil?.rol === 'administracion'
+  const esPrivilegiado = esSupervisor || esAdministracion
   const rol = perfil?.rol || 'vendedor'
   const { tasaEfectiva } = useTasaCambio()
   const { data: config = {} } = useConfigNegocio()
@@ -181,8 +183,8 @@ export default function DespachosView() {
           </button>
         ))}
 
-        {/* Filtro por vendedor — solo supervisor */}
-        {esSupervisor && vendedores.length > 1 && (
+        {/* Filtro por vendedor — supervisor y administracion */}
+        {esPrivilegiado && vendedores.length > 1 && (
           <>
             <div className="w-px h-5 bg-slate-200 mx-1 hidden sm:block" />
             <VendedorFilterPill vendedores={vendedores} value={vendedorFiltro} onChange={setVendedorFiltro} />

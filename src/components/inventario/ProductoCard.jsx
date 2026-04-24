@@ -61,7 +61,8 @@ function BadgeStock({ actual, minimo, comprometido = 0, productoId }) {
 
 export default function ProductoCard({ producto, onEditar, onDesactivar, onBorrar, onKardex, tasa = 0, comprometido = 0 }) {
   const { perfil } = useAuthStore()
-  const esSupervisor = perfil?.rol === 'supervisor'
+  const esAdministracion = perfil?.rol === 'administracion'
+  const esPrivilegiado = perfil?.rol === 'supervisor' || esAdministracion
   const { fg, bg } = colorCategoria(producto.categoria || '')
 
   const stockActual = Number(producto.stock_actual) || 0
@@ -133,7 +134,7 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, onBorra
             </div>
           </div>
 
-          {esSupervisor && producto.costo_usd != null && (
+          {esPrivilegiado && producto.costo_usd != null && (
             <div className="flex items-center justify-between">
               <span className="text-[10px] text-slate-400">Costo</span>
               <div className="text-right">
@@ -155,25 +156,29 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, onBorra
         </div>
       </div>
 
-      {/* Acciones — iconos compactos */}
-      {esSupervisor && (
+      {/* Acciones — iconos compactos (solo administracion puede CRUD, supervisor y admin ven kardex) */}
+      {esPrivilegiado && (
         <div className="border-t border-slate-100 px-1.5 py-1.5 flex items-center justify-between">
           <button onClick={() => onKardex(producto)} title="Kardex"
             className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-violet-600 hover:bg-violet-50 transition-colors">
             <ClipboardList size={11} />Kardex
           </button>
-          <button onClick={() => onEditar(producto)} title="Editar"
-            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-sky-600 hover:bg-sky-50 transition-colors">
-            <Pencil size={11} />Editar
-          </button>
-          <button onClick={() => onDesactivar(producto)} title="Desactivar"
-            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-amber-500 hover:bg-amber-50 transition-colors">
-            <EyeOff size={11} />
-          </button>
-          <button onClick={() => onBorrar(producto)} title="Borrar"
-            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-red-500 hover:bg-red-50 transition-colors">
-            <Trash2 size={11} />
-          </button>
+          {esAdministracion && (
+            <>
+              <button onClick={() => onEditar(producto)} title="Editar"
+                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-sky-600 hover:bg-sky-50 transition-colors">
+                <Pencil size={11} />Editar
+              </button>
+              <button onClick={() => onDesactivar(producto)} title="Desactivar"
+                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-amber-500 hover:bg-amber-50 transition-colors">
+                <EyeOff size={11} />
+              </button>
+              <button onClick={() => onBorrar(producto)} title="Borrar"
+                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-red-500 hover:bg-red-50 transition-colors">
+                <Trash2 size={11} />
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>

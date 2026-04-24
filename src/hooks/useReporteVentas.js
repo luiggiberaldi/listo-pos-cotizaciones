@@ -12,10 +12,10 @@ export const REPORTE_KEY = ['reporte-ventas']
  */
 export function useReporteVentas({ from, to, prevFrom, prevTo }) {
   const { perfil } = useAuthStore()
-  const esSupervisor = perfil?.rol === 'supervisor'
+  const esPrivilegiado = perfil?.rol === 'supervisor' || perfil?.rol === 'administracion'
 
   return useQuery({
-    queryKey: [...REPORTE_KEY, from, to, prevFrom, prevTo, esSupervisor, perfil?.id],
+    queryKey: [...REPORTE_KEY, from, to, prevFrom, prevTo, esPrivilegiado, perfil?.id],
     queryFn: async () => {
       // ── 1. Despachos entregados período actual + anterior en paralelo ──
       // Construir offset de zona horaria local para filtros correctos
@@ -39,7 +39,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
           .gte('entregada_en', `${f}T00:00:00${tzStr}`)
           .lte('entregada_en', `${t}T23:59:59${tzStr}`)
           .order('entregada_en', { ascending: false })
-        if (!esSupervisor) q = q.eq('vendedor_id', perfil.id)
+        if (!esPrivilegiado) q = q.eq('vendedor_id', perfil.id)
         return q
       }
 
@@ -51,7 +51,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
             .select('id, vendedor_id, total_comision, estado, creado_en')
             .gte('creado_en', `${from}T00:00:00${tzStr}`)
             .lte('creado_en', `${to}T23:59:59${tzStr}`)
-          if (!esSupervisor) q = q.eq('vendedor_id', perfil.id)
+          if (!esPrivilegiado) q = q.eq('vendedor_id', perfil.id)
           return q
         })(),
         (() => {
@@ -59,7 +59,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
             .select('id, vendedor_id, total_comision, estado, creado_en')
             .gte('creado_en', `${prevFrom}T00:00:00${tzStr}`)
             .lte('creado_en', `${prevTo}T23:59:59${tzStr}`)
-          if (!esSupervisor) q = q.eq('vendedor_id', perfil.id)
+          if (!esPrivilegiado) q = q.eq('vendedor_id', perfil.id)
           return q
         })(),
       ])

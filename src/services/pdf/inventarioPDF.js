@@ -113,12 +113,12 @@ export async function generarInventarioPDF({ reporte, config = {} }) {
   const { kpis, items, productosBajoStock, productosSinMov90, porCategoria } = reporte
 
   // ═══ KPIs ═══
-  const kpiBoxW = kpis.esSupervisor ? CONTENT_W / 4 : CONTENT_W / 3
+  const kpiBoxW = kpis.esPrivilegiado ? CONTENT_W / 4 : CONTENT_W / 3
   const kpiBoxH = 18
   const kpiData = [
     { label: 'Total productos', value: String(kpis.totalProductos), color: C_PRIMARY },
-    ...(kpis.esSupervisor ? [{ label: 'Valor a costo', value: fmtUsd(kpis.totalValorCosto), color: C_EMERALD }] : []),
-    { label: 'Valor a precio venta', value: fmtUsd(kpis.totalValorVenta), color: kpis.esSupervisor ? C_AMBER : C_EMERALD },
+    ...(kpis.esPrivilegiado ? [{ label: 'Valor a costo', value: fmtUsd(kpis.totalValorCosto), color: C_EMERALD }] : []),
+    { label: 'Valor a precio venta', value: fmtUsd(kpis.totalValorVenta), color: kpis.esPrivilegiado ? C_AMBER : C_EMERALD },
     { label: 'Bajo stock', value: String(kpis.numBajoStock), color: C_RED },
   ]
 
@@ -143,7 +143,7 @@ export async function generarInventarioPDF({ reporte, config = {} }) {
   doc.text('Resumen por Categoría', MARGIN, y + 4)
   y += 8
 
-  const catCols = kpis.esSupervisor
+  const catCols = kpis.esPrivilegiado
     ? [
         { label: 'Categoría', x: MARGIN, w: 48 },
         { label: 'Productos', x: MARGIN + 48, w: 22 },
@@ -190,7 +190,7 @@ export async function generarInventarioPDF({ reporte, config = {} }) {
     doc.text(String(cat.count), catCols[1].x + 1, y + 3)
     doc.text(fmtNum(cat.stockTotal), catCols[2].x + 1, y + 3)
 
-    if (kpis.esSupervisor) {
+    if (kpis.esPrivilegiado) {
       doc.text(fmtUsd(cat.valorCosto), catCols[3].x + 1, y + 3)
       doc.setFont('helvetica', 'bold')
       doc.text(fmtUsd(cat.valorVenta), catCols[4].x + 1, y + 3)
@@ -218,7 +218,7 @@ export async function generarInventarioPDF({ reporte, config = {} }) {
   doc.setTextColor(...C_DARK)
   doc.text('TOTAL', MARGIN + 1, y + 3)
   doc.text(String(items.length), catCols[1].x + 1, y + 3)
-  if (kpis.esSupervisor) {
+  if (kpis.esPrivilegiado) {
     doc.text(fmtUsd(kpis.totalValorCosto), catCols[3].x + 1, y + 3)
     doc.text(fmtUsd(kpis.totalValorVenta), catCols[4].x + 1, y + 3)
   } else {

@@ -1,7 +1,7 @@
 // src/components/inventario/ListaPreciosModal.jsx
 // Modal para configurar y generar PDF "Lista de Precios" para clientes
 import { useState } from 'react'
-import { FileText, Loader2, DollarSign, Check, X } from 'lucide-react'
+import { FileText, Loader2, DollarSign, Check, X, PackageCheck } from 'lucide-react'
 
 export default function ListaPreciosModal({
   isOpen,
@@ -11,7 +11,8 @@ export default function ListaPreciosModal({
   tasa = 0,
   config = {},
 }) {
-  const [moneda, setMoneda] = useState('usd')
+  const [moneda, setMoneda] = useState('$')
+  const [soloConStock, setSoloConStock] = useState(true)
   const [modoCats, setModoCats] = useState('todas') // 'todas' | 'seleccionar'
   const [catsSeleccionadas, setCatsSeleccionadas] = useState(new Set())
   const [columnas, setColumnas] = useState({
@@ -38,9 +39,13 @@ export default function ListaPreciosModal({
     setColumnas(prev => ({ ...prev, [key]: !prev[key] }))
   }
 
-  const productosFiltrados = modoCats === 'todas'
-    ? productos
-    : productos.filter(p => catsSeleccionadas.has(p.categoria || 'Sin categoría'))
+  const productosFiltrados = (() => {
+    let lista = modoCats === 'todas'
+      ? productos
+      : productos.filter(p => catsSeleccionadas.has(p.categoria || 'Sin categoría'))
+    if (soloConStock) lista = lista.filter(p => Number(p.stock_actual) > 0)
+    return lista
+  })()
 
   const handleGenerar = async () => {
     setGenerando(true)
@@ -63,16 +68,18 @@ export default function ListaPreciosModal({
   const tieneP3 = productos.some(p => p.precio_3 != null)
 
   const MONEDAS = [
-    { value: 'usd', label: 'Solo USD ($)', icon: '$' },
-    { value: 'bs', label: 'Solo Bolívares', icon: 'Bs' },
-    { value: 'mixto', label: 'Mixto ($ y Bs)', icon: '$/Bs' },
+    { value: '$', label: 'USDT ($)', icon: '$' },
+    { value: 'bcv', label: 'Dólar BCV', icon: '$' },
+    { value: 'bs', label: 'Bolívares', icon: 'Bs' },
+    { value: 'mixto', label: 'Mixto USDT', icon: '$/Bs' },
+    { value: 'mixto_bcv', label: 'Mixto BCV', icon: '$/Bs' },
   ]
 
   const COLUMNAS_OPT = [
     { key: 'codigo', label: 'Código' },
     { key: 'unidad', label: 'Unidad' },
     { key: 'stock', label: 'Stock disponible' },
-    ...(tieneP2 ? [{ key: 'precio2', label: 'Precio 2' }] : []),
+    ...(tieneP2 ? [{ key: 'precio2', label: 'Precio Mayor' }] : []),
     ...(tieneP3 ? [{ key: 'precio3', label: 'Precio 3' }] : []),
   ]
 
@@ -160,6 +167,35 @@ export default function ListaPreciosModal({
             )}
           </div>
 
+          {/* ── 1b. Filtro stock ── */}
+          <button type="button" onClick={() => setSoloConStock(!soloConStock)}
+            className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-left transition-all active:scale-[0.98] ${
+              soloConStock
+                ? 'bg-emerald-50 border-2 border-emerald-400'
+                : 'bg-white border border-slate-200 hover:border-slate-300'
+            }`}>
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+              soloConStock ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400'
+            }`}>
+              <PackageCheck size={15} />
+            </div>
+            <div className="flex-1">
+              <span className={`text-sm font-semibold ${soloConStock ? 'text-emerald-700' : 'text-slate-600'}`}>
+                Solo productos con stock
+              </span>
+              <p className="text-[11px] text-slate-400">Excluir productos sin existencia</p>
+            </div>
+            {soloConStock && (
+              <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
+                <Check size={12} color="white" />
+              </div>
+            )}
+          </button>
+
+          <p className="text-xs text-blue-600 font-medium ml-1">
+            {productosFiltrados.length} productos a incluir
+          </p>
+
           {/* ── 2. Moneda ── */}
           <div className="space-y-2.5">
             <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Moneda</label>
@@ -187,10 +223,10 @@ export default function ListaPreciosModal({
                 </button>
               ))}
             </div>
-            {(moneda === 'bs' || moneda === 'mixto') && tasa > 0 && (
+            {['bs', 'mixto', 'mixto_bcv', 'bcv'].includes(moneda) && tasa > 0 && (
               <p className="text-xs text-slate-400 ml-1">Tasa vigente: Bs {tasa.toFixed(2)}</p>
             )}
-            {(moneda === 'bs' || moneda === 'mixto') && tasa <= 0 && (
+            {['bs', 'mixto', 'mixto_bcv', 'bcv'].includes(moneda) && tasa <= 0 && (
               <p className="text-xs text-amber-600 font-medium ml-1">No hay tasa disponible — se mostrará en USD</p>
             )}
           </div>

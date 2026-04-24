@@ -9,6 +9,7 @@ import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs } from '../../utils/fo
 export default memo(function DespachoRow({ despacho, onVer, tasa = 0 }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
+  const esPrivilegiado = esSupervisor || perfil?.rol === 'administracion'
   const vendedorColor = despacho.vendedor?.color || '#64748b'
 
   const numDisplay = despacho.cotizacion
@@ -41,7 +42,7 @@ export default memo(function DespachoRow({ despacho, onVer, tasa = 0 }) {
             {despacho.cliente?.nombre && (
               <span className="truncate max-w-[200px] font-medium" style={{ color: despacho.cliente?.vendedor?.color || vendedorColor }}>{despacho.cliente.nombre}</span>
             )}
-            {esSupervisor && despacho.vendedor && (
+            {esPrivilegiado && despacho.vendedor && (
               <>
                 <span className="text-slate-300">·</span>
                 <span style={{ color: vendedorColor }}>{despacho.vendedor.nombre}</span>

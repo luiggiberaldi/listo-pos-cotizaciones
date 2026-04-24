@@ -9,10 +9,10 @@ export const REPORTE_DESPACHOS_KEY = ['reporte-despachos']
 
 export function useReporteDespachos({ from, to }) {
   const { perfil } = useAuthStore()
-  const esSupervisor = perfil?.rol === 'supervisor'
+  const esPrivilegiado = perfil?.rol === 'supervisor' || perfil?.rol === 'administracion'
 
   return useQuery({
-    queryKey: [...REPORTE_DESPACHOS_KEY, from, to, esSupervisor, perfil?.id],
+    queryKey: [...REPORTE_DESPACHOS_KEY, from, to, esPrivilegiado, perfil?.id],
     queryFn: async () => {
       const rawOffset = new Date().getTimezoneOffset()
       const sign = rawOffset <= 0 ? '+' : '-'
@@ -31,7 +31,7 @@ export function useReporteDespachos({ from, to }) {
         .lte('creado_en', `${to}T23:59:59${tzStr}`)
         .order('creado_en', { ascending: false })
 
-      if (!esSupervisor) q = q.eq('vendedor_id', perfil.id)
+      if (!esPrivilegiado) q = q.eq('vendedor_id', perfil.id)
 
       const { data: despachos, error } = await q
       if (error) throw error

@@ -141,6 +141,28 @@ function RutaSupervisor() {
   return <Outlet />
 }
 
+// ─── Ruta para supervisor O administracion ───────────────────────────────────
+// Para secciones compartidas como reportes
+function RutaSupervisorOAdmin() {
+  const { perfil, initialized } = useAuthStore()
+
+  if (!initialized) return <PantallaCarga />
+  if (!perfil) return <Navigate to="/login" replace />
+  if (perfil.rol !== 'supervisor' && perfil.rol !== 'administracion') return <Navigate to="/" replace />
+  return <Outlet />
+}
+
+// ─── Ruta que excluye un rol específico ──────────────────────────────────────
+// Administracion NO puede ver cotizaciones ni transportistas
+function RutaExcluyeAdmin() {
+  const { perfil, initialized } = useAuthStore()
+
+  if (!initialized) return <PantallaCarga />
+  if (!perfil) return <Navigate to="/login" replace />
+  if (perfil.rol === 'administracion') return <Navigate to="/" replace />
+  return <Outlet />
+}
+
 // ─── App raíz ─────────────────────────────────────────────────────────────────
 function AppRoutes() {
   const initialize = useAuthStore((s) => s.initialize)
@@ -176,16 +198,24 @@ function AppRoutes() {
           <Route element={<AppLayout />}>
             <Route path="/"               element={<DashboardView />} />
             <Route path="/clientes"       element={<ClientesView />} />
-            <Route path="/cotizaciones"   element={<CotizacionesView />} />
             <Route path="/despachos"      element={<DespachosView />} />
             <Route path="/inventario"     element={<InventarioView />} />
-            <Route path="/transportistas" element={<TransportistasView />} />
             <Route path="/comisiones"    element={<ComisionesView />} />
+
+            {/* Cotizaciones y transportistas: todos menos administracion */}
+            <Route element={<RutaExcluyeAdmin />}>
+              <Route path="/cotizaciones"   element={<CotizacionesView />} />
+              <Route path="/transportistas" element={<TransportistasView />} />
+            </Route>
+
+            {/* Reportes: supervisor y administracion */}
+            <Route element={<RutaSupervisorOAdmin />}>
+              <Route path="/reportes"      element={<ReportesView />} />
+            </Route>
 
             {/* Rutas exclusivas de supervisor */}
             <Route element={<RutaSupervisor />}>
               <Route path="/usuarios"      element={<UsuariosView />} />
-              <Route path="/reportes"      element={<ReportesView />} />
               <Route path="/configuracion" element={<ConfiguracionView />} />
               <Route path="/logs"          element={<LogsView />} />
             </Route>

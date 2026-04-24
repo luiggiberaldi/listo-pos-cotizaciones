@@ -12,6 +12,7 @@ import { useCategorias } from '../hooks/useInventario'
 import CustomSelect from '../components/ui/CustomSelect'
 import { fmtUsd } from '../utils/format'
 import { adminAPI } from '../services/supabase/adminClient'
+import useAuthStore from '../store/useAuthStore'
 import UsuariosView from './UsuariosView'
 import PageHeader  from '../components/ui/PageHeader'
 
@@ -214,6 +215,8 @@ function ComisionesTab({ campos, cambiar, isLoading, cargando }) {
 export default function ConfiguracionView() {
   const { data: config = {}, isLoading } = useConfigNegocio()
   const actualizar = useActualizarConfig()
+  const { perfil } = useAuthStore()
+  const esSuperAdmin = perfil?.id === '00000000-0000-0000-0000-000000000000'
   const [tab, setTab]         = useState('comisiones')
   const [guardado, setGuardado] = useState(false)
   const [error,    setError]    = useState('')
@@ -543,6 +546,7 @@ export default function ConfiguracionView() {
             )}
           </div>
 
+          {esSuperAdmin && (
           <div className="bg-white rounded-2xl border border-red-200 p-5 space-y-4">
             <div className="flex items-center gap-3 mb-1">
               <div className="w-0.5 self-stretch rounded-full shrink-0 bg-red-400" style={{ minHeight: '20px' }} />
@@ -619,6 +623,7 @@ export default function ConfiguracionView() {
               )}
             </div>
           </div>
+          )}
         </div>
       )}
     </div>

@@ -36,10 +36,10 @@ export function useCuentasCobrar(clienteId) {
 // ─── Resumen global CxC (para reporte) ────────────────────────────────────
 export function useResumenCxC() {
   const { perfil } = useAuthStore()
-  const esSupervisor = perfil?.rol === 'supervisor'
+  const esPrivilegiado = perfil?.rol === 'supervisor' || perfil?.rol === 'administracion'
 
   return useQuery({
-    queryKey: [...CXC_KEY, 'resumen', esSupervisor, perfil?.id],
+    queryKey: [...CXC_KEY, 'resumen', esPrivilegiado, perfil?.id],
     queryFn: async () => {
       // Obtener clientes con saldo pendiente > 0
       let query = supabase
@@ -53,7 +53,7 @@ export function useResumenCxC() {
         .eq('activo', true)
         .order('saldo_pendiente', { ascending: false })
 
-      if (!esSupervisor) query = query.eq('vendedor_id', perfil.id)
+      if (!esPrivilegiado) query = query.eq('vendedor_id', perfil.id)
 
       const { data: clientesConDeuda, error } = await query
       if (error) throw error
