@@ -413,17 +413,25 @@ async function groqFetch(env, grupo, messages, { maxTokens = 2048, temperature =
 // Extrae operator_id/operator_rol de app_metadata si están presentes
 async function verifyAuth(request, env) {
   const authHeader = request.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) return null;
+  if (!authHeader?.startsWith('Bearer ')) {
+    console.error('[verifyAuth] FAIL: no Bearer header');
+    return null;
+  }
   const token = authHeader.slice(7);
 
   // Verificar el token llamando a Supabase auth
-  const res = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
+  const supaUrl = `${env.SUPABASE_URL}/auth/v1/user`;
+  const res = await fetch(supaUrl, {
     headers: {
       Authorization: `Bearer ${token}`,
       apikey: env.SUPABASE_ANON_KEY,
     },
   });
-  if (!res.ok) return null;
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    console.error(`[verifyAuth] FAIL: Supabase returned ${res.status}. URL: ${supaUrl}. Body: ${body.slice(0, 300)}`);
+    return null;
+  }
   const user = await res.json();
   // Attach operator context from app_metadata (set by switch-operator)
   user.operator_id = user.app_metadata?.operator_id || null;
