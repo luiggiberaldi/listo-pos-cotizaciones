@@ -2032,6 +2032,7 @@ async function handleCrearDespacho(request, env) {
         transportista_id: transportistaId || cot.transportista_id,
         estado: 'pendiente',
         total_usd: totalConFlete,
+        flete_usd: flete,
         notas: notas || null,
         forma_pago: formaPago || null,
         creado_por: user.operator_id,

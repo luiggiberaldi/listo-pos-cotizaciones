@@ -28,7 +28,7 @@ export function useDespachos({ estado = '' } = {}) {
         .from('notas_despacho')
         .select(`
           id, numero, cotizacion_id, estado,
-          total_usd, notas, forma_pago,
+          total_usd, flete_usd, notas, forma_pago,
           creado_en, despachada_en, entregada_en,
           cliente_id, vendedor_id, transportista_id,
           transportista:transportistas!notas_despacho_transportista_id_fkey(id, nombre, rif, telefono, color, zona_cobertura, vehiculo, placa_chuto, placa_batea),

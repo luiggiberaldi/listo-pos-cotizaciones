@@ -362,13 +362,17 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   const totW = (monedaPDF === 'mixto' || monedaPDF === 'mixto_bcv') ? 90 : 75
   const totX = PAGE_W - MARGIN - totW
   const total = Number(despacho.total_usd || 0)
+  const flete = Number(despacho.flete_usd || 0)
+  const subtotal = flete > 0 ? total - flete : total
+  const hasFlete = flete > 0
 
   // Posicionar recuadro unificado fijo sobre el chofer
-  const ty = choferY - 24
+  const desgloseH = hasFlete ? 14 : 0
+  const ty = choferY - 24 - desgloseH
 
   const fp = (formaPago || despacho.forma_pago || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
-  // ── Recuadro unificado: FORMA DE PAGO + TOTAL ──
+  // ── Recuadro unificado: FORMA DE PAGO + DESGLOSE + TOTAL ──
 
   // Fila FORMA DE PAGO arriba (con borde)
   const fpY = ty
@@ -387,8 +391,26 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   drawCheck(doc, 'TRANSF.',    MARGIN + 114, fpY + 6, fp === 'transferencia')
   drawCheck(doc, 'CTA X COB.', MARGIN + 134, fpY + 6, fp === 'cta por cobrar')
 
+  // Desglose Subtotal + Flete (solo si hay flete)
+  if (hasFlete) {
+    const desY = fpY + 9
+    doc.setDrawColor(120, 120, 120)
+    doc.setLineWidth(0.2)
+
+    doc.rect(MARGIN, desY, CONTENT_W, 7, 'S')
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(...C_DARK)
+    doc.text('Subtotal', MARGIN + 4, desY + 5)
+    doc.text(fmtTotal(subtotal, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, desY + 5, { align: 'right' })
+
+    doc.rect(MARGIN, desY + 7, CONTENT_W, 7, 'S')
+    doc.text('Flete', MARGIN + 4, desY + 12)
+    doc.text(fmtTotal(flete, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, desY + 12, { align: 'right' })
+  }
+
   // Barra oscura TOTAL abajo (ancho completo)
-  const totTopY = fpY + 9
+  const totTopY = fpY + 9 + desgloseH
   doc.setFillColor(60, 60, 60)
   doc.rect(MARGIN, totTopY, CONTENT_W, 10, 'F')
 
