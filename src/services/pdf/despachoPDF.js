@@ -433,14 +433,13 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const ty = transportistaStartY - 5 - TOTALES_H       // fijo sobre transportista
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 4. CONDICIONES + CUENTAS BANCARIAS (izq) + TOTALES (der) — fijo
+  // 4. CONDICIONES (izq) + CUENTAS BANCARIAS (der) — en una sola línea
   // ══════════════════════════════════════════════════════════════════════════
-  const totW = (monedaPDF === 'mixto' || monedaPDF === 'mixto_bcv') ? 90 : 75
-  const totX = PAGE_W - MARGIN - totW
-  const leftW = totX - MARGIN - 5
   const total = Number(despacho.total_usd || 0)
 
-  // ── Condiciones (izquierda) — recuadro compacto ──
+  const halfW = CONTENT_W / 2 - 2
+
+  // ── Condiciones (izquierda) ──
   const condiciones = [
     'Precios Sujetos a cambios sin previo aviso.',
     'El cliente se encarga de descargar la mercancía.',
@@ -452,38 +451,48 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.setFillColor(245, 245, 245)
   doc.setDrawColor(100, 100, 100)
   doc.setLineWidth(0.4)
-  doc.roundedRect(MARGIN, ty, leftW, condBoxH, 1, 1, 'FD')
+  doc.roundedRect(MARGIN, ty, halfW, condBoxH, 1, 1, 'FD')
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9)
+  doc.setFontSize(8)
   doc.setTextColor(...C_DARK)
   doc.text('CONDICIONES GENERALES:', MARGIN + condPadding, ty + condPadding + 3.5)
 
   doc.setDrawColor(100, 100, 100)
   doc.setLineWidth(0.2)
-  doc.line(MARGIN + condPadding, ty + condPadding + 5.5, MARGIN + leftW - condPadding, ty + condPadding + 5.5)
+  doc.line(MARGIN + condPadding, ty + condPadding + 5.5, MARGIN + halfW - condPadding, ty + condPadding + 5.5)
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8.5)
+  doc.setFontSize(7.5)
   let condY = ty + condPadding + 9.5
   condiciones.forEach(c => {
     doc.text(`• ${c}`, MARGIN + condPadding, condY)
     condY += condLineH
   })
 
-  condY = ty + condBoxH + 1
+  // ── Cuentas bancarias (derecha) ──
+  const rightX = MARGIN + halfW + 4
 
-  // Cuentas bancarias (compactas)
+  doc.setFillColor(245, 245, 245)
+  doc.setDrawColor(100, 100, 100)
+  doc.setLineWidth(0.4)
+  doc.roundedRect(rightX, ty, halfW, condBoxH, 1, 1, 'FD')
+
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7.5)
+  doc.setFontSize(7)
   doc.setTextColor(...C_DARK)
-  doc.text('Transferencias a nombre de ' + (config.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.').toUpperCase(), MARGIN, condY + 3)
-  condY += 4
+  doc.text('Transferencias a nombre de ' + (config.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.').toUpperCase(), rightX + condPadding, ty + condPadding + 3.5)
+
+  doc.setDrawColor(100, 100, 100)
+  doc.setLineWidth(0.2)
+  doc.line(rightX + condPadding, ty + condPadding + 5.5, rightX + halfW - condPadding, ty + condPadding + 5.5)
+
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7.5)
+  let cuentaY = ty + condPadding + 9.5
   CUENTAS_BANCARIAS.forEach(cuenta => {
-    doc.text(cuenta, MARGIN, condY + 3)
-    condY += 3.5
+    doc.text(cuenta, rightX + condPadding, cuentaY)
+    cuentaY += condLineH
   })
 
   // ── Recuadro unificado: FORMA DE PAGO + TOTAL — 3mm encima del chofer ──
