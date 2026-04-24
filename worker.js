@@ -2130,7 +2130,7 @@ async function handleActualizarEstadoDespacho(request, env) {
     if (!desp) return jsonError('Despacho no encontrado', 404, request);
 
     // 2. Validar transición
-    const valid = (desp.estado === 'pendiente' && ['despachada', 'anulada'].includes(nuevoEstado))
+    const valid = (desp.estado === 'pendiente' && ['despachada', 'entregada', 'anulada'].includes(nuevoEstado))
       || (desp.estado === 'despachada' && ['entregada', 'anulada'].includes(nuevoEstado));
     if (!valid) {
       return jsonError(`No se puede pasar de "${desp.estado}" a "${nuevoEstado}"`, 400, request);
@@ -2181,8 +2181,12 @@ async function handleActualizarEstadoDespacho(request, env) {
 
     // 4. Actualizar estado
     const updateData = { estado: nuevoEstado };
-    if (nuevoEstado === 'despachada') updateData.despachada_en = new Date().toISOString();
-    if (nuevoEstado === 'entregada') updateData.entregada_en = new Date().toISOString();
+    const ahora = new Date().toISOString();
+    if (nuevoEstado === 'despachada') updateData.despachada_en = ahora;
+    if (nuevoEstado === 'entregada') {
+      updateData.entregada_en = ahora;
+      if (!desp.despachada_en) updateData.despachada_en = ahora; // auto-despachar
+    }
 
     await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}`, {
       method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },

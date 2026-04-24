@@ -8,12 +8,12 @@ export const ACCIONES = {
   },
   despachar: {
     supervisor: {
-      label: 'Marcar como despachada',
-      confirmTitle: '¿Marcar como despachada?',
-      confirmMessage: 'El despacho pasará a estado "en tránsito".',
-      confirmDetails: 'El transportista puede proceder con la entrega.',
+      label: 'Despachar y entregar',
+      confirmTitle: '¿Despachar y marcar como entregada?',
+      confirmMessage: 'Se calculará la comisión del vendedor y se cerrará el despacho.',
+      confirmDetails: 'Esta acción no se puede deshacer.',
       confirmText: 'Sí, despachar',
-      variant: 'default',
+      variant: 'success',
     },
   },
   entregada: {

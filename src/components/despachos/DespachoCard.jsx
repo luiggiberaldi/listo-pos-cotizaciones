@@ -40,7 +40,6 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     : '—'
 
   const canDespachar = esSupervisor && despacho.estado === 'pendiente'
-  const canEntregada = esSupervisor && despacho.estado === 'despachada'
   const canAnular = esSupervisor && (despacho.estado === 'pendiente' || despacho.estado === 'despachada')
   const canReciclar = esSupervisor && despacho.estado === 'anulada' && onReciclar
 
@@ -210,11 +209,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   function getPrimaryAction() {
     if (canDespachar) {
       const cfg = getDespachoAction('despachar', rol)
-      return { key: 'despachar', label: cfg.label || 'Despachar', icon: Truck, action: () => setAccionPendiente({ id: despacho.id, estado: 'despachada', actionConfig: cfg }) }
-    }
-    if (canEntregada) {
-      const cfg = getDespachoAction('entregada', rol)
-      return { key: 'entregada', label: cfg.label || 'Entregada', icon: CheckCircle, action: () => setAccionPendiente({ id: despacho.id, estado: 'entregada', actionConfig: cfg }) }
+      return { key: 'despachar', label: cfg.label || 'Despachar', icon: Truck, action: () => setAccionPendiente({ id: despacho.id, estado: 'entregada', actionConfig: cfg }) }
     }
     if (canReciclar) {
       const cfg = getDespachoAction('reciclar', rol)
@@ -424,23 +419,12 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         {canDespachar && (
           <button onClick={() => {
               const cfg = getDespachoAction('despachar', rol)
-              setAccionPendiente({ id: despacho.id, estado: 'despachada', actionConfig: cfg })
-            }}
-            disabled={estadoCambiando}
-            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-50">
-            {estadoCambiando ? <Loader2 size={13} className="animate-spin" /> : <Truck size={13} />}
-            {getDespachoAction('despachar', rol).label || 'Despachar'}
-          </button>
-        )}
-        {canEntregada && (
-          <button onClick={() => {
-              const cfg = getDespachoAction('entregada', rol)
               setAccionPendiente({ id: despacho.id, estado: 'entregada', actionConfig: cfg })
             }}
             disabled={estadoCambiando}
             className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-50">
-            {estadoCambiando ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle size={13} />}
-            {getDespachoAction('entregada', rol).label || 'Entregada'}
+            {estadoCambiando ? <Loader2 size={13} className="animate-spin" /> : <Truck size={13} />}
+            {getDespachoAction('despachar', rol).label || 'Despachar'}
           </button>
         )}
         {canReciclar && (

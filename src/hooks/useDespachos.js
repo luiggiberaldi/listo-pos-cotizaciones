@@ -228,7 +228,7 @@ export function useActualizarEstadoDespacho() {
           ...d,
           estado: nuevoEstado,
           ...(nuevoEstado === 'despachada' ? { despachada_en: new Date().toISOString() } : {}),
-          ...(nuevoEstado === 'entregada' ? { entregada_en: new Date().toISOString() } : {}),
+          ...(nuevoEstado === 'entregada' ? { despachada_en: d.despachada_en || new Date().toISOString(), entregada_en: new Date().toISOString() } : {}),
         } : d)
       })
       return { previousQueries }
