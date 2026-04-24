@@ -426,7 +426,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   y += 2
 
   // ── Layout fijo: posiciones calculadas desde el fondo ──
-  const sloganY = PAGE_H - 28
+  const sloganY = PAGE_H - 33
   const TRANS_H = 18
 
   // ── Recuadro unificado: FORMA DE PAGO + TOTAL — 3mm encima del chofer ──
@@ -587,7 +587,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     const ph = PAGE_H
 
     // Línea separadora
-    const footerY = ph - 23
+    const footerY = ph - 28
     doc.setLineWidth(0.8)
     doc.setDrawColor(...C_DARK)
     doc.line(MARGIN, footerY, PAGE_W - MARGIN, footerY)
