@@ -151,7 +151,7 @@ export function parseSearchTerms(query) {
 /**
  * Normaliza texto para comparación (quita tildes)
  */
-function normalizeText(text) {
+export function normalizeText(text) {
   return (text || '').toLowerCase()
     .replace(/[áà]/g, 'a')
     .replace(/[éè]/g, 'e')

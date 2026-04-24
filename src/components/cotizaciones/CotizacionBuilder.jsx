@@ -9,7 +9,7 @@ import {
   User, Truck, Search, Plus, Trash2, UserPlus, ChevronDown, ChevronLeft, ChevronRight, X, Package,
   Save, Send, ArrowLeft, ArrowRight, Loader2, AlertCircle, DollarSign, RefreshCw,
   CheckCircle, FileDown, MessageCircle, StickyNote, Tag, Hash, Phone, Mail, MapPin,
-  LayoutGrid, LayoutList, ShoppingCart, Minus,
+  LayoutGrid, LayoutList, ShoppingCart, Minus, Camera,
 } from 'lucide-react'
 import { useClientes, useVendedores } from '../../hooks/useClientes'
 import { useInventario, useCategorias } from '../../hooks/useInventario'
@@ -32,6 +32,7 @@ import supabase from '../../services/supabase/client'
 import CustomSelect from '../ui/CustomSelect'
 import ClienteForm from '../clientes/ClienteForm'
 import ProductoAutocomplete from './ProductoAutocomplete'
+import ScanMaterialListModal from './ScanMaterialListModal'
 import { guardarProductoReciente } from './ProductosRecientes'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -278,7 +279,7 @@ function ItemCard({ item, idx, onChange, onDelete, tasa = 0, precios }) {
 // ─── Buscador de productos ────────────────────────────────────────────────────
 const PRODUCTOS_POR_PAGINA = 30
 
-function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
+function BuscadorProductos({ onAgregar, onScanClick, itemsAgregados = [], tasa = 0 }) {
   const [texto, setTexto] = useState('')
   const [catActiva, setCatActiva] = useState('')
   const { perfil } = useAuthStore()
@@ -342,23 +343,30 @@ function BuscadorProductos({ onAgregar, itemsAgregados = [], tasa = 0 }) {
   return (
     <div className="space-y-3">
 
-      {/* Barra de búsqueda para filtrar grid */}
-      <div className="relative">
-        <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-        <input
-          type="text"
-          value={texto}
-          onChange={e => cambiarTexto(e.target.value)}
-          placeholder="Buscar por nombre o código..."
-          className="w-full pl-10 pr-10 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 shadow-inner focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400 transition-all"
-          autoFocus
-        />
-        {texto && (
-          <button type="button" onClick={() => cambiarTexto('')}
-            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-600 transition-colors">
-            <X size={14} />
-          </button>
-        )}
+      {/* Barra de búsqueda + botón escanear */}
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          <input
+            type="text"
+            value={texto}
+            onChange={e => cambiarTexto(e.target.value)}
+            placeholder="Buscar por nombre o código..."
+            className="w-full pl-10 pr-10 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 shadow-inner focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400 transition-all"
+            autoFocus
+          />
+          {texto && (
+            <button type="button" onClick={() => cambiarTexto('')}
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-600 transition-colors">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+        <button type="button" onClick={onScanClick} title="Escanear lista de materiales"
+          className="shrink-0 flex items-center gap-1.5 px-3 py-2.5 bg-primary text-white font-bold rounded-xl hover:opacity-90 transition-opacity text-xs sm:text-sm">
+          <Camera size={16} />
+          <span className="hidden sm:inline">Escanear</span>
+        </button>
       </div>
 
       {/* Chips de categoría — scroll horizontal con flechas */}
@@ -1129,6 +1137,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
   // Paso actual del wizard (1-4)
   const [paso, setPaso] = useState(esEdicion ? 2 : 1)
   const [showCrearCliente, setShowCrearCliente] = useState(false)
+  const [showScanModal, setShowScanModal] = useState(false)
 
   // Estado del formulario
   const [vendedorId,         setVendedorId]         = useState(cotizacionExistente?.vendedor_id ?? '')
@@ -1282,6 +1291,37 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
         precioUnitUsd: Number(p.precio_usd),
         descuentoPct:  0,
       }]
+    })
+  }
+
+  // Bulk-add desde escaneo de lista
+  function agregarProductosBulk(listaItems) {
+    setItems(prev => {
+      let updated = [...prev]
+      let agregados = 0
+      for (const { producto, cantidad } of listaItems) {
+        const stock = Number(producto.stock_actual) || 0
+        const qty = Math.min(cantidad, stock > 0 ? stock : cantidad)
+        const idx = updated.findIndex(it => it.productoId === producto.id)
+        if (idx !== -1) {
+          const newQty = Math.min(updated[idx].cantidad + qty, stock > 0 ? stock : Infinity)
+          updated = updated.map((it, i) => i === idx ? { ...it, cantidad: newQty } : it)
+        } else {
+          updated.push({
+            _key:          `item-${++_itemCounter}`,
+            productoId:    producto.id,
+            codigoSnap:    producto.codigo ?? '',
+            nombreSnap:    producto.nombre,
+            unidadSnap:    producto.unidad ?? 'und',
+            cantidad:      qty,
+            precioUnitUsd: Number(producto.precio_usd),
+            descuentoPct:  0,
+          })
+        }
+        agregados++
+      }
+      if (agregados > 0) showToast(`${agregados} producto${agregados > 1 ? 's' : ''} agregado${agregados > 1 ? 's' : ''} desde el escaneo`, 'ok')
+      return updated
     })
   }
 
@@ -1704,7 +1744,13 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                   <SectionH3 icon={Package}>Agregar productos</SectionH3>
                 </div>
                 <div className="flex-1 min-h-0 overflow-y-auto pb-20 lg:pb-0">
-                  <BuscadorProductos onAgregar={agregarProducto} itemsAgregados={items} tasa={tasaHook.tasaEfectiva} />
+                  <BuscadorProductos onAgregar={agregarProducto} onScanClick={() => setShowScanModal(true)} itemsAgregados={items} tasa={tasaHook.tasaEfectiva} />
+                  <ScanMaterialListModal
+                    open={showScanModal}
+                    onClose={() => setShowScanModal(false)}
+                    onBulkAdd={agregarProductosBulk}
+                    tasa={tasaHook.tasaEfectiva}
+                  />
                 </div>
               </div>
 

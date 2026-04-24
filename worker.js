@@ -239,6 +239,11 @@ export default {
       return handlePdfTemp(request, env);
     }
 
+    // ── API: escanear lista de materiales con IA (visión) ─────────────
+    if (url.pathname === '/api/scan-material-list' && request.method === 'POST') {
+      return handleScanMaterialList(request, env);
+    }
+
     // ── API routes para operaciones admin ──────────────────────────────────
     if (url.pathname.startsWith('/api/admin/')) {
       return handleAdmin(request, env, url);
@@ -3355,4 +3360,279 @@ async function handlePurgeLogs(request, env) {
   const deleted = await res.json()
 
   return json({ ok: true, eliminados: deleted.length }, 200, request)
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SCAN MATERIAL LIST — IA Vision para listas manuscritas
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Rate limit separado para scan (más estricto)
+const scanRateLimitMap = new Map()
+function isScanRateLimited(ip) {
+  const now = Date.now()
+  const entry = scanRateLimitMap.get(ip)
+  if (!entry || now - entry.windowStart > 60_000) {
+    scanRateLimitMap.set(ip, { windowStart: now, count: 1 })
+    return false
+  }
+  entry.count++
+  return entry.count > 5 // max 5 scans por minuto
+}
+
+// Sinónimos server-side (replica de smartSearch.js para el Worker)
+const SCAN_SINONIMOS = {
+  'media': '1/2', 'medio': '1/2', 'cuarto': '1/4', 'octavo': '1/8',
+  'metros': 'mts', 'metro': 'mts', 'centimetros': 'cm', 'milimetros': 'mm',
+  'pulgadas': 'pulg', 'pulgada': 'pulg',
+  'galvanizado': 'galv', 'galvanizada': 'galv',
+  'negro': 'negra', 'negra': 'negro', 'blanco': 'blanca', 'blanca': 'blanco',
+  'lamina': 'laminas', 'laminas': 'lamina',
+  'tubo': 'tubos', 'tubos': 'tubo',
+  'cabilla': 'cabillas', 'cabillas': 'cabilla',
+  'tornillo': 'tornillos', 'tornillos': 'tornillo',
+  'clavo': 'clavos', 'clavos': 'clavo',
+  'conexion': 'conexiones', 'conexiones': 'conexion',
+  'saco': 'sacos', 'sacos': 'saco',
+  'kilo': 'kilos', 'kilos': 'kilo', 'kg': 'kilos',
+  'galon': 'galones', 'galones': 'galon',
+  'anillo': 'anillos', 'anillos': 'anillo',
+  'codo': 'codos', 'codos': 'codo',
+  'te': 'tee', 'tee': 'te',
+  'sifon': 'sifones', 'sifones': 'sifon',
+  'pega': 'pegas', 'pegas': 'pega',
+  'alambre': 'alambres', 'alambres': 'alambre',
+  'perfil': 'perfiles', 'perfiles': 'perfil',
+  'viga': 'vigas', 'vigas': 'viga',
+  'angulo': 'angulos', 'angulos': 'angulo',
+  'valvula': 'valvulas', 'valvulas': 'valvula',
+  'bloque': 'bloques', 'bloques': 'bloque',
+  'arena': 'arenas',
+  'cemento': 'cementos',
+}
+
+const SCAN_FRACCIONES_MULTI = [
+  ['tres octavos', '3/8'], ['cinco octavos', '5/8'],
+  ['tres cuartos', '3/4'], ['siete octavos', '7/8'],
+]
+
+function scanNormalize(text) {
+  return (text || '').toLowerCase()
+    .replace(/[áà]/g, 'a').replace(/[éè]/g, 'e')
+    .replace(/[íì]/g, 'i').replace(/[óò]/g, 'o')
+    .replace(/[úù]/g, 'u').replace(/ñ/g, 'n')
+}
+
+function scanTokenize(descripcion) {
+  let q = scanNormalize(descripcion)
+  for (const [frase, reemplazo] of SCAN_FRACCIONES_MULTI) {
+    q = q.replace(new RegExp(frase, 'g'), reemplazo)
+  }
+  const tokens = q.split(/\s+/).filter(Boolean)
+  return tokens.map(token => {
+    const variantes = new Set([token])
+    const sin = SCAN_SINONIMOS[token]
+    if (sin) variantes.add(sin)
+    if (token.length > 3 && token.endsWith('s')) {
+      const singular = token.slice(0, -1)
+      variantes.add(singular)
+      const sinS = SCAN_SINONIMOS[singular]
+      if (sinS) variantes.add(sinS)
+    }
+    if (token.length > 4 && token.endsWith('es')) {
+      const base = token.slice(0, -2)
+      variantes.add(base)
+      const sinB = SCAN_SINONIMOS[base]
+      if (sinB) variantes.add(sinB)
+    }
+    return [...variantes]
+  })
+}
+
+async function findProductMatches(descripcion, env) {
+  const tokenGroups = scanTokenize(descripcion)
+  if (tokenGroups.length === 0) return []
+
+  // Construir filtro AND de ORs para PostgREST
+  const orClauses = tokenGroups.map(variantes => {
+    const conditions = variantes.flatMap(v => {
+      const safe = v.replace(/[.,()\\%_'"]/g, '')
+      if (!safe) return []
+      return [`nombre.ilike.%${safe}%`, `codigo.ilike.%${safe}%`]
+    })
+    return `or=(${conditions.join(',')})`
+  })
+
+  const select = 'id,codigo,nombre,unidad,precio_usd,precio_2,precio_3,stock_actual,stock_minimo,imagen_url'
+  const url = `${env.SUPABASE_URL}/rest/v1/productos?activo=eq.true&select=${select}&${orClauses.join('&')}&limit=3&order=stock_actual.desc`
+
+  const res = await fetch(url, {
+    headers: {
+      apikey: env.SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    },
+  })
+  if (!res.ok) return []
+  return await res.json()
+}
+
+// Fallback: búsqueda más amplia si no hay match exacto (solo primer token)
+async function findProductMatchesFallback(descripcion, env) {
+  const tokenGroups = scanTokenize(descripcion)
+  if (tokenGroups.length === 0) return []
+
+  // Tomar solo el token principal (primer sustantivo, usualmente el material)
+  const mainToken = tokenGroups[0]
+  const conditions = mainToken.flatMap(v => {
+    const safe = v.replace(/[.,()\\%_'"]/g, '')
+    if (!safe) return []
+    return [`nombre.ilike.%${safe}%`, `codigo.ilike.%${safe}%`]
+  })
+
+  const select = 'id,codigo,nombre,unidad,precio_usd,precio_2,precio_3,stock_actual,stock_minimo,imagen_url'
+  const url = `${env.SUPABASE_URL}/rest/v1/productos?activo=eq.true&select=${select}&or=(${conditions.join(',')})&limit=5&order=stock_actual.desc`
+
+  const res = await fetch(url, {
+    headers: {
+      apikey: env.SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    },
+  })
+  if (!res.ok) return []
+  return await res.json()
+}
+
+async function handleScanMaterialList(request, env) {
+  // Rate limit
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown'
+  if (isScanRateLimited(ip)) {
+    return jsonError('Demasiadas solicitudes de escaneo. Espera un momento.', 429, request)
+  }
+
+  // Auth
+  const user = await verifyAuth(request, env)
+  if (!user) return jsonError('No autorizado', 401, request)
+
+  // Body
+  let body
+  try { body = await request.json() } catch { return jsonError('JSON inválido', 400, request) }
+
+  const { image, mimeType } = body
+  if (!image || typeof image !== 'string') return jsonError('Falta imagen en base64', 400, request)
+  if (image.length > 10_000_000) return jsonError('Imagen demasiado grande (max ~7MB)', 400, request)
+
+  const mime = mimeType || 'image/jpeg'
+
+  // Step 1: Llamar a Workers AI Vision para extraer la lista
+  let aiItems = []
+  try {
+    const aiResponse = await env.AI.run('@cf/meta/llama-3.2-11b-vision-instruct', {
+      messages: [
+        {
+          role: 'system',
+          content: `Eres un asistente que lee listas de materiales de construcción escritas a mano.
+Tu tarea es extraer cada línea de la lista, identificando la CANTIDAD y la DESCRIPCIÓN del material.
+
+Reglas:
+- Cada línea tiene un número (cantidad) seguido de una descripción del material
+- Las cantidades pueden ser números enteros o decimales
+- Los materiales típicos incluyen: cabillas, cemento, bloques, arena, tubos, láminas, perfiles, clavos, tornillos, alambre, codos, anillos, te, sifones, pega, etc.
+- Las fracciones como 1/2, 3/8, 5/8, 3/4 son medidas comunes (pulgadas de diámetro)
+- "aguas negras" y "aguas blancas" son tipos de tubería
+- Si no puedes leer claramente un valor, haz tu mejor estimación
+- Ignora líneas que no sean items (títulos, notas, totales, rayas)
+
+Responde ÚNICAMENTE con un JSON array válido, SIN markdown, SIN explicaciones, SIN backticks:
+[{"cantidad":90,"descripcion":"cabillas 1/2","confianza":0.95}]`
+        },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Lee esta lista de materiales y extrae cada item como JSON:' },
+            { type: 'image', image: `data:${mime};base64,${image}` }
+          ]
+        }
+      ],
+      max_tokens: 2048,
+      temperature: 0.1,
+    })
+
+    // Extraer JSON de la respuesta
+    let rawText = ''
+    if (typeof aiResponse === 'string') {
+      rawText = aiResponse
+    } else if (aiResponse?.response) {
+      rawText = aiResponse.response
+    } else if (aiResponse?.result?.response) {
+      rawText = aiResponse.result.response
+    } else {
+      rawText = JSON.stringify(aiResponse)
+    }
+
+    // Limpiar: extraer el array JSON
+    const jsonMatch = rawText.match(/\[[\s\S]*\]/)
+    if (jsonMatch) {
+      aiItems = JSON.parse(jsonMatch[0])
+    }
+  } catch (e) {
+    await logToSystem(env, {
+      nivel: 'error', origen: 'worker', categoria: 'SCAN',
+      mensaje: `Error AI Vision: ${e.message}`,
+      stack: e.stack?.slice(0, 2000),
+      endpoint: 'POST /api/scan-material-list',
+      usuario_id: user.operator_id,
+    })
+    return jsonError(`Error procesando imagen: ${e.message}`, 500, request)
+  }
+
+  if (!Array.isArray(aiItems) || aiItems.length === 0) {
+    return json({ items: [], rawText: 'No se pudieron extraer items de la imagen' }, 200, request)
+  }
+
+  // Step 2: Buscar matches en la base de datos para cada item
+  const results = await Promise.all(aiItems.map(async (item, idx) => {
+    const cantidad = Number(item.cantidad) || 1
+    const descripcion = (item.descripcion || '').trim()
+    const confianza = Number(item.confianza) || 0.5
+
+    if (!descripcion) return null
+
+    // Intento 1: búsqueda con todos los tokens
+    let matches = await findProductMatches(descripcion, env)
+
+    // Intento 2: fallback con token principal si no hay matches
+    if (matches.length === 0) {
+      matches = await findProductMatchesFallback(descripcion, env)
+    }
+
+    return {
+      linea: idx + 1,
+      cantidad,
+      descripcionOriginal: descripcion,
+      confianza,
+      matches: matches.map(p => ({
+        id: p.id,
+        codigo: p.codigo,
+        nombre: p.nombre,
+        unidad: p.unidad,
+        precio_usd: Number(p.precio_usd),
+        precio_2: p.precio_2 ? Number(p.precio_2) : null,
+        precio_3: p.precio_3 ? Number(p.precio_3) : null,
+        stock_actual: Number(p.stock_actual),
+        stock_minimo: Number(p.stock_minimo),
+        imagen_url: p.imagen_url,
+      })),
+    }
+  }))
+
+  // Log exitoso
+  await logToSystem(env, {
+    nivel: 'info', origen: 'worker', categoria: 'SCAN',
+    mensaje: `Escaneo exitoso: ${results.filter(Boolean).length} items extraídos`,
+    endpoint: 'POST /api/scan-material-list',
+    usuario_id: user.operator_id,
+    usuario_nombre: user.email,
+    meta: { itemCount: results.filter(Boolean).length },
+  })
+
+  return json({ items: results.filter(Boolean) }, 200, request)
 }
