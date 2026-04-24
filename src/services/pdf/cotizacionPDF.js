@@ -253,7 +253,9 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     doc.setTextColor(...C_DARK)
 
     doc.text(String(item.cantidad), COLS[0].x + COLS[0].w / 2, midY, { align: 'center' })
+    doc.setFontSize(8)
     doc.text(item.codigo_snap || '—', COLS[1].x + COLS[1].w / 2, midY, { align: 'center' })
+    doc.setFontSize(9)
     const descLines = doc.splitTextToSize(item.nombre_snap || '', COLS[2].w - 4)
     doc.text(descLines[0], COLS[2].x + 2, midY)
     doc.text(item.unidad_snap || '—', COLS[3].x + COLS[3].w / 2, midY, { align: 'center' })

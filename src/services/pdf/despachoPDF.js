@@ -387,7 +387,9 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
 
     const singleMidY = y + ROW_H / 2 + 1.2
     doc.text(String(item.cantidad), COLS[0].x + COLS[0].w / 2, singleMidY, { align: 'center' })
+    doc.setFontSize(8)
     doc.text(item.codigo_snap || '—', COLS[1].x + COLS[1].w / 2, singleMidY, { align: 'center' })
+    doc.setFontSize(9)
 
     // Descripción multi-línea
     for (let li = 0; li < lineCount; li++) {

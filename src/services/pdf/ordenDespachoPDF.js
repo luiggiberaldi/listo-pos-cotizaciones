@@ -313,7 +313,9 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
 
     const singleMidY = y + ROW_H / 2 + 1.2
     doc.text(String(item.cantidad), COLS[0].x + COLS[0].w / 2, singleMidY, { align: 'center' })
+    doc.setFontSize(8)
     doc.text(item.codigo_snap || '—', COLS[1].x + COLS[1].w / 2, singleMidY, { align: 'center' })
+    doc.setFontSize(9)
 
     for (let li = 0; li < lineCount; li++) {
       doc.text(descLines[li], COLS[2].x + 2, midY + li * 4)
