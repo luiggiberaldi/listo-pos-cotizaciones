@@ -14,11 +14,34 @@ import Skeleton     from '../components/ui/Skeleton'
 import EmptyState   from '../components/ui/EmptyState'
 import PageHeader  from '../components/ui/PageHeader'
 
+const PREFIJOS_RIF = ['V', 'J', 'E', 'G', 'P']
+
+function parsearRifTransp(rif) {
+  if (!rif) return { prefijo: 'V', numero: '' }
+  const limpio = rif.trim().toUpperCase()
+  const match = limpio.match(/^([VJEGP])-?(.*)$/)
+  if (match) return { prefijo: match[1], numero: match[2].replace(/\./g, '') }
+  return { prefijo: 'V', numero: limpio.replace(/\./g, '') }
+}
+
+function formatearConPuntos(num) {
+  return num.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+}
+
+function formatearRifTransp(prefijo, numero) {
+  const limpio = numero.replace(/[^\d-]/g, '')
+  if (!limpio) return ''
+  if (prefijo === 'V') return `V${formatearConPuntos(limpio)}`
+  return `${prefijo}-${limpio}`
+}
+
 // ─── Formulario ───────────────────────────────────────────────────────────────
 function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
+  const { prefijo: rifPrefijoInit, numero: rifNumeroInit } = parsearRifTransp(inicial.rif)
+  const [rifPrefijo, setRifPrefijo] = useState(rifPrefijoInit)
   const [campos, setCampos] = useState({
     nombre:         inicial.nombre         ?? '',
-    rif:            inicial.rif            ?? '',
+    rif:            rifNumeroInit,
     color:          inicial.color          ?? '',
     vehiculo:       inicial.vehiculo       ?? '',
     placa_chuto:    inicial.placa_chuto    ?? '',
@@ -34,7 +57,7 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
   function submit(e) {
     e.preventDefault()
     if (!campos.nombre.trim()) { setError('El nombre es obligatorio'); return }
-    onGuardar(campos)
+    onGuardar({ ...campos, rif: formatearRifTransp(rifPrefijo, campos.rif) })
   }
 
   const inputCls = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400'
@@ -49,8 +72,34 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
         </div>
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-slate-700">Cédula / RIF</label>
-          <input value={campos.rif} onChange={e => cambiar('rif', e.target.value)}
-            placeholder="V-00000000 / J-00000000-0" className={inputCls} disabled={cargando} />
+          <div className="flex gap-1 mb-1.5">
+            {PREFIJOS_RIF.map(p => (
+              <button key={p} type="button" disabled={cargando}
+                onClick={() => setRifPrefijo(p)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                  rifPrefijo === p ? 'bg-primary text-white shadow-sm scale-105' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                } disabled:opacity-50`}>
+                {p}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center">
+            <span className="inline-flex items-center px-2.5 rounded-l-xl border border-r-0 border-slate-200 bg-slate-100 text-sm font-bold text-slate-600 select-none h-[42px]">
+              {rifPrefijo}{rifPrefijo !== 'V' ? '-' : ''}
+            </span>
+            <input value={campos.rif} onChange={e => {
+              if (rifPrefijo === 'V') {
+                let val = e.target.value.replace(/\D/g, '').slice(0, 9)
+                cambiar('rif', val)
+              } else {
+                let val = e.target.value.replace(/[^\d-]/g, '')
+                if (val.replace(/-/g, '').length > 10) return
+                cambiar('rif', val)
+              }
+            }}
+              placeholder={rifPrefijo === 'V' ? '24457713' : '30123456-7'}
+              className={`${inputCls} !rounded-l-none`} disabled={cargando} inputMode="numeric" />
+          </div>
         </div>
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-slate-700">Color</label>
