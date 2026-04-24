@@ -321,7 +321,8 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.setFontSize(8)
   doc.text('VENDEDOR:', MARGIN + tlfLblW + tlfValW + 2, f6Y + rowH / 2 + 1)
 
-  doc.rect(MARGIN + tlfLblW + tlfValW + vendLblW, f6Y, vendValW, rowH, 'S')
+  doc.setFillColor(235, 235, 240)
+  doc.rect(MARGIN + tlfLblW + tlfValW + vendLblW, f6Y, vendValW, rowH, 'FD')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(9)
   const vendStr = (despacho.vendedor?.nombre || '—') + vendedorTlf
