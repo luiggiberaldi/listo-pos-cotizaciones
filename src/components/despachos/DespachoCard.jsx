@@ -295,10 +295,10 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         </button>
 
         {/* Fila secundaria: Ver + PDF + más */}
-        <div className="flex items-center gap-1 mt-2 flex-wrap">
+        <div className="flex items-center gap-1 mt-2 overflow-x-auto pb-1 -mx-1 px-1">
           {primaryAction.key !== 'ver' && (
             <button onClick={() => setShowDetalle(true)}
-              className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 active:bg-slate-100 transition-colors">
+              className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 active:bg-slate-100 transition-colors shrink-0">
               <Eye size={14} /> Ver
             </button>
           )}
@@ -323,17 +323,17 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             )}
           </div>
           <button onClick={descargarPDF} disabled={pdfLoading}
-            className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40">
+            className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40 shrink-0">
             {pdfLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Download size={14} />}
             N. Entrega
           </button>
           <button onClick={descargarOrdenDespacho} disabled={ordenLoading}
-            className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40">
+            className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40 shrink-0">
             {ordenLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Download size={14} />}
             O. Despacho
           </button>
           <button onClick={imprimirDespacho} disabled={printLoading}
-            className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40">
+            className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40 shrink-0">
             {printLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Printer size={14} />}
             Imprimir
           </button>
