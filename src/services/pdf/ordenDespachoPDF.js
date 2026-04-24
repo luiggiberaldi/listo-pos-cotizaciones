@@ -400,17 +400,18 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   // ══════════════════════════════════════════════════════════════════════════
   // 5. DATOS DEL CHOFER Y VEHÍCULO — fijo al fondo (footer)
   // ══════════════════════════════════════════════════════════════════════════
-  const col6W = (CONTENT_W - 10) / 6
-
   doc.setFillColor(240, 240, 240)
   doc.rect(MARGIN, choferY, CONTENT_W, 6, 'F')
+  doc.setDrawColor(120, 120, 120)
+  doc.setLineWidth(0.3)
+  doc.rect(MARGIN, choferY, CONTENT_W, 6, 'S')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8)
   doc.setTextColor(...C_DARK)
   doc.text('DATOS DEL CHOFER Y DEL VEHÍCULO', MARGIN + 2, choferY + 4)
 
-  const fieldsY = choferY + 10
-
+  const cellY = choferY + 6
+  const cellH = 12
   const choferFields = [
     { label: 'CHOFER', val: transportista?.nombre || '' },
     { label: 'C.I.', val: transportista?.rif || '' },
@@ -419,18 +420,20 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
     { label: 'PLACA CHUTO', val: transportista?.placa_chuto || '' },
     { label: 'PLACA BATEA', val: transportista?.placa_batea || '' },
   ]
+  const colW = CONTENT_W / choferFields.length
   choferFields.forEach((f, i) => {
-    const fx = MARGIN + i * (col6W + 2)
+    const fx = MARGIN + i * colW
+    doc.setDrawColor(120, 120, 120)
+    doc.setLineWidth(0.3)
+    doc.rect(fx, cellY, colW, cellH, 'S')
     doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7)
+    doc.setTextColor(100, 100, 100)
+    doc.text(f.label + ':', fx + 2, cellY + 4)
+    doc.setFont('helvetica', 'bold')
     doc.setFontSize(9)
     doc.setTextColor(...C_DARK)
-    doc.text(`${f.label}:`, fx, fieldsY)
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(10)
-    if (f.val) doc.text(f.val, fx, fieldsY + 4)
-    doc.setLineWidth(0.2)
-    doc.setDrawColor(150, 150, 150)
-    doc.line(fx, fieldsY + 5.5, fx + col6W, fieldsY + 5.5)
+    if (f.val) doc.text(f.val, fx + 2, cellY + 9.5)
   })
 
   // ── NO cuentas, NO slogan, NO condiciones ──

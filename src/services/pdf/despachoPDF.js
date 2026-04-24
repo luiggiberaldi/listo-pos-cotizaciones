@@ -524,40 +524,42 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   if (transportista) {
     const TRANS_H = 18
     const ty = sloganY - 9 - TRANS_H
-    const col7W = (CONTENT_W - 12) / 7
 
     // Cabecera gris compacta
     doc.setFillColor(240, 240, 240)
     doc.rect(MARGIN, ty, CONTENT_W, 6, 'F')
+    doc.setDrawColor(120, 120, 120)
+    doc.setLineWidth(0.3)
+    doc.rect(MARGIN, ty, CONTENT_W, 6, 'S')
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(8)
     doc.setTextColor(...C_DARK)
     doc.text('DATOS DEL CHOFER Y DEL VEHÍCULO', MARGIN + 2, ty + 4)
 
-    const fieldsY = ty + 10
-
-    // Una sola fila con 7 campos
+    const cellY = ty + 6
+    const cellH = 12
     const choferFields = [
       { label: 'CHOFER', val: transportista?.nombre || '' },
       { label: 'C.I.', val: transportista?.rif || '' },
-      { label: 'COLOR', val: transportista?.telefono || '' },
+      { label: 'TELÉFONO', val: transportista?.telefono || '' },
       { label: 'VEHÍCULO', val: transportista?.vehiculo || '' },
-      { label: 'PLACA', val: transportista?.zona_cobertura || '' },
       { label: 'PLACA CHUTO', val: transportista?.placa_chuto || '' },
       { label: 'PLACA BATEA', val: transportista?.placa_batea || '' },
     ]
+    const colW = CONTENT_W / choferFields.length
     choferFields.forEach((f, i) => {
-      const fx = MARGIN + i * (col7W + 2)
+      const fx = MARGIN + i * colW
+      doc.setDrawColor(120, 120, 120)
+      doc.setLineWidth(0.3)
+      doc.rect(fx, cellY, colW, cellH, 'S')
       doc.setFont('helvetica', 'normal')
+      doc.setFontSize(7)
+      doc.setTextColor(100, 100, 100)
+      doc.text(f.label + ':', fx + 2, cellY + 4)
+      doc.setFont('helvetica', 'bold')
       doc.setFontSize(9)
       doc.setTextColor(...C_DARK)
-      doc.text(`${f.label}:`, fx, fieldsY)
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(10)
-      if (f.val) doc.text(f.val, fx, fieldsY + 4)
-      doc.setLineWidth(0.2)
-      doc.setDrawColor(150, 150, 150)
-      doc.line(fx, fieldsY + 5.5, fx + col7W, fieldsY + 5.5)
+      if (f.val) doc.text(f.val, fx + 2, cellY + 9.5)
     })
   }
 
