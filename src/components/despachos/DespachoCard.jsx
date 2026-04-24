@@ -229,11 +229,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     actions.push({ label: 'Descargar PDF', icon: Download, onClick: descargarPDF, disabled: pdfLoading })
     if (canDespachar && primaryAction.key !== 'despachar') {
       const cfg = getDespachoAction('despachar', rol)
-      actions.push({ label: cfg.label || 'Despachar', icon: Truck, onClick: () => setAccionPendiente({ id: despacho.id, estado: 'despachada', actionConfig: cfg }), textColor: 'text-indigo-600' })
-    }
-    if (canEntregada && primaryAction.key !== 'entregada') {
-      const cfg = getDespachoAction('entregada', rol)
-      actions.push({ label: cfg.label || 'Entregada', icon: CheckCircle, onClick: () => setAccionPendiente({ id: despacho.id, estado: 'entregada', actionConfig: cfg }), textColor: 'text-emerald-600' })
+      actions.push({ label: cfg.label || 'Despachar', icon: Truck, onClick: () => setAccionPendiente({ id: despacho.id, estado: 'entregada', actionConfig: cfg }), textColor: 'text-emerald-600' })
     }
     if (canReciclar && primaryAction.key !== 'reciclar')
       actions.push({ label: getDespachoAction('reciclar', rol).label || 'Reutilizar', icon: RefreshCcw, onClick: () => onReciclar(despacho), textColor: 'text-teal-600' })
