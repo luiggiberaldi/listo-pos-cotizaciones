@@ -349,29 +349,36 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   y += 4
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 4. TOTALES (forma de pago + total) — posicionados después de la tabla
+  // 4. Layout fijo desde el fondo: Chofer en footer, Totales encima
   // ══════════════════════════════════════════════════════════════════════════
+  const transportista = despacho.transportista_id ? (despacho.transportista || null) : null
+
+  // Datos del chofer fijos al fondo de la página (footer)
+  const CHOFER_H = 22
+  const choferY = PAGE_H - MARGIN - CHOFER_H
+
+  // Total 6mm más alto que antes (originalmente ~36mm offset, ahora 30mm)
   const totW = (monedaPDF === 'mixto' || monedaPDF === 'mixto_bcv') ? 90 : 75
   const totX = PAGE_W - MARGIN - totW
   const total = Number(despacho.total_usd || 0)
 
-  // Si no cabe en la página actual, nueva página
-  if (y > PAGE_H - 70) { doc.addPage(); y = MARGIN }
+  // Posicionar totales fijos sobre el chofer
+  const ty = choferY - 56
 
   const fp = (formaPago || despacho.forma_pago || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(9)
   doc.setTextColor(...C_DARK)
-  doc.text('FORMA DE PAGO:', totX, y + 4)
-  drawCheck(doc, 'EFECTIVO',   totX,      y + 12, fp === 'efectivo')
-  drawCheck(doc, 'ZELLE',      totX + 25, y + 12, fp === 'zelle')
-  drawCheck(doc, 'P. MÓVIL',   totX + 45, y + 12, fp === 'pago movil')
-  drawCheck(doc, 'USDT',       totX + 65, y + 12, fp === 'usdt')
-  drawCheck(doc, 'TRANSF.',    totX,      y + 19, fp === 'transferencia')
-  drawCheck(doc, 'CTA X COB.', totX + 25, y + 19, fp === 'cta por cobrar')
+  doc.text('FORMA DE PAGO:', totX, ty + 4)
+  drawCheck(doc, 'EFECTIVO',   totX,      ty + 12, fp === 'efectivo')
+  drawCheck(doc, 'ZELLE',      totX + 25, ty + 12, fp === 'zelle')
+  drawCheck(doc, 'P. MÓVIL',   totX + 45, ty + 12, fp === 'pago movil')
+  drawCheck(doc, 'USDT',       totX + 65, ty + 12, fp === 'usdt')
+  drawCheck(doc, 'TRANSF.',    totX,      ty + 19, fp === 'transferencia')
+  drawCheck(doc, 'CTA X COB.', totX + 25, ty + 19, fp === 'cta por cobrar')
 
-  // Total grande
-  const totTopY = y + 36
+  // Total grande — 6mm más alto (offset 30 en vez de 36)
+  const totTopY = ty + 30
   doc.setFillColor(60, 60, 60)
   doc.rect(totX, totTopY, totW, 14, 'F')
 
@@ -382,47 +389,42 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   doc.text(fmtTotal(total, monedaPDF, tasa, factorBcv), totX + totW - 4, totTopY + 9, { align: 'right' })
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 5. DATOS DEL CHOFER Y VEHÍCULO
+  // 5. DATOS DEL CHOFER Y VEHÍCULO — fijo al fondo (footer)
   // ══════════════════════════════════════════════════════════════════════════
-  const transportista = despacho.transportista_id ? (despacho.transportista || null) : null
+  const col6W = (CONTENT_W - 10) / 6
 
-  if (transportista) {
-    const choferY = totTopY + 20
-    const col7W = (CONTENT_W - 12) / 7
+  doc.setFillColor(240, 240, 240)
+  doc.rect(MARGIN, choferY, CONTENT_W, 6, 'F')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.setTextColor(...C_DARK)
+  doc.text('DATOS DEL CHOFER Y DEL VEHÍCULO', MARGIN + 2, choferY + 4)
 
-    doc.setFillColor(240, 240, 240)
-    doc.rect(MARGIN, choferY, CONTENT_W, 6, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
+  const fieldsY = choferY + 10
+
+  const choferFields = [
+    { label: 'CHOFER', val: transportista?.nombre || '' },
+    { label: 'C.I.', val: transportista?.rif || '' },
+    { label: 'TELÉFONO', val: transportista?.telefono || '' },
+    { label: 'VEHÍCULO', val: transportista?.vehiculo || '' },
+    { label: 'PLACA CHUTO', val: transportista?.placa_chuto || '' },
+    { label: 'PLACA BATEA', val: transportista?.placa_batea || '' },
+  ]
+  choferFields.forEach((f, i) => {
+    const fx = MARGIN + i * (col6W + 2)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
     doc.setTextColor(...C_DARK)
-    doc.text('DATOS DEL CHOFER Y DEL VEHÍCULO', MARGIN + 2, choferY + 4)
+    doc.text(`${f.label}:`, fx, fieldsY)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(10)
+    if (f.val) doc.text(f.val, fx, fieldsY + 4)
+    doc.setLineWidth(0.2)
+    doc.setDrawColor(150, 150, 150)
+    doc.line(fx, fieldsY + 5.5, fx + col6W, fieldsY + 5.5)
+  })
 
-    const fieldsY = choferY + 10
-
-    const choferFields = [
-      { label: 'CHOFER', val: transportista?.nombre || '' },
-      { label: 'C.I.', val: transportista?.rif || '' },
-      { label: 'TELÉFONO', val: transportista?.telefono || '' },
-      { label: 'VEHÍCULO', val: transportista?.vehiculo || '' },
-      { label: 'PLACA CHUTO', val: transportista?.placa_chuto || '' },
-      { label: 'PLACA BATEA', val: transportista?.placa_batea || '' },
-    ]
-    choferFields.forEach((f, i) => {
-      const fx = MARGIN + i * (col7W + 2)
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(9)
-      doc.setTextColor(...C_DARK)
-      doc.text(`${f.label}:`, fx, fieldsY)
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(10)
-      if (f.val) doc.text(f.val, fx, fieldsY + 4)
-      doc.setLineWidth(0.2)
-      doc.setDrawColor(150, 150, 150)
-      doc.line(fx, fieldsY + 5.5, fx + col7W, fieldsY + 5.5)
-    })
-  }
-
-  // ── NO footer, NO cuentas, NO slogan, NO condiciones ──
+  // ── NO cuentas, NO slogan, NO condiciones ──
 
   // ── Guardar o devolver blob ──────────────────────────────────────────────
   const filename = `ODC_${numDes.replace(/ /g, '_')}.pdf`
