@@ -190,9 +190,14 @@ export async function generarPlantillaOrdenDespachoPDF({ config = {} } = {}) {
   })
   y += 9
 
-  // Filas vacías para llenar a mano
-  const BLANK_ROWS = 12
+  // Filas vacías para llenar a mano — calcular cuántas caben
   const BLANK_ROW_H = 7
+  const CHOFER_H = 22
+  const choferY = PAGE_H - MARGIN - CHOFER_H
+  const fpY = choferY - 24
+  const notasH = 20  // espacio para notas (3 + 6 + 2*5.5)
+  const availableH = fpY - y - notasH - 3
+  const BLANK_ROWS = Math.max(1, Math.floor(availableH / BLANK_ROW_H))
   doc.setLineWidth(0.2)
   doc.setDrawColor(200, 200, 200)
   for (let i = 0; i < BLANK_ROWS; i++) {
@@ -218,11 +223,6 @@ export async function generarPlantillaOrdenDespachoPDF({ config = {} } = {}) {
   // ══════════════════════════════════════════════════════════════════════════
   // 4. Layout fijo desde el fondo: Chofer en footer, Totales encima
   // ══════════════════════════════════════════════════════════════════════════
-  const CHOFER_H = 22
-  const choferY = PAGE_H - MARGIN - CHOFER_H
-
-  // Recuadro unificado: FORMA DE PAGO + TOTAL — encima del chofer
-  const fpY = choferY - 24
 
   // Forma de pago (sin marcar)
   doc.setDrawColor(120, 120, 120)
