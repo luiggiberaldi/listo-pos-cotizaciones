@@ -87,8 +87,15 @@ function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
       {/* Teléfono */}
       <div className="relative">
         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400"><Phone size={14} /></div>
-        <input value={campos.telefono} onChange={e => cambiar('telefono', e.target.value)}
-          placeholder="Teléfono (opcional)" type="tel" inputMode="tel" className={inputCls} disabled={cargando} />
+        <input value={campos.telefono} onChange={e => {
+            let val = e.target.value.replace(/[^\d]/g, '')
+            if (val.startsWith('58') && val.length > 10) val = val.slice(2)
+            if (val.startsWith('0')) val = val.slice(1)
+            val = val.slice(0, 10)
+            if (val.length > 3) val = val.slice(0, 3) + '-' + val.slice(3)
+            cambiar('telefono', val)
+          }}
+          placeholder="412-1234567" type="tel" inputMode="tel" className={inputCls} disabled={cargando} />
       </div>
       {/* PIN */}
       <div className="relative">
@@ -155,7 +162,15 @@ function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
 
 // ─── Formulario editar usuario ────────────────────────────────────────────────
 function FormEditar({ usuario, onGuardar, onCancelar, cargando, coloresUsados = [] }) {
-  const [campos, setCampos] = useState({ nombre: usuario.nombre, rol: usuario.rol, pin: '', pinConfirm: '', color: usuario.color || COLORES_VENDEDOR[0], telefono: usuario.telefono || '' })
+  const telNorm = (() => {
+    let t = (usuario.telefono || '').replace(/[\s\-\(\)\.+]/g, '')
+    if (t.startsWith('58') && t.length >= 12) t = t.slice(2)
+    if (t.startsWith('0')) t = t.slice(1)
+    t = t.slice(0, 10)
+    if (t.length > 3) t = t.slice(0, 3) + '-' + t.slice(3)
+    return t
+  })()
+  const [campos, setCampos] = useState({ nombre: usuario.nombre, rol: usuario.rol, pin: '', pinConfirm: '', color: usuario.color || COLORES_VENDEDOR[0], telefono: telNorm })
   const [mostrarPin, setMostrarPin] = useState(false)
   const [error, setError] = useState('')
 
@@ -193,8 +208,15 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando, coloresUsados = 
       {/* Teléfono */}
       <div className="relative">
         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400"><Phone size={14} /></div>
-        <input value={campos.telefono} onChange={e => setCampos(p => ({ ...p, telefono: e.target.value }))}
-          placeholder="Teléfono (opcional)" type="tel" inputMode="tel"
+        <input value={campos.telefono} onChange={e => {
+            let val = e.target.value.replace(/[^\d]/g, '')
+            if (val.startsWith('58') && val.length > 10) val = val.slice(2)
+            if (val.startsWith('0')) val = val.slice(1)
+            val = val.slice(0, 10)
+            if (val.length > 3) val = val.slice(0, 3) + '-' + val.slice(3)
+            setCampos(p => ({ ...p, telefono: val }))
+          }}
+          placeholder="412-1234567" type="tel" inputMode="tel"
           className={`${inputCls} !pl-10`} disabled={cargando} />
       </div>
       <CustomSelect
