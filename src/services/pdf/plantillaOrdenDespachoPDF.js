@@ -269,7 +269,7 @@ export async function generarPlantillaOrdenDespachoPDF({ config = {} } = {}) {
 
   const cellY2 = choferY + 6
   const cellH = 12
-  const choferLabels = ['CHOFER', 'C.I.', 'TELÉFONO', 'VEHÍCULO', 'PLACA CHUTO', 'PLACA BATEA']
+  const choferLabels = ['CHOFER', 'C.I.', 'COLOR', 'VEHÍCULO', 'PLACA CHUTO', 'PLACA BATEA']
   const colW = CONTENT_W / choferLabels.length
   choferLabels.forEach((label, i) => {
     const fx = MARGIN + i * colW
