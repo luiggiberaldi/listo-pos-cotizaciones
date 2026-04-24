@@ -18,6 +18,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const esSupervisor = perfil?.rol === 'supervisor'
   const rol = perfil?.rol || 'vendedor'
   const [pdfLoading, setPdfLoading]   = useState(false)
+  const [ordenLoading, setOrdenLoading] = useState(false)
   const [printLoading, setPrintLoading] = useState(false)
   const [showDetalle, setShowDetalle] = useState(false)
   const [showSheet, setShowSheet]     = useState(false)
@@ -85,6 +86,38 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       showToast('Error al generar PDF: ' + (err.message || 'Error desconocido'), 'error')
     } finally {
       setPdfLoading(false)
+    }
+  }
+
+  async function descargarOrdenDespacho() {
+    setOrdenLoading(true)
+    try {
+      const session = (await supabase.auth.getSession()).data.session
+      const [{ generarOrdenDespachoPDF }, itemsRes, clienteData, vendedorRes, transportistaRes] = await Promise.all([
+        import('../../services/pdf/ordenDespachoPDF'),
+        supabase.from('cotizacion_items').select('codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, total_linea_usd, orden').eq('cotizacion_id', despacho.cotizacion_id).order('orden'),
+        despacho.cliente_id
+          ? fetch(apiUrl('/api/clientes/lookup'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+              body: JSON.stringify({ ids: [despacho.cliente_id] }),
+            }).then(r => r.ok ? r.json() : [])
+          : Promise.resolve([]),
+        despacho.vendedor_id ? supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', despacho.vendedor_id).single() : Promise.resolve({ data: null }),
+        despacho.transportista_id ? supabase.from('transportistas').select('id, nombre, rif, telefono, zona_cobertura, vehiculo, placa_chuto, placa_batea').eq('id', despacho.transportista_id).single() : Promise.resolve({ data: null }),
+      ])
+      if (itemsRes.error) throw itemsRes.error
+      const desConDatos = {
+        ...despacho,
+        cliente: clienteData?.[0] || despacho.cliente,
+        vendedor: vendedorRes.data || despacho.vendedor,
+        transportista: transportistaRes.data || despacho.transportista,
+      }
+      await generarOrdenDespachoPDF({ despacho: desConDatos, items: itemsRes.data ?? [], config, formaPago: despacho.forma_pago || '', monedaPDF: monedaPdf, tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio })
+    } catch (err) {
+      showToast('Error al generar Orden de Despacho: ' + (err.message || 'Error desconocido'), 'error')
+    } finally {
+      setOrdenLoading(false)
     }
   }
 
@@ -292,7 +325,12 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           <button onClick={descargarPDF} disabled={pdfLoading}
             className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40">
             {pdfLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Download size={14} />}
-            PDF
+            N. Entrega
+          </button>
+          <button onClick={descargarOrdenDespacho} disabled={ordenLoading}
+            className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40">
+            {ordenLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Download size={14} />}
+            O. Despacho
           </button>
           <button onClick={imprimirDespacho} disabled={printLoading}
             className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40">
@@ -372,10 +410,16 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             )}
           </div>
           <button onClick={descargarPDF} disabled={pdfLoading}
-            title="Descargar PDF"
+            title="Descargar Nota de Entrega"
             className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-50">
             {pdfLoading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-            PDF
+            N. Entrega
+          </button>
+          <button onClick={descargarOrdenDespacho} disabled={ordenLoading}
+            title="Descargar Orden de Despacho"
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-50">
+            {ordenLoading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+            O. Despacho
           </button>
           <button onClick={imprimirDespacho} disabled={printLoading}
             title="Imprimir despacho"
