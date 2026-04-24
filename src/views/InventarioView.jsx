@@ -98,10 +98,16 @@ export default function InventarioView() {
   const borrar = useBorrarProducto()
   const { data: stockComprometido = {} } = useStockComprometido()
 
-  // Filtrar por stock bajo (client-side)
+  // Filtrar por stock bajo (client-side) — stock bajo primero, stock 0 al final
   const productosFiltrados = useMemo(() => {
     if (!stockBajo) return productos
-    return productos.filter(p => p.stock_actual <= 0 || (p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo))
+    const filtrados = productos.filter(p => p.stock_actual <= 0 || (p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo))
+    return filtrados.sort((a, b) => {
+      const aZero = a.stock_actual <= 0 ? 1 : 0
+      const bZero = b.stock_actual <= 0 ? 1 : 0
+      if (aZero !== bZero) return aZero - bZero // stock > 0 primero
+      return a.stock_actual - b.stock_actual     // menor stock primero
+    })
   }, [productos, stockBajo])
 
   // Paginación

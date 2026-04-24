@@ -153,6 +153,9 @@ export default function ProductoForm({ producto = null, onSuccess, onCancel }) {
         await supabase.from('productos').update({ imagen_url: url }).eq('id', productoId)
       } else if (imagenEliminada && productoId) {
         await supabase.from('productos').update({ imagen_url: null }).eq('id', productoId)
+      } else if (esEdicion && productoId && producto.imagen_url) {
+        // Restaurar imagen_url en caso de que el RPC la haya limpiado
+        await supabase.from('productos').update({ imagen_url: producto.imagen_url }).eq('id', productoId)
       }
 
       onSuccess?.()
