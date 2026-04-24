@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
 import useAuthStore from '../store/useAuthStore'
 import { sanitizePostgrestSearch } from '../utils/format'
-import { apiUrl } from '../services/apiBase'
+import { authFetch } from '../services/authFetch'
 
 // ─── Keys de caché ────────────────────────────────────────────────────────────
 export const CLIENTES_KEY = ['clientes']
@@ -18,16 +18,10 @@ export function useClientes(busqueda = '') {
   return useQuery({
     queryKey: [...CLIENTES_KEY, busqueda],
     queryFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.access_token) throw new Error('No autenticado')
-
       const params = new URLSearchParams()
       if (busqueda.trim()) params.set('busqueda', busqueda.trim())
 
-      const res = await fetch(apiUrl(`/api/clientes?${params}`), {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      })
-
+      const res = await authFetch(`/api/clientes?${params}`)
       if (!res.ok) throw new Error('Error al cargar clientes')
       return await res.json()
     },
@@ -155,15 +149,9 @@ export function useReasignarCliente() {
 
   return useMutation({
     mutationFn: async ({ clienteId, nuevoVendedorId, motivo }) => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.access_token) throw new Error('No autenticado')
-
-      const res = await fetch(apiUrl('/api/clientes/reasignar'), {
+      const res = await authFetch('/api/clientes/reasignar', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clienteId, nuevoVendedorId, motivo }),
       })
       const result = await res.json()
