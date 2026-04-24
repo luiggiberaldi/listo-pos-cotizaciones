@@ -47,13 +47,31 @@ const VACIO = {
 
 const PREFIJOS_RIF = ['V', 'J', 'E', 'G', 'P']
 
-/** Separa "J-12345678-9" en { prefijo: 'J', numero: '12345678-9' } */
+/** Separa "V24.457.713" o "J-30123456-7" en { prefijo, numero } */
 function parsearRif(rif) {
   if (!rif) return { prefijo: 'V', numero: '' }
   const limpio = rif.trim().toUpperCase()
   const match = limpio.match(/^([VJEGP])-?(.*)$/)
-  if (match) return { prefijo: match[1], numero: match[2] }
-  return { prefijo: 'V', numero: limpio }
+  if (match) return { prefijo: match[1], numero: match[2].replace(/\./g, '') }
+  return { prefijo: 'V', numero: limpio.replace(/\./g, '') }
+}
+
+/** Formatea número con puntos de miles: 24457713 → 24.457.713 */
+function formatearConPuntos(num) {
+  const limpio = num.replace(/\D/g, '')
+  return limpio.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+}
+
+/** Combina prefijo + número en formato final */
+function formatearRif(prefijo, numero) {
+  const limpio = numero.replace(/[^\d-]/g, '')
+  if (!limpio) return ''
+  if (prefijo === 'V') {
+    // Cédula: V24.457.713 (sin guión, con puntos)
+    return `V${formatearConPuntos(limpio)}`
+  }
+  // RIF: J-30123456-7 (con guión)
+  return `${prefijo}-${limpio}`
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
@@ -113,10 +131,17 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
     if (!campos.rif_cedula.trim()) {
       errs.rif_cedula = 'El RIF/Cédula es obligatorio para proteger la asignación del cliente'
     } else {
-      const nums = campos.rif_cedula.replace(/-/g, '').trim()
-      // Debe ser 6-9 dígitos, opcionalmente seguido de guion y dígito verificador
-      if (!/^\d{6,9}(-\d)?$/.test(campos.rif_cedula.trim())) {
-        errs.rif_cedula = 'Solo números. Ej: 12345678-9 o 12345678'
+      const limpio = campos.rif_cedula.replace(/[^\d-]/g, '')
+      if (rifPrefijo === 'V') {
+        // Cédula: 6-9 dígitos
+        if (!/^\d{6,9}$/.test(limpio)) {
+          errs.rif_cedula = 'Cédula: 6 a 9 dígitos. Ej: 24457713'
+        }
+      } else {
+        // RIF: 8 dígitos + guión + dígito verificador
+        if (!/^\d{7,9}-\d$/.test(limpio)) {
+          errs.rif_cedula = 'RIF: 8 dígitos-verificador. Ej: 30123456-7'
+        }
       }
     }
     if (campos.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(campos.email.trim())) {
@@ -142,10 +167,10 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
     const errs = validar()
     if (Object.keys(errs).length) { setErrores(errs); return }
 
-    // Combinar prefijo + número del RIF
+    // Combinar prefijo + número del RIF con formato correcto
     const camposFinales = {
       ...campos,
-      rif_cedula: `${rifPrefijo}-${campos.rif_cedula.trim()}`,
+      rif_cedula: formatearRif(rifPrefijo, campos.rif_cedula.trim()),
     }
 
     try {
@@ -212,20 +237,26 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
         </div>
         <div className="relative flex items-center">
           <span className="inline-flex items-center px-3 rounded-l-xl border border-r-0 border-slate-200 bg-slate-100 text-sm font-bold text-slate-600 select-none h-[42px]">
-            {rifPrefijo}-
+            {rifPrefijo}{rifPrefijo !== 'V' ? '-' : ''}
           </span>
           <input
             type="text"
             name="rif_cedula"
             value={campos.rif_cedula}
             onChange={e => {
-              // Solo permitir dígitos y guion para dígito verificador
-              let val = e.target.value.replace(/[^\d-]/g, '')
-              // Máx formato: 123456789-0
-              if (val.replace(/-/g, '').length > 10) return
-              cambiar({ target: { name: 'rif_cedula', value: val } })
+              if (rifPrefijo === 'V') {
+                // Cédula: solo dígitos
+                let val = e.target.value.replace(/\D/g, '')
+                if (val.length > 9) return
+                cambiar({ target: { name: 'rif_cedula', value: val } })
+              } else {
+                // RIF: dígitos y guion para verificador
+                let val = e.target.value.replace(/[^\d-]/g, '')
+                if (val.replace(/-/g, '').length > 10) return
+                cambiar({ target: { name: 'rif_cedula', value: val } })
+              }
             }}
-            placeholder="12345678-9"
+            placeholder={rifPrefijo === 'V' ? '24457713' : '30123456-7'}
             className={`${inputClass} rounded-l-none`}
             disabled={cargando}
             inputMode="numeric"

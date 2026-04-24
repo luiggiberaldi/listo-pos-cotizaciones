@@ -19,8 +19,7 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
   const [campos, setCampos] = useState({
     nombre:         inicial.nombre         ?? '',
     rif:            inicial.rif            ?? '',
-    telefono:       inicial.telefono       ?? '',  // repurposed as "color"
-    zona_cobertura: inicial.zona_cobertura ?? '',  // repurposed as "placa"
+    color:          inicial.color          ?? '',
     vehiculo:       inicial.vehiculo       ?? '',
     placa_chuto:    inicial.placa_chuto    ?? '',
     placa_batea:    inicial.placa_batea    ?? '',
@@ -55,7 +54,7 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
         </div>
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-slate-700">Color</label>
-          <input value={campos.telefono} onChange={e => cambiar('telefono', e.target.value)}
+          <input value={campos.color} onChange={e => cambiar('color', e.target.value)}
             placeholder="Ej: Rojo, Blanco" className={inputCls} disabled={cargando} />
         </div>
         <div className="space-y-1.5">
@@ -189,10 +188,10 @@ function TransportistaCard({ transportista, esSupervisor, onEditar, onDesactivar
 
       {/* ── Detalles ── */}
       <div className="px-4 pb-3 mt-1 space-y-1.5">
-        {transportista.telefono && (
+        {transportista.color && (
           <div className="flex items-center gap-1.5 text-xs text-slate-500">
             <span className="font-medium text-slate-400">Color:</span>
-            <span>{transportista.telefono}</span>
+            <span>{transportista.color}</span>
           </div>
         )}
         {transportista.vehiculo && (
