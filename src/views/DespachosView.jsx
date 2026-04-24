@@ -1,8 +1,8 @@
 // src/views/DespachosView.jsx
 // Vista principal de notas de despacho
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Package, PackageCheck, RefreshCw, Filter, LayoutGrid, List, FileDown } from 'lucide-react'
+import { Package, PackageCheck, RefreshCw, Filter, LayoutGrid, List, FileDown, ChevronDown } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import { useDespachos, useActualizarEstadoDespacho, useReciclarDespacho } from '../hooks/useDespachos'
@@ -21,7 +21,8 @@ import Pagination  from '../components/ui/Pagination'
 import { OnboardingSequence } from '../components/ui/OnboardingTooltip'
 import { showToast } from '../components/ui/Toast'
 
-import { generarDespachoPlantillaPDF } from '../services/pdf/despachoPlantillaPDF'
+import { generarPlantillaNotaEntregaPDF } from '../services/pdf/plantillaNotaEntregaPDF'
+import { generarPlantillaOrdenDespachoPDF } from '../services/pdf/plantillaOrdenDespachoPDF'
 const ESTADOS_FILTRO = [
   { valor: '',           label: 'Todas' },
   { valor: 'pendiente',  label: 'Pendientes' },
@@ -43,6 +44,48 @@ function SkeletonDespachos() {
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+function PlantillaDropdown({ config }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-semibold border transition-all hover:shadow-sm active:scale-[0.98] min-h-[44px]"
+        style={{ background: 'linear-gradient(135deg, rgba(27,54,93,0.06), rgba(184,134,11,0.06))', border: '1px solid rgba(27,54,93,0.18)', color: '#1B365D' }}
+      >
+        <FileDown size={15} />
+        Plantilla vacía
+        <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute right-0 mt-1 w-56 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-50">
+          <button
+            onClick={() => { generarPlantillaNotaEntregaPDF({ config }); setOpen(false) }}
+            className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 transition-colors text-slate-700"
+          >
+            Nota de Entrega
+          </button>
+          <button
+            onClick={() => { generarPlantillaOrdenDespachoPDF({ config }); setOpen(false) }}
+            className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 transition-colors text-slate-700"
+          >
+            Orden de Despacho
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -117,15 +160,7 @@ export default function DespachosView() {
         title="Notas de Despacho"
         subtitle={isLoading ? 'Cargando...' : `${despachosFiltrados.length} despacho${despachosFiltrados.length !== 1 ? 's' : ''}`}
         action={
-          <button
-            onClick={() => generarDespachoPlantillaPDF({ config })}
-            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-semibold border transition-all hover:shadow-sm active:scale-[0.98] min-h-[44px]"
-            style={{ background: 'linear-gradient(135deg, rgba(27,54,93,0.06), rgba(184,134,11,0.06))', border: '1px solid rgba(27,54,93,0.18)', color: '#1B365D' }}
-            title="Descargar plantilla vacía"
-          >
-            <FileDown size={15} />
-            Plantilla vacía
-          </button>
+          <PlantillaDropdown config={config} />
         }
       />
 
