@@ -1,8 +1,8 @@
 // src/views/ComisionesView.jsx
-// Vista de comisiones por despacho entregado
+// Vista de comisiones agrupadas por vendedor
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { DollarSign, CheckCircle, Clock, Filter, TrendingUp, Eye, X, FileText, ArrowLeft, Download } from 'lucide-react'
+import { DollarSign, CheckCircle, Clock, Filter, TrendingUp, FileText, Download, ChevronDown, ChevronUp } from 'lucide-react'
 import { useComisiones, useComisionesResumen, useMarcarComisionPagada } from '../hooks/useComisiones'
 import { useVendedores } from '../hooks/useClientes'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
@@ -19,7 +19,6 @@ function ResumenCard({ icon: Icon, label, value, sub, gradient, border }) {
   return (
     <div className="relative overflow-hidden rounded-2xl p-4 flex flex-col gap-3 cursor-default"
       style={{ background: gradient, border: `1px solid ${border}`, boxShadow: '0 2px 8px rgba(0,0,0,0.10)' }}>
-      {/* Orbe decorativo */}
       <div className="absolute -bottom-4 -right-4 w-20 h-20 rounded-full pointer-events-none"
         style={{ background: 'rgba(255,255,255,0.05)' }} />
       <div className="flex items-center gap-2.5 relative z-10">
@@ -37,92 +36,142 @@ function ResumenCard({ icon: Icon, label, value, sub, gradient, border }) {
   )
 }
 
-// ─── Tarjeta de comisión ──────────────────────────────────────────────────────
-function ComisionCard({ comision, esSupervisor, onMarcarPagada, marcando, onVerDetalle }) {
-  const esPendiente = comision.estado === 'pendiente'
+// ─── Tarjeta agrupada por vendedor ──────────────────────────────────────────
+function VendedorCard({ vendedor, comisiones, esSupervisor, onMarcarPagada, marcando, onExportarPDF }) {
+  const [abierto, setAbierto] = useState(false)
+
+  const pendientes = comisiones.filter(c => c.estado === 'pendiente')
+  const pagadas = comisiones.filter(c => c.estado === 'pagada')
+  const totalPendiente = pendientes.reduce((s, c) => s + Number(c.total_comision || 0), 0)
+  const totalPagado = pagadas.reduce((s, c) => s + Number(c.total_comision || 0), 0)
+  const totalGeneral = totalPendiente + totalPagado
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3 hover:shadow-lg transition-all duration-200">
+    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden hover:shadow-lg transition-all duration-200">
 
-      {/* Header: vendedor + estado */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-black"
-            style={{ background: comision.vendedor?.color || '#1B365D' }}>
-            {(comision.vendedor?.nombre || '?')[0].toUpperCase()}
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-bold text-slate-800 truncate">
-              {comision.vendedor?.nombre ?? 'Vendedor'}
-            </p>
-            <p className="text-xs text-slate-400">
-              Despacho #{comision.despacho?.numero ?? '—'} · Cot. #{comision.cotizacion?.numero ?? '—'}
-            </p>
-          </div>
+      {/* Header: avatar + nombre + total */}
+      <button
+        onClick={() => setAbierto(!abierto)}
+        className="w-full flex items-center gap-3 p-4 text-left hover:bg-slate-50/50 transition-colors"
+      >
+        <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-white text-sm font-black"
+          style={{ background: vendedor?.color || '#1B365D' }}>
+          {(vendedor?.nombre || '?')[0].toUpperCase()}
         </div>
-        <span className={`text-xs font-bold px-2.5 py-1 rounded-full shrink-0 border ${
-          esPendiente
-            ? 'bg-amber-50 text-amber-700 border-amber-200'
-            : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-        }`}>
-          {esPendiente ? 'Pendiente' : 'Pagada'}
-        </span>
-      </div>
-
-      {/* Desglose */}
-      <div className="grid grid-cols-2 gap-2 text-xs">
-        <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
-          <p className="text-slate-400 font-medium mb-0.5">Cabilla ({comision.pct_cabilla}%)</p>
-          <p className="text-slate-600 font-semibold">{fmtUsd(comision.monto_cabilla)}</p>
-          <p className="text-emerald-600 font-black">{fmtUsd(comision.comision_cabilla)}</p>
-        </div>
-        {(comision.detalle_extras || []).filter(e => Number(e.monto) > 0).map((extra, idx) => (
-          <div key={idx} className="bg-amber-50 rounded-xl p-2.5 border border-amber-100">
-            <p className="text-amber-600 font-medium mb-0.5">{extra.cat} ({extra.pct}%)</p>
-            <p className="text-slate-600 font-semibold">{fmtUsd(extra.monto)}</p>
-            <p className="text-emerald-600 font-black">{fmtUsd(extra.comision)}</p>
-          </div>
-        ))}
-        <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
-          <p className="text-slate-400 font-medium mb-0.5">Otros ({comision.pct_otros}%)</p>
-          <p className="text-slate-600 font-semibold">{fmtUsd(comision.monto_otros)}</p>
-          <p className="text-emerald-600 font-black">{fmtUsd(comision.comision_otros)}</p>
-        </div>
-      </div>
-
-      {/* Total + acción */}
-      <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-        <div>
-          <p className="text-xs text-slate-400 font-medium">Total comisión</p>
-          <p className="text-xl font-black text-slate-800">{fmtUsd(comision.total_comision)}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {onVerDetalle && (
-            <button
-              onClick={() => onVerDetalle(comision.vendedor)}
-              className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
-            >
-              <Eye size={13} />Ver detalle
-            </button>
-          )}
-          {esSupervisor && esPendiente && (
-            <button
-              onClick={() => onMarcarPagada(comision)}
-              disabled={marcando}
-              className="flex items-center gap-1.5 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all active:scale-[0.98] disabled:opacity-50 shadow-md"
-              style={{ background: 'linear-gradient(135deg, #065f46, #047857)' }}
-            >
-              <CheckCircle size={13} />
-              Marcar pagada
-            </button>
-          )}
-        </div>
-        {!esPendiente && !onVerDetalle && comision.estado === 'pagada' && comision.pagada_en && (
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-slate-800 truncate">{vendedor?.nombre ?? 'Vendedor'}</p>
           <p className="text-xs text-slate-400">
-            {new Date(comision.pagada_en).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}
+            {comisiones.length} comisión{comisiones.length !== 1 ? 'es' : ''}
           </p>
-        )}
+        </div>
+        <div className="text-right shrink-0 mr-2">
+          <p className="text-lg font-black text-slate-800">{fmtUsd(totalGeneral)}</p>
+        </div>
+        {abierto ? <ChevronUp size={16} className="text-slate-400 shrink-0" /> : <ChevronDown size={16} className="text-slate-400 shrink-0" />}
+      </button>
+
+      {/* Mini resumen siempre visible */}
+      <div className="grid grid-cols-3 gap-2 px-4 pb-3 -mt-1">
+        <div className="bg-slate-50 rounded-xl px-2.5 py-2 border border-slate-100 text-center">
+          <p className="text-[10px] text-slate-400 font-medium">Total</p>
+          <p className="text-sm font-black text-slate-700">{fmtUsd(totalGeneral)}</p>
+        </div>
+        <div className="bg-amber-50 rounded-xl px-2.5 py-2 border border-amber-100 text-center">
+          <p className="text-[10px] text-amber-500 font-medium">Pendiente</p>
+          <p className="text-sm font-black text-amber-600">{fmtUsd(totalPendiente)}</p>
+          <p className="text-[9px] text-slate-400">{pendientes.length}</p>
+        </div>
+        <div className="bg-emerald-50 rounded-xl px-2.5 py-2 border border-emerald-100 text-center">
+          <p className="text-[10px] text-emerald-500 font-medium">Pagado</p>
+          <p className="text-sm font-black text-emerald-600">{fmtUsd(totalPagado)}</p>
+          <p className="text-[9px] text-slate-400">{pagadas.length}</p>
+        </div>
       </div>
+
+      {/* Lista expandible de comisiones individuales */}
+      {abierto && (
+        <div className="border-t border-slate-100 px-4 py-3 space-y-2.5">
+          {onExportarPDF && (
+            <button
+              onClick={() => onExportarPDF(vendedor)}
+              className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors mb-1"
+            >
+              <Download size={12} />Exportar PDF
+            </button>
+          )}
+          {comisiones.map(c => {
+            const esPendiente = c.estado === 'pendiente'
+            return (
+              <div key={c.id} className="bg-slate-50 rounded-xl border border-slate-100 p-3 hover:bg-slate-100/60 transition-all">
+                {/* Row 1: Despacho + estado + fecha */}
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FileText size={13} className="text-slate-400 shrink-0" />
+                    <span className="text-xs font-mono text-slate-500">
+                      Despacho #{c.despacho?.numero ?? '—'} · Cot. #{c.cotizacion?.numero ?? '—'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[11px] text-slate-400">{fmtFecha(c.creado_en)}</span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                      esPendiente
+                        ? 'bg-amber-50 text-amber-700 border-amber-200'
+                        : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    }`}>
+                      {esPendiente ? 'Pendiente' : 'Pagada'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Row 2: Desglose inline */}
+                <div className="flex flex-col gap-1.5 text-xs mb-2">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 sm:gap-2">
+                    <div className="flex-1 bg-white rounded-lg px-2.5 py-1.5 border border-slate-100">
+                      <span className="text-slate-400">Cabilla ({c.pct_cabilla}%)</span>
+                      <span className="ml-1.5 font-bold text-slate-600">{fmtUsd(c.monto_cabilla)}</span>
+                      <span className="ml-1 font-black text-emerald-600">→ {fmtUsd(c.comision_cabilla)}</span>
+                    </div>
+                    <div className="flex-1 bg-white rounded-lg px-2.5 py-1.5 border border-slate-100">
+                      <span className="text-slate-400">Otros ({c.pct_otros}%)</span>
+                      <span className="ml-1.5 font-bold text-slate-600">{fmtUsd(c.monto_otros)}</span>
+                      <span className="ml-1 font-black text-emerald-600">→ {fmtUsd(c.comision_otros)}</span>
+                    </div>
+                  </div>
+                  {(c.detalle_extras || []).filter(e => Number(e.monto) > 0).map((extra, idx) => (
+                    <div key={idx} className="bg-amber-50 rounded-lg px-2.5 py-1.5 border border-amber-100">
+                      <span className="text-amber-600">{extra.cat} ({extra.pct}%)</span>
+                      <span className="ml-1.5 font-bold text-slate-600">{fmtUsd(extra.monto)}</span>
+                      <span className="ml-1 font-black text-emerald-600">→ {fmtUsd(extra.comision)}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Row 3: Total + acción */}
+                <div className="flex items-center justify-between">
+                  <span className="text-base font-black text-slate-800">{fmtUsd(c.total_comision)}</span>
+                  <div className="flex items-center gap-2">
+                    {c.estado === 'pagada' && c.pagada_en && (
+                      <span className="text-[11px] text-slate-400">
+                        Pagada {new Date(c.pagada_en).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </span>
+                    )}
+                    {esSupervisor && esPendiente && (
+                      <button
+                        onClick={() => onMarcarPagada(c)}
+                        disabled={marcando}
+                        className="flex items-center gap-1 text-white font-bold text-[11px] px-3 py-1.5 rounded-lg transition-all active:scale-[0.98] disabled:opacity-50"
+                        style={{ background: 'linear-gradient(135deg, #065f46, #047857)' }}
+                      >
+                        <CheckCircle size={11} />Pagada
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
@@ -133,172 +182,21 @@ function SkeletonComisiones() {
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
       {[1, 2, 3].map(i => (
         <div key={i} className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
-          <div className="flex items-center gap-2.5">
-            <Skeleton className="w-8 h-8 rounded-full shrink-0" />
+          <div className="flex items-center gap-3">
+            <Skeleton className="w-10 h-10 rounded-full shrink-0" />
             <div className="flex-1 space-y-1.5">
-              <Skeleton className="h-3 w-2/3 rounded" />
-              <Skeleton className="h-2.5 w-1/2 rounded" />
+              <Skeleton className="h-3.5 w-2/3 rounded" />
+              <Skeleton className="h-2.5 w-1/3 rounded" />
             </div>
+            <Skeleton className="h-5 w-20 rounded" />
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <Skeleton className="h-14 rounded-xl" />
             <Skeleton className="h-14 rounded-xl" />
-          </div>
-          <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-            <Skeleton className="h-6 w-1/3 rounded" />
-            <Skeleton className="h-8 w-28 rounded-xl" />
+            <Skeleton className="h-14 rounded-xl" />
           </div>
         </div>
       ))}
-    </div>
-  )
-}
-
-// ─── Modal detalle de comisiones por vendedor ────────────────────────────────
-function ModalDetalleVendedor({ vendedor, comisiones, onClose, esSupervisor, onMarcarPagada, marcando, onExportarPDF }) {
-  if (!vendedor) return null
-
-  const comisionesVendedor = comisiones.filter(c => c.vendedor_id === vendedor.id)
-  const pendientes = comisionesVendedor.filter(c => c.estado === 'pendiente')
-  const pagadas = comisionesVendedor.filter(c => c.estado === 'pagada')
-
-  const totalPendiente = pendientes.reduce((s, c) => s + Number(c.total_comision || 0), 0)
-  const totalPagado = pagadas.reduce((s, c) => s + Number(c.total_comision || 0), 0)
-  const totalGeneral = totalPendiente + totalPagado
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
-      onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
-        onClick={e => e.stopPropagation()}>
-
-        {/* Header */}
-        <div className="relative h-20 shrink-0 flex items-center gap-4 px-6"
-          style={{ background: `linear-gradient(135deg, ${vendedor.color || '#1B365D'}ee, ${vendedor.color || '#1B365D'}99)` }}>
-          <div className="absolute inset-0 opacity-10 pointer-events-none"
-            style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '12px 12px' }} />
-          <div className="relative z-10 w-12 h-12 rounded-full bg-white/20 border border-white/30 flex items-center justify-center text-white text-lg font-black backdrop-blur-sm">
-            {(vendedor.nombre || '?')[0].toUpperCase()}
-          </div>
-          <div className="relative z-10 flex-1 min-w-0">
-            <h3 className="text-lg font-black text-white truncate">{vendedor.nombre}</h3>
-            <p className="text-xs text-white/60">{comisionesVendedor.length} comisión{comisionesVendedor.length !== 1 ? 'es' : ''}</p>
-          </div>
-          <button onClick={onClose}
-            className="relative z-10 p-2 rounded-full bg-white/15 border border-white/25 text-white hover:bg-white/25 transition-colors">
-            <X size={16} />
-          </button>
-        </div>
-
-        {/* Resumen del vendedor */}
-        <div className="grid grid-cols-3 gap-3 px-6 py-4 bg-slate-50 border-b border-slate-100">
-          <div className="text-center">
-            <p className="text-xs text-slate-400 font-medium">Total</p>
-            <p className="text-lg font-black text-slate-800">{fmtUsd(totalGeneral)}</p>
-          </div>
-          <div className="text-center">
-            <p className="text-xs text-amber-500 font-medium">Pendiente</p>
-            <p className="text-lg font-black text-amber-600">{fmtUsd(totalPendiente)}</p>
-            <p className="text-[10px] text-slate-400">{pendientes.length} por pagar</p>
-          </div>
-          <div className="text-center">
-            <p className="text-xs text-emerald-500 font-medium">Pagado</p>
-            <p className="text-lg font-black text-emerald-600">{fmtUsd(totalPagado)}</p>
-            <p className="text-[10px] text-slate-400">{pagadas.length} pagada{pagadas.length !== 1 ? 's' : ''}</p>
-          </div>
-        </div>
-
-        {/* Botón exportar PDF del vendedor */}
-        {onExportarPDF && comisionesVendedor.length > 0 && (
-          <div className="px-6 pt-3">
-            <button
-              onClick={() => onExportarPDF(vendedor)}
-              className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
-            >
-              <Download size={13} />Exportar PDF de {vendedor.nombre}
-            </button>
-          </div>
-        )}
-
-        {/* Lista de comisiones */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
-          {comisionesVendedor.length === 0 ? (
-            <p className="text-sm text-slate-400 text-center py-8">Sin comisiones registradas</p>
-          ) : (
-            comisionesVendedor.map(c => {
-              const esPendiente = c.estado === 'pendiente'
-              return (
-                <div key={c.id} className="bg-white rounded-xl border border-slate-200 p-3.5 hover:shadow-sm transition-all">
-                  {/* Row 1: Despacho + estado + fecha */}
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <FileText size={13} className="text-slate-400 shrink-0" />
-                      <span className="text-xs font-mono text-slate-500">
-                        Despacho #{c.despacho?.numero ?? '—'} · Cot. #{c.cotizacion?.numero ?? '—'}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[11px] text-slate-400">{fmtFecha(c.creado_en)}</span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                        esPendiente
-                          ? 'bg-amber-50 text-amber-700 border-amber-200'
-                          : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                      }`}>
-                        {esPendiente ? 'Pendiente' : 'Pagada'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Row 2: Desglose inline */}
-                  <div className="flex flex-col gap-2 text-xs mb-2">
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
-                      <div className="flex-1 bg-slate-50 rounded-lg px-2.5 py-1.5 border border-slate-100">
-                        <span className="text-slate-400">Cabilla ({c.pct_cabilla}%)</span>
-                        <span className="ml-1.5 font-bold text-slate-600">{fmtUsd(c.monto_cabilla)}</span>
-                        <span className="ml-1 font-black text-emerald-600">→ {fmtUsd(c.comision_cabilla)}</span>
-                      </div>
-                      <div className="flex-1 bg-slate-50 rounded-lg px-2.5 py-1.5 border border-slate-100">
-                        <span className="text-slate-400">Otros ({c.pct_otros}%)</span>
-                        <span className="ml-1.5 font-bold text-slate-600">{fmtUsd(c.monto_otros)}</span>
-                        <span className="ml-1 font-black text-emerald-600">→ {fmtUsd(c.comision_otros)}</span>
-                      </div>
-                    </div>
-                    {(c.detalle_extras || []).filter(e => Number(e.monto) > 0).map((extra, idx) => (
-                      <div key={idx} className="bg-amber-50 rounded-lg px-2.5 py-1.5 border border-amber-100">
-                        <span className="text-amber-600">{extra.cat} ({extra.pct}%)</span>
-                        <span className="ml-1.5 font-bold text-slate-600">{fmtUsd(extra.monto)}</span>
-                        <span className="ml-1 font-black text-emerald-600">→ {fmtUsd(extra.comision)}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Row 3: Total + acción */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-base font-black text-slate-800">{fmtUsd(c.total_comision)}</span>
-                    <div className="flex items-center gap-2">
-                      {c.estado === 'pagada' && c.pagada_en && (
-                        <span className="text-[11px] text-slate-400">
-                          Pagada {new Date(c.pagada_en).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}
-                        </span>
-                      )}
-                      {esSupervisor && esPendiente && (
-                        <button
-                          onClick={() => onMarcarPagada(c)}
-                          disabled={marcando}
-                          className="flex items-center gap-1 text-white font-bold text-[11px] px-3 py-1.5 rounded-lg transition-all active:scale-[0.98] disabled:opacity-50"
-                          style={{ background: 'linear-gradient(135deg, #065f46, #047857)' }}
-                        >
-                          <CheckCircle size={11} />Pagada
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )
-            })
-          )}
-        </div>
-      </div>
     </div>
   )
 }
@@ -314,7 +212,6 @@ export default function ComisionesView() {
   const [filtroEstado,   setFiltroEstado]   = useState('')
   const [filtroVendedor, setFiltroVendedor] = useState('')
   const [comisionAPagar, setComisionAPagar] = useState(null)
-  const [vendedorDetalle, setVendedorDetalle] = useState(null)
 
   const { data: comisiones = [], isLoading } = useComisiones({
     estado:     filtroEstado,
@@ -325,6 +222,17 @@ export default function ComisionesView() {
   const { data: configNeg = {} } = useConfigNegocio()
   const marcar = useMarcarComisionPagada()
   const [exportando, setExportando] = useState(false)
+
+  // Agrupar comisiones por vendedor
+  const comisionesPorVendedor = useMemo(() => {
+    const mapa = new Map()
+    for (const c of comisiones) {
+      const vid = c.vendedor_id
+      if (!mapa.has(vid)) mapa.set(vid, { vendedor: c.vendedor, items: [] })
+      mapa.get(vid).items.push(c)
+    }
+    return [...mapa.values()]
+  }, [comisiones])
 
   async function exportarPDF(vendedorFiltro = null) {
     setExportando(true)
@@ -422,7 +330,7 @@ export default function ComisionesView() {
         )}
       </div>
 
-      {/* Lista */}
+      {/* Lista agrupada por vendedor */}
       {isLoading ? (
         <SkeletonComisiones />
       ) : comisiones.length === 0 ? (
@@ -435,14 +343,15 @@ export default function ComisionesView() {
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {comisiones.map(c => (
-            <ComisionCard
-              key={c.id}
-              comision={c}
+          {comisionesPorVendedor.map(g => (
+            <VendedorCard
+              key={g.vendedor?.id || 'unknown'}
+              vendedor={g.vendedor}
+              comisiones={g.items}
               esSupervisor={esSupervisor}
               onMarcarPagada={(comision) => setComisionAPagar(comision)}
               marcando={marcar.isPending}
-              onVerDetalle={(vendedor) => setVendedorDetalle(vendedor)}
+              onExportarPDF={exportarPDF}
             />
           ))}
         </div>
@@ -458,16 +367,6 @@ export default function ComisionesView() {
           : ''}
         confirmText="Sí, marcar como pagada"
         variant="success"
-      />
-
-      <ModalDetalleVendedor
-        vendedor={vendedorDetalle}
-        comisiones={comisiones}
-        onClose={() => setVendedorDetalle(null)}
-        esSupervisor={esSupervisor}
-        onMarcarPagada={(comision) => { setVendedorDetalle(null); setComisionAPagar(comision) }}
-        marcando={marcar.isPending}
-        onExportarPDF={exportarPDF}
       />
     </div>
   )
