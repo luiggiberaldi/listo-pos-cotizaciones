@@ -387,7 +387,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             <RefreshCcw size={13} /> {getDespachoAction('reciclar', rol).label || 'Reutilizar'}
           </button>
         )}
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex items-center gap-1 flex-wrap justify-end">
           <div className="relative">
             <button onClick={() => setShowMonedaMenu(v => !v)}
               onBlur={() => setTimeout(() => setShowMonedaMenu(false), 200)}
@@ -429,7 +429,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           </button>
           {canAnular && (
             <button onClick={() => onAnular(despacho)}
-              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 transition-colors">
+              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 transition-colors whitespace-nowrap">
               <Ban size={13} /> {getDespachoAction('anular', rol).label || 'Anular'}
             </button>
           )}
