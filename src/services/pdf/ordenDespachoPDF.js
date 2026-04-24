@@ -371,14 +371,14 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   doc.setTextColor(...C_DARK)
   doc.text('FORMA DE PAGO:', totX, ty + 4)
   drawCheck(doc, 'EFECTIVO',   totX,      ty + 12, fp === 'efectivo')
-  drawCheck(doc, 'ZELLE',      totX + 25, ty + 12, fp === 'zelle')
-  drawCheck(doc, 'P. MÓVIL',   totX + 45, ty + 12, fp === 'pago movil')
-  drawCheck(doc, 'USDT',       totX + 65, ty + 12, fp === 'usdt')
-  drawCheck(doc, 'TRANSF.',    totX,      ty + 19, fp === 'transferencia')
-  drawCheck(doc, 'CTA X COB.', totX + 25, ty + 19, fp === 'cta por cobrar')
+  drawCheck(doc, 'ZELLE',      totX + 22, ty + 12, fp === 'zelle')
+  drawCheck(doc, 'P. MÓVIL',   totX + 40, ty + 12, fp === 'pago movil')
+  drawCheck(doc, 'USDT',       totX + 60, ty + 12, fp === 'usdt')
+  drawCheck(doc, 'TRANSF.',    totX + 76, ty + 12, fp === 'transferencia')
+  drawCheck(doc, 'CTA X COB.', totX + 96, ty + 12, fp === 'cta por cobrar')
 
-  // Total grande — 6mm más alto (offset 30 en vez de 36)
-  const totTopY = ty + 30
+  // Total grande
+  const totTopY = ty + 24
   doc.setFillColor(60, 60, 60)
   doc.rect(totX, totTopY, totW, 14, 'F')
 
