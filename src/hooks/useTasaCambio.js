@@ -178,7 +178,7 @@ export function useTasaCambio() {
       // Procesar USDT
       if (usdtData && usdtData.precio > 0) {
         setTasaUsdt({
-          precio: Math.round(usdtData.precio * 100) / 100,
+          precio: Math.round(usdtData.precio / 5) * 5,
           fuente: usdtData.fuente,
           ultimaActualizacion: new Date().toISOString(),
         })
