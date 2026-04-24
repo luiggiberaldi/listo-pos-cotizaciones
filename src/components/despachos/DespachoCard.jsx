@@ -294,23 +294,23 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           {primaryAction.label}
         </button>
 
-        {/* Fila secundaria: Ver + PDF + más */}
-        <div className="flex items-center gap-1 mt-2 overflow-x-auto pb-1 -mx-1 px-1">
+        {/* Fila secundaria: grid 2 filas × auto cols */}
+        <div className="grid grid-cols-4 gap-1.5 mt-2">
           {primaryAction.key !== 'ver' && (
             <button onClick={() => setShowDetalle(true)}
-              className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 active:bg-slate-100 transition-colors shrink-0">
+              className="flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-medium text-slate-600 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 transition-colors">
               <Eye size={14} /> Ver
             </button>
           )}
           <div className="relative">
             <button onClick={() => setShowMonedaMenu(v => !v)}
               onBlur={() => setTimeout(() => setShowMonedaMenu(false), 200)}
-              className="flex items-center gap-1 px-2 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors whitespace-nowrap">
+              className="w-full flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-medium text-slate-600 bg-slate-50 hover:bg-slate-100 transition-colors whitespace-nowrap">
               <DollarSign size={14} />
               {monedaLabel} <ChevronDown size={10} />
             </button>
             {showMonedaMenu && (
-              <div className="absolute left-0 right-auto sm:left-0 bottom-full mb-1 w-44 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20 max-w-[calc(100vw-2rem)]"
+              <div className="absolute left-0 bottom-full mb-1 w-44 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
                 onMouseDown={e => e.preventDefault()}>
                 {MONEDA_OPTIONS.map(opt => (
                   <button key={opt.key} onClick={() => seleccionarMoneda(opt.key)}
@@ -323,23 +323,23 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             )}
           </div>
           <button onClick={descargarPDF} disabled={pdfLoading}
-            className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40 shrink-0">
+            className="flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors disabled:opacity-40">
             {pdfLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Download size={14} />}
-            N. Entrega
+            Entrega
           </button>
           <button onClick={descargarOrdenDespacho} disabled={ordenLoading}
-            className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40 shrink-0">
-            {ordenLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Download size={14} />}
-            O. Despacho
+            className="flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-medium text-violet-600 bg-violet-50 hover:bg-violet-100 transition-colors disabled:opacity-40">
+            {ordenLoading ? <div className="w-3 h-3 border-[1.5px] border-violet-400 border-t-transparent rounded-full animate-spin" /> : <Download size={14} />}
+            Orden
           </button>
           <button onClick={imprimirDespacho} disabled={printLoading}
-            className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40 shrink-0">
-            {printLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Printer size={14} />}
+            className="flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 transition-colors disabled:opacity-40">
+            {printLoading ? <div className="w-3 h-3 border-[1.5px] border-amber-500 border-t-transparent rounded-full animate-spin" /> : <Printer size={14} />}
             Imprimir
           </button>
           {getMobileSheetActions().length > 0 && (
             <button onClick={() => setShowSheet(true)}
-              className="ml-auto flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:bg-slate-50 active:bg-slate-100 transition-colors">
+              className="flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-medium text-slate-400 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 transition-colors">
               <MoreHorizontal size={14} /> Más
             </button>
           )}
