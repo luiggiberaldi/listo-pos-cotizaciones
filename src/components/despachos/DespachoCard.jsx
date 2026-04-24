@@ -23,6 +23,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const [showDetalle, setShowDetalle] = useState(false)
   const [showSheet, setShowSheet]     = useState(false)
   const [showMonedaMenu, setShowMonedaMenu] = useState(false)
+  const [showPrintMenu, setShowPrintMenu] = useState(false)
   const [monedaPdf, setMonedaPdf] = useState(() => localStorage.getItem('construacero_moneda_pdf') || '$')
   const [accionPendiente, setAccionPendiente] = useState(null) // { id, estado, actionConfig }
   const { tasaBcv, tasaUsdt } = useTasaCambio()
@@ -123,6 +124,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
 
   async function imprimirDespacho() {
     setPrintLoading(true)
+    setShowPrintMenu(false)
     try {
       const session = (await supabase.auth.getSession()).data.session
       const [{ generarDespachoPDF }, itemsRes, clienteData, vendedorRes, transportistaRes] = await Promise.all([
@@ -156,6 +158,47 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       }
     } catch (err) {
       showToast('Error al imprimir: ' + (err.message || 'Error desconocido'), 'error')
+    } finally {
+      setPrintLoading(false)
+    }
+  }
+
+  async function imprimirOrdenDespacho() {
+    setPrintLoading(true)
+    setShowPrintMenu(false)
+    try {
+      const session = (await supabase.auth.getSession()).data.session
+      const [{ generarOrdenDespachoPDF }, itemsRes, clienteData, vendedorRes, transportistaRes] = await Promise.all([
+        import('../../services/pdf/ordenDespachoPDF'),
+        supabase.from('cotizacion_items').select('codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, total_linea_usd, orden').eq('cotizacion_id', despacho.cotizacion_id).order('orden'),
+        despacho.cliente_id
+          ? fetch(apiUrl('/api/clientes/lookup'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+              body: JSON.stringify({ ids: [despacho.cliente_id] }),
+            }).then(r => r.ok ? r.json() : [])
+          : Promise.resolve([]),
+        despacho.vendedor_id ? supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', despacho.vendedor_id).single() : Promise.resolve({ data: null }),
+        despacho.transportista_id ? supabase.from('transportistas').select('id, nombre, rif, telefono, zona_cobertura, vehiculo, placa_chuto, placa_batea, color').eq('id', despacho.transportista_id).single() : Promise.resolve({ data: null }),
+      ])
+      if (itemsRes.error) throw itemsRes.error
+      const desConDatos = {
+        ...despacho,
+        cliente: clienteData?.[0] || despacho.cliente,
+        vendedor: vendedorRes.data || despacho.vendedor,
+        transportista: transportistaRes.data || despacho.transportista,
+      }
+      const blob = await generarOrdenDespachoPDF({ despacho: desConDatos, items: itemsRes.data ?? [], config, formaPago: despacho.forma_pago || '', monedaPDF: monedaPdf, tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio, returnBlob: true })
+      const url = URL.createObjectURL(blob)
+      const printWindow = window.open(url)
+      if (printWindow) {
+        printWindow.addEventListener('load', () => {
+          printWindow.print()
+          URL.revokeObjectURL(url)
+        })
+      }
+    } catch (err) {
+      showToast('Error al imprimir orden: ' + (err.message || 'Error desconocido'), 'error')
     } finally {
       setPrintLoading(false)
     }
@@ -332,11 +375,28 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             {ordenLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Download size={14} />}
             O. Despacho
           </button>
-          <button onClick={imprimirDespacho} disabled={printLoading}
-            className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40 shrink-0">
-            {printLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Printer size={14} />}
-            Imprimir
-          </button>
+          <div className="relative shrink-0">
+            <button onClick={() => setShowPrintMenu(v => !v)}
+              onBlur={() => setTimeout(() => setShowPrintMenu(false), 200)}
+              disabled={printLoading}
+              className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40">
+              {printLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Printer size={14} />}
+              Imprimir <ChevronDown size={10} />
+            </button>
+            {showPrintMenu && (
+              <div className="absolute left-0 bottom-full mb-1 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
+                onMouseDown={e => e.preventDefault()}>
+                <button onClick={imprimirDespacho}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
+                  <Printer size={14} /> Nota de Entrega
+                </button>
+                <button onClick={imprimirOrdenDespacho}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
+                  <Printer size={14} /> Orden de Despacho
+                </button>
+              </div>
+            )}
+          </div>
           {getMobileSheetActions().length > 0 && (
             <button onClick={() => setShowSheet(true)}
               className="ml-auto flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:bg-slate-50 active:bg-slate-100 transition-colors">
@@ -421,12 +481,29 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             {ordenLoading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
             O. Despacho
           </button>
-          <button onClick={imprimirDespacho} disabled={printLoading}
-            title="Imprimir despacho"
-            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-50">
-            {printLoading ? <Loader2 size={13} className="animate-spin" /> : <Printer size={13} />}
-            Imprimir
-          </button>
+          <div className="relative">
+            <button onClick={() => setShowPrintMenu(v => !v)}
+              onBlur={() => setTimeout(() => setShowPrintMenu(false), 200)}
+              disabled={printLoading}
+              title="Imprimir documento"
+              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-50">
+              {printLoading ? <Loader2 size={13} className="animate-spin" /> : <Printer size={13} />}
+              Imprimir <ChevronDown size={10} />
+            </button>
+            {showPrintMenu && (
+              <div className="absolute right-0 bottom-full mb-1 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
+                onMouseDown={e => e.preventDefault()}>
+                <button onClick={imprimirDespacho}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
+                  <Printer size={14} /> Nota de Entrega
+                </button>
+                <button onClick={imprimirOrdenDespacho}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
+                  <Printer size={14} /> Orden de Despacho
+                </button>
+              </div>
+            )}
+          </div>
           {canAnular && (
             <button onClick={() => onAnular(despacho)}
               className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 transition-colors whitespace-nowrap">
