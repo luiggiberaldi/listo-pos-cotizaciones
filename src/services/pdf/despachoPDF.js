@@ -485,31 +485,36 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     condY += 3.5
   })
 
-  // ── Totales (derecha) ──
+  // ── Recuadro unificado: TOTAL + FORMA DE PAGO ──
   const fp = (formaPago || despacho.forma_pago || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
-  // Forma de pago (izquierda, misma línea que total)
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8)
-  doc.setTextColor(...C_DARK)
-  doc.text('FORMA DE PAGO:', MARGIN, ty + 6)
-  drawCheck(doc, 'EFECTIVO',   MARGIN,      ty + 13, fp === 'efectivo')
-  drawCheck(doc, 'ZELLE',      MARGIN + 22, ty + 13, fp === 'zelle')
-  drawCheck(doc, 'P. MÓVIL',   MARGIN + 40, ty + 13, fp === 'pago movil')
-  drawCheck(doc, 'USDT',       MARGIN + 60, ty + 13, fp === 'usdt')
-  drawCheck(doc, 'TRANSF.',    MARGIN + 76, ty + 13, fp === 'transferencia')
-  drawCheck(doc, 'CTA X COB.', MARGIN + 96, ty + 13, fp === 'cta por cobrar')
-
-  // Total grande (derecha, misma línea)
-  const totTopY = ty + 2
+  // Barra oscura TOTAL (ancho completo)
+  const totTopY = ty
   doc.setFillColor(60, 60, 60)
-  doc.rect(totX, totTopY, totW, 14, 'F')
+  doc.rect(MARGIN, totTopY, CONTENT_W, 10, 'F')
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(13)
+  doc.setFontSize(11)
   doc.setTextColor(...C_WHITE)
-  doc.text('TOTAL', totX + 4, totTopY + 9)
-  doc.text(fmtTotal(total, monedaPDF, tasa, factorBcv), totX + totW - 4, totTopY + 9, { align: 'right' })
+  doc.text('TOTAL', MARGIN + 4, totTopY + 7)
+  doc.text(fmtTotal(total, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, totTopY + 7, { align: 'right' })
+
+  // Fila FORMA DE PAGO debajo (con borde)
+  const fpY = totTopY + 10
+  doc.setDrawColor(120, 120, 120)
+  doc.setLineWidth(0.3)
+  doc.rect(MARGIN, fpY, CONTENT_W, 9, 'S')
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(7.5)
+  doc.setTextColor(...C_DARK)
+  doc.text('FORMA DE PAGO:', MARGIN + 3, fpY + 6)
+  drawCheck(doc, 'EFECTIVO',   MARGIN + 38, fpY + 6, fp === 'efectivo')
+  drawCheck(doc, 'ZELLE',      MARGIN + 60, fpY + 6, fp === 'zelle')
+  drawCheck(doc, 'P. MÓVIL',   MARGIN + 78, fpY + 6, fp === 'pago movil')
+  drawCheck(doc, 'USDT',       MARGIN + 98, fpY + 6, fp === 'usdt')
+  drawCheck(doc, 'TRANSF.',    MARGIN + 114, fpY + 6, fp === 'transferencia')
+  drawCheck(doc, 'CTA X COB.', MARGIN + 134, fpY + 6, fp === 'cta por cobrar')
 
   // ══════════════════════════════════════════════════════════════════════════
   // 5. DATOS DEL CHOFER Y VEHÍCULO — fijo 5mm sobre el slogan
