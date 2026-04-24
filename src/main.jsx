@@ -34,6 +34,20 @@ if ('serviceWorker' in navigator) {
     const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' })
     // Forzar chequeo de actualización inmediato y periódico
     reg.update()
-    setInterval(() => reg.update(), 60 * 1000)
+    setInterval(() => reg.update(), 30 * 1000)
+    // Si hay SW en espera, activarlo inmediatamente
+    if (reg.waiting) {
+      reg.waiting.postMessage({ type: 'SKIP_WAITING' })
+    }
+    reg.addEventListener('updatefound', () => {
+      const newSW = reg.installing
+      if (newSW) {
+        newSW.addEventListener('statechange', () => {
+          if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+            newSW.postMessage({ type: 'SKIP_WAITING' })
+          }
+        })
+      }
+    })
   })
 }

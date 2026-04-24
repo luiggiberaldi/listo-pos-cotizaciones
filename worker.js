@@ -301,10 +301,11 @@ export default {
     newHeaders.set('Referrer-Policy', 'strict-origin-when-cross-origin');
     newHeaders.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
 
-    // index.html no debe cachearse para que el browser siempre cargue el JS actualizado
+    // index.html y sw.js no deben cachearse para que el browser siempre cargue la versión actualizada
     const isHtml = response.headers.get('content-type')?.includes('text/html')
       || url.pathname === '/' || !url.pathname.includes('.')
-    if (isHtml) {
+    const isSW = url.pathname === '/sw.js'
+    if (isHtml || isSW) {
       newHeaders.set('Cache-Control', 'no-cache, no-store, must-revalidate')
       newHeaders.set('Pragma', 'no-cache')
     } else {
