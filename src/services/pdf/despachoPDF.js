@@ -485,22 +485,11 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     condY += 3.5
   })
 
-  // ── Recuadro unificado: TOTAL + FORMA DE PAGO ──
+  // ── Recuadro unificado: FORMA DE PAGO + TOTAL ──
   const fp = (formaPago || despacho.forma_pago || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
-  // Barra oscura TOTAL (ancho completo)
-  const totTopY = ty
-  doc.setFillColor(60, 60, 60)
-  doc.rect(MARGIN, totTopY, CONTENT_W, 10, 'F')
-
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
-  doc.setTextColor(...C_WHITE)
-  doc.text('TOTAL', MARGIN + 4, totTopY + 7)
-  doc.text(fmtTotal(total, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, totTopY + 7, { align: 'right' })
-
-  // Fila FORMA DE PAGO debajo (con borde)
-  const fpY = totTopY + 10
+  // Fila FORMA DE PAGO arriba (con borde)
+  const fpY = ty
   doc.setDrawColor(120, 120, 120)
   doc.setLineWidth(0.3)
   doc.rect(MARGIN, fpY, CONTENT_W, 9, 'S')
@@ -515,6 +504,17 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   drawCheck(doc, 'USDT',       MARGIN + 98, fpY + 6, fp === 'usdt')
   drawCheck(doc, 'TRANSF.',    MARGIN + 114, fpY + 6, fp === 'transferencia')
   drawCheck(doc, 'CTA X COB.', MARGIN + 134, fpY + 6, fp === 'cta por cobrar')
+
+  // Barra oscura TOTAL abajo (ancho completo)
+  const totTopY = fpY + 9
+  doc.setFillColor(60, 60, 60)
+  doc.rect(MARGIN, totTopY, CONTENT_W, 10, 'F')
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.setTextColor(...C_WHITE)
+  doc.text('TOTAL', MARGIN + 4, totTopY + 7)
+  doc.text(fmtTotal(total, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, totTopY + 7, { align: 'right' })
 
   // ══════════════════════════════════════════════════════════════════════════
   // 5. DATOS DEL CHOFER Y VEHÍCULO — fijo 5mm sobre el slogan
