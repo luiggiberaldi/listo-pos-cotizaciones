@@ -123,7 +123,8 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
 
   function cambiar(e) {
     const { name, value } = e.target
-    setCampos(prev => ({ ...prev, [name]: value }))
+    const val = name === 'nombre' ? value.replace(/\b\w/g, c => c.toUpperCase()) : value
+    setCampos(prev => ({ ...prev, [name]: val }))
     // Limpiar error del campo al escribir
     if (errores[name]) setErrores(prev => ({ ...prev, [name]: '' }))
     if (errorGeneral) setErrorGeneral('')

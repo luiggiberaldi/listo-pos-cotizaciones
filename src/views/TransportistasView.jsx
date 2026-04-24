@@ -50,7 +50,8 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
   const [error, setError] = useState('')
 
   function cambiar(campo, valor) {
-    setCampos(prev => ({ ...prev, [campo]: valor }))
+    const val = campo === 'nombre' ? valor.replace(/\b\w/g, c => c.toUpperCase()) : valor
+    setCampos(prev => ({ ...prev, [campo]: val }))
     setError('')
   }
 
