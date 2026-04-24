@@ -208,10 +208,10 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const confirmConfig = accionPendiente?.actionConfig || {}
 
   return (
-    <div className="group bg-white rounded-2xl border border-slate-200 hover:shadow-lg transition-all duration-200 overflow-hidden flex flex-col">
+    <div className="group bg-white rounded-2xl border border-slate-200 hover:shadow-lg transition-all duration-200 flex flex-col">
 
       {/* ── Header strip con color del vendedor ── */}
-      <div className="relative h-16 shrink-0 flex items-end justify-between px-4 pb-2"
+      <div className="relative h-16 shrink-0 flex items-end justify-between px-4 pb-2 rounded-t-2xl"
         title={despacho.vendedor?.nombre ? `Vendedor: ${despacho.vendedor.nombre}` : undefined}
         style={{ background: `linear-gradient(135deg, ${vendedorColor}ee 0%, ${vendedorColor}99 100%)` }}>
         <div className="absolute inset-0 opacity-10"
