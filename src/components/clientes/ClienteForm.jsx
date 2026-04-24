@@ -2,9 +2,10 @@
 // Formulario para crear o editar un cliente
 // Usado dentro de un Modal — recibe onSuccess para cerrar tras guardar
 import { useState, useEffect } from 'react'
-import { User, Hash, Phone, Mail, MapPin, StickyNote, Loader2, Tag } from 'lucide-react'
+import { User, Hash, Phone, Mail, MapPin, StickyNote, Loader2, Tag, Building } from 'lucide-react'
 import { useCrearCliente, useActualizarCliente } from '../../hooks/useClientes'
 import CustomSelect from '../ui/CustomSelect'
+import { ESTADOS, getCiudades } from '../../data/venezuelaGeo'
 
 // ─── Campo de formulario reutilizable ─────────────────────────────────────────
 function Campo({ label, icono: Icono, error, children }) {
@@ -40,6 +41,8 @@ const VACIO = {
   rif_cedula:   '',
   telefono:     '',
   email:        '',
+  estado:       '',
+  ciudad:       '',
   direccion:    '',
   notas:        '',
   tipo_cliente: 'natural',
@@ -109,6 +112,8 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
         rif_cedula:   numero,
         telefono:     tel,
         email:        cliente.email        ?? '',
+        estado:       cliente.estado       ?? '',
+        ciudad:       cliente.ciudad       ?? '',
         direccion:    cliente.direccion    ?? '',
         notas:        cliente.notas        ?? '',
         tipo_cliente: cliente.tipo_cliente ?? 'natural',
@@ -155,6 +160,12 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
       if (!/^4(12|14|16|24|26)\d{7}$/.test(telLimpio)) {
         errs.telefono = 'Debe ser un número móvil válido (412, 414, 416, 424, 426)'
       }
+    }
+    if (!campos.estado) {
+      errs.estado = 'Selecciona un estado'
+    }
+    if (!campos.ciudad) {
+      errs.ciudad = 'Selecciona una ciudad'
     }
     if (!campos.direccion.trim()) {
       errs.direccion = 'La dirección es obligatoria'
@@ -307,14 +318,50 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
         />
       </Campo>
 
-      {/* Dirección */}
+      {/* Estado y Ciudad */}
+      <div className="grid grid-cols-2 gap-3">
+        <Campo label="Estado *" icono={MapPin} error={errores.estado}>
+          <CustomSelect
+            options={ESTADOS.map(e => ({ value: e, label: e }))}
+            value={campos.estado}
+            onChange={val => {
+              setCampos(prev => ({ ...prev, estado: val, ciudad: '' }))
+              if (errores.estado) setErrores(prev => ({ ...prev, estado: '' }))
+              if (errores.ciudad) setErrores(prev => ({ ...prev, ciudad: '' }))
+              if (errorGeneral) setErrorGeneral('')
+            }}
+            placeholder="Seleccionar..."
+            icon={MapPin}
+            disabled={cargando}
+            searchable
+          />
+        </Campo>
+
+        <Campo label="Ciudad *" icono={Building} error={errores.ciudad}>
+          <CustomSelect
+            options={(campos.estado ? getCiudades(campos.estado) : []).map(c => ({ value: c, label: c }))}
+            value={campos.ciudad}
+            onChange={val => {
+              setCampos(prev => ({ ...prev, ciudad: val }))
+              if (errores.ciudad) setErrores(prev => ({ ...prev, ciudad: '' }))
+              if (errorGeneral) setErrorGeneral('')
+            }}
+            placeholder={campos.estado ? 'Seleccionar...' : 'Elige estado primero'}
+            icon={Building}
+            disabled={cargando || !campos.estado}
+            searchable
+          />
+        </Campo>
+      </div>
+
+      {/* Dirección (línea específica) */}
       <Campo label="Dirección *" icono={MapPin} error={errores.direccion}>
         <input
           type="text"
           name="direccion"
           value={campos.direccion}
           onChange={cambiar}
-          placeholder="Ej: Av. Principal, Edif. Torre, Piso 3"
+          placeholder="Ej: Av. Principal, Edif. Torre, Piso 3, Local 2"
           className={inputClass}
           disabled={cargando}
         />

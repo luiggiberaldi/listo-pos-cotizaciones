@@ -40,7 +40,7 @@ export function useCliente(id) {
         .from('clientes')
         .select(`
           id, nombre, rif_cedula, telefono, email,
-          direccion, notas, tipo_cliente, activo,
+          direccion, estado, ciudad, notas, tipo_cliente, activo,
           vendedor_id, asignado_en, saldo_pendiente,
           vendedor:usuarios!clientes_vendedor_id_fkey(id, nombre)
         `)
@@ -70,6 +70,8 @@ export function useCrearCliente() {
           telefono:    campos.telefono?.trim() || null,
           email:       campos.email?.trim()     || null,
           direccion:   campos.direccion?.trim() || null,
+          estado:      campos.estado?.trim()    || null,
+          ciudad:      campos.ciudad?.trim()    || null,
           notas:       campos.notas?.trim()     || null,
           tipo_cliente: campos.tipo_cliente || 'natural',
           vendedor_id: perfil.id,
@@ -105,6 +107,8 @@ export function useActualizarCliente() {
           telefono:    campos.telefono?.trim() || null,
           email:       campos.email?.trim()     || null,
           direccion:   campos.direccion?.trim() || null,
+          estado:      campos.estado?.trim()    || null,
+          ciudad:      campos.ciudad?.trim()    || null,
           notas:       campos.notas?.trim()     || null,
           tipo_cliente: campos.tipo_cliente || 'natural',
         })

@@ -290,7 +290,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.rect(MARGIN + dirLblW, f5Y, CONTENT_W - dirLblW, rowH, 'S')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(9)
-  const dirStr = cliente.direccion || '—'
+  const dirStr = [cliente.direccion, cliente.ciudad, cliente.estado].filter(Boolean).join(', ') || '—'
   const maxDirW = CONTENT_W - dirLblW - 4
   let dStr = dirStr
   if (doc.getTextWidth(dStr) > maxDirW) {

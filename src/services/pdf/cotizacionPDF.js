@@ -174,7 +174,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     [{ label: 'Cliente', val: cliente.nombre || '—' },         { label: 'R.I.F / Cédula', val: cliente.rif_cedula || '—' }],
     [{ label: 'Teléfono', val: cliente.telefono || '—' },      { label: 'Correo', val: cliente.email || '—' }],
     [{ label: 'Vendedor', val: (cotizacion.vendedor?.nombre || '—') + (cotizacion.vendedor?.telefono ? ` — ${cotizacion.vendedor.telefono}` : ''), highlight: true }],
-    [{ label: 'Dirección Fiscal', val: cliente.direccion || '—' }],
+    [{ label: 'Dirección Fiscal', val: [cliente.direccion, cliente.ciudad, cliente.estado].filter(Boolean).join(', ') || '—' }],
   ]
 
   doc.setFontSize(9.5)

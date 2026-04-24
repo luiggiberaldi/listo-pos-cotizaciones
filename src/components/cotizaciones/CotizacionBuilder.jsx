@@ -1649,8 +1649,8 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                         {clienteSeleccionado.email && (
                           <span className="flex items-center gap-1.5"><Mail size={11} className="text-slate-400" /> {clienteSeleccionado.email}</span>
                         )}
-                        {clienteSeleccionado.direccion && (
-                          <span className="flex items-center gap-1.5 col-span-2"><MapPin size={11} className="text-slate-400" /> {clienteSeleccionado.direccion}</span>
+                        {(clienteSeleccionado.direccion || clienteSeleccionado.ciudad || clienteSeleccionado.estado) && (
+                          <span className="flex items-center gap-1.5 col-span-2"><MapPin size={11} className="text-slate-400" /> {[clienteSeleccionado.direccion, clienteSeleccionado.ciudad, clienteSeleccionado.estado].filter(Boolean).join(', ')}</span>
                         )}
                       </div>
                     </div>

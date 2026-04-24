@@ -82,7 +82,7 @@ export default function ClienteCard({ cliente, onEditar, onDesactivar, onReasign
       <div className="px-4 pb-3 space-y-1.5 mt-1">
         <Contacto icono={Phone} valor={cliente.telefono} />
         <Contacto icono={Mail}  valor={cliente.email} />
-        <Contacto icono={MapPin} valor={cliente.direccion} />
+        <Contacto icono={MapPin} valor={[cliente.direccion, cliente.ciudad, cliente.estado].filter(Boolean).join(', ')} />
       </div>
 
       {/* ── Vendedor chip ── */}

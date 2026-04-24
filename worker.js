@@ -1354,7 +1354,7 @@ async function handleListarClientes(request, env) {
   const url = new URL(request.url);
   const busqueda = url.searchParams.get('busqueda') || '';
 
-  let queryUrl = `${env.SUPABASE_URL}/rest/v1/clientes?activo=eq.true&order=nombre.asc&select=id,nombre,rif_cedula,telefono,email,direccion,notas,tipo_cliente,activo,vendedor_id,saldo_pendiente,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color)`;
+  let queryUrl = `${env.SUPABASE_URL}/rest/v1/clientes?activo=eq.true&order=nombre.asc&select=id,nombre,rif_cedula,telefono,email,direccion,estado,ciudad,notas,tipo_cliente,activo,vendedor_id,saldo_pendiente,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color)`;
 
   if (busqueda.trim()) {
     const safe = sanitizeSearch(busqueda);
@@ -1392,7 +1392,7 @@ async function handleClientesLookup(request, env) {
     return jsonError('ids debe ser un array de 1-200 UUIDs', 400, request);
   }
 
-  const queryUrl = `${env.SUPABASE_URL}/rest/v1/clientes?id=in.(${ids.map(encodeURIComponent).join(',')})&select=id,nombre,rif_cedula,telefono,email,direccion,tipo_cliente,vendedor_id,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color)`;
+  const queryUrl = `${env.SUPABASE_URL}/rest/v1/clientes?id=in.(${ids.map(encodeURIComponent).join(',')})&select=id,nombre,rif_cedula,telefono,email,direccion,estado,ciudad,tipo_cliente,vendedor_id,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color)`;
 
   const res = await fetch(queryUrl, {
     headers: {

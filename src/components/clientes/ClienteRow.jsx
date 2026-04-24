@@ -52,10 +52,10 @@ export default function ClienteRow({ cliente, onEditar, onDesactivar, onReasigna
               <span className="truncate max-w-[180px]">{cliente.email}</span>
             </span>
           )}
-          {cliente.direccion && (
+          {(cliente.direccion || cliente.ciudad || cliente.estado) && (
             <span className="flex items-center gap-1 text-xs text-slate-500">
               <MapPin size={11} className="text-slate-400" />
-              <span className="truncate max-w-[200px]">{cliente.direccion}</span>
+              <span className="truncate max-w-[200px]">{[cliente.direccion, cliente.ciudad, cliente.estado].filter(Boolean).join(', ')}</span>
             </span>
           )}
         </div>
