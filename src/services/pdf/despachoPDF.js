@@ -87,26 +87,26 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const HDR_H = 20
 
   // Logo a la izquierda (más pequeño)
-  try { doc.addImage(LOGO_DESPACHO, 'PNG', MARGIN - 2, 8, 20, 20) } catch (_) {}
+  try { doc.addImage(LOGO_DESPACHO, 'PNG', MARGIN - 2, 6, 22, 22) } catch (_) {}
 
   // Nombre del negocio centrado
   const centerX = PAGE_W / 2
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(20)
   doc.setTextColor(...C_DARK)
-  doc.text('CONSTRUACERO CARABOBO, C.A.', centerX, 17, { align: 'center' })
+  doc.text('CONSTRUACERO CARABOBO, C.A.', centerX, 16, { align: 'center' })
 
   // RIF centrado
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(12)
-  doc.text('RIF.: J-50115913-0', centerX, 23, { align: 'center' })
+  doc.text('RIF.: J-50115913-0', centerX, 22, { align: 'center' })
 
   // Línea separadora
   doc.setLineWidth(0.8)
   doc.setDrawColor(...C_DARK)
-  doc.line(MARGIN, HDR_H + 8, PAGE_W - MARGIN, HDR_H + 8)
+  doc.line(MARGIN, HDR_H + 10, PAGE_W - MARGIN, HDR_H + 10)
 
-  y = HDR_H + 14
+  y = HDR_H + 17
 
   // ── Marca de agua central ──
   try {
@@ -611,25 +611,25 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     const ph = PAGE_H
 
     // Línea separadora
-    const footerY = ph - 20
+    const footerY = ph - 28
     doc.setLineWidth(0.8)
     doc.setDrawColor(...C_DARK)
     doc.line(MARGIN, footerY, PAGE_W - MARGIN, footerY)
 
     // Dirección
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7)
+    doc.setFontSize(7.5)
     doc.setTextColor(...C_DARK)
 
     const addr1 = 'Av. 76, (Calle S-3) Nro. 70-C-766, Local Galpón Nro. 3 Edificio Centro Industrial Massico II'
     const addr2 = 'Parcela MB-6 y Mb7, Urb. Industrial Aeropuerto Vía Flor Amarillo, Valencia, Edo. Carabobo, Zona Postal 2003'
 
-    doc.text(addr1, PAGE_W / 2, footerY + 4, { align: 'center' })
+    doc.text(addr1, PAGE_W / 2, footerY + 5, { align: 'center' })
     doc.setFont('helvetica', 'normal')
-    doc.text(addr2, PAGE_W / 2, footerY + 7.5, { align: 'center' })
+    doc.text(addr2, PAGE_W / 2, footerY + 9, { align: 'center' })
 
     // Teléfono y correo
-    doc.setFontSize(7.5)
+    doc.setFontSize(8)
     const tel = config.telefono_negocio || ''
     const email = config.email_negocio || ''
     const contactLine = [tel, email].filter(Boolean).join('     |     ')
