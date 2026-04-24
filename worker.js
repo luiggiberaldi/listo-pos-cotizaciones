@@ -102,36 +102,6 @@ export default {
       return new Response(null, { headers: corsHeaders(request) });
     }
 
-    // ── DEBUG: diagnóstico temporal de auth ──────────────────────────────────
-    if (url.pathname === '/api/debug-auth') {
-      const authHeader = request.headers.get('Authorization');
-      const hasBearer = authHeader?.startsWith('Bearer ');
-      const tokenLen = hasBearer ? authHeader.slice(7).length : 0;
-      const info = {
-        hasAuthHeader: !!authHeader,
-        hasBearerPrefix: !!hasBearer,
-        tokenLength: tokenLen,
-        supabaseUrl: env.SUPABASE_URL ? env.SUPABASE_URL.slice(0, 30) + '...' : 'MISSING',
-        anonKeyLength: env.SUPABASE_ANON_KEY ? env.SUPABASE_ANON_KEY.length : 0,
-      };
-      // Try verifying with Supabase if token present
-      if (hasBearer) {
-        const token = authHeader.slice(7);
-        try {
-          const res = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
-            headers: { Authorization: `Bearer ${token}`, apikey: env.SUPABASE_ANON_KEY },
-          });
-          info.supabaseStatus = res.status;
-          info.supabaseBody = (await res.text()).slice(0, 300);
-        } catch (e) {
-          info.supabaseError = e.message;
-        }
-      }
-      return new Response(JSON.stringify(info, null, 2), {
-        headers: { 'Content-Type': 'application/json', ...corsHeaders(request) },
-      });
-    }
-
     // ── API routes (wrapped in error logging) ────
     if (url.pathname.startsWith('/api/')) {
       try {
@@ -443,25 +413,17 @@ async function groqFetch(env, grupo, messages, { maxTokens = 2048, temperature =
 // Extrae operator_id/operator_rol de app_metadata si están presentes
 async function verifyAuth(request, env) {
   const authHeader = request.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    console.error('[verifyAuth] FAIL: no Bearer header');
-    return null;
-  }
+  if (!authHeader?.startsWith('Bearer ')) return null;
   const token = authHeader.slice(7);
 
   // Verificar el token llamando a Supabase auth
-  const supaUrl = `${env.SUPABASE_URL}/auth/v1/user`;
-  const res = await fetch(supaUrl, {
+  const res = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
     headers: {
       Authorization: `Bearer ${token}`,
       apikey: env.SUPABASE_ANON_KEY,
     },
   });
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    console.error(`[verifyAuth] FAIL: Supabase returned ${res.status}. URL: ${supaUrl}. Body: ${body.slice(0, 300)}`);
-    return null;
-  }
+  if (!res.ok) return null;
   const user = await res.json();
   // Attach operator context from app_metadata (set by switch-operator)
   user.operator_id = user.app_metadata?.operator_id || null;
