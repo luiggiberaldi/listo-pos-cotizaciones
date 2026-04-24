@@ -281,9 +281,7 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   doc.setTextColor(...C_DARK)
   doc.text('CONDICIONES GENERALES:', MARGIN + condPadding, ty + condPadding + 3.5)
 
-  doc.setDrawColor(100, 100, 100)
-  doc.setLineWidth(0.2)
-  doc.line(MARGIN + condPadding, ty + condPadding + 5.5, MARGIN + halfW - condPadding, ty + condPadding + 5.5)
+
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7.5)
@@ -306,9 +304,7 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   doc.setTextColor(...C_DARK)
   doc.text('Transferencias a nombre de ' + (config.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.').toUpperCase(), rightX + condPadding, ty + condPadding + 3.5)
 
-  doc.setDrawColor(100, 100, 100)
-  doc.setLineWidth(0.2)
-  doc.line(rightX + condPadding, ty + condPadding + 5.5, rightX + halfW - condPadding, ty + condPadding + 5.5)
+
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7.5)
