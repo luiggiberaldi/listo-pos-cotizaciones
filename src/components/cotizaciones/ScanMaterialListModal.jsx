@@ -343,20 +343,7 @@ export default function ScanMaterialListModal({ open, onClose, onBulkAdd, tasa =
                     />
                   ))}
 
-                  {/* Debug log copiable (temporal) */}
-                  {debugLog && (
-                    <div className="mt-4 bg-slate-900 rounded-xl p-3 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase">Debug Log</p>
-                        <button
-                          onClick={() => { navigator.clipboard.writeText(debugLog); setDebugCopied(true); setTimeout(() => setDebugCopied(false), 2000) }}
-                          className="text-[10px] px-2 py-1 bg-slate-700 text-slate-300 rounded-md hover:bg-slate-600 font-bold">
-                          {debugCopied ? 'Copiado' : 'Copiar'}
-                        </button>
-                      </div>
-                      <pre className="text-[10px] text-green-400 whitespace-pre-wrap break-words max-h-48 overflow-y-auto font-mono leading-relaxed">{debugLog}</pre>
-                    </div>
-                  )}
+                  {/* Debug log copiable (temporal) - oculto */}
                 </>
               )}
             </div>
