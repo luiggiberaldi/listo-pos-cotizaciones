@@ -363,22 +363,24 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   const total = Number(despacho.total_usd || 0)
 
   // Posicionar totales fijos sobre el chofer
-  const ty = choferY - 56
+  const ty = choferY - 24
 
   const fp = (formaPago || despacho.forma_pago || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9)
-  doc.setTextColor(...C_DARK)
-  doc.text('FORMA DE PAGO:', totX, ty + 4)
-  drawCheck(doc, 'EFECTIVO',   totX,      ty + 12, fp === 'efectivo')
-  drawCheck(doc, 'ZELLE',      totX + 22, ty + 12, fp === 'zelle')
-  drawCheck(doc, 'P. MÓVIL',   totX + 40, ty + 12, fp === 'pago movil')
-  drawCheck(doc, 'USDT',       totX + 60, ty + 12, fp === 'usdt')
-  drawCheck(doc, 'TRANSF.',    totX + 76, ty + 12, fp === 'transferencia')
-  drawCheck(doc, 'CTA X COB.', totX + 96, ty + 12, fp === 'cta por cobrar')
 
-  // Total grande
-  const totTopY = ty + 24
+  // Forma de pago (izquierda, misma línea que total)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.setTextColor(...C_DARK)
+  doc.text('FORMA DE PAGO:', MARGIN, ty + 6)
+  drawCheck(doc, 'EFECTIVO',   MARGIN,      ty + 13, fp === 'efectivo')
+  drawCheck(doc, 'ZELLE',      MARGIN + 22, ty + 13, fp === 'zelle')
+  drawCheck(doc, 'P. MÓVIL',   MARGIN + 40, ty + 13, fp === 'pago movil')
+  drawCheck(doc, 'USDT',       MARGIN + 60, ty + 13, fp === 'usdt')
+  drawCheck(doc, 'TRANSF.',    MARGIN + 76, ty + 13, fp === 'transferencia')
+  drawCheck(doc, 'CTA X COB.', MARGIN + 96, ty + 13, fp === 'cta por cobrar')
+
+  // Total grande (derecha, misma línea)
+  const totTopY = ty + 2
   doc.setFillColor(60, 60, 60)
   doc.rect(totX, totTopY, totW, 14, 'F')
 
