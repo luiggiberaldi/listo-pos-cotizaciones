@@ -277,14 +277,14 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   doc.roundedRect(MARGIN, ty, halfW, condBoxH, 1, 1, 'FD')
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8)
+  doc.setFontSize(10)
   doc.setTextColor(...C_DARK)
   doc.text('CONDICIONES GENERALES:', MARGIN + condPadding, ty + condPadding + 3.5)
 
 
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7.5)
+  doc.setFontSize(9.5)
   let condY = ty + condPadding + 9.5
   condiciones.forEach(c => {
     doc.text(`• ${c}`, MARGIN + condPadding, condY)
@@ -300,14 +300,14 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   doc.roundedRect(rightX, ty, halfW, condBoxH, 1, 1, 'FD')
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7)
+  doc.setFontSize(9)
   doc.setTextColor(...C_DARK)
   doc.text('Transferencias a nombre de ' + (config.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.').toUpperCase(), rightX + condPadding, ty + condPadding + 3.5)
 
 
 
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7.5)
+  doc.setFontSize(8)
   let cuentaY = ty + condPadding + 9.5
   CUENTAS_BANCARIAS.forEach(cuenta => {
     doc.text(cuenta, rightX + condPadding, cuentaY)
