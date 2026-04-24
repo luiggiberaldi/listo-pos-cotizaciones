@@ -301,7 +301,7 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   doc.roundedRect(rightX, ty, halfW, condBoxH, 1, 1, 'FD')
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8.5)
+  doc.setFontSize(8)
   doc.setTextColor(...C_DARK)
   doc.text('Transferencias a nombre de ' + (config.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.').toUpperCase(), rightX + condPadding, ty + condPadding + 3.5)
 
