@@ -244,6 +244,11 @@ export default {
       return handleScanMaterialList(request, env);
     }
 
+    // ── API: parsear texto de lista de materiales (WhatsApp, etc.) ────
+    if (url.pathname === '/api/parse-material-text' && request.method === 'POST') {
+      return handleParseMaterialText(request, env);
+    }
+
     // ── API routes para operaciones admin ──────────────────────────────────
     if (url.pathname.startsWith('/api/admin/')) {
       return handleAdmin(request, env, url);
@@ -3415,6 +3420,20 @@ const SCAN_FRACCIONES_MULTI = [
   ['tres cuartos', '3/4'], ['siete octavos', '7/8'],
 ]
 
+// Reemplazos multi-palabra que se procesan antes de tokenizar
+const SCAN_REEMPLAZOS_PRE = [
+  [/aguas?\s+negras?/gi, 'A/N'],
+  [/aguas?\s+blancas?/gi, 'A.F'],
+  [/(\d+)\s*pulgadas?/gi, '$1"'],
+  // Medidas compuestas: "1 1/2" → "1~1/2" para no separar al tokenizar
+  [/(\d+)\s+([\d]+\/[\d]+)/g, '$1~$2'],
+  // Quitar prefijos triviales
+  [/\bsacos?\s+de\s+/gi, ''],
+  [/\bkilos?\s+de?\s*/gi, ''],
+  [/\bgalones?\s+de\s+/gi, ''],
+  [/\bgalon\s+de\s+/gi, ''],
+]
+
 function scanNormalize(text) {
   return (text || '').toLowerCase()
     .replace(/[áà]/g, 'a').replace(/[éè]/g, 'e')
@@ -3427,23 +3446,38 @@ function scanTokenize(descripcion) {
   for (const [frase, reemplazo] of SCAN_FRACCIONES_MULTI) {
     q = q.replace(new RegExp(frase, 'g'), reemplazo)
   }
+  for (const [regex, reemplazo] of SCAN_REEMPLAZOS_PRE) {
+    q = q.replace(regex, reemplazo)
+  }
   const tokens = q.split(/\s+/).filter(Boolean)
   return tokens.map(token => {
-    const variantes = new Set([token])
-    const sin = SCAN_SINONIMOS[token]
+    // Restaurar medidas compuestas: "1~1/2" → "1 1/2"
+    const displayToken = token.replace(/~/g, ' ')
+    const variantes = new Set([displayToken])
+
+    // Sinónimos directos
+    const sin = SCAN_SINONIMOS[displayToken]
     if (sin) variantes.add(sin)
-    if (token.length > 3 && token.endsWith('s')) {
-      const singular = token.slice(0, -1)
+
+    // Deplural: si termina en 's', agregar sin la 's'
+    if (displayToken.length > 3 && displayToken.endsWith('s')) {
+      const singular = displayToken.slice(0, -1)
       variantes.add(singular)
       const sinS = SCAN_SINONIMOS[singular]
       if (sinS) variantes.add(sinS)
     }
-    if (token.length > 4 && token.endsWith('es')) {
-      const base = token.slice(0, -2)
+    // Deplural: si termina en 'es', agregar sin 'es'
+    if (displayToken.length > 4 && displayToken.endsWith('es')) {
+      const base = displayToken.slice(0, -2)
       variantes.add(base)
       const sinB = SCAN_SINONIMOS[base]
       if (sinB) variantes.add(sinB)
     }
+    // Agregar plural: si NO termina en 's', agregar con 's'
+    if (!displayToken.endsWith('s') && displayToken.length > 2) {
+      variantes.add(displayToken + 's')
+    }
+
     return [...variantes]
   })
 }
@@ -3455,15 +3489,28 @@ async function findProductMatches(descripcion, env) {
   // Construir filtro AND de ORs para PostgREST
   const orClauses = tokenGroups.map(variantes => {
     const conditions = variantes.flatMap(v => {
-      const safe = v.replace(/[.,()\\%_'"]/g, '')
-      if (!safe) return []
-      return [`nombre.ilike.%${safe}%`, `codigo.ilike.%${safe}%`]
+      const safe = v.replace(/[.,()\\%_']/g, '')
+      if (!safe || safe.length < 2) return [] // ignorar tokens muy cortos
+      const encoded = encodeURIComponent(safe)
+      // Para tokens cortos (2-3 chars), buscar con delimitador de palabra para evitar falsos positivos
+      // Ej: "te" no debe matchear "calienTE", sino "TEE A.F"
+      if (safe.length <= 3) {
+        return [
+          `nombre.ilike.${encoded} *`,   // al inicio: "TEE ..."
+          `nombre.ilike.* ${encoded} *`,  // en medio: "... TEE ..."
+          `nombre.ilike.* ${encoded}`,    // al final: "... TEE"
+        ]
+      }
+      return [`nombre.ilike.*${encoded}*`, `codigo.ilike.*${encoded}*`]
     })
+    if (conditions.length === 0) return null
     return `or=(${conditions.join(',')})`
-  })
+  }).filter(Boolean)
+
+  if (orClauses.length === 0) return []
 
   const select = 'id,codigo,nombre,unidad,precio_usd,precio_2,precio_3,stock_actual,stock_minimo,imagen_url'
-  const url = `${env.SUPABASE_URL}/rest/v1/productos?activo=eq.true&select=${select}&${orClauses.join('&')}&limit=3&order=stock_actual.desc`
+  const url = `${env.SUPABASE_URL}/rest/v1/productos?activo=eq.true&select=${select}&${orClauses.join('&')}&limit=5&order=stock_actual.desc`
 
   const res = await fetch(url, {
     headers: {
@@ -3475,30 +3522,168 @@ async function findProductMatches(descripcion, env) {
   return await res.json()
 }
 
-// Fallback: búsqueda más amplia si no hay match exacto (solo primer token)
+// Fallback: búsqueda con el token principal (material) solamente
 async function findProductMatchesFallback(descripcion, env) {
   const tokenGroups = scanTokenize(descripcion)
   if (tokenGroups.length === 0) return []
 
-  // Tomar solo el token principal (primer sustantivo, usualmente el material)
-  const mainToken = tokenGroups[0]
-  const conditions = mainToken.flatMap(v => {
-    const safe = v.replace(/[.,()\\%_'"]/g, '')
-    if (!safe) return []
-    return [`nombre.ilike.%${safe}%`, `codigo.ilike.%${safe}%`]
-  })
+  // Filtrar tokens triviales y muy cortos
+  const triviales = new Set(['de', 'a', 'para', 'con', 'en', 'el', 'la', 'los', 'las', 'un', 'una', 'y', 'o', 'del', 'kilo', 'kilos', 'kg', 'galon', 'galones', 'litro', 'litros', 'metro', 'metros', 'mts', 'pulgada', 'pulgadas', 'pulg', 'aguas', 'blancas', 'negras'])
+  const significativos = tokenGroups.filter(variantes => !variantes.every(v => triviales.has(v) || v.length < 2))
 
-  const select = 'id,codigo,nombre,unidad,precio_usd,precio_2,precio_3,stock_actual,stock_minimo,imagen_url'
-  const url = `${env.SUPABASE_URL}/rest/v1/productos?activo=eq.true&select=${select}&or=(${conditions.join(',')})&limit=5&order=stock_actual.desc`
+  if (significativos.length === 0) return []
 
-  const res = await fetch(url, {
-    headers: {
-      apikey: env.SUPABASE_SERVICE_KEY,
-      Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-    },
-  })
-  if (!res.ok) return []
-  return await res.json()
+  // Intentar primero con los 2 tokens más significativos
+  for (const count of [2, 1]) {
+    const topTokens = significativos.slice(0, count)
+    const orClauses = topTokens.map(variantes => {
+      const conditions = variantes.flatMap(v => {
+        const safe = v.replace(/[.,()\\%_']/g, '')
+        if (!safe || safe.length < 2) return []
+        const encoded = encodeURIComponent(safe)
+        return [`nombre.ilike.*${encoded}*`]
+      })
+      if (conditions.length === 0) return null
+      return `or=(${conditions.join(',')})`
+    }).filter(Boolean)
+
+    if (orClauses.length === 0) continue
+
+    const select = 'id,codigo,nombre,unidad,precio_usd,precio_2,precio_3,stock_actual,stock_minimo,imagen_url'
+    const url = `${env.SUPABASE_URL}/rest/v1/productos?activo=eq.true&select=${select}&${orClauses.join('&')}&limit=5&order=stock_actual.desc`
+
+    const res = await fetch(url, {
+      headers: {
+        apikey: env.SUPABASE_SERVICE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+      },
+    })
+    if (!res.ok) continue
+    const results = await res.json()
+    if (results.length > 0) return results
+  }
+
+  return []
+}
+
+// ── Parsear texto de lista de materiales (WhatsApp, notas, etc.) ─────────────
+async function handleParseMaterialText(request, env) {
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown'
+  if (isScanRateLimited(ip)) {
+    return jsonError('Demasiadas solicitudes. Espera un momento.', 429, request)
+  }
+
+  const user = await verifyAuth(request, env)
+  if (!user) return jsonError('No autorizado', 401, request)
+
+  let body
+  try { body = await request.json() } catch { return jsonError('JSON inválido', 400, request) }
+
+  const { text } = body
+  if (!text || typeof text !== 'string' || text.trim().length < 3) {
+    return jsonError('Falta texto para analizar', 400, request)
+  }
+  if (text.length > 10000) return jsonError('Texto demasiado largo (max 10000 chars)', 400, request)
+
+  let aiItems = []
+  let rawAiText = ''
+  try {
+    const aiPromise = env.AI.run('auto', {
+      messages: [
+        {
+          role: 'user',
+          content: `Extrae los materiales de construcción de este mensaje de texto (puede ser de WhatsApp, nota, o lista).
+
+Reglas: singular (cabilla no cabillas), incluir medida (cabilla 1/2), cantidad SOLO en campo cantidad. Si no hay cantidad explícita, usa 1.
+
+JSON array sin explicaciones ni backticks:
+[{"cantidad":90,"descripcion":"cabilla 1/2"},{"cantidad":5,"descripcion":"tubo 1 1/2"}]
+
+Texto:
+${text.slice(0, 5000)}`
+        }
+      ],
+      temperature: 0.1,
+    })
+
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Timeout: la IA tardó más de 60 segundos')), 60000)
+    )
+    const aiResponse = await Promise.race([aiPromise, timeoutPromise])
+
+    let rawText = ''
+    if (typeof aiResponse === 'string') {
+      rawText = aiResponse
+    } else if (aiResponse?.choices?.[0]?.message?.content) {
+      rawText = aiResponse.choices[0].message.content
+    } else if (aiResponse?.response) {
+      rawText = aiResponse.response
+    } else if (aiResponse?.result?.response) {
+      rawText = aiResponse.result.response
+    } else {
+      rawText = JSON.stringify(aiResponse)
+    }
+    rawAiText = rawText
+
+    let jsonMatch = rawText.match(/\[[\s\S]*\]/)
+    if (jsonMatch) {
+      aiItems = JSON.parse(jsonMatch[0])
+    } else {
+      const openBracket = rawText.indexOf('[')
+      if (openBracket !== -1) {
+        let partial = rawText.slice(openBracket).trim()
+        const lastComplete = partial.lastIndexOf('}')
+        if (lastComplete > 0) {
+          partial = partial.slice(0, lastComplete + 1) + ']'
+          try { aiItems = JSON.parse(partial) } catch { /* no se pudo recuperar */ }
+        }
+      }
+    }
+  } catch (e) {
+    await logToSystem(env, {
+      nivel: 'error', origen: 'worker', categoria: 'PARSE_TEXT',
+      mensaje: `Error AI parse text: ${e.message}`,
+      endpoint: 'POST /api/parse-material-text',
+      usuario_id: user.operator_id,
+    })
+    return jsonError(`Error procesando texto: ${e.message}`, 500, request)
+  }
+
+  if (!Array.isArray(aiItems) || aiItems.length === 0) {
+    return json({ items: [], rawAiText: rawAiText?.slice(0, 2000) }, 200, request)
+  }
+
+  // Buscar matches igual que en scan
+  const results = await Promise.all(aiItems.map(async (item, idx) => {
+    const cantidad = Number(item.cantidad) || 1
+    let descripcion = (item.descripcion || '').trim()
+    descripcion = descripcion.replace(/^\d+[\s]*[xX×\-]?\s*/g, '').trim()
+    if (!descripcion) descripcion = (item.descripcion || '').trim()
+    const confianza = Number(item.confianza) || 0.5
+
+    if (!descripcion) return null
+
+    let matches = await findProductMatches(descripcion, env)
+    if (matches.length === 0) {
+      matches = await findProductMatchesFallback(descripcion, env)
+    }
+
+    return {
+      linea: idx + 1,
+      cantidad,
+      descripcionOriginal: descripcion,
+      confianza,
+      matches: matches.map(p => ({
+        id: p.id, codigo: p.codigo, nombre: p.nombre, unidad: p.unidad,
+        precio_usd: Number(p.precio_usd), precio_2: p.precio_2 ? Number(p.precio_2) : null,
+        precio_3: p.precio_3 ? Number(p.precio_3) : null,
+        stock_actual: Number(p.stock_actual), stock_minimo: Number(p.stock_minimo),
+        imagen_url: p.imagen_url,
+      })),
+    }
+  }))
+
+  return json({ items: results.filter(Boolean), rawAiText: rawAiText?.slice(0, 2000) }, 200, request)
 }
 
 async function handleScanMaterialList(request, env) {
@@ -3522,44 +3707,42 @@ async function handleScanMaterialList(request, env) {
 
   const mime = mimeType || 'image/jpeg'
 
-  // Step 1: Llamar a Workers AI Vision para extraer la lista
+  // Step 1: Llamar a AI Vision para extraer la lista
   let aiItems = []
+  let rawAiText = ''
   try {
-    const aiResponse = await env.AI.run('@cf/meta/llama-3.2-11b-vision-instruct', {
+    // Usar el AI binding virtualizado de camelAI con modelo 'auto' (soporta visión)
+    // No establecer max_tokens — los thinking tokens cuentan y truncan la respuesta
+    const aiPromise = env.AI.run('auto', {
       messages: [
-        {
-          role: 'system',
-          content: `Eres un asistente que lee listas de materiales de construcción escritas a mano.
-Tu tarea es extraer cada línea de la lista, identificando la CANTIDAD y la DESCRIPCIÓN del material.
-
-Reglas:
-- Cada línea tiene un número (cantidad) seguido de una descripción del material
-- Las cantidades pueden ser números enteros o decimales
-- Los materiales típicos incluyen: cabillas, cemento, bloques, arena, tubos, láminas, perfiles, clavos, tornillos, alambre, codos, anillos, te, sifones, pega, etc.
-- Las fracciones como 1/2, 3/8, 5/8, 3/4 son medidas comunes (pulgadas de diámetro)
-- "aguas negras" y "aguas blancas" son tipos de tubería
-- Si no puedes leer claramente un valor, haz tu mejor estimación
-- Ignora líneas que no sean items (títulos, notas, totales, rayas)
-
-Responde ÚNICAMENTE con un JSON array válido, SIN markdown, SIN explicaciones, SIN backticks:
-[{"cantidad":90,"descripcion":"cabillas 1/2","confianza":0.95}]`
-        },
         {
           role: 'user',
           content: [
-            { type: 'text', text: 'Lee esta lista de materiales y extrae cada item como JSON:' },
-            { type: 'image', image: `data:${mime};base64,${image}` }
+            { type: 'text', text: `Lee esta lista de materiales de construcción manuscrita. Extrae TODAS las líneas, cada una tiene cantidad y material.
+
+Reglas: singular (cabilla no cabillas), incluir medida (cabilla 1/2), cantidad SOLO en campo cantidad.
+
+JSON array sin explicaciones ni backticks:
+[{"cantidad":90,"descripcion":"cabilla 1/2"},{"cantidad":5,"descripcion":"tubo 1 1/2"}]` },
+            { type: 'image_url', image_url: { url: `data:${mime};base64,${image}` } }
           ]
         }
       ],
-      max_tokens: 2048,
       temperature: 0.1,
     })
 
-    // Extraer JSON de la respuesta
+    // Timeout de 60s para evitar que se cuelgue
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Timeout: la IA tardó más de 60 segundos')), 60000)
+    )
+    const aiResponse = await Promise.race([aiPromise, timeoutPromise])
+
+    // Extraer JSON de la respuesta (soporta múltiples formatos)
     let rawText = ''
     if (typeof aiResponse === 'string') {
       rawText = aiResponse
+    } else if (aiResponse?.choices?.[0]?.message?.content) {
+      rawText = aiResponse.choices[0].message.content
     } else if (aiResponse?.response) {
       rawText = aiResponse.response
     } else if (aiResponse?.result?.response) {
@@ -3567,11 +3750,27 @@ Responde ÚNICAMENTE con un JSON array válido, SIN markdown, SIN explicaciones,
     } else {
       rawText = JSON.stringify(aiResponse)
     }
+    rawAiText = rawText
 
     // Limpiar: extraer el array JSON
-    const jsonMatch = rawText.match(/\[[\s\S]*\]/)
+    let jsonMatch = rawText.match(/\[[\s\S]*\]/)
     if (jsonMatch) {
       aiItems = JSON.parse(jsonMatch[0])
+    } else {
+      // Respuesta truncada: la IA devolvió un [ pero no cerró con ]
+      // Intentar cerrar el JSON manualmente
+      const openBracket = rawText.indexOf('[')
+      if (openBracket !== -1) {
+        let partial = rawText.slice(openBracket).trim()
+        // Quitar último objeto incompleto (no tiene cierre })
+        const lastComplete = partial.lastIndexOf('}')
+        if (lastComplete > 0) {
+          partial = partial.slice(0, lastComplete + 1) + ']'
+          try {
+            aiItems = JSON.parse(partial)
+          } catch { /* no se pudo recuperar */ }
+        }
+      }
     }
   } catch (e) {
     await logToSystem(env, {
@@ -3585,13 +3784,24 @@ Responde ÚNICAMENTE con un JSON array válido, SIN markdown, SIN explicaciones,
   }
 
   if (!Array.isArray(aiItems) || aiItems.length === 0) {
-    return json({ items: [], rawText: 'No se pudieron extraer items de la imagen' }, 200, request)
+    // Log para debug: qué devolvió la IA
+    await logToSystem(env, {
+      nivel: 'warn', origen: 'worker', categoria: 'SCAN',
+      mensaje: `AI no devolvió items parseables`,
+      endpoint: 'POST /api/scan-material-list',
+      usuario_id: user.operator_id,
+      meta: { rawAiText: rawAiText?.slice(0, 3000) },
+    })
+    return json({ items: [], rawAiText: rawAiText?.slice(0, 2000) }, 200, request)
   }
 
   // Step 2: Buscar matches en la base de datos para cada item
   const results = await Promise.all(aiItems.map(async (item, idx) => {
     const cantidad = Number(item.cantidad) || 1
-    const descripcion = (item.descripcion || '').trim()
+    // Limpiar descripción: quitar cantidad duplicada al inicio (ej: "90 x cabillas" → "cabillas")
+    let descripcion = (item.descripcion || '').trim()
+    descripcion = descripcion.replace(/^\d+[\s]*[xX×\-]?\s*/g, '').trim()
+    if (!descripcion) descripcion = (item.descripcion || '').trim() // fallback si quedó vacía
     const confianza = Number(item.confianza) || 0.5
 
     if (!descripcion) return null
@@ -3634,5 +3844,5 @@ Responde ÚNICAMENTE con un JSON array válido, SIN markdown, SIN explicaciones,
     meta: { itemCount: results.filter(Boolean).length },
   })
 
-  return json({ items: results.filter(Boolean) }, 200, request)
+  return json({ items: results.filter(Boolean), rawAiText: rawAiText?.slice(0, 2000) }, 200, request)
 }

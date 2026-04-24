@@ -1,58 +1,98 @@
 // src/components/cotizaciones/ScanMaterialListModal.jsx
-// Modal fullscreen para escanear listas de materiales con IA Vision
+// Modal para escanear listas de materiales (foto) o pegar texto (WhatsApp)
 import { useState, useRef } from 'react'
-import { X, Camera, Image as ImageIcon, Loader2, AlertCircle, Check, Search, Package, ChevronDown } from 'lucide-react'
+import { X, Camera, Image as ImageIcon, Loader2, AlertCircle, Check, Search, Package, MessageSquareText, ClipboardPaste } from 'lucide-react'
 import { comprimirParaOCR } from '../../utils/imageToBase64'
 import { useScanMaterialList } from '../../hooks/useScanMaterialList'
 import { fmtUsdSimple as fmtUsd } from '../../utils/format'
 import ProductoAutocomplete from './ProductoAutocomplete'
 
 export default function ScanMaterialListModal({ open, onClose, onBulkAdd, tasa = 0 }) {
-  const [phase, setPhase] = useState('capture') // capture | processing | results
+  const [phase, setPhase] = useState('capture') // capture | paste | processing | results
+  const [rawAiText, setRawAiText] = useState('')
   const [preview, setPreview] = useState(null)
-  const [items, setItems] = useState([]) // items con match seleccionado
-  const { scan, loading, error, results, reset } = useScanMaterialList()
+  const [pasteText, setPasteText] = useState('')
+  const [items, setItems] = useState([])
+  const [debugLog, setDebugLog] = useState('')
+  const [debugCopied, setDebugCopied] = useState(false)
+  const { scan, parseText, loading, error, results, reset } = useScanMaterialList()
   const fileRef = useRef(null)
 
   if (!open) return null
 
+  function processResults(data) {
+    if (data?.rawAiText) setRawAiText(data.rawAiText)
+
+    // Generar log debug detallado
+    const logLines = []
+    logLines.push(`=== SCAN DEBUG LOG ===`)
+    logLines.push(`Timestamp: ${new Date().toISOString()}`)
+    logLines.push(`Raw AI text: ${data?.rawAiText || '(vacío)'}`)
+    logLines.push(`Items recibidos: ${data?.items?.length || 0}`)
+    logLines.push(`---`)
+    if (data?.items) {
+      data.items.forEach((it, i) => {
+        logLines.push(`[${i+1}] descripcion: "${it.descripcionOriginal}" | cantidad: ${it.cantidad} | confianza: ${it.confianza}`)
+        logLines.push(`    matches (${it.matches?.length || 0}):`)
+        if (it.matches?.length > 0) {
+          it.matches.forEach((m, j) => logLines.push(`      ${j+1}. [${m.codigo}] ${m.nombre} | precio: ${m.precio_usd} | stock: ${m.stock_actual}`))
+        } else {
+          logLines.push(`      (sin coincidencias)`)
+        }
+      })
+    }
+    logLines.push(`=== FIN DEBUG ===`)
+    setDebugLog(logLines.join('\n'))
+
+    if (data?.items?.length > 0) {
+      setItems(data.items.map(it => ({
+        ...it,
+        checked: true,
+        selectedMatch: it.matches?.[0] || null,
+        cantidadEdit: it.cantidad,
+        showAutocomplete: false,
+      })))
+      setPhase('results')
+    } else {
+      setPhase('results')
+      setItems([])
+    }
+  }
+
   async function handleFile(e) {
     const file = e.target.files?.[0]
     if (!file) return
-
-    // Preview
     const url = URL.createObjectURL(file)
     setPreview(url)
     setPhase('processing')
-
     try {
-      // Comprimir para OCR (max 1200px, quality 0.8)
       const { base64, mimeType } = await comprimirParaOCR(file)
       const data = await scan(base64, mimeType)
-
-      if (data?.items?.length > 0) {
-        // Inicializar items con el primer match seleccionado y checkbox on
-        setItems(data.items.map(it => ({
-          ...it,
-          checked: true,
-          selectedMatch: it.matches?.[0] || null,
-          cantidadEdit: it.cantidad,
-          showAutocomplete: false,
-        })))
-        setPhase('results')
-      } else {
-        setPhase('results')
-        setItems([])
-      }
+      processResults(data)
     } catch {
       setPhase('capture')
+    }
+  }
+
+  async function handlePasteSubmit() {
+    if (!pasteText.trim()) return
+    setPhase('processing')
+    try {
+      const data = await parseText(pasteText.trim())
+      processResults(data)
+    } catch {
+      setPhase('paste')
     }
   }
 
   function handleRetry() {
     setPhase('capture')
     setPreview(null)
+    setPasteText('')
     setItems([])
+    setRawAiText('')
+    setDebugLog('')
+    setDebugCopied(false)
     reset()
     if (fileRef.current) fileRef.current.value = ''
   }
@@ -107,7 +147,11 @@ export default function ScanMaterialListModal({ open, onClose, onBulkAdd, tasa =
   function handleClose() {
     setPhase('capture')
     setPreview(null)
+    setPasteText('')
     setItems([])
+    setRawAiText('')
+    setDebugLog('')
+    setDebugCopied(false)
     reset()
     if (fileRef.current) fileRef.current.value = ''
     onClose()
@@ -123,7 +167,7 @@ export default function ScanMaterialListModal({ open, onClose, onBulkAdd, tasa =
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-slate-200 shrink-0">
           <div className="flex items-center gap-2">
             <Camera size={18} className="text-primary" />
-            <h2 className="text-sm sm:text-base font-bold text-slate-800">Escanear Lista de Materiales</h2>
+            <h2 className="text-sm sm:text-base font-bold text-slate-800">Importar Lista de Materiales</h2>
           </div>
           <button onClick={handleClose} className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors">
             <X size={18} className="text-slate-400" />
@@ -133,33 +177,92 @@ export default function ScanMaterialListModal({ open, onClose, onBulkAdd, tasa =
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6">
 
-          {/* ── FASE 1: Captura ── */}
+          {/* ── FASE 1: Captura (foto o texto) ── */}
           {phase === 'capture' && (
-            <div className="flex flex-col items-center gap-6 py-8">
-              <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center">
-                <Camera size={36} className="text-primary" />
+            <div className="flex flex-col items-center gap-6 py-6">
+              <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+                <Camera size={28} className="text-primary" />
               </div>
-              <div className="text-center space-y-2">
-                <p className="text-base font-bold text-slate-700">Toma una foto de la lista</p>
+              <div className="text-center space-y-1">
+                <p className="text-base font-bold text-slate-700">Importar lista de materiales</p>
                 <p className="text-sm text-slate-500 max-w-sm">
-                  La IA leerá los materiales y cantidades escritos a mano y los buscará en tu inventario
+                  Toma una foto de una lista escrita a mano o pega un texto de WhatsApp
                 </p>
               </div>
 
               <input ref={fileRef} type="file" accept="image/*" capture="environment"
                 onChange={handleFile} className="hidden" id="scan-file-input" />
 
-              <div className="flex flex-col sm:flex-row gap-3 w-full max-w-xs">
+              <div className="flex flex-col gap-3 w-full max-w-xs">
                 <label htmlFor="scan-file-input"
-                  className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white font-bold rounded-xl cursor-pointer hover:opacity-90 transition-opacity text-sm">
+                  className="flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white font-bold rounded-xl cursor-pointer hover:opacity-90 transition-opacity text-sm">
                   <Camera size={18} />
                   Tomar Foto
                 </label>
-                <label className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl cursor-pointer hover:bg-slate-200 transition-colors text-sm">
+                <label className="flex items-center justify-center gap-2 px-6 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl cursor-pointer hover:bg-slate-200 transition-colors text-sm">
                   <ImageIcon size={18} />
-                  Galería
+                  Subir de Galería
                   <input type="file" accept="image/*" onChange={handleFile} className="hidden" />
                 </label>
+                <div className="flex items-center gap-3 my-1">
+                  <div className="flex-1 h-px bg-slate-200" />
+                  <span className="text-[10px] text-slate-400 font-bold uppercase">o</span>
+                  <div className="flex-1 h-px bg-slate-200" />
+                </div>
+                <button onClick={() => setPhase('paste')}
+                  className="flex items-center justify-center gap-2 px-6 py-3 bg-green-50 text-green-700 font-bold rounded-xl hover:bg-green-100 transition-colors text-sm border border-green-200">
+                  <MessageSquareText size={18} />
+                  Pegar Texto / WhatsApp
+                </button>
+              </div>
+
+              {error && (
+                <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 px-4 py-2 rounded-lg">
+                  <AlertCircle size={16} />
+                  {error}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── FASE 1b: Pegar texto ── */}
+          {phase === 'paste' && (
+            <div className="flex flex-col gap-4 py-4">
+              <div className="flex items-center gap-2">
+                <MessageSquareText size={18} className="text-green-600" />
+                <p className="text-sm font-bold text-slate-700">Pega el texto con la lista de materiales</p>
+              </div>
+              <p className="text-xs text-slate-500">
+                Pega un mensaje de WhatsApp, nota, o cualquier texto que contenga materiales con cantidades
+              </p>
+              <textarea
+                value={pasteText}
+                onChange={e => setPasteText(e.target.value)}
+                placeholder={"Ej:\n90 cabillas 1/2\n45 cabillas 3/8\n5 tubos 1 1/2\n12 codos 1 1/2\n3 pegas azules\n50 sacos de cemento"}
+                className="w-full h-48 px-3 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary placeholder:text-slate-300"
+                autoFocus
+              />
+              <div className="flex items-center gap-3">
+                <button onClick={() => { setPasteText(''); setPhase('capture') }}
+                  className="px-4 py-2.5 text-sm text-slate-500 hover:text-slate-700 font-medium">
+                  Volver
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const clip = await navigator.clipboard.readText()
+                      if (clip) setPasteText(clip)
+                    } catch { /* clipboard access denied */ }
+                  }}
+                  className="flex items-center gap-1.5 px-4 py-2.5 text-sm text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 font-bold">
+                  <ClipboardPaste size={14} />
+                  Pegar
+                </button>
+                <button onClick={handlePasteSubmit} disabled={!pasteText.trim()}
+                  className="flex-1 flex items-center justify-center gap-2 px-6 py-2.5 bg-primary text-white font-bold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed text-sm">
+                  <Search size={16} />
+                  Buscar Materiales
+                </button>
               </div>
 
               {error && (
@@ -179,7 +282,7 @@ export default function ScanMaterialListModal({ open, onClose, onBulkAdd, tasa =
               )}
               <div className="flex flex-col items-center gap-3">
                 <Loader2 size={32} className="text-primary animate-spin" />
-                <p className="text-sm font-bold text-slate-700">Leyendo lista de materiales...</p>
+                <p className="text-sm font-bold text-slate-700">Buscando materiales en inventario...</p>
                 <p className="text-xs text-slate-400">Esto puede tomar unos segundos</p>
               </div>
               {error && (
@@ -203,10 +306,16 @@ export default function ScanMaterialListModal({ open, onClose, onBulkAdd, tasa =
               {items.length === 0 ? (
                 <div className="text-center py-8 space-y-4">
                   <AlertCircle size={32} className="text-amber-500 mx-auto" />
-                  <p className="text-sm text-slate-600">No se pudieron extraer items de la imagen</p>
+                  <p className="text-sm text-slate-600">No se pudieron extraer materiales</p>
+                  {rawAiText && (
+                    <div className="text-left bg-slate-50 border border-slate-200 rounded-lg p-3 mx-auto max-w-md">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Respuesta IA (debug):</p>
+                      <pre className="text-[11px] text-slate-600 whitespace-pre-wrap break-words max-h-40 overflow-y-auto">{rawAiText}</pre>
+                    </div>
+                  )}
                   <button onClick={handleRetry}
                     className="px-4 py-2 bg-primary text-white text-sm font-bold rounded-xl hover:opacity-90">
-                    Intentar con otra foto
+                    Intentar de nuevo
                   </button>
                 </div>
               ) : (
@@ -216,7 +325,7 @@ export default function ScanMaterialListModal({ open, onClose, onBulkAdd, tasa =
                       {items.length} items detectados
                     </p>
                     <button onClick={handleRetry} className="text-xs text-primary font-bold hover:underline">
-                      Escanear otra
+                      Nueva importación
                     </button>
                   </div>
 
@@ -233,6 +342,21 @@ export default function ScanMaterialListModal({ open, onClose, onBulkAdd, tasa =
                       onToggleAutocomplete={() => toggleAutocomplete(idx)}
                     />
                   ))}
+
+                  {/* Debug log copiable (temporal) */}
+                  {debugLog && (
+                    <div className="mt-4 bg-slate-900 rounded-xl p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase">Debug Log</p>
+                        <button
+                          onClick={() => { navigator.clipboard.writeText(debugLog); setDebugCopied(true); setTimeout(() => setDebugCopied(false), 2000) }}
+                          className="text-[10px] px-2 py-1 bg-slate-700 text-slate-300 rounded-md hover:bg-slate-600 font-bold">
+                          {debugCopied ? 'Copiado' : 'Copiar'}
+                        </button>
+                      </div>
+                      <pre className="text-[10px] text-green-400 whitespace-pre-wrap break-words max-h-48 overflow-y-auto font-mono leading-relaxed">{debugLog}</pre>
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -269,7 +393,7 @@ function ScanResultRow({ item, idx, tasa, onToggle, onCantidadChange, onSelectMa
     <div className={`border rounded-xl p-3 transition-all ${
       item.checked ? 'border-slate-200 bg-white' : 'border-slate-100 bg-slate-50 opacity-60'
     }`}>
-      {/* Fila superior: checkbox + descripción original + confianza */}
+      {/* Fila superior: checkbox + descripción original */}
       <div className="flex items-start gap-2 mb-2">
         <button onClick={onToggle}
           className={`mt-0.5 w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${
@@ -280,7 +404,7 @@ function ScanResultRow({ item, idx, tasa, onToggle, onCantidadChange, onSelectMa
         <div className="flex-1 min-w-0">
           <p className="text-xs font-bold text-slate-800 leading-snug">
             <span className="text-primary font-black">{item.cantidadEdit}</span>
-            {' × '}
+            {' x '}
             {item.descripcionOriginal}
           </p>
         </div>

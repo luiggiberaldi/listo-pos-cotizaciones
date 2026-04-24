@@ -18,7 +18,7 @@ export function fileToBase64(file) {
  * Comprime una imagen para OCR (mayor resolución que para thumbnails)
  * Max 1200px, calidad 0.8
  */
-export function comprimirParaOCR(file, { maxSize = 1200, quality = 0.8 } = {}) {
+export function comprimirParaOCR(file, { maxSize = 1600, quality = 0.85 } = {}) {
   return new Promise((resolve, reject) => {
     const img = new Image()
     const url = URL.createObjectURL(file)
