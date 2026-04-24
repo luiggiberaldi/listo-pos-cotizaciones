@@ -486,11 +486,14 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     condY += 3.5
   })
 
-  // ── Recuadro unificado: FORMA DE PAGO + TOTAL ──
+  // ── Recuadro unificado: FORMA DE PAGO + TOTAL — 3mm encima del chofer ──
   const fp = (formaPago || despacho.forma_pago || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
+  // Calcular posición del chofer para posicionar el recuadro encima
+  const choferStartY = sloganY - 9 - 18  // misma fórmula que ty del chofer
+  const fpY = choferStartY - 3 - 19      // 19mm alto del recuadro (9 + 10), 3mm gap
+
   // Fila FORMA DE PAGO arriba (con borde)
-  const fpY = ty
   doc.setDrawColor(120, 120, 120)
   doc.setLineWidth(0.3)
   doc.rect(MARGIN, fpY, CONTENT_W, 9, 'S')
