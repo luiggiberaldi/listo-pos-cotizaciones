@@ -511,6 +511,74 @@ Implementar el módulo completo de gestión de clientes con lógica anti-robo.
 
 ---
 
+### SESIÓN 10 — 24/04/2026 — Fix: Error 401 en página de Clientes (Vercel)
+
+**Objetivo de la sesión:** Diagnosticar y corregir error 401 (Unauthorized) en `/api/clientes` y `/api/clientes/lookup` que impedía cargar la página de Clientes desde el deploy de Vercel.
+
+#### Síntoma
+
+Al abrir la pestaña de Clientes en `https://listo-pos-cotizaciones.vercel.app/clientes`, la consola del navegador mostraba:
+```
+GET https://listo-pos-cotizaciones.vercel.app/api/clientes? 401 (Unauthorized)
+```
+Repetido 4 veces (React Query reintenta 3 veces). La página mostraba "Error al cargar los clientes". El error NO ocurría en otras secciones (Cotizaciones, Despachos) porque esas usan Supabase directamente, no el Worker API.
+
+#### Diagnóstico (cronología)
+
+1. **Hipótesis inicial: token expirado** → Se creó `src/services/authFetch.js` con retry automático que refresca el token de Supabase en caso de 401. No solucionó el problema.
+
+2. **Hipótesis: Vercel quita el header Authorization** → Se descubrió que `vercel.json` usa rewrites a URL externa (`workers.dev`). Se cambió a llamadas cross-origin directas con `VITE_WORKER_ORIGIN`. El 401 persistió.
+
+3. **Prueba en camelai.app** → El mismo código funcionaba sin errores en `https://listo-pos-cotizaciones.camelai.app`. Esto confirmó que el problema NO era el código del frontend ni el token.
+
+4. **Diagnóstico del Worker en workers.dev** → Se agregó un endpoint temporal `/api/debug-auth` que reveló:
+   - Las credenciales de Supabase (`SUPABASE_URL`, `SUPABASE_ANON_KEY`) estaban correctas en ambos Workers
+   - El Worker en `workers.dev` validaba tokens correctamente contra Supabase
+   - El token que enviaba el frontend desde `vercel.app` era rechazado por Supabase
+
+5. **Causa raíz encontrada:** El Worker desplegado en `luigistorelogistics.workers.dev` estaba **desactualizado** (nunca se había re-desplegado desde que se hicieron cambios al código). El deploy a workers.dev se hacía manualmente con `wrangler deploy` y no había automatización.
+
+#### Solución aplicada
+
+**1. Arquitectura de deploy definitiva:**
+- **Vercel** → auto-deploy del frontend en cada push a `main`
+- **GitHub Actions** → auto-deploy del Worker a `workers.dev` en cada push a `main`
+- **camelAI** → deploy del Worker al entorno de desarrollo
+
+**2. Frontend apunta al Worker de camelai:**
+- `.env.production` configura `VITE_WORKER_ORIGIN=https://listo-pos-cotizaciones-98674n.apps.camelai.dev`
+- El frontend en Vercel hace llamadas cross-origin al Worker de camelai (CORS ya configurado)
+- Esto evita depender del Worker en `workers.dev` que históricamente queda desactualizado
+
+**3. GitHub Actions configurado:**
+- Workflow `.github/workflows/deploy-worker.yml` despliega automáticamente a `workers.dev`
+- Secrets `CF_API_TOKEN` y `CF_ACCOUNT_ID` configurados en el repositorio de GitHub
+- Build con Bun + deploy con `wrangler-action@v3`
+
+**4. Helper authFetch creado:**
+- `src/services/authFetch.js` — wrapper de fetch que refresca el token automáticamente si recibe 401
+- `useClientes` actualizado para usar `authFetch` en vez de fetch directo
+
+#### Archivos creados/modificados
+
+| Archivo | Cambio |
+|---------|--------|
+| `src/services/authFetch.js` | **NUEVO** — fetch autenticado con retry en 401 |
+| `src/hooks/useClientes.js` | Usa `authFetch` en vez de `getSession()` + `fetch()` manual |
+| `.env.production` | **NUEVO** — `VITE_WORKER_ORIGIN` apunta al Worker de camelai |
+| `.github/workflows/deploy-worker.yml` | Actualizado con secrets correctos y env vars de build |
+
+#### Lecciones aprendidas
+
+1. **Vercel rewrites NO reenvían el header `Authorization`** a URLs externas. Para endpoints autenticados, usar llamadas cross-origin directas con CORS.
+2. **Siempre automatizar el deploy del Worker.** Un Worker desactualizado causa errores difíciles de diagnosticar porque el código fuente se ve correcto.
+3. **localStorage es por dominio.** La sesión de Supabase en `vercel.app` es independiente de la de `camelai.app`. No asumir que un token válido en un dominio funciona igual desde otro contexto.
+
+#### Pendiente
+- Evaluar migrar el frontend de Vercel a Cloudflare Pages (mismo dominio que el Worker, elimina problema de CORS y tokens cross-domain)
+
+---
+
 ## REGISTRO DE ERRORES
 
 > Tabla de errores encontrados durante el desarrollo.
@@ -519,6 +587,7 @@ Implementar el módulo completo de gestión de clientes con lógica anti-robo.
 | # | Fecha | Fase | Descripción del error | Causa raíz | Solución aplicada | Estado |
 |---|---|---|---|---|---|---|
 | 1 | 14/04/2026 | S8 | 400 Bad Request en query de clientes | `tipo_cliente` seleccionado en hook pero columna no existía en BD | Ejecutar migration 019 vía Supabase Management API | ✅ Resuelto |
+| 2 | 24/04/2026 | S10 | 401 Unauthorized en `/api/clientes` desde Vercel | Worker en workers.dev desactualizado + Vercel rewrites no reenvían Authorization header | Apuntar frontend a Worker de camelai + GitHub Actions para auto-deploy | ✅ Resuelto |
 
 ---
 
