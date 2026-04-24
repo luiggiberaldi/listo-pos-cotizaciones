@@ -240,17 +240,18 @@ export async function generarPlantillaOrdenDespachoPDF({ config = {} } = {}) {
   drawCheck(doc, 'TRANSF.',    MARGIN + 114, fpY + 6)
   drawCheck(doc, 'CTA X COB.', MARGIN + 134, fpY + 6)
 
-  // Barra oscura TOTAL
+  // Barra TOTAL — fondo blanco, texto negro (para llenar a mano)
   const totTopY = fpY + 9
-  doc.setFillColor(60, 60, 60)
-  doc.rect(MARGIN, totTopY, CONTENT_W, 10, 'F')
+  doc.setDrawColor(120, 120, 120)
+  doc.setLineWidth(0.3)
+  doc.rect(MARGIN, totTopY, CONTENT_W, 10, 'S')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(11)
-  doc.setTextColor(...C_WHITE)
+  doc.setTextColor(...C_DARK)
   doc.text('TOTAL', MARGIN + 4, totTopY + 7)
-  // Línea en blanco para monto
+  // Línea para monto
   doc.setLineWidth(0.4)
-  doc.setDrawColor(...C_WHITE)
+  doc.setDrawColor(150, 150, 150)
   doc.line(MARGIN + 30, totTopY + 7.5, MARGIN + CONTENT_W - 4, totTopY + 7.5)
 
   // ══════════════════════════════════════════════════════════════════════════
