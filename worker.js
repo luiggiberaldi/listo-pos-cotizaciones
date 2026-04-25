@@ -550,8 +550,8 @@ async function handleAdmin(request, env, url) {
     }
 
     // Validate rol
-    if (!['supervisor', 'vendedor', 'administracion'].includes(rol)) {
-      return jsonError('Rol inválido: debe ser supervisor, vendedor o administracion', 400, request);
+    if (!['supervisor', 'vendedor', 'administracion', 'logistica'].includes(rol)) {
+      return jsonError('Rol inválido: debe ser supervisor, vendedor, administracion o logistica', 400, request);
     }
 
     // Validate PIN length
@@ -601,7 +601,7 @@ async function handleAdmin(request, env, url) {
     const { nombre, rol, pin, color, telefono } = body;
 
     // Validate rol if provided
-    if (rol && !['supervisor', 'vendedor', 'administracion'].includes(rol)) {
+    if (rol && !['supervisor', 'vendedor', 'administracion', 'logistica'].includes(rol)) {
       return jsonError('Rol inválido', 400, request);
     }
 
