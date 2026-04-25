@@ -124,6 +124,8 @@ function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
       </div>
       {/* Rol */}
       <CustomSelect
+        value={campos.rol}
+        onChange={v => cambiar('rol', v)}
         options={[
           { value: 'vendedor', label: 'Vendedor' },
           { value: 'administracion', label: 'Administración' },
@@ -232,6 +234,8 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando, coloresUsados = 
           className={`${inputCls} !pl-10`} disabled={cargando} />
       </div>
       <CustomSelect
+        value={campos.rol}
+        onChange={v => setCampos(p => ({ ...p, rol: v }))}
         options={[
           { value: 'vendedor', label: 'Vendedor' },
           { value: 'administracion', label: 'Administración' },
