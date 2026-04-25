@@ -244,7 +244,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const confirmConfig = accionPendiente?.actionConfig || {}
 
   return (
-    <div className="group bg-white rounded-2xl border border-slate-200 hover:shadow-lg transition-all duration-200 flex flex-col">
+    <div className="group bg-white rounded-2xl border border-slate-200 hover:shadow-lg transition-all duration-200 flex flex-col" onClick={(e) => { if (e.target.closest('button') || e.target.closest('[data-no-click]')) return; setShowDetalle(true) }}>
 
       {/* ── Header strip con color del vendedor ── */}
       <div className="relative h-16 shrink-0 flex items-end justify-between px-4 pb-2 rounded-t-2xl"
@@ -255,65 +255,49 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)',
             backgroundSize: '12px 12px',
           }} />
-        <div className="relative z-10 min-w-0">
+        <div className="relative z-10 min-w-0 flex items-center gap-2">
           <p className="font-black text-white font-mono leading-tight drop-shadow" style={{fontSize:'20px'}}>{numDisplay}</p>
+          <span className="text-[10px] font-mono text-white/70 bg-white/15 px-1.5 py-0.5 rounded">{cotNum}</span>
         </div>
         <div className="relative z-10 shrink-0">
           <EstadoBadge estado={despacho.estado} />
         </div>
       </div>
 
-      {/* ── Ref. cotización + fechas ── */}
-      <div className="px-4 pt-3 pb-2 space-y-1">
+      {/* ── Fecha relevante + Cliente ── */}
+      <div className="px-4 pt-3 pb-2 space-y-1.5">
         <div className="flex items-center gap-1.5 text-xs text-slate-400">
-          <FileText size={11} className="shrink-0" />
-          <span className="font-mono">{cotNum}</span>
+          <Calendar size={11} />
+          {despacho.estado === 'entregada' && despacho.entregada_en
+            ? <span className="text-teal-500 font-medium">Entregada {fmtFecha(despacho.entregada_en)}</span>
+            : despacho.estado === 'despachada' && despacho.despachada_en
+              ? <span className="text-indigo-400 font-medium">Despachada {fmtFecha(despacho.despachada_en)}</span>
+              : <span>{fmtFecha(despacho.creado_en)}</span>
+          }
         </div>
-        <div className="flex items-center gap-3 text-xs text-slate-400">
-          <span className="flex items-center gap-1">
-            <Calendar size={11} />{fmtFecha(despacho.creado_en)}
-          </span>
-          {despacho.despachada_en && (
-            <><span className="text-slate-300">·</span><span className="text-indigo-400">Despachada {fmtFecha(despacho.despachada_en)}</span></>
-          )}
-          {despacho.entregada_en && (
-            <><span className="text-slate-300">·</span><span className="text-teal-500">Entregada {fmtFecha(despacho.entregada_en)}</span></>
-          )}
-        </div>
+        {despacho.cliente?.nombre && (
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold text-slate-700 truncate">{despacho.cliente.nombre}</span>
+            {esPrivilegiado && despacho.vendedor && (
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0 ml-2"
+                style={{ backgroundColor: vendedorColor + '18', color: vendedorColor, border: `1px solid ${vendedorColor}40` }}>
+                {despacho.vendedor.nombre}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* ── Cliente ── */}
-      {despacho.cliente?.nombre && (
-        <div className="px-4 pb-2 flex items-center justify-between">
-          <span className="text-xs text-slate-400">Cliente</span>
-          <span className="text-xs font-semibold truncate max-w-[200px]"
-            style={{ color: despacho.cliente?.vendedor?.color || vendedorColor }}>
-            {despacho.cliente.nombre}
-          </span>
-        </div>
-      )}
-
       {/* ── Total ── */}
-      <div className="mx-4 mb-3 bg-slate-50 rounded-xl px-3.5 py-2.5 flex items-center justify-between">
-        <span className="text-xs font-medium text-slate-500">Total</span>
+      <div className="mx-4 mb-3 bg-slate-50 rounded-xl px-3.5 py-3 flex items-center justify-between">
+        <span className="text-xs font-medium text-slate-400">Total</span>
         <div className="text-right">
-          <span className="text-base font-bold text-slate-800">{fmtUsd(despacho.total_usd)}</span>
+          <span className="text-lg font-bold text-slate-800">{fmtUsd(despacho.total_usd)}</span>
           {tasa > 0 && despacho.total_usd > 0 && (
             <div className="text-[11px] text-slate-400">{fmtBs(usdToBs(despacho.total_usd, tasa))}</div>
           )}
         </div>
       </div>
-
-      {/* ── Vendedor (supervisor y administracion) ── */}
-      {esPrivilegiado && despacho.vendedor && (
-        <div className="px-4 pb-3 flex items-center justify-between">
-          <span className="text-xs text-slate-400">Vendedor</span>
-          <span className="text-xs font-semibold px-2.5 py-1 rounded-full"
-            style={{ backgroundColor: vendedorColor + '18', color: vendedorColor, border: `1px solid ${vendedorColor}40` }}>
-            {despacho.vendedor.nombre}
-          </span>
-        </div>
-      )}
 
       {/* ══════════ MOBILE ACTIONS (< md) ══════════ */}
       <div className="md:hidden mt-auto border-t border-slate-100 p-2.5">
@@ -330,15 +314,9 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           {primaryAction.label}
         </button>
 
-        {/* Fila secundaria: Ver + PDF + más */}
+        {/* Fila de acciones: moneda + PDFs + imprimir */}
         <div className="flex items-center gap-1 mt-2 overflow-x-auto pb-1 -mx-1 px-1">
-          {primaryAction.key !== 'ver' && (
-            <button onClick={() => setShowDetalle(true)}
-              className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 active:bg-slate-100 transition-colors shrink-0">
-              <Eye size={14} /> Ver
-            </button>
-          )}
-          <div className="relative">
+          <div className="relative" data-no-click>
             <button onClick={() => setShowMonedaMenu(v => !v)}
               onBlur={() => setTimeout(() => setShowMonedaMenu(false), 200)}
               className="flex items-center gap-1 px-2 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors whitespace-nowrap">
