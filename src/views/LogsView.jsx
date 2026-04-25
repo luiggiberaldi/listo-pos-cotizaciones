@@ -1,10 +1,12 @@
 // src/views/LogsView.jsx
-// Panel de logs del sistema + análisis AI + Tests/Health (desarrollador)
+// Panel de logs del sistema + análisis AI + Auditoría + Tests/Health (desarrollador)
 import { useState, useEffect } from 'react'
 import {
   AlertCircle, AlertTriangle, Info, Download, Trash2, Bot, RefreshCw,
   Filter, ChevronLeft, ChevronRight, Shield, Zap, Bug, Clock,
   Monitor, Server, Database, CheckCircle2, XCircle, Activity, FlaskConical,
+  Users, FileText, ShoppingCart, Settings, LogIn, TrendingUp, BarChart3,
+  Search, Calendar,
 } from 'lucide-react'
 import { useLogs, useLogStats, useLogAnalysis, useLogPurge } from '../hooks/useLogs'
 import { adminAPI, devAPI } from '../services/supabase/adminClient'
@@ -20,6 +22,7 @@ const TABS_BASE = [
 ]
 
 const TABS_DEV = [
+  { id: 'audit', label: 'Auditoría', icon: Shield },
   { id: 'tests',  label: 'Tests', icon: FlaskConical },
   { id: 'health', label: 'Health', icon: Activity },
 ]
@@ -67,6 +70,16 @@ const AI_AGENTS = [
     gradient: 'from-blue-500 to-indigo-600',
   },
 ]
+
+// ── Audit Config ─────────────────────────────────────────────────────
+const CATEGORIA_ICONS = {
+  AUTH: LogIn, COTIZACION: FileText, USUARIO: Users, FINANZAS: TrendingUp,
+  INVENTARIO: ShoppingCart, CONFIG: Settings, DESPACHO: FileText, CLIENTE: Users,
+}
+const CATEGORIA_COLORS = {
+  AUTH: '#8b5cf6', COTIZACION: '#3b82f6', USUARIO: '#06b6d4', FINANZAS: '#10b981',
+  INVENTARIO: '#f59e0b', CONFIG: '#64748b', DESPACHO: '#ec4899', CLIENTE: '#6366f1',
+}
 
 // ── Componentes ──────────────────────────────────────────────────────────
 
@@ -199,6 +212,112 @@ function TestSuiteRow({ name, passed, failed, total, tests }) {
 }
 
 // Conversión básica de markdown a HTML
+function AuditRow({ registro }) {
+  const [expanded, setExpanded] = useState(false)
+  const cat = registro.categoria || 'OTRO'
+  const Icon = CATEGORIA_ICONS[cat] || FileText
+  const color = CATEGORIA_COLORS[cat] || '#64748b'
+  const ts = new Date(registro.ts)
+  const fecha = ts.toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit' })
+  const hora = ts.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+
+  return (
+    <div className="bg-white border border-slate-100 rounded-lg p-3 cursor-pointer transition-all hover:shadow-sm hover:border-slate-200" onClick={() => setExpanded(!expanded)}>
+      <div className="flex items-start gap-2.5">
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5" style={{ background: `${color}15` }}>
+          <Icon size={14} style={{ color }} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ background: `${color}15`, color }}>{cat}</span>
+            <span className="text-xs font-medium text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">{registro.accion?.replace(/_/g, ' ')}</span>
+          </div>
+          {registro.descripcion && <p className="text-sm text-slate-700 mt-1 break-words">{registro.descripcion}</p>}
+          <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
+            <span>{fecha} {hora}</span>
+            <span>• {registro.usuario_nombre || '—'}</span>
+            <span className="px-1.5 py-0.5 rounded bg-slate-50 text-slate-500">{registro.usuario_rol}</span>
+          </div>
+        </div>
+      </div>
+      {expanded && registro.meta && Object.keys(registro.meta).length > 0 && (
+        <pre className="mt-2 text-xs text-slate-500 bg-slate-50 border border-slate-100 p-2 rounded overflow-auto max-h-32">{JSON.stringify(registro.meta, null, 2)}</pre>
+      )}
+    </div>
+  )
+}
+
+function AuditStatsBar({ stats }) {
+  if (!stats) return null
+  const maxCount = Math.max(...(stats.topCategorias?.map(c => c.count) || [1]))
+  return (
+    <div className="space-y-4 mb-4">
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <StatCard label="Total registros" value={stats.total} icon={Database} color="#64748b" />
+        <StatCard label="Acciones hoy" value={stats.accionesHoy} icon={Activity} color="#3b82f6" />
+        <StatCard label="Esta semana" value={stats.accionesSemana} icon={BarChart3} color="#10b981" />
+        <StatCard label="Logins fallidos (7d)" value={stats.loginsFallidos} icon={Shield} color={stats.loginsFallidos > 5 ? '#ef4444' : '#f59e0b'} />
+      </div>
+
+      {/* Charts row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {/* Top categorías */}
+        {stats.topCategorias?.length > 0 && (
+          <div className="bg-white rounded-xl border border-slate-100 p-4 shadow-sm">
+            <h3 className="text-xs font-bold text-slate-500 mb-3">Actividad por categoría (30d)</h3>
+            <div className="space-y-2">
+              {stats.topCategorias.map(({ categoria: cat, count }) => {
+                const color = CATEGORIA_COLORS[cat] || '#64748b'
+                return (
+                  <div key={cat} className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-slate-600 w-24 truncate">{cat}</span>
+                    <div className="flex-1 h-4 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all" style={{ width: `${Math.max(5, (count / maxCount) * 100)}%`, background: color }} />
+                    </div>
+                    <span className="text-xs font-bold text-slate-700 w-8 text-right">{count}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Top usuarios */}
+        {stats.topUsuarios?.length > 0 && (
+          <div className="bg-white rounded-xl border border-slate-100 p-4 shadow-sm">
+            <h3 className="text-xs font-bold text-slate-500 mb-3">Usuarios más activos (30d)</h3>
+            <div className="space-y-2">
+              {stats.topUsuarios.map(u => (
+                <div key={u.nombre} className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600">{u.nombre[0]}</div>
+                  <span className="text-xs font-medium text-slate-700 flex-1 truncate">{u.nombre}</span>
+                  <span className="text-[10px] text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded">{u.rol}</span>
+                  <span className="text-xs font-bold text-slate-700">{u.count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Top acciones */}
+      {stats.topAcciones?.length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-100 p-4 shadow-sm">
+          <h3 className="text-xs font-bold text-slate-500 mb-3">Acciones más frecuentes (30d)</h3>
+          <div className="flex flex-wrap gap-2">
+            {stats.topAcciones.map(({ accion, count }) => (
+              <span key={accion} className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-slate-50 text-slate-600">
+                {accion.replace(/_/g, ' ')} <strong className="text-slate-800">{count}</strong>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function formatMarkdown(text) {
   if (!text) return ''
   return text
@@ -311,6 +430,16 @@ export default function LogsView() {
   const [healthData, setHealthData] = useState(null)
   const [healthLoading, setHealthLoading] = useState(false)
 
+  // Audit state
+  const [auditData, setAuditData] = useState(null)
+  const [auditStats, setAuditStats] = useState(null)
+  const [auditLoading, setAuditLoading] = useState(false)
+  const [auditStatsLoading, setAuditStatsLoading] = useState(false)
+  const [auditPage, setAuditPage] = useState(1)
+  const [auditCategoria, setAuditCategoria] = useState('')
+  const [auditAnalysis, setAuditAnalysis] = useState(null)
+  const [auditAnalyzing, setAuditAnalyzing] = useState(false)
+
   const { data: logsData, isLoading: logsLoading, refetch, isFetching } = useLogs({ page, limit: 50, nivel: nivel || undefined, origen: origen || undefined, categoria: categoria || undefined })
   const { data: stats, refetch: refetchStats } = useLogStats()
   const purge = useLogPurge()
@@ -362,6 +491,43 @@ export default function LogsView() {
     }
     setHealthLoading(false)
   }
+
+  async function loadAudit(pg = auditPage) {
+    setAuditLoading(true)
+    try {
+      const data = await adminAPI.getAudit({ page: pg, limit: 30, categoria: auditCategoria || undefined })
+      setAuditData(data)
+    } catch (e) { showToast(e.message, 'error') }
+    setAuditLoading(false)
+  }
+
+  async function loadAuditStats() {
+    setAuditStatsLoading(true)
+    try {
+      const data = await adminAPI.getAuditStats()
+      setAuditStats(data)
+    } catch (e) { showToast(e.message, 'error') }
+    setAuditStatsLoading(false)
+  }
+
+  async function runAuditAnalysis() {
+    setAuditAnalyzing(true)
+    try {
+      const data = await adminAPI.analyzeAudit()
+      setAuditAnalysis(data)
+    } catch (e) { setAuditAnalysis({ resultado: `Error: ${e.message}`, registros_count: 0 }) }
+    setAuditAnalyzing(false)
+  }
+
+  // Auto-load audit data when tab changes
+  useEffect(() => {
+    if (tab === 'audit' && !auditData && !auditLoading) loadAudit(1)
+    if (tab === 'audit' && !auditStats && !auditStatsLoading) loadAuditStats()
+  }, [tab])
+
+  useEffect(() => {
+    if (tab === 'audit') loadAudit(auditPage)
+  }, [auditPage, auditCategoria])
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -522,6 +688,117 @@ export default function LogsView() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Tab: Auditoría (solo desarrollador) */}
+      {tab === 'audit' && esDesarrollador && (
+        <div className="space-y-4">
+          {/* Stats dashboard */}
+          {auditStatsLoading ? (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[1,2,3,4].map(i => <div key={i} className="h-20 bg-slate-100 rounded-xl animate-pulse" />)}
+            </div>
+          ) : (
+            <AuditStatsBar stats={auditStats} />
+          )}
+
+          {/* AI Analysis button */}
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="bg-gradient-to-r from-violet-500 to-purple-600 p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
+                  <Bot size={20} className="text-white" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-white font-bold text-sm">Análisis AI de Auditoría</h3>
+                  <p className="text-white/80 text-xs">Resumen ejecutivo, alertas de seguridad y recomendaciones de mejora</p>
+                </div>
+              </div>
+            </div>
+            <div className="p-4">
+              {!auditAnalysis && !auditAnalyzing && (
+                <button onClick={runAuditAnalysis}
+                  className="w-full py-2.5 rounded-lg text-sm font-bold text-white transition-all hover:opacity-90"
+                  style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
+                  <Bot size={14} className="inline mr-1.5 -mt-0.5" />
+                  Generar Informe de Auditoría
+                </button>
+              )}
+              {auditAnalyzing && (
+                <div className="flex items-center gap-2 justify-center py-4 text-slate-500">
+                  <RefreshCw size={16} className="animate-spin" />
+                  <span className="text-sm">Analizando con Groq AI...</span>
+                </div>
+              )}
+              {auditAnalysis && !auditAnalyzing && (
+                <div className="prose prose-sm max-w-none text-slate-700">
+                  <div className="text-xs text-slate-400 mb-2 flex items-center gap-2">
+                    <Clock size={12} />
+                    {auditAnalysis.registros_count} registros analizados{auditAnalysis.modelo && ` • ${auditAnalysis.modelo}`}
+                  </div>
+                  <div className="text-sm leading-relaxed whitespace-pre-wrap"
+                    dangerouslySetInnerHTML={{ __html: formatMarkdown(auditAnalysis.resultado) }} />
+                  <button onClick={() => { setAuditAnalysis(null) }}
+                    className="mt-3 text-xs text-slate-400 hover:text-slate-600 underline">
+                    Regenerar análisis
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Filters + Audit list */}
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <Filter size={14} className="text-slate-400" />
+              <select value={auditCategoria} onChange={e => { setAuditCategoria(e.target.value); setAuditPage(1) }}
+                className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white">
+                <option value="">Todas las categorías</option>
+                {Object.keys(CATEGORIA_ICONS).map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+              <button onClick={() => { loadAudit(1); loadAuditStats() }}
+                disabled={auditLoading}
+                className="ml-auto text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1 px-2 py-1.5 border border-slate-200 rounded-lg bg-white disabled:opacity-50">
+                <RefreshCw size={12} className={auditLoading ? 'animate-spin' : ''} /> Actualizar
+              </button>
+            </div>
+
+            {auditLoading ? (
+              <div className="space-y-2">
+                {[1,2,3,4,5].map(i => <div key={i} className="h-16 bg-slate-50 rounded-lg animate-pulse" />)}
+              </div>
+            ) : !auditData?.registros?.length ? (
+              <div className="text-center py-12 text-slate-400">
+                <Shield size={40} className="mx-auto mb-3 opacity-50" />
+                <p className="text-sm font-medium">No hay registros de auditoría</p>
+                <p className="text-xs mt-1">Las acciones del sistema aparecerán aquí automáticamente</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {auditData.registros.map(r => <AuditRow key={r.id} registro={r} />)}
+              </div>
+            )}
+
+            {/* Pagination */}
+            {auditData && auditData.pages > 1 && (
+              <div className="flex items-center justify-center gap-3 mt-4">
+                <button onClick={() => setAuditPage(p => Math.max(1, p - 1))} disabled={auditPage <= 1}
+                  className="p-1.5 rounded-lg border border-slate-200 disabled:opacity-30">
+                  <ChevronLeft size={16} />
+                </button>
+                <span className="text-sm text-slate-600 font-medium">
+                  Página {auditPage} de {auditData.pages}
+                </span>
+                <button onClick={() => setAuditPage(p => Math.min(auditData.pages, p + 1))} disabled={auditPage >= auditData.pages}
+                  className="p-1.5 rounded-lg border border-slate-200 disabled:opacity-30">
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

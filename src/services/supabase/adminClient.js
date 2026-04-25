@@ -144,6 +144,23 @@ export const adminAPI = {
   analyzeLogs: (tipo) => adminFetch('logs/analyze', 'POST', { tipo }),
 
   purgeLogs: (dias = 0) => adminFetch('logs/purge', 'DELETE', { dias }),
+
+  // ── Auditoría ──────────────────────────────────────────────────────
+  getAudit: (params = {}) => {
+    const qs = new URLSearchParams()
+    if (params.page) qs.set('page', params.page)
+    if (params.limit) qs.set('limit', params.limit)
+    if (params.categoria) qs.set('categoria', params.categoria)
+    if (params.usuario_id) qs.set('usuario_id', params.usuario_id)
+    if (params.accion) qs.set('accion', params.accion)
+    if (params.desde) qs.set('desde', params.desde)
+    if (params.hasta) qs.set('hasta', params.hasta)
+    return adminFetch(`audit?${qs.toString()}`, 'GET')
+  },
+
+  getAuditStats: () => adminFetch('audit/stats', 'GET'),
+
+  analyzeAudit: () => adminFetch('audit/analyze', 'POST'),
 }
 
 // ── Dev Tools API (solo desarrollador) ──────────────────────────────────
