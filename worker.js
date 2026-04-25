@@ -193,6 +193,17 @@ export default {
       return handlePurgeLogs(request, env);
     }
 
+    // ── API: Auditoría completa ──────────────────────────────────────────
+    if (url.pathname === '/api/admin/audit' && request.method === 'GET') {
+      return handleGetAudit(request, env, url);
+    }
+    if (url.pathname === '/api/admin/audit/stats' && request.method === 'GET') {
+      return handleGetAuditStats(request, env);
+    }
+    if (url.pathname === '/api/admin/audit/analyze' && request.method === 'POST') {
+      return handleAnalyzeAudit(request, env);
+    }
+
     // ── API: backup completo del sistema ───────────────────────────────────
     if (url.pathname === '/api/admin/backup' && request.method === 'GET') {
       return handleBackup(request, env);
@@ -591,6 +602,15 @@ async function handleAdmin(request, env, url) {
       return jsonError('Error al crear usuario: ' + errText, 500, request);
     }
 
+    // Auditoría
+    try {
+      await registrarAuditoria(env, { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' }, {
+        usuarioId: user.operator_id || user.id, usuarioNombre: user.operator_nombre || 'Supervisor', usuarioRol: user.operator_rol || 'supervisor',
+        categoria: 'USUARIO', accion: 'CREAR_USUARIO', descripcion: `Usuario "${nombre.trim()}" creado con rol ${rol}`,
+        entidadTipo: 'usuario', entidadId: newId, meta: { nombre: nombre.trim(), rol, color },
+      });
+    } catch {}
+
     return json({ id: newId, ok: true }, 201, request);
   }
 
@@ -641,6 +661,15 @@ async function handleAdmin(request, env, url) {
       if (!dbRes.ok) return jsonError('Error al actualizar usuario', 500, request);
     }
 
+    // Auditoría
+    try {
+      await registrarAuditoria(env, { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' }, {
+        usuarioId: user.operator_id || user.id, usuarioNombre: user.operator_nombre || 'Supervisor', usuarioRol: user.operator_rol || 'supervisor',
+        categoria: 'USUARIO', accion: 'EDITAR_USUARIO', descripcion: `Usuario ${userId} actualizado`,
+        entidadTipo: 'usuario', entidadId: userId, meta: { campos_actualizados: Object.keys(updateData), rol: updateData.rol, nombre: updateData.nombre },
+      });
+    } catch {}
+
     return json({ ok: true }, 200, request);
   }
 
@@ -663,6 +692,15 @@ async function handleAdmin(request, env, url) {
     );
 
     if (!dbRes.ok) return jsonError('Error al eliminar usuario', 500, request);
+
+    // Auditoría
+    try {
+      await registrarAuditoria(env, { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' }, {
+        usuarioId: user.operator_id || user.id, usuarioNombre: user.operator_nombre || 'Supervisor', usuarioRol: user.operator_rol || 'supervisor',
+        categoria: 'USUARIO', accion: 'ELIMINAR_USUARIO', descripcion: `Usuario ${userId} eliminado`,
+        entidadTipo: 'usuario', entidadId: userId,
+      });
+    } catch {}
 
     return json({ ok: true }, 200, request);
   }
@@ -712,7 +750,17 @@ async function handleSwitchOperator(request, env) {
   }
 
   const isValid = await verifyPinPBKDF2(pin, operator.pin_hash, operator.pin_salt);
-  if (!isValid) return jsonError('PIN incorrecto', 401, request);
+  if (!isValid) {
+    // Auditoría: intento fallido
+    try {
+      await registrarAuditoria(env, { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' }, {
+        usuarioId: operator.id, usuarioNombre: operator.nombre, usuarioRol: operator.rol,
+        categoria: 'AUTH', accion: 'LOGIN_FALLIDO', descripcion: `Intento de login fallido para ${operator.nombre}`,
+        entidadTipo: 'usuario', entidadId: operator.id, meta: { ip },
+      });
+    } catch {}
+    return jsonError('PIN incorrecto', 401, request);
+  }
 
   // Update app_metadata on the business auth user
   const metaRes = await fetch(
@@ -737,6 +785,15 @@ async function handleSwitchOperator(request, env) {
   if (!metaRes.ok) {
     return jsonError('Error al establecer operador', 500, request);
   }
+
+  // Auditoría: login exitoso
+  try {
+    await registrarAuditoria(env, { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' }, {
+      usuarioId: operator.id, usuarioNombre: operator.nombre, usuarioRol: operator.rol,
+      categoria: 'AUTH', accion: 'LOGIN_EXITOSO', descripcion: `${operator.nombre} inició sesión`,
+      entidadTipo: 'usuario', entidadId: operator.id, meta: { ip },
+    });
+  } catch {}
 
   return json({
     ok: true,
@@ -1587,6 +1644,16 @@ async function handleGuardarCotizacion(request, env) {
         return jsonError(`Error al insertar items: ${err}`, 500, request);
       }
     }
+
+    // Auditoría
+    try {
+      await registrarAuditoria(env, supaHeaders, {
+        usuarioId: user.operator_id, usuarioNombre: user.operator_nombre || 'Operador', usuarioRol: user.operator_rol || 'vendedor',
+        categoria: 'COTIZACION', accion: cotizacionId ? 'EDITAR_COTIZACION' : 'CREAR_COTIZACION',
+        descripcion: cotizacionId ? `Cotización ${id} editada` : `Cotización ${id} creada`,
+        entidadTipo: 'cotizacion', entidadId: id, meta: { items_count: items.length, cliente_id: headerData.cliente_id },
+      });
+    } catch {}
 
     return new Response(JSON.stringify({ id }), {
       headers: { 'Content-Type': 'application/json', ...corsHeaders(request) },
@@ -2496,6 +2563,15 @@ async function handleRegistrarAbono(request, env) {
       body: JSON.stringify({ saldo_pendiente: nuevoSaldo }),
     });
 
+    // 4. Auditoría
+    try {
+      await registrarAuditoria(env, headers, {
+        usuarioId: user.operator_id, usuarioNombre: user.operator_nombre || 'Supervisor', usuarioRol: 'supervisor',
+        categoria: 'FINANZAS', accion: 'REGISTRAR_ABONO', descripcion: `Abono de $${monto} registrado para cliente ${clienteId}`,
+        entidadTipo: 'cliente', entidadId: clienteId, meta: { monto, forma_pago: formaPago, saldo_anterior: saldoActual, saldo_nuevo: nuevoSaldo },
+      });
+    } catch {}
+
     return json({ id: abono.id, nuevoSaldo }, 200, request);
   } catch (e) {
     return jsonError(e.message || 'Error al registrar abono', 500, request);
@@ -2615,6 +2691,16 @@ async function handleAplicarMovimientoLote(request, env) {
     });
     const movResults = await insRes.json();
     const numero = movResults?.[0]?.numero || null;
+
+    // Auditoría
+    try {
+      await registrarAuditoria(env, headers, {
+        usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
+        categoria: 'INVENTARIO', accion: tipo === 'ingreso' ? 'INGRESO_INVENTARIO' : 'EGRESO_INVENTARIO',
+        descripcion: `${tipo === 'ingreso' ? 'Ingreso' : 'Egreso'} de ${items.length} producto(s): ${motivo}`,
+        entidadTipo: 'inventario', entidadId: loteId, meta: { tipo, motivo, motivo_tipo, items_count: items.length, numero },
+      });
+    } catch {}
 
     return json({ lote_id: loteId, numero }, 200, request);
   } catch (e) {
@@ -2784,6 +2870,16 @@ async function handleSaveConfig(request, env) {
     const text = await res.text();
     return jsonError(text || `Error ${res.status}`, res.status, request);
   }
+
+  // Auditoría
+  try {
+    await registrarAuditoria(env, { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' }, {
+      usuarioId: user.operator_id || user.id, usuarioNombre: user.operator_nombre || 'Supervisor', usuarioRol: user.operator_rol || 'supervisor',
+      categoria: 'CONFIG', accion: 'GUARDAR_CONFIG', descripcion: `Configuración del negocio actualizada`,
+      entidadTipo: 'configuracion', entidadId: '1', meta: { campos: Object.keys(campos) },
+    });
+  } catch {}
+
   return json({ ok: true }, 200, request);
 }
 
