@@ -31,6 +31,12 @@ const ESTADOS_FILTRO = [
   { valor: 'anulada',    label: 'Canceladas' },
 ]
 
+const ESTADOS_FILTRO_LOGISTICA = [
+  { valor: '',           label: 'Todas' },
+  { valor: 'despachada', label: 'Por entregar' },
+  { valor: 'entregada',  label: 'Entregadas' },
+]
+
 function SkeletonDespachos() {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
@@ -95,6 +101,7 @@ export default function DespachosView() {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const esAdministracion = perfil?.rol === 'administracion'
+  const esLogistica = perfil?.rol === 'logistica'
   const esPrivilegiado = esSupervisor || esAdministracion
   const rol = perfil?.rol || 'vendedor'
   const { tasaEfectiva } = useTasaCambio()
@@ -159,10 +166,10 @@ export default function DespachosView() {
       {/* Encabezado */}
       <PageHeader
         icon={PackageCheck}
-        title="Notas de Despacho"
-        subtitle={isLoading ? 'Cargando...' : `${despachosFiltrados.length} despacho${despachosFiltrados.length !== 1 ? 's' : ''}`}
+        title={esLogistica ? 'Entregas' : 'Notas de Despacho'}
+        subtitle={isLoading ? 'Cargando...' : `${despachosFiltrados.length} ${esLogistica ? 'entrega' : 'despacho'}${despachosFiltrados.length !== 1 ? 's' : ''}`}
         action={
-          <PlantillaDropdown config={config} />
+          !esLogistica && <PlantillaDropdown config={config} />
         }
       />
 
@@ -172,7 +179,7 @@ export default function DespachosView() {
       {/* Filtros de estado + vendedor */}
       <div className="flex items-center gap-2 flex-wrap">
         <Filter size={14} className="text-slate-400 shrink-0" />
-        {ESTADOS_FILTRO.map(({ valor, label }) => (
+        {(esLogistica ? ESTADOS_FILTRO_LOGISTICA : ESTADOS_FILTRO).map(({ valor, label }) => (
           <button key={valor} onClick={() => setEstadoFiltro(valor)}
             className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
               estadoFiltro === valor

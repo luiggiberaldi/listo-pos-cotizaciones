@@ -39,8 +39,9 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     ? `COT-${String(despacho.cotizacion.numero).padStart(5, '0')}${despacho.cotizacion.version > 1 ? ` Rev.${despacho.cotizacion.version}` : ''}`
     : '—'
 
-  const canDespachar = esSupervisor && despacho.estado === 'pendiente'
-  const canAnular = esSupervisor && (despacho.estado === 'pendiente' || despacho.estado === 'despachada')
+  const canDespachar = esPrivilegiado && despacho.estado === 'pendiente'
+  const canEntregar = (esPrivilegiado || perfil?.rol === 'logistica') && despacho.estado === 'despachada'
+  const canAnular = esPrivilegiado && (despacho.estado === 'pendiente' || despacho.estado === 'despachada')
   const canReciclar = esSupervisor && despacho.estado === 'anulada' && onReciclar
 
   function seleccionarMoneda(moneda) {
@@ -209,7 +210,11 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   function getPrimaryAction() {
     if (canDespachar) {
       const cfg = getDespachoAction('despachar', rol)
-      return { key: 'despachar', label: cfg.label || 'Despachar', icon: Truck, action: () => setAccionPendiente({ id: despacho.id, estado: 'entregada', actionConfig: cfg }) }
+      return { key: 'despachar', label: cfg.label || 'Aprobar despacho', icon: Truck, action: () => setAccionPendiente({ id: despacho.id, estado: 'despachada', actionConfig: cfg }) }
+    }
+    if (canEntregar) {
+      const cfg = getDespachoAction('entregar', rol)
+      return { key: 'entregar', label: cfg?.label || 'Marcar entregada', icon: CheckCircle, action: () => setAccionPendiente({ id: despacho.id, estado: 'entregada', actionConfig: cfg || { label: 'Marcar entregada', confirm: '¿Confirmar entrega realizada?', color: 'emerald' } }) }
     }
     if (canReciclar) {
       const cfg = getDespachoAction('reciclar', rol)
@@ -229,7 +234,11 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     actions.push({ label: 'Descargar PDF', icon: Download, onClick: descargarPDF, disabled: pdfLoading })
     if (canDespachar && primaryAction.key !== 'despachar') {
       const cfg = getDespachoAction('despachar', rol)
-      actions.push({ label: cfg.label || 'Despachar', icon: Truck, onClick: () => setAccionPendiente({ id: despacho.id, estado: 'entregada', actionConfig: cfg }), textColor: 'text-emerald-600' })
+      actions.push({ label: cfg.label || 'Aprobar despacho', icon: Truck, onClick: () => setAccionPendiente({ id: despacho.id, estado: 'despachada', actionConfig: cfg }), textColor: 'text-blue-600' })
+    }
+    if (canEntregar && primaryAction.key !== 'entregar') {
+      const cfg = getDespachoAction('entregar', rol)
+      actions.push({ label: cfg?.label || 'Marcar entregada', icon: CheckCircle, onClick: () => setAccionPendiente({ id: despacho.id, estado: 'entregada', actionConfig: cfg || { label: 'Marcar entregada', confirm: '¿Confirmar entrega realizada?', color: 'emerald' } }), textColor: 'text-emerald-600' })
     }
     if (canReciclar && primaryAction.key !== 'reciclar')
       actions.push({ label: getDespachoAction('reciclar', rol).label || 'Reutilizar', icon: RefreshCcw, onClick: () => onReciclar(despacho), textColor: 'text-teal-600' })
@@ -393,12 +402,23 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         {canDespachar && (
           <button onClick={() => {
               const cfg = getDespachoAction('despachar', rol)
+              setAccionPendiente({ id: despacho.id, estado: 'despachada', actionConfig: cfg })
+            }}
+            disabled={estadoCambiando}
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50">
+            {estadoCambiando ? <Loader2 size={13} className="animate-spin" /> : <Truck size={13} />}
+            {getDespachoAction('despachar', rol).label || 'Aprobar despacho'}
+          </button>
+        )}
+        {canEntregar && (
+          <button onClick={() => {
+              const cfg = getDespachoAction('entregar', rol) || { label: 'Marcar entregada', confirm: '¿Confirmar entrega realizada?', color: 'emerald' }
               setAccionPendiente({ id: despacho.id, estado: 'entregada', actionConfig: cfg })
             }}
             disabled={estadoCambiando}
             className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-50">
-            {estadoCambiando ? <Loader2 size={13} className="animate-spin" /> : <Truck size={13} />}
-            {getDespachoAction('despachar', rol).label || 'Despachar'}
+            {estadoCambiando ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle size={13} />}
+            Marcar entregada
           </button>
         )}
         {canReciclar && (

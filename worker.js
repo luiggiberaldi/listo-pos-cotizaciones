@@ -445,7 +445,7 @@ async function verifyAuth(request, env) {
 // UUID especial para Super Admin virtual (easter egg del logo)
 const SUPER_ADMIN_UUID = '00000000-0000-0000-0000-000000000000'
 
-// Obtiene el rol del operador (supervisor | vendedor | administracion | null)
+// Obtiene el rol del operador (supervisor | vendedor | administracion | logistica | null)
 async function getOperatorRole(operatorId, env) {
   if (!operatorId) return null;
   if (operatorId === SUPER_ADMIN_UUID) return 'supervisor'; // Super Admin virtual
@@ -2126,7 +2126,7 @@ async function handleCrearDespacho(request, env) {
 // 3. ACTUALIZAR ESTADO DESPACHO
 // ══════════════════════════════════════════════════════════════════════════════
 async function handleActualizarEstadoDespacho(request, env) {
-  const v = await validateOperator(request, env, { requirePrivileged: true });
+  const v = await validateOperator(request, env);
   if (v.error) return v.error;
   const { user, operador, headers } = v;
 
@@ -2135,6 +2135,18 @@ async function handleActualizarEstadoDespacho(request, env) {
   const { despachoId, nuevoEstado } = body;
   if (!despachoId || !nuevoEstado) return jsonError('Faltan campos', 400, request);
   if (!isValidUuid(despachoId)) return jsonError('despachoId inválido', 400, request);
+
+  // Validar permisos por rol y estado destino
+  const rol = operador.rol;
+  const esPrivilegiado = rol === 'supervisor' || rol === 'administracion';
+  const esLogistica = rol === 'logistica';
+  if (!esPrivilegiado && !esLogistica) {
+    return jsonError('No tienes permiso para cambiar el estado del despacho', 403, request);
+  }
+  // Logística solo puede marcar entregada
+  if (esLogistica && nuevoEstado !== 'entregada') {
+    return jsonError('Logística solo puede marcar despachos como entregados', 403, request);
+  }
 
   try {
     // 1. Obtener despacho

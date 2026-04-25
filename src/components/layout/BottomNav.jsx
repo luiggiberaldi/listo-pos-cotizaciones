@@ -7,22 +7,23 @@ import { PackageCheck, Truck, DollarSign, BarChart3, Settings, AlertCircle } fro
 
 const BOTTOM_ITEMS = [
   { path: '/', label: 'Inicio', icon: LayoutDashboard },
-  { path: '/cotizaciones', label: 'Cotizaciones', icon: FileText, labelByRole: { administracion: 'Despachos' } },
-  { path: '/clientes', label: 'Clientes', icon: Users },
-  { path: '/inventario', label: 'Inventario', icon: Package },
+  { path: '/cotizaciones', label: 'Cotizaciones', icon: FileText, labelByRole: { administracion: 'Despachos' }, excludeRoles: ['logistica'] },
+  { path: '/despachos', label: 'Despachos', icon: PackageCheck, labelByRole: { logistica: 'Entregas' }, onlyRoles: ['logistica'] },
+  { path: '/clientes', label: 'Clientes', icon: Users, excludeRoles: ['logistica'] },
+  { path: '/inventario', label: 'Inventario', icon: Package, excludeRoles: ['logistica'] },
 ]
 
 const MORE_ITEMS = [
-  { path: '/despachos', label: 'Despachos', icon: PackageCheck },
-  { path: '/transportistas', label: 'Transportistas', icon: Truck, excludeRoles: ['administracion'] },
-  { path: '/comisiones', label: 'Comisiones', icon: DollarSign },
+  { path: '/despachos', label: 'Despachos', icon: PackageCheck, excludeRoles: ['logistica'] },
+  { path: '/transportistas', label: 'Transportistas', icon: Truck, excludeRoles: ['administracion', 'logistica'] },
+  { path: '/comisiones', label: 'Comisiones', icon: DollarSign, excludeRoles: ['logistica'] },
   { path: '/reportes', label: 'Reportes', icon: BarChart3, requiresPrivileged: true },
   { path: '/configuracion', label: 'Configuración', icon: Settings, supervisorOnly: true },
 ]
 
-export default function BottomNav({ esSupervisor, esAdministracion = false }) {
+export default function BottomNav({ esSupervisor, esAdministracion = false, rol: rolProp }) {
   const esPrivilegiado = esSupervisor || esAdministracion
-  const rol = esAdministracion ? 'administracion' : esSupervisor ? 'supervisor' : 'vendedor'
+  const rol = rolProp || (esAdministracion ? 'administracion' : esSupervisor ? 'supervisor' : 'vendedor')
   const [showMore, setShowMore] = useState(false)
 
   return (
@@ -71,7 +72,11 @@ export default function BottomNav({ esSupervisor, esAdministracion = false }) {
         }}>
         <div className="flex items-center justify-around px-2 h-16">
           {BOTTOM_ITEMS
-            .filter(item => !item.excludeRoles || !item.excludeRoles.includes(rol))
+            .filter(item => {
+              if (item.excludeRoles && item.excludeRoles.includes(rol)) return false
+              if (item.onlyRoles && !item.onlyRoles.includes(rol)) return false
+              return true
+            })
             .map(({ path, label, labelByRole, icon: Icon }) => {
             const displayLabel = labelByRole?.[rol] || label
             return (

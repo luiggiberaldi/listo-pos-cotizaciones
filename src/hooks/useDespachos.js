@@ -20,16 +20,19 @@ export const DESPACHOS_KEY = ['despachos']
 export function useDespachos({ estado = '' } = {}) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
+  const esLogistica = perfil?.rol === 'logistica'
   const esPrivilegiado = esSupervisor || perfil?.rol === 'administracion'
+  const veTodos = esPrivilegiado || esLogistica
 
   return useQuery({
-    queryKey: [...DESPACHOS_KEY, estado, esPrivilegiado, perfil?.id],
+    queryKey: [...DESPACHOS_KEY, estado, veTodos, perfil?.id],
     queryFn: async () => {
       let query = supabase
         .from('notas_despacho')
         .select(`
           id, numero, cotizacion_id, estado,
           total_usd, flete_usd, notas, forma_pago,
+          referencia_pago, forma_pago_cliente,
           creado_en, despachada_en, entregada_en,
           cliente_id, vendedor_id, transportista_id,
           transportista:transportistas!notas_despacho_transportista_id_fkey(id, nombre, rif, telefono, color, zona_cobertura, vehiculo, placa_chuto, placa_batea),
@@ -40,8 +43,10 @@ export function useDespachos({ estado = '' } = {}) {
 
       if (estado) query = query.eq('estado', estado)
 
-      // Vendedores solo ven sus propios despachos
-      if (!esPrivilegiado) query = query.eq('vendedor_id', perfil.id)
+      // Vendedores solo ven sus propios despachos; logística/admin/supervisor ven todos
+      if (!veTodos) query = query.eq('vendedor_id', perfil.id)
+      // Logística solo ve despachadas y entregadas
+      if (esLogistica && !estado) query = query.in('estado', ['despachada', 'entregada'])
 
       const { data, error } = await query
       if (error) throw error

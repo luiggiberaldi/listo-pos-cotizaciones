@@ -153,13 +153,13 @@ function RutaSupervisorOAdmin() {
 }
 
 // ─── Ruta que excluye un rol específico ──────────────────────────────────────
-// Administracion NO puede ver cotizaciones ni transportistas
+// Administracion y logistica NO pueden ver transportistas
 function RutaExcluyeAdmin() {
   const { perfil, initialized } = useAuthStore()
 
   if (!initialized) return <PantallaCarga />
   if (!perfil) return <Navigate to="/login" replace />
-  if (perfil.rol === 'administracion') return <Navigate to="/" replace />
+  if (perfil.rol === 'administracion' || perfil.rol === 'logistica') return <Navigate to="/" replace />
   return <Outlet />
 }
 
@@ -200,11 +200,11 @@ function AppRoutes() {
             <Route path="/clientes"       element={<ClientesView />} />
             <Route path="/despachos"      element={<DespachosView />} />
             <Route path="/inventario"     element={<InventarioView />} />
+            <Route path="/cotizaciones"   element={<CotizacionesView />} />
             <Route path="/comisiones"    element={<ComisionesView />} />
 
-            {/* Cotizaciones y transportistas: todos menos administracion */}
+            {/* Transportistas: excluye admin y logistica */}
             <Route element={<RutaExcluyeAdmin />}>
-              <Route path="/cotizaciones"   element={<CotizacionesView />} />
               <Route path="/transportistas" element={<TransportistasView />} />
             </Route>
 

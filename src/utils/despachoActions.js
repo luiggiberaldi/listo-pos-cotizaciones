@@ -8,21 +8,45 @@ export const ACCIONES = {
   },
   despachar: {
     supervisor: {
-      label: 'Despachar y entregar',
-      confirmTitle: '¿Despachar y marcar como entregada?',
-      confirmMessage: 'Se calculará la comisión del vendedor y se cerrará el despacho.',
-      confirmDetails: 'Esta acción no se puede deshacer.',
-      confirmText: 'Sí, despachar',
+      label: 'Aprobar despacho',
+      confirmTitle: '¿Aprobar este despacho?',
+      confirmMessage: 'Se calculará la comisión del vendedor.',
+      confirmDetails: 'El despacho pasará a estar listo para entrega.',
+      confirmText: 'Sí, aprobar',
+      variant: 'success',
+    },
+    administracion: {
+      label: 'Aprobar despacho',
+      confirmTitle: '¿Aprobar este despacho?',
+      confirmMessage: 'Se calculará la comisión del vendedor.',
+      confirmDetails: 'El despacho pasará a estar listo para entrega.',
+      confirmText: 'Sí, aprobar',
       variant: 'success',
     },
   },
-  entregada: {
+  entregar: {
     supervisor: {
       label: 'Marcar entregada',
       confirmTitle: '¿Marcar como entregada?',
-      confirmMessage: 'Se calculará la comisión del vendedor y se cerrará el despacho.',
+      confirmMessage: 'Se confirmará la entrega del material al cliente.',
       confirmDetails: 'Esta acción no se puede deshacer.',
       confirmText: 'Sí, entregada',
+      variant: 'success',
+    },
+    administracion: {
+      label: 'Marcar entregada',
+      confirmTitle: '¿Marcar como entregada?',
+      confirmMessage: 'Se confirmará la entrega del material al cliente.',
+      confirmDetails: 'Esta acción no se puede deshacer.',
+      confirmText: 'Sí, entregada',
+      variant: 'success',
+    },
+    logistica: {
+      label: 'Confirmar entrega',
+      confirmTitle: '¿Confirmar entrega realizada?',
+      confirmMessage: 'Se marcará el despacho como entregado al cliente.',
+      confirmDetails: '',
+      confirmText: 'Sí, confirmar entrega',
       variant: 'success',
     },
   },
@@ -40,6 +64,14 @@ export const ACCIONES = {
       confirmTitle: '¿Anular este despacho?',
       confirmMessage: 'Se restaurará el stock de todos los productos al inventario.',
       confirmDetails: 'Esta acción no se puede deshacer. El despacho quedará anulado permanentemente.',
+      confirmText: 'Sí, anular',
+      variant: 'danger',
+    },
+    administracion: {
+      label: 'Anular despacho',
+      confirmTitle: '¿Anular este despacho?',
+      confirmMessage: 'Se restaurará el stock de todos los productos al inventario.',
+      confirmDetails: 'Esta acción no se puede deshacer.',
       confirmText: 'Sí, anular',
       variant: 'danger',
     },
@@ -68,8 +100,8 @@ export function getDespachoAction(key, rol) {
 
 // Colores para el botón primario móvil según tipo de acción
 export const PRIMARY_ACTION_COLORS = {
-  despachar:  { bg: 'bg-indigo-500', text: 'text-white', active: 'active:bg-indigo-600' },
-  entregada:  { bg: 'bg-emerald-500', text: 'text-white', active: 'active:bg-emerald-600' },
+  despachar:  { bg: 'bg-blue-500', text: 'text-white', active: 'active:bg-blue-600' },
+  entregar:   { bg: 'bg-emerald-500', text: 'text-white', active: 'active:bg-emerald-600' },
   reciclar:   { bg: 'bg-teal-500', text: 'text-white', active: 'active:bg-teal-600' },
   ver:        { bg: 'bg-slate-100', text: 'text-slate-700', active: 'active:bg-slate-200' },
   pdf:        { bg: 'bg-slate-100', text: 'text-slate-700', active: 'active:bg-slate-200' },

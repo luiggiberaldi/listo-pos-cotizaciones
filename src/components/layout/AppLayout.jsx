@@ -49,12 +49,12 @@ function NotifIcon({ type }) {
 // ─── Definición de rutas de navegación ────────────────────────────────────────
 const NAV_TODOS = [
   { path: '/',               label: 'Inicio',         icono: LayoutDashboard },
-  { path: '/clientes',       label: 'Clientes',       icono: Users },
-  { path: '/cotizaciones',   label: 'Cotizaciones',   icono: FileText,   labelByRole: { administracion: 'Despachos' } },
-  { path: '/despachos',      label: 'Despachos',      icono: PackageCheck },
-  { path: '/inventario',     label: 'Inventario',     icono: Package },
-  { path: '/transportistas', label: 'Transportistas', icono: Truck,      excludeRoles: ['administracion'] },
-  { path: '/comisiones',     label: 'Comisiones',     icono: DollarSign },
+  { path: '/clientes',       label: 'Clientes',       icono: Users,          excludeRoles: ['logistica'] },
+  { path: '/cotizaciones',   label: 'Cotizaciones',   icono: FileText,       labelByRole: { administracion: 'Despachos' }, excludeRoles: ['logistica'] },
+  { path: '/despachos',      label: 'Despachos',      icono: PackageCheck,   labelByRole: { logistica: 'Entregas' } },
+  { path: '/inventario',     label: 'Inventario',     icono: Package,        excludeRoles: ['logistica'] },
+  { path: '/transportistas', label: 'Transportistas', icono: Truck,          excludeRoles: ['administracion', 'logistica'] },
+  { path: '/comisiones',     label: 'Comisiones',     icono: DollarSign,     excludeRoles: ['logistica'] },
 ]
 
 const NAV_SUPERVISOR = [
@@ -68,8 +68,9 @@ function BadgeRol({ rol }) {
     supervisor:      'bg-sky-500/20 text-sky-300 border border-sky-500/30',
     vendedor:        'bg-teal-500/20 text-teal-300 border border-teal-500/30',
     administracion:  'bg-amber-500/20 text-amber-300 border border-amber-500/30',
+    logistica:       'bg-purple-500/20 text-purple-300 border border-purple-500/30',
   }
-  const textos = { supervisor: 'Supervisor', vendedor: 'Vendedor', administracion: 'Administración' }
+  const textos = { supervisor: 'Supervisor', vendedor: 'Vendedor', administracion: 'Administración', logistica: 'Logística' }
   return (
     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${estilos[rol] ?? 'bg-white/10 text-white/50'}`}>
       {textos[rol] ?? rol}
@@ -474,7 +475,7 @@ export default function AppLayout() {
       </main>
 
       {/* ── Bottom Navigation — solo móvil ──────────────────────────────── */}
-      <BottomNav esSupervisor={esSupervisor} esAdministracion={esAdministracion} />
+      <BottomNav esSupervisor={esSupervisor} esAdministracion={esAdministracion} rol={perfil?.rol} />
 
       {/* ── FAB Cotización Rápida — solo móvil, no para administracion ── */}
       {!esAdministracion && <QuickQuoteFAB />}
