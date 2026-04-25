@@ -256,7 +256,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             backgroundSize: '12px 12px',
           }} />
         <div className="relative z-10 min-w-0">
-          <p className="font-black text-white text-sm font-mono leading-tight drop-shadow">{numDisplay}</p>
+          <p className="font-black text-white font-mono leading-tight drop-shadow" style={{fontSize:'20px'}}>{numDisplay}</p>
         </div>
         <div className="relative z-10 shrink-0">
           <EstadoBadge estado={despacho.estado} />

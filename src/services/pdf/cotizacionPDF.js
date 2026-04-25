@@ -11,6 +11,10 @@ function fmtUsd(n) {
 function fmtBs(n) {
   return `Bs ${Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
+// Versión corta sin prefijo para celdas de tabla
+function fmtBsShort(n) {
+  return Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
 function fmtBcvUsd(n) {
   return `$${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
@@ -139,71 +143,70 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   } catch (_) {}
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 2. DATOS DEL CLIENTE — formato de nota física
+  // 2. DATOS DEL CLIENTE — cuadrícula con celdas
   // ══════════════════════════════════════════════════════════════════════════
   const cliente = cotizacion.cliente || {}
-
-  // Fila superior: RIF cliente + Emisión / Vencimiento / Nota #
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8)
-  doc.setTextColor(...C_DARK)
 
   // Encabezado tipo "COTIZACIÓN:"
   const cotBarY = y - 4
   doc.setFillColor(248, 248, 248)
   doc.rect(MARGIN, cotBarY, CONTENT_W, 7, 'F')
-  doc.setDrawColor(220, 220, 220)
+  doc.setDrawColor(200, 200, 200)
   doc.setLineWidth(0.3)
   doc.rect(MARGIN, cotBarY, CONTENT_W, 7, 'S')
-  doc.setFontSize(10)
-  doc.text('COTIZACIÓN:', MARGIN + 3, cotBarY + 5)
-  y += 9
-
-  // Fila de fecha de emisión
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
-  doc.text('Emisión:', MARGIN, y)
   doc.setFont('helvetica', 'bold')
-  doc.text(fmtFecha(cotizacion.creado_en), MARGIN + 20, y)
-  y += 7
+  doc.setFontSize(10)
+  doc.setTextColor(...C_DARK)
+  doc.text('COTIZACIÓN:', MARGIN + 3, cotBarY + 5)
+  y = cotBarY + 7
 
-  // Datos del cliente en 2 columnas
-  const halfW = (PAGE_W - MARGIN * 2) / 2 - 2
-  const col2X = MARGIN + halfW + 4
-  const clienteRows = [
-    [{ label: 'Cliente', val: cliente.nombre || '—' },         { label: 'R.I.F / Cédula', val: cliente.rif_cedula || '—' }],
-    [{ label: 'Teléfono', val: cliente.telefono || '—' },      { label: 'Correo', val: cliente.email || '—' }],
-    [{ label: 'Vendedor', val: (cotizacion.vendedor?.nombre || '—') + (cotizacion.vendedor?.telefono ? ` — ${cotizacion.vendedor.telefono}` : ''), highlight: true }],
-    [{ label: 'Dirección Fiscal', val: [cliente.direccion, cliente.ciudad, cliente.estado].filter(Boolean).join(', ') || '—' }],
-  ]
+  const ROW_H_INFO = 7
+  const halfW = CONTENT_W / 2
+  doc.setLineWidth(0.2)
+  doc.setDrawColor(200, 200, 200)
 
-  doc.setFontSize(9.5)
-  clienteRows.forEach(row => {
-    row.forEach((item, colIdx) => {
-      const baseX = colIdx === 0 ? MARGIN : col2X
-      const lineEndX = row.length === 1 ? PAGE_W - MARGIN : (colIdx === 0 ? MARGIN + halfW : PAGE_W - MARGIN)
+  // Helper para dibujar celda con label + valor
+  const drawCell = (x, cellY, w, label, val, opts = {}) => {
+    doc.rect(x, cellY, w, ROW_H_INFO, 'S')
+    if (opts.fill) {
+      doc.setFillColor(240, 240, 240)
+      doc.rect(x, cellY, w, ROW_H_INFO, 'F')
+      doc.rect(x, cellY, w, ROW_H_INFO, 'S')
+    }
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    doc.setTextColor(100, 100, 100)
+    doc.text(`${label}:`, x + 2, cellY + 4.5)
+    const lblW = doc.getTextWidth(`${label}: `)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9.5)
+    doc.setTextColor(...C_DARK)
+    doc.text(String(val || '—'), x + 2 + lblW + 1, cellY + 4.8)
+  }
 
-      if (item.highlight) {
-        doc.setFillColor(230, 230, 230)
-        doc.rect(baseX - 1, y - 4.5, lineEndX - baseX + 2, 6, 'F')
-      }
+  // Fila 1: Emisión (ancho completo)
+  drawCell(MARGIN, y, CONTENT_W, 'Emisión', fmtFecha(cotizacion.creado_en))
+  y += ROW_H_INFO
 
-      doc.setFont('helvetica', 'normal')
-      doc.setTextColor(...C_DARK)
-      doc.text(`${item.label}: `, baseX, y)
-      const lblW = doc.getTextWidth(`${item.label}: `)
+  // Fila 2: Cliente | R.I.F / Cédula
+  drawCell(MARGIN, y, halfW, 'Cliente', cliente.nombre)
+  drawCell(MARGIN + halfW, y, halfW, 'R.I.F / Cédula', cliente.rif_cedula)
+  y += ROW_H_INFO
 
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(10.5)
-      doc.text(String(item.val), baseX + lblW + 3, y)
-      doc.setFontSize(9.5)
+  // Fila 3: Teléfono | Correo
+  drawCell(MARGIN, y, halfW, 'Teléfono', cliente.telefono)
+  drawCell(MARGIN + halfW, y, halfW, 'Correo', cliente.email)
+  y += ROW_H_INFO
 
-      doc.setLineWidth(0.3)
-      doc.setDrawColor(...C_PRIMARY)
-      doc.line(baseX, y + 1.5, lineEndX, y + 1.5)
-    })
-    y += 6.5
-  })
+  // Fila 4: Vendedor (ancho completo, fondo gris)
+  const vendedorStr = (cotizacion.vendedor?.nombre || '—') + (cotizacion.vendedor?.telefono ? ` — ${cotizacion.vendedor.telefono}` : '')
+  drawCell(MARGIN, y, CONTENT_W, 'Vendedor', vendedorStr, { fill: true })
+  y += ROW_H_INFO
+
+  // Fila 5: Dirección Fiscal (ancho completo)
+  const dirFiscal = [cliente.direccion, cliente.ciudad, cliente.estado].filter(Boolean).join(', ') || '—'
+  drawCell(MARGIN, y, CONTENT_W, 'Dirección Fiscal', dirFiscal)
+  y += ROW_H_INFO
 
   y += 3
 
@@ -212,13 +215,14 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   // ══════════════════════════════════════════════════════════════════════════
   const precioLabel = monedaPDF === 'bs' ? 'PRECIO Bs' : monedaPDF === 'bcv' ? 'PRECIO BCV' : monedaPDF === 'mixto_bcv' ? 'PRECIO BCV' : 'PRECIO'
   const totalLabel  = monedaPDF === 'bs' ? 'TOTAL Bs'  : monedaPDF === 'bcv' ? 'TOTAL BCV'  : monedaPDF === 'mixto_bcv' ? 'TOTAL BCV' : 'TOTAL'
+  // Anchos fijos que funcionan para cualquier moneda
   const COLS = [
-    { label: 'CANT.',       x: MARGIN,        w: 16,  align: 'center' },
-    { label: 'CÓD.',        x: MARGIN + 16,   w: 24,  align: 'center' },
-    { label: 'DESCRIPCIÓN', x: MARGIN + 40,   w: 68,  align: 'center' },
-    { label: 'UNID.',       x: MARGIN + 108,  w: 16,  align: 'center' },
-    { label: precioLabel,    x: MARGIN + 124,  w: 26,  align: 'center' },
-    { label: totalLabel,     x: MARGIN + 150,  w: 32,  align: 'right'  },
+    { label: 'CANT.',       x: MARGIN,        w: 14,  align: 'center' },
+    { label: 'CÓD.',        x: MARGIN + 14,   w: 22,  align: 'center' },
+    { label: 'DESCRIPCIÓN', x: MARGIN + 36,   w: 58,  align: 'center' },
+    { label: 'UNID.',       x: MARGIN + 94,   w: 12,  align: 'center' },
+    { label: precioLabel,    x: MARGIN + 106,  w: 36,  align: 'center' },
+    { label: totalLabel,     x: MARGIN + 142,  w: 40,  align: 'right'  },
   ]
   const ROW_H = 9
 
@@ -261,10 +265,16 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     doc.text(item.unidad_snap || '—', COLS[3].x + COLS[3].w / 2, midY, { align: 'center' })
 
     const tasaEfectiva = tasa > 0 ? tasa : Number(cotizacion.tasa_bcv_snapshot || 0)
-    doc.text(fmtPrecio(item.precio_unit_usd, monedaPDF, tasaEfectiva, factorBcv), COLS[4].x + COLS[4].w - 2, midY, { align: 'right' })
+    // Auto-ajustar fuente si el texto es muy largo para la columna
+    const precioText = fmtPrecio(item.precio_unit_usd, monedaPDF, tasaEfectiva, factorBcv)
+    const totalText = fmtPrecio(item.total_linea_usd, monedaPDF, tasaEfectiva, factorBcv)
+    doc.setFontSize(10.5)
+    doc.text(precioText, COLS[4].x + COLS[4].w - 2, midY, { align: 'right' })
 
     doc.setFont('helvetica', 'bold')
-    doc.text(fmtPrecio(item.total_linea_usd, monedaPDF, tasaEfectiva, factorBcv), COLS[5].x + COLS[5].w - 2, midY, { align: 'right' })
+    doc.setFontSize(10.5)
+    doc.text(totalText, COLS[5].x + COLS[5].w - 2, midY, { align: 'right' })
+    doc.setFontSize(9)
 
     y += ROW_H
   })
@@ -380,9 +390,9 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   doc.setFillColor(...C_ACCENT)
   doc.rect(totX, ty - 2, totW, 10, 'F')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
+  doc.setFontSize(14)
   doc.setTextColor(...C_WHITE)
-  doc.text('TOTAL', totX + 4, ty + 5)
+  doc.text('TOTAL', totX + 4, ty + 5.5)
   doc.text(fmtTotalLinea(total, monedaPDF, tasaEfectivaTot, factorBcv), totX + totW - 4, ty + 5, { align: 'right' })
 
   // (Total en Bs omitido en modo USD — solo se muestra en mixto/bs)

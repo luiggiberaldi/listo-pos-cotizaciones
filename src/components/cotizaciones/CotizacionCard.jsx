@@ -237,7 +237,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
             backgroundSize: '12px 12px',
           }} />
         <div className="relative z-10 min-w-0">
-          <p className="font-black text-white text-sm font-mono leading-tight drop-shadow">{numDisplay}</p>
+          <p className="font-black text-white font-mono leading-tight drop-shadow" style={{fontSize:'20px'}}>{numDisplay}</p>
         </div>
         <div className="relative z-10 shrink-0 flex flex-col items-end gap-1">
           <EstadoBadge estado={cotizacion.estado} />
@@ -264,14 +264,6 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
             <Calendar size={11} />
             {fmtFecha(cotizacion.creado_en)}
           </span>
-          {cotizacion.valida_hasta && (
-            <>
-              <span className="text-slate-300">·</span>
-              <span className={new Date(cotizacion.valida_hasta) < new Date() ? 'text-red-400' : 'text-slate-400'}>
-                Vence {fmtFecha(cotizacion.valida_hasta)}
-              </span>
-            </>
-          )}
         </div>
       </div>
 

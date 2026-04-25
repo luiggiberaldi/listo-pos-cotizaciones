@@ -3384,47 +3384,132 @@ function isScanRateLimited(ip) {
   return entry.count > 5 // max 5 scans por minuto
 }
 
-// Sinónimos server-side (replica de smartSearch.js para el Worker)
+// ── Sinónimos server-side expandidos (jerga venezolana + inventario) ──────────
 const SCAN_SINONIMOS = {
-  'media': '1/2', 'medio': '1/2', 'cuarto': '1/4', 'octavo': '1/8',
-  'metros': 'mts', 'metro': 'mts', 'centimetros': 'cm', 'milimetros': 'mm',
-  'pulgadas': 'pulg', 'pulgada': 'pulg',
-  'galvanizado': 'galv', 'galvanizada': 'galv',
-  'negro': 'negra', 'negra': 'negro', 'blanco': 'blanca', 'blanca': 'blanco',
-  'lamina': 'laminas', 'laminas': 'lamina',
-  'tubo': 'tubos', 'tubos': 'tubo',
-  'cabilla': 'cabillas', 'cabillas': 'cabilla',
-  'tornillo': 'tornillos', 'tornillos': 'tornillo',
-  'clavo': 'clavos', 'clavos': 'clavo',
-  'conexion': 'conexiones', 'conexiones': 'conexion',
-  'saco': 'sacos', 'sacos': 'saco',
-  'kilo': 'kilos', 'kilos': 'kilo', 'kg': 'kilos',
-  'galon': 'galones', 'galones': 'galon',
-  'anillo': 'anillos', 'anillos': 'anillo',
-  'codo': 'codos', 'codos': 'codo',
-  'te': 'tee', 'tee': 'te',
-  'sifon': 'sifones', 'sifones': 'sifon',
-  'pega': 'pegas', 'pegas': 'pega',
-  'alambre': 'alambres', 'alambres': 'alambre',
-  'perfil': 'perfiles', 'perfiles': 'perfil',
-  'viga': 'vigas', 'vigas': 'viga',
-  'angulo': 'angulos', 'angulos': 'angulo',
-  'valvula': 'valvulas', 'valvulas': 'valvula',
-  'bloque': 'bloques', 'bloques': 'bloque',
-  'arena': 'arenas',
-  'cemento': 'cementos',
+  // Fracciones
+  'media': ['1/2'], 'medio': ['1/2'], 'cuarto': ['1/4'], 'octavo': ['1/8'],
+  // Materiales y jerga venezolana
+  'cabilla': ['cabillas', 'cabilla estriada'], 'cabillas': ['cabilla'],
+  'varilla': ['cabilla', 'cabillas'], 'varillas': ['cabilla'],
+  'platina': ['pletina', 'pletinas'], 'platinas': ['pletina'],
+  'pletina': ['platina', 'platinas'], 'pletinas': ['platina'],
+  'tubo': ['tubos'], 'tubos': ['tubo'],
+  'tuberia': ['tubo', 'tubos'],
+  'lamina': ['lam', 'laminas'], 'laminas': ['lam', 'lamina'], 'lam': ['lamina'],
+  'zinc': ['lamina', 'galv', 'galvanizado', 'galvatecho', 'prepintado'],
+  'teja': ['lamina', 'acerolit', 'galvatecho', 'termopanel'],
+  'tejas': ['lamina', 'acerolit', 'galvatecho', 'termopanel'],
+  'losacero': ['losa acero'], 'losa': ['losacero'],
+  'perfil': ['perfiles', 'vigueta'], 'perfiles': ['perfil'],
+  'vigueta': ['perfil', 'vigueta tipo c'],
+  'cercha': ['cerchas'], 'cerchas': ['cercha'],
+  // Conexiones
+  'codo': ['codos'], 'codos': ['codo'],
+  'tee': ['te'], 'te': ['tee'],
+  'anillo': ['anillos'], 'anillos': ['anillo'],
+  'sifon': ['sifones'], 'sifones': ['sifon'],
+  'union': ['uniones'], 'uniones': ['union'],
+  'tapon': ['tapones'], 'tapones': ['tapon'],
+  'niple': ['niples', 'nipple'], 'niples': ['niple'],
+  'yee': ['ye'], 'ye': ['yee'],
+  'curva': ['curvas'], 'curvas': ['curva'],
+  'reduccion': ['reducciones'], 'reducciones': ['reduccion'],
+  'adaptador': ['adaptadores'],
+  // Pegamentos
+  'pega': ['pegamento', 'pega prof'], 'pegamento': ['pega'],
+  'cemento': ['cemento gris'],
+  'sika': ['sikaflex'], 'sikaflex': ['sika'],
+  // Acabados
+  'galvanizado': ['galv', 'galvanizada'], 'galvanizada': ['galv', 'galvanizado'],
+  'galv': ['galvanizado', 'galvanizada'],
+  'hierro': ['hn', 'hierro negro'], 'hn': ['hierro', 'hierro negro'],
+  'negro': ['negra', 'hn'], 'negra': ['negro'],
+  'blanco': ['blanca'], 'blanca': ['blanco'],
+  'estriada': ['estriado'], 'estriado': ['estriada'],
+  'redondo': ['redonda'], 'redonda': ['redondo'],
+  'cuadrado': ['cuadrada', 'cuad'], 'cuadrada': ['cuadrado'], 'cuad': ['cuadrado'],
+  'rectangular': ['rect'], 'rect': ['rectangular'],
+  'estructural': ['estruc'], 'estruc': ['estructural'],
+  'pulido': ['pulido'],
+  'roscado': ['rosc', 'c/rosc'], 'rosc': ['roscado', 'c/rosc'],
+  'liso': ['lisa'], 'lisa': ['liso'],
+  // Tubos específicos
+  'electrico': ['elec', 'emt', 'conduit'], 'electrica': ['elec', 'electrico'],
+  'elec': ['electrico'], 'conduit': ['elec', 'electrico'], 'emt': ['elec', 'electrico'],
+  'ventilacion': ['vent'], 'vent': ['ventilacion'],
+  'pvc': ['pvc'],
+  // Otros productos
+  'viga': ['vigas'], 'vigas': ['viga'],
+  'angulo': ['angulos'], 'angulos': ['angulo'],
+  'malla': ['mallas', 'truckson'], 'mallas': ['malla'], 'truckson': ['malla'],
+  'alambre': ['alambre galvanizado', 'alambron'],
+  'alambron': ['alambre'],
+  'zuncho': ['zunchos'], 'zunchos': ['zuncho'],
+  'cable': ['cables'], 'cables': ['cable'],
+  'breaker': ['breakers'],
+  'cajetin': ['cajetines'],
+  'disco': ['discos'], 'discos': ['disco'],
+  'electrodo': ['electrodos'], 'electrodos': ['electrodo'],
+  'clavo': ['clavos'], 'clavos': ['clavo'],
+  'tornillo': ['tornillos', 'tor'], 'tornillos': ['tornillo', 'tor'], 'tor': ['tornillo'],
+  'barra': ['barras'], 'barras': ['barra'],
+  'drywall': ['dry wall', 'laminas drywall'],
+  'arvidal': ['arvidal'],
+  'calibre': ['cal'], 'cal': ['calibre'],
+  'valvula': ['valvulas'], 'valvulas': ['valvula'],
+  // Vigas
+  'ipe': ['ipe'], 'ipn': ['ipn'], 'hea': ['hea'], 'heb': ['heb'],
+  'wf': ['wf'], 'upl': ['upl'], 'vp': ['vp'],
+}
+
+// Correcciones de errores tipográficos comunes
+const SCAN_TYPOS = {
+  'cavilla': 'cabilla', 'cavillas': 'cabillas', 'kabilla': 'cabilla', 'kabillas': 'cabillas',
+  'kabiya': 'cabilla', 'cabiya': 'cabilla', 'cabiyas': 'cabillas', 'gavilla': 'cabilla',
+  'cabila': 'cabilla', 'cabilas': 'cabillas',
+  'tuvo': 'tubo', 'tuvos': 'tubos', 'tibo': 'tubo', 'tubp': 'tubo',
+  'lamima': 'lamina', 'lanina': 'lamina', 'lamna': 'lamina', 'laina': 'lamina',
+  'coto': 'codo', 'angilo': 'angulo', 'amgulo': 'angulo', 'anguko': 'angulo', 'abgulo': 'angulo',
+  'biga': 'viga', 'bigas': 'vigas',
+  'pletima': 'pletina', 'platima': 'platina', 'pletna': 'pletina',
+  'clabo': 'clavo', 'clabos': 'clavos', 'clabp': 'clavo',
+  'almabre': 'alambre', 'alhambre': 'alambre', 'alanbre': 'alambre', 'alembre': 'alambre',
+  'cemeto': 'cemento', 'cemnto': 'cemento', 'semento': 'cemento', 'ceemento': 'cemento',
+  'cifon': 'sifon', 'sifo': 'sifon',
+  'peag': 'pega', 'pgea': 'pega', 'pegaa': 'pega',
+  'maya': 'malla', 'mayas': 'mallas', 'maalla': 'malla',
+  'losasero': 'losacero', 'lozacero': 'losacero',
+  'breiker': 'breaker', 'breker': 'breaker', 'braker': 'breaker',
+  'electrofo': 'electrodo', 'electrod': 'electrodo',
+  'perfl': 'perfil', 'perfi': 'perfil',
+  'disko': 'disco', 'dico': 'disco',
+  'zunco': 'zuncho', 'suncho': 'zuncho', 'sunco': 'zuncho',
+  'cajehn': 'cajetin', 'cajehin': 'cajetin',
+  'rejila': 'rejilla', 'rejiya': 'rejilla',
+  'galbanizado': 'galvanizado', 'galvaniado': 'galvanizado',
+  'estrucrural': 'estructural', 'estructiral': 'estructural',
+  'pulifo': 'pulido', 'galvatexo': 'galvatecho', 'galvatehco': 'galvatecho',
+  'termopabel': 'termopanel', 'tremopanel': 'termopanel',
+  'drywal': 'drywall', 'draiwall': 'drywall',
 }
 
 const SCAN_FRACCIONES_MULTI = [
   ['tres octavos', '3/8'], ['cinco octavos', '5/8'],
   ['tres cuartos', '3/4'], ['siete octavos', '7/8'],
+  ['uno y medio', '1 1/2'], ['1 y medio', '1 1/2'], ['1 y media', '1 1/2'],
+  ['2 y medio', '2 1/2'], ['2 y media', '2 1/2'],
+  ['3 y medio', '3 1/2'], ['3 y media', '3 1/2'],
 ]
 
 // Reemplazos multi-palabra que se procesan antes de tokenizar
 const SCAN_REEMPLAZOS_PRE = [
   [/aguas?\s+negras?/gi, 'A/N'],
   [/aguas?\s+blancas?/gi, 'A.F'],
+  [/aguas?\s+frias?/gi, 'A.F'],
+  [/agua\s+caliente/gi, 'A.C'],
+  [/alta\s+presion/gi, 'alta presion'],
   [/(\d+)\s*pulgadas?/gi, '$1"'],
+  [/(\d+)\s*pulg\b/gi, '$1"'],
   // Medidas compuestas: "1 1/2" → "1~1/2" para no separar al tokenizar
   [/(\d+)\s+([\d]+\/[\d]+)/g, '$1~$2'],
   // Quitar prefijos triviales
@@ -3432,13 +3517,19 @@ const SCAN_REEMPLAZOS_PRE = [
   [/\bkilos?\s+de?\s*/gi, ''],
   [/\bgalones?\s+de\s+/gi, ''],
   [/\bgalon\s+de\s+/gi, ''],
+  [/\brollos?\s+de\s+/gi, ''],
+  [/\bmetros?\s+de\s+/gi, ''],
 ]
+
+const SCAN_STOPWORDS = new Set([
+  'de', 'del', 'la', 'el', 'los', 'las', 'un', 'una', 'para', 'con', 'por', 'en', 'al', 'y', 'o', 'que', 'se', 'es',
+])
 
 function scanNormalize(text) {
   return (text || '').toLowerCase()
-    .replace(/[áà]/g, 'a').replace(/[éè]/g, 'e')
-    .replace(/[íì]/g, 'i').replace(/[óò]/g, 'o')
-    .replace(/[úù]/g, 'u').replace(/ñ/g, 'n')
+    .replace(/[áàä]/g, 'a').replace(/[éèë]/g, 'e')
+    .replace(/[íìï]/g, 'i').replace(/[óòö]/g, 'o')
+    .replace(/[úùü]/g, 'u').replace(/ñ/g, 'n')
 }
 
 function scanTokenize(descripcion) {
@@ -3449,31 +3540,41 @@ function scanTokenize(descripcion) {
   for (const [regex, reemplazo] of SCAN_REEMPLAZOS_PRE) {
     q = q.replace(regex, reemplazo)
   }
-  const tokens = q.split(/\s+/).filter(Boolean)
+  const tokens = q.split(/\s+/).filter(t => t && !SCAN_STOPWORDS.has(t))
   return tokens.map(token => {
     // Restaurar medidas compuestas: "1~1/2" → "1 1/2"
     const displayToken = token.replace(/~/g, ' ')
     const variantes = new Set([displayToken])
 
-    // Sinónimos directos
-    const sin = SCAN_SINONIMOS[displayToken]
-    if (sin) variantes.add(sin)
+    // 1. Corrección de typos
+    const corrected = SCAN_TYPOS[displayToken]
+    if (corrected) {
+      variantes.add(corrected)
+      const sins = SCAN_SINONIMOS[corrected]
+      if (sins) sins.forEach(s => variantes.add(s))
+    }
 
-    // Deplural: si termina en 's', agregar sin la 's'
+    // 2. Sinónimos directos (ahora son arrays)
+    const sins = SCAN_SINONIMOS[displayToken]
+    if (sins) sins.forEach(s => variantes.add(s))
+
+    // 3. Deplural: si termina en 's', agregar sin la 's'
     if (displayToken.length > 3 && displayToken.endsWith('s')) {
       const singular = displayToken.slice(0, -1)
       variantes.add(singular)
       const sinS = SCAN_SINONIMOS[singular]
-      if (sinS) variantes.add(sinS)
+      if (sinS) sinS.forEach(s => variantes.add(s))
+      const typoS = SCAN_TYPOS[singular]
+      if (typoS) variantes.add(typoS)
     }
-    // Deplural: si termina en 'es', agregar sin 'es'
+    // 4. Deplural: si termina en 'es', agregar sin 'es'
     if (displayToken.length > 4 && displayToken.endsWith('es')) {
       const base = displayToken.slice(0, -2)
       variantes.add(base)
       const sinB = SCAN_SINONIMOS[base]
-      if (sinB) variantes.add(sinB)
+      if (sinB) sinB.forEach(s => variantes.add(s))
     }
-    // Agregar plural: si NO termina en 's', agregar con 's'
+    // 5. Agregar plural: si NO termina en 's', agregar con 's'
     if (!displayToken.endsWith('s') && displayToken.length > 2) {
       variantes.add(displayToken + 's')
     }

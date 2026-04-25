@@ -334,7 +334,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   }
   doc.text(vStr, MARGIN + tlfLblW + tlfValW + vendLblW + 2, f6Y + rowH / 2 + 1)
 
-  y = f6Y + rowH + 4
+  y = f6Y + rowH + 2
 
   // ══════════════════════════════════════════════════════════════════════════
   // 3. TABLA DE PRODUCTOS
@@ -344,12 +344,12 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const COLS = [
     { label: 'CANT.',       x: MARGIN,        w: 11,  align: 'center' },
     { label: 'CÓD.',        x: MARGIN + 11,   w: 20,  align: 'center' },
-    { label: 'DESCRIPCIÓN', x: MARGIN + 31,   w: 97,  align: 'center' },
-    { label: 'UNID.',       x: MARGIN + 128,  w: 11,  align: 'center' },
-    { label: precioLabel,    x: MARGIN + 139,  w: 22,  align: 'center' },
-    { label: totalLabel,     x: MARGIN + 161,  w: 21,  align: 'right'  },
+    { label: 'DESCRIPCIÓN', x: MARGIN + 31,   w: 75,  align: 'center' },
+    { label: 'UNID.',       x: MARGIN + 106,  w: 11,  align: 'center' },
+    { label: precioLabel,    x: MARGIN + 117,  w: 32,  align: 'center' },
+    { label: totalLabel,     x: MARGIN + 149,  w: 33,  align: 'right'  },
   ]
-  const ROW_H_BASE = 7
+  const ROW_H_BASE = 6.5
 
   // Cabecera tabla
   doc.setFillColor(60, 60, 60)
@@ -371,16 +371,13 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.setDrawColor(200, 200, 200)
 
   items.forEach((item) => {
-    const descLines = doc.splitTextToSize(item.nombre_snap || '', COLS[2].w - 4)
-    const lineCount = Math.min(descLines.length, 3)
-    const ROW_H = Math.max(ROW_H_BASE, lineCount * 4 + 3)
+    const ROW_H = ROW_H_BASE
 
-    if (y > PAGE_H - 55) { doc.addPage(); y = MARGIN }
+    if (y + ROW_H > PAGE_H - 108) { doc.addPage(); y = MARGIN }
 
     doc.rect(MARGIN, y, CONTENT_W, ROW_H, 'S')
     COLS.forEach(col => { doc.line(col.x, y, col.x, y + ROW_H) })
 
-    const midY = y + (lineCount === 1 ? ROW_H / 2 + 1.2 : 4.5)
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
     doc.setTextColor(...C_DARK)
@@ -389,18 +386,30 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     doc.text(String(item.cantidad), COLS[0].x + COLS[0].w / 2, singleMidY, { align: 'center' })
     doc.setFontSize(8)
     doc.text(item.codigo_snap || '—', COLS[1].x + COLS[1].w / 2, singleMidY, { align: 'center' })
+
+    // Descripción — siempre 1 línea, auto-reduce fuente si no cabe
+    const descText = item.nombre_snap || ''
+    const descMaxW = COLS[2].w - 4
+    let descFS = 9
+    doc.setFontSize(descFS)
+    while (descFS > 5 && doc.getTextWidth(descText) > descMaxW) {
+      descFS -= 0.5
+      doc.setFontSize(descFS)
+    }
+    doc.text(descText, COLS[2].x + 2, singleMidY)
     doc.setFontSize(9)
 
-    // Descripción multi-línea
-    for (let li = 0; li < lineCount; li++) {
-      doc.text(descLines[li], COLS[2].x + 2, midY + li * 4)
-    }
-
     doc.text(item.unidad_snap || '—', COLS[3].x + COLS[3].w / 2, singleMidY, { align: 'center' })
-    doc.text(fmtPrecio(item.precio_unit_usd, monedaPDF, tasa, factorBcv), COLS[4].x + COLS[4].w - 2, singleMidY, { align: 'right' })
+
+    const precioText = fmtPrecio(item.precio_unit_usd, monedaPDF, tasa, factorBcv)
+    const totalText = fmtPrecio(item.total_linea_usd, monedaPDF, tasa, factorBcv)
+    doc.setFontSize(10.5)
+    doc.text(precioText, COLS[4].x + COLS[4].w - 2, singleMidY, { align: 'right' })
 
     doc.setFont('helvetica', 'bold')
-    doc.text(fmtPrecio(item.total_linea_usd, monedaPDF, tasa, factorBcv), COLS[5].x + COLS[5].w - 2, singleMidY, { align: 'right' })
+    doc.setFontSize(10.5)
+    doc.text(totalText, COLS[5].x + COLS[5].w - 2, singleMidY, { align: 'right' })
+    doc.setFontSize(9)
 
     y += ROW_H
   })
@@ -484,7 +493,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.rect(MARGIN, totTopY, CONTENT_W, 10, 'F')
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
+  doc.setFontSize(13)
   doc.setTextColor(...C_WHITE)
   doc.text('TOTAL', MARGIN + 4, totTopY + 7)
   doc.text(fmtTotal(total, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, totTopY + 7, { align: 'right' })
@@ -592,7 +601,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
       doc.text(f.label + ':', fx + 2, cellY + 4)
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(9)
-      doc.setTextColor(...C_DARK)
+      doc.setTextColor(0, 0, 0)
       if (f.val) doc.text(f.val, fx + 2, cellY + 9.5)
     })
   }
