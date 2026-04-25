@@ -28,3 +28,13 @@ CREATE POLICY cotizaciones_logistica_select ON public.cotizaciones
 CREATE POLICY clientes_logistica_select ON public.clientes
   FOR SELECT
   USING (public.get_rol_actual() = 'logistica');
+
+-- Permitir a logística leer usuarios (necesario para nombre de vendedor en despachos)
+CREATE POLICY usuarios_logistica_select ON public.usuarios
+  FOR SELECT
+  USING (public.get_rol_actual() = 'logistica');
+
+-- Permitir a logística leer transportistas (necesario para datos de transporte)
+CREATE POLICY transportistas_logistica_select ON public.transportistas
+  FOR SELECT
+  USING (public.get_rol_actual() = 'logistica');
