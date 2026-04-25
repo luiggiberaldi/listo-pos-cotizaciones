@@ -95,7 +95,7 @@ function UserCard({ user, onClick, index }) {
             {nombre}
           </p>
           <span
-            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all duration-300"
+            className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide transition-all duration-300 max-w-full"
             style={{
               background: acc.chip,
               border: `1px solid ${acc.chipBorder}`,
