@@ -634,9 +634,23 @@ function UserSelectStep() {
 // ─── Vista principal ──────────────────────────────────────────────────────────
 // La sesión de Supabase persiste en localStorage. Si el usuario ya inició sesión
 // con email/contraseña, no necesita volver a hacerlo — va directo a selección de operador.
+// Detectar sesión guardada en localStorage de forma síncrona
+// para evitar flash del formulario email/contraseña al recargar
+function haySessionGuardada() {
+  try {
+    const keys = Object.keys(localStorage)
+    const sbKey = keys.find(k => k.startsWith('sb-') && k.endsWith('-auth-token'))
+    if (!sbKey) return false
+    const stored = localStorage.getItem(sbKey)
+    if (!stored) return false
+    const parsed = JSON.parse(stored)
+    return !!(parsed?.access_token || parsed?.user)
+  } catch { return false }
+}
+
 export default function LoginPage() {
   const { user, initialized } = useAuthStore()
-  const [gatePassed, setGatePassed] = useState(false)
+  const [gatePassed, setGatePassed] = useState(() => haySessionGuardada())
 
   useEffect(() => {
     const prev = document.body.style.backgroundColor

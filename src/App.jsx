@@ -114,9 +114,12 @@ function ViewLoader() {
 // Si aún se está verificando la sesión → pantalla de carga
 // Si no hay sesión → redirige a /login
 function RutaProtegida() {
-  const { perfil, initialized } = useAuthStore()
+  const { user, perfil, initialized } = useAuthStore()
 
   if (!initialized) return <PantallaCarga />
+  // Si hay sesión de negocio (user) pero el perfil aún no cargó,
+  // mostrar carga en vez de redirigir a login (evita flash del formulario)
+  if (!perfil && user) return <PantallaCarga />
   if (!perfil) return <Navigate to="/login" replace />
   return <Outlet />
 }
@@ -134,9 +137,10 @@ function RutaPublica() {
 // Requiere sesión activa Y rol supervisor
 // Si el usuario es vendedor → redirige al dashboard
 function RutaSupervisor() {
-  const { perfil, initialized } = useAuthStore()
+  const { user, perfil, initialized } = useAuthStore()
 
   if (!initialized) return <PantallaCarga />
+  if (!perfil && user) return <PantallaCarga />
   if (!perfil) return <Navigate to="/login" replace />
   if (perfil.rol !== 'supervisor' && perfil.rol !== 'desarrollador') return <Navigate to="/" replace />
   return <Outlet />
@@ -145,9 +149,10 @@ function RutaSupervisor() {
 // ─── Ruta para supervisor O administracion ───────────────────────────────────
 // Para secciones compartidas como reportes
 function RutaSupervisorOAdmin() {
-  const { perfil, initialized } = useAuthStore()
+  const { user, perfil, initialized } = useAuthStore()
 
   if (!initialized) return <PantallaCarga />
+  if (!perfil && user) return <PantallaCarga />
   if (!perfil) return <Navigate to="/login" replace />
   if (perfil.rol !== 'supervisor' && perfil.rol !== 'administracion' && perfil.rol !== 'desarrollador') return <Navigate to="/" replace />
   return <Outlet />
@@ -155,9 +160,10 @@ function RutaSupervisorOAdmin() {
 
 // ─── Ruta exclusiva de desarrollador ──────────────────────────────────────────
 function RutaDesarrollador() {
-  const { perfil, initialized } = useAuthStore()
+  const { user, perfil, initialized } = useAuthStore()
 
   if (!initialized) return <PantallaCarga />
+  if (!perfil && user) return <PantallaCarga />
   if (!perfil) return <Navigate to="/login" replace />
   if (perfil.rol !== 'desarrollador') return <Navigate to="/" replace />
   return <Outlet />
@@ -166,9 +172,10 @@ function RutaDesarrollador() {
 // ─── Ruta que excluye un rol específico ──────────────────────────────────────
 // Administracion y logistica NO pueden ver transportistas
 function RutaExcluyeAdmin() {
-  const { perfil, initialized } = useAuthStore()
+  const { user, perfil, initialized } = useAuthStore()
 
   if (!initialized) return <PantallaCarga />
+  if (!perfil && user) return <PantallaCarga />
   if (!perfil) return <Navigate to="/login" replace />
   if (perfil.rol !== 'desarrollador' && (perfil.rol === 'administracion' || perfil.rol === 'logistica')) return <Navigate to="/" replace />
   return <Outlet />
