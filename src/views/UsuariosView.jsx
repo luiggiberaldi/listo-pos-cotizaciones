@@ -129,6 +129,7 @@ function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
           { value: 'administracion', label: 'Administración' },
           { value: 'logistica', label: 'Logística' },
           { value: 'supervisor', label: 'Supervisor' },
+        ]}
         placeholder="Seleccionar rol..."
         disabled={cargando}
         searchable={false}
@@ -235,7 +236,8 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando, coloresUsados = 
           { value: 'vendedor', label: 'Vendedor' },
           { value: 'administracion', label: 'Administración' },
           { value: 'logistica', label: 'Logística' },
-          { value: 'supervisor', label: 'Supervisor' },}
+          { value: 'supervisor', label: 'Supervisor' },
+        ]}
         placeholder="Seleccionar rol..."
         disabled={cargando}
         searchable={false}
