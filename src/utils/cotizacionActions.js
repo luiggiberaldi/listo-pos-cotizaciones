@@ -21,24 +21,6 @@ export const ACCIONES = {
     supervisor: { label: 'Enviar' },
     default:    { label: 'Enviar' },
   },
-  aceptar: {
-    supervisor: {
-      label: 'Aprobar cotización',
-      confirmTitle: '¿Aprobar esta cotización?',
-      confirmMessage: 'El vendedor será notificado y podrá proceder con el despacho.',
-      confirmText: 'Sí, aprobar',
-      variant: 'success',
-    },
-  },
-  rechazar: {
-    supervisor: {
-      label: 'Cliente no aceptó',
-      confirmTitle: '¿El cliente no aceptó?',
-      confirmMessage: 'Se marcará como no aceptada. Puedes reutilizarla después si el cliente cambia de opinión.',
-      confirmText: 'Confirmar',
-      variant: 'warning',
-    },
-  },
   anular: {
     vendedor: {
       label: 'Cancelar',
@@ -81,7 +63,6 @@ export function getAction(key, rol) {
 // Colores para el botón primario móvil según tipo de acción
 export const PRIMARY_ACTION_COLORS = {
   editar:    { bg: 'bg-sky-500', text: 'text-white', active: 'active:bg-sky-600' },
-  aceptar:   { bg: 'bg-emerald-500', text: 'text-white', active: 'active:bg-emerald-600' },
   despachar: { bg: 'bg-indigo-500', text: 'text-white', active: 'active:bg-indigo-600' },
   whatsapp:  { bg: 'bg-emerald-500', text: 'text-white', active: 'active:bg-emerald-600' },
   reciclar:  { bg: 'bg-teal-500', text: 'text-white', active: 'active:bg-teal-600' },

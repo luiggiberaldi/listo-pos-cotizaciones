@@ -226,16 +226,6 @@ export function notifyCotizacionEnviada(numero, clienteNombre, vendedorNombre, t
   )
 }
 
-export function notifyCotizacionAceptada(numero, clienteNombre, totalUsd, currentRole = null) {
-  createNotification(
-    NOTIF_TYPES.COTIZACION_ACEPTADA,
-    'Cotización Aceptada',
-    `Cotización #${numero} — ${clienteNombre} — $${Number(totalUsd).toFixed(2)}`,
-    null,
-    currentRole,
-  )
-}
-
 export function notifyDespachoCreado(numero, clienteNombre, currentRole = null) {
   createNotification(
     NOTIF_TYPES.DESPACHO_CREADO,

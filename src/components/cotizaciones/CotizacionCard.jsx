@@ -1,6 +1,6 @@
 // src/components/cotizaciones/CotizacionCard.jsx
 import { useState, memo } from 'react'
-import { FileText, User, Calendar, Pencil, Ban, CheckCircle, XCircle, FileDown, MessageCircle, Loader2, Truck, ChevronDown, DollarSign, RefreshCw, Eye, Clock, PackageCheck, MoreHorizontal, AlertTriangle, Printer, Check } from 'lucide-react'
+import { FileText, User, Calendar, Pencil, Ban, XCircle, FileDown, MessageCircle, Loader2, Truck, ChevronDown, DollarSign, RefreshCw, Eye, Clock, PackageCheck, MoreHorizontal, AlertTriangle, Printer, Check } from 'lucide-react'
 import EstadoBadge from './EstadoBadge'
 import QuoteFlowIndicator from './QuoteFlowIndicator'
 import MobileActionSheet from './MobileActionSheet'
@@ -31,9 +31,10 @@ async function fetchClienteViaAPI(clienteId) {
   } catch { return null }
 }
 
-export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, onCambiarEstado, onDespachar, onReciclar, tasa = 0 }) {
+export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, onCambiarEstado, onDespachar, onReciclar, onCambiarEstadoDespacho, tasa = 0 }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
+  const esAdministracion = perfil?.rol === 'administracion'
   const rol = perfil?.rol || 'vendedor'
   const esBorrador = cotizacion.estado === 'borrador'
   const esEnviada  = cotizacion.estado === 'enviada'
@@ -176,19 +177,16 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
   const canVersion = !esBorrador && !despachoAnulado && ['enviada', 'aceptada', 'rechazada'].includes(cotizacion.estado) && (!esSupervisor || esPropietario)
   const canPdf = cotizacion.estado !== 'borrador' && cotizacion.estado !== 'anulada'
   const canWhatsApp = !despachoAnulado && (cotizacion.estado === 'enviada' || cotizacion.estado === 'aceptada')
-  const canAcceptReject = esSupervisor && esEnviada
-  const canDespachar = (esSupervisor || esPropietario) && cotizacion.estado === 'aceptada' && onDespachar && !despacho
-  const canAnular = !despachoAnulado && cotizacion.estado !== 'anulada' && cotizacion.estado !== 'vencida' && cotizacion.estado !== 'rechazada' && (esBorrador || (esSupervisor && (esEnviada || (cotizacion.estado === 'aceptada' && !despacho))))
+  const canDespachar = (esSupervisor || esPropietario) && ['enviada', 'aceptada'].includes(cotizacion.estado) && onDespachar && !despacho
+  const canAnular = !despachoAnulado && cotizacion.estado !== 'anulada' && cotizacion.estado !== 'vencida' && cotizacion.estado !== 'rechazada' && (esBorrador || ((esSupervisor || esPropietario) && (esEnviada || (cotizacion.estado === 'aceptada' && !despacho))))
   const canReciclar = esSupervisor && (despachoAnulado || ['rechazada', 'anulada', 'vencida'].includes(cotizacion.estado))
-  const hasSecondaryActions = canAcceptReject || canDespachar || canAnular
+  const hasSecondaryActions = canDespachar || canAnular
 
   // ── Acción primaria para móvil ──
   function getPrimaryAction() {
     if (esBorrador && canEdit)
       return { key: 'editar', label: getAction('editar', rol).label || 'Editar', icon: Pencil, action: () => onEditar(cotizacion) }
-    if (esEnviada && esSupervisor)
-      return { key: 'aceptar', label: getAction('aceptar', rol).label || 'Aprobar', icon: CheckCircle, action: () => onCambiarEstado(cotizacion.id, 'aceptada', cotizacion.numero, cotizacion.cliente?.nombre, cotizacion.total_usd, cotizacion.vendedor_id) }
-    if (cotizacion.estado === 'aceptada' && canDespachar)
+    if (canDespachar)
       return { key: 'despachar', label: getAction('despachar', rol).label || 'Despachar', icon: Truck, action: () => onDespachar(cotizacion) }
     if (canWhatsApp)
       return { key: 'whatsapp', label: 'WhatsApp', icon: MessageCircle, action: handleWhatsApp, loading: waLoading }
@@ -211,10 +209,6 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
       actions.push({ label: 'Descargar PDF', icon: FileDown, onClick: descargarPDF, disabled: pdfLoading })
     if (canWhatsApp && primaryAction.key !== 'whatsapp')
       actions.push({ label: 'Compartir por WhatsApp', icon: MessageCircle, onClick: handleWhatsApp, disabled: waLoading, textColor: 'text-emerald-600' })
-    if (canAcceptReject && primaryAction.key !== 'aceptar') {
-      actions.push({ label: getAction('aceptar', rol).label || 'Aprobar', icon: CheckCircle, onClick: () => onCambiarEstado(cotizacion.id, 'aceptada', cotizacion.numero, cotizacion.cliente?.nombre, cotizacion.total_usd, cotizacion.vendedor_id), textColor: 'text-emerald-600' })
-      actions.push({ label: getAction('rechazar', rol).label || 'Rechazar', icon: XCircle, onClick: () => onCambiarEstado(cotizacion.id, 'rechazada', cotizacion.numero, null, null, cotizacion.vendedor_id), textColor: 'text-orange-600' })
-    }
     if (canDespachar && primaryAction.key !== 'despachar')
       actions.push({ label: getAction('despachar', rol).label || 'Despachar', icon: Truck, onClick: () => onDespachar(cotizacion), textColor: 'text-indigo-600' })
     if (canReciclar && primaryAction.key !== 'reciclar')
@@ -301,8 +295,8 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         </div>
       </div>
 
-      {/* ── Vendedor (solo supervisor) ── */}
-      {esSupervisor && cotizacion.vendedor && (
+      {/* ── Vendedor (supervisor y admin) ── */}
+      {(esSupervisor || esAdministracion) && cotizacion.vendedor && (
         <div className="px-4 pb-3 flex items-center justify-between">
           <span className="text-xs text-slate-400">Vendedor</span>
           <span className="text-xs font-semibold px-2.5 py-1 rounded-full"
@@ -312,7 +306,36 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         </div>
       )}
 
+      {/* ══════════ ADMIN DESPACHO ACTIONS ══════════ */}
+      {esAdministracion && despacho && onCambiarEstadoDespacho && (
+        <div className="mt-auto border-t border-slate-100 px-3 py-2 flex items-center gap-1.5 flex-wrap">
+          <button onClick={() => setShowDetalle(true)}
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-primary hover:bg-primary-light transition-colors">
+            <Eye size={13} /> Ver
+          </button>
+          {despacho.estado === 'pendiente' && (
+            <button onClick={() => onCambiarEstadoDespacho(despacho.id, 'despachada')}
+              className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold text-white bg-blue-500 hover:bg-blue-600 active:bg-blue-700 transition-colors ml-auto">
+              <Check size={13} /> Aprobar despacho
+            </button>
+          )}
+          {despacho.estado === 'despachada' && (
+            <button onClick={() => onCambiarEstadoDespacho(despacho.id, 'entregada')}
+              className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 transition-colors ml-auto">
+              <PackageCheck size={13} /> Marcar entregada
+            </button>
+          )}
+          {['pendiente', 'despachada'].includes(despacho.estado) && (
+            <button onClick={() => onCambiarEstadoDespacho(despacho.id, 'anulada')}
+              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 transition-colors">
+              <Ban size={13} /> Anular
+            </button>
+          )}
+        </div>
+      )}
+
       {/* ══════════ MOBILE ACTIONS (< md) ══════════ */}
+      {!esAdministracion && (
       <div className="md:hidden mt-auto border-t border-slate-100 p-2.5">
         {/* Botón primario — full width, thumb-friendly */}
         <button
@@ -383,8 +406,10 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
           actions={getMobileSheetActions()}
         />
       </div>
+      )}
 
       {/* ══════════ DESKTOP ACTIONS (md+) ══════════ */}
+      {!esAdministracion && (
       <div className="hidden md:flex mt-auto border-t border-slate-100 px-3 py-2 items-center gap-1.5 flex-wrap">
         {/* Ver detalle */}
         <button onClick={() => setShowDetalle(true)}
@@ -471,18 +496,6 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
             {showActions && (
               <div className="absolute right-0 bottom-full mb-1 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
                 onMouseDown={e => e.preventDefault()}>
-                {canAcceptReject && (
-                  <>
-                    <button onClick={() => { onCambiarEstado(cotizacion.id, 'aceptada', cotizacion.numero, cotizacion.cliente?.nombre, cotizacion.total_usd, cotizacion.vendedor_id); setShowActions(false) }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-emerald-700 hover:bg-emerald-50 transition-colors text-left">
-                      <CheckCircle size={14} />{getAction('aceptar', rol).label || 'Aprobar'}
-                    </button>
-                    <button onClick={() => { onCambiarEstado(cotizacion.id, 'rechazada', cotizacion.numero, null, null, cotizacion.vendedor_id); setShowActions(false) }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-orange-600 hover:bg-orange-50 transition-colors text-left">
-                      <XCircle size={14} />{getAction('rechazar', rol).label || 'Rechazar'}
-                    </button>
-                  </>
-                )}
                 {canDespachar && (
                   <button onClick={() => { onDespachar(cotizacion); setShowActions(false) }}
                     className="w-full flex items-center gap-2 px-3 py-2 text-sm text-indigo-600 hover:bg-indigo-50 transition-colors text-left">
@@ -491,7 +504,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
                 )}
                 {canAnular && (
                   <>
-                    {(canAcceptReject || canDespachar) && <div className="my-1 border-t border-slate-100" />}
+                    {canDespachar && <div className="my-1 border-t border-slate-100" />}
                     <button onClick={() => { onAnular(cotizacion); setShowActions(false) }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-500 hover:bg-red-50 transition-colors text-left">
                       <Ban size={14} />{getAction('anular', rol).label || 'Anular'}
@@ -503,6 +516,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
           </div>
         )}
       </div>
+      )}
 
       <DetalleModal
         isOpen={showDetalle}

@@ -754,7 +754,7 @@ async function handleClearOperator(request, env) {
   if (!user?.id) return jsonError('No autenticado', 401, request);
 
   // Clear operator from app_metadata
-  await fetch(`${env.SUPABASE_URL}/auth/v1/admin/users/${user.id}`, {
+  const metaRes = await fetch(`${env.SUPABASE_URL}/auth/v1/admin/users/${user.id}`, {
     method: 'PUT',
     headers: {
       apikey: env.SUPABASE_SERVICE_KEY,
@@ -765,6 +765,8 @@ async function handleClearOperator(request, env) {
       app_metadata: { operator_id: null, operator_rol: null, operator_nombre: null },
     }),
   });
+
+  if (!metaRes.ok) return jsonError('Error al limpiar operador', 500, request);
 
   return json({ ok: true }, 200, request);
 }
@@ -878,7 +880,7 @@ async function handlePush(request, env, url) {
     let body;
     try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
 
-    await fetch(
+    const delRes = await fetch(
       `${env.SUPABASE_URL}/rest/v1/push_subscriptions?usuario_id=eq.${user.operator_id || user.id}&endpoint=eq.${encodeURIComponent(body.endpoint)}`,
       {
         method: 'DELETE',
@@ -888,6 +890,8 @@ async function handlePush(request, env, url) {
         },
       }
     );
+
+    if (!delRes.ok) return jsonError('Error al eliminar suscripción', 500, request);
 
     return json({ ok: true }, 200, request);
   }
@@ -1338,10 +1342,14 @@ async function handleClearInventory(request, env) {
   };
 
   // Borrar kardex (movimientos) antes de productos
-  await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos?id=neq.00000000-0000-0000-0000-000000000000`, {
+  const delKardex = await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos?id=neq.00000000-0000-0000-0000-000000000000`, {
     method: 'DELETE',
     headers: h,
   });
+  if (!delKardex.ok) {
+    const text = await delKardex.text();
+    return jsonError(`Error al borrar kardex: ${text}`, 500, request);
+  }
 
   const res = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=neq.00000000-0000-0000-0000-000000000000`, {
     method: 'DELETE',
@@ -1350,7 +1358,7 @@ async function handleClearInventory(request, env) {
 
   if (!res.ok) {
     const text = await res.text();
-    return jsonError(`Error al borrar: ${text}`, 500, request);
+    return jsonError(`Error al borrar productos: ${text}`, 500, request);
   }
 
   return json({ ok: true }, 200, request);
@@ -1550,6 +1558,7 @@ async function handleReciclarCotizacion(request, env) {
       `${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${cotizacionId}&select=*`,
       { headers: supaHeaders }
     );
+    if (!cotRes.ok) return jsonError('Error al obtener cotización', 500, request);
     const [cotOrig] = await cotRes.json();
     if (!cotOrig) return jsonError('Cotización no encontrada', 404, request);
 
@@ -1565,11 +1574,12 @@ async function handleReciclarCotizacion(request, env) {
       fetch(`${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${user.operator_id}&select=nombre,rol`, { headers: supaHeaders }),
     ]);
 
+    if (!vendRes.ok) return jsonError('Error al buscar vendedor destino', 500, request);
     const [vendDest] = await vendRes.json();
     if (!vendDest) return jsonError('Vendedor destino no existe o está inactivo', 400, request);
 
-    const [vendOrig] = await vendOrigRes.json();
-    const [supData] = await supRes.json();
+    const [vendOrig] = vendOrigRes.ok ? await vendOrigRes.json() : [null];
+    const [supData] = supRes.ok ? await supRes.json() : [null];
 
     // 4. Registrar auditoría ANTES de la mutación
     const numOrigPad = String(cotOrig.numero).padStart(5, '0');
@@ -1604,6 +1614,7 @@ async function handleReciclarCotizacion(request, env) {
       `${env.SUPABASE_URL}/rest/v1/cotizacion_items?cotizacion_id=eq.${cotizacionId}&select=producto_id,codigo_snap,nombre_snap,unidad_snap,cantidad,precio_unit_usd,descuento_pct,total_linea_usd,orden`,
       { headers: supaHeaders }
     );
+    if (!itemsRes.ok) return jsonError('Error al obtener items de cotización', 500, request);
     const items = await itemsRes.json();
 
     if (items.length > 0) {
@@ -1824,13 +1835,15 @@ function supaServiceHeaders(env) {
 }
 
 // Valida auth + operator_id, devuelve { user, operador } o Response de error
-async function validateOperator(request, env, { requireSupervisor = false } = {}) {
+async function validateOperator(request, env, { requireSupervisor = false, requirePrivileged = false } = {}) {
   const user = await verifyAuth(request, env);
   if (!user?.id) return { error: jsonError('No autenticado', 401, request) };
   if (!user.operator_id) return { error: jsonError('No hay operador seleccionado', 400, request) };
 
   const h = supaServiceHeaders(env);
-  const rolFilter = requireSupervisor ? '&rol=eq.supervisor' : '';
+  const rolFilter = requireSupervisor ? '&rol=eq.supervisor'
+    : requirePrivileged ? '&rol=in.(supervisor,administracion)'
+    : '';
   const res = await fetch(
     `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${user.operator_id}&activo=eq.true${rolFilter}&select=id,nombre,rol,color`,
     { headers: h }
@@ -1839,7 +1852,9 @@ async function validateOperator(request, env, { requireSupervisor = false } = {}
   if (!operador) {
     const msg = requireSupervisor
       ? 'Solo supervisores pueden realizar esta acción'
-      : 'Operador no encontrado o inactivo';
+      : requirePrivileged
+        ? 'Solo supervisores o administración pueden realizar esta acción'
+        : 'Operador no encontrado o inactivo';
     return { error: jsonError(msg, 403, request) };
   }
 
@@ -1878,6 +1893,11 @@ async function handleEnviarCotizacion(request, env) {
   const { cotizacionId, tasaBcv } = body;
   if (!cotizacionId || !tasaBcv) return jsonError('Faltan campos: cotizacionId, tasaBcv', 400, request);
   if (!isValidUuid(cotizacionId)) return jsonError('cotizacionId inválido', 400, request);
+
+  const tasaNum = Number(tasaBcv);
+  if (!Number.isFinite(tasaNum) || tasaNum <= 0 || tasaNum > 10000) {
+    return jsonError('Tasa BCV inválida: debe ser un número positivo razonable', 400, request);
+  }
 
   try {
     // 1. Obtener cotización
@@ -1937,7 +1957,7 @@ async function handleCrearDespacho(request, env) {
 
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
-  const { cotizacionId, notas, formaPago, transportistaId, fleteUsd } = body;
+  const { cotizacionId, notas, formaPago, transportistaId, fleteUsd, referenciaPago, formaPagoCliente } = body;
   const flete = Math.max(0, Number(fleteUsd) || 0);
   if (!cotizacionId) return jsonError('Falta cotizacionId', 400, request);
   if (!isValidUuid(cotizacionId)) return jsonError('cotizacionId inválido', 400, request);
@@ -1951,10 +1971,10 @@ async function handleCrearDespacho(request, env) {
     const esSupervisorOp = operador.rol === 'supervisor';
     const esPropietario = cot.vendedor_id === (user.operator_id || user.id);
 
-    // Vendedores solo pueden despachar cotizaciones aceptadas y propias
+    // Vendedores pueden despachar cotizaciones enviadas o aceptadas propias
     if (!esSupervisorOp) {
-      if (cot.estado !== 'aceptada') {
-        return jsonError('Solo puedes despachar cotizaciones ya aceptadas por el supervisor', 400, request);
+      if (!['enviada', 'aceptada'].includes(cot.estado)) {
+        return jsonError('La cotización debe estar enviada o aceptada para despachar', 400, request);
       }
       if (!esPropietario) {
         return jsonError('Solo puedes despachar tus propias cotizaciones', 400, request);
@@ -1970,8 +1990,8 @@ async function handleCrearDespacho(request, env) {
       return jsonError('Ya existe una nota de despacho para esta cotización', 400, request);
     }
 
-    // 3. Si está enviada, aceptarla (solo supervisor)
-    if (cot.estado === 'enviada' && esSupervisorOp) {
+    // 3. Si está enviada, aceptarla automáticamente al crear despacho
+    if (cot.estado === 'enviada') {
       await fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${cotizacionId}`, {
         method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
         body: JSON.stringify({ estado: 'aceptada' }),
@@ -2058,6 +2078,8 @@ async function handleCrearDespacho(request, env) {
         flete_usd: flete,
         notas: notas || null,
         forma_pago: formaPago || null,
+        referencia_pago: referenciaPago || null,
+        forma_pago_cliente: formaPagoCliente || null,
         creado_por: user.operator_id,
       }),
     });
@@ -2068,44 +2090,25 @@ async function handleCrearDespacho(request, env) {
     }
     const [despacho] = await despRes.json();
 
-    // 8. Si es Cta por cobrar, registrar cargo CxC
+    // 8. Si es Cta por cobrar, registrar cargo CxC (RPC atómico)
     if (formaPago === 'Cta por cobrar' && despacho) {
-      const saldoRes = await fetch(
-        `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${cot.cliente_id}&select=saldo_pendiente`,
-        { headers }
-      );
-      const [clienteSaldo] = await saldoRes.json();
-      const saldoActual = Number(clienteSaldo?.saldo_pendiente || 0);
-      const nuevoSaldo = saldoActual + totalConFlete;
-
-      await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
+      const cxcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/registrar_cargo_cxc`, {
         method: 'POST', headers,
         body: JSON.stringify({
-          cliente_id: cot.cliente_id,
-          despacho_id: despacho.id,
-          tipo: 'cargo',
-          monto_usd: totalConFlete,
-          saldo_usd: nuevoSaldo,
-          descripcion: `Orden de despacho #${cot.numero}`,
-          registrado_por: user.operator_id,
+          p_cliente_id: cot.cliente_id,
+          p_despacho_id: despacho.id,
+          p_monto_usd: totalConFlete,
+          p_descripcion: `Orden de despacho #${cot.numero}`,
+          p_registrado_por: user.operator_id,
         }),
       });
-
-      await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${cot.cliente_id}`, {
-        method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
-        body: JSON.stringify({ saldo_pendiente: nuevoSaldo }),
-      });
+      if (!cxcRes.ok) {
+        const cxcErr = await cxcRes.text();
+        return jsonError(`Error al registrar CxC: ${cxcErr}`, 500, request);
+      }
     }
 
-    // 9. Calcular comisión (usar RPC con service key — esta función no usa get_operador_id)
-    try {
-      await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcular_comision_despacho`, {
-        method: 'POST', headers,
-        body: JSON.stringify({ p_despacho_id: despacho.id }),
-      });
-    } catch { /* comisión no es crítica */ }
-
-    // 10. Auditoría
+    // 9. Auditoría (comisión se calcula al marcar entregada, no aquí)
     await registrarAuditoria(env, headers, {
       usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: 'supervisor',
       categoria: 'COTIZACION', accion: 'CREAR_DESPACHO',
@@ -2123,7 +2126,7 @@ async function handleCrearDespacho(request, env) {
 // 3. ACTUALIZAR ESTADO DESPACHO
 // ══════════════════════════════════════════════════════════════════════════════
 async function handleActualizarEstadoDespacho(request, env) {
-  const v = await validateOperator(request, env, { requireSupervisor: true });
+  const v = await validateOperator(request, env, { requirePrivileged: true });
   if (v.error) return v.error;
   const { user, operador, headers } = v;
 
@@ -2146,65 +2149,41 @@ async function handleActualizarEstadoDespacho(request, env) {
       return jsonError(`No se puede pasar de "${desp.estado}" a "${nuevoEstado}"`, 400, request);
     }
 
-    // 3. Si se anula, devolver stock y registrar kardex
+    // 3. Si se anula, usar RPC atómico (stock + kardex + comisión en 1 transacción)
     if (nuevoEstado === 'anulada') {
-      const ciRes = await fetch(
-        `${env.SUPABASE_URL}/rest/v1/cotizacion_items?cotizacion_id=eq.${desp.cotizacion_id}&producto_id=not.is.null&select=producto_id,cantidad,nombre_snap`,
-        { headers }
-      );
-      const items = await ciRes.json();
-      const loteId = crypto.randomUUID();
-      const movimientos = [];
-      for (const item of items) {
-        const pRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${item.producto_id}&select=stock_actual,nombre`, { headers });
-        const [prod] = await pRes.json();
-        if (prod) {
-          const stockAnterior = Number(prod.stock_actual);
-          const nuevoStock = stockAnterior + Number(item.cantidad);
-          await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${item.producto_id}`, {
-            method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
-            body: JSON.stringify({ stock_actual: nuevoStock }),
-          });
-          movimientos.push({
-            lote_id: loteId,
-            tipo: 'ingreso',
-            motivo: `Anulación de despacho #${desp.numero}`,
-            motivo_tipo: 'venta',
-            producto_id: item.producto_id,
-            producto_nombre: item.nombre_snap || prod.nombre,
-            cantidad: Number(item.cantidad),
-            stock_anterior: stockAnterior,
-            stock_nuevo: nuevoStock,
-            usuario_id: user.operator_id,
-            usuario_nombre: operador.nombre,
-            usuario_color: operador.color || null,
-          });
-        }
-      }
-      if (movimientos.length > 0) {
-        await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos`, {
-          method: 'POST', headers,
-          body: JSON.stringify(movimientos),
-        });
+      const rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/anular_despacho_atomico`, {
+        method: 'POST', headers,
+        body: JSON.stringify({
+          p_despacho_id: despachoId,
+          p_usuario_id: user.operator_id,
+          p_usuario_nombre: operador.nombre,
+          p_usuario_color: operador.color || null,
+        }),
+      });
+      if (!rpcRes.ok) {
+        const rpcErr = await rpcRes.text();
+        return jsonError(`Error al anular despacho: ${rpcErr}`, 500, request);
       }
     }
 
-    // 4. Actualizar estado
-    const updateData = { estado: nuevoEstado };
-    const ahora = new Date().toISOString();
-    if (nuevoEstado === 'despachada') updateData.despachada_en = ahora;
-    if (nuevoEstado === 'entregada') {
-      updateData.entregada_en = ahora;
-      if (!desp.despachada_en) updateData.despachada_en = ahora; // auto-despachar
+    // 4. Actualizar estado (si no es anulada — el RPC ya lo hizo)
+    if (nuevoEstado !== 'anulada') {
+      const updateData = { estado: nuevoEstado };
+      const ahora = new Date().toISOString();
+      if (nuevoEstado === 'despachada') updateData.despachada_en = ahora;
+      if (nuevoEstado === 'entregada') {
+        updateData.entregada_en = ahora;
+        if (!desp.despachada_en) updateData.despachada_en = ahora; // auto-despachar
+      }
+
+      await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}`, {
+        method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
+        body: JSON.stringify(updateData),
+      });
     }
 
-    await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}`, {
-      method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
-      body: JSON.stringify(updateData),
-    });
-
-    // 5. Si entregada, calcular comisión
-    if (nuevoEstado === 'entregada') {
+    // 5. Si despachada, calcular comisión para el vendedor
+    if (nuevoEstado === 'despachada') {
       try {
         await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcular_comision_despacho`, {
           method: 'POST', headers,
@@ -2370,7 +2349,7 @@ async function handleReasignarCliente(request, env) {
 // 6. REGISTRAR ABONO CxC
 // ══════════════════════════════════════════════════════════════════════════════
 async function handleRegistrarAbono(request, env) {
-  const v = await validateOperator(request, env, { requireSupervisor: true });
+  const v = await validateOperator(request, env, { requirePrivileged: true });
   if (v.error) return v.error;
   const { user, headers } = v;
 

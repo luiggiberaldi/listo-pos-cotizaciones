@@ -1,7 +1,7 @@
 // src/components/layout/BcvWidget.jsx
 // Widget de tasa de cambio — BCV / USDT / Manual
 import { useState, useRef, useEffect } from 'react'
-import { DollarSign, RefreshCw, X } from 'lucide-react'
+import { DollarSign, RefreshCw, X, AlertTriangle } from 'lucide-react'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
 
 const fmtRate = n => new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
@@ -77,6 +77,13 @@ export default function BcvWidget({ soloLectura = false }) {
 
   // Modo visual: el pendiente o el actual
   const modoVisual = modoPendiente || modoTasa
+
+  // Detectar tasa desactualizada (> 30 min)
+  const STALE_MS = 30 * 60 * 1000
+  const tasaActiva = modoTasa === 'usdt' ? tasaUsdt : tasaBcv
+  const esStale = modoTasa !== 'manual' && tasaActiva.ultimaActualizacion
+    ? (Date.now() - new Date(tasaActiva.ultimaActualizacion).getTime()) > STALE_MS
+    : false
 
   const modoActual = MODO_CONFIG_FULL[modoTasa] || MODO_CONFIG.usdt
 
@@ -156,6 +163,12 @@ export default function BcvWidget({ soloLectura = false }) {
             </p>
           )}
           <p className="text-[10px] text-white/25">Promedio ask/bid de Binance P2P Venezuela</p>
+          {esStale && modoTasa === 'usdt' && (
+            <div className="flex items-center gap-1.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/15">
+              <AlertTriangle size={12} className="text-amber-400 shrink-0" />
+              <p className="text-[10px] text-amber-400/90">Tasa desactualizada — pulsa refrescar</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -222,9 +235,9 @@ export default function BcvWidget({ soloLectura = false }) {
           {tasaEfectiva > 0 ? fmtRate(tasaEfectiva) : '—'}
         </span>
         <span className="hidden sm:inline text-[10px] text-white/55 font-medium">Bs/$</span>
+        {esStale && <AlertTriangle size={11} className="text-amber-400 shrink-0 animate-pulse" />}
       </div>
-    )
-  }
+    )  }
 
   return (
     <div className="relative" ref={bcvRef}>
@@ -248,6 +261,9 @@ export default function BcvWidget({ soloLectura = false }) {
         <span className="hidden sm:inline text-[10px] text-white/55 font-medium">Bs/$</span>
         {modoTasa === 'manual' && (
           <span className="text-[8px] sm:text-[9px] bg-amber-500/20 text-amber-400 px-1 sm:px-1.5 py-0.5 rounded font-bold border border-amber-500/20">MAN</span>
+        )}
+        {esStale && (
+          <AlertTriangle size={12} className="text-amber-400 shrink-0 animate-pulse" />
         )}
       </button>
 

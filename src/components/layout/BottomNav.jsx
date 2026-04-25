@@ -7,7 +7,7 @@ import { PackageCheck, Truck, DollarSign, BarChart3, Settings, AlertCircle } fro
 
 const BOTTOM_ITEMS = [
   { path: '/', label: 'Inicio', icon: LayoutDashboard },
-  { path: '/cotizaciones', label: 'Cotizaciones', icon: FileText, excludeRoles: ['administracion'] },
+  { path: '/cotizaciones', label: 'Cotizaciones', icon: FileText, labelByRole: { administracion: 'Despachos' } },
   { path: '/clientes', label: 'Clientes', icon: Users },
   { path: '/inventario', label: 'Inventario', icon: Package },
 ]
@@ -72,7 +72,9 @@ export default function BottomNav({ esSupervisor, esAdministracion = false }) {
         <div className="flex items-center justify-around px-2 h-16">
           {BOTTOM_ITEMS
             .filter(item => !item.excludeRoles || !item.excludeRoles.includes(rol))
-            .map(({ path, label, icon: Icon }) => (
+            .map(({ path, label, labelByRole, icon: Icon }) => {
+            const displayLabel = labelByRole?.[rol] || label
+            return (
             <NavLink
               key={path}
               to={path}
@@ -87,11 +89,11 @@ export default function BottomNav({ esSupervisor, esAdministracion = false }) {
                   <div className={`p-1.5 rounded-lg transition-all ${isActive ? 'bg-amber-400/15' : ''}`}>
                     <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
                   </div>
-                  <span className={`text-xs font-bold ${isActive ? 'text-amber-400' : ''}`}>{label}</span>
+                  <span className={`text-xs font-bold ${isActive ? 'text-amber-400' : ''}`}>{displayLabel}</span>
                 </>
               )}
             </NavLink>
-          ))}
+          )})}
 
           {/* Botón "Más" */}
           <button

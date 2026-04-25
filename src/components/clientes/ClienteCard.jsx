@@ -79,14 +79,16 @@ export default function ClienteCard({ cliente, onEditar, onDesactivar, onReasign
       </div>
 
       {/* ── Contacto ── */}
-      <div className="px-4 pb-3 space-y-1.5 mt-1">
-        <Contacto icono={Phone} valor={cliente.telefono} />
-        <Contacto icono={Mail}  valor={cliente.email} />
-        <Contacto icono={MapPin} valor={[cliente.direccion, cliente.ciudad, cliente.estado].filter(Boolean).join(', ')} />
-      </div>
+      {!esAdministracion && (
+        <div className="px-4 pb-3 space-y-1.5 mt-1">
+          <Contacto icono={Phone} valor={cliente.telefono} />
+          <Contacto icono={Mail}  valor={cliente.email} />
+          <Contacto icono={MapPin} valor={[cliente.direccion, cliente.ciudad, cliente.estado].filter(Boolean).join(', ')} />
+        </div>
+      )}
 
       {/* ── Vendedor chip ── */}
-      {cliente.vendedor && (
+      {!esAdministracion && cliente.vendedor && (
         <div className="mx-4 mb-3 flex items-center justify-between">
           <span className="text-xs text-slate-400">Vendedor</span>
           <span className="text-xs font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5"
@@ -103,7 +105,23 @@ export default function ClienteCard({ cliente, onEditar, onDesactivar, onReasign
       )}
 
       {/* ── Saldo pendiente (crédito) ── */}
-      {Number(cliente.saldo_pendiente || 0) > 0 && (
+      {esAdministracion ? (
+        <div className={`mx-4 mb-3 flex items-center justify-between rounded-lg px-3 py-2 border ${
+          Number(cliente.saldo_pendiente || 0) > 0
+            ? 'bg-red-50 border-red-200'
+            : 'bg-emerald-50 border-emerald-200'
+        }`}>
+          <span className={`flex items-center gap-1.5 text-xs font-semibold ${
+            Number(cliente.saldo_pendiente || 0) > 0 ? 'text-red-600' : 'text-emerald-600'
+          }`}>
+            <AlertCircle size={12} />
+            {Number(cliente.saldo_pendiente || 0) > 0 ? 'Deuda' : 'Sin deuda'}
+          </span>
+          <span className={`text-sm font-black ${
+            Number(cliente.saldo_pendiente || 0) > 0 ? 'text-red-700' : 'text-emerald-700'
+          }`}>{fmtUsd(cliente.saldo_pendiente || 0)}</span>
+        </div>
+      ) : Number(cliente.saldo_pendiente || 0) > 0 && (
         <div className="mx-4 mb-3 flex items-center justify-between bg-red-50 rounded-lg px-3 py-1.5 border border-red-100">
           <span className="flex items-center gap-1 text-xs text-red-600 font-semibold">
             <AlertCircle size={11} />
@@ -114,7 +132,7 @@ export default function ClienteCard({ cliente, onEditar, onDesactivar, onReasign
       )}
 
       {/* ── Nota reasignación ── */}
-      {cliente.ultima_reasig_en && (
+      {!esAdministracion && cliente.ultima_reasig_en && (
         <div className="mx-4 mb-3 text-xs text-slate-400 bg-slate-50 rounded-lg px-3 py-1.5 border border-slate-100">
           Reasignado: {new Date(cliente.ultima_reasig_en).toLocaleDateString('es-VE')}
         </div>
@@ -131,9 +149,9 @@ export default function ClienteCard({ cliente, onEditar, onDesactivar, onReasign
         )}
         {onVerFicha && (
           <button onClick={() => onVerFicha(cliente)} title="Ver ficha del cliente"
-            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-violet-600 hover:bg-violet-50 active:bg-violet-100 transition-colors">
+            className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-violet-600 hover:bg-violet-50 active:bg-violet-100 transition-colors ${esAdministracion ? 'flex-1 justify-center py-2' : ''}`}>
             <BookOpen size={13} />
-            Ficha
+            {esAdministracion ? 'Ver cuenta' : 'Ficha'}
           </button>
         )}
         {!esAdministracion && (esPropio || esSupervisor) && (

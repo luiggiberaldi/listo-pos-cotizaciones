@@ -50,7 +50,7 @@ function NotifIcon({ type }) {
 const NAV_TODOS = [
   { path: '/',               label: 'Inicio',         icono: LayoutDashboard },
   { path: '/clientes',       label: 'Clientes',       icono: Users },
-  { path: '/cotizaciones',   label: 'Cotizaciones',   icono: FileText,   excludeRoles: ['administracion'] },
+  { path: '/cotizaciones',   label: 'Cotizaciones',   icono: FileText,   labelByRole: { administracion: 'Despachos' } },
   { path: '/despachos',      label: 'Despachos',      icono: PackageCheck },
   { path: '/inventario',     label: 'Inventario',     icono: Package },
   { path: '/transportistas', label: 'Transportistas', icono: Truck,      excludeRoles: ['administracion'] },
@@ -403,8 +403,8 @@ export default function AppLayout() {
         <nav className="relative z-10 flex-1 min-h-0 overflow-y-auto sidebar-scrollbar p-3 space-y-0.5">
           {NAV_TODOS
             .filter(item => !item.excludeRoles || !item.excludeRoles.includes(perfil?.rol))
-            .map(({ path, label, icono: Icono }) => (
-            <NavItem key={path} path={path} label={label} Icono={Icono} onClick={cerrarMenu} collapsed={sidebarCollapsed} />
+            .map(({ path, label, labelByRole, icono: Icono }) => (
+            <NavItem key={path} path={path} label={labelByRole?.[perfil?.rol] || label} Icono={Icono} onClick={cerrarMenu} collapsed={sidebarCollapsed} />
           ))}
           {esPrivilegiado && (
             <>

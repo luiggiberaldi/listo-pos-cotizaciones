@@ -8,7 +8,7 @@ import useAuthStore from '../store/useAuthStore'
 import supabase from '../services/supabase/client'
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import { useCotizaciones, useAnularCotizacion, useActualizarEstado, useCrearVersion, useReciclarCotizacion } from '../hooks/useCotizaciones'
-import { useCrearDespacho } from '../hooks/useDespachos'
+import { useCrearDespacho, useActualizarEstadoDespacho } from '../hooks/useDespachos'
 import { useCotizacion } from '../hooks/useCotizaciones'
 import CotizacionCard    from '../components/cotizaciones/CotizacionCard'
 import CotizacionRow     from '../components/cotizaciones/CotizacionRow'
@@ -41,6 +41,14 @@ const ESTADOS_FILTRO = [
   { valor: 'anulada',   label: 'Canceladas' },
 ]
 
+const ESTADOS_FILTRO_ADMIN = [
+  { valor: '',          label: 'Todos' },
+  { valor: 'pendiente', label: 'Por aprobar' },
+  { valor: 'despachada', label: 'Aprobados' },
+  { valor: 'entregada', label: 'Entregados' },
+  { valor: 'anulada',   label: 'Anulados' },
+]
+
 function SkeletonCotizaciones() {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
@@ -66,6 +74,8 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
   const [formaPago, setFormaPago] = useState('')
   const [transportistaId, setTransportistaId] = useState('')
   const [fleteUsd, setFleteUsd] = useState('')
+  const [referenciaPago, setReferenciaPago] = useState('')
+  const [formaPagoCliente, setFormaPagoCliente] = useState('')
   const [showTransportistaMenu, setShowTransportistaMenu] = useState(false)
   const [stockMap, setStockMap] = useState({})
   const { data: transportistas = [] } = useTransportistas()
@@ -262,6 +272,40 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
           )}
         </div>
 
+        {/* Pago del cliente */}
+        <div className="space-y-3">
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+            Pago del cliente
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Forma de pago</label>
+              <select
+                value={formaPagoCliente}
+                onChange={e => setFormaPagoCliente(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-lg text-sm border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 min-h-[44px]"
+                disabled={cargando}
+              >
+                <option value="">— Seleccionar —</option>
+                {['Efectivo', 'Zelle', 'Pago Móvil', 'USDT', 'Transferencia'].map(f => (
+                  <option key={f} value={f}>{f}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Referencia / comprobante</label>
+              <input
+                type="text"
+                value={referenciaPago}
+                onChange={e => setReferenciaPago(e.target.value)}
+                placeholder="Nº confirmación..."
+                className="w-full px-3 py-2.5 rounded-lg text-sm border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 min-h-[44px]"
+                disabled={cargando}
+              />
+            </div>
+          </div>
+        </div>
+
         {/* Transportista */}
         <div className="space-y-2">
           <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
@@ -354,7 +398,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
             className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-700 font-semibold text-base hover:bg-slate-50 transition-colors disabled:opacity-50">
             Cancelar
           </button>
-          <button onClick={() => onConfirm(formaPago, transportistaId || null, Number(fleteUsd) || 0)} disabled={cargando || items.length === 0 || !formaPago}
+          <button onClick={() => onConfirm(formaPago, transportistaId || null, Number(fleteUsd) || 0, referenciaPago, formaPagoCliente)} disabled={cargando || items.length === 0 || !formaPago}
             title={!formaPago ? 'Selecciona una forma de pago' : undefined}
             className="flex-1 py-3 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-semibold text-base transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20">
             {cargando
@@ -409,6 +453,7 @@ function ModalVersionar({ cotizacion, onConfirm, onCancel, cargando }) {
 function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
+  const esAdministracion = perfil?.rol === 'administracion'
   const { tasaEfectiva } = useTasaCambio()
   const [estadoFiltro, setEstadoFiltro] = useState('')
   const [vendedorFiltro, setVendedorFiltro] = useState('')
@@ -419,17 +464,21 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
   const [cotizacionAReciclar, setCotizacionAReciclar] = useState(null)
   const [vendedorReciclar, setVendedorReciclar] = useState('')
   const [cotizacionDetalle, setCotizacionDetalle] = useState(null)
-  const [cotizacionAAceptar, setCotizacionAAceptar] = useState(null)
-  const [cotizacionARechazar, setCotizacionARechazar] = useState(null)
 
   const { data: cotizaciones = [], isLoading, isError, refetch } = useCotizaciones({ estado: estadoFiltro })
   const { data: vendedores = [] } = useVendedores()
 
-  // Filtrar por vendedor (solo supervisor)
+  // Filtrar por vendedor (solo supervisor) y adaptar para admin
   const cotizacionesFiltradas = useMemo(() => {
-    if (!vendedorFiltro) return cotizaciones
-    return cotizaciones.filter(c => c.vendedor_id === vendedorFiltro)
-  }, [cotizaciones, vendedorFiltro])
+    let filtered = cotizaciones
+    if (vendedorFiltro) filtered = filtered.filter(c => c.vendedor_id === vendedorFiltro)
+    if (esAdministracion) {
+      // Admin solo ve cotizaciones que tienen despacho
+      filtered = filtered.filter(c => c.despacho)
+      if (estadoFiltro) filtered = filtered.filter(c => c.despacho?.estado === estadoFiltro)
+    }
+    return filtered
+  }, [cotizaciones, vendedorFiltro, esAdministracion, estadoFiltro])
 
   const ITEMS_POR_PAGINA = 12
   const totalPaginas = Math.max(1, Math.ceil(cotizacionesFiltradas.length / ITEMS_POR_PAGINA))
@@ -445,6 +494,11 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
   const cambiarEstado = useActualizarEstado()
   const crearDespacho = useCrearDespacho()
   const reciclar      = useReciclarCotizacion()
+  const cambiarEstadoDespacho = useActualizarEstadoDespacho()
+
+  function handleCambiarEstadoDespacho(despachoId, nuevoEstado) {
+    cambiarEstadoDespacho.mutate({ despachoId, nuevoEstado })
+  }
 
   async function confirmarAnular() {
     if (!cotizacionAAnular) return
@@ -452,7 +506,7 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
     setCotizacionAAnular(null)
   }
 
-  async function confirmarDespachar(formaPago = '', transportistaId = null, fleteUsd = 0) {
+  async function confirmarDespachar(formaPago = '', transportistaId = null, fleteUsd = 0, referenciaPago = '', formaPagoCliente = '') {
     if (!cotizacionADespachar) return
     try {
       await crearDespacho.mutateAsync({
@@ -460,6 +514,8 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
         formaPago: formaPago || null,
         transportistaId: transportistaId || null,
         fleteUsd: fleteUsd || 0,
+        referenciaPago: referenciaPago || null,
+        formaPagoCliente: formaPagoCliente || null,
       })
       setCotizacionADespachar(null)
     } catch (err) {
@@ -486,24 +542,9 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
     setVendedorReciclar(cot.vendedor_id || '')
   }
 
-  // Interceptar cambio de estado para pedir confirmación
+  // Interceptar cambio de estado
   function handleCambiarEstado(id, estado, numero, clienteNombre, totalUsd, vendedorId) {
-    const payload = { id, estado, numero, clienteNombre, totalUsd, vendedorId }
-    if (estado === 'aceptada') setCotizacionAAceptar(payload)
-    else if (estado === 'rechazada') setCotizacionARechazar(payload)
-    else cambiarEstado.mutate(payload)
-  }
-
-  async function confirmarAceptar() {
-    if (!cotizacionAAceptar) return
-    await cambiarEstado.mutateAsync(cotizacionAAceptar)
-    setCotizacionAAceptar(null)
-  }
-
-  async function confirmarRechazar() {
-    if (!cotizacionARechazar) return
-    await cambiarEstado.mutateAsync(cotizacionARechazar)
-    setCotizacionARechazar(null)
+    cambiarEstado.mutate({ id, estado, numero, clienteNombre, totalUsd, vendedorId })
   }
 
   // Al hacer click en "editar": si es borrador → editar directo; si no → versionar
@@ -520,16 +561,18 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
 
       {/* Encabezado */}
       <PageHeader
-        icon={FileText}
-        title="Cotizaciones"
-        subtitle={isLoading ? 'Cargando...' : `${cotizacionesFiltradas.length} cotización${cotizacionesFiltradas.length !== 1 ? 'es' : ''}`}
+        icon={esAdministracion ? PackageCheck : FileText}
+        title={esAdministracion ? 'Despachos' : 'Cotizaciones'}
+        subtitle={isLoading ? 'Cargando...' : `${cotizacionesFiltradas.length} ${esAdministracion ? 'despacho' : 'cotización'}${cotizacionesFiltradas.length !== 1 ? (esAdministracion ? 's' : 'es') : ''}`}
         action={
+          !esAdministracion && (
           <div className="flex items-center gap-2">
             <button onClick={onNueva} className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98]"
               style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
               <Plus size={16} />Nueva
             </button>
           </div>
+          )
         }
       />
 
@@ -539,7 +582,7 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
       {/* Filtros: fila 1 — tabs de estado (scroll horizontal) */}
       <div className="overflow-x-auto scrollbar-hide -mx-1 px-1">
         <div className="flex items-center gap-1.5 w-max pb-0.5">
-          {ESTADOS_FILTRO.map(({ valor, label }) => (
+          {(esAdministracion ? ESTADOS_FILTRO_ADMIN : ESTADOS_FILTRO).map(({ valor, label }) => (
             <button key={valor} onClick={() => setEstadoFiltro(valor)}
               className={`px-3.5 py-2 rounded-full text-xs font-semibold transition-colors border whitespace-nowrap ${
                 estadoFiltro === valor
@@ -605,6 +648,7 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
                 onCambiarEstado={handleCambiarEstado}
                 onDespachar={setCotizacionADespachar}
                 onReciclar={abrirReciclar}
+                onCambiarEstadoDespacho={handleCambiarEstadoDespacho}
                 tasa={tasaEfectiva}
               />
             ))}
@@ -646,30 +690,6 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
         message={getAction('anular', perfil?.rol).confirmMessage || 'Esta acción no se puede deshacer.'}
         confirmText={getAction('anular', perfil?.rol).confirmText || 'Sí, anular'}
         variant={getAction('anular', perfil?.rol).variant || 'danger'}
-      />
-
-      {/* Confirm aprobar cotización */}
-      <ConfirmModal
-        isOpen={!!cotizacionAAceptar}
-        onClose={() => setCotizacionAAceptar(null)}
-        onConfirm={confirmarAceptar}
-        title={getAction('aceptar', 'supervisor').confirmTitle}
-        message={cotizacionAAceptar ? `COT-${String(cotizacionAAceptar.numero).padStart(5, '0')}${cotizacionAAceptar.clienteNombre ? ` — ${cotizacionAAceptar.clienteNombre}` : ''}` : ''}
-        details={getAction('aceptar', 'supervisor').confirmMessage}
-        confirmText={getAction('aceptar', 'supervisor').confirmText}
-        variant="success"
-      />
-
-      {/* Confirm rechazar cotización */}
-      <ConfirmModal
-        isOpen={!!cotizacionARechazar}
-        onClose={() => setCotizacionARechazar(null)}
-        onConfirm={confirmarRechazar}
-        title={getAction('rechazar', 'supervisor').confirmTitle}
-        message={cotizacionARechazar ? `COT-${String(cotizacionARechazar.numero).padStart(5, '0')}${cotizacionARechazar.clienteNombre ? ` — ${cotizacionARechazar.clienteNombre}` : ''}` : ''}
-        details={getAction('rechazar', 'supervisor').confirmMessage}
-        confirmText={getAction('rechazar', 'supervisor').confirmText}
-        variant="warning"
       />
 
       {/* Modal despachar con resumen */}

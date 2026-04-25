@@ -8,7 +8,6 @@ import { calcTotales } from '../utils/calcTotales'
 import { round2 } from '../utils/dinero'
 import {
   notifyCotizacionEnviada,
-  notifyCotizacionAceptada,
   notifyCotizacionAnulada,
 } from '../services/notificationService'
 import { showToast } from '../components/ui/Toast'
@@ -21,13 +20,14 @@ export const COTIZACIONES_KEY = ['cotizaciones']
 export function useCotizaciones({ estado = '', clienteId = '' } = {}) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
+  const esPrivilegiado = esSupervisor || perfil?.rol === 'administracion'
 
   return useQuery({
-    queryKey: [...COTIZACIONES_KEY, estado, clienteId, esSupervisor, perfil?.id],
+    queryKey: [...COTIZACIONES_KEY, estado, clienteId, esPrivilegiado, perfil?.id],
     queryFn: async () => {
-      // Supervisor: tabla directa; Vendedor: vista (sin notas_internas)
-      const tabla = esSupervisor ? 'cotizaciones' : 'v_cotizaciones_vendedor'
-      const selectCols = esSupervisor
+      // Privilegiado (supervisor/admin): tabla directa; Vendedor: vista (sin notas_internas)
+      const tabla = esPrivilegiado ? 'cotizaciones' : 'v_cotizaciones_vendedor'
+      const selectCols = esPrivilegiado
         ? 'id, numero, version, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, creado_en, enviada_en, notas_cliente, cliente_id, vendedor_id, despacho:notas_despacho!notas_despacho_cotizacion_id_fkey(id, estado)'
         : 'id, numero, version, cliente_id, vendedor_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, notas_cliente, creado_en, enviada_en, despacho:notas_despacho!notas_despacho_cotizacion_id_fkey(id, estado)'
 
@@ -37,7 +37,7 @@ export function useCotizaciones({ estado = '', clienteId = '' } = {}) {
         .order('creado_en', { ascending: false })
         .limit(200)
 
-      if (!esSupervisor) query = query.eq('vendedor_id', perfil.id)
+      if (!esPrivilegiado) query = query.eq('vendedor_id', perfil.id)
       if (estado) query = query.eq('estado', estado)
       if (clienteId) query = query.eq('cliente_id', clienteId)
 
@@ -298,7 +298,6 @@ export function useAnularCotizacion() {
 // ─── Actualizar estado (supervisor) ──────────────────────────────────────────
 export function useActualizarEstado() {
   const qc = useQueryClient()
-  const rol = useAuthStore.getState().perfil?.rol
 
   return useMutation({
     mutationFn: async ({ id, estado, numero, clienteNombre, totalUsd, vendedorId }) => {
@@ -309,20 +308,10 @@ export function useActualizarEstado() {
       if (error) throw error
       return { estado, numero, clienteNombre, totalUsd, vendedorId }
     },
-    onSuccess: ({ estado, numero, clienteNombre, totalUsd, vendedorId }) => {
+    onSuccess: ({ estado, numero }) => {
       qc.invalidateQueries({ queryKey: COTIZACIONES_KEY })
       qc.invalidateQueries({ queryKey: STOCK_COMPROMETIDO_KEY })
-      if (estado === 'aceptada') {
-        showToast(`Cotización #${numero} aceptada`, 'success')
-        notifyCotizacionAceptada(numero, clienteNombre ?? 'cliente', totalUsd ?? 0, rol)
-        sendPushNotification({
-          title: '✅ Cotización Aceptada',
-          message: `Cotización #${numero} — ${clienteNombre ?? 'cliente'} — $${Number(totalUsd).toFixed(2)}`,
-          tag: `cotizacion-aceptada-${numero}`,
-          url: '/cotizaciones',
-          targetUserId: vendedorId,
-        })
-      }
+      showToast(`Cotización #${numero} → ${estado}`, 'success')
     },
   })
 }

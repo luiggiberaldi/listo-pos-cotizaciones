@@ -4,7 +4,7 @@
 // — Supervisor: ve todos los clientes + puede reasignar
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Users, Plus, Search, RefreshCw, X, LayoutGrid, List, Filter, ChevronDown, Check } from 'lucide-react'
+import { Users, Plus, Search, RefreshCw, X, LayoutGrid, List, Filter, ChevronDown, Check, AlertCircle } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { useClientes, useDesactivarCliente, useVendedores } from '../hooks/useClientes'
 import ClienteCard       from '../components/clientes/ClienteCard'
@@ -104,6 +104,7 @@ export default function ClientesView() {
   const [textoBusqueda, setTextoBusqueda] = useState('')
   const [filtroTipo, setFiltroTipo]         = useState('')
   const [filtroVendedor, setFiltroVendedor] = useState('')
+  const [filtroConDeuda, setFiltroConDeuda] = useState(false)
   const [vistaMode, setVistaMode] = useState(() => localStorage.getItem('clientes_vista') || (window.innerWidth < 768 ? 'list' : 'grid'))
   const [pagina, setPagina] = useState(1)
 
@@ -127,15 +128,17 @@ export default function ClientesView() {
     return clientes.filter(c => {
       if (filtroTipo     && c.tipo_cliente !== filtroTipo)               return false
       if (filtroVendedor && c.vendedor_id  !== filtroVendedor)           return false
+      if (filtroConDeuda && !(Number(c.saldo_pendiente || 0) > 0))      return false
       return true
     })
-  }, [clientes, filtroTipo, filtroVendedor])
+  }, [clientes, filtroTipo, filtroVendedor, filtroConDeuda])
 
-  const hayFiltros = filtroTipo || filtroVendedor
+  const hayFiltros = filtroTipo || filtroVendedor || filtroConDeuda
 
   function limpiarFiltros() {
     setFiltroTipo('')
     setFiltroVendedor('')
+    setFiltroConDeuda(false)
     setPagina(1)
   }
 
@@ -311,6 +314,19 @@ export default function ClientesView() {
           options={vendedores.map(v => ({ value: v.id, label: v.nombre }))}
         />
 
+        {/* Solo con deuda */}
+        <button
+          onClick={() => { setFiltroConDeuda(v => !v); setPagina(1) }}
+          className={`flex items-center gap-1.5 text-xs font-bold rounded-xl px-3 py-2.5 transition-all min-h-[44px] border ${
+            filtroConDeuda
+              ? 'bg-red-500 text-white border-red-500'
+              : 'bg-white text-slate-600 border-slate-200 hover:border-red-300 hover:text-red-600'
+          }`}
+        >
+          <AlertCircle size={12} />
+          Con deuda
+        </button>
+
         {/* Limpiar filtros */}
         {hayFiltros && (
           <button
@@ -381,6 +397,7 @@ export default function ClientesView() {
                 onDesactivar={abrirDesactivar}
                 onReasignar={abrirReasignar}
                 onCotizar={cotizarCliente}
+                onVerFicha={abrirFicha}
               />
             ))}
           </div>

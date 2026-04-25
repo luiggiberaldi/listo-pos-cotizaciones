@@ -115,6 +115,8 @@ function FormAbono({ clienteId, onSuccess }) {
 export default function FichaClienteModal({ cliente, isOpen, onClose }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
+  const esAdministracion = perfil?.rol === 'administracion'
+  const puedeRegistrarAbono = esSupervisor || esAdministracion
   const { data: movimientos = [], isLoading, refetch } = useCuentasCobrar(isOpen ? cliente?.id : null)
 
   if (!isOpen || !cliente) return null
@@ -167,8 +169,8 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
         {/* Body scrollable */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
 
-          {/* Formulario abono (solo supervisor si hay deuda) */}
-          {esSupervisor && saldo > 0 && (
+          {/* Formulario abono (supervisor o administración si hay deuda) */}
+          {puedeRegistrarAbono && saldo > 0 && (
             <FormAbono clienteId={cliente.id} onSuccess={refetch} />
           )}
 
