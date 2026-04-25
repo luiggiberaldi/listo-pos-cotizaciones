@@ -138,7 +138,7 @@ function RutaSupervisor() {
 
   if (!initialized) return <PantallaCarga />
   if (!perfil) return <Navigate to="/login" replace />
-  if (perfil.rol !== 'supervisor') return <Navigate to="/" replace />
+  if (perfil.rol !== 'supervisor' && perfil.rol !== 'desarrollador') return <Navigate to="/" replace />
   return <Outlet />
 }
 
@@ -149,7 +149,7 @@ function RutaSupervisorOAdmin() {
 
   if (!initialized) return <PantallaCarga />
   if (!perfil) return <Navigate to="/login" replace />
-  if (perfil.rol !== 'supervisor' && perfil.rol !== 'administracion') return <Navigate to="/" replace />
+  if (perfil.rol !== 'supervisor' && perfil.rol !== 'administracion' && perfil.rol !== 'desarrollador') return <Navigate to="/" replace />
   return <Outlet />
 }
 
@@ -160,7 +160,7 @@ function RutaExcluyeAdmin() {
 
   if (!initialized) return <PantallaCarga />
   if (!perfil) return <Navigate to="/login" replace />
-  if (perfil.rol === 'administracion' || perfil.rol === 'logistica') return <Navigate to="/" replace />
+  if (perfil.rol !== 'desarrollador' && (perfil.rol === 'administracion' || perfil.rol === 'logistica')) return <Navigate to="/" replace />
   return <Outlet />
 }
 

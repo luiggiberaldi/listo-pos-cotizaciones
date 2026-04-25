@@ -41,7 +41,7 @@ export function useLogAnalysis() {
 export function useLogPurge() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: () => adminAPI.purgeLogs(),
+    mutationFn: (dias = 0) => adminAPI.purgeLogs(dias),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['system-logs'] })
       qc.invalidateQueries({ queryKey: ['system-logs-stats'] })

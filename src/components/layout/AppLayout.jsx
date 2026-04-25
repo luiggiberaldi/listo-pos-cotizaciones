@@ -9,7 +9,7 @@ import {
   Menu, X, DollarSign, RefreshCw, PackageCheck, Bell, BellOff,
   AlertTriangle, Send, CheckCircle, Ban,
   PanelLeftClose, PanelLeftOpen, BarChart3,
-  Clock, CalendarClock, AlertCircle,
+  Clock, CalendarClock, AlertCircle, ScrollText,
 } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import LoginAvatar from '../auth/LoginAvatar'
@@ -61,6 +61,7 @@ const NAV_TODOS = [
 const NAV_SUPERVISOR = [
   { path: '/reportes',      label: 'Reportes',      icono: BarChart3 },
   { path: '/configuracion', label: 'Configuración', icono: Settings, excludeRoles: ['administracion'] },
+  { path: '/logs',          label: 'System Logs',   icono: ScrollText },
 ]
 
 // ─── Badge de rol ──────────────────────────────────────────────────────────────
@@ -70,8 +71,9 @@ function BadgeRol({ rol }) {
     vendedor:        'bg-teal-500/20 text-teal-300 border border-teal-500/30',
     administracion:  'bg-amber-500/20 text-amber-300 border border-amber-500/30',
     logistica:       'bg-purple-500/20 text-purple-300 border border-purple-500/30',
+    desarrollador:   'bg-violet-500/20 text-violet-300 border border-violet-500/30',
   }
-  const textos = { supervisor: 'Supervisor', vendedor: 'Vendedor', administracion: 'Administración', logistica: 'Logística' }
+  const textos = { supervisor: 'Supervisor', vendedor: 'Vendedor', administracion: 'Administración', logistica: 'Logística', desarrollador: 'Dev' }
   return (
     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${estilos[rol] ?? 'bg-white/10 text-white/50'}`}>
       {textos[rol] ?? rol}
@@ -162,7 +164,8 @@ export default function AppLayout() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  const esSupervisor = perfil?.rol === 'supervisor'
+  const esDesarrollador = perfil?.rol === 'desarrollador'
+  const esSupervisor = perfil?.rol === 'supervisor' || esDesarrollador
   const esAdministracion = perfil?.rol === 'administracion'
   const esPrivilegiado = esSupervisor || esAdministracion
 
@@ -404,7 +407,7 @@ export default function AppLayout() {
         {/* Navegación */}
         <nav className="relative z-10 flex-1 min-h-0 overflow-y-auto sidebar-scrollbar p-3 space-y-0.5">
           {NAV_TODOS
-            .filter(item => (!item.excludeRoles || !item.excludeRoles.includes(perfil?.rol)) && (!item.onlyRoles || item.onlyRoles.includes(perfil?.rol)))
+            .filter(item => esDesarrollador || ((!item.excludeRoles || !item.excludeRoles.includes(perfil?.rol)) && (!item.onlyRoles || item.onlyRoles.includes(perfil?.rol))))
             .map(({ path, label, labelByRole, icono: Icono }) => (
             <NavItem key={path} path={path} label={labelByRole?.[perfil?.rol] || label} Icono={Icono} onClick={cerrarMenu} collapsed={sidebarCollapsed} />
           ))}
@@ -419,7 +422,7 @@ export default function AppLayout() {
               )}
               {sidebarCollapsed && <div className="pt-3 mt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }} />}
               {NAV_SUPERVISOR
-                .filter(item => !item.excludeRoles || !item.excludeRoles.includes(perfil?.rol))
+                .filter(item => esDesarrollador || !item.excludeRoles || !item.excludeRoles.includes(perfil?.rol))
                 .map(({ path, label, icono: Icono }) => (
                 <NavItem key={path} path={path} label={label} Icono={Icono} onClick={cerrarMenu} collapsed={sidebarCollapsed} />
               ))}

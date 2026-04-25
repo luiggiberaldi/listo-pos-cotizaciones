@@ -46,6 +46,9 @@ export default defineConfig({
       },
     }),
   ],
+  test: {
+    include: ['src/utils/__tests__/**/*.test.js'],
+  },
   build: {
     rollupOptions: {
       output: {

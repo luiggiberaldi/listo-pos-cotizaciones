@@ -114,17 +114,17 @@ const useAuthStore = create((set, get) => ({
       return
     }
 
-    // Super Admin — no existe en tabla usuarios, perfil sintético
+    // Desarrollador — no existe en tabla usuarios, perfil sintético
     if (operatorId === '00000000-0000-0000-0000-000000000000') {
       set({
         user: authUser,
         perfil: {
           id: operatorId,
-          nombre: 'Super Admin',
+          nombre: 'Desarrollador',
           email: authUser.email,
-          rol: 'supervisor',
+          rol: 'desarrollador',
           activo: true,
-          color: '#ef4444',
+          color: '#8b5cf6',
           _isSuperAdmin: true,
         },
         error: null,

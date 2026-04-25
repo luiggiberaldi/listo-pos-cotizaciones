@@ -1,20 +1,27 @@
 // src/views/LogsView.jsx
-// Panel de logs del sistema + análisis AI — solo supervisor
-import { useState } from 'react'
+// Panel de logs del sistema + análisis AI + Tests/Health (desarrollador)
+import { useState, useEffect } from 'react'
 import {
   AlertCircle, AlertTriangle, Info, Download, Trash2, Bot, RefreshCw,
   Filter, ChevronLeft, ChevronRight, Shield, Zap, Bug, Clock,
-  Monitor, Server, Database,
+  Monitor, Server, Database, CheckCircle2, XCircle, Activity, FlaskConical,
 } from 'lucide-react'
 import { useLogs, useLogStats, useLogAnalysis, useLogPurge } from '../hooks/useLogs'
-import { adminAPI } from '../services/supabase/adminClient'
+import { adminAPI, devAPI } from '../services/supabase/adminClient'
+import useAuthStore from '../store/useAuthStore'
 import PageHeader from '../components/ui/PageHeader'
 import ConfirmModal from '../components/ui/ConfirmModal'
+import { showToast } from '../components/ui/Toast'
 
 // ── Config ──────────────────────────────────────────────────────────────
-const TABS = [
+const TABS_BASE = [
   { id: 'logs', label: 'Logs', icon: AlertCircle },
   { id: 'ai',   label: 'Análisis AI', icon: Bot },
+]
+
+const TABS_DEV = [
+  { id: 'tests',  label: 'Tests', icon: FlaskConical },
+  { id: 'health', label: 'Health', icon: Activity },
 ]
 
 const NIVELES = [
@@ -164,6 +171,33 @@ function AIAnalysisCard({ agent, onRun, result, isLoading }) {
   )
 }
 
+function TestSuiteRow({ name, passed, failed, total, tests }) {
+  const [expanded, setExpanded] = useState(false)
+  const allPassed = failed === 0
+  return (
+    <div className={`bg-white rounded-xl border shadow-sm overflow-hidden ${allPassed ? 'border-green-100' : 'border-red-200'}`}>
+      <div className="p-3 flex items-center gap-3 cursor-pointer hover:bg-slate-50" onClick={() => setExpanded(!expanded)}>
+        {allPassed ? <CheckCircle2 size={16} className="text-green-500 shrink-0" /> : <XCircle size={16} className="text-red-500 shrink-0" />}
+        <span className="text-sm font-medium text-slate-700 flex-1 truncate">{name}</span>
+        <span className="text-xs text-slate-400">{passed}/{total}</span>
+      </div>
+      {expanded && (
+        <div className="border-t border-slate-100 px-3 py-2 space-y-1 max-h-60 overflow-auto">
+          {tests.map((t, i) => (
+            <div key={i} className="flex items-center gap-2 text-xs">
+              {t.status === 'passed'
+                ? <CheckCircle2 size={12} className="text-green-400 shrink-0" />
+                : <XCircle size={12} className="text-red-400 shrink-0" />}
+              <span className={`${t.status === 'passed' ? 'text-slate-600' : 'text-red-700 font-medium'}`}>{t.title}</span>
+              {t.duration != null && <span className="text-slate-400 ml-auto shrink-0">{t.duration.toFixed(1)}ms</span>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Conversión básica de markdown a HTML
 function formatMarkdown(text) {
   if (!text) return ''
@@ -180,9 +214,87 @@ function formatMarkdown(text) {
     .replace(/\n/g, '<br/>')
 }
 
+const PURGE_OPTIONS = [
+  { dias: 90, label: 'Más de 90 días' },
+  { dias: 30, label: 'Más de 30 días' },
+  { dias: 7,  label: 'Más de 7 días' },
+  { dias: 1,  label: 'Más de 1 día' },
+  { dias: 0,  label: 'Todos los logs', danger: true },
+]
+
+function PurgeModal({ onConfirm, onClose }) {
+  const [selected, setSelected] = useState(null)
+  const [loading, setLoading] = useState(false)
+
+  async function handleConfirm() {
+    if (selected === null) return
+    setLoading(true)
+    try {
+      await onConfirm(selected)
+    } catch (e) {
+      showToast(e.message || 'Error purgando', 'error')
+    }
+    setLoading(false)
+  }
+
+  return (
+    <div className="fixed inset-0 z-[200] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl max-w-sm w-full shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="relative h-20 flex items-center justify-center"
+          style={{ background: 'linear-gradient(135deg, #fca5a5, #ef4444)' }}>
+          <div className="w-12 h-12 rounded-full flex items-center justify-center"
+            style={{ background: 'rgba(255,255,255,0.25)', border: '1.5px solid rgba(255,255,255,0.5)' }}>
+            <Trash2 size={22} color="white" />
+          </div>
+        </div>
+        <div className="px-5 pt-4 pb-5">
+          <h3 className="text-lg font-black text-slate-800 text-center mb-1">Purgar logs</h3>
+          <p className="text-xs text-slate-500 text-center mb-4">Selecciona qué logs eliminar</p>
+          <div className="space-y-2 mb-4">
+            {PURGE_OPTIONS.map(opt => (
+              <button
+                key={opt.dias}
+                onClick={() => setSelected(opt.dias)}
+                className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium border transition-all ${
+                  selected === opt.dias
+                    ? opt.danger
+                      ? 'bg-red-50 border-red-300 text-red-700'
+                      : 'bg-blue-50 border-blue-300 text-blue-700'
+                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                {opt.label}
+                {opt.danger && selected === opt.dias && (
+                  <span className="block text-[10px] text-red-500 mt-0.5">Se borrarán TODOS los registros</span>
+                )}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-3">
+            <button onClick={onClose} disabled={loading}
+              className="flex-1 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl border border-slate-100">
+              Cancelar
+            </button>
+            <button onClick={handleConfirm} disabled={selected === null || loading}
+              className="flex-1 py-2.5 text-sm font-bold text-white rounded-xl disabled:opacity-40 flex items-center justify-center gap-2"
+              style={{ background: 'linear-gradient(135deg, #dc2626, #b91c1c)' }}>
+              {loading && <RefreshCw size={12} className="animate-spin" />}
+              Purgar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Vista Principal ──────────────────────────────────────────────────────
 
 export default function LogsView() {
+  const { perfil } = useAuthStore()
+  const esDesarrollador = perfil?.rol === 'desarrollador'
+  const TABS = esDesarrollador ? [...TABS_BASE, ...TABS_DEV] : TABS_BASE
+
   const [tab, setTab] = useState('logs')
   const [page, setPage] = useState(1)
   const [nivel, setNivel] = useState('')
@@ -193,18 +305,30 @@ export default function LogsView() {
   const [aiResults, setAiResults] = useState({})
   const [aiLoading, setAiLoading] = useState({})
 
-  const { data: logsData, isLoading: logsLoading, refetch } = useLogs({ page, limit: 50, nivel: nivel || undefined, origen: origen || undefined, categoria: categoria || undefined })
-  const { data: stats } = useLogStats()
+  // Dev state
+  const [testResults, setTestResults] = useState(null)
+  const [testsLoading, setTestsLoading] = useState(false)
+  const [healthData, setHealthData] = useState(null)
+  const [healthLoading, setHealthLoading] = useState(false)
+
+  const { data: logsData, isLoading: logsLoading, refetch, isFetching } = useLogs({ page, limit: 50, nivel: nivel || undefined, origen: origen || undefined, categoria: categoria || undefined })
+  const { data: stats, refetch: refetchStats } = useLogStats()
   const purge = useLogPurge()
 
   const logs = logsData?.logs || []
   const totalPages = logsData?.pages || 1
 
+  async function handleRefresh() {
+    await Promise.all([refetch(), refetchStats()])
+    showToast('Logs actualizados', 'success')
+  }
+
   async function handleDownload() {
     setDownloading(true)
     try {
       await adminAPI.downloadLogs()
-    } catch { /* toast */ }
+      showToast('Descarga iniciada', 'success')
+    } catch (e) { showToast(e.message || 'Error descargando', 'error') }
     setDownloading(false)
   }
 
@@ -217,6 +341,26 @@ export default function LogsView() {
       setAiResults(prev => ({ ...prev, [tipo]: { resultado: `Error: ${e.message}`, logs_count: 0, modelo: '—' } }))
     }
     setAiLoading(prev => ({ ...prev, [tipo]: false }))
+  }
+
+  async function loadTests() {
+    setTestsLoading(true)
+    try {
+      const data = await devAPI.getTestResults()
+      setTestResults(data)
+    } catch { setTestResults(null) }
+    setTestsLoading(false)
+  }
+
+  async function runHealthCheck() {
+    setHealthLoading(true)
+    try {
+      const data = await devAPI.healthCheck()
+      setHealthData(data)
+    } catch (e) {
+      setHealthData({ error: e.message })
+    }
+    setHealthLoading(false)
   }
 
   return (
@@ -275,8 +419,8 @@ export default function LogsView() {
             />
 
             <div className="ml-auto flex gap-2">
-              <button onClick={() => refetch()} className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1 px-2 py-1.5 border border-slate-200 rounded-lg bg-white">
-                <RefreshCw size={12} /> Actualizar
+              <button onClick={handleRefresh} disabled={isFetching} className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1 px-2 py-1.5 border border-slate-200 rounded-lg bg-white disabled:opacity-50">
+                <RefreshCw size={12} className={isFetching ? 'animate-spin' : ''} /> Actualizar
               </button>
               <button
                 onClick={handleDownload}
@@ -381,14 +525,159 @@ export default function LogsView() {
         </div>
       )}
 
-      {/* Confirm purge modal */}
+      {/* Tab: Tests (solo desarrollador) */}
+      {tab === 'tests' && esDesarrollador && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-slate-500">Resultados de tests automatizados generados en el último build.</p>
+            <button
+              onClick={loadTests}
+              disabled={testsLoading}
+              className="text-xs text-white flex items-center gap-1 px-3 py-1.5 rounded-lg font-bold"
+              style={{ background: 'linear-gradient(135deg, #8b5cf6, #6d28d9)' }}
+            >
+              {testsLoading ? <RefreshCw size={12} className="animate-spin" /> : <FlaskConical size={12} />}
+              {testsLoading ? 'Cargando...' : 'Cargar Tests'}
+            </button>
+          </div>
+
+          {testResults && (
+            <>
+              {/* Summary */}
+              <div className="grid grid-cols-4 gap-3">
+                <div className="bg-white rounded-xl border border-slate-100 p-4 shadow-sm text-center">
+                  <p className="text-2xl font-black text-slate-800">{testResults.numTotalTests}</p>
+                  <p className="text-xs text-slate-500">Total</p>
+                </div>
+                <div className="bg-white rounded-xl border border-green-100 p-4 shadow-sm text-center">
+                  <p className="text-2xl font-black text-green-600">{testResults.numPassedTests}</p>
+                  <p className="text-xs text-green-600">Pasaron</p>
+                </div>
+                <div className="bg-white rounded-xl border border-red-100 p-4 shadow-sm text-center">
+                  <p className="text-2xl font-black text-red-600">{testResults.numFailedTests}</p>
+                  <p className="text-xs text-red-600">Fallaron</p>
+                </div>
+                <div className="bg-white rounded-xl border border-slate-100 p-4 shadow-sm text-center">
+                  <p className="text-2xl font-black text-slate-800">{testResults.numTotalTestSuites}</p>
+                  <p className="text-xs text-slate-500">Suites</p>
+                </div>
+              </div>
+
+              {/* Success banner */}
+              {testResults.success && (
+                <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg p-3">
+                  <CheckCircle2 size={18} className="text-green-600" />
+                  <span className="text-sm font-bold text-green-700">Todos los tests pasaron</span>
+                  <span className="text-xs text-green-600 ml-auto">
+                    {new Date(testResults.startTime).toLocaleString('es-VE')}
+                  </span>
+                </div>
+              )}
+
+              {/* Test suites */}
+              <div className="space-y-2">
+                {testResults.testResults?.map((suite, i) => {
+                  const name = suite.name?.split('/').pop() || `Suite ${i + 1}`
+                  const passed = suite.assertionResults?.filter(t => t.status === 'passed').length || 0
+                  const failed = suite.assertionResults?.filter(t => t.status === 'failed').length || 0
+                  const total = suite.assertionResults?.length || 0
+                  return (
+                    <TestSuiteRow key={i} name={name} passed={passed} failed={failed} total={total} tests={suite.assertionResults || []} />
+                  )
+                })}
+              </div>
+            </>
+          )}
+
+          {!testResults && !testsLoading && (
+            <div className="text-center py-12 text-slate-400">
+              <FlaskConical size={40} className="mx-auto mb-3 opacity-50" />
+              <p className="text-sm font-medium">Presiona "Cargar Tests" para ver los resultados</p>
+              <p className="text-xs mt-1">Los tests se ejecutan automáticamente en cada build</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab: Health Check (solo desarrollador) */}
+      {tab === 'health' && esDesarrollador && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-slate-500">Verifica la conexión y estado de todos los servicios en tiempo real.</p>
+            <button
+              onClick={runHealthCheck}
+              disabled={healthLoading}
+              className="text-xs text-white flex items-center gap-1 px-3 py-1.5 rounded-lg font-bold"
+              style={{ background: 'linear-gradient(135deg, #8b5cf6, #6d28d9)' }}
+            >
+              {healthLoading ? <RefreshCw size={12} className="animate-spin" /> : <Activity size={12} />}
+              {healthLoading ? 'Verificando...' : 'Ejecutar Health Check'}
+            </button>
+          </div>
+
+          {healthData && !healthData.error && (
+            <>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs text-slate-500">Tiempo total: {healthData.total_ms}ms</span>
+              </div>
+              <div className="space-y-3">
+                {Object.entries(healthData.checks || {}).map(([key, check]) => (
+                  <div key={key} className={`rounded-xl border p-4 shadow-sm ${check.ok ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                    <div className="flex items-center gap-3">
+                      {check.ok ? <CheckCircle2 size={20} className="text-green-600" /> : <XCircle size={20} className="text-red-600" />}
+                      <div className="flex-1">
+                        <h4 className="text-sm font-bold capitalize">{key.replace(/_/g, ' ')}</h4>
+                        <div className="flex flex-wrap gap-3 mt-1">
+                          {check.status && <span className="text-xs text-slate-500">Status: {check.status}</span>}
+                          <span className="text-xs text-slate-500">{check.ms}ms</span>
+                          {check.keys_count && <span className="text-xs text-slate-500">{check.keys_count} keys</span>}
+                          {check.total_logs && <span className="text-xs text-slate-500">{check.total_logs} logs</span>}
+                          {check.error && <span className="text-xs text-red-600">{check.error}</span>}
+                        </div>
+                        {check.counts && (
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {Object.entries(check.counts).map(([table, count]) => (
+                              <span key={table} className="text-xs bg-white border border-slate-200 rounded px-2 py-0.5">
+                                {table}: <strong>{count}</strong>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {healthData?.error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
+              <XCircle size={24} className="mx-auto mb-2 text-red-500" />
+              <p className="text-sm text-red-700 font-medium">{healthData.error}</p>
+            </div>
+          )}
+
+          {!healthData && !healthLoading && (
+            <div className="text-center py-12 text-slate-400">
+              <Activity size={40} className="mx-auto mb-3 opacity-50" />
+              <p className="text-sm font-medium">Presiona "Ejecutar Health Check"</p>
+              <p className="text-xs mt-1">Verifica Supabase, Groq API, tablas y sistema de logs</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Purge modal con selección de rango */}
       {confirmPurge && (
-        <ConfirmModal
-          titulo="Purgar logs antiguos"
-          mensaje="Se eliminarán todos los logs con más de 90 días. Esta acción no se puede deshacer."
-          textoConfirmar="Purgar"
-          onConfirm={() => { purge.mutate(); setConfirmPurge(false) }}
-          onCancel={() => setConfirmPurge(false)}
+        <PurgeModal
+          onConfirm={async (dias) => {
+            const result = await purge.mutateAsync(dias)
+            const label = dias === 0 ? 'todos' : `mayores a ${dias} días`
+            showToast(`Purga completada: ${result?.eliminados ?? 0} logs eliminados (${label})`, 'success')
+            setConfirmPurge(false)
+          }}
+          onClose={() => setConfirmPurge(false)}
         />
       )}
     </div>

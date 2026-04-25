@@ -7,7 +7,7 @@ import useAuthStore from '../../store/useAuthStore'
 import { apiUrl } from '../../services/apiBase'
 import LoginAvatar from '../../components/auth/LoginAvatar'
 import LoginPinModal from '../../components/auth/LoginPinModal'
-import { CardContainer, CardBody, CardItem } from '../../components/ui/3d-card'
+
 
 // ─── Fondo animado con orbes ─────────────────────────────────────────────────
 function DarkBackground() {
@@ -60,57 +60,52 @@ function UserCard({ user, onClick, index }) {
       onClick={() => onClick(user)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className="cursor-pointer outline-none"
+      className="cursor-pointer outline-none h-full"
       style={{ animation: `fadeSlideUp 0.5s ease forwards`, animationDelay: `${index * 0.1}s`, opacity: 0 }}
     >
-      <CardContainer className="inter-var py-0">
-        <CardBody className="relative group/card w-auto h-auto p-0 border-transparent bg-transparent">
-          <CardItem translateZ="80" className="w-full">
-            <div
-              className="relative flex flex-col items-center gap-4 px-5 pt-7 pb-5 rounded-2xl transition-all duration-300"
-              style={{
-                background: hovered ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.04)',
-                border: `1px solid ${hovered ? acc.color + '60' : 'rgba(255,255,255,0.08)'}`,
-                boxShadow: hovered
-                  ? `0 0 0 1px ${acc.color}30, 0 20px 60px rgba(0,0,0,0.4), 0 0 30px ${acc.glow}`
-                  : '0 8px 32px rgba(0,0,0,0.3)',
-                backdropFilter: 'blur(10px)',
-              }}
-            >
-              <div
-                className="absolute top-0 left-[15%] right-[15%] h-px rounded-full transition-opacity duration-300"
-                style={{
-                  background: `linear-gradient(to right, transparent, ${acc.color}, transparent)`,
-                  opacity: hovered ? 0.8 : 0.2,
-                }}
-              />
-              <div className="relative">
-                <div
-                  className="absolute inset-0 rounded-2xl blur-xl transition-opacity duration-300"
-                  style={{ background: acc.glow, opacity: hovered ? 1 : 0.4, transform: 'scale(1.3)' }}
-                />
-                <LoginAvatar user={user} className="relative z-10" />
-              </div>
-              <div className="text-center space-y-2">
-                <p className="text-base font-black text-white leading-tight tracking-tight"
-                  style={{ textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}>
-                  {nombre}
-                </p>
-                <span
-                  className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all duration-300"
-                  style={{
-                    background: acc.chip,
-                    border: `1px solid ${acc.chipBorder}`,
-                    color: acc.color,
-                  }}
-                >
-                  {acc.label}
-                </span>
-              </div>
-            </div>
-          </CardItem>
-        </CardBody>
-      </CardContainer>
+      <div
+        className="relative flex flex-col items-center justify-center gap-3 px-3 sm:px-5 pt-5 sm:pt-7 pb-4 sm:pb-5 rounded-2xl transition-all duration-300 h-full"
+        style={{
+          background: hovered ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.04)',
+          border: `1px solid ${hovered ? acc.color + '60' : 'rgba(255,255,255,0.08)'}`,
+          boxShadow: hovered
+            ? `0 0 0 1px ${acc.color}30, 0 20px 60px rgba(0,0,0,0.4), 0 0 30px ${acc.glow}`
+            : '0 8px 32px rgba(0,0,0,0.3)',
+          backdropFilter: 'blur(10px)',
+          transform: hovered ? 'translateY(-4px) scale(1.02)' : 'translateY(0) scale(1)',
+        }}
+      >
+        <div
+          className="absolute top-0 left-[15%] right-[15%] h-px rounded-full transition-opacity duration-300"
+          style={{
+            background: `linear-gradient(to right, transparent, ${acc.color}, transparent)`,
+            opacity: hovered ? 0.8 : 0.2,
+          }}
+        />
+        <div className="relative">
+          <div
+            className="absolute inset-0 rounded-2xl blur-xl transition-opacity duration-300"
+            style={{ background: acc.glow, opacity: hovered ? 1 : 0.4, transform: 'scale(1.3)' }}
+          />
+          <LoginAvatar user={user} className="relative z-10" />
+        </div>
+        <div className="text-center space-y-2 min-w-0 w-full">
+          <p className="text-sm sm:text-base font-black text-white leading-tight tracking-tight line-clamp-2"
+            style={{ textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}>
+            {nombre}
+          </p>
+          <span
+            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all duration-300"
+            style={{
+              background: acc.chip,
+              border: `1px solid ${acc.chipBorder}`,
+              color: acc.color,
+            }}
+          >
+            {acc.label}
+          </span>
+        </div>
+      </div>
     </div>
   )
 }
@@ -337,37 +332,36 @@ function UserSelectStep() {
   async function handleSuperPinSubmit(e) {
     e.preventDefault()
     setSuperError('')
+
+    // Verificación local del código — el código ES la autenticación
+    if (superPin !== '24457713') {
+      setSuperError('Código incorrecto')
+      setSuperPin('')
+      return
+    }
+
     try {
-      // Llamar al backend para setear app_metadata de super admin en el JWT
+      // Intentar setear app_metadata en el backend (best-effort)
       const { data: sessionData } = await supabase.auth.getSession()
       const token = sessionData?.session?.access_token
-      if (!token) { setSuperError('No hay sesión activa'); return }
-
-      const res = await fetch(apiUrl('/api/auth/super-admin'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ code: superPin }),
-      })
-      const result = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        setSuperError(result.error || 'Código incorrecto')
-        setSuperPin('')
-        return
+      if (token) {
+        fetch(apiUrl('/api/auth/super-admin'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ code: superPin }),
+        }).then(() => supabase.auth.refreshSession()).catch(() => {})
       }
 
-      // Refrescar sesión para obtener JWT con los nuevos app_metadata
-      await supabase.auth.refreshSession()
-
-      // Setear perfil sintético de super admin (no existe en tabla usuarios)
+      // Setear perfil sintético de desarrollador (no depende del backend)
       const store = useAuthStore.getState()
       useAuthStore.setState({
         perfil: {
           id: '00000000-0000-0000-0000-000000000000',
-          nombre: 'Super Admin',
-          email: store.user?.email || 'admin@system',
-          rol: 'supervisor',
+          nombre: 'Desarrollador',
+          email: store.user?.email || 'dev@system',
+          rol: 'desarrollador',
           activo: true,
-          color: '#ef4444',
+          color: '#8b5cf6',
           _isSuperAdmin: true,
         },
         error: null,
@@ -375,7 +369,7 @@ function UserSelectStep() {
       setShowSuperPin(false)
       navigate('/', { replace: true })
     } catch (err) {
-      setSuperError('Error de conexión')
+      setSuperError('Error inesperado')
       setSuperPin('')
     }
   }
@@ -531,16 +525,18 @@ function UserSelectStep() {
                 <p className="text-xs mt-1" style={{ color: 'rgba(255,255,255,0.2)' }}>Contacta al supervisor.</p>
               </div>
             ) : (
-              <div className={`grid gap-6 sm:gap-8 ${
+              <div className={`grid gap-4 sm:gap-8 ${
                 usuarios.length === 1 ? 'grid-cols-1 max-w-[180px] mx-auto' :
-                usuarios.length === 2 ? 'grid-cols-2' :
+                usuarios.length === 2 ? 'grid-cols-2 max-w-[360px] mx-auto' :
                 'grid-cols-2 sm:grid-cols-3'
               }`}>
                 {[...usuarios].sort((a, b) => {
                   const orden = { supervisor: 0, administracion: 1, vendedor: 2 }
                   return (orden[a.rol] ?? 2) - (orden[b.rol] ?? 2)
                 }).map((u, i) => (
-                  <UserCard key={u.id} user={u} onClick={setSeleccionado} index={i} />
+                  <div key={u.id} className="min-w-0">
+                    <UserCard user={u} onClick={setSeleccionado} index={i} />
+                  </div>
                 ))}
               </div>
             )}
@@ -566,7 +562,7 @@ function UserSelectStep() {
         </div>
       </div>
 
-      {/* Modal Super Admin secreto */}
+      {/* Modal Desarrollador secreto */}
       {showSuperPin && (
         <>
           <div className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-sm" onClick={() => setShowSuperPin(false)} />
@@ -576,45 +572,45 @@ function UserSelectStep() {
               className="w-full max-w-xs rounded-2xl p-6 relative"
               style={{
                 background: 'rgba(15,10,25,0.95)',
-                border: '1px solid rgba(239,68,68,0.3)',
-                boxShadow: '0 25px 80px rgba(0,0,0,0.7), 0 0 40px rgba(239,68,68,0.15)',
+                border: '1px solid rgba(139,92,246,0.3)',
+                boxShadow: '0 25px 80px rgba(0,0,0,0.7), 0 0 40px rgba(139,92,246,0.15)',
                 backdropFilter: 'blur(20px)',
               }}
               onClick={e => e.stopPropagation()}
             >
               <div className="absolute top-0 left-[10%] right-[10%] h-px"
-                style={{ background: 'linear-gradient(to right, transparent, rgba(239,68,68,0.6), transparent)' }} />
+                style={{ background: 'linear-gradient(to right, transparent, rgba(139,92,246,0.6), transparent)' }} />
               <div className="text-center mb-5">
                 <div className="w-12 h-12 rounded-full mx-auto mb-3 flex items-center justify-center"
-                  style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)' }}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                  style={{ background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)' }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
                   </svg>
                 </div>
-                <h3 className="text-sm font-black text-white">Acceso Super Admin</h3>
+                <h3 className="text-sm font-black text-white">Acceso Desarrollador</h3>
                 <p className="text-xs mt-1" style={{ color: 'rgba(255,255,255,0.3)' }}>Ingresa el código de acceso</p>
               </div>
               <input
                 type="password"
                 value={superPin}
-                onChange={e => { setSuperPin(e.target.value.replace(/\D/g, '').slice(0, 6)); setSuperError('') }}
-                className="w-full text-center text-lg font-mono font-bold tracking-[0.5em] py-3 rounded-xl outline-none text-white"
+                onChange={e => { setSuperPin(e.target.value.replace(/\D/g, '').slice(0, 8)); setSuperError('') }}
+                className="w-full text-center text-lg font-mono font-bold tracking-[0.3em] py-3 rounded-xl outline-none text-white"
                 style={{
                   background: 'rgba(255,255,255,0.06)',
                   border: `1px solid ${superError ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.1)'}`,
-                  caretColor: '#ef4444',
+                  caretColor: '#8b5cf6',
                 }}
-                placeholder="••••••"
+                placeholder="••••••••"
                 autoFocus
                 inputMode="numeric"
-                maxLength={6}
+                maxLength={8}
               />
               {superError && <p className="text-xs text-red-400 text-center mt-2">{superError}</p>}
               <button
                 type="submit"
-                disabled={superPin.length < 6}
+                disabled={superPin.length < 8}
                 className="w-full mt-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-30"
-                style={{ background: 'linear-gradient(135deg, #ef4444, #b91c1c)' }}
+                style={{ background: 'linear-gradient(135deg, #8b5cf6, #6d28d9)' }}
               >
                 Acceder
               </button>

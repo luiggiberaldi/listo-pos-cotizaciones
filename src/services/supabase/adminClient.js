@@ -143,5 +143,27 @@ export const adminAPI = {
 
   analyzeLogs: (tipo) => adminFetch('logs/analyze', 'POST', { tipo }),
 
-  purgeLogs: () => adminFetch('logs/purge', 'DELETE'),
+  purgeLogs: (dias = 0) => adminFetch('logs/purge', 'DELETE', { dias }),
+}
+
+// ── Dev Tools API (solo desarrollador) ──────────────────────────────────
+async function devFetch(path, method = 'GET') {
+  const token = await getAuthToken()
+  if (!token) throw new Error('No autenticado')
+  const res = await fetch(apiUrl(`/api/dev/${path}`), {
+    method,
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `Error ${res.status}`)
+  return data
+}
+
+export const devAPI = {
+  healthCheck: () => devFetch('health'),
+  async getTestResults() {
+    const res = await fetch(apiUrl('/test-results.json'))
+    if (!res.ok) return null
+    return res.json().catch(() => null)
+  },
 }

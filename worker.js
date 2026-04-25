@@ -156,11 +156,6 @@ export default {
       return handleReciclarDespacho(request, env);
     }
 
-    // ── API: venta rápida (cotización + despacho atómico) ────────────────────
-    if (url.pathname === '/api/ventas-rapidas/crear' && request.method === 'POST') {
-      return handleVentaRapida(request, env);
-    }
-
     // ── API: reasignar cliente (bypass RLS) ─────────────────────────────────
     if (url.pathname === '/api/clientes/reasignar' && request.method === 'POST') {
       return handleReasignarCliente(request, env);
@@ -239,19 +234,14 @@ export default {
       return handleSuperAdmin(request, env);
     }
 
+    // ── API: Developer tools (solo desarrollador) ──────────────────────────
+    if (url.pathname.startsWith('/api/dev/')) {
+      return handleDevTools(request, env, url);
+    }
+
     // ── API: subir PDF temporal (para WhatsApp) ─────────────────────────
     if (url.pathname === '/api/pdf-temp' && request.method === 'POST') {
       return handlePdfTemp(request, env);
-    }
-
-    // ── API: escanear lista de materiales con IA (visión) ─────────────
-    if (url.pathname === '/api/scan-material-list' && request.method === 'POST') {
-      return handleScanMaterialList(request, env);
-    }
-
-    // ── API: parsear texto de lista de materiales (WhatsApp, etc.) ────
-    if (url.pathname === '/api/parse-material-text' && request.method === 'POST') {
-      return handleParseMaterialText(request, env);
     }
 
     // ── API routes para operaciones admin ──────────────────────────────────
@@ -450,10 +440,10 @@ async function verifyAuth(request, env) {
 // UUID especial para Super Admin virtual (easter egg del logo)
 const SUPER_ADMIN_UUID = '00000000-0000-0000-0000-000000000000'
 
-// Obtiene el rol del operador (supervisor | vendedor | administracion | logistica | null)
+// Obtiene el rol del operador (supervisor | vendedor | administracion | desarrollador | null)
 async function getOperatorRole(operatorId, env) {
   if (!operatorId) return null;
-  if (operatorId === SUPER_ADMIN_UUID) return 'supervisor'; // Super Admin virtual
+  if (operatorId === SUPER_ADMIN_UUID) return 'desarrollador';
   const res = await fetch(
     `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${operatorId}&activo=eq.true&select=rol`,
     {
@@ -470,13 +460,13 @@ async function getOperatorRole(operatorId, env) {
 
 async function verifySupervisor(operatorId, env) {
   const rol = await getOperatorRole(operatorId, env);
-  return rol === 'supervisor';
+  return rol === 'supervisor' || rol === 'desarrollador';
 }
 
 // Verifica supervisor O administracion (para endpoints compartidos como reportes)
 async function verifyPrivileged(operatorId, env) {
   const rol = await getOperatorRole(operatorId, env);
-  return rol === 'supervisor' || rol === 'administracion';
+  return rol === 'supervisor' || rol === 'administracion' || rol === 'desarrollador';
 }
 
 // ── PDF temporal handler (para WhatsApp) ──────────────────────────────────
@@ -759,7 +749,7 @@ async function handleClearOperator(request, env) {
   if (!user?.id) return jsonError('No autenticado', 401, request);
 
   // Clear operator from app_metadata
-  const metaRes = await fetch(`${env.SUPABASE_URL}/auth/v1/admin/users/${user.id}`, {
+  await fetch(`${env.SUPABASE_URL}/auth/v1/admin/users/${user.id}`, {
     method: 'PUT',
     headers: {
       apikey: env.SUPABASE_SERVICE_KEY,
@@ -771,26 +761,104 @@ async function handleClearOperator(request, env) {
     }),
   });
 
-  if (!metaRes.ok) return jsonError('Error al limpiar operador', 500, request);
-
   return json({ ok: true }, 200, request);
 }
 
-// Super Admin virtual — activa el operador especial sin usuario en DB
-const SUPER_ADMIN_CODE = '794848'
+// ══════════════════════════════════════════════════════════════════════════════
+// DEV TOOLS — Solo accesible para rol desarrollador
+// ══════════════════════════════════════════════════════════════════════════════
 
-async function handleSuperAdmin(request, env) {
-  const user = await verifyAuth(request, env);
-  if (!user?.id) return jsonError('No autenticado', 401, request);
+async function handleDevTools(request, env, url) {
+  // Verificar que sea desarrollador
+  const op = await validateOperator(request, env);
+  if (op.error) return op.error;
+  if (op.operador.rol !== 'desarrollador') return jsonError('Acceso denegado', 403, request);
 
-  let body;
-  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+  const sub = url.pathname.replace('/api/dev/', '');
 
-  if (body.code !== SUPER_ADMIN_CODE) {
-    return jsonError('Código incorrecto', 401, request);
+  // GET /api/dev/health — Health check en vivo
+  if (sub === 'health' && request.method === 'GET') {
+    const checks = {};
+    const t0 = Date.now();
+
+    // 1. Supabase connection
+    try {
+      const r = await fetch(`${env.SUPABASE_URL}/rest/v1/usuarios?select=count&limit=1`, {
+        headers: supaServiceHeaders(env),
+      });
+      checks.supabase = { ok: r.ok, status: r.status, ms: Date.now() - t0 };
+    } catch (e) {
+      checks.supabase = { ok: false, error: e.message, ms: Date.now() - t0 };
+    }
+
+    // 2. Groq API (grupo A, modelo check)
+    const t1 = Date.now();
+    try {
+      const raw = env.GROQ_KEYS_A;
+      const keys = raw ? raw.split(',').map(k => k.trim()).filter(Boolean) : [];
+      if (!keys.length) {
+        checks.groq = { ok: false, error: 'No hay keys configuradas', ms: 0 };
+      } else {
+        const r = await fetch('https://api.groq.com/openai/v1/models', {
+          headers: { Authorization: `Bearer ${keys[0]}` },
+        });
+        checks.groq = { ok: r.ok, status: r.status, keys_count: keys.length * 3, ms: Date.now() - t1 };
+      }
+    } catch (e) {
+      checks.groq = { ok: false, error: e.message, ms: Date.now() - t1 };
+    }
+
+    // 3. System logs table
+    const t2 = Date.now();
+    try {
+      const r = await fetch(`${env.SUPABASE_URL}/rest/v1/system_logs?select=count`, {
+        headers: { ...supaServiceHeaders(env), Prefer: 'count=exact' },
+      });
+      const count = r.headers.get('content-range')?.split('/')?.[1] || '?';
+      checks.system_logs = { ok: r.ok, total_logs: count, ms: Date.now() - t2 };
+    } catch (e) {
+      checks.system_logs = { ok: false, error: e.message, ms: Date.now() - t2 };
+    }
+
+    // 4. Tables check
+    const t3 = Date.now();
+    try {
+      const tables = ['usuarios', 'clientes', 'productos', 'cotizaciones', 'despachos', 'transportistas'];
+      const counts = {};
+      for (const t of tables) {
+        const r = await fetch(`${env.SUPABASE_URL}/rest/v1/${t}?select=count`, {
+          headers: { ...supaServiceHeaders(env), Prefer: 'count=exact' },
+        });
+        counts[t] = r.headers.get('content-range')?.split('/')?.[1] || '?';
+      }
+      checks.tables = { ok: true, counts, ms: Date.now() - t3 };
+    } catch (e) {
+      checks.tables = { ok: false, error: e.message, ms: Date.now() - t3 };
+    }
+
+    return json({ ok: true, checks, total_ms: Date.now() - t0 }, 200, request);
   }
 
-  // Set super admin in app_metadata
+  return jsonError('Endpoint no encontrado', 404, request);
+}
+
+// Desarrollador virtual — activa el operador especial sin usuario en DB
+const SUPER_ADMIN_CODE = '24457713'
+
+async function handleSuperAdmin(request, env) {
+  // Primero verificar el código (antes de auth, para dar error claro)
+  let body;
+  try { body = await request.clone().json(); } catch { return jsonError('Body inválido', 400, request); }
+
+  if (body.code !== SUPER_ADMIN_CODE) {
+    return jsonError('Código de acceso incorrecto', 403, request);
+  }
+
+  // Código correcto — ahora verificar sesión
+  const user = await verifyAuth(request, env);
+  if (!user?.id) return jsonError('Código válido pero no hay sesión activa. Inicia sesión primero.', 401, request);
+
+  // Set desarrollador in app_metadata
   const metaRes = await fetch(`${env.SUPABASE_URL}/auth/v1/admin/users/${user.id}`, {
     method: 'PUT',
     headers: {
@@ -801,27 +869,27 @@ async function handleSuperAdmin(request, env) {
     body: JSON.stringify({
       app_metadata: {
         operator_id: SUPER_ADMIN_UUID,
-        operator_rol: 'supervisor',
-        operator_nombre: 'Super Admin',
+        operator_rol: 'desarrollador',
+        operator_nombre: 'Desarrollador',
       },
     }),
   });
 
-  if (!metaRes.ok) return jsonError('Error activando Super Admin', 500, request);
+  if (!metaRes.ok) return jsonError('Error activando acceso', 500, request);
 
   await logToSystem(env, {
     nivel: 'info',
     origen: 'worker',
     categoria: 'AUTH',
-    mensaje: 'Super Admin activado',
+    mensaje: 'Acceso desarrollador activado',
     usuario_id: SUPER_ADMIN_UUID,
-    usuario_nombre: 'Super Admin',
+    usuario_nombre: 'Desarrollador',
     meta: { ip: request.headers.get('CF-Connecting-IP') || 'unknown' },
   })
 
   return json({
     ok: true,
-    operator: { id: SUPER_ADMIN_UUID, nombre: 'Super Admin', rol: 'supervisor', color: '#ef4444' },
+    operator: { id: SUPER_ADMIN_UUID, nombre: 'Desarrollador', rol: 'desarrollador', color: '#8b5cf6' },
   }, 200, request);
 }
 
@@ -885,7 +953,7 @@ async function handlePush(request, env, url) {
     let body;
     try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
 
-    const delRes = await fetch(
+    await fetch(
       `${env.SUPABASE_URL}/rest/v1/push_subscriptions?usuario_id=eq.${user.operator_id || user.id}&endpoint=eq.${encodeURIComponent(body.endpoint)}`,
       {
         method: 'DELETE',
@@ -895,8 +963,6 @@ async function handlePush(request, env, url) {
         },
       }
     );
-
-    if (!delRes.ok) return jsonError('Error al eliminar suscripción', 500, request);
 
     return json({ ok: true }, 200, request);
   }
@@ -1347,14 +1413,10 @@ async function handleClearInventory(request, env) {
   };
 
   // Borrar kardex (movimientos) antes de productos
-  const delKardex = await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos?id=neq.00000000-0000-0000-0000-000000000000`, {
+  await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos?id=neq.00000000-0000-0000-0000-000000000000`, {
     method: 'DELETE',
     headers: h,
   });
-  if (!delKardex.ok) {
-    const text = await delKardex.text();
-    return jsonError(`Error al borrar kardex: ${text}`, 500, request);
-  }
 
   const res = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=neq.00000000-0000-0000-0000-000000000000`, {
     method: 'DELETE',
@@ -1363,7 +1425,7 @@ async function handleClearInventory(request, env) {
 
   if (!res.ok) {
     const text = await res.text();
-    return jsonError(`Error al borrar productos: ${text}`, 500, request);
+    return jsonError(`Error al borrar: ${text}`, 500, request);
   }
 
   return json({ ok: true }, 200, request);
@@ -1563,7 +1625,6 @@ async function handleReciclarCotizacion(request, env) {
       `${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${cotizacionId}&select=*`,
       { headers: supaHeaders }
     );
-    if (!cotRes.ok) return jsonError('Error al obtener cotización', 500, request);
     const [cotOrig] = await cotRes.json();
     if (!cotOrig) return jsonError('Cotización no encontrada', 404, request);
 
@@ -1579,12 +1640,11 @@ async function handleReciclarCotizacion(request, env) {
       fetch(`${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${user.operator_id}&select=nombre,rol`, { headers: supaHeaders }),
     ]);
 
-    if (!vendRes.ok) return jsonError('Error al buscar vendedor destino', 500, request);
     const [vendDest] = await vendRes.json();
     if (!vendDest) return jsonError('Vendedor destino no existe o está inactivo', 400, request);
 
-    const [vendOrig] = vendOrigRes.ok ? await vendOrigRes.json() : [null];
-    const [supData] = supRes.ok ? await supRes.json() : [null];
+    const [vendOrig] = await vendOrigRes.json();
+    const [supData] = await supRes.json();
 
     // 4. Registrar auditoría ANTES de la mutación
     const numOrigPad = String(cotOrig.numero).padStart(5, '0');
@@ -1619,7 +1679,6 @@ async function handleReciclarCotizacion(request, env) {
       `${env.SUPABASE_URL}/rest/v1/cotizacion_items?cotizacion_id=eq.${cotizacionId}&select=producto_id,codigo_snap,nombre_snap,unidad_snap,cantidad,precio_unit_usd,descuento_pct,total_linea_usd,orden`,
       { headers: supaHeaders }
     );
-    if (!itemsRes.ok) return jsonError('Error al obtener items de cotización', 500, request);
     const items = await itemsRes.json();
 
     if (items.length > 0) {
@@ -1840,15 +1899,19 @@ function supaServiceHeaders(env) {
 }
 
 // Valida auth + operator_id, devuelve { user, operador } o Response de error
-async function validateOperator(request, env, { requireSupervisor = false, requirePrivileged = false } = {}) {
+async function validateOperator(request, env, { requireSupervisor = false } = {}) {
   const user = await verifyAuth(request, env);
   if (!user?.id) return { error: jsonError('No autenticado', 401, request) };
   if (!user.operator_id) return { error: jsonError('No hay operador seleccionado', 400, request) };
 
+  // Desarrollador virtual — no existe en tabla usuarios
+  if (user.operator_id === SUPER_ADMIN_UUID) {
+    const operador = { id: SUPER_ADMIN_UUID, nombre: 'Desarrollador', rol: 'desarrollador', color: '#8b5cf6' };
+    return { user, operador, headers: supaServiceHeaders(env) };
+  }
+
   const h = supaServiceHeaders(env);
-  const rolFilter = requireSupervisor ? '&rol=eq.supervisor'
-    : requirePrivileged ? '&rol=in.(supervisor,administracion)'
-    : '';
+  const rolFilter = requireSupervisor ? '&rol=eq.supervisor' : '';
   const res = await fetch(
     `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${user.operator_id}&activo=eq.true${rolFilter}&select=id,nombre,rol,color`,
     { headers: h }
@@ -1857,9 +1920,7 @@ async function validateOperator(request, env, { requireSupervisor = false, requi
   if (!operador) {
     const msg = requireSupervisor
       ? 'Solo supervisores pueden realizar esta acción'
-      : requirePrivileged
-        ? 'Solo supervisores o administración pueden realizar esta acción'
-        : 'Operador no encontrado o inactivo';
+      : 'Operador no encontrado o inactivo';
     return { error: jsonError(msg, 403, request) };
   }
 
@@ -1898,11 +1959,6 @@ async function handleEnviarCotizacion(request, env) {
   const { cotizacionId, tasaBcv } = body;
   if (!cotizacionId || !tasaBcv) return jsonError('Faltan campos: cotizacionId, tasaBcv', 400, request);
   if (!isValidUuid(cotizacionId)) return jsonError('cotizacionId inválido', 400, request);
-
-  const tasaNum = Number(tasaBcv);
-  if (!Number.isFinite(tasaNum) || tasaNum <= 0 || tasaNum > 10000) {
-    return jsonError('Tasa BCV inválida: debe ser un número positivo razonable', 400, request);
-  }
 
   try {
     // 1. Obtener cotización
@@ -1962,7 +2018,7 @@ async function handleCrearDespacho(request, env) {
 
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
-  const { cotizacionId, notas, formaPago, transportistaId, fleteUsd, referenciaPago, formaPagoCliente } = body;
+  const { cotizacionId, notas, formaPago, transportistaId, fleteUsd } = body;
   const flete = Math.max(0, Number(fleteUsd) || 0);
   if (!cotizacionId) return jsonError('Falta cotizacionId', 400, request);
   if (!isValidUuid(cotizacionId)) return jsonError('cotizacionId inválido', 400, request);
@@ -1976,10 +2032,10 @@ async function handleCrearDespacho(request, env) {
     const esSupervisorOp = operador.rol === 'supervisor';
     const esPropietario = cot.vendedor_id === (user.operator_id || user.id);
 
-    // Vendedores pueden despachar cotizaciones enviadas o aceptadas propias
+    // Vendedores solo pueden despachar cotizaciones aceptadas y propias
     if (!esSupervisorOp) {
-      if (!['enviada', 'aceptada'].includes(cot.estado)) {
-        return jsonError('La cotización debe estar enviada o aceptada para despachar', 400, request);
+      if (cot.estado !== 'aceptada') {
+        return jsonError('Solo puedes despachar cotizaciones ya aceptadas por el supervisor', 400, request);
       }
       if (!esPropietario) {
         return jsonError('Solo puedes despachar tus propias cotizaciones', 400, request);
@@ -1995,8 +2051,8 @@ async function handleCrearDespacho(request, env) {
       return jsonError('Ya existe una nota de despacho para esta cotización', 400, request);
     }
 
-    // 3. Si está enviada, aceptarla automáticamente al crear despacho
-    if (cot.estado === 'enviada') {
+    // 3. Si está enviada, aceptarla (solo supervisor)
+    if (cot.estado === 'enviada' && esSupervisorOp) {
       await fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${cotizacionId}`, {
         method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
         body: JSON.stringify({ estado: 'aceptada' }),
@@ -2083,8 +2139,6 @@ async function handleCrearDespacho(request, env) {
         flete_usd: flete,
         notas: notas || null,
         forma_pago: formaPago || null,
-        referencia_pago: referenciaPago || null,
-        forma_pago_cliente: formaPagoCliente || null,
         creado_por: user.operator_id,
       }),
     });
@@ -2095,25 +2149,44 @@ async function handleCrearDespacho(request, env) {
     }
     const [despacho] = await despRes.json();
 
-    // 8. Si es Cta por cobrar, registrar cargo CxC (RPC atómico)
+    // 8. Si es Cta por cobrar, registrar cargo CxC
     if (formaPago === 'Cta por cobrar' && despacho) {
-      const cxcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/registrar_cargo_cxc`, {
+      const saldoRes = await fetch(
+        `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${cot.cliente_id}&select=saldo_pendiente`,
+        { headers }
+      );
+      const [clienteSaldo] = await saldoRes.json();
+      const saldoActual = Number(clienteSaldo?.saldo_pendiente || 0);
+      const nuevoSaldo = saldoActual + totalConFlete;
+
+      await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
         method: 'POST', headers,
         body: JSON.stringify({
-          p_cliente_id: cot.cliente_id,
-          p_despacho_id: despacho.id,
-          p_monto_usd: totalConFlete,
-          p_descripcion: `Orden de despacho #${cot.numero}`,
-          p_registrado_por: user.operator_id,
+          cliente_id: cot.cliente_id,
+          despacho_id: despacho.id,
+          tipo: 'cargo',
+          monto_usd: totalConFlete,
+          saldo_usd: nuevoSaldo,
+          descripcion: `Orden de despacho #${cot.numero}`,
+          registrado_por: user.operator_id,
         }),
       });
-      if (!cxcRes.ok) {
-        const cxcErr = await cxcRes.text();
-        return jsonError(`Error al registrar CxC: ${cxcErr}`, 500, request);
-      }
+
+      await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${cot.cliente_id}`, {
+        method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
+        body: JSON.stringify({ saldo_pendiente: nuevoSaldo }),
+      });
     }
 
-    // 9. Auditoría (comisión se calcula al marcar entregada, no aquí)
+    // 9. Calcular comisión (usar RPC con service key — esta función no usa get_operador_id)
+    try {
+      await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcular_comision_despacho`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ p_despacho_id: despacho.id }),
+      });
+    } catch { /* comisión no es crítica */ }
+
+    // 10. Auditoría
     await registrarAuditoria(env, headers, {
       usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: 'supervisor',
       categoria: 'COTIZACION', accion: 'CREAR_DESPACHO',
@@ -2128,229 +2201,10 @@ async function handleCrearDespacho(request, env) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 2b. VENTA RÁPIDA (cotización + despacho en un solo paso)
-// ══════════════════════════════════════════════════════════════════════════════
-async function handleVentaRapida(request, env) {
-  const v = await validateOperator(request, env);
-  if (v.error) return v.error;
-  const { user, operador, headers } = v;
-
-  // Solo vendedor y supervisor pueden crear ventas rápidas
-  if (!['vendedor', 'supervisor'].includes(operador.rol)) {
-    return jsonError('Solo vendedores y supervisores pueden crear ventas rápidas', 403, request);
-  }
-
-  let body;
-  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
-
-  const {
-    clienteId, transportistaId, fleteUsd, formaPago, formaPagoCliente,
-    referenciaPago, notas, notasCliente, items, descuentoGlobalPct, costoEnvioUsd, tasaBcv,
-  } = body;
-
-  // Validaciones básicas
-  if (!clienteId) return jsonError('Falta clienteId', 400, request);
-  if (!isValidUuid(clienteId)) return jsonError('clienteId inválido', 400, request);
-  if (!items || !Array.isArray(items) || items.length === 0) return jsonError('Se requiere al menos un producto', 400, request);
-  if (!formaPago) return jsonError('Falta forma de pago', 400, request);
-
-  const tasaNum = Number(tasaBcv);
-  if (!Number.isFinite(tasaNum) || tasaNum <= 0 || tasaNum > 100000) {
-    return jsonError('Tasa BCV inválida', 400, request);
-  }
-
-  const flete = Math.max(0, Number(fleteUsd) || 0);
-  const costoEnvio = Math.max(0, Number(costoEnvioUsd) || 0);
-
-  // Validar items
-  for (let i = 0; i < items.length; i++) {
-    const it = items[i];
-    if (!it.productoId) return jsonError(`Item ${i + 1}: falta productoId`, 400, request);
-    if (typeof it.cantidad !== 'number' || it.cantidad <= 0) return jsonError(`Item ${i + 1}: cantidad debe ser > 0`, 400, request);
-    if (typeof it.precioUnitUsd !== 'number' || it.precioUnitUsd < 0) return jsonError(`Item ${i + 1}: precio inválido`, 400, request);
-  }
-
-  try {
-    // 1. Obtener datos de productos (stock, nombre, código, unidad)
-    const prodIds = items.map(i => i.productoId);
-    const prodRes = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/productos?id=in.(${prodIds.join(',')})&activo=eq.true&select=id,stock_actual,nombre,codigo,unidad`,
-      { headers }
-    );
-    const productos = await prodRes.json();
-    const stockMap = Object.fromEntries(productos.map(p => [p.id, p]));
-
-    // 2. Validar stock suficiente
-    for (const item of items) {
-      const prod = stockMap[item.productoId];
-      if (!prod) return jsonError(`Producto no encontrado o inactivo (ID: ${item.productoId})`, 400, request);
-      if (Number(prod.stock_actual) < Number(item.cantidad)) {
-        return jsonError(`Stock insuficiente: "${prod.nombre}" requiere ${item.cantidad} pero solo hay ${prod.stock_actual}`, 400, request);
-      }
-    }
-
-    // 3. Calcular totales
-    const round2 = n => Math.round(n * 100) / 100;
-    const subtotal = round2(items.reduce((s, it) => s + round2(it.cantidad * it.precioUnitUsd), 0));
-    const totalUsd = round2(subtotal + costoEnvio);
-    const totalBs = round2(totalUsd * tasaNum);
-
-    // 4. Crear cotización con estado 'aceptada' directamente
-    const now = new Date().toISOString();
-    const cotRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?select=id,numero`, {
-      method: 'POST',
-      headers: { ...headers, Prefer: 'return=representation' },
-      body: JSON.stringify({
-        cliente_id: clienteId,
-        vendedor_id: user.operator_id,
-        transportista_id: transportistaId || null,
-        estado: 'aceptada',
-        subtotal_usd: subtotal,
-        descuento_global_pct: 0,
-        descuento_usd: 0,
-        costo_envio_usd: costoEnvio,
-        total_usd: totalUsd,
-        tasa_bcv_snapshot: tasaNum,
-        total_bs_snapshot: totalBs,
-        notas_cliente: notasCliente?.trim() || null,
-        notas_internas: 'Venta rápida',
-        enviada_en: now,
-        actualizado_en: now,
-      }),
-    });
-    if (!cotRes.ok) {
-      const err = await cotRes.text();
-      return jsonError(`Error al crear cotización: ${err}`, 500, request);
-    }
-    const [cot] = await cotRes.json();
-
-    // 5. Insertar items de cotización (con snapshots de producto)
-    const itemRows = items.map((it, idx) => {
-      const prod = stockMap[it.productoId];
-      return {
-        cotizacion_id: cot.id,
-        producto_id: it.productoId,
-        codigo_snap: prod.codigo || null,
-        nombre_snap: prod.nombre,
-        unidad_snap: prod.unidad || 'und',
-        cantidad: it.cantidad,
-        precio_unit_usd: it.precioUnitUsd,
-        descuento_pct: 0,
-        total_linea_usd: round2(it.cantidad * it.precioUnitUsd),
-        orden: idx,
-      };
-    });
-
-    const itemsRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizacion_items`, {
-      method: 'POST', headers,
-      body: JSON.stringify(itemRows),
-    });
-    if (!itemsRes.ok) {
-      const err = await itemsRes.text();
-      return jsonError(`Error al insertar items: ${err}`, 500, request);
-    }
-
-    // 6. Descontar stock y registrar kardex
-    const loteId = crypto.randomUUID();
-    const movimientos = [];
-    for (const item of items) {
-      const prod = stockMap[item.productoId];
-      const stockAnterior = Number(prod.stock_actual);
-      const nuevoStock = stockAnterior - Number(item.cantidad);
-      await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${item.productoId}`, {
-        method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
-        body: JSON.stringify({ stock_actual: nuevoStock }),
-      });
-      movimientos.push({
-        lote_id: loteId,
-        tipo: 'egreso',
-        motivo: `Venta rápida — Nota de despacho #${cot.numero}`,
-        motivo_tipo: 'otro',
-        producto_id: item.productoId,
-        producto_nombre: prod.nombre,
-        cantidad: Number(item.cantidad),
-        stock_anterior: stockAnterior,
-        stock_nuevo: nuevoStock,
-        usuario_id: user.operator_id,
-        usuario_nombre: operador.nombre,
-        usuario_color: operador.color || null,
-      });
-    }
-
-    if (movimientos.length > 0) {
-      const kardexRes = await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos`, {
-        method: 'POST', headers,
-        body: JSON.stringify(movimientos),
-      });
-      if (!kardexRes.ok) {
-        const kardexErr = await kardexRes.text();
-        return jsonError(`Error al registrar kardex: ${kardexErr}`, 500, request);
-      }
-    }
-
-    // 7. Crear nota de despacho
-    const totalConFlete = totalUsd + flete;
-    const despRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?select=id,numero`, {
-      method: 'POST',
-      headers: { ...headers, Prefer: 'return=representation' },
-      body: JSON.stringify({
-        cotizacion_id: cot.id,
-        cliente_id: clienteId,
-        vendedor_id: user.operator_id,
-        transportista_id: transportistaId || null,
-        estado: 'pendiente',
-        total_usd: totalConFlete,
-        flete_usd: flete,
-        notas: notas?.trim() || null,
-        forma_pago: formaPago,
-        referencia_pago: referenciaPago || null,
-        forma_pago_cliente: formaPagoCliente || null,
-        creado_por: user.operator_id,
-      }),
-    });
-    if (!despRes.ok) {
-      const err = await despRes.text();
-      return jsonError(`Error al crear despacho: ${err}`, 500, request);
-    }
-    const [despacho] = await despRes.json();
-
-    // 8. Si es Cta por cobrar, registrar cargo CxC
-    if (formaPago === 'Cta por cobrar' && despacho) {
-      const cxcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/registrar_cargo_cxc`, {
-        method: 'POST', headers,
-        body: JSON.stringify({
-          p_cliente_id: clienteId,
-          p_despacho_id: despacho.id,
-          p_monto_usd: totalConFlete,
-          p_descripcion: `Venta rápida — Despacho #${cot.numero}`,
-          p_registrado_por: user.operator_id,
-        }),
-      });
-      if (!cxcRes.ok) {
-        const cxcErr = await cxcRes.text();
-        return jsonError(`Error al registrar CxC: ${cxcErr}`, 500, request);
-      }
-    }
-
-    // 9. Auditoría
-    await registrarAuditoria(env, headers, {
-      usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
-      categoria: 'COTIZACION', accion: 'VENTA_RAPIDA',
-      entidadTipo: 'nota_despacho', entidadId: despacho.id,
-      meta: { cotizacion_id: cot.id, total_usd: totalConFlete, items: items.length },
-    });
-
-    return json({ cotizacionId: cot.id, despachoId: despacho.id, numero: cot.numero }, 200, request);
-  } catch (e) {
-    return jsonError(e.message || 'Error al crear venta rápida', 500, request);
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
 // 3. ACTUALIZAR ESTADO DESPACHO
 // ══════════════════════════════════════════════════════════════════════════════
 async function handleActualizarEstadoDespacho(request, env) {
-  const v = await validateOperator(request, env);
+  const v = await validateOperator(request, env, { requireSupervisor: true });
   if (v.error) return v.error;
   const { user, operador, headers } = v;
 
@@ -2359,18 +2213,6 @@ async function handleActualizarEstadoDespacho(request, env) {
   const { despachoId, nuevoEstado } = body;
   if (!despachoId || !nuevoEstado) return jsonError('Faltan campos', 400, request);
   if (!isValidUuid(despachoId)) return jsonError('despachoId inválido', 400, request);
-
-  // Validar permisos por rol y estado destino
-  const rol = operador.rol;
-  const esPrivilegiado = rol === 'supervisor' || rol === 'administracion';
-  const esLogistica = rol === 'logistica';
-  if (!esPrivilegiado && !esLogistica) {
-    return jsonError('No tienes permiso para cambiar el estado del despacho', 403, request);
-  }
-  // Logística solo puede marcar entregada
-  if (esLogistica && nuevoEstado !== 'entregada') {
-    return jsonError('Logística solo puede marcar despachos como entregados', 403, request);
-  }
 
   try {
     // 1. Obtener despacho
@@ -2385,41 +2227,65 @@ async function handleActualizarEstadoDespacho(request, env) {
       return jsonError(`No se puede pasar de "${desp.estado}" a "${nuevoEstado}"`, 400, request);
     }
 
-    // 3. Si se anula, usar RPC atómico (stock + kardex + comisión en 1 transacción)
+    // 3. Si se anula, devolver stock y registrar kardex
     if (nuevoEstado === 'anulada') {
-      const rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/anular_despacho_atomico`, {
-        method: 'POST', headers,
-        body: JSON.stringify({
-          p_despacho_id: despachoId,
-          p_usuario_id: user.operator_id,
-          p_usuario_nombre: operador.nombre,
-          p_usuario_color: operador.color || null,
-        }),
-      });
-      if (!rpcRes.ok) {
-        const rpcErr = await rpcRes.text();
-        return jsonError(`Error al anular despacho: ${rpcErr}`, 500, request);
+      const ciRes = await fetch(
+        `${env.SUPABASE_URL}/rest/v1/cotizacion_items?cotizacion_id=eq.${desp.cotizacion_id}&producto_id=not.is.null&select=producto_id,cantidad,nombre_snap`,
+        { headers }
+      );
+      const items = await ciRes.json();
+      const loteId = crypto.randomUUID();
+      const movimientos = [];
+      for (const item of items) {
+        const pRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${item.producto_id}&select=stock_actual,nombre`, { headers });
+        const [prod] = await pRes.json();
+        if (prod) {
+          const stockAnterior = Number(prod.stock_actual);
+          const nuevoStock = stockAnterior + Number(item.cantidad);
+          await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${item.producto_id}`, {
+            method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
+            body: JSON.stringify({ stock_actual: nuevoStock }),
+          });
+          movimientos.push({
+            lote_id: loteId,
+            tipo: 'ingreso',
+            motivo: `Anulación de despacho #${desp.numero}`,
+            motivo_tipo: 'venta',
+            producto_id: item.producto_id,
+            producto_nombre: item.nombre_snap || prod.nombre,
+            cantidad: Number(item.cantidad),
+            stock_anterior: stockAnterior,
+            stock_nuevo: nuevoStock,
+            usuario_id: user.operator_id,
+            usuario_nombre: operador.nombre,
+            usuario_color: operador.color || null,
+          });
+        }
+      }
+      if (movimientos.length > 0) {
+        await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos`, {
+          method: 'POST', headers,
+          body: JSON.stringify(movimientos),
+        });
       }
     }
 
-    // 4. Actualizar estado (si no es anulada — el RPC ya lo hizo)
-    if (nuevoEstado !== 'anulada') {
-      const updateData = { estado: nuevoEstado };
-      const ahora = new Date().toISOString();
-      if (nuevoEstado === 'despachada') updateData.despachada_en = ahora;
-      if (nuevoEstado === 'entregada') {
-        updateData.entregada_en = ahora;
-        if (!desp.despachada_en) updateData.despachada_en = ahora; // auto-despachar
-      }
-
-      await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}`, {
-        method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
-        body: JSON.stringify(updateData),
-      });
+    // 4. Actualizar estado
+    const updateData = { estado: nuevoEstado };
+    const ahora = new Date().toISOString();
+    if (nuevoEstado === 'despachada') updateData.despachada_en = ahora;
+    if (nuevoEstado === 'entregada') {
+      updateData.entregada_en = ahora;
+      if (!desp.despachada_en) updateData.despachada_en = ahora; // auto-despachar
     }
 
-    // 5. Si despachada, calcular comisión para el vendedor
-    if (nuevoEstado === 'despachada') {
+    await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}`, {
+      method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
+      body: JSON.stringify(updateData),
+    });
+
+    // 5. Si entregada, calcular comisión
+    if (nuevoEstado === 'entregada') {
       try {
         await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcular_comision_despacho`, {
           method: 'POST', headers,
@@ -2585,7 +2451,7 @@ async function handleReasignarCliente(request, env) {
 // 6. REGISTRAR ABONO CxC
 // ══════════════════════════════════════════════════════════════════════════════
 async function handleRegistrarAbono(request, env) {
-  const v = await validateOperator(request, env, { requirePrivileged: true });
+  const v = await validateOperator(request, env, { requireSupervisor: true });
   if (v.error) return v.error;
   const { user, headers } = v;
 
@@ -3558,607 +3424,39 @@ Responde en español con nivel de riesgo (crítico/alto/medio/bajo). Usa formato
   }
 }
 
-// DELETE /api/admin/logs/purge — limpiar logs > 90 días
+// DELETE /api/admin/logs/purge — limpiar logs según rango de días
 async function handlePurgeLogs(request, env) {
   const user = await verifyAuth(request, env)
   if (!user?.operator_id) return jsonError('No autenticado', 401, request)
   const isSup = await verifySupervisor(user.operator_id, env)
   if (!isSup) return jsonError('Solo supervisores', 403, request)
 
+  // Leer días del body (0 = todos, 7 = >7 días, 30 = >30 días, etc.)
+  let body = {}
+  try { body = await request.json() } catch { /* sin body = todos */ }
+  const dias = typeof body.dias === 'number' ? body.dias : 0
+
   const h = {
     apikey: env.SUPABASE_SERVICE_KEY,
     Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
   }
 
-  const corte = new Date(Date.now() - 90 * 86400000).toISOString()
+  let filter = ''
+  if (dias > 0) {
+    const corte = new Date(Date.now() - dias * 86400000).toISOString()
+    filter = `?ts=lt.${corte}`
+  } else {
+    // Borrar todos: necesitamos un filtro que matchee todo
+    filter = '?id=not.is.null'
+  }
+
   const res = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/system_logs?ts=lt.${corte}`,
-    { method: 'DELETE', headers: { ...h, Prefer: 'return=representation' } }
+    `${env.SUPABASE_URL}/rest/v1/system_logs${filter}`,
+    { method: 'DELETE', headers: { ...h, Prefer: 'return=representation', 'Content-Type': 'application/json' } }
   )
 
   if (!res.ok) return jsonError('Error purgando logs', 500, request)
   const deleted = await res.json()
 
   return json({ ok: true, eliminados: deleted.length }, 200, request)
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// SCAN MATERIAL LIST — IA Vision para listas manuscritas
-// ══════════════════════════════════════════════════════════════════════════════
-
-// Rate limit separado para scan (más estricto)
-const scanRateLimitMap = new Map()
-function isScanRateLimited(ip) {
-  const now = Date.now()
-  const entry = scanRateLimitMap.get(ip)
-  if (!entry || now - entry.windowStart > 60_000) {
-    scanRateLimitMap.set(ip, { windowStart: now, count: 1 })
-    return false
-  }
-  entry.count++
-  return entry.count > 5 // max 5 scans por minuto
-}
-
-// ── Sinónimos server-side expandidos (jerga venezolana + inventario) ──────────
-const SCAN_SINONIMOS = {
-  // Fracciones
-  'media': ['1/2'], 'medio': ['1/2'], 'cuarto': ['1/4'], 'octavo': ['1/8'],
-  // Materiales y jerga venezolana
-  'cabilla': ['cabillas', 'cabilla estriada'], 'cabillas': ['cabilla'],
-  'varilla': ['cabilla', 'cabillas'], 'varillas': ['cabilla'],
-  'platina': ['pletina', 'pletinas'], 'platinas': ['pletina'],
-  'pletina': ['platina', 'platinas'], 'pletinas': ['platina'],
-  'tubo': ['tubos'], 'tubos': ['tubo'],
-  'tuberia': ['tubo', 'tubos'],
-  'lamina': ['lam', 'laminas'], 'laminas': ['lam', 'lamina'], 'lam': ['lamina'],
-  'zinc': ['lamina', 'galv', 'galvanizado', 'galvatecho', 'prepintado'],
-  'teja': ['lamina', 'acerolit', 'galvatecho', 'termopanel'],
-  'tejas': ['lamina', 'acerolit', 'galvatecho', 'termopanel'],
-  'losacero': ['losa acero'], 'losa': ['losacero'],
-  'perfil': ['perfiles', 'vigueta'], 'perfiles': ['perfil'],
-  'vigueta': ['perfil', 'vigueta tipo c'],
-  'cercha': ['cerchas'], 'cerchas': ['cercha'],
-  // Conexiones
-  'codo': ['codos'], 'codos': ['codo'],
-  'tee': ['te'], 'te': ['tee'],
-  'anillo': ['anillos'], 'anillos': ['anillo'],
-  'sifon': ['sifones'], 'sifones': ['sifon'],
-  'union': ['uniones'], 'uniones': ['union'],
-  'tapon': ['tapones'], 'tapones': ['tapon'],
-  'niple': ['niples', 'nipple'], 'niples': ['niple'],
-  'yee': ['ye'], 'ye': ['yee'],
-  'curva': ['curvas'], 'curvas': ['curva'],
-  'reduccion': ['reducciones'], 'reducciones': ['reduccion'],
-  'adaptador': ['adaptadores'],
-  // Pegamentos
-  'pega': ['pegamento', 'pega prof'], 'pegamento': ['pega'],
-  'cemento': ['cemento gris'],
-  'sika': ['sikaflex'], 'sikaflex': ['sika'],
-  // Acabados
-  'galvanizado': ['galv', 'galvanizada'], 'galvanizada': ['galv', 'galvanizado'],
-  'galv': ['galvanizado', 'galvanizada'],
-  'hierro': ['hn', 'hierro negro'], 'hn': ['hierro', 'hierro negro'],
-  'negro': ['negra', 'hn'], 'negra': ['negro'],
-  'blanco': ['blanca'], 'blanca': ['blanco'],
-  'estriada': ['estriado'], 'estriado': ['estriada'],
-  'redondo': ['redonda'], 'redonda': ['redondo'],
-  'cuadrado': ['cuadrada', 'cuad'], 'cuadrada': ['cuadrado'], 'cuad': ['cuadrado'],
-  'rectangular': ['rect'], 'rect': ['rectangular'],
-  'estructural': ['estruc'], 'estruc': ['estructural'],
-  'pulido': ['pulido'],
-  'roscado': ['rosc', 'c/rosc'], 'rosc': ['roscado', 'c/rosc'],
-  'liso': ['lisa'], 'lisa': ['liso'],
-  // Tubos específicos
-  'electrico': ['elec', 'emt', 'conduit'], 'electrica': ['elec', 'electrico'],
-  'elec': ['electrico'], 'conduit': ['elec', 'electrico'], 'emt': ['elec', 'electrico'],
-  'ventilacion': ['vent'], 'vent': ['ventilacion'],
-  'pvc': ['pvc'],
-  // Otros productos
-  'viga': ['vigas'], 'vigas': ['viga'],
-  'angulo': ['angulos'], 'angulos': ['angulo'],
-  'malla': ['mallas', 'truckson'], 'mallas': ['malla'], 'truckson': ['malla'],
-  'alambre': ['alambre galvanizado', 'alambron'],
-  'alambron': ['alambre'],
-  'zuncho': ['zunchos'], 'zunchos': ['zuncho'],
-  'cable': ['cables'], 'cables': ['cable'],
-  'breaker': ['breakers'],
-  'cajetin': ['cajetines'],
-  'disco': ['discos'], 'discos': ['disco'],
-  'electrodo': ['electrodos'], 'electrodos': ['electrodo'],
-  'clavo': ['clavos'], 'clavos': ['clavo'],
-  'tornillo': ['tornillos', 'tor'], 'tornillos': ['tornillo', 'tor'], 'tor': ['tornillo'],
-  'barra': ['barras'], 'barras': ['barra'],
-  'drywall': ['dry wall', 'laminas drywall'],
-  'arvidal': ['arvidal'],
-  'calibre': ['cal'], 'cal': ['calibre'],
-  'valvula': ['valvulas'], 'valvulas': ['valvula'],
-  // Vigas
-  'ipe': ['ipe'], 'ipn': ['ipn'], 'hea': ['hea'], 'heb': ['heb'],
-  'wf': ['wf'], 'upl': ['upl'], 'vp': ['vp'],
-}
-
-// Correcciones de errores tipográficos comunes
-const SCAN_TYPOS = {
-  'cavilla': 'cabilla', 'cavillas': 'cabillas', 'kabilla': 'cabilla', 'kabillas': 'cabillas',
-  'kabiya': 'cabilla', 'cabiya': 'cabilla', 'cabiyas': 'cabillas', 'gavilla': 'cabilla',
-  'cabila': 'cabilla', 'cabilas': 'cabillas',
-  'tuvo': 'tubo', 'tuvos': 'tubos', 'tibo': 'tubo', 'tubp': 'tubo',
-  'lamima': 'lamina', 'lanina': 'lamina', 'lamna': 'lamina', 'laina': 'lamina',
-  'coto': 'codo', 'angilo': 'angulo', 'amgulo': 'angulo', 'anguko': 'angulo', 'abgulo': 'angulo',
-  'biga': 'viga', 'bigas': 'vigas',
-  'pletima': 'pletina', 'platima': 'platina', 'pletna': 'pletina',
-  'clabo': 'clavo', 'clabos': 'clavos', 'clabp': 'clavo',
-  'almabre': 'alambre', 'alhambre': 'alambre', 'alanbre': 'alambre', 'alembre': 'alambre',
-  'cemeto': 'cemento', 'cemnto': 'cemento', 'semento': 'cemento', 'ceemento': 'cemento',
-  'cifon': 'sifon', 'sifo': 'sifon',
-  'peag': 'pega', 'pgea': 'pega', 'pegaa': 'pega',
-  'maya': 'malla', 'mayas': 'mallas', 'maalla': 'malla',
-  'losasero': 'losacero', 'lozacero': 'losacero',
-  'breiker': 'breaker', 'breker': 'breaker', 'braker': 'breaker',
-  'electrofo': 'electrodo', 'electrod': 'electrodo',
-  'perfl': 'perfil', 'perfi': 'perfil',
-  'disko': 'disco', 'dico': 'disco',
-  'zunco': 'zuncho', 'suncho': 'zuncho', 'sunco': 'zuncho',
-  'cajehn': 'cajetin', 'cajehin': 'cajetin',
-  'rejila': 'rejilla', 'rejiya': 'rejilla',
-  'galbanizado': 'galvanizado', 'galvaniado': 'galvanizado',
-  'estrucrural': 'estructural', 'estructiral': 'estructural',
-  'pulifo': 'pulido', 'galvatexo': 'galvatecho', 'galvatehco': 'galvatecho',
-  'termopabel': 'termopanel', 'tremopanel': 'termopanel',
-  'drywal': 'drywall', 'draiwall': 'drywall',
-}
-
-const SCAN_FRACCIONES_MULTI = [
-  ['tres octavos', '3/8'], ['cinco octavos', '5/8'],
-  ['tres cuartos', '3/4'], ['siete octavos', '7/8'],
-  ['uno y medio', '1 1/2'], ['1 y medio', '1 1/2'], ['1 y media', '1 1/2'],
-  ['2 y medio', '2 1/2'], ['2 y media', '2 1/2'],
-  ['3 y medio', '3 1/2'], ['3 y media', '3 1/2'],
-]
-
-// Reemplazos multi-palabra que se procesan antes de tokenizar
-const SCAN_REEMPLAZOS_PRE = [
-  [/aguas?\s+negras?/gi, 'A/N'],
-  [/aguas?\s+blancas?/gi, 'A.F'],
-  [/aguas?\s+frias?/gi, 'A.F'],
-  [/agua\s+caliente/gi, 'A.C'],
-  [/alta\s+presion/gi, 'alta presion'],
-  [/(\d+)\s*pulgadas?/gi, '$1"'],
-  [/(\d+)\s*pulg\b/gi, '$1"'],
-  // Medidas compuestas: "1 1/2" → "1~1/2" para no separar al tokenizar
-  [/(\d+)\s+([\d]+\/[\d]+)/g, '$1~$2'],
-  // Quitar prefijos triviales
-  [/\bsacos?\s+de\s+/gi, ''],
-  [/\bkilos?\s+de?\s*/gi, ''],
-  [/\bgalones?\s+de\s+/gi, ''],
-  [/\bgalon\s+de\s+/gi, ''],
-  [/\brollos?\s+de\s+/gi, ''],
-  [/\bmetros?\s+de\s+/gi, ''],
-]
-
-const SCAN_STOPWORDS = new Set([
-  'de', 'del', 'la', 'el', 'los', 'las', 'un', 'una', 'para', 'con', 'por', 'en', 'al', 'y', 'o', 'que', 'se', 'es',
-])
-
-function scanNormalize(text) {
-  return (text || '').toLowerCase()
-    .replace(/[áàä]/g, 'a').replace(/[éèë]/g, 'e')
-    .replace(/[íìï]/g, 'i').replace(/[óòö]/g, 'o')
-    .replace(/[úùü]/g, 'u').replace(/ñ/g, 'n')
-}
-
-function scanTokenize(descripcion) {
-  let q = scanNormalize(descripcion)
-  for (const [frase, reemplazo] of SCAN_FRACCIONES_MULTI) {
-    q = q.replace(new RegExp(frase, 'g'), reemplazo)
-  }
-  for (const [regex, reemplazo] of SCAN_REEMPLAZOS_PRE) {
-    q = q.replace(regex, reemplazo)
-  }
-  const tokens = q.split(/\s+/).filter(t => t && !SCAN_STOPWORDS.has(t))
-  return tokens.map(token => {
-    // Restaurar medidas compuestas: "1~1/2" → "1 1/2"
-    const displayToken = token.replace(/~/g, ' ')
-    const variantes = new Set([displayToken])
-
-    // 1. Corrección de typos
-    const corrected = SCAN_TYPOS[displayToken]
-    if (corrected) {
-      variantes.add(corrected)
-      const sins = SCAN_SINONIMOS[corrected]
-      if (sins) sins.forEach(s => variantes.add(s))
-    }
-
-    // 2. Sinónimos directos (ahora son arrays)
-    const sins = SCAN_SINONIMOS[displayToken]
-    if (sins) sins.forEach(s => variantes.add(s))
-
-    // 3. Deplural: si termina en 's', agregar sin la 's'
-    if (displayToken.length > 3 && displayToken.endsWith('s')) {
-      const singular = displayToken.slice(0, -1)
-      variantes.add(singular)
-      const sinS = SCAN_SINONIMOS[singular]
-      if (sinS) sinS.forEach(s => variantes.add(s))
-      const typoS = SCAN_TYPOS[singular]
-      if (typoS) variantes.add(typoS)
-    }
-    // 4. Deplural: si termina en 'es', agregar sin 'es'
-    if (displayToken.length > 4 && displayToken.endsWith('es')) {
-      const base = displayToken.slice(0, -2)
-      variantes.add(base)
-      const sinB = SCAN_SINONIMOS[base]
-      if (sinB) sinB.forEach(s => variantes.add(s))
-    }
-    // 5. Agregar plural: si NO termina en 's', agregar con 's'
-    if (!displayToken.endsWith('s') && displayToken.length > 2) {
-      variantes.add(displayToken + 's')
-    }
-
-    return [...variantes]
-  })
-}
-
-async function findProductMatches(descripcion, env) {
-  const tokenGroups = scanTokenize(descripcion)
-  if (tokenGroups.length === 0) return []
-
-  // Construir filtro AND de ORs para PostgREST
-  const orClauses = tokenGroups.map(variantes => {
-    const conditions = variantes.flatMap(v => {
-      const safe = v.replace(/[.,()\\%_']/g, '')
-      if (!safe || safe.length < 2) return [] // ignorar tokens muy cortos
-      const encoded = encodeURIComponent(safe)
-      // Para tokens cortos (2-3 chars), buscar con delimitador de palabra para evitar falsos positivos
-      // Ej: "te" no debe matchear "calienTE", sino "TEE A.F"
-      if (safe.length <= 3) {
-        return [
-          `nombre.ilike.${encoded} *`,   // al inicio: "TEE ..."
-          `nombre.ilike.* ${encoded} *`,  // en medio: "... TEE ..."
-          `nombre.ilike.* ${encoded}`,    // al final: "... TEE"
-        ]
-      }
-      return [`nombre.ilike.*${encoded}*`, `codigo.ilike.*${encoded}*`]
-    })
-    if (conditions.length === 0) return null
-    return `or=(${conditions.join(',')})`
-  }).filter(Boolean)
-
-  if (orClauses.length === 0) return []
-
-  const select = 'id,codigo,nombre,unidad,precio_usd,precio_2,precio_3,stock_actual,stock_minimo,imagen_url'
-  const url = `${env.SUPABASE_URL}/rest/v1/productos?activo=eq.true&select=${select}&${orClauses.join('&')}&limit=5&order=stock_actual.desc`
-
-  const res = await fetch(url, {
-    headers: {
-      apikey: env.SUPABASE_SERVICE_KEY,
-      Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-    },
-  })
-  if (!res.ok) return []
-  return await res.json()
-}
-
-// Fallback: búsqueda con el token principal (material) solamente
-async function findProductMatchesFallback(descripcion, env) {
-  const tokenGroups = scanTokenize(descripcion)
-  if (tokenGroups.length === 0) return []
-
-  // Filtrar tokens triviales y muy cortos
-  const triviales = new Set(['de', 'a', 'para', 'con', 'en', 'el', 'la', 'los', 'las', 'un', 'una', 'y', 'o', 'del', 'kilo', 'kilos', 'kg', 'galon', 'galones', 'litro', 'litros', 'metro', 'metros', 'mts', 'pulgada', 'pulgadas', 'pulg', 'aguas', 'blancas', 'negras'])
-  const significativos = tokenGroups.filter(variantes => !variantes.every(v => triviales.has(v) || v.length < 2))
-
-  if (significativos.length === 0) return []
-
-  // Intentar primero con los 2 tokens más significativos
-  for (const count of [2, 1]) {
-    const topTokens = significativos.slice(0, count)
-    const orClauses = topTokens.map(variantes => {
-      const conditions = variantes.flatMap(v => {
-        const safe = v.replace(/[.,()\\%_']/g, '')
-        if (!safe || safe.length < 2) return []
-        const encoded = encodeURIComponent(safe)
-        return [`nombre.ilike.*${encoded}*`]
-      })
-      if (conditions.length === 0) return null
-      return `or=(${conditions.join(',')})`
-    }).filter(Boolean)
-
-    if (orClauses.length === 0) continue
-
-    const select = 'id,codigo,nombre,unidad,precio_usd,precio_2,precio_3,stock_actual,stock_minimo,imagen_url'
-    const url = `${env.SUPABASE_URL}/rest/v1/productos?activo=eq.true&select=${select}&${orClauses.join('&')}&limit=5&order=stock_actual.desc`
-
-    const res = await fetch(url, {
-      headers: {
-        apikey: env.SUPABASE_SERVICE_KEY,
-        Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-      },
-    })
-    if (!res.ok) continue
-    const results = await res.json()
-    if (results.length > 0) return results
-  }
-
-  return []
-}
-
-// ── Parsear texto de lista de materiales (WhatsApp, notas, etc.) ─────────────
-async function handleParseMaterialText(request, env) {
-  const ip = request.headers.get('CF-Connecting-IP') || 'unknown'
-  if (isScanRateLimited(ip)) {
-    return jsonError('Demasiadas solicitudes. Espera un momento.', 429, request)
-  }
-
-  const user = await verifyAuth(request, env)
-  if (!user) return jsonError('No autorizado', 401, request)
-
-  let body
-  try { body = await request.json() } catch { return jsonError('JSON inválido', 400, request) }
-
-  const { text } = body
-  if (!text || typeof text !== 'string' || text.trim().length < 3) {
-    return jsonError('Falta texto para analizar', 400, request)
-  }
-  if (text.length > 10000) return jsonError('Texto demasiado largo (max 10000 chars)', 400, request)
-
-  let aiItems = []
-  let rawAiText = ''
-  try {
-    const aiPromise = env.AI.run('auto', {
-      messages: [
-        {
-          role: 'user',
-          content: `Extrae los materiales de construcción de este mensaje de texto (puede ser de WhatsApp, nota, o lista).
-
-Reglas: singular (cabilla no cabillas), incluir medida (cabilla 1/2), cantidad SOLO en campo cantidad. Si no hay cantidad explícita, usa 1.
-
-JSON array sin explicaciones ni backticks:
-[{"cantidad":90,"descripcion":"cabilla 1/2"},{"cantidad":5,"descripcion":"tubo 1 1/2"}]
-
-Texto:
-${text.slice(0, 5000)}`
-        }
-      ],
-      temperature: 0.1,
-    })
-
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Timeout: la IA tardó más de 60 segundos')), 60000)
-    )
-    const aiResponse = await Promise.race([aiPromise, timeoutPromise])
-
-    let rawText = ''
-    if (typeof aiResponse === 'string') {
-      rawText = aiResponse
-    } else if (aiResponse?.choices?.[0]?.message?.content) {
-      rawText = aiResponse.choices[0].message.content
-    } else if (aiResponse?.response) {
-      rawText = aiResponse.response
-    } else if (aiResponse?.result?.response) {
-      rawText = aiResponse.result.response
-    } else {
-      rawText = JSON.stringify(aiResponse)
-    }
-    rawAiText = rawText
-
-    let jsonMatch = rawText.match(/\[[\s\S]*\]/)
-    if (jsonMatch) {
-      aiItems = JSON.parse(jsonMatch[0])
-    } else {
-      const openBracket = rawText.indexOf('[')
-      if (openBracket !== -1) {
-        let partial = rawText.slice(openBracket).trim()
-        const lastComplete = partial.lastIndexOf('}')
-        if (lastComplete > 0) {
-          partial = partial.slice(0, lastComplete + 1) + ']'
-          try { aiItems = JSON.parse(partial) } catch { /* no se pudo recuperar */ }
-        }
-      }
-    }
-  } catch (e) {
-    await logToSystem(env, {
-      nivel: 'error', origen: 'worker', categoria: 'PARSE_TEXT',
-      mensaje: `Error AI parse text: ${e.message}`,
-      endpoint: 'POST /api/parse-material-text',
-      usuario_id: user.operator_id,
-    })
-    return jsonError(`Error procesando texto: ${e.message}`, 500, request)
-  }
-
-  if (!Array.isArray(aiItems) || aiItems.length === 0) {
-    return json({ items: [], rawAiText: rawAiText?.slice(0, 2000) }, 200, request)
-  }
-
-  // Buscar matches igual que en scan
-  const results = await Promise.all(aiItems.map(async (item, idx) => {
-    const cantidad = Number(item.cantidad) || 1
-    let descripcion = (item.descripcion || '').trim()
-    descripcion = descripcion.replace(/^\d+[\s]*[xX×\-]?\s*/g, '').trim()
-    if (!descripcion) descripcion = (item.descripcion || '').trim()
-    const confianza = Number(item.confianza) || 0.5
-
-    if (!descripcion) return null
-
-    let matches = await findProductMatches(descripcion, env)
-    if (matches.length === 0) {
-      matches = await findProductMatchesFallback(descripcion, env)
-    }
-
-    return {
-      linea: idx + 1,
-      cantidad,
-      descripcionOriginal: descripcion,
-      confianza,
-      matches: matches.map(p => ({
-        id: p.id, codigo: p.codigo, nombre: p.nombre, unidad: p.unidad,
-        precio_usd: Number(p.precio_usd), precio_2: p.precio_2 ? Number(p.precio_2) : null,
-        precio_3: p.precio_3 ? Number(p.precio_3) : null,
-        stock_actual: Number(p.stock_actual), stock_minimo: Number(p.stock_minimo),
-        imagen_url: p.imagen_url,
-      })),
-    }
-  }))
-
-  return json({ items: results.filter(Boolean), rawAiText: rawAiText?.slice(0, 2000) }, 200, request)
-}
-
-async function handleScanMaterialList(request, env) {
-  // Rate limit
-  const ip = request.headers.get('CF-Connecting-IP') || 'unknown'
-  if (isScanRateLimited(ip)) {
-    return jsonError('Demasiadas solicitudes de escaneo. Espera un momento.', 429, request)
-  }
-
-  // Auth
-  const user = await verifyAuth(request, env)
-  if (!user) return jsonError('No autorizado', 401, request)
-
-  // Body
-  let body
-  try { body = await request.json() } catch { return jsonError('JSON inválido', 400, request) }
-
-  const { image, mimeType } = body
-  if (!image || typeof image !== 'string') return jsonError('Falta imagen en base64', 400, request)
-  if (image.length > 10_000_000) return jsonError('Imagen demasiado grande (max ~7MB)', 400, request)
-
-  const mime = mimeType || 'image/jpeg'
-
-  // Step 1: Llamar a AI Vision para extraer la lista
-  let aiItems = []
-  let rawAiText = ''
-  try {
-    // Usar el AI binding virtualizado de camelAI con modelo 'auto' (soporta visión)
-    // No establecer max_tokens — los thinking tokens cuentan y truncan la respuesta
-    const aiPromise = env.AI.run('auto', {
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: `Lee esta lista de materiales de construcción manuscrita. Extrae TODAS las líneas, cada una tiene cantidad y material.
-
-Reglas: singular (cabilla no cabillas), incluir medida (cabilla 1/2), cantidad SOLO en campo cantidad.
-
-JSON array sin explicaciones ni backticks:
-[{"cantidad":90,"descripcion":"cabilla 1/2"},{"cantidad":5,"descripcion":"tubo 1 1/2"}]` },
-            { type: 'image_url', image_url: { url: `data:${mime};base64,${image}` } }
-          ]
-        }
-      ],
-      temperature: 0.1,
-    })
-
-    // Timeout de 60s para evitar que se cuelgue
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Timeout: la IA tardó más de 60 segundos')), 60000)
-    )
-    const aiResponse = await Promise.race([aiPromise, timeoutPromise])
-
-    // Extraer JSON de la respuesta (soporta múltiples formatos)
-    let rawText = ''
-    if (typeof aiResponse === 'string') {
-      rawText = aiResponse
-    } else if (aiResponse?.choices?.[0]?.message?.content) {
-      rawText = aiResponse.choices[0].message.content
-    } else if (aiResponse?.response) {
-      rawText = aiResponse.response
-    } else if (aiResponse?.result?.response) {
-      rawText = aiResponse.result.response
-    } else {
-      rawText = JSON.stringify(aiResponse)
-    }
-    rawAiText = rawText
-
-    // Limpiar: extraer el array JSON
-    let jsonMatch = rawText.match(/\[[\s\S]*\]/)
-    if (jsonMatch) {
-      aiItems = JSON.parse(jsonMatch[0])
-    } else {
-      // Respuesta truncada: la IA devolvió un [ pero no cerró con ]
-      // Intentar cerrar el JSON manualmente
-      const openBracket = rawText.indexOf('[')
-      if (openBracket !== -1) {
-        let partial = rawText.slice(openBracket).trim()
-        // Quitar último objeto incompleto (no tiene cierre })
-        const lastComplete = partial.lastIndexOf('}')
-        if (lastComplete > 0) {
-          partial = partial.slice(0, lastComplete + 1) + ']'
-          try {
-            aiItems = JSON.parse(partial)
-          } catch { /* no se pudo recuperar */ }
-        }
-      }
-    }
-  } catch (e) {
-    await logToSystem(env, {
-      nivel: 'error', origen: 'worker', categoria: 'SCAN',
-      mensaje: `Error AI Vision: ${e.message}`,
-      stack: e.stack?.slice(0, 2000),
-      endpoint: 'POST /api/scan-material-list',
-      usuario_id: user.operator_id,
-    })
-    return jsonError(`Error procesando imagen: ${e.message}`, 500, request)
-  }
-
-  if (!Array.isArray(aiItems) || aiItems.length === 0) {
-    // Log para debug: qué devolvió la IA
-    await logToSystem(env, {
-      nivel: 'warn', origen: 'worker', categoria: 'SCAN',
-      mensaje: `AI no devolvió items parseables`,
-      endpoint: 'POST /api/scan-material-list',
-      usuario_id: user.operator_id,
-      meta: { rawAiText: rawAiText?.slice(0, 3000) },
-    })
-    return json({ items: [], rawAiText: rawAiText?.slice(0, 2000) }, 200, request)
-  }
-
-  // Step 2: Buscar matches en la base de datos para cada item
-  const results = await Promise.all(aiItems.map(async (item, idx) => {
-    const cantidad = Number(item.cantidad) || 1
-    // Limpiar descripción: quitar cantidad duplicada al inicio (ej: "90 x cabillas" → "cabillas")
-    let descripcion = (item.descripcion || '').trim()
-    descripcion = descripcion.replace(/^\d+[\s]*[xX×\-]?\s*/g, '').trim()
-    if (!descripcion) descripcion = (item.descripcion || '').trim() // fallback si quedó vacía
-    const confianza = Number(item.confianza) || 0.5
-
-    if (!descripcion) return null
-
-    // Intento 1: búsqueda con todos los tokens
-    let matches = await findProductMatches(descripcion, env)
-
-    // Intento 2: fallback con token principal si no hay matches
-    if (matches.length === 0) {
-      matches = await findProductMatchesFallback(descripcion, env)
-    }
-
-    return {
-      linea: idx + 1,
-      cantidad,
-      descripcionOriginal: descripcion,
-      confianza,
-      matches: matches.map(p => ({
-        id: p.id,
-        codigo: p.codigo,
-        nombre: p.nombre,
-        unidad: p.unidad,
-        precio_usd: Number(p.precio_usd),
-        precio_2: p.precio_2 ? Number(p.precio_2) : null,
-        precio_3: p.precio_3 ? Number(p.precio_3) : null,
-        stock_actual: Number(p.stock_actual),
-        stock_minimo: Number(p.stock_minimo),
-        imagen_url: p.imagen_url,
-      })),
-    }
-  }))
-
-  // Log exitoso
-  await logToSystem(env, {
-    nivel: 'info', origen: 'worker', categoria: 'SCAN',
-    mensaje: `Escaneo exitoso: ${results.filter(Boolean).length} items extraídos`,
-    endpoint: 'POST /api/scan-material-list',
-    usuario_id: user.operator_id,
-    usuario_nombre: user.email,
-    meta: { itemCount: results.filter(Boolean).length },
-  })
-
-  return json({ items: results.filter(Boolean), rawAiText: rawAiText?.slice(0, 2000) }, 200, request)
 }

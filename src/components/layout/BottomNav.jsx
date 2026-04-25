@@ -23,7 +23,8 @@ const MORE_ITEMS = [
 ]
 
 export default function BottomNav({ esSupervisor, esAdministracion = false, rol: rolProp }) {
-  const esPrivilegiado = esSupervisor || esAdministracion
+  const esDesarrollador = rolProp === 'desarrollador'
+  const esPrivilegiado = esSupervisor || esAdministracion || esDesarrollador
   const rol = rolProp || (esAdministracion ? 'administracion' : esSupervisor ? 'supervisor' : 'vendedor')
   const [showMore, setShowMore] = useState(false)
 
@@ -40,6 +41,7 @@ export default function BottomNav({ esSupervisor, esAdministracion = false, rol:
           style={{ background: '#0f1f3c', border: '1px solid rgba(255,255,255,0.1)' }}>
           <div className="grid grid-cols-3 gap-1 p-3">
             {MORE_ITEMS.filter(item => {
+              if (esDesarrollador) return true
               if (item.excludeRoles && item.excludeRoles.includes(rol)) return false
               if (item.onlyRoles && !item.onlyRoles.includes(rol)) return false
               if (item.supervisorOnly && !esSupervisor) return false
@@ -75,6 +77,7 @@ export default function BottomNav({ esSupervisor, esAdministracion = false, rol:
         <div className="flex items-center justify-around px-2 h-16">
           {BOTTOM_ITEMS
             .filter(item => {
+              if (esDesarrollador) return true
               if (item.excludeRoles && item.excludeRoles.includes(rol)) return false
               if (item.onlyRoles && !item.onlyRoles.includes(rol)) return false
               return true
