@@ -153,6 +153,16 @@ function RutaSupervisorOAdmin() {
   return <Outlet />
 }
 
+// ─── Ruta exclusiva de desarrollador ──────────────────────────────────────────
+function RutaDesarrollador() {
+  const { perfil, initialized } = useAuthStore()
+
+  if (!initialized) return <PantallaCarga />
+  if (!perfil) return <Navigate to="/login" replace />
+  if (perfil.rol !== 'desarrollador') return <Navigate to="/" replace />
+  return <Outlet />
+}
+
 // ─── Ruta que excluye un rol específico ──────────────────────────────────────
 // Administracion y logistica NO pueden ver transportistas
 function RutaExcluyeAdmin() {
@@ -219,6 +229,10 @@ function AppRoutes() {
             <Route element={<RutaSupervisor />}>
               <Route path="/usuarios"      element={<UsuariosView />} />
               <Route path="/configuracion" element={<ConfiguracionView />} />
+            </Route>
+
+            {/* Rutas exclusivas de desarrollador */}
+            <Route element={<RutaDesarrollador />}>
               <Route path="/logs"          element={<LogsView />} />
             </Route>
           </Route>

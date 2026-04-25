@@ -61,7 +61,7 @@ const NAV_TODOS = [
 const NAV_SUPERVISOR = [
   { path: '/reportes',      label: 'Reportes',      icono: BarChart3 },
   { path: '/configuracion', label: 'Configuración', icono: Settings, excludeRoles: ['administracion'] },
-  { path: '/logs',          label: 'System Logs',   icono: ScrollText },
+  { path: '/logs',          label: 'System Logs',   icono: ScrollText, onlyRoles: ['desarrollador'] },
 ]
 
 // ─── Badge de rol ──────────────────────────────────────────────────────────────
@@ -422,7 +422,7 @@ export default function AppLayout() {
               )}
               {sidebarCollapsed && <div className="pt-3 mt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }} />}
               {NAV_SUPERVISOR
-                .filter(item => esDesarrollador || !item.excludeRoles || !item.excludeRoles.includes(perfil?.rol))
+                .filter(item => esDesarrollador || ((!item.excludeRoles || !item.excludeRoles.includes(perfil?.rol)) && (!item.onlyRoles || item.onlyRoles.includes(perfil?.rol))))
                 .map(({ path, label, icono: Icono }) => (
                 <NavItem key={path} path={path} label={label} Icono={Icono} onClick={cerrarMenu} collapsed={sidebarCollapsed} />
               ))}
