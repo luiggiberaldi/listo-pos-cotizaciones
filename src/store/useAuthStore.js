@@ -40,11 +40,24 @@ const useAuthStore = create((set, get) => ({
 
   // ─── Inicializar: suscribirse a cambios de auth ────────────────────────────
   initialize: () => {
+    // Detectar si hay sesión guardada para dar más tiempo
+    let haySession = false
+    try {
+      const keys = Object.keys(localStorage)
+      const sbKey = keys.find(k => k.startsWith('sb-') && k.endsWith('-auth-token'))
+      if (sbKey && localStorage.getItem(sbKey)) haySession = true
+    } catch { /* ignorar */ }
+
     const timeoutId = setTimeout(() => {
       if (!get().initialized) {
-        set({ initialized: true, user: null, perfil: null })
+        // Si hay sesión guardada, no forzar user: null — dejar que Supabase la restaure
+        if (haySession) {
+          set({ initialized: true })
+        } else {
+          set({ initialized: true, user: null, perfil: null })
+        }
       }
-    }, 2000)
+    }, haySession ? 5000 : 2000)
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
@@ -55,7 +68,7 @@ const useAuthStore = create((set, get) => ({
               set({ user: session.user })
               const perfilPromise = get()._cargarPerfil(session.user)
               const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('timeout')), 1800)
+                setTimeout(() => reject(new Error('timeout')), 3000)
               )
               await Promise.race([perfilPromise, timeoutPromise])
             }
