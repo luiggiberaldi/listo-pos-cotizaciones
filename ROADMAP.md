@@ -6,6 +6,53 @@
 
 ## Bitácora de cambios
 
+### 2026-04-25 — Fase 4 completada
+
+**Venta Rápida (cotización + despacho atómico)**
+- Endpoint `POST /api/ventas-rapidas/crear` en worker.js: crea cotización (estado `aceptada`) + despacho (estado `pendiente`) en un solo paso
+- Hook `useVentaRapida.js`: mutation con invalidación de caches + push notification
+- Vista `VentaRapidaView.jsx`: wizard 3 pasos (productos → pago → confirmar)
+- Ruta `/venta-rapida` visible solo para vendedor y supervisor
+- Navegación: sidebar + BottomNav con icono Zap, filtro `onlyRoles`
+
+### 2026-04-25 — Fase 3 completada
+
+**3.1 Dashboard de vendedor**
+- MetricCard extraído a `src/components/ui/MetricCard.jsx` (6 temas de color, soporte onClick)
+- Cards: Facturado mes, Esperando respuesta, Pendientes aprobación (gold), Comisiones pendientes (emerald)
+- Secciones: desglose por estado + comisiones (sin cambios)
+
+**3.2 Dashboard de administración**
+- Cards: Despachos por aprobar (gold, clickable→/cotizaciones), CxC total (bug corregido), Stock bajo (red), Ventas del día (emerald, sub: semana)
+- Sección: lista "Stock bajo" con barras de progreso + accesos rápidos
+- Bug fix: `cxcResumen?.totalDeuda` → `cxcResumen?.kpis?.totalDeuda`
+
+**3.3 Dashboard de logística**
+- Migration `064_logistica_rls_despachos.sql`: política SELECT para logística en `notas_despacho`
+- Hook `useDashboardMetrics.js`: queries paralelas por rol con staleTime 5min
+- Cards: Entregas pendientes (blue), Entregadas hoy (emerald)
+- Sección: "Próximas entregas" con datos de cliente (via `/api/clientes/lookup`)
+- PageHeader: subtítulo "Centro de entregas", sin botón "Nueva"
+
+### 2026-04-25 — Fase 2 completada
+
+**2.1 Rol logística en DB + backend**
+- Migración `063_rol_logistica.sql`: `logistica` agregado al CHECK constraint de `usuarios.rol`
+- `worker.js` → `getOperatorRole()`: reconoce logística; `handleActualizarEstadoDespacho`: logística solo puede marcar `entregada`
+- Navegación (sidebar + BottomNav): logística ve solo Inicio + Entregas
+
+**2.2 Vista de logística**
+- `DespachosView.jsx`: título "Entregas", filtros reducidos (Por entregar, Entregadas)
+- `DespachoCard.jsx`: `canEntregar` incluye logística, botón "Marcar entregada"
+- `useDespachos.js`: logística ve solo despachos `despachada` y `entregada`
+- `despachoActions.js`: acciones de logística (solo entregar)
+
+**2.3 Etiquetas contextuales por rol**
+- `src/utils/estadoLabels.js` — `getDespachoLabel(estado, rol)`, `getFiltrosDespacho(rol)`
+- `EstadoBadge.jsx` reescrito: acepta `rol` y muestra etiquetas contextuales
+- DespachoCard, DespachoRow: pasan `rol` al EstadoBadge
+- DespachosView: usa `getFiltrosDespacho()` dinámico
+
 ### 2026-04-25 — Fase 1 completada
 
 **1.1 Campo de referencia de pago en despacho**
@@ -80,7 +127,7 @@
 
 ---
 
-## Fase 2 — Rol de Logística (Media prioridad)
+## Fase 2 — Rol de Logística (Media prioridad) [COMPLETADA]
 
 **Objetivo:** Separar la entrega física del flujo administrativo.
 
@@ -132,7 +179,7 @@ Mapa propuesto:
 
 ---
 
-## Fase 3 — Dashboards y UX Polish (Prioridad normal)
+## Fase 3 — Dashboards y UX Polish (Prioridad normal) [COMPLETADA]
 
 **Objetivo:** Que cada rol tenga una vista inicial útil con métricas relevantes.
 
@@ -174,7 +221,7 @@ Mapa propuesto:
 
 ---
 
-## Fase 4 (Opcional) — Venta Rápida
+## Fase 4 (Opcional) — Venta Rápida [COMPLETADA]
 
 **Objetivo:** Para clientes recurrentes que no necesitan cotización formal.
 

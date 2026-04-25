@@ -269,7 +269,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           <span className="text-[10px] font-mono text-white/70 bg-white/15 px-1.5 py-0.5 rounded">{cotNum}</span>
         </div>
         <div className="relative z-10 shrink-0">
-          <EstadoBadge estado={despacho.estado} />
+          <EstadoBadge estado={despacho.estado} rol={rol} />
         </div>
       </div>
 
@@ -296,6 +296,15 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           </div>
         )}
       </div>
+
+      {/* ── Referencia de pago del cliente ── */}
+      {(despacho.forma_pago_cliente || despacho.referencia_pago) && (
+        <div className="mx-4 mb-1.5 flex items-center gap-2 text-[11px] text-slate-400">
+          {despacho.forma_pago_cliente && <span className="font-medium">{despacho.forma_pago_cliente}</span>}
+          {despacho.forma_pago_cliente && despacho.referencia_pago && <span>·</span>}
+          {despacho.referencia_pago && <span className="font-mono">Ref: {despacho.referencia_pago}</span>}
+        </div>
+      )}
 
       {/* ── Total ── */}
       <div className="mx-4 mb-3 bg-slate-50 rounded-xl px-3.5 py-3 flex items-center justify-between">

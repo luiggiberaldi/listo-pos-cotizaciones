@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, memo } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import {
-  Users, FileText, Package, Truck,
+  Users, FileText, Package, Truck, Zap,
   UserCog, ClipboardList,
   LayoutDashboard, Settings, ArrowRightLeft,
   Menu, X, DollarSign, RefreshCw, PackageCheck, Bell, BellOff,
@@ -51,6 +51,7 @@ const NAV_TODOS = [
   { path: '/',               label: 'Inicio',         icono: LayoutDashboard },
   { path: '/clientes',       label: 'Clientes',       icono: Users,          excludeRoles: ['logistica'] },
   { path: '/cotizaciones',   label: 'Cotizaciones',   icono: FileText,       labelByRole: { administracion: 'Despachos' }, excludeRoles: ['logistica'] },
+  { path: '/venta-rapida',   label: 'Venta rápida',   icono: Zap,            onlyRoles: ['vendedor', 'supervisor'] },
   { path: '/despachos',      label: 'Despachos',      icono: PackageCheck,   labelByRole: { logistica: 'Entregas' } },
   { path: '/inventario',     label: 'Inventario',     icono: Package,        excludeRoles: ['logistica'] },
   { path: '/transportistas', label: 'Transportistas', icono: Truck,          excludeRoles: ['administracion', 'logistica'] },
@@ -403,7 +404,7 @@ export default function AppLayout() {
         {/* Navegación */}
         <nav className="relative z-10 flex-1 min-h-0 overflow-y-auto sidebar-scrollbar p-3 space-y-0.5">
           {NAV_TODOS
-            .filter(item => !item.excludeRoles || !item.excludeRoles.includes(perfil?.rol))
+            .filter(item => (!item.excludeRoles || !item.excludeRoles.includes(perfil?.rol)) && (!item.onlyRoles || item.onlyRoles.includes(perfil?.rol)))
             .map(({ path, label, labelByRole, icono: Icono }) => (
             <NavItem key={path} path={path} label={labelByRole?.[perfil?.rol] || label} Icono={Icono} onClick={cerrarMenu} collapsed={sidebarCollapsed} />
           ))}

@@ -31,7 +31,7 @@ export default memo(function DespachoRow({ despacho, onVer, tasa = 0 }) {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-bold text-slate-800 text-sm font-mono">{numDisplay}</span>
-            <EstadoBadge estado={despacho.estado} />
+            <EstadoBadge estado={despacho.estado} rol={perfil?.rol} />
             {cotNum && (
               <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 font-mono">
                 <FileText size={9} />{cotNum}

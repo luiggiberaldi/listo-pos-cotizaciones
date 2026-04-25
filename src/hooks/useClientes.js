@@ -167,6 +167,31 @@ export function useReasignarCliente() {
   })
 }
 
+// ─── Query: cotizaciones de un cliente (historial) ──────────────────────────
+export function useCotizacionesCliente(clienteId) {
+  return useQuery({
+    queryKey: ['cotizaciones-cliente', clienteId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('cotizaciones')
+        .select(`
+          id, numero, version, cotizacion_raiz_id, estado,
+          total_usd, tasa_bcv_snapshot, total_bs_snapshot,
+          creado_en, enviada_en,
+          vendedor:usuarios!cotizaciones_vendedor_id_fkey(id, nombre)
+        `)
+        .eq('cliente_id', clienteId)
+        .order('creado_en', { ascending: false })
+        .limit(50)
+
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: !!clienteId,
+    staleTime: 1000 * 60 * 5,
+  })
+}
+
 // ─── Query: lista de vendedores activos (para selector de reasignación) ───────
 export function useVendedores() {
   return useQuery({

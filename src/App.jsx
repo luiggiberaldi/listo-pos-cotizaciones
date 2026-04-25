@@ -58,6 +58,7 @@ if (typeof window !== 'undefined') {
 const ClientesView      = lazyRetry(() => import('./views/ClientesView'))
 const CotizacionesView  = lazyRetry(() => import('./views/CotizacionesView'))
 const DespachosView     = lazyRetry(() => import('./views/DespachosView'))
+const VentaRapidaView   = lazyRetry(() => import('./views/VentaRapidaView'))
 const InventarioView    = lazyRetry(() => import('./views/InventarioView'))
 const TransportistasView = lazyRetry(() => import('./views/TransportistasView'))
 const UsuariosView      = lazyRetry(() => import('./views/UsuariosView'))
@@ -201,6 +202,7 @@ function AppRoutes() {
             <Route path="/despachos"      element={<DespachosView />} />
             <Route path="/inventario"     element={<InventarioView />} />
             <Route path="/cotizaciones"   element={<CotizacionesView />} />
+            <Route path="/venta-rapida"   element={<VentaRapidaView />} />
             <Route path="/comisiones"    element={<ComisionesView />} />
 
             {/* Transportistas: excluye admin y logistica */}

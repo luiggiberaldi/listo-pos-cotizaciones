@@ -73,7 +73,7 @@ El sistema fue transformado en **Construacero Carabobo** — un cotizador comerc
 | **Fase 3** | Inventario consultable | ✅ Completada |
 | **Fase 4** | Constructor de cotizaciones (wizard) | ✅ Completada |
 | **Fase 5** | Generador de PDF + WhatsApp | ✅ Completada |
-| **Fase 6** | Transportistas + Historial + Versioning | ⏳ Pendiente |
+| **Fase 6** | Transportistas + Historial + Versioning | ✅ Completada |
 | **Fase 7** | Panel supervisor + Auditoría + Usuarios | ✅ Completada |
 
 ---
@@ -588,6 +588,7 @@ Repetido 4 veces (React Query reintenta 3 veces). La página mostraba "Error al 
 |---|---|---|---|---|---|---|
 | 1 | 14/04/2026 | S8 | 400 Bad Request en query de clientes | `tipo_cliente` seleccionado en hook pero columna no existía en BD | Ejecutar migration 019 vía Supabase Management API | ✅ Resuelto |
 | 2 | 24/04/2026 | S10 | 401 Unauthorized en `/api/clientes` desde Vercel | Worker en workers.dev desactualizado + Vercel rewrites no reenvían Authorization header | Apuntar frontend a Worker de camelai + GitHub Actions para auto-deploy | ✅ Resuelto |
+| 3 | 25/04/2026 | S11b | `referencia_pago` y `forma_pago_cliente` se guardaban pero no se mostraban en PDF ni detalle | Campos implementados en backend/hook pero no integrados en la UI de salida | Agregados al PDF, DetalleModal y DespachoCard | ✅ Resuelto |
 
 ---
 
@@ -730,6 +731,409 @@ Una auditoría externa identificó 5 vulnerabilidades reales en el sistema. Toda
 #### Pendiente
 - La nota de Sesión 8 sobre RLS de `configuracion_negocio` para lectura anónima queda **RESUELTA** — ahora se usa RPCs callable por `anon` que solo retornan boolean
 - Fase 6: Transportistas + Historial + Versioning (única fase funcional pendiente)
+
+---
+
+## SESIÓN 11 — 25/04/2026 — Fase 2 del ROADMAP: Rol de Logística (completada)
+
+### Objetivo
+Completar la Fase 2 del ROADMAP: separar la entrega física del flujo administrativo con un rol dedicado de logística.
+
+### Estado al iniciar la sesión
+
+El IDE anterior había avanzado parcialmente en las 3 sub-tareas de la Fase 2:
+
+| Sub-tarea | Estado previo |
+|-----------|--------------|
+| **2.1** Rol logistica en DB + backend | ✅ Completo |
+| **2.2** Vista de logística | ⚠️ Parcial (faltaba verificar navegación) |
+| **2.3** Etiquetas contextuales por rol | ❌ No iniciado |
+
+### Trabajo del IDE (sesión anterior — pre Sesión 11)
+
+**2.1 — Base de datos + backend:**
+- Migration `063_rol_logistica.sql`: actualiza CHECK constraint de `usuarios.rol` para incluir `logistica`
+- `worker.js` → `getOperatorRole()`: reconoce rol `logistica`
+- `worker.js` → `handleActualizarEstadoDespacho`: logística puede marcar `entregada` pero NO otros estados
+
+**2.2 — Vista y navegación (parcial):**
+- `DespachosView.jsx`: detecta `esLogistica`, título "Entregas", filtros reducidos
+- `DespachoCard.jsx`: `canEntregar` incluye logística, botón "Marcar entregada"
+- `AppLayout.jsx` sidebar: `excludeRoles: ['logistica']` en ítems que logística no necesita
+- `BottomNav.jsx`: `onlyRoles: ['logistica']` para ítem de Despachos/Entregas
+- `useDespachos.js`: logística ve solo despachos `despachada` y `entregada` por defecto
+- `despachoActions.js`: acciones de logística definidas (solo entregar)
+
+### Trabajo completado en Sesión 11
+
+**Auditoría de navegación:**
+- Verificado que sidebar (AppLayout) filtra correctamente para logística usando `excludeRoles`
+- Verificado que BottomNav filtra correctamente con `onlyRoles` + `excludeRoles`
+- Logística ve: Inicio + Entregas (despachos). No ve: Clientes, Cotizaciones, Inventario, Transportistas, Comisiones
+
+**2.3 — Etiquetas contextuales por rol (NUEVO):**
+
+| Archivo | Cambio |
+|---------|--------|
+| `src/utils/estadoLabels.js` | **NUEVO** — `getDespachoLabel(estado, rol)`, `getCotizacionLabel(estado)`, `getFiltrosDespacho(rol)` |
+| `src/components/cotizaciones/EstadoBadge.jsx` | Reescrito: usa `estadoLabels.js`, acepta prop `rol` opcional |
+| `src/components/despachos/DespachoCard.jsx` | Pasa `rol` al `EstadoBadge` |
+| `src/components/despachos/DespachoRow.jsx` | Pasa `rol` al `EstadoBadge` |
+| `src/views/DespachosView.jsx` | Usa `getFiltrosDespacho(rol)` en vez de constantes hardcodeadas |
+
+**Mapa de etiquetas implementado:**
+
+| Estado despacho | Vendedor ve | Admin ve | Logística ve |
+|----------------|-------------|----------|-------------|
+| `pendiente` | Esperando aprobación | Por aprobar | Pendiente |
+| `despachada` | Aprobada | Aprobada – En entrega | Por entregar |
+| `entregada` | Entregada | Entregada | Entregada |
+| `anulada` | Anulada | Anulada | Anulada |
+
+### Decisiones técnicas
+- `estadoLabels.js` separa estados de despacho y cotización — los de cotización no cambian por rol
+- `EstadoBadge` es retrocompatible: sin prop `rol`, usa etiqueta genérica (sin romper usos existentes en cotizaciones)
+- Filtros de DespachosView se generan dinámicamente desde `getFiltrosDespacho(rol)`
+
+### Verificación
+- Build: ✅ exitoso (5.26s)
+- Deploy: ✅ Cloudflare Workers (Version ID: 801130b2)
+
+### Estado de la Fase 2 del ROADMAP
+
+| Sub-tarea | Estado |
+|-----------|--------|
+| **2.1** Rol logistica en DB + backend | ✅ Completada |
+| **2.2** Vista de logística | ✅ Completada |
+| **2.3** Etiquetas contextuales por rol | ✅ Completada |
+
+**Fase 2 del ROADMAP: ✅ COMPLETADA**
+
+### Pendiente para siguiente sesión
+- **Fase 3 del ROADMAP**: Dashboards y UX Polish (dashboard por rol: vendedor, admin, logística)
+- **Fase 6 original**: Transportistas + Historial + Versioning (pendiente desde Sesión 8)
+- Ejecutar migration `063_rol_logistica.sql` en Supabase (si no se ha ejecutado aún)
+
+### Errores / Bloqueantes
+- Ninguno.
+
+---
+
+## SESIÓN 11b — 25/04/2026 — Auditoría Fases 1-2 + Corrección brecha 1.1
+
+### Objetivo
+Verificar que las Fases 1 y 2 del ROADMAP se implementaron correctamente. Corregir cualquier brecha encontrada.
+
+### Auditoría realizada
+
+Se auditaron las 6 sub-tareas de ambas fases contra los criterios de aceptación del ROADMAP.
+
+| Fase | Sub-tarea | Resultado |
+|------|-----------|-----------|
+| 1 | 1.1 Referencia de pago en despacho | ⚠️ Parcial — campos guardados pero no visibles |
+| 1 | 1.2 Admin aprueba despachos | ✅ Pass |
+| 1 | 1.3 Vista despachos para admin | ✅ Pass |
+| 2 | 2.1 Rol logistica en DB + backend | ✅ Pass |
+| 2 | 2.2 Vista de logística | ✅ Pass |
+| 2 | 2.3 Etiquetas contextuales por rol | ✅ Pass |
+
+### Brecha corregida: 1.1 — Referencia de pago no visible
+
+**Problema:** Los campos `referencia_pago` y `forma_pago_cliente` se aceptaban y guardaban en la BD (hook + worker), pero no se mostraban en ninguna interfaz visible al usuario.
+
+**Criterio de aceptación del ROADMAP:** *"La referencia aparece en el timeline y en el PDF"*
+
+**Corrección aplicada:**
+
+| Archivo | Cambio |
+|---------|--------|
+| `src/services/pdf/despachoPDF.js` | Nueva fila entre FORMA DE PAGO y desglose: muestra "PAGO CLIENTE: {tipo}" y "REF: {referencia}" cuando existen. Ajustes de layout bottom-up para no solapar con el total ni el desglose. |
+| `src/components/ui/DetalleModal.jsx` | Sección meta info de despachos: agrega iconos CreditCard y Hash con forma de pago y referencia del cliente |
+| `src/components/despachos/DespachoCard.jsx` | Línea sutil entre la info del cliente y el total: muestra forma de pago y referencia cuando existen |
+
+**Campos NO modificados (ya funcionaban):**
+- `useDespachos.js` — ya incluía `referencia_pago` y `forma_pago_cliente` en el SELECT
+- `worker.js` → `handleCrearDespacho` — ya los guardaba correctamente
+- `CotizacionesView.jsx` → `ModalDespachar` — ya tenía los campos del formulario
+
+### Verificación
+- Build: ✅ exitoso
+- Deploy: ✅ Cloudflare Workers (Version ID: a66a5e3a)
+
+### Estado post-auditoría
+
+| Fase | Estado |
+|------|--------|
+| **Fase 1** — Flujo de Aprobación Real | ✅ **COMPLETADA** (brecha 1.1 corregida) |
+| **Fase 2** — Rol de Logística | ✅ **COMPLETADA** |
+
+### Pendiente para siguiente sesión
+- **Fase 3 del ROADMAP**: Dashboards y UX Polish (dashboard por rol: vendedor, admin, logística)
+- **Fase 6 original**: Transportistas + Historial + Versioning (pendiente desde Sesión 8)
+- Ejecutar migration `063_rol_logistica.sql` en Supabase (si no se ha ejecutado aún)
+
+### Errores / Bloqueantes
+- Ninguno.
+
+---
+
+## SESIÓN 12 — 25/04/2026 — Fase 3 del ROADMAP: Dashboards por Rol
+
+### Contexto
+El `DashboardView.jsx` original mostraba métricas genéricas de cotizaciones para todos los roles. Admin veía métricas irrelevantes (total cotizaciones, tasa aceptación) y logística no tenía dashboard. Se implementaron dashboards específicos por rol según lo definido en el ROADMAP.
+
+### Cambios realizados
+
+#### 1. Migration RLS para logística
+- **Archivo nuevo:** `supabase/migrations/064_logistica_rls_despachos.sql`
+- Crea política SELECT en `notas_despacho` para rol `logistica`
+- Sin esta política, las queries directas a Supabase retornaban vacío para logística
+- **Pendiente:** ejecutar en Supabase producción
+
+#### 2. MetricCard extraído a componente reutilizable
+- **Archivo nuevo:** `src/components/ui/MetricCard.jsx`
+- Tarjeta de métrica con gradiente, extraída de DashboardView (líneas 123-186)
+- 6 temas de color: primary, emerald, blue, gold, red, purple
+- Soporte para `onClick` con animaciones hover/active
+- Componente memo para evitar re-renders innecesarios
+
+#### 3. Hook `useDashboardMetrics`
+- **Archivo nuevo:** `src/hooks/useDashboardMetrics.js`
+- Un solo `useQuery` que ejecuta queries paralelas según el rol del usuario
+- **Vendedor:** `despachosPendientes` (propios, estado=pendiente)
+- **Admin:** `despachosPendientes` (todos), `ventasDia`, `ventasSemana`, `stockBajoCount`, `stockBajoItems`
+- **Logística:** `despachosDespachados`, `entregasHoy`, `proximasEntregas` (con lookup de clientes via `/api/clientes/lookup`)
+- **Supervisor:** `despachosPendientes` (todos)
+- staleTime: 5min, gcTime: 15min
+
+#### 4. DashboardView refactorizado por rol
+- **Archivo modificado:** `src/views/DashboardView.jsx`
+
+**Bug corregido:** `cxcResumen?.totalDeuda` → `cxcResumen?.kpis?.totalDeuda` (la card de CxC nunca se renderizaba porque el hook retorna `{ kpis: { totalDeuda } }`)
+
+**Metric cards por rol:**
+| Rol | Cards |
+|-----|-------|
+| Vendedor | Facturado mes, Esperando respuesta, Pendientes aprobación (gold), Comisiones pendientes (emerald) |
+| Admin | Despachos por aprobar (gold, clickable→/cotizaciones), CxC total (corregido), Stock bajo (red), Ventas del día (emerald, sub: semana) |
+| Logística | Entregas pendientes (blue), Entregadas hoy (emerald) |
+| Supervisor | 4 cards existentes + CxC corregida |
+
+**Secciones de contenido por rol:**
+- **Vendedor/Supervisor:** desglose por estado + comisiones (sin cambios)
+- **Admin:** lista "Stock bajo" con barras de progreso (nombre, stock actual/mínimo, top 5) + accesos rápidos
+- **Logística:** lista "Próximas entregas" (cliente, dirección, número despacho, fecha). Click → `/despachos`. Si vacía: EmptyState
+- Admin/Logística: se ocultan secciones irrelevantes (cotizaciones por estado, comisiones)
+
+**PageHeader por rol:**
+- Logística: subtítulo "Centro de entregas", sin botón "Nueva"
+- Admin: subtítulo "Panel de administración", sin botón "Nueva"
+
+### Build & Deploy
+- Build: `vite build` exitoso (5.31s)
+- Deploy: `wrangler deploy --dispatch-namespace chiridion` exitoso
+
+### Archivos creados/modificados
+| Archivo | Acción |
+|---------|--------|
+| `supabase/migrations/064_logistica_rls_despachos.sql` | Creado |
+| `src/components/ui/MetricCard.jsx` | Creado |
+| `src/hooks/useDashboardMetrics.js` | Creado |
+| `src/views/DashboardView.jsx` | Refactorizado |
+
+### Pendiente para siguiente sesión
+- **Fase 4 del ROADMAP**: Venta rápida / Facturación inmediata
+- **Fase 6 original**: Transportistas + Historial + Versioning (pendiente desde Sesión 8)
+- Ejecutar migrations `063_rol_logistica.sql` y `064_logistica_rls_despachos.sql` en Supabase producción
+
+### Errores / Bloqueantes
+- Ninguno.
+
+---
+
+## SESIÓN 13 — 25/04/2026 — Fase 4 del ROADMAP: Venta Rápida
+
+### Contexto
+Clientes recurrentes no necesitan el flujo completo de 5 pasos (borrador → enviar → aceptar → despachar → aprobar). La Venta Rápida combina cotización + despacho en un solo paso atómico, reduciendo el flujo a 2 pasos: vendedor llena formulario → admin aprueba.
+
+### Cambios realizados
+
+#### 1. Endpoint backend `POST /api/ventas-rapidas/crear`
+- **Archivo modificado:** `worker.js`
+- Nuevo handler `handleVentaRapida` (~160 líneas) que combina:
+  - Creación de cotización con estado `aceptada` directamente
+  - Snapshot de tasa BCV + cálculo de totales
+  - Inserción de items con snapshots de producto
+  - Verificación y descuento de stock
+  - Registro de movimientos kardex (con motivo "Venta rápida")
+  - Creación de nota de despacho con estado `pendiente`
+  - Registro de cargo CxC si forma de pago es "Cta por cobrar"
+  - Auditoría con acción `VENTA_RAPIDA`
+- Ruta agregada en dispatcher: `/api/ventas-rapidas/crear`
+- Solo accesible por vendedor y supervisor
+
+#### 2. Hook `useVentaRapida`
+- **Archivo nuevo:** `src/hooks/useVentaRapida.js`
+- `useMutation` que llama al endpoint
+- Invalida caches: despachos, inventario, comisiones, cotizaciones, stock comprometido, CxC
+- Envía notificación push a supervisor al crear
+- Toast de éxito con número de despacho
+
+#### 3. Vista `VentaRapidaView.jsx`
+- **Archivo nuevo:** `src/views/VentaRapidaView.jsx` (~520 líneas)
+- Wizard de 3 pasos con indicador visual:
+  - **Paso 1 — Productos:** selector de cliente (con búsqueda y creación rápida), catálogo de productos con búsqueda inteligente, categorías, productos recientes, carrito con +/- cantidad
+  - **Paso 2 — Pago:** forma de pago (6 opciones), pago del cliente (forma + referencia), transportista opcional, flete condicional, notas
+  - **Paso 3 — Confirmar:** resumen completo (cliente, items, totales con USD y Bs, pago, transporte), warning de descuento de stock, botón de confirmación
+- Barra inferior sticky con navegación Atrás/Siguiente/Crear
+- Validaciones: cliente requerido, al menos 1 item, forma de pago requerida
+- Reset automático del formulario tras creación exitosa
+
+#### 4. Ruta y navegación
+- **`src/App.jsx`:** lazy import + ruta `/venta-rapida` en rutas protegidas
+- **`src/components/layout/AppLayout.jsx`:**
+  - Importación de icono `Zap`
+  - Nuevo item en `NAV_TODOS`: `onlyRoles: ['vendedor', 'supervisor']`
+  - Filtro de nav actualizado para soportar `onlyRoles`
+- **`src/components/layout/BottomNav.jsx`:**
+  - Importación de icono `Zap`
+  - "Venta rápida" agregada a `MORE_ITEMS` con `onlyRoles`
+  - Filtro de MORE_ITEMS actualizado para soportar `onlyRoles`
+
+### Build & Deploy
+- Build: `vite build` exitoso (5.35s)
+- Deploy: `wrangler deploy --dispatch-namespace chiridion` exitoso
+- Nuevo chunk: `VentaRapidaView-Du0gZhdE.js` (23.30 kB gzip: 6.12 kB)
+
+### Archivos creados/modificados
+| Archivo | Acción |
+|---------|--------|
+| `worker.js` | Handler `handleVentaRapida` + ruta |
+| `src/hooks/useVentaRapida.js` | Creado |
+| `src/views/VentaRapidaView.jsx` | Creado |
+| `src/App.jsx` | Lazy import + ruta |
+| `src/components/layout/AppLayout.jsx` | Nav item + filtro onlyRoles |
+| `src/components/layout/BottomNav.jsx` | Nav item + filtro onlyRoles |
+
+### Migrations ejecutadas en esta sesión
+- `064_logistica_rls_despachos.sql` — política SELECT para logística en `notas_despacho` (ejecutada via Management API)
+- `063_rol_logistica.sql` — ya estaba ejecutada previamente
+
+### Pendiente para siguiente sesión
+- **Fase 6 original**: Transportistas + Historial + Versioning (pendiente desde Sesión 8)
+- Probar flujo completo de venta rápida en producción
+
+### Errores / Bloqueantes
+- Ninguno.
+
+---
+
+## SESIÓN 13b — 25/04/2026 — Auditoría Fases 3-4 + Corrección gap vendedor
+
+### Contexto
+Auditoría de las Fases 3 y 4 contra los criterios del ROADMAP.
+
+### Resultado de auditoría
+
+**Fase 4 (Venta Rápida):** 100% conforme. Todos los criterios verificados sin gaps.
+
+**Fase 3 (Dashboards por Rol):**
+- Admin: 4/4 métricas ✅
+- Logística: 3/3 métricas ✅
+- Supervisor: completo ✅
+- **Vendedor: 3/4 métricas** — faltaba "Clientes con deuda" prometida en ROADMAP 3.1
+
+### Corrección aplicada
+- **`src/views/DashboardView.jsx`:** agregada 5ª card para vendedor "Clientes con deuda" (color red, icono Users)
+  - Valor: `cxcResumen?.kpis?.numClientesConDeuda`
+  - Sub: total deuda en USD
+  - Grid cambiado de `lg:grid-cols-4` a `lg:grid-cols-5` para vendedor
+  - Los datos ya estaban disponibles via `useResumenCxC()` — solo faltaba la card
+
+### Build & Deploy
+- Build exitoso, deploy exitoso
+
+### Pendiente para siguiente sesión
+- Ninguno. Todas las fases del plan general original están completadas.
+
+### Errores / Bloqueantes
+- Ninguno.
+
+---
+
+## SESIÓN 14 — 25/04/2026 — Fase 6: Transportistas + Historial + Versioning
+
+### Contexto
+Fase 6 era la última fase funcional pendiente del plan general original, marcada pendiente desde la Sesión 8. Se identificaron tres componentes:
+- **Transportistas**: Vista CRUD existía pero la tabla DB le faltaban 4 columnas (`color`, `vehiculo`, `placa_chuto`, `placa_batea`) que el frontend ya usaba → errores silenciosos al guardar
+- **Versioning**: Ya estaba implementado desde fases anteriores (`cotizaciones.version`, `cotizacion_raiz_id`, endpoint `handleCrearVersion`, historial en `DetalleModal`)
+- **Historial por cliente**: `FichaClienteModal` solo mostraba historial de CxC, no cotizaciones
+
+### Cambios realizados
+
+#### 1. Migración `065_transportistas_campos_vehiculo.sql`
+- **Archivo nuevo:** `supabase/migrations/065_transportistas_campos_vehiculo.sql`
+- Agrega 4 columnas faltantes a tabla `transportistas`: `color`, `vehiculo`, `placa_chuto`, `placa_batea`
+- **Ejecutada** en producción via Supabase Management API
+- Verificada: las 4 columnas aparecen en `information_schema.columns`
+
+#### 2. Hook `useCotizacionesCliente`
+- **Archivo modificado:** `src/hooks/useClientes.js`
+- Nuevo hook `useCotizacionesCliente(clienteId)` que consulta cotizaciones de un cliente
+- Select: id, numero, version, cotizacion_raiz_id, estado, total_usd, tasa_bcv_snapshot, total_bs_snapshot, creado_en, enviada_en, vendedor(id, nombre)
+- Ordenado por `creado_en DESC`, límite 50
+- staleTime: 5min
+
+#### 3. Historial de cotizaciones en FichaClienteModal
+- **Archivo modificado:** `src/components/clientes/FichaClienteModal.jsx`
+- Nueva sección "Cotizaciones del cliente" debajo del historial de CxC
+- Componente `HistorialCotizaciones`: lista de cotizaciones con número formateado (COT-XXXXX Rev.X), EstadoBadge, total USD, fecha, vendedor
+- Click en cotización disponible vía prop `onVerCotizacion` (para integrar con DetalleModal)
+- Skeleton loading + empty state cuando no hay cotizaciones
+- Imports agregados: `FileText`, `ChevronRight`, `useCotizacionesCliente`, `EstadoBadge`
+
+### Verificación del estado de Fase 6
+
+| Componente | Estado |
+|------------|--------|
+| **Transportistas** — Vista CRUD | ✅ Ya existía (TransportistasView.jsx) |
+| **Transportistas** — Hook | ✅ Ya existía (useTransportistas.js) |
+| **Transportistas** — DB columnas | ✅ Corregido (migración 065) |
+| **Versioning** — DB schema | ✅ Ya existía (version + cotizacion_raiz_id) |
+| **Versioning** — Backend | ✅ Ya existía (handleCrearVersion en worker.js) |
+| **Versioning** — UI | ✅ Ya existía (DetalleModal muestra versiones) |
+| **Historial** — Hook | ✅ Creado (useCotizacionesCliente) |
+| **Historial** — UI | ✅ Creado (FichaClienteModal sección cotizaciones) |
+
+### Build & Deploy
+- Build: `vite build` exitoso (5.31s)
+- Deploy: `wrangler deploy --dispatch-namespace chiridion` exitoso (Version ID: 8159aa78)
+
+### Archivos creados/modificados
+
+| Archivo | Acción |
+|---------|--------|
+| `supabase/migrations/065_transportistas_campos_vehiculo.sql` | Creado |
+| `src/hooks/useClientes.js` | Hook `useCotizacionesCliente` agregado |
+| `src/components/clientes/FichaClienteModal.jsx` | Sección historial cotizaciones |
+
+### Estado del Plan General
+
+| Fase | Descripción | Estado |
+|---|---|---|
+| **Fase 0** | Arquitectura, BD y reglas de negocio | ✅ Completada |
+| **Fase 1** | Limpieza del proyecto + estructura base | ✅ Completada |
+| **Fase 2** | Módulo de Clientes (con anti-robo) | ✅ Completada |
+| **Fase 3** | Inventario consultable | ✅ Completada |
+| **Fase 4** | Constructor de cotizaciones (wizard) | ✅ Completada |
+| **Fase 5** | Generador de PDF + WhatsApp | ✅ Completada |
+| **Fase 6** | Transportistas + Historial + Versioning | ✅ **Completada** |
+| **Fase 7** | Panel supervisor + Auditoría + Usuarios | ✅ Completada |
+
+**🎉 Todas las fases del plan general original están completadas.**
+
+### Errores / Bloqueantes
+- Ninguno.
 
 ---
 

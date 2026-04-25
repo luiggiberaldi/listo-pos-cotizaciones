@@ -1,10 +1,12 @@
 // src/components/clientes/FichaClienteModal.jsx
 // Modal ficha del cliente: historial de crédito + formulario de abono
 import { useState } from 'react'
-import { X, CreditCard, ArrowUpCircle, ArrowDownCircle, AlertCircle, RefreshCw, DollarSign, Hash, Phone } from 'lucide-react'
+import { X, CreditCard, ArrowUpCircle, ArrowDownCircle, AlertCircle, RefreshCw, DollarSign, Hash, Phone, FileText, ChevronRight } from 'lucide-react'
 import { useCuentasCobrar, useRegistrarAbono } from '../../hooks/useCuentasCobrar'
+import { useCotizacionesCliente } from '../../hooks/useClientes'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtUsdSimple as fmtUsd } from '../../utils/format'
+import EstadoBadge from '../cotizaciones/EstadoBadge'
 
 function fmtFecha(iso) {
   if (!iso) return '—'
@@ -108,6 +110,70 @@ function FormAbono({ clienteId, onSuccess }) {
         {registrar.isPending ? 'Registrando...' : 'Confirmar abono'}
       </button>
     </form>
+  )
+}
+
+// ─── Historial de cotizaciones ───────────────────────────────────────────────
+function HistorialCotizaciones({ clienteId, onVerCotizacion }) {
+  const { data: cotizaciones = [], isLoading } = useCotizacionesCliente(clienteId)
+
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        {[1,2,3].map(i => (
+          <div key={i} className="h-14 bg-slate-100 rounded-xl animate-pulse" />
+        ))}
+      </div>
+    )
+  }
+
+  if (cotizaciones.length === 0) {
+    return (
+      <div className="text-center py-8 text-slate-400">
+        <FileText size={28} className="mx-auto mb-2 opacity-30" />
+        <p className="text-sm">Sin cotizaciones registradas</p>
+      </div>
+    )
+  }
+
+  function fmtNumero(cot) {
+    const num = `COT-${String(cot.numero).padStart(5, '0')}`
+    return cot.version > 1 ? `${num} Rev.${cot.version}` : num
+  }
+
+  function fmtFechaCorta(iso) {
+    if (!iso) return '—'
+    return new Date(iso).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })
+  }
+
+  return (
+    <div className="space-y-2">
+      {cotizaciones.map(cot => (
+        <button
+          key={cot.id}
+          onClick={() => onVerCotizacion?.(cot)}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border border-slate-100 bg-slate-50 hover:bg-slate-100 transition-colors text-left"
+        >
+          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+            <FileText size={14} className="text-primary" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-800 font-mono">{fmtNumero(cot)}</span>
+              <EstadoBadge estado={cot.estado} />
+            </div>
+            <p className="text-[10px] text-slate-400 mt-0.5">
+              {fmtFechaCorta(cot.creado_en)}
+              {cot.vendedor?.nombre ? ` · ${cot.vendedor.nombre}` : ''}
+            </p>
+          </div>
+          <div className="text-right shrink-0 flex items-center gap-2">
+            <span className="text-sm font-black text-slate-700">{fmtUsd(cot.total_usd)}</span>
+            <ChevronRight size={14} className="text-slate-300" />
+          </div>
+        </button>
+      ))}
+    </div>
   )
 }
 
@@ -226,6 +292,15 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Historial de cotizaciones */}
+          <div>
+            <h3 className="text-sm font-black text-slate-800 flex items-center gap-2 mb-3">
+              <FileText size={14} className="text-slate-500" />
+              Cotizaciones del cliente
+            </h3>
+            <HistorialCotizaciones clienteId={cliente.id} />
           </div>
         </div>
       </div>

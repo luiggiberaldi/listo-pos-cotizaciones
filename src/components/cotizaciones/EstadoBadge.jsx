@@ -1,4 +1,6 @@
 // src/components/cotizaciones/EstadoBadge.jsx
+import { getDespachoLabel, getCotizacionLabel } from '../../utils/estadoLabels'
+
 const ESTILOS = {
   borrador:   'bg-slate-100 text-slate-600 border-slate-200',
   enviada:    'bg-blue-50 text-blue-700 border-blue-200',
@@ -12,23 +14,15 @@ const ESTILOS = {
   entregada:  'bg-teal-50 text-teal-700 border-teal-200',
 }
 
-const ETIQUETAS = {
-  borrador:   'Borrador',
-  enviada:    'Enviada',
-  aceptada:   'Aceptada',
-  rechazada:  'No aceptada',
-  vencida:    'Vencida',
-  anulada:    'Cancelada',
-  // Estados de despacho
-  pendiente:  'Pendiente',
-  despachada: 'Despachada',
-  entregada:  'Entregada',
-}
+const ESTADOS_DESPACHO = ['pendiente', 'despachada', 'entregada', 'anulada']
 
-export default function EstadoBadge({ estado }) {
+export default function EstadoBadge({ estado, rol }) {
+  const esDespacho = ESTADOS_DESPACHO.includes(estado)
+  const label = esDespacho && rol ? getDespachoLabel(estado, rol) : (esDespacho ? getDespachoLabel(estado) : getCotizacionLabel(estado))
+
   return (
     <span className={`inline-flex items-center text-xs font-semibold px-2.5 py-0.5 rounded-full border ${ESTILOS[estado] ?? ESTILOS.borrador}`}>
-      {ETIQUETAS[estado] ?? estado}
+      {label}
     </span>
   )
 }

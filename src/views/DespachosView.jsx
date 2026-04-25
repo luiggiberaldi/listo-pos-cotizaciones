@@ -9,6 +9,7 @@ import { useDespachos, useActualizarEstadoDespacho, useReciclarDespacho } from '
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import { useVendedores } from '../hooks/useClientes'
 import { getDespachoAction } from '../utils/despachoActions'
+import { getFiltrosDespacho } from '../utils/estadoLabels'
 import VendedorFilterPill from '../components/ui/VendedorFilterPill'
 import DespachoCard from '../components/despachos/DespachoCard'
 import DespachoRow  from '../components/despachos/DespachoRow'
@@ -23,19 +24,6 @@ import { showToast } from '../components/ui/Toast'
 
 import { generarPlantillaNotaEntregaPDF } from '../services/pdf/plantillaNotaEntregaPDF'
 import { generarPlantillaOrdenDespachoPDF } from '../services/pdf/plantillaOrdenDespachoPDF'
-const ESTADOS_FILTRO = [
-  { valor: '',           label: 'Todas' },
-  { valor: 'pendiente',  label: 'Pendientes' },
-  { valor: 'despachada', label: 'Despachadas' },
-  { valor: 'entregada',  label: 'Entregadas' },
-  { valor: 'anulada',    label: 'Canceladas' },
-]
-
-const ESTADOS_FILTRO_LOGISTICA = [
-  { valor: '',           label: 'Todas' },
-  { valor: 'despachada', label: 'Por entregar' },
-  { valor: 'entregada',  label: 'Entregadas' },
-]
 
 function SkeletonDespachos() {
   return (
@@ -179,7 +167,7 @@ export default function DespachosView() {
       {/* Filtros de estado + vendedor */}
       <div className="flex items-center gap-2 flex-wrap">
         <Filter size={14} className="text-slate-400 shrink-0" />
-        {(esLogistica ? ESTADOS_FILTRO_LOGISTICA : ESTADOS_FILTRO).map(({ valor, label }) => (
+        {getFiltrosDespacho(perfil?.rol).map(({ valor, label }) => (
           <button key={valor} onClick={() => setEstadoFiltro(valor)}
             className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
               estadoFiltro === valor

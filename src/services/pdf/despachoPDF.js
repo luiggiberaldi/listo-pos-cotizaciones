@@ -449,7 +449,9 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
 
   const choferStartY = sloganY - 9 - TRANS_H
   const desgloseH = hasFlete ? 14 : 0  // 2 filas de 7mm cada una
-  const fpY = choferStartY - 3 - 19 - desgloseH  // 19mm alto (9 + 10), 3mm gap
+  const hasRefPago = !!(despacho.referencia_pago || despacho.forma_pago_cliente)
+  const refPagoH = hasRefPago ? 7 : 0
+  const fpY = choferStartY - 3 - 19 - desgloseH - refPagoH  // 19mm alto (9 + 10), 3mm gap
 
   // Fila FORMA DE PAGO arriba (con borde)
   doc.setDrawColor(120, 120, 120)
@@ -467,9 +469,29 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   drawCheck(doc, 'TRANSF.',    MARGIN + 114, fpY + 6, fp === 'transferencia')
   drawCheck(doc, 'CTA X COB.', MARGIN + 134, fpY + 6, fp === 'cta por cobrar')
 
+  // ── Referencia de pago del cliente (si existe) ──
+  const refPago = despacho.referencia_pago || ''
+  const fpCliente = despacho.forma_pago_cliente || ''
+  if (refPago || fpCliente) {
+    const refY = fpY + 9
+    doc.setDrawColor(120, 120, 120)
+    doc.setLineWidth(0.3)
+    doc.rect(MARGIN, refY, CONTENT_W, 7, 'S')
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7.5)
+    doc.setTextColor(...C_DARK)
+    const refParts = []
+    if (fpCliente) refParts.push(`PAGO CLIENTE: ${fpCliente.toUpperCase()}`)
+    if (refPago) refParts.push(`REF: ${refPago}`)
+    doc.text(refParts.join('     |     '), MARGIN + 3, refY + 5)
+  }
+
+  const refRowH = (refPago || fpCliente) ? 7 : 0
+
   // Desglose Subtotal + Flete (solo si hay flete)
   if (hasFlete) {
-    const desY = fpY + 9
+    const desY = fpY + 9 + refRowH
     doc.setDrawColor(120, 120, 120)
     doc.setLineWidth(0.2)
 
@@ -488,7 +510,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   }
 
   // Barra oscura TOTAL abajo (ancho completo)
-  const totTopY = fpY + 9 + desgloseH
+  const totTopY = fpY + 9 + refRowH + desgloseH
   doc.setFillColor(60, 60, 60)
   doc.rect(MARGIN, totTopY, CONTENT_W, 10, 'F')
 

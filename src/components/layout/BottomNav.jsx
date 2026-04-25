@@ -1,7 +1,7 @@
 // src/components/layout/BottomNav.jsx
 // Barra de navegación inferior para móvil (thumb-friendly)
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, FileText, Users, Package, MoreHorizontal } from 'lucide-react'
+import { LayoutDashboard, FileText, Users, Package, MoreHorizontal, Zap } from 'lucide-react'
 import { useState } from 'react'
 import { PackageCheck, Truck, DollarSign, BarChart3, Settings, AlertCircle } from 'lucide-react'
 
@@ -14,6 +14,7 @@ const BOTTOM_ITEMS = [
 ]
 
 const MORE_ITEMS = [
+  { path: '/venta-rapida', label: 'Venta rápida', icon: Zap, onlyRoles: ['vendedor', 'supervisor'] },
   { path: '/despachos', label: 'Despachos', icon: PackageCheck, excludeRoles: ['logistica'] },
   { path: '/transportistas', label: 'Transportistas', icon: Truck, excludeRoles: ['administracion', 'logistica'] },
   { path: '/comisiones', label: 'Comisiones', icon: DollarSign, excludeRoles: ['logistica'] },
@@ -40,6 +41,7 @@ export default function BottomNav({ esSupervisor, esAdministracion = false, rol:
           <div className="grid grid-cols-3 gap-1 p-3">
             {MORE_ITEMS.filter(item => {
               if (item.excludeRoles && item.excludeRoles.includes(rol)) return false
+              if (item.onlyRoles && !item.onlyRoles.includes(rol)) return false
               if (item.supervisorOnly && !esSupervisor) return false
               if (item.requiresPrivileged && !esPrivilegiado) return false
               if (!esSupervisor && ['/auditoria', '/logs'].includes(item.path)) return false

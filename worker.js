@@ -156,6 +156,11 @@ export default {
       return handleReciclarDespacho(request, env);
     }
 
+    // ── API: venta rápida (cotización + despacho atómico) ────────────────────
+    if (url.pathname === '/api/ventas-rapidas/crear' && request.method === 'POST') {
+      return handleVentaRapida(request, env);
+    }
+
     // ── API: reasignar cliente (bypass RLS) ─────────────────────────────────
     if (url.pathname === '/api/clientes/reasignar' && request.method === 'POST') {
       return handleReasignarCliente(request, env);
@@ -2119,6 +2124,225 @@ async function handleCrearDespacho(request, env) {
     return json({ id: despacho.id, numero: despacho.numero }, 200, request);
   } catch (e) {
     return jsonError(e.message || 'Error al crear despacho', 500, request);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 2b. VENTA RÁPIDA (cotización + despacho en un solo paso)
+// ══════════════════════════════════════════════════════════════════════════════
+async function handleVentaRapida(request, env) {
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { user, operador, headers } = v;
+
+  // Solo vendedor y supervisor pueden crear ventas rápidas
+  if (!['vendedor', 'supervisor'].includes(operador.rol)) {
+    return jsonError('Solo vendedores y supervisores pueden crear ventas rápidas', 403, request);
+  }
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+
+  const {
+    clienteId, transportistaId, fleteUsd, formaPago, formaPagoCliente,
+    referenciaPago, notas, notasCliente, items, descuentoGlobalPct, costoEnvioUsd, tasaBcv,
+  } = body;
+
+  // Validaciones básicas
+  if (!clienteId) return jsonError('Falta clienteId', 400, request);
+  if (!isValidUuid(clienteId)) return jsonError('clienteId inválido', 400, request);
+  if (!items || !Array.isArray(items) || items.length === 0) return jsonError('Se requiere al menos un producto', 400, request);
+  if (!formaPago) return jsonError('Falta forma de pago', 400, request);
+
+  const tasaNum = Number(tasaBcv);
+  if (!Number.isFinite(tasaNum) || tasaNum <= 0 || tasaNum > 100000) {
+    return jsonError('Tasa BCV inválida', 400, request);
+  }
+
+  const flete = Math.max(0, Number(fleteUsd) || 0);
+  const costoEnvio = Math.max(0, Number(costoEnvioUsd) || 0);
+
+  // Validar items
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    if (!it.productoId) return jsonError(`Item ${i + 1}: falta productoId`, 400, request);
+    if (typeof it.cantidad !== 'number' || it.cantidad <= 0) return jsonError(`Item ${i + 1}: cantidad debe ser > 0`, 400, request);
+    if (typeof it.precioUnitUsd !== 'number' || it.precioUnitUsd < 0) return jsonError(`Item ${i + 1}: precio inválido`, 400, request);
+  }
+
+  try {
+    // 1. Obtener datos de productos (stock, nombre, código, unidad)
+    const prodIds = items.map(i => i.productoId);
+    const prodRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/productos?id=in.(${prodIds.join(',')})&activo=eq.true&select=id,stock_actual,nombre,codigo,unidad`,
+      { headers }
+    );
+    const productos = await prodRes.json();
+    const stockMap = Object.fromEntries(productos.map(p => [p.id, p]));
+
+    // 2. Validar stock suficiente
+    for (const item of items) {
+      const prod = stockMap[item.productoId];
+      if (!prod) return jsonError(`Producto no encontrado o inactivo (ID: ${item.productoId})`, 400, request);
+      if (Number(prod.stock_actual) < Number(item.cantidad)) {
+        return jsonError(`Stock insuficiente: "${prod.nombre}" requiere ${item.cantidad} pero solo hay ${prod.stock_actual}`, 400, request);
+      }
+    }
+
+    // 3. Calcular totales
+    const round2 = n => Math.round(n * 100) / 100;
+    const subtotal = round2(items.reduce((s, it) => s + round2(it.cantidad * it.precioUnitUsd), 0));
+    const totalUsd = round2(subtotal + costoEnvio);
+    const totalBs = round2(totalUsd * tasaNum);
+
+    // 4. Crear cotización con estado 'aceptada' directamente
+    const now = new Date().toISOString();
+    const cotRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?select=id,numero`, {
+      method: 'POST',
+      headers: { ...headers, Prefer: 'return=representation' },
+      body: JSON.stringify({
+        cliente_id: clienteId,
+        vendedor_id: user.operator_id,
+        transportista_id: transportistaId || null,
+        estado: 'aceptada',
+        subtotal_usd: subtotal,
+        descuento_global_pct: 0,
+        descuento_usd: 0,
+        costo_envio_usd: costoEnvio,
+        total_usd: totalUsd,
+        tasa_bcv_snapshot: tasaNum,
+        total_bs_snapshot: totalBs,
+        notas_cliente: notasCliente?.trim() || null,
+        notas_internas: 'Venta rápida',
+        enviada_en: now,
+        actualizado_en: now,
+      }),
+    });
+    if (!cotRes.ok) {
+      const err = await cotRes.text();
+      return jsonError(`Error al crear cotización: ${err}`, 500, request);
+    }
+    const [cot] = await cotRes.json();
+
+    // 5. Insertar items de cotización (con snapshots de producto)
+    const itemRows = items.map((it, idx) => {
+      const prod = stockMap[it.productoId];
+      return {
+        cotizacion_id: cot.id,
+        producto_id: it.productoId,
+        codigo_snap: prod.codigo || null,
+        nombre_snap: prod.nombre,
+        unidad_snap: prod.unidad || 'und',
+        cantidad: it.cantidad,
+        precio_unit_usd: it.precioUnitUsd,
+        descuento_pct: 0,
+        total_linea_usd: round2(it.cantidad * it.precioUnitUsd),
+        orden: idx,
+      };
+    });
+
+    const itemsRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizacion_items`, {
+      method: 'POST', headers,
+      body: JSON.stringify(itemRows),
+    });
+    if (!itemsRes.ok) {
+      const err = await itemsRes.text();
+      return jsonError(`Error al insertar items: ${err}`, 500, request);
+    }
+
+    // 6. Descontar stock y registrar kardex
+    const loteId = crypto.randomUUID();
+    const movimientos = [];
+    for (const item of items) {
+      const prod = stockMap[item.productoId];
+      const stockAnterior = Number(prod.stock_actual);
+      const nuevoStock = stockAnterior - Number(item.cantidad);
+      await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${item.productoId}`, {
+        method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
+        body: JSON.stringify({ stock_actual: nuevoStock }),
+      });
+      movimientos.push({
+        lote_id: loteId,
+        tipo: 'egreso',
+        motivo: `Venta rápida — Nota de despacho #${cot.numero}`,
+        motivo_tipo: 'otro',
+        producto_id: item.productoId,
+        producto_nombre: prod.nombre,
+        cantidad: Number(item.cantidad),
+        stock_anterior: stockAnterior,
+        stock_nuevo: nuevoStock,
+        usuario_id: user.operator_id,
+        usuario_nombre: operador.nombre,
+        usuario_color: operador.color || null,
+      });
+    }
+
+    if (movimientos.length > 0) {
+      const kardexRes = await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos`, {
+        method: 'POST', headers,
+        body: JSON.stringify(movimientos),
+      });
+      if (!kardexRes.ok) {
+        const kardexErr = await kardexRes.text();
+        return jsonError(`Error al registrar kardex: ${kardexErr}`, 500, request);
+      }
+    }
+
+    // 7. Crear nota de despacho
+    const totalConFlete = totalUsd + flete;
+    const despRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?select=id,numero`, {
+      method: 'POST',
+      headers: { ...headers, Prefer: 'return=representation' },
+      body: JSON.stringify({
+        cotizacion_id: cot.id,
+        cliente_id: clienteId,
+        vendedor_id: user.operator_id,
+        transportista_id: transportistaId || null,
+        estado: 'pendiente',
+        total_usd: totalConFlete,
+        flete_usd: flete,
+        notas: notas?.trim() || null,
+        forma_pago: formaPago,
+        referencia_pago: referenciaPago || null,
+        forma_pago_cliente: formaPagoCliente || null,
+        creado_por: user.operator_id,
+      }),
+    });
+    if (!despRes.ok) {
+      const err = await despRes.text();
+      return jsonError(`Error al crear despacho: ${err}`, 500, request);
+    }
+    const [despacho] = await despRes.json();
+
+    // 8. Si es Cta por cobrar, registrar cargo CxC
+    if (formaPago === 'Cta por cobrar' && despacho) {
+      const cxcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/registrar_cargo_cxc`, {
+        method: 'POST', headers,
+        body: JSON.stringify({
+          p_cliente_id: clienteId,
+          p_despacho_id: despacho.id,
+          p_monto_usd: totalConFlete,
+          p_descripcion: `Venta rápida — Despacho #${cot.numero}`,
+          p_registrado_por: user.operator_id,
+        }),
+      });
+      if (!cxcRes.ok) {
+        const cxcErr = await cxcRes.text();
+        return jsonError(`Error al registrar CxC: ${cxcErr}`, 500, request);
+      }
+    }
+
+    // 9. Auditoría
+    await registrarAuditoria(env, headers, {
+      usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
+      categoria: 'COTIZACION', accion: 'VENTA_RAPIDA',
+      entidadTipo: 'nota_despacho', entidadId: despacho.id,
+      meta: { cotizacion_id: cot.id, total_usd: totalConFlete, items: items.length },
+    });
+
+    return json({ cotizacionId: cot.id, despachoId: despacho.id, numero: cot.numero }, 200, request);
+  } catch (e) {
+    return jsonError(e.message || 'Error al crear venta rápida', 500, request);
   }
 }
 

@@ -1,7 +1,7 @@
 // src/components/ui/DetalleModal.jsx
 // Modal genérico de detalle para cotizaciones y despachos
 import { useEffect, useState } from 'react'
-import { X, Package, Loader2, Calendar, Clock, User, FileText, History } from 'lucide-react'
+import { X, Package, Loader2, Calendar, Clock, User, FileText, History, CreditCard, Hash } from 'lucide-react'
 import supabase from '../../services/supabase/client'
 import { fmtUsdSimple as fmtUsd, fmtFecha } from '../../utils/format'
 import useAuthStore from '../../store/useAuthStore'
@@ -133,6 +133,12 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
             <span className="inline-flex items-center gap-1"><FileText size={12} className="text-slate-400" /> Ref: <strong className="font-mono text-slate-700">
               COT-{String(registro.cotizacion.numero).padStart(5, '0')}{registro.cotizacion.version > 1 ? ` Rev.${registro.cotizacion.version}` : ''}
             </strong></span>
+          )}
+          {!esCot && registro.forma_pago_cliente && (
+            <span className="inline-flex items-center gap-1"><CreditCard size={12} className="text-slate-400" /> Pago: <strong className="text-slate-700">{registro.forma_pago_cliente}</strong></span>
+          )}
+          {!esCot && registro.referencia_pago && (
+            <span className="inline-flex items-center gap-1"><Hash size={12} className="text-slate-400" /> Ref. pago: <strong className="font-mono text-slate-700">{registro.referencia_pago}</strong></span>
           )}
         </div>
 
