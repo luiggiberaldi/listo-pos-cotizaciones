@@ -40,6 +40,7 @@ const ROL_ACCENT = {
   supervisor:     { color: '#3b82f6', glow: 'rgba(59,130,246,0.35)', chip: 'rgba(59,130,246,0.15)', chipBorder: 'rgba(59,130,246,0.3)', label: 'Supervisor' },
   vendedor:       { color: '#14b8a6', glow: 'rgba(20,184,166,0.3)',  chip: 'rgba(20,184,166,0.12)', chipBorder: 'rgba(20,184,166,0.25)', label: 'Vendedor'   },
   administracion: { color: '#f59e0b', glow: 'rgba(245,158,11,0.35)', chip: 'rgba(245,158,11,0.15)', chipBorder: 'rgba(245,158,11,0.3)', label: 'Administración' },
+  logistica:      { color: '#8b5cf6', glow: 'rgba(139,92,246,0.35)', chip: 'rgba(139,92,246,0.15)', chipBorder: 'rgba(139,92,246,0.3)', label: 'Logística' },
 }
 
 // ─── Tarjeta de usuario (Dark Premium) ───────────────────────────────────────
@@ -61,10 +62,10 @@ function UserCard({ user, onClick, index }) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       className="cursor-pointer outline-none h-full"
-      style={{ animation: `fadeSlideUp 0.5s ease forwards`, animationDelay: `${index * 0.1}s`, opacity: 0 }}
+      style={{ animation: `fadeSlideUp 0.5s ease forwards`, animationDelay: `${index * 0.07}s`, opacity: 0 }}
     >
       <div
-        className="relative flex flex-col items-center justify-center gap-3 px-3 sm:px-5 pt-5 sm:pt-7 pb-4 sm:pb-5 rounded-2xl transition-all duration-300 h-full"
+        className="relative flex flex-col items-center justify-center gap-2 sm:gap-3 px-3 sm:px-4 pt-4 sm:pt-6 pb-3 sm:pb-5 rounded-2xl transition-all duration-300 h-full"
         style={{
           background: hovered ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.04)',
           border: `1px solid ${hovered ? acc.color + '60' : 'rgba(255,255,255,0.08)'}`,
@@ -89,13 +90,13 @@ function UserCard({ user, onClick, index }) {
           />
           <LoginAvatar user={user} className="relative z-10" />
         </div>
-        <div className="text-center space-y-2 min-w-0 w-full">
-          <p className="text-sm sm:text-base font-black text-white leading-tight tracking-tight line-clamp-2"
+        <div className="text-center space-y-1.5 sm:space-y-2 min-w-0 w-full">
+          <p className="text-xs sm:text-sm md:text-base font-black text-white leading-tight tracking-tight line-clamp-2"
             style={{ textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}>
             {nombre}
           </p>
           <span
-            className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide transition-all duration-300 max-w-full"
+            className="inline-flex items-center px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] font-bold uppercase tracking-wide transition-all duration-300 max-w-full"
             style={{
               background: acc.chip,
               border: `1px solid ${acc.chipBorder}`,
@@ -420,35 +421,35 @@ function UserSelectStep() {
 
       <DarkBackground />
 
-      <div className="relative z-10 min-h-screen w-full flex flex-col lg:flex-row items-center justify-center px-4 sm:px-6 lg:px-8 xl:px-12 py-8 gap-8 lg:gap-8 xl:gap-14 overflow-x-hidden">
+      <div className="relative z-10 min-h-[100dvh] w-full flex flex-col lg:flex-row items-center justify-center px-3 sm:px-6 lg:px-8 xl:px-12 py-6 sm:py-8 gap-5 sm:gap-8 lg:gap-8 xl:gap-14 overflow-x-hidden overflow-y-auto">
 
         {/* ── LOGO + BRANDING ── */}
         <div
-          className="flex flex-col items-center lg:items-start gap-4 select-none lg:w-[220px] xl:w-[300px] shrink-0"
+          className="flex flex-col items-center lg:items-start gap-3 sm:gap-4 select-none lg:w-[220px] xl:w-[300px] shrink-0"
           style={{ animation: 'logoReveal 0.8s ease forwards' }}
         >
           <div className="relative flex items-center justify-center lg:justify-start">
             <div className="absolute rounded-full opacity-25 blur-3xl"
-              style={{ width: 'clamp(160px, 30vw, 280px)', height: 'clamp(160px, 30vw, 280px)', background: 'radial-gradient(circle, #B8860B 0%, transparent 70%)' }} />
+              style={{ width: 'clamp(120px, 25vw, 280px)', height: 'clamp(120px, 25vw, 280px)', background: 'radial-gradient(circle, #B8860B 0%, transparent 70%)' }} />
             <img
               src="/logo.png"
               alt="Construacero Carabobo"
               onClick={handleLogoTap}
               className="relative z-10 w-auto object-contain select-none drop-shadow-2xl cursor-pointer"
               style={{
-                height: 'clamp(120px, 16vw, 220px)',
+                height: 'clamp(80px, 14vw, 220px)',
                 filter: 'drop-shadow(0 0 40px rgba(184,134,11,0.35)) brightness(1.05)',
               }}
               draggable={false}
             />
           </div>
 
-          <div className="flex items-center justify-center lg:justify-start gap-3 w-full">
-            <div className="h-px flex-1 max-w-[48px] opacity-40" style={{ background: 'linear-gradient(to right, transparent, #B8860B)' }} />
-            <span className="text-[10px] sm:text-xs font-bold tracking-[0.3em] uppercase whitespace-nowrap" style={{ color: '#B8860B' }}>
+          <div className="flex items-center justify-center lg:justify-start gap-2 sm:gap-3 w-full">
+            <div className="h-px flex-1 max-w-[36px] sm:max-w-[48px] opacity-40" style={{ background: 'linear-gradient(to right, transparent, #B8860B)' }} />
+            <span className="text-[9px] sm:text-xs font-bold tracking-[0.25em] sm:tracking-[0.3em] uppercase whitespace-nowrap" style={{ color: '#B8860B' }}>
               Sistema de Gestión
             </span>
-            <div className="h-px flex-1 max-w-[48px] opacity-40" style={{ background: 'linear-gradient(to left, transparent, #B8860B)' }} />
+            <div className="h-px flex-1 max-w-[36px] sm:max-w-[48px] opacity-40" style={{ background: 'linear-gradient(to left, transparent, #B8860B)' }} />
           </div>
 
           <p className="hidden lg:block text-sm leading-relaxed max-w-[280px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
@@ -458,7 +459,7 @@ function UserSelectStep() {
 
         {/* ── PANEL PRINCIPAL ── */}
         <div
-          className="w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-sm xl:max-w-lg relative overflow-hidden rounded-2xl sm:rounded-3xl"
+          className="w-full max-w-[calc(100vw-1.5rem)] sm:max-w-sm md:max-w-md lg:max-w-sm xl:max-w-lg relative overflow-hidden rounded-2xl sm:rounded-3xl"
           style={{
             background: 'rgba(255,255,255,0.04)',
             backdropFilter: 'blur(20px)',
@@ -475,22 +476,22 @@ function UserSelectStep() {
           <div className="absolute bottom-0 left-0 w-48 h-48 -ml-16 -mb-16 rounded-full pointer-events-none"
             style={{ background: 'radial-gradient(circle, #B8860B 0%, transparent 70%)', filter: 'blur(30px)', opacity: 0.06 }} />
 
-          <div className="relative z-10 p-5 sm:p-6 lg:p-6 xl:p-8">
+          <div className="relative z-10 p-4 sm:p-6 lg:p-6 xl:p-8">
 
             {/* Header */}
-            <div className="flex items-center justify-between mb-6 sm:mb-8">
-              <div>
-                <h1 className="text-lg sm:text-xl font-black text-white tracking-tight">
+            <div className="flex items-center justify-between mb-4 sm:mb-6 lg:mb-8">
+              <div className="min-w-0">
+                <h1 className="text-base sm:text-lg md:text-xl font-black text-white tracking-tight">
                   ¿Quién está operando?
                 </h1>
-                <p className="text-xs sm:text-sm mt-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                <p className="text-[11px] sm:text-xs md:text-sm mt-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>
                   Selecciona tu usuario e ingresa tu PIN
                 </p>
               </div>
               <button
                 onClick={cargarUsuarios.bind(null, false)}
                 disabled={cargando}
-                className="p-2 sm:p-2.5 rounded-xl transition-all disabled:opacity-40 shrink-0"
+                className="p-2 sm:p-2.5 rounded-xl transition-all disabled:opacity-40 shrink-0 ml-2"
                 style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.5)' }}
                 onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
@@ -501,10 +502,10 @@ function UserSelectStep() {
 
             {/* Grid usuarios */}
             {cargando ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-5">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-4">
                 {Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="flex flex-col items-center gap-3 py-5 sm:py-6 animate-pulse">
-                    <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl" style={{ background: 'rgba(255,255,255,0.08)' }} />
+                  <div key={i} className="flex flex-col items-center gap-2.5 sm:gap-3 py-4 sm:py-6 animate-pulse">
+                    <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl" style={{ background: 'rgba(255,255,255,0.08)' }} />
                     <div className="space-y-2 w-full px-2">
                       <div className="h-2.5 rounded w-3/4 mx-auto" style={{ background: 'rgba(255,255,255,0.08)' }} />
                       <div className="h-2 rounded w-1/2 mx-auto" style={{ background: 'rgba(255,255,255,0.05)' }} />
@@ -513,25 +514,25 @@ function UserSelectStep() {
                 ))}
               </div>
             ) : errorLista ? (
-              <div className="text-center py-10">
+              <div className="text-center py-8 sm:py-10">
                 <p className="text-sm mb-3" style={{ color: 'rgba(255,255,255,0.4)' }}>{errorLista}</p>
                 <button onClick={cargarUsuarios} className="text-sm font-bold text-sky-400 hover:text-sky-300 transition-colors">
                   Reintentar
                 </button>
               </div>
             ) : usuarios.length === 0 ? (
-              <div className="text-center py-10">
+              <div className="text-center py-8 sm:py-10">
                 <p className="text-sm" style={{ color: 'rgba(255,255,255,0.3)' }}>No hay usuarios activos en el sistema.</p>
                 <p className="text-xs mt-1" style={{ color: 'rgba(255,255,255,0.2)' }}>Contacta al supervisor.</p>
               </div>
             ) : (
-              <div className={`grid gap-3 sm:gap-4 ${
-                usuarios.length === 1 ? 'grid-cols-1 max-w-[180px] mx-auto' :
-                usuarios.length === 2 ? 'grid-cols-2 max-w-[360px] mx-auto' :
+              <div className={`grid gap-2.5 sm:gap-4 ${
+                usuarios.length === 1 ? 'grid-cols-1 max-w-[160px] sm:max-w-[180px] mx-auto' :
+                usuarios.length === 2 ? 'grid-cols-2 max-w-[320px] sm:max-w-[360px] mx-auto' :
                 'grid-cols-2 sm:grid-cols-3'
               }`}>
                 {[...usuarios].sort((a, b) => {
-                  const orden = { supervisor: 0, administracion: 1, vendedor: 2 }
+                  const orden = { supervisor: 0, administracion: 1, vendedor: 2, logistica: 3 }
                   return (orden[a.rol] ?? 2) - (orden[b.rol] ?? 2)
                 }).map((u, i) => (
                   <div key={u.id} className="min-w-0">
@@ -546,16 +547,8 @@ function UserSelectStep() {
 
       </div>
 
-      {/* Footer — bottom fijo, solo desktop */}
-      <div className="hidden md:flex fixed bottom-4 left-0 right-0 justify-center items-center gap-4 pointer-events-none z-20"
-        style={{ animation: 'fadeIn 1s ease 0.8s forwards', opacity: 0 }}>
-        <div className="pointer-events-auto">
-          <PwaInstallButton />
-        </div>
-      </div>
-
-      {/* Botón instalar PWA en móvil */}
-      <div className="md:hidden fixed bottom-4 left-0 right-0 flex justify-center z-20 pointer-events-none"
+      {/* Footer — PWA install button */}
+      <div className="fixed bottom-3 sm:bottom-4 left-0 right-0 flex justify-center z-20 pointer-events-none"
         style={{ animation: 'fadeIn 1s ease 0.8s forwards', opacity: 0 }}>
         <div className="pointer-events-auto">
           <PwaInstallButton />

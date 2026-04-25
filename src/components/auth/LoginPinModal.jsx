@@ -111,12 +111,12 @@ export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
 
   return (
     <div
-      className="fixed inset-0 z-[300] flex items-center justify-center animate-in fade-in duration-200"
+      className="fixed inset-0 z-[300] flex items-end sm:items-center justify-center animate-in fade-in duration-200"
       style={{ background: 'rgba(5, 10, 24, 0.85)', backdropFilter: 'blur(8px)' }}
       onClick={bloqueado ? undefined : onClose}
     >
       <div
-        className="relative w-full max-w-sm mx-4 rounded-3xl overflow-hidden animate-in zoom-in-95 duration-300"
+        className="relative w-full sm:max-w-sm sm:mx-4 rounded-t-3xl sm:rounded-3xl overflow-hidden animate-in slide-in-from-bottom sm:zoom-in-95 duration-300 max-h-[95dvh] overflow-y-auto"
         style={{
           background: 'linear-gradient(160deg, #0d1f3c 0%, #0a1628 60%, #081520 100%)',
           border: '1px solid rgba(255,255,255,0.08)',
@@ -139,12 +139,17 @@ export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
         <div className="absolute top-0 left-[20%] right-[20%] h-px"
           style={{ background: 'linear-gradient(to right, transparent, rgba(184,134,11,0.4), transparent)' }} />
 
-        <div className="relative z-10 px-7 pt-8 pb-7">
+        {/* Barra de arrastre en móvil */}
+        <div className="sm:hidden flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 rounded-full" style={{ background: 'rgba(255,255,255,0.2)' }} />
+        </div>
+
+        <div className="relative z-10 px-5 sm:px-7 pt-4 sm:pt-8 pb-5 sm:pb-7">
 
           {/* Botón cerrar */}
           {!bloqueado && (
             <button onClick={onClose}
-              className="absolute top-5 right-5 p-1.5 rounded-xl transition-colors"
+              className="absolute top-3 sm:top-5 right-4 sm:right-5 p-1.5 rounded-xl transition-colors"
               style={{ color: 'rgba(255,255,255,0.35)', background: 'rgba(255,255,255,0.05)' }}
               onMouseEnter={e => e.currentTarget.style.color = 'rgba(255,255,255,0.8)'}
               onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.35)'}>
@@ -153,37 +158,39 @@ export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
           )}
 
           {/* Avatar + nombre */}
-          <div className="flex flex-col items-center mb-7">
-            <div className="mb-4"><LoginAvatar user={user} /></div>
-            <h2 className="text-xl font-black text-white">{nombre}</h2>
-            <p className="text-xs mt-1" style={{ color: 'rgba(255,255,255,0.4)' }}>
+          <div className="flex flex-col items-center mb-5 sm:mb-7">
+            <div className="mb-3 sm:mb-4"><LoginAvatar user={user} /></div>
+            <h2 className="text-lg sm:text-xl font-black text-white">{nombre}</h2>
+            <p className="text-[11px] sm:text-xs mt-1" style={{ color: 'rgba(255,255,255,0.4)' }}>
               Ingresa tu PIN de {PIN_LEN} dígitos
             </p>
           </div>
 
           {bloqueado ? (
             /* ── Estado bloqueado ── */
-            <div className="flex flex-col items-center gap-4 py-2">
-              <div className="w-20 h-20 rounded-full flex items-center justify-center"
+            <div className="flex flex-col items-center gap-3 sm:gap-4 py-2">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center"
                 style={{ background: 'rgba(239,68,68,0.15)', border: '2px solid rgba(239,68,68,0.3)' }}>
-                <ShieldAlert size={36} className="text-red-400" />
+                <ShieldAlert size={30} className="text-red-400 sm:hidden" />
+                <ShieldAlert size={36} className="text-red-400 hidden sm:block" />
               </div>
               <div className="text-center">
                 <p className="text-sm font-black text-white">Acceso bloqueado</p>
-                <p className="text-xs mt-1" style={{ color: 'rgba(255,255,255,0.4)' }}>{MAX_INTENTOS} intentos fallidos consecutivos</p>
+                <p className="text-[11px] sm:text-xs mt-1" style={{ color: 'rgba(255,255,255,0.4)' }}>{MAX_INTENTOS} intentos fallidos consecutivos</p>
               </div>
-              <div className="flex items-center gap-3 px-6 py-3 rounded-2xl"
+              <div className="flex items-center gap-3 px-5 sm:px-6 py-2.5 sm:py-3 rounded-2xl"
                 style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)' }}>
-                <Clock size={18} className="text-red-400 shrink-0" />
-                <span className="text-2xl font-black text-red-400 tabular-nums w-8 text-center">{segsLeft}</span>
-                <span className="text-sm font-semibold text-red-400/70">segundos</span>
+                <Clock size={16} className="text-red-400 shrink-0 sm:hidden" />
+                <Clock size={18} className="text-red-400 shrink-0 hidden sm:block" />
+                <span className="text-xl sm:text-2xl font-black text-red-400 tabular-nums w-8 text-center">{segsLeft}</span>
+                <span className="text-xs sm:text-sm font-semibold text-red-400/70">segundos</span>
               </div>
             </div>
           ) : (
             <>
               {/* Aviso intentos fallidos */}
               {intentos > 0 && (
-                <div className="mb-5 flex items-center gap-2 px-3 py-2 rounded-xl"
+                <div className="mb-4 sm:mb-5 flex items-center gap-2 px-3 py-2 rounded-xl"
                   style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.25)' }}>
                   <ShieldAlert size={14} className="text-amber-400 shrink-0" />
                   <p className="text-[11px] font-bold text-amber-400">
@@ -193,9 +200,9 @@ export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
               )}
 
               {/* Puntos indicadores */}
-              <div className={`flex justify-center gap-3.5 mb-8 ${error ? 'animate-shake' : ''}`}>
+              <div className={`flex justify-center gap-3 sm:gap-3.5 mb-5 sm:mb-8 ${error ? 'animate-shake' : ''}`}>
                 {Array.from({ length: PIN_LEN }).map((_, i) => (
-                  <div key={i} className="w-4 h-4 rounded-full transition-all duration-200"
+                  <div key={i} className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full transition-all duration-200"
                     style={
                       error
                         ? { background: '#ef4444', border: '2px solid #ef4444', boxShadow: '0 0 12px rgba(239,68,68,0.6)', transform: 'scale(1.1)' }
@@ -220,10 +227,10 @@ export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
               />
 
               {/* Pad numérico */}
-              <div className="grid grid-cols-3 gap-3 max-w-[270px] mx-auto">
+              <div className="grid grid-cols-3 gap-2.5 sm:gap-3 max-w-[240px] sm:max-w-[270px] mx-auto">
                 {[1,2,3,4,5,6,7,8,9].map(n => (
                   <button key={n} type="button" onPointerDown={e => { e.preventDefault(); presionar(String(n)) }}
-                    className="h-14 rounded-2xl text-xl font-bold transition-all duration-150 active:scale-95 select-none"
+                    className="h-12 sm:h-14 rounded-xl sm:rounded-2xl text-lg sm:text-xl font-bold transition-all duration-150 active:scale-95 select-none"
                     style={{
                       background: 'rgba(255,255,255,0.07)',
                       border: '1px solid rgba(255,255,255,0.1)',
@@ -243,7 +250,7 @@ export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
                 <div />
 
                 <button type="button" onPointerDown={e => { e.preventDefault(); presionar('0') }}
-                  className="h-14 rounded-2xl text-xl font-bold transition-all duration-150 active:scale-95 select-none"
+                  className="h-12 sm:h-14 rounded-xl sm:rounded-2xl text-lg sm:text-xl font-bold transition-all duration-150 active:scale-95 select-none"
                   style={{
                     background: 'rgba(255,255,255,0.07)',
                     border: '1px solid rgba(255,255,255,0.1)',
@@ -260,7 +267,7 @@ export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
                 </button>
 
                 <button type="button" onPointerDown={e => { e.preventDefault(); borrar() }}
-                  className="h-14 rounded-2xl flex items-center justify-center transition-all duration-150 active:scale-95 select-none"
+                  className="h-12 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all duration-150 active:scale-95 select-none"
                   style={{
                     background: 'rgba(255,255,255,0.05)',
                     border: '1px solid rgba(255,255,255,0.08)',
@@ -270,7 +277,8 @@ export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
                   onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = 'rgba(255,255,255,0.4)' }}
                   onTouchStart={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.2)'; e.currentTarget.style.transform = 'scale(0.95)' }}
                   onTouchEnd={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.transform = 'scale(1)' }}>
-                  <Delete size={22} />
+                  <Delete size={20} className="sm:hidden" />
+                  <Delete size={22} className="hidden sm:block" />
                 </button>
               </div>
             </>
@@ -279,7 +287,7 @@ export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
 
         {/* Overlay de carga */}
         {working && (
-          <div className="absolute inset-0 z-20 rounded-3xl flex items-center justify-center"
+          <div className="absolute inset-0 z-20 rounded-t-3xl sm:rounded-3xl flex items-center justify-center"
             style={{ background: 'rgba(10,22,40,0.85)', backdropFilter: 'blur(4px)' }}>
             <div className="flex flex-col items-center gap-3">
               <Loader2 className="animate-spin" size={32} style={{ color: userColor }} />
