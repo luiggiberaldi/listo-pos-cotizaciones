@@ -127,10 +127,8 @@ function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
         options={[
           { value: 'vendedor', label: 'Vendedor' },
           { value: 'administracion', label: 'Administración' },
+          { value: 'logistica', label: 'Logística' },
           { value: 'supervisor', label: 'Supervisor' },
-        ]}
-        value={campos.rol}
-        onChange={val => { cambiar('rol', val); setCampos(p => ({ ...p, pin: '' })) }}
         placeholder="Seleccionar rol..."
         disabled={cargando}
         searchable={false}
@@ -236,10 +234,8 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando, coloresUsados = 
         options={[
           { value: 'vendedor', label: 'Vendedor' },
           { value: 'administracion', label: 'Administración' },
-          { value: 'supervisor', label: 'Supervisor' },
-        ]}
-        value={campos.rol}
-        onChange={val => setCampos(p => ({ ...p, rol: val, pin: '', pinConfirm: '' }))}
+          { value: 'logistica', label: 'Logística' },
+          { value: 'supervisor', label: 'Supervisor' },}
         placeholder="Seleccionar rol..."
         disabled={cargando}
         searchable={false}
