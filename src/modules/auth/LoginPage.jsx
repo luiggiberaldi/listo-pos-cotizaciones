@@ -420,11 +420,11 @@ function UserSelectStep() {
 
       <DarkBackground />
 
-      <div className="relative z-10 min-h-screen w-full flex flex-col lg:flex-row items-center justify-center px-4 sm:px-6 lg:px-12 py-8 gap-8 lg:gap-16">
+      <div className="relative z-10 min-h-screen w-full flex flex-col lg:flex-row items-center justify-center px-4 sm:px-6 lg:px-8 xl:px-12 py-8 gap-8 lg:gap-8 xl:gap-14 overflow-x-hidden">
 
         {/* ── LOGO + BRANDING ── */}
         <div
-          className="flex flex-col items-center lg:items-start gap-4 select-none lg:w-[340px] xl:w-[400px] shrink-0"
+          className="flex flex-col items-center lg:items-start gap-4 select-none lg:w-[220px] xl:w-[300px] shrink-0"
           style={{ animation: 'logoReveal 0.8s ease forwards' }}
         >
           <div className="relative flex items-center justify-center lg:justify-start">
@@ -436,7 +436,7 @@ function UserSelectStep() {
               onClick={handleLogoTap}
               className="relative z-10 w-auto object-contain select-none drop-shadow-2xl cursor-pointer"
               style={{
-                height: 'clamp(160px, 22vw, 300px)',
+                height: 'clamp(120px, 16vw, 220px)',
                 filter: 'drop-shadow(0 0 40px rgba(184,134,11,0.35)) brightness(1.05)',
               }}
               draggable={false}
@@ -458,7 +458,7 @@ function UserSelectStep() {
 
         {/* ── PANEL PRINCIPAL ── */}
         <div
-          className="w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg xl:max-w-xl relative overflow-hidden rounded-2xl sm:rounded-3xl"
+          className="w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-sm xl:max-w-lg relative overflow-hidden rounded-2xl sm:rounded-3xl"
           style={{
             background: 'rgba(255,255,255,0.04)',
             backdropFilter: 'blur(20px)',
@@ -475,7 +475,7 @@ function UserSelectStep() {
           <div className="absolute bottom-0 left-0 w-48 h-48 -ml-16 -mb-16 rounded-full pointer-events-none"
             style={{ background: 'radial-gradient(circle, #B8860B 0%, transparent 70%)', filter: 'blur(30px)', opacity: 0.06 }} />
 
-          <div className="relative z-10 p-5 sm:p-7 lg:p-8">
+          <div className="relative z-10 p-5 sm:p-6 lg:p-6 xl:p-8">
 
             {/* Header */}
             <div className="flex items-center justify-between mb-6 sm:mb-8">
@@ -525,7 +525,7 @@ function UserSelectStep() {
                 <p className="text-xs mt-1" style={{ color: 'rgba(255,255,255,0.2)' }}>Contacta al supervisor.</p>
               </div>
             ) : (
-              <div className={`grid gap-4 sm:gap-8 ${
+              <div className={`grid gap-3 sm:gap-4 ${
                 usuarios.length === 1 ? 'grid-cols-1 max-w-[180px] mx-auto' :
                 usuarios.length === 2 ? 'grid-cols-2 max-w-[360px] mx-auto' :
                 'grid-cols-2 sm:grid-cols-3'
