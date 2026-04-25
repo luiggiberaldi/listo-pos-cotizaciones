@@ -40,6 +40,12 @@ const ROL_CONFIG = {
     text:     'text-slate-600',
     border:   'border-slate-200',
   },
+  logistica: {
+    label:    'Logística',
+    bg:       'bg-purple-50',
+    text:     'text-purple-700',
+    border:   'border-purple-200',
+  },
 }
 
 // Colores predefinidos para vendedores
@@ -470,7 +476,7 @@ function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar, c
 
       {/* ── Acciones ── */}
       {!propio ? (
-        <div className="border-t border-slate-100 px-2 py-2 flex items-center gap-0.5">
+        <div className="border-t border-slate-100 px-2 py-2 flex items-center flex-wrap gap-0.5">
           <button onClick={() => onEditar(usuario)}
             className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-primary hover:bg-primary-light active:bg-primary-light transition-colors whitespace-nowrap">
             <Pencil size={13} />Editar
@@ -480,7 +486,7 @@ function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar, c
               usuario.activo ? 'text-slate-600 hover:bg-slate-100' : 'text-emerald-600 hover:bg-emerald-50'
             }`}>
             {usuario.activo ? <UserX size={13} /> : <UserCheck size={13} />}
-            {usuario.activo ? 'Desactivar' : 'Activar'}
+            {usuario.activo ? 'Desact.' : 'Activar'}
           </button>
           <button onClick={() => onEliminar(usuario)} title="Eliminar"
             className="ml-auto flex items-center justify-center p-1.5 rounded-lg text-xs font-medium text-red-400 hover:bg-red-50 hover:text-red-600 active:bg-red-100 transition-colors">
@@ -501,7 +507,7 @@ function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar, c
 
 function SkeletonUsuarios() {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
       {Array.from({ length: 4 }).map((_, i) => (
         <div key={i} className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
           <div className="flex gap-3">
@@ -607,7 +613,7 @@ export default function UsuariosView() {
           {activos.length > 0 && (
             <div className="space-y-3">
               <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest">Activos</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
                 {activos.map(u => (
                   <UsuarioCard key={u.id} usuario={u}
                     propio={u.id === perfil?.id}
@@ -625,7 +631,7 @@ export default function UsuariosView() {
           {inactivos.length > 0 && (
             <div className="space-y-3">
               <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">Inactivos</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
                 {inactivos.map(u => (
                   <UsuarioCard key={u.id} usuario={u}
                     propio={u.id === perfil?.id}
