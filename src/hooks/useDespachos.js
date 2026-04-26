@@ -31,7 +31,7 @@ export function useDespachos({ estado = '' } = {}) {
         .from('notas_despacho')
         .select(`
           id, numero, cotizacion_id, estado,
-          total_usd, flete_usd, notas, forma_pago,
+          total_usd, flete_usd, descuento_total_usd, notas, forma_pago,
           referencia_pago, forma_pago_cliente,
           creado_en, despachada_en, entregada_en,
           cliente_id, vendedor_id, transportista_id,
@@ -45,8 +45,6 @@ export function useDespachos({ estado = '' } = {}) {
 
       // Vendedores solo ven sus propios despachos; logística/admin/supervisor ven todos
       if (!veTodos) query = query.eq('vendedor_id', perfil.id)
-      // Logística solo ve despachadas y entregadas
-      if (esLogistica && !estado) query = query.in('estado', ['despachada', 'entregada'])
 
       const { data, error } = await query
       if (error) throw error

@@ -1429,6 +1429,78 @@ La función ahora verifica `expires_at` del JWT. Si quedan menos de 60s, ejecuta
 
 ---
 
+## SESIÓN 26/04/2026 — Mejoras varias + descuentos por unidad + retomar venta rápida
+
+### Cambios realizados
+
+#### 1. Fix flash de login al recargar
+Al recargar la app estando logueado, aparecía brevemente la pantalla de login antes de mostrar el perfil. Se resolvió cacheando el perfil del operador en `localStorage` y restaurándolo sincrónicamente en `initialize()` antes de que Supabase verifique la sesión.
+
+**Archivos modificados:** `src/store/useAuthStore.js`
+
+#### 2. Descuentos por artículo en despachos (logística)
+Se implementó un sistema completo de descuentos por artículo dentro de los despachos. Solo los roles `logistica`, `supervisor` y `desarrollador` pueden aplicar descuentos.
+
+**Tipos de descuento:**
+- **Porcentaje (%)** — descuento como % del total de línea
+- **Monto fijo ($)** — descuento en USD sobre el total de línea
+- **Por unidad ($/u)** — descuento en USD por unidad × cantidad (agregado posteriormente)
+
+**Arquitectura:** Tabla separada `despacho_descuentos` (no modifica `cotizacion_items` para preservar integridad de documentos). Campo `descuento_total_usd` en `notas_despacho` para acceso rápido al total de descuentos.
+
+**Impacto en otros módulos:**
+- **Comisiones:** La RPC `calcular_comision_despacho` resta descuentos por ítem antes de calcular comisión (migración 069)
+- **Reportes:** `useReporteVentas` resta `descuento_total_usd` del total de ventas
+- **CxC:** El worker ajusta el cargo y `saldo_pendiente` del cliente al guardar descuentos
+- **PDFs:** Nota de Entrega y Orden de Despacho muestran fila de descuento
+
+**Archivos nuevos:**
+- `supabase/migrations/068_despacho_descuentos.sql` — tabla, RLS, índices
+- `supabase/migrations/069_comision_con_descuento.sql` — RPC actualizada
+- `supabase/migrations/070_descuento_por_unidad.sql` — CHECK constraint para monto_unitario
+- `src/hooks/useDespachoDescuentos.js` — queries y mutaciones
+- `src/components/despachos/DescuentoModal.jsx` — modal de descuentos
+
+**Archivos modificados:**
+- `worker.js` — endpoints POST/GET para descuentos, ajuste CxC y recomisión
+- `src/components/despachos/DespachoCard.jsx` — botón descuento + badge
+- `src/hooks/useDespachos.js` — incluir `descuento_total_usd` en query
+- `src/components/ui/DetalleModal.jsx` — mostrar desglose con descuento
+- `src/services/pdf/despachoPDF.js` — fila descuento en PDF
+- `src/services/pdf/ordenDespachoPDF.js` — fila descuento en PDF
+- `src/hooks/useReporteVentas.js` — venta neta resta descuentos
+
+#### 3. Logística ve todos los despachos
+Se eliminó el filtro que limitaba a logística a ver solo despachos `despachada`/`entregada`. Ahora ven todos los estados (pendiente, despachada, entregada) de todos los vendedores.
+
+**Archivos modificados:** `src/hooks/useDespachos.js` (línea 49 eliminada)
+
+#### 4. Retomar venta rápida (draft)
+Se implementó persistencia de borradores en venta rápida, idéntico al patrón de `CotizacionBuilder`. Si el usuario cierra la app a mitad de una venta rápida, al volver ve un banner ámbar para retomar o descartar.
+
+- Auto-guardado cada 1.5s en `localStorage`
+- Borrador expira a las 24h
+- Se limpia al completar la venta exitosamente
+- Guarda: step, clienteId, items, formaPago, referenciaPago, transportistaId, fleteUsd, notas
+
+**Archivos modificados:** `src/views/VentaRapidaView.jsx`
+
+#### 5. UX del modal de descuentos
+- Iconos de tipo ya no se duplican (se removieron iconos Lucide, se usa solo texto: `%`, `$`, `$/u`)
+- Al hacer focus en el input de valor, se selecciona todo el texto para escribir directo
+- Tercer botón `$/u` para descuento por unidad
+
+### Errores encontrados y solucionados
+
+#### Error React #31 — "object with keys {type, message}"
+**Causa:** En `src/hooks/useDespachoDescuentos.js`, las llamadas a `showToast` pasaban un objeto `{ type: 'error', message: '...' }` como primer argumento, cuando la firma de `showToast` espera `(message, type)` como argumentos separados. React intentaba renderizar el objeto como texto del toast y lanzaba el error #31 (no se puede renderizar un objeto como hijo de React).
+
+**Solución:** Cambiar `showToast({ type: 'error', message: '...' })` por `showToast('...', 'error')` y lo mismo para el caso de éxito.
+
+**Archivos corregidos:** `src/hooks/useDespachoDescuentos.js` (líneas 56 y 59)
+
+---
+
 ## GLOSARIO
 
 | Término | Significado |

@@ -40,6 +40,26 @@ async function getAccessToken() {
   return token
 }
 
+// ─── Cache de perfil en localStorage ──────────────────────────────────────────
+const PERFIL_CACHE_KEY = 'listo_perfil_cache'
+
+function guardarPerfilCache(perfil) {
+  try {
+    if (perfil) {
+      localStorage.setItem(PERFIL_CACHE_KEY, JSON.stringify(perfil))
+    } else {
+      localStorage.removeItem(PERFIL_CACHE_KEY)
+    }
+  } catch { /* ignorar */ }
+}
+
+function leerPerfilCache() {
+  try {
+    const raw = localStorage.getItem(PERFIL_CACHE_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
+}
+
 // ─── Store ────────────────────────────────────────────────────────────────────
 const useAuthStore = create((set, get) => ({
   // Estado
@@ -62,6 +82,15 @@ const useAuthStore = create((set, get) => ({
       if (sbKey && localStorage.getItem(sbKey)) haySession = true
     } catch { /* ignorar */ }
     console.log('[AUTH] haySession:', haySession)
+
+    // Restaurar perfil cacheado para evitar flash de login al recargar
+    if (haySession) {
+      const perfilCache = leerPerfilCache()
+      if (perfilCache) {
+        console.log('[AUTH] perfil restaurado desde cache:', perfilCache.nombre)
+        set({ perfil: perfilCache, initialized: true })
+      }
+    }
 
     const timeoutId = setTimeout(() => {
       const state = get()
@@ -141,6 +170,7 @@ const useAuthStore = create((set, get) => ({
 
         if (event === 'SIGNED_OUT') {
           const wasLoggedIn = get().user !== null && !get()._logoutManual
+          guardarPerfilCache(null)
           set({ user: null, perfil: null, error: null, _logoutManual: false })
           if (wasLoggedIn) {
             set({ error: 'Tu sesión ha expirado. Inicia sesión nuevamente para no perder tu trabajo.' })
@@ -177,19 +207,17 @@ const useAuthStore = create((set, get) => ({
 
     // Desarrollador — no existe en tabla usuarios, perfil sintético
     if (operatorId === '00000000-0000-0000-0000-000000000000') {
-      set({
-        user: authUser,
-        perfil: {
-          id: operatorId,
-          nombre: 'Desarrollador',
-          email: authUser.email,
-          rol: 'desarrollador',
-          activo: true,
-          color: '#8b5cf6',
-          _isSuperAdmin: true,
-        },
-        error: null,
-      })
+      const perfilDev = {
+        id: operatorId,
+        nombre: 'Desarrollador',
+        email: authUser.email,
+        rol: 'desarrollador',
+        activo: true,
+        color: '#8b5cf6',
+        _isSuperAdmin: true,
+      }
+      guardarPerfilCache(perfilDev)
+      set({ user: authUser, perfil: perfilDev, error: null })
       return
     }
 
@@ -207,6 +235,7 @@ const useAuthStore = create((set, get) => ({
       .catch(err => ({ data: null, error: err }))
 
     if (error || !data) {
+      guardarPerfilCache(null)
       set({
         user: authUser,
         perfil: null,
@@ -226,6 +255,7 @@ const useAuthStore = create((set, get) => ({
           })
         }
       } catch { /* ignorar */ }
+      guardarPerfilCache(null)
       set({
         user: authUser,
         perfil: null,
@@ -234,18 +264,16 @@ const useAuthStore = create((set, get) => ({
       return
     }
 
-    set({
-      user: authUser,
-      perfil: {
-        id: data.id,
-        nombre: data.nombre,
-        email: authUser.email,
-        rol: data.rol,
-        activo: data.activo,
-        color: data.color ?? null,
-      },
-      error: null,
-    })
+    const perfilNuevo = {
+      id: data.id,
+      nombre: data.nombre,
+      email: authUser.email,
+      rol: data.rol,
+      activo: data.activo,
+      color: data.color ?? null,
+    }
+    guardarPerfilCache(perfilNuevo)
+    set({ user: authUser, perfil: perfilNuevo, error: null })
   },
 
   // ─── Login del negocio (email + contraseña) ───────────────────────────────
@@ -312,18 +340,16 @@ const useAuthStore = create((set, get) => ({
         // Limpiar cache de datos del operador anterior
         queryClient.clear()
 
-        set({
-          perfil: {
-            id: op.id,
-            nombre: op.nombre,
-            email: get().user?.email,
-            rol: op.rol,
-            activo: true,
-            color: op.color ?? null,
-          },
-          loading: false,
-          error: null,
-        })
+        const perfilOp = {
+          id: op.id,
+          nombre: op.nombre,
+          email: get().user?.email,
+          rol: op.rol,
+          activo: true,
+          color: op.color ?? null,
+        }
+        guardarPerfilCache(perfilOp)
+        set({ perfil: perfilOp, loading: false, error: null })
       }
 
       // Refrescar JWT para que RLS funcione con el nuevo operador
@@ -359,8 +385,10 @@ const useAuthStore = create((set, get) => ({
       // Limpiar cache de datos del operador anterior
       queryClient.clear()
 
+      guardarPerfilCache(null)
       set({ perfil: null, loading: false, error: null })
     } catch {
+      guardarPerfilCache(null)
       set({ perfil: null, loading: false })
     }
   },
@@ -388,6 +416,7 @@ const useAuthStore = create((set, get) => ({
 
     set({ _logoutManual: true })
     await supabase.auth.signOut()
+    guardarPerfilCache(null)
     set({ user: null, perfil: null, error: null, _logoutManual: false })
   },
 

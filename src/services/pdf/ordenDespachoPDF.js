@@ -375,11 +375,14 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   const totX = PAGE_W - MARGIN - totW
   const total = Number(despacho.total_usd || 0)
   const flete = Number(despacho.flete_usd || 0)
+  const descuentoTotal = Number(despacho.descuento_total_usd || 0)
   const subtotal = flete > 0 ? total - flete : total
+  const totalFinal = total - descuentoTotal
   const hasFlete = flete > 0
+  const hasDescuento = descuentoTotal > 0
 
   // Posicionar recuadro unificado fijo sobre el chofer
-  const desgloseH = hasFlete ? 14 : 0
+  const desgloseH = (hasFlete ? 14 : 0) + (hasDescuento ? (hasFlete ? 7 : 14) : 0)
   const ty = choferY - 24 - desgloseH
 
   const fp = (formaPago || despacho.forma_pago || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -403,22 +406,46 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   drawCheck(doc, 'TRANSF.',    MARGIN + 114, fpY + 6, fp === 'transferencia')
   drawCheck(doc, 'CTA X COB.', MARGIN + 134, fpY + 6, fp === 'cta por cobrar')
 
-  // Desglose Subtotal + Flete (solo si hay flete)
-  if (hasFlete) {
-    const desY = fpY + 9
+  // Desglose Subtotal + Flete + Descuento
+  let desY = fpY + 9
+  if (hasFlete || hasDescuento) {
     doc.setDrawColor(120, 120, 120)
     doc.setLineWidth(0.2)
 
-    doc.rect(MARGIN, desY, CONTENT_W, 7, 'S')
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(9)
-    doc.setTextColor(...C_DARK)
-    doc.text('Subtotal', MARGIN + 4, desY + 5)
-    doc.text(fmtTotal(subtotal, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, desY + 5, { align: 'right' })
+    if (hasFlete) {
+      doc.rect(MARGIN, desY, CONTENT_W, 7, 'S')
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9)
+      doc.setTextColor(...C_DARK)
+      doc.text('Subtotal', MARGIN + 4, desY + 5)
+      doc.text(fmtTotal(subtotal, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, desY + 5, { align: 'right' })
 
-    doc.rect(MARGIN, desY + 7, CONTENT_W, 7, 'S')
-    doc.text('Flete', MARGIN + 4, desY + 12)
-    doc.text(fmtTotal(flete, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, desY + 12, { align: 'right' })
+      doc.rect(MARGIN, desY + 7, CONTENT_W, 7, 'S')
+      doc.text('Flete', MARGIN + 4, desY + 12)
+      doc.text(fmtTotal(flete, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, desY + 12, { align: 'right' })
+      desY += 14
+    }
+
+    if (hasDescuento) {
+      if (!hasFlete) {
+        doc.rect(MARGIN, desY, CONTENT_W, 7, 'S')
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(9)
+        doc.setTextColor(...C_DARK)
+        doc.text('Subtotal', MARGIN + 4, desY + 5)
+        doc.text(fmtTotal(total, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, desY + 5, { align: 'right' })
+        desY += 7
+      }
+
+      doc.setDrawColor(120, 120, 120)
+      doc.setLineWidth(0.2)
+      doc.rect(MARGIN, desY, CONTENT_W, 7, 'S')
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9)
+      doc.setTextColor(180, 100, 0)
+      doc.text('Descuento', MARGIN + 4, desY + 5)
+      doc.text('-' + fmtTotal(descuentoTotal, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, desY + 5, { align: 'right' })
+    }
   }
 
   // Barra oscura TOTAL abajo (ancho completo)
@@ -430,7 +457,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   doc.setFontSize(13)
   doc.setTextColor(...C_WHITE)
   doc.text('TOTAL', MARGIN + 4, totTopY + 7)
-  doc.text(fmtTotal(total, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, totTopY + 7, { align: 'right' })
+  doc.text(fmtTotal(totalFinal, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, totTopY + 7, { align: 'right' })
 
   // ══════════════════════════════════════════════════════════════════════════
   // 5. DATOS DEL CHOFER Y VEHÍCULO — fijo al fondo (footer)

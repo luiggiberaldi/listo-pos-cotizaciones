@@ -439,12 +439,15 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   // ── Recuadro unificado: FORMA DE PAGO + DESGLOSE + TOTAL ──
   const total = Number(despacho.total_usd || 0)
   const flete = Number(despacho.flete_usd || 0)
-  const subtotal = flete > 0 ? total - flete : total
+  const descuentoTotal = Number(despacho.descuento_total_usd || 0)
+  const subtotal = flete > 0 || descuentoTotal > 0 ? total : total
+  const totalFinal = total - descuentoTotal
   const hasFlete = flete > 0
+  const hasDescuento = descuentoTotal > 0
   const fp = (formaPago || despacho.forma_pago || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
   const choferStartY = sloganY - 9 - TRANS_H
-  const desgloseH = hasFlete ? 14 : 0  // 2 filas de 7mm cada una
+  const desgloseH = (hasFlete ? 14 : 0) + (hasDescuento ? (hasFlete ? 7 : 14) : 0)  // filas de 7mm
   const hasRefPago = !!(despacho.referencia_pago || despacho.forma_pago_cliente)
   const refPagoH = hasRefPago ? 7 : 0
   const fpY = choferStartY - 3 - 19 - desgloseH - refPagoH  // 19mm alto (9 + 10), 3mm gap
@@ -485,24 +488,50 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
 
   const refRowH = (refPago || fpCliente) ? 7 : 0
 
-  // Desglose Subtotal + Flete (solo si hay flete)
-  if (hasFlete) {
-    const desY = fpY + 9 + refRowH
+  // Desglose Subtotal + Flete + Descuento
+  let desY = fpY + 9 + refRowH
+  if (hasFlete || hasDescuento) {
     doc.setDrawColor(120, 120, 120)
     doc.setLineWidth(0.2)
 
-    // Fila Subtotal
-    doc.rect(MARGIN, desY, CONTENT_W, 7, 'S')
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(9)
-    doc.setTextColor(...C_DARK)
-    doc.text('Subtotal', MARGIN + 4, desY + 5)
-    doc.text(fmtTotal(subtotal, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, desY + 5, { align: 'right' })
+    if (hasFlete) {
+      // Fila Subtotal
+      doc.rect(MARGIN, desY, CONTENT_W, 7, 'S')
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9)
+      doc.setTextColor(...C_DARK)
+      doc.text('Subtotal', MARGIN + 4, desY + 5)
+      doc.text(fmtTotal(total - flete, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, desY + 5, { align: 'right' })
 
-    // Fila Flete
-    doc.rect(MARGIN, desY + 7, CONTENT_W, 7, 'S')
-    doc.text('Flete', MARGIN + 4, desY + 12)
-    doc.text(fmtTotal(flete, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, desY + 12, { align: 'right' })
+      // Fila Flete
+      doc.rect(MARGIN, desY + 7, CONTENT_W, 7, 'S')
+      doc.text('Flete', MARGIN + 4, desY + 12)
+      doc.text(fmtTotal(flete, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, desY + 12, { align: 'right' })
+      desY += 14
+    }
+
+    if (hasDescuento) {
+      if (!hasFlete) {
+        // Si no hay flete, mostrar subtotal primero
+        doc.rect(MARGIN, desY, CONTENT_W, 7, 'S')
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(9)
+        doc.setTextColor(...C_DARK)
+        doc.text('Subtotal', MARGIN + 4, desY + 5)
+        doc.text(fmtTotal(total, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, desY + 5, { align: 'right' })
+        desY += 7
+      }
+
+      // Fila Descuento
+      doc.setDrawColor(120, 120, 120)
+      doc.setLineWidth(0.2)
+      doc.rect(MARGIN, desY, CONTENT_W, 7, 'S')
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9)
+      doc.setTextColor(180, 100, 0) // amber
+      doc.text('Descuento', MARGIN + 4, desY + 5)
+      doc.text('-' + fmtTotal(descuentoTotal, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, desY + 5, { align: 'right' })
+    }
   }
 
   // Barra oscura TOTAL abajo (ancho completo)
@@ -514,7 +543,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.setFontSize(13)
   doc.setTextColor(...C_WHITE)
   doc.text('TOTAL', MARGIN + 4, totTopY + 7)
-  doc.text(fmtTotal(total, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, totTopY + 7, { align: 'right' })
+  doc.text(fmtTotal(totalFinal, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, totTopY + 7, { align: 'right' })
 
   // ══════════════════════════════════════════════════════════════════════════
   // 4. CONDICIONES (izq) + CUENTAS BANCARIAS (der) — 5mm encima del recuadro pago

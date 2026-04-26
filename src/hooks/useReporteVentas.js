@@ -30,7 +30,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
         let q = supabase
           .from('notas_despacho')
           .select(`
-            id, numero, cotizacion_id, total_usd, flete_usd, forma_pago,
+            id, numero, cotizacion_id, total_usd, flete_usd, descuento_total_usd, forma_pago,
             vendedor_id, cliente_id, entregada_en,
             vendedor:usuarios!notas_despacho_vendedor_id_fkey(id, nombre, color),
             cliente:clientes!notas_despacho_cliente_id_fkey(id, nombre)
@@ -94,18 +94,19 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
 
       // ── 3. Agregaciones ──
 
-      // KPIs actuales (restando flete — no le queda a la empresa)
-      const ventaSinFlete = (d) => Number(d.total_usd || 0) - Number(d.flete_usd || 0)
-      const totalVentas = despachos.reduce((s, d) => s + ventaSinFlete(d), 0)
+      // KPIs actuales (restando flete y descuentos)
+      const ventaNeta = (d) => Number(d.total_usd || 0) - Number(d.flete_usd || 0) - Number(d.descuento_total_usd || 0)
+      const totalVentas = despachos.reduce((s, d) => s + ventaNeta(d), 0)
       const totalFlete = despachos.reduce((s, d) => s + Number(d.flete_usd || 0), 0)
+      const totalDescuentos = despachos.reduce((s, d) => s + Number(d.descuento_total_usd || 0), 0)
       const numDespachos = despachos.length
       const ticketPromedio = numDespachos > 0 ? totalVentas / numDespachos : 0
       const totalComisiones = comisiones.reduce((s, c) => s + Number(c.total_comision || 0), 0)
       const comisionesPagadas = comisiones.filter(c => c.estado === 'pagada').reduce((s, c) => s + Number(c.total_comision || 0), 0)
       const comisionesPendientes = comisiones.filter(c => c.estado === 'pendiente').reduce((s, c) => s + Number(c.total_comision || 0), 0)
 
-      // KPIs anteriores (para comparativo, también sin flete)
-      const prevTotalVentas = prevDespachos.reduce((s, d) => s + (Number(d.total_usd || 0) - Number(d.flete_usd || 0)), 0)
+      // KPIs anteriores (para comparativo, también sin flete ni descuentos)
+      const prevTotalVentas = prevDespachos.reduce((s, d) => s + (Number(d.total_usd || 0) - Number(d.flete_usd || 0) - Number(d.descuento_total_usd || 0)), 0)
       const prevNumDespachos = prevDespachos.length
       const prevTicketPromedio = prevNumDespachos > 0 ? prevTotalVentas / prevNumDespachos : 0
       const prevTotalComisiones = prevComisiones.reduce((s, c) => s + Number(c.total_comision || 0), 0)
@@ -125,7 +126,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
           }
         }
         vendedorMap[vid].despachos++
-        vendedorMap[vid].totalUsd += ventaSinFlete(d)
+        vendedorMap[vid].totalUsd += ventaNeta(d)
       })
       comisiones.forEach(c => {
         if (vendedorMap[c.vendedor_id]) {
@@ -147,7 +148,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
           }
         }
         clienteMap[cid].despachos++
-        clienteMap[cid].totalUsd += ventaSinFlete(d)
+        clienteMap[cid].totalUsd += ventaNeta(d)
       })
       const porCliente = Object.values(clienteMap).sort((a, b) => b.totalUsd - a.totalUsd).slice(0, 10)
 
@@ -194,13 +195,13 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
         const fp = d.forma_pago || 'Sin especificar'
         if (!formaPagoMap[fp]) formaPagoMap[fp] = { formaPago: fp, count: 0, totalUsd: 0 }
         formaPagoMap[fp].count++
-        formaPagoMap[fp].totalUsd += ventaSinFlete(d)
+        formaPagoMap[fp].totalUsd += ventaNeta(d)
       })
       const porFormaPago = Object.values(formaPagoMap).sort((a, b) => b.totalUsd - a.totalUsd)
 
       return {
         kpis: {
-          totalVentas, totalFlete, numDespachos, ticketPromedio, totalComisiones,
+          totalVentas, totalFlete, totalDescuentos, numDespachos, ticketPromedio, totalComisiones,
           comisionesPagadas, comisionesPendientes,
           prevTotalVentas, prevNumDespachos, prevTicketPromedio, prevTotalComisiones,
         },

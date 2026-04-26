@@ -252,9 +252,19 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
           </div>
         )}
         {!esCot && (
-          <div className="border-t border-slate-100 px-5 py-3 bg-slate-50 shrink-0">
-            <div className="flex justify-between font-black text-slate-800 text-base">
-              <span>Total</span><span>{fmtUsd(total)}</span>
+          <div className="border-t border-slate-100 px-5 py-3 bg-slate-50 shrink-0 space-y-1.5">
+            {Number(registro.descuento_total_usd || 0) > 0 && (
+              <>
+                <div className="flex justify-between text-xs text-slate-500">
+                  <span>Subtotal</span><span>{fmtUsd(total)}</span>
+                </div>
+                <div className="flex justify-between text-xs text-amber-600">
+                  <span>Descuento</span><span>-{fmtUsd(registro.descuento_total_usd)}</span>
+                </div>
+              </>
+            )}
+            <div className={`flex justify-between font-black text-slate-800 text-base ${Number(registro.descuento_total_usd || 0) > 0 ? 'pt-1 border-t border-slate-200' : ''}`}>
+              <span>Total</span><span>{fmtUsd(total - Number(registro.descuento_total_usd || 0))}</span>
             </div>
           </div>
         )}

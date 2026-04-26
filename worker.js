@@ -157,6 +157,16 @@ export default {
       return handleReciclarDespacho(request, env);
     }
 
+    // ── API: guardar descuentos de despacho (logística/supervisor) ─────────
+    if (url.pathname === '/api/despachos/descuentos' && request.method === 'POST') {
+      return handleGuardarDescuentos(request, env);
+    }
+
+    // ── API: obtener descuentos de un despacho ────────────────────────────
+    if (url.pathname.startsWith('/api/despachos/') && url.pathname.endsWith('/descuentos') && request.method === 'GET') {
+      return handleObtenerDescuentos(request, env, url);
+    }
+
     // ── API: reasignar cliente (bypass RLS) ─────────────────────────────────
     if (url.pathname === '/api/clientes/reasignar' && request.method === 'POST') {
       return handleReasignarCliente(request, env);
@@ -2702,6 +2712,193 @@ async function handleReciclarDespacho(request, env) {
     return json({ id: nueva.id, numero: nueva.numero }, 200, request);
   } catch (e) {
     return jsonError(e.message || 'Error al reciclar despacho', 500, request);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 4b. GUARDAR DESCUENTOS DE DESPACHO (logística / supervisor / desarrollador)
+// ══════════════════════════════════════════════════════════════════════════════
+async function handleGuardarDescuentos(request, env) {
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { user, operador, headers, ip } = v;
+
+  // Solo logística, supervisor o desarrollador
+  if (!['logistica', 'supervisor', 'desarrollador'].includes(operador.rol)) {
+    return jsonError('Solo logística o supervisor pueden aplicar descuentos', 403, request);
+  }
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+  const { despachoId, descuentos } = body;
+  if (!despachoId || !isValidUuid(despachoId)) return jsonError('despachoId inválido', 400, request);
+  if (!Array.isArray(descuentos)) return jsonError('descuentos debe ser un array', 400, request);
+
+  try {
+    // 1. Obtener despacho
+    const dRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&select=id,estado,cotizacion_id,total_usd`, { headers });
+    const [desp] = await dRes.json();
+    if (!desp) return jsonError('Despacho no encontrado', 404, request);
+    if (!['pendiente', 'despachada'].includes(desp.estado)) {
+      return jsonError('Solo se pueden aplicar descuentos a despachos pendientes o despachados', 400, request);
+    }
+
+    // 2. Obtener ítems de la cotización para validar
+    const itemsRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/cotizacion_items?cotizacion_id=eq.${desp.cotizacion_id}&select=id,total_linea_usd,precio_unit_usd,cantidad`,
+      { headers }
+    );
+    const items = await itemsRes.json();
+    const itemMap = Object.fromEntries(items.map(i => [i.id, i]));
+
+    // 3. Validar y calcular cada descuento
+    const descuentosValidos = [];
+    for (const d of descuentos) {
+      if (!d.cotizacionItemId || !isValidUuid(d.cotizacionItemId)) continue;
+      const item = itemMap[d.cotizacionItemId];
+      if (!item) continue;
+
+      const tipo = d.tipo === 'monto' ? 'monto' : d.tipo === 'monto_unitario' ? 'monto_unitario' : 'porcentaje';
+      const valor = Math.max(0, Number(d.valor) || 0);
+      if (valor <= 0) continue;
+
+      let montoUsd;
+      if (tipo === 'porcentaje') {
+        if (valor > 100) continue;
+        montoUsd = Number(item.total_linea_usd) * valor / 100;
+      } else if (tipo === 'monto_unitario') {
+        montoUsd = valor * Number(item.cantidad);
+        if (montoUsd > Number(item.total_linea_usd)) continue;
+      } else {
+        montoUsd = valor;
+        if (montoUsd > Number(item.total_linea_usd)) continue;
+      }
+      montoUsd = Math.round(montoUsd * 10000) / 10000;
+
+      descuentosValidos.push({
+        despacho_id: despachoId,
+        cotizacion_item_id: d.cotizacionItemId,
+        tipo,
+        valor,
+        monto_usd: montoUsd,
+        aplicado_por: user.operator_id,
+      });
+    }
+
+    // 4. Eliminar descuentos existentes del despacho
+    await fetch(`${env.SUPABASE_URL}/rest/v1/despacho_descuentos?despacho_id=eq.${despachoId}`, {
+      method: 'DELETE', headers,
+    });
+
+    // 5. Insertar nuevos descuentos (si hay)
+    if (descuentosValidos.length > 0) {
+      const insRes = await fetch(`${env.SUPABASE_URL}/rest/v1/despacho_descuentos`, {
+        method: 'POST',
+        headers: { ...headers, Prefer: 'return=representation' },
+        body: JSON.stringify(descuentosValidos),
+      });
+      if (!insRes.ok) {
+        const err = await insRes.text();
+        return jsonError('Error al guardar descuentos: ' + err, 500, request);
+      }
+    }
+
+    // 6. Calcular y actualizar descuento_total_usd en notas_despacho
+    const descuentoTotal = descuentosValidos.reduce((sum, d) => sum + d.monto_usd, 0);
+    const descTotalRounded = Math.round(descuentoTotal * 10000) / 10000;
+    const descuentoPrevio = Number(desp.descuento_total_usd || 0);
+
+    await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}`, {
+      method: 'PATCH', headers,
+      body: JSON.stringify({ descuento_total_usd: descTotalRounded }),
+    });
+
+    // 7. Ajustar CxC si existe un cargo para este despacho
+    const diffDescuento = descTotalRounded - descuentoPrevio;
+    if (diffDescuento !== 0) {
+      const cxcRes = await fetch(
+        `${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?despacho_id=eq.${despachoId}&tipo=eq.cargo&select=id,monto_usd,cliente_id`,
+        { headers }
+      );
+      const cxcEntries = await cxcRes.json();
+      if (Array.isArray(cxcEntries) && cxcEntries.length > 0) {
+        const cxc = cxcEntries[0];
+        const nuevoMontoCxc = Math.max(0, Number(cxc.monto_usd) - diffDescuento);
+        // Actualizar monto del cargo CxC
+        await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?id=eq.${cxc.id}`, {
+          method: 'PATCH', headers,
+          body: JSON.stringify({ monto_usd: Math.round(nuevoMontoCxc * 10000) / 10000 }),
+        });
+        // Actualizar saldo pendiente del cliente
+        const saldoRes = await fetch(
+          `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${cxc.cliente_id}&select=saldo_pendiente`,
+          { headers }
+        );
+        const [clienteSaldo] = await saldoRes.json();
+        if (clienteSaldo) {
+          const nuevoSaldo = Math.max(0, Number(clienteSaldo.saldo_pendiente || 0) - diffDescuento);
+          await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${cxc.cliente_id}`, {
+            method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
+            body: JSON.stringify({ saldo_pendiente: Math.round(nuevoSaldo * 10000) / 10000 }),
+          });
+        }
+      }
+
+      // 8. Si ya existe comisión, eliminarla para recalcular con descuentos
+      const comRes = await fetch(
+        `${env.SUPABASE_URL}/rest/v1/comisiones?despacho_id=eq.${despachoId}&select=id`,
+        { headers }
+      );
+      const comEntries = await comRes.json();
+      if (Array.isArray(comEntries) && comEntries.length > 0) {
+        // Eliminar comisión existente para que se recalcule
+        await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despacho_id=eq.${despachoId}`, {
+          method: 'DELETE', headers,
+        });
+        // Recalcular comisión con descuentos aplicados
+        await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcular_comision_despacho`, {
+          method: 'POST', headers: { ...headers, Prefer: 'return=representation' },
+          body: JSON.stringify({ p_despacho_id: despachoId }),
+        });
+      }
+    }
+
+    // 9. Auditoría
+    await registrarAuditoria(env, headers, {
+      usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
+      categoria: 'DESPACHO', accion: 'APLICAR_DESCUENTO',
+      entidadTipo: 'nota_despacho', entidadId: despachoId,
+      meta: { descuento_total_usd: descTotalRounded, items_con_descuento: descuentosValidos.length }, ip,
+    });
+
+    return json({ ok: true, descuento_total_usd: descTotalRounded, descuentos: descuentosValidos.length }, 200, request);
+  } catch (e) {
+    return jsonError(e.message || 'Error al guardar descuentos', 500, request);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 4c. OBTENER DESCUENTOS DE UN DESPACHO
+// ══════════════════════════════════════════════════════════════════════════════
+async function handleObtenerDescuentos(request, env, url) {
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { headers } = v;
+
+  // Extraer despachoId de /api/despachos/:id/descuentos
+  const parts = url.pathname.split('/');
+  const despachoId = parts[3];
+  if (!despachoId || !isValidUuid(despachoId)) return jsonError('despachoId inválido', 400, request);
+
+  try {
+    const res = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/despacho_descuentos?despacho_id=eq.${despachoId}&select=id,cotizacion_item_id,tipo,valor,monto_usd,aplicado_por,creado_en`,
+      { headers }
+    );
+    const descuentos = await res.json();
+    return json(descuentos, 200, request);
+  } catch (e) {
+    return jsonError(e.message || 'Error al obtener descuentos', 500, request);
   }
 }
 

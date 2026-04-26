@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Zap, User, X, Plus, Minus, Package, ArrowLeft, ArrowRight, Loader2,
   Search, CheckCircle, ShoppingCart, DollarSign, Truck, CreditCard,
-  AlertCircle, ChevronRight, ChevronLeft, UserPlus, ChevronUp, Hash, FileText, Trash2,
+  AlertCircle, ChevronRight, ChevronLeft, UserPlus, ChevronUp, Hash, FileText, Trash2, Save,
 } from 'lucide-react'
 import { useClientes } from '../hooks/useClientes'
 import ClienteForm from '../components/clientes/ClienteForm'
@@ -25,6 +25,34 @@ import { showToast } from '../components/ui/Toast'
 import PageHeader from '../components/ui/PageHeader'
 
 const FORMAS_PAGO = ['Efectivo', 'Zelle', 'Pago Móvil', 'USDT', 'Transferencia', 'Cta por cobrar']
+
+// ─── Draft (retomar) helpers ──────────────────────────────────────────────────
+const VR_DRAFT_KEY = 'construacero_venta_rapida_draft'
+
+function getDraftKey(userId) {
+  return userId ? `${VR_DRAFT_KEY}_${userId}` : VR_DRAFT_KEY
+}
+
+function saveDraft(state, userId) {
+  try {
+    localStorage.setItem(getDraftKey(userId), JSON.stringify({ ...state, _ts: Date.now(), _userId: userId }))
+  } catch { /* ignorar */ }
+}
+
+function loadDraft(userId) {
+  try {
+    const raw = localStorage.getItem(getDraftKey(userId))
+    if (!raw) return null
+    const draft = JSON.parse(raw)
+    if (Date.now() - draft._ts > 24 * 60 * 60 * 1000) { localStorage.removeItem(getDraftKey(userId)); return null }
+    if (draft._userId && draft._userId !== userId) { localStorage.removeItem(getDraftKey(userId)); return null }
+    return draft
+  } catch { return null }
+}
+
+function clearDraft(userId) {
+  try { localStorage.removeItem(getDraftKey(userId)) } catch { /* ignorar */ }
+}
 
 export default function VentaRapidaView() {
   const { perfil } = useAuthStore()
@@ -62,6 +90,51 @@ export default function VentaRapidaView() {
 
   const clienteRef = useRef(null)
   const productoInputRef = useRef(null)
+
+  // ─── Draft (retomar) ───────────────────────────────────────────────────────
+  const [showDraftBanner, setShowDraftBanner] = useState(false)
+  const draftRef = useRef(null)
+
+  // Restaurar borrador al montar
+  useEffect(() => {
+    const draft = loadDraft(perfil?.id)
+    if (draft && (draft.items?.length > 0 || draft.clienteId)) {
+      draftRef.current = draft
+      setShowDraftBanner(true)
+    }
+  }, [])
+
+  // Auto-guardado debounced 1.5s
+  useEffect(() => {
+    if (ventaRapida.isPending) return
+    const timer = setTimeout(() => {
+      if (items.length > 0 || clienteId) {
+        saveDraft({ step, clienteId, items, formaPago, referenciaPago, transportistaId, fleteUsd, notas }, perfil?.id)
+      }
+    }, 1500)
+    return () => clearTimeout(timer)
+  }, [step, clienteId, items, formaPago, referenciaPago, transportistaId, fleteUsd, notas, ventaRapida.isPending])
+
+  function restoreDraft() {
+    const d = draftRef.current
+    if (!d) return
+    if (d.clienteId) setClienteId(d.clienteId)
+    if (d.items?.length > 0) setItems(d.items)
+    if (d.formaPago) setFormaPago(d.formaPago)
+    if (d.referenciaPago) setReferenciaPago(d.referenciaPago)
+    if (d.transportistaId) setTransportistaId(d.transportistaId)
+    if (d.fleteUsd) setFleteUsd(d.fleteUsd)
+    if (d.notas) setNotas(d.notas)
+    if (d.step != null && d.step >= 0 && d.step <= 2) setStep(d.step)
+    setShowDraftBanner(false)
+    draftRef.current = null
+  }
+
+  function discardDraft() {
+    clearDraft(perfil?.id)
+    setShowDraftBanner(false)
+    draftRef.current = null
+  }
 
   const costoEnvioUsd = 0
   const { subtotal, ivaUsd, totalUsd } = calcTotales(items, 0, costoEnvioUsd, config.iva_pct ?? 0)
@@ -200,6 +273,7 @@ export default function VentaRapidaView() {
       tasaBcv: tasa,
     }, {
       onSuccess: () => {
+        clearDraft(perfil?.id)
         // Reset form
         setStep(0)
         setClienteId('')
@@ -228,6 +302,19 @@ export default function VentaRapidaView() {
         subtitle="Cotización + despacho en un solo paso"
         icon={Zap}
       />
+
+      {showDraftBanner && (
+        <div className="flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 rounded-xl mx-4 mt-3 px-4 py-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <Save size={16} className="text-amber-600 shrink-0" />
+            <span className="text-sm font-medium text-amber-800 truncate">Tienes una venta sin terminar</span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button onClick={restoreDraft} className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg">Retomar</button>
+            <button onClick={discardDraft} className="px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-700">Descartar</button>
+          </div>
+        </div>
+      )}
 
       {/* Step indicator */}
       <div className="flex items-center justify-center gap-1 sm:gap-2 px-4 py-3 bg-white/60 border-b border-slate-200/60">
