@@ -934,17 +934,13 @@ function SectionH3({ icon: Icon, children }) {
 function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente, onAnterior, preciosMap = {} }) {
   // 'closed' | 'normal' | 'expanded'
   const [sheetState, setSheetState] = useState('closed')
-  const sheetStateRef = useRef(sheetState)
-  sheetStateRef.current = sheetState
   const sheetOpen = sheetState !== 'closed'
   const setSheetOpen = (v) => setSheetState(v ? 'normal' : 'closed')
   const fabRef = useRef(null)
   const swipeStartY = useRef(null)
   const sheetRef = useRef(null)
-  const dragOffsetY = useRef(0)
-  const isDragging = useRef(false)
 
-  // Swipe-up en FAB para abrir
+  // Swipe-up en FAB para abrir (pointer events OK aquí porque es un botón simple)
   const onPointerDown = (e) => {
     swipeStartY.current = e.clientY
     e.currentTarget.setPointerCapture(e.pointerId)
@@ -958,50 +954,50 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
   }
   const onPointerUp = () => { swipeStartY.current = null }
 
-  // Swipe en el handle/header del sheet: arriba expande, abajo reduce
-  const onHandlePointerDown = (e) => {
-    swipeStartY.current = e.clientY
-    dragOffsetY.current = 0
-    isDragging.current = true
-    e.target.setPointerCapture(e.pointerId)
+  // ── Touch events para el handle del sheet ──
+  // Usamos touch events en vez de pointer events porque son más confiables en móvil
+  const touchStartY = useRef(null)
+  const touchStateSnap = useRef('normal') // captura el estado al iniciar el touch
+
+  const onHandleTouchStart = (e) => {
+    touchStartY.current = e.touches[0].clientY
+    touchStateSnap.current = sheetState // capturar estado actual
     if (sheetRef.current) {
       sheetRef.current.style.transition = 'none'
     }
   }
-  const onHandlePointerMove = (e) => {
-    if (!isDragging.current || swipeStartY.current === null) return
-    const delta = e.clientY - swipeStartY.current
-    dragOffsetY.current = delta
+
+  const onHandleTouchMove = (e) => {
+    if (touchStartY.current === null) return
+    e.preventDefault() // evitar scroll del body
+    const delta = e.touches[0].clientY - touchStartY.current
     if (!sheetRef.current) return
-    const st = sheetStateRef.current
+    const st = touchStateSnap.current
     if (st === 'normal' && delta < 0) {
-      // Normal → arrastrando hacia arriba: feedback elástico
-      sheetRef.current.style.transform = `translateY(${delta * 0.25}px)`
+      // Arrastrando hacia arriba en normal: feedback elástico
+      sheetRef.current.style.transform = `translateY(${delta * 0.3}px)`
     } else if (st === 'expanded' && delta > 0) {
-      // Expandida → arrastrando hacia abajo: sigue el dedo
+      // Arrastrando hacia abajo en expanded: sigue el dedo
       sheetRef.current.style.transform = `translateY(${delta}px)`
     }
   }
-  const onHandlePointerUp = () => {
-    if (!isDragging.current) return
-    isDragging.current = false
-    const delta = dragOffsetY.current
-    const st = sheetStateRef.current
-    const transition = 'transform 0.3s cubic-bezier(0.32,0.72,0,1), max-height 0.3s cubic-bezier(0.32,0.72,0,1)'
+
+  const onHandleTouchEnd = (e) => {
+    if (touchStartY.current === null) return
+    const endY = e.changedTouches[0].clientY
+    const delta = endY - touchStartY.current
+    const st = touchStateSnap.current
     if (sheetRef.current) {
-      sheetRef.current.style.transition = transition
+      sheetRef.current.style.transition = 'transform 0.3s cubic-bezier(0.32,0.72,0,1), max-height 0.3s cubic-bezier(0.32,0.72,0,1)'
       sheetRef.current.style.transform = ''
     }
-    const threshold = 40
+    const threshold = 30
     if (st === 'normal' && delta < -threshold) {
-      // Swipe up en normal → expandir
       setSheetState('expanded')
     } else if (st === 'expanded' && delta > threshold) {
-      // Swipe down en expandida → volver a normal
       setSheetState('normal')
     }
-    swipeStartY.current = null
-    dragOffsetY.current = 0
+    touchStartY.current = null
   }
 
   const totalItems = items.reduce((s, it) => s + it.cantidad, 0)
@@ -1157,9 +1153,9 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
               onClick={e => e.stopPropagation()}>
               {/* Handle + Header - zona de swipe completa */}
               <div className="shrink-0"
-                onPointerDown={onHandlePointerDown}
-                onPointerMove={onHandlePointerMove}
-                onPointerUp={onHandlePointerUp}
+                onTouchStart={onHandleTouchStart}
+                onTouchMove={onHandleTouchMove}
+                onTouchEnd={onHandleTouchEnd}
                 style={{ touchAction: 'none' }}>
                 {/* Handle visual */}
                 <div className="flex justify-center pt-3 pb-2">
