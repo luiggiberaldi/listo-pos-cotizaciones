@@ -1137,6 +1137,103 @@ Fase 6 era la última fase funcional pendiente del plan general original, marcad
 
 ---
 
+## AUDITORÍA DE SEGURIDAD (26/04/2026)
+
+### Contexto
+Se realizó una auditoría de seguridad completa del proyecto. Se encontraron vulnerabilidades críticas
+y se corrigieron. Este documento registra TODO lo que se hizo y la arquitectura de deploy resultante
+para evitar repetir errores de configuración.
+
+### Arquitectura de Deploy (IMPORTANTE — leer antes de tocar infra)
+
+El proyecto tiene **DOS Workers desplegados** del mismo código:
+
+| Worker | URL | Quién lo despliega | Tiene secrets |
+|--------|-----|--------------------|---------------|
+| **luigistorelogistics** (PRIMARIO) | `listo-pos-cotizaciones.luigistorelogistics.workers.dev` | GitHub Actions (`deploy-worker.yml`) | ✅ Sí — en Cloudflare Dashboard |
+| **camelAI** (secundario) | `listo-pos-cotizaciones-sqf5rv.camelai.app` | `bash deploy.sh` (usa `--dispatch-namespace chiridion`) | ❌ No tiene `SUPABASE_SERVICE_KEY` ni `VAPID_PRIVATE_KEY` |
+
+**Vercel** es el frontend primario (`listo-pos-cotizaciones.vercel.app`).
+El `vercel.json` hace proxy de `/api/*` → `luigistorelogistics.workers.dev`.
+
+```
+Usuario → Vercel (frontend) → /api/* proxy → Worker luigistorelogistics (backend)
+```
+
+**⚠️ REGLA CRÍTICA:** Nunca cambiar `vercel.json` para apuntar a la URL de camelAI.
+El Worker de camelAI NO tiene los secrets de Supabase y causará errores 500.
+
+### Dónde están los secrets
+
+**Cloudflare Dashboard** (Worker `listo-pos-cotizaciones` en cuenta `luigistorelogistics`):
+- `SUPABASE_SERVICE_KEY` — Secreto cifrado
+- `VAPID_PRIVATE_KEY` — Secreto cifrado
+- `DEV_SUPER_CODE` — Secreto cifrado (`24457713`)
+- `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `VAPID_PUBLIC_KEY` — Texto plano (no sensibles)
+- `GROQ_KEYS_A/B/C` — Se inyectan desde `deploy.sh` vía `.dev.vars` (solo en camelAI)
+
+**GitHub Secrets** (repo `luiggiberaldi/listo-pos-cotizaciones`):
+- `CF_API_TOKEN` — Token de Cloudflare para deploy
+- `CF_ACCOUNT_ID` — Account ID de Cloudflare
+- `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` — Duplicados (mismo propósito)
+- `VITE_SUPABASE_URL` — URL de Supabase (para build de Vite)
+- `VITE_SUPABASE_ANON_KEY` — Anon key de Supabase (para build de Vite)
+
+**⚠️ Si agregas un nuevo secret al Worker**, agrégalo en el Cloudflare Dashboard,
+NO en `wrangler.jsonc`. Los secrets en `wrangler.jsonc` quedan expuestos en el repo.
+
+### Cambios realizados en la auditoría
+
+#### 1. CORS endurecido (`worker.js` líneas 7-19)
+- **Antes:** `Array.includes()` + `origin.endsWith('.vercel.app')` (wildcard)
+- **Después:** `new Set([...3 dominios exactos...])` — solo match exacto
+- Los 3 dominios permitidos: `.camelai.app`, `.apps.camelai.dev`, `.vercel.app`
+
+#### 2. Super admin code movido a secret (`worker.js`)
+- **Antes:** `const SUPER_ADMIN_CODE = '24457713'` hardcodeado
+- **Después:** Usa `env.DEV_SUPER_CODE` (secret en Cloudflare Dashboard)
+- `wrangler.jsonc` tiene `DEV_SUPER_CODE` temporal en `vars` hasta que se configure como secret
+
+#### 3. Validación de super PIN en frontend (`LoginPage.jsx`)
+- **Antes:** Comparación local `if (superPin !== '24457713')` — bypass del servidor
+- **Después:** Solo valida vía `fetch('/api/auth/super-admin')` con `await` + `if (!res.ok)`
+
+#### 4. IP tracking en auditoría (`worker.js`)
+- `validateOperator()` ahora captura `request.headers.get('CF-Connecting-IP')` y la retorna
+- **Las 16 llamadas** a `registrarAuditoria()` ahora pasan `ip` al campo `ip_origen`
+- Handlers sin `validateOperator` usan `request.headers.get('CF-Connecting-IP') || null` inline
+
+#### 5. Credentials removidos del repo
+- `.github/workflows/deploy-worker.yml` — Supabase URL y anon key ahora usan `${{ secrets.* }}`
+- `.env.production` y `.env.bak` — eliminados de git tracking (`git rm --cached`)
+- `.gitignore` — agregados `.env.production` y `.env.bak`
+
+### Errores encontrados durante la auditoría
+
+| Error | Causa raíz | Solución |
+|-------|-----------|----------|
+| PIN da 500 desde Vercel | `vercel.json` apuntaba a Worker de camelAI que no tiene secrets | Revertir a `luigistorelogistics.workers.dev` |
+| `validateOperator` no retornaba `ip` | Línea 2018 faltaba `ip` en `return { user, operador, headers: h }` | Agregado `ip` al return |
+| Worker camelAI da `SERVICE_KEY exists: false` | Los secrets de Cloudflare Dashboard no aplican al dispatch namespace `chiridion` | Usar Worker personal como backend primario |
+| `construacerocarabobo` Worker duplicado | Deploy previo con nombre diferente en `wrangler.jsonc` | Eliminar manualmente en Cloudflare Dashboard |
+
+### Flujo de deploy correcto
+
+```
+1. Hacer cambios en código
+2. git add + git commit + git push
+3. GitHub Actions despliega worker.js → luigistorelogistics.workers.dev (con secrets)
+4. Vercel despliega frontend → listo-pos-cotizaciones.vercel.app
+5. (Opcional) bash deploy.sh → despliega a camelAI (sin secrets sensibles)
+```
+
+### Pendientes post-auditoría
+- [ ] Eliminar Worker `construacerocarabobo` del Cloudflare Dashboard
+- [ ] Eliminar `DEV_SUPER_CODE` de `wrangler.jsonc` vars (ya está como secret en Dashboard)
+- [ ] Convertir `SUPABASE_ANON_KEY` de texto plano a secreto en Dashboard (no es urgente, es público)
+
+---
+
 ## GLOSARIO
 
 | Término | Significado |
