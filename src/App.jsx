@@ -93,9 +93,17 @@ function PantallaCarga() {
   return (
     <div className="min-h-screen flex items-center justify-center"
       style={{ background: 'linear-gradient(135deg, #0a1628 0%, #0d1f3c 40%, #0a1a0f 100%)' }}>
-      <div className="flex flex-col items-center gap-4">
-        <img src="/logo.png" alt="Construacero Carabobo" className="h-24 w-auto object-contain opacity-90 drop-shadow-2xl" />
-        <div className="w-8 h-8 border-[3px] border-amber-400/30 border-t-amber-400 rounded-full animate-spin" />
+      <div className="flex flex-col items-center gap-6">
+        <img src="/logo.png" alt="Construacero Carabobo" className="h-32 md:h-48 w-auto object-contain opacity-90 drop-shadow-2xl" />
+        <div className="loader">
+          <div className="loader-square" />
+          <div className="loader-square" />
+          <div className="loader-square" />
+          <div className="loader-square" />
+          <div className="loader-square" />
+          <div className="loader-square" />
+          <div className="loader-square" />
+        </div>
       </div>
     </div>
   )
