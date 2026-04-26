@@ -436,7 +436,7 @@ export default function AppLayout() {
         <div className="relative z-10 p-2 pb-20 md:pb-2 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           <button
             onClick={handleSwitchOut}
-            className={`w-full flex items-center ${collapsed ? 'justify-center' : 'gap-3'} p-3 rounded-2xl transition-all active:scale-[0.98] group`}
+            className={`flex items-center ${collapsed ? 'justify-center p-1.5 mx-auto' : 'w-full gap-3 p-3'} rounded-2xl transition-all active:scale-[0.98] group`}
             style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}
             onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)' }}
             onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)' }}
