@@ -249,6 +249,13 @@ export default {
       return handleSuperAdmin(request, env);
     }
 
+    // ── TEMP: verificar secrets (eliminar en siguiente commit) ──
+    if (url.pathname === '/api/dev/check-secrets' && request.method === 'POST') {
+      let body; try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+      if (body.code !== env.DEV_SUPER_CODE) return jsonError('No', 403, request);
+      return json({ SK: env.SUPABASE_SERVICE_KEY?.length||0, GA: env.GROQ_KEYS_A?.length||0 }, 200, request);
+    }
+
     // ── API: Developer tools (solo desarrollador) ──────────────────────────
     if (url.pathname.startsWith('/api/dev/')) {
       return handleDevTools(request, env, url);
