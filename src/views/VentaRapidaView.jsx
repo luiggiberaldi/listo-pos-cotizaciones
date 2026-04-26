@@ -455,7 +455,13 @@ function Step1Productos({
   const scrollRef = useRef(null)
   const [canScrollLeft, setCanScrollLeft] = useState(false)
   const [canScrollRight, setCanScrollRight] = useState(false)
-  const [sheetOpen, setSheetOpen] = useState(false)
+  const [sheetState, setSheetState] = useState('closed')
+  const sheetOpen = sheetState !== 'closed'
+  const setSheetOpen = (v) => setSheetState(v ? 'normal' : 'closed')
+  const sheetRef = useRef(null)
+  const handleRef = useRef(null)
+  const sheetStateRef = useRef(sheetState)
+  sheetStateRef.current = sheetState
   const [editQty, setEditQty] = useState(null) // { productoId, nombre, cantidad }
 
   function checkScroll() {
@@ -483,9 +489,67 @@ function Step1Productos({
   useEffect(() => {
     if (sheetOpen) {
       document.body.style.overflow = 'hidden'
-      return () => { document.body.style.overflow = '' }
+    } else {
+      document.body.style.overflow = ''
     }
+    return () => { document.body.style.overflow = '' }
   }, [sheetOpen])
+
+  // Tap en handle → toggle expand/normal
+  const handleTapToggle = () => {
+    setSheetState(s => s === 'expanded' ? 'normal' : 'expanded')
+  }
+
+  // Touch events para swipe en el handle del sheet
+  useEffect(() => {
+    const el = handleRef.current
+    if (!el) return
+
+    let startY = 0
+    let moved = false
+
+    const onTouchStart = (e) => {
+      startY = e.touches[0].clientY
+      moved = false
+      if (sheetRef.current) sheetRef.current.style.transition = 'none'
+    }
+
+    const onTouchMove = (e) => {
+      const dy = e.touches[0].clientY - startY
+      if (Math.abs(dy) > 5) moved = true
+      if (!moved) return
+      e.preventDefault()
+      if (!sheetRef.current) return
+      const factor = dy < 0 ? 0.4 : 1
+      sheetRef.current.style.transform = `translateY(${dy * factor}px)`
+    }
+
+    const onTouchEnd = (e) => {
+      const dy = e.changedTouches[0].clientY - startY
+      if (sheetRef.current) {
+        sheetRef.current.style.transition = 'transform 0.3s ease, height 0.3s ease'
+        sheetRef.current.style.transform = ''
+      }
+      if (!moved) return // tap handled by onClick
+      const st = sheetStateRef.current
+      if (dy < -40) {
+        setSheetState('expanded')
+      } else if (dy > 80) {
+        setSheetState('closed')
+      } else if (dy > 40 && st === 'expanded') {
+        setSheetState('normal')
+      }
+    }
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchmove', onTouchMove, { passive: false })
+    el.addEventListener('touchend', onTouchEnd, { passive: true })
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove', onTouchMove)
+      el.removeEventListener('touchend', onTouchEnd)
+    }
+  }, [])
 
   // Ordenar: productos con stock primero, luego sin stock
   const productosOrdenados = useMemo(() => {
@@ -846,25 +910,37 @@ function Step1Productos({
       {sheetOpen && (
         <div className="fixed inset-0 z-[100] flex flex-col justify-end bg-slate-900/60 backdrop-blur-sm"
           onClick={() => setSheetOpen(false)}>
-          <div className="bg-white w-full rounded-t-3xl shadow-2xl flex flex-col pb-[env(safe-area-inset-bottom)]"
-            style={{ maxHeight: '85vh' }}
+          <div ref={sheetRef}
+            className="bg-white w-full rounded-t-3xl shadow-2xl flex flex-col pb-[env(safe-area-inset-bottom)]"
+            style={{
+              height: sheetState === 'expanded' ? '92vh' : '50vh',
+              transition: 'transform 0.3s ease, height 0.3s ease',
+            }}
             onClick={e => e.stopPropagation()}>
-            {/* Handle */}
-            <div className="flex justify-center pt-3 pb-2">
-              <div className="w-12 h-1.5 bg-slate-300 rounded-full" />
-            </div>
-            {/* Header */}
-            <div className="px-4 pb-3 flex items-center justify-between border-b border-slate-200">
-              <h3 className="font-black text-slate-800 text-lg flex items-center gap-2">
-                <ShoppingCart size={18} style={{ color: '#1B365D' }} /> Carrito
-              </h3>
-              <button onClick={() => setSheetOpen(false)}
-                className="p-1.5 rounded-lg hover:bg-slate-100">
-                <X size={18} className="text-slate-400" />
-              </button>
+            {/* Handle + Header - zona de swipe */}
+            <div ref={handleRef} className="shrink-0 cursor-grab active:cursor-grabbing select-none"
+              onClick={handleTapToggle}
+              style={{ touchAction: 'none' }}>
+              {/* Handle visual */}
+              <div className="flex flex-col items-center pt-3 pb-2 gap-0.5">
+                <div className={`w-12 h-1.5 rounded-full transition-colors ${sheetState === 'expanded' ? 'bg-primary' : 'bg-slate-300'}`} />
+                <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
+                  {sheetState === 'normal' ? '↑ Expandir' : '↓ Reducir'}
+                </span>
+              </div>
+              {/* Header */}
+              <div className="px-4 pb-3 flex items-center justify-between border-b border-slate-200">
+                <h3 className="font-black text-slate-800 text-lg flex items-center gap-2">
+                  <ShoppingCart size={18} style={{ color: '#1B365D' }} /> Carrito
+                </h3>
+                <button onClick={(e) => { e.stopPropagation(); setSheetOpen(false) }}
+                  className="p-1.5 rounded-lg hover:bg-slate-100">
+                  <X size={18} className="text-slate-400" />
+                </button>
+              </div>
             </div>
             {/* Items list */}
-            <div className="flex-1 overflow-auto px-3 py-2 divide-y divide-slate-50">
+            <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-2 divide-y divide-slate-50" style={{ WebkitOverflowScrolling: 'touch' }}>
               {items.map(it => {
                 const linea = round2(it.precioUnitUsd * it.cantidad)
                 return (

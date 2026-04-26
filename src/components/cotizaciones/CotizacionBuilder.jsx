@@ -1000,6 +1000,16 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
   const sheetOpen = sheetState !== 'closed'
   const setSheetOpen = (v) => setSheetState(v ? 'normal' : 'closed')
   const fabRef = useRef(null)
+
+  // Bloquear scroll del body cuando la cesta está abierta
+  useEffect(() => {
+    if (sheetOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => { document.body.style.overflow = '' }
+  }, [sheetOpen])
   const swipeStartY = useRef(null)
   const sheetRef = useRef(null)
 
@@ -1147,12 +1157,12 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
                     return (
                       <button key={n.label} type="button"
                         onClick={() => onCambiar(idx, 'precioUnitUsd', Number(n.value))}
-                        className={`flex flex-col items-center justify-center py-2.5 px-2 rounded-xl border-2 transition-all active:scale-[0.96] touch-manipulation ${
+                        className={`flex flex-col items-center justify-center py-1.5 px-1.5 rounded-lg border-2 transition-all active:scale-[0.96] touch-manipulation ${
                           active ? 'border-primary bg-primary text-white shadow-md' : 'border-slate-200 bg-white text-slate-600'
                         }`}
                       >
-                        <span className={`text-[11px] font-bold uppercase tracking-widest ${active ? 'text-white/80' : 'text-slate-400'}`}>{n.label}</span>
-                        <span className={`text-sm font-black mt-0.5 ${active ? 'text-white' : 'text-slate-800'}`}>${Number(n.value).toFixed(2)}</span>
+                        <span className={`text-[10px] font-bold uppercase tracking-widest ${active ? 'text-white/80' : 'text-slate-400'}`}>{n.label}</span>
+                        <span className={`text-xs font-black ${active ? 'text-white' : 'text-slate-800'}`}>${Number(n.value).toFixed(2)}</span>
                       </button>
                     )
                   })}
@@ -1249,7 +1259,7 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
                     <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${items.length > 0 ? 'bg-primary text-white' : 'bg-slate-100 text-slate-400'}`}>
                       {items.length} items
                     </span>
-                    <button type="button" onClick={() => setSheetOpen(false)} className="p-1.5 text-slate-400 hover:text-slate-600 transition-colors">
+                    <button type="button" onClick={(e) => { e.stopPropagation(); setSheetOpen(false) }} className="p-1.5 text-slate-400 hover:text-slate-600 transition-colors">
                       <X size={18} />
                     </button>
                   </div>
