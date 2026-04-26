@@ -3,8 +3,14 @@
 // Si la primera llamada falla con 401, refresca la sesión y reintenta una vez.
 import supabase from './supabase/client'
 import { apiUrl } from './apiBase'
+import useAuthStore from '../store/useAuthStore'
 
 const DEFAULT_TIMEOUT = 15000 // 15 segundos
+
+function operatorHeader() {
+  const perfil = useAuthStore.getState().perfil
+  return perfil?.id ? { 'X-Operator-Id': perfil.id } : {}
+}
 
 /**
  * Hace una petición autenticada al Worker API.
@@ -27,6 +33,7 @@ export async function authFetch(path, options = {}) {
   const headers = {
     ...fetchOpts.headers,
     Authorization: `Bearer ${session.access_token}`,
+    ...operatorHeader(),
   }
 
   let res
@@ -51,6 +58,7 @@ export async function authFetch(path, options = {}) {
     const retryHeaders = {
       ...fetchOpts.headers,
       Authorization: `Bearer ${newToken}`,
+      ...operatorHeader(),
     }
 
     let retryRes

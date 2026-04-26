@@ -216,7 +216,7 @@ export default function ConfiguracionView() {
   const { data: config = {}, isLoading } = useConfigNegocio()
   const actualizar = useActualizarConfig()
   const { perfil } = useAuthStore()
-  const esSuperAdmin = perfil?.id === '00000000-0000-0000-0000-000000000000'
+  const esDesarrollador = perfil?.rol === 'desarrollador'
   const [tab, setTab]         = useState('comisiones')
   const [guardado, setGuardado] = useState(false)
   const [error,    setError]    = useState('')
@@ -561,7 +561,7 @@ export default function ConfiguracionView() {
             )}
           </div>
 
-          {esSuperAdmin && (
+          {esDesarrollador && (
           <div className="bg-white rounded-2xl border border-red-200 p-5 space-y-4">
             <div className="flex items-center gap-3 mb-1">
               <div className="w-0.5 self-stretch rounded-full shrink-0 bg-red-400" style={{ minHeight: '20px' }} />

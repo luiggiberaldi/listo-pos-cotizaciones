@@ -722,6 +722,7 @@ export default function CotizacionesView() {
   const [modo,      setModo]      = useState('lista')           // 'lista' | 'builder'
   const [editandoId, setEditandoId] = useState(null)            // ID del borrador a editar
   const [clientePreseleccionado, setClientePreseleccionado] = useState(null) // cliente_id desde URL
+  const [cotVersionar, setCotVersionar] = useState(null)        // cotización pendiente de confirmación para versionar
 
   // Si viene ?nueva=1 del dashboard o clientes, abrir wizard directamente
   useEffect(() => {
@@ -752,11 +753,17 @@ export default function CotizacionesView() {
     setEditandoId(null)
   }
 
-  // Cuando el usuario quiere "editar" una cotización NO borrador → crear versión automáticamente
-  async function iniciarVersionado(cot) {
+  // Cuando el usuario quiere "editar" una cotización NO borrador → mostrar confirmación
+  function iniciarVersionado(cot) {
+    setCotVersionar(cot)
+  }
+
+  async function confirmarVersionado() {
+    if (!cotVersionar) return
     try {
-      const nuevoId = await crearVersion.mutateAsync(cot.id)
-      showToast(`Se creó Rev.${(cot.version || 1) + 1} como borrador editable. La cotización original fue anulada.`, 'success')
+      const nuevoId = await crearVersion.mutateAsync(cotVersionar.id)
+      showToast(`Se creó Rev.${(cotVersionar.version || 1) + 1} como borrador editable. La cotización original fue anulada.`, 'success')
+      setCotVersionar(null)
       setEditandoId(nuevoId)
       setModo('builder')
     } catch (e) {
@@ -792,6 +799,12 @@ export default function CotizacionesView() {
         onVersionar={iniciarVersionado}
       />
 
+      <ModalVersionar
+        cotizacion={cotVersionar}
+        onConfirm={confirmarVersionado}
+        onCancel={() => setCotVersionar(null)}
+        cargando={crearVersion.isPending}
+      />
     </>
   )
 }

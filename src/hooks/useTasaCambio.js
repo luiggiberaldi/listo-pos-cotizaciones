@@ -257,13 +257,14 @@ export function useTasaCambio() {
 
   // ─── Realtime sync: broadcast cambios de tasa a otros dispositivos ──────────
   const _ignoreNextBroadcast = useRef(false)
+  const channelRef = useRef(null)
 
   // Wrappers que broadcast al cambiar
   const setModoTasaSync = useCallback((modo) => {
     setModoTasa(modo)
     _ignoreNextBroadcast.current = true
     try {
-      supabase.channel('tasa-sync').send({
+      channelRef.current?.send({
         type: 'broadcast',
         event: 'tasa_change',
         payload: { modoTasa: modo, tasaManual: modo === 'manual' ? tasaManual : null, ts: Date.now() },
@@ -275,7 +276,7 @@ export function useTasaCambio() {
     setTasaManual(val)
     _ignoreNextBroadcast.current = true
     try {
-      supabase.channel('tasa-sync').send({
+      channelRef.current?.send({
         type: 'broadcast',
         event: 'tasa_change',
         payload: { modoTasa: 'manual', tasaManual: val, ts: Date.now() },
@@ -301,7 +302,12 @@ export function useTasaCambio() {
       })
       .subscribe()
 
-    return () => supabase.removeChannel(channel)
+    channelRef.current = channel
+
+    return () => {
+      channelRef.current = null
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   return {

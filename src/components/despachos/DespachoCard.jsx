@@ -1,5 +1,5 @@
 // src/components/despachos/DespachoCard.jsx
-import { useState, memo } from 'react'
+import { useState, useRef, memo } from 'react'
 import { FileText, Calendar, Truck, CheckCircle, Ban, RefreshCcw, Download, Loader2, Eye, MoreHorizontal, ChevronDown, DollarSign, Printer, Check } from 'lucide-react'
 import EstadoBadge from '../cotizaciones/EstadoBadge'
 import MobileActionSheet from '../cotizaciones/MobileActionSheet'
@@ -26,6 +26,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const [showSheet, setShowSheet]     = useState(false)
   const [showMonedaMenu, setShowMonedaMenu] = useState(false)
   const [showPrintMenu, setShowPrintMenu] = useState(false)
+  const monedaBtnRef = useRef(null)
+  const [monedaMenuPos, setMonedaMenuPos] = useState({ top: 0, left: 0 })
   const [monedaPdf, setMonedaPdf] = useState(() => localStorage.getItem('construacero_moneda_pdf') || '$')
   const [accionPendiente, setAccionPendiente] = useState(null) // { id, estado, actionConfig }
   const { tasaBcv, tasaUsdt } = useTasaCambio()
@@ -48,6 +50,13 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     setMonedaPdf(moneda)
     localStorage.setItem('construacero_moneda_pdf', moneda)
     setShowMonedaMenu(false)
+  }
+
+  function toggleMonedaMenu() {
+    if (showMonedaMenu) { setShowMonedaMenu(false); return }
+    const rect = monedaBtnRef.current?.getBoundingClientRect()
+    if (rect) setMonedaMenuPos({ top: rect.top, left: rect.left })
+    setShowMonedaMenu(true)
   }
 
   const MONEDA_OPTIONS = [
@@ -345,16 +354,17 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           {/* O. Despacho con selector de moneda agrupado */}
           <div className="flex items-center shrink-0 rounded-lg border border-slate-200 divide-x divide-slate-200">
             <div className="relative" data-no-click>
-              <button onClick={() => setShowMonedaMenu(v => !v)}
-                onBlur={() => setTimeout(() => setShowMonedaMenu(false), 200)}
+              <button ref={monedaBtnRef} onClick={toggleMonedaMenu}
                 title="Moneda para Orden de Despacho"
                 className="flex items-center gap-0.5 px-2 py-2 rounded-l-lg text-xs font-medium text-slate-400 hover:bg-slate-50 transition-colors">
                 {MONEDA_OPTIONS.find(o => o.key === monedaPdf)?.icon}
                 <ChevronDown size={9} />
               </button>
               {showMonedaMenu && (
-                <div className="absolute left-0 bottom-full mb-1 w-44 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20 max-w-[calc(100vw-2rem)]"
-                  onMouseDown={e => e.preventDefault()}>
+                <>
+                  <div className="fixed inset-0 z-[9998]" onClick={() => setShowMonedaMenu(false)} />
+                  <div className="fixed w-44 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-[9999]"
+                    style={{ top: monedaMenuPos.top - 8, left: monedaMenuPos.left, transform: 'translateY(-100%)' }}>
                   {MONEDA_OPTIONS.map(opt => (
                     <button key={opt.key} onClick={() => seleccionarMoneda(opt.key)}
                       className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left whitespace-nowrap ${monedaPdf === opt.key ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-700 hover:bg-slate-50'}`}>
@@ -362,7 +372,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
                       {monedaPdf === opt.key && <Check size={14} className="ml-auto text-emerald-500" />}
                     </button>
                   ))}
-                </div>
+                  </div>
+                </>
               )}
             </div>
             <button onClick={descargarOrdenDespacho} disabled={ordenLoading}
@@ -460,16 +471,17 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           {/* O. Despacho con selector de moneda agrupado */}
           <div className="flex items-center rounded-lg border border-slate-200 divide-x divide-slate-200">
             <div className="relative" data-no-click>
-              <button onClick={() => setShowMonedaMenu(v => !v)}
-                onBlur={() => setTimeout(() => setShowMonedaMenu(false), 200)}
+              <button ref={monedaBtnRef} onClick={toggleMonedaMenu}
                 title="Moneda para Orden de Despacho"
                 className="flex items-center gap-0.5 px-2 py-1.5 rounded-l-lg text-xs font-medium text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors">
                 {MONEDA_OPTIONS.find(o => o.key === monedaPdf)?.icon}
                 <ChevronDown size={9} />
               </button>
               {showMonedaMenu && (
-                <div className="absolute right-0 bottom-full mb-1 w-40 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
-                  onMouseDown={e => e.preventDefault()}>
+                <>
+                  <div className="fixed inset-0 z-[9998]" onClick={() => setShowMonedaMenu(false)} />
+                  <div className="fixed w-40 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-[9999]"
+                    style={{ top: monedaMenuPos.top - 8, left: monedaMenuPos.left, transform: 'translateY(-100%)' }}>
                   {MONEDA_OPTIONS.map(opt => (
                     <button key={opt.key} onClick={() => seleccionarMoneda(opt.key)}
                       className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left ${monedaPdf === opt.key ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-700 hover:bg-slate-50'}`}>
@@ -477,7 +489,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
                       {monedaPdf === opt.key && <Check size={14} className="ml-auto text-emerald-500" />}
                     </button>
                   ))}
-                </div>
+                  </div>
+                </>
               )}
             </div>
             <button onClick={descargarOrdenDespacho} disabled={ordenLoading}

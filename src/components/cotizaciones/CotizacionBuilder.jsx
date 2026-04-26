@@ -9,7 +9,7 @@ import {
   User, Truck, Search, Plus, Trash2, UserPlus, ChevronDown, ChevronLeft, ChevronRight, X, Package,
   Save, Send, ArrowLeft, ArrowRight, Loader2, AlertCircle, DollarSign, RefreshCw,
   CheckCircle, FileDown, MessageCircle, StickyNote, Tag, Hash, Phone, Mail, MapPin,
-  LayoutGrid, LayoutList, ShoppingCart, Minus, Camera,
+  LayoutGrid, LayoutList, ShoppingCart, Minus, Camera, Eye,
 } from 'lucide-react'
 import { useClientes, useVendedores } from '../../hooks/useClientes'
 import { useInventario, useCategorias } from '../../hooks/useInventario'
@@ -279,13 +279,14 @@ function ItemCard({ item, idx, onChange, onDelete, tasa = 0, precios }) {
 // ─── Buscador de productos ────────────────────────────────────────────────────
 const PRODUCTOS_POR_PAGINA = 30
 
-function BuscadorProductos({ onAgregar, onScanClick, itemsAgregados = [], tasa = 0 }) {
+function BuscadorProductos({ onAgregar, onScanClick, itemsAgregados = [], tasa = 0, onCambiarCantidad, onEliminarItem }) {
   const [texto, setTexto] = useState('')
   const [catActiva, setCatActiva] = useState('')
   const { perfil } = useAuthStore()
   const [visibleCount, setVisibleCount] = useState(PRODUCTOS_POR_PAGINA)
   const [canScrollLeft, setCanScrollLeft]   = useState(false)
   const [canScrollRight, setCanScrollRight] = useState(false)
+  const [editQty, setEditQty] = useState(null) // { productoId, nombre, cantidad, stock }
   const scrollRef = useRef(null)
   const { data: inventarioData, isLoading } = useInventario({ pageSize: 1000 })
   const todosProductos = inventarioData?.productos ?? inventarioData ?? []
@@ -327,6 +328,7 @@ function BuscadorProductos({ onAgregar, onScanClick, itemsAgregados = [], tasa =
   })
 
   const idsAgregados = new Set(itemsAgregados.map(it => it.productoId))
+  const itemsMap = Object.fromEntries(itemsAgregados.map((it, idx) => [it.productoId, { ...it, _idx: idx }]))
 
   // Wrapper que también guarda en recientes
   function agregarConReciente(p) {
@@ -433,11 +435,11 @@ function BuscadorProductos({ onAgregar, onScanClick, itemsAgregados = [], tasa =
               const bloqueado  = sinStock || sinPrecio
               const comprometido = stockComprometido[p.id] || 0
               const disponibleReal = (p.stock_actual ?? 0) - comprometido
+              const itemInCart = itemsMap[p.id]
+              const stock = Number(p.stock_actual) || 0
               return (
-                <button key={p.id} type="button"
-                  onClick={() => !bloqueado && agregarConReciente(p)}
-                  disabled={bloqueado}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-all active:scale-[0.98] min-h-[48px] ${
+                <div key={p.id}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-all min-h-[48px] ${
                     bloqueado
                       ? 'opacity-40 cursor-not-allowed border-slate-100 bg-white'
                       : yaAgregado
@@ -445,7 +447,9 @@ function BuscadorProductos({ onAgregar, onScanClick, itemsAgregados = [], tasa =
                         : disponibleReal <= 0 && comprometido > 0
                           ? 'border-amber-300 bg-amber-50/30 shadow-sm shadow-amber-100/80'
                           : 'border-slate-200 bg-white hover:border-primary/50'
-                  }`}>
+                  }`}
+                  onClick={() => !yaAgregado && !bloqueado && agregarConReciente(p)}
+                >
                   {/* Indicador izquierdo */}
                   <div className={`w-7 h-7 rounded-lg shrink-0 flex items-center justify-center ${
                     yaAgregado ? 'bg-emerald-100' : 'bg-slate-100'
@@ -466,23 +470,43 @@ function BuscadorProductos({ onAgregar, onScanClick, itemsAgregados = [], tasa =
                       <p className="text-[9px] font-bold text-primary/60">{[p.precio_2 != null && 'P2', p.precio_3 != null && 'P3'].filter(Boolean).length + 1} precios</p>
                     )}
                   </div>
-                  {/* Precio + stock */}
-                  <div className="shrink-0 text-right">
-                    <p className={`text-xs font-black ${yaAgregado ? 'text-emerald-600' : 'text-slate-800'}`}>
-                      {fmtUsd(p.precio_usd)}
-                    </p>
-                    {tasa > 0 && (
-                      <p className="text-[9px] text-slate-400">{fmtBs(usdToBs(p.precio_usd, tasa))}</p>
-                    )}
-                    <p className={`text-[9px] font-medium ${
-                      sinStock ? 'text-red-500' :
-                      disponibleReal <= 0 && comprometido > 0 ? 'text-amber-600' :
-                      (p.stock_actual <= (p.stock_minimo || 5)) ? 'text-amber-500' : 'text-emerald-500'
-                    }`}>
-                      {sinStock ? 'Agotado' : comprometido > 0 ? `${p.stock_actual ?? 0} (${comprometido} comp.)` : `${p.stock_actual ?? 0} disp.`}
-                    </p>
-                  </div>
-                </button>
+                  {/* Stepper inline OR Precio+stock */}
+                  {yaAgregado && itemInCart ? (
+                    <div className="shrink-0 flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
+                      <button type="button"
+                        onClick={() => itemInCart.cantidad <= 1 ? onEliminarItem(itemInCart._idx) : onCambiarCantidad(itemInCart._idx, 'cantidad', itemInCart.cantidad - 1)}
+                        className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 active:bg-red-100 active:text-red-500 transition-colors">
+                        {itemInCart.cantidad <= 1 ? <Trash2 size={11} strokeWidth={2.5} /> : <Minus size={12} strokeWidth={3} />}
+                      </button>
+                      <button type="button"
+                        onClick={() => setEditQty({ productoId: p.id, nombre: p.nombre, cantidad: itemInCart.cantidad, stock, idx: itemInCart._idx })}
+                        className="w-9 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-xs font-black text-slate-700 active:bg-sky-50 active:border-sky-300">
+                        {itemInCart.cantidad}
+                      </button>
+                      <button type="button"
+                        onClick={() => onCambiarCantidad(itemInCart._idx, 'cantidad', itemInCart.cantidad + 1)}
+                        className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 active:bg-emerald-100 transition-colors">
+                        <Plus size={12} strokeWidth={3} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="shrink-0 text-right">
+                      <p className={`text-xs font-black ${yaAgregado ? 'text-emerald-600' : 'text-slate-800'}`}>
+                        {fmtUsd(p.precio_usd)}
+                      </p>
+                      {tasa > 0 && (
+                        <p className="text-[9px] text-slate-400">{fmtBs(usdToBs(p.precio_usd, tasa))}</p>
+                      )}
+                      <p className={`text-[9px] font-medium ${
+                        sinStock ? 'text-red-500' :
+                        disponibleReal <= 0 && comprometido > 0 ? 'text-amber-600' :
+                        (p.stock_actual <= (p.stock_minimo || 5)) ? 'text-amber-500' : 'text-emerald-500'
+                      }`}>
+                        {sinStock ? 'Agotado' : comprometido > 0 ? `${p.stock_actual ?? 0} (${comprometido} comp.)` : `${p.stock_actual ?? 0} disp.`}
+                      </p>
+                    </div>
+                  )}
+                </div>
               )
             })}
           </div>
@@ -591,6 +615,43 @@ function BuscadorProductos({ onAgregar, onScanClick, itemsAgregados = [], tasa =
         <div className="text-center py-10">
           <Package size={28} className="mx-auto text-slate-200 mb-3" />
           <p className="text-sm font-bold text-slate-400">No hay productos en el inventario</p>
+        </div>
+      )}
+
+      {/* Modal editar cantidad exacta */}
+      {editQty && (
+        <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-sm"
+          onClick={() => setEditQty(null)}>
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-xs p-5 space-y-3 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <p className="text-sm font-bold text-slate-700 truncate mb-3">{editQty.nombre}</p>
+            <div className="flex items-center gap-3">
+              <input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={editQty.stock || 99999}
+                defaultValue={editQty.cantidad}
+                autoFocus
+                className="flex-1 text-center text-lg font-black border-2 border-slate-200 rounded-xl py-2 focus:border-primary focus:outline-none"
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    const val = Math.max(1, Math.min(Number(e.target.value) || 1, editQty.stock || 99999))
+                    onCambiarCantidad(editQty.idx, 'cantidad', val)
+                    setEditQty(null)
+                  }
+                }}
+              />
+              <button onClick={() => setEditQty(null)}
+                className="px-3 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100 rounded-xl">Cancelar</button>
+              <button onClick={(e) => {
+                  const input = e.target.closest('.space-y-3')?.querySelector('input')
+                  const val = Math.max(1, Math.min(Number(input?.value) || 1, editQty.stock || 99999))
+                  onCambiarCantidad(editQty.idx, 'cantidad', val)
+                  setEditQty(null)
+                }}
+                className="px-4 py-2 text-sm font-bold text-white bg-primary rounded-xl">OK</button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -1275,6 +1336,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
   const [numDisplay, setNumDisplay] = useState('')
   const [pdfLoading, setPdfLoading] = useState(false)
   const [waLoading, setWaLoading]   = useState(false)
+  const [showResumen, setShowResumen] = useState(false)
 
   // ── Auto-guardado: restaurar borrador al montar ────────────────────────────
   const [showDraftBanner, setShowDraftBanner] = useState(false)
@@ -1647,12 +1709,12 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
               {paso === 4 ? 'Cotización enviada' :
                esEdicion
                 ? cotizacionExistente.version > 1
-                  ? `Editar Rev.${cotizacionExistente.version}`
-                  : `Editar borrador`
+                  ? `Rev.${cotizacionExistente.version}`
+                  : `Editar`
                 : 'Nueva cotización'}
             </h2>
             {esEdicion && cotizacionExistente.numero && (
-              <span className="text-[10px] font-mono font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full shrink-0">
+              <span className="hidden sm:inline text-[10px] font-mono font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full shrink-0">
                 COT-{String(cotizacionExistente.numero).padStart(5, '0')}
                 {cotizacionExistente.version > 1 && ` Rev.${cotizacionExistente.version}`}
               </span>
@@ -1836,7 +1898,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                   <SectionH3 icon={Package}>Agregar productos</SectionH3>
                 </div>
                 <div className="flex-1 min-h-0 overflow-y-auto pb-20 lg:pb-0">
-                  <BuscadorProductos onAgregar={agregarProducto} onScanClick={() => setShowScanModal(true)} itemsAgregados={items} tasa={tasaHook.tasaEfectiva} />
+                  <BuscadorProductos onAgregar={agregarProducto} onScanClick={() => setShowScanModal(true)} itemsAgregados={items} tasa={tasaHook.tasaEfectiva} onCambiarCantidad={cambiarItem} onEliminarItem={eliminarItem} />
                   <ScanMaterialListModal
                     open={showScanModal}
                     onClose={() => setShowScanModal(false)}
@@ -2132,15 +2194,28 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
 
                 {/* Acciones */}
                 <div className="space-y-3 pt-1">
+                  {/* Resumen detallado expandible */}
+                  <button onClick={() => setShowResumen(v => !v)}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all active:scale-[0.98]"
+                    style={{ backgroundColor: '#1B365D10', color: '#1B365D' }}>
+                    <Eye size={16} />
+                    {showResumen ? 'Ocultar resumen' : 'Ver resumen'}
+                  </button>
+                  {showResumen && (
+                    <div className="bg-slate-50 rounded-xl p-3 space-y-2 max-h-60 overflow-y-auto text-left">
+                      {items.map((item, i) => (
+                        <div key={i} className="flex items-start justify-between gap-2 py-1.5 border-b border-slate-100 last:border-0">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-slate-700 truncate">{item.nombre}</p>
+                            <p className="text-[10px] text-slate-400">{item.cantidad} × {fmtUsd(item.precioUnitUsd)}</p>
+                          </div>
+                          <p className="text-xs font-bold text-slate-800 shrink-0">{fmtUsd(item.cantidad * item.precioUnitUsd)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   <div className="flex flex-col xs:flex-row gap-2 sm:gap-3">
-                    <button onClick={descargarPDF} disabled={pdfLoading}
-                      className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all active:scale-[0.98] disabled:opacity-50"
-                      style={{ backgroundColor: '#1B365D10', color: '#1B365D' }}>
-                      {pdfLoading
-                        ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                        : <FileDown size={16} />}
-                      Descargar PDF
-                    </button>
                     <button onClick={handleWhatsApp} disabled={waLoading}
                       className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-sm rounded-xl transition-all active:scale-[0.98] disabled:opacity-50">
                       {waLoading

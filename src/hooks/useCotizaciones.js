@@ -3,7 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
 import useAuthStore from '../store/useAuthStore'
-import { apiUrl } from '../services/apiBase'
+import { apiUrl, getAuthHeaders } from '../services/apiBase'
 import { calcTotales } from '../utils/calcTotales'
 import { round2 } from '../utils/dinero'
 import {
@@ -176,13 +176,10 @@ export function useGuardarBorrador() {
       }))
 
       // Route through worker API (bypasses RLS for cross-vendor clients)
-      const { data: { session } } = await supabase.auth.getSession()
+      const headers = await getAuthHeaders()
       const res = await fetch(apiUrl('/api/cotizaciones/guardar'), {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
+        headers,
         body: JSON.stringify({ cotizacionId, headerData, items: itemRows }),
       })
 
@@ -205,15 +202,11 @@ export function useEnviarCotizacion() {
 
   return useMutation({
     mutationFn: async ({ cotizacionId, tasaBcv }) => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.access_token) throw new Error('No autenticado')
+      const headers = await getAuthHeaders()
 
       const res = await fetch(apiUrl('/api/cotizaciones/enviar'), {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({ cotizacionId, tasaBcv: Number(tasaBcv) }),
       })
       const result = await res.json()
@@ -325,15 +318,11 @@ export function useCrearVersion() {
 
   return useMutation({
     mutationFn: async (cotizacionId) => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.access_token) throw new Error('No autenticado')
+      const headers = await getAuthHeaders()
 
       const res = await fetch(apiUrl('/api/cotizaciones/crear-version'), {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({ cotizacionId }),
       })
 
@@ -352,15 +341,11 @@ export function useReciclarCotizacion() {
 
   return useMutation({
     mutationFn: async ({ cotizacionId, vendedorDestinoId }) => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.access_token) throw new Error('No autenticado')
+      const headers = await getAuthHeaders()
 
       const res = await fetch(apiUrl('/api/cotizaciones/reciclar'), {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({ cotizacionId, vendedorDestinoId }),
       })
 

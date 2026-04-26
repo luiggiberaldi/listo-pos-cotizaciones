@@ -2,7 +2,7 @@
 // Mutation para crear venta rápida (cotización + despacho atómico)
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
-import { apiUrl } from '../services/apiBase'
+import { apiUrl, getAuthHeaders } from '../services/apiBase'
 import useAuthStore from '../store/useAuthStore'
 import { DESPACHOS_KEY } from './useDespachos'
 import { INVENTARIO_KEY } from './useInventario'
@@ -23,15 +23,11 @@ export function useVentaRapida() {
       formaPago, formaPagoCliente, referenciaPago,
       notas, notasCliente, items, costoEnvioUsd, tasaBcv,
     }) => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.access_token) throw new Error('No autenticado')
+      const headers = await getAuthHeaders()
 
       const res = await fetch(apiUrl('/api/ventas-rapidas/crear'), {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           clienteId, transportistaId: transportistaId || null,
           fleteUsd: Number(fleteUsd) || 0,

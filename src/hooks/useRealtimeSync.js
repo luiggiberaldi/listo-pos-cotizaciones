@@ -17,9 +17,7 @@ const USUARIOS_KEY = ['usuarios']
 
 // Tablas con invalidación lazy (refetch al navegar a la vista)
 const TABLAS_LAZY = [
-  { tabla: 'cotizaciones',    keys: [COTIZACIONES_KEY] },
   { tabla: 'clientes',        keys: [CLIENTES_KEY] },
-  { tabla: 'notas_despacho',  keys: [DESPACHOS_KEY, INVENTARIO_KEY] },
   { tabla: 'comisiones',      keys: [COMISIONES_KEY] },
   { tabla: 'usuarios',        keys: [USUARIOS_KEY] },
 ]
@@ -28,6 +26,8 @@ const TABLAS_LAZY = [
 const TABLAS_INMEDIATAS = [
   { tabla: 'productos',              keys: [INVENTARIO_KEY] },
   { tabla: 'configuracion_negocio',  keys: [CONFIG_KEY] },
+  { tabla: 'cotizaciones',           keys: [COTIZACIONES_KEY] },
+  { tabla: 'notas_despacho',         keys: [DESPACHOS_KEY, INVENTARIO_KEY] },
 ]
 
 export function useRealtimeSync() {

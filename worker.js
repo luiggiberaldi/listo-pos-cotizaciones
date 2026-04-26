@@ -452,6 +452,26 @@ async function verifyAuth(request, env) {
   // Attach operator context from app_metadata (set by switch-operator)
   user.operator_id = user.app_metadata?.operator_id || null;
   user.operator_rol = user.app_metadata?.operator_rol || null;
+  user.operator_nombre = user.app_metadata?.operator_nombre || null;
+
+  // Allow frontend to override operator_id via header (handles JWT refresh delay)
+  const headerOpId = request.headers.get('X-Operator-Id');
+  if (headerOpId && isValidUuid(headerOpId) && headerOpId !== user.operator_id) {
+    // Verify the operator exists and is active before trusting the header
+    const checkRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${headerOpId}&activo=eq.true&select=id,nombre,rol`,
+      { headers: { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}` } }
+    );
+    if (checkRes.ok) {
+      const [op] = await checkRes.json();
+      if (op) {
+        user.operator_id = op.id;
+        user.operator_rol = op.rol;
+        user.operator_nombre = op.nombre;
+      }
+    }
+  }
+
   return user;
 }
 
