@@ -2123,7 +2123,7 @@ async function handleCrearDespacho(request, env) {
     if (!cot) return jsonError('Cotización no encontrada', 404, request);
 
     const esSupervisorOp = operador.rol === 'supervisor';
-    const esPropietario = cot.vendedor_id === (user.operator_id || user.id);
+    const esPropietario = cot.vendedor_id === operador.id;
 
     // Todos pueden despachar cotizaciones enviadas o aceptadas propias
     if (!['enviada', 'aceptada'].includes(cot.estado)) {
