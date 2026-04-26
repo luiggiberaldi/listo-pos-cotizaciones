@@ -459,16 +459,18 @@ function BuscadorProductos({ onAgregar, onScanClick, itemsAgregados = [], tasa =
                       : <Package size={14} className="text-slate-400" />
                     }
                   </div>
-                  {/* Nombre */}
+                  {/* Nombre + precio cuando hay stepper */}
                   <div className="flex-1 min-w-0">
                     <p className={`text-xs font-bold leading-tight truncate ${
                       yaAgregado ? 'text-emerald-700' : 'text-slate-700'
                     }`}>
                       {p.nombre}
                     </p>
-                    {(p.precio_2 != null || p.precio_3 != null) && (
+                    {yaAgregado && itemInCart ? (
+                      <p className="text-[10px] text-slate-400">{fmtUsd(p.precio_usd)} c/u</p>
+                    ) : (p.precio_2 != null || p.precio_3 != null) ? (
                       <p className="text-[9px] font-bold text-primary/60">{[p.precio_2 != null && 'P2', p.precio_3 != null && 'P3'].filter(Boolean).length + 1} precios</p>
-                    )}
+                    ) : null}
                   </div>
                   {/* Stepper inline OR Precio+stock */}
                   {yaAgregado && itemInCart ? (
@@ -1025,9 +1027,12 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
     const el = handleRef.current
     if (!el) return
 
+    let hasMoved = false
+
     const onTouchStart = (e) => {
       touchStartY.current = e.touches[0].clientY
       touchStateSnap.current = sheetState
+      hasMoved = false
       if (sheetRef.current) {
         sheetRef.current.style.transition = 'none'
       }
@@ -1036,12 +1041,16 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
     const onTouchMove = (e) => {
       if (touchStartY.current === null) return
       e.preventDefault()
+      hasMoved = true
       const delta = e.touches[0].clientY - touchStartY.current
       if (!sheetRef.current) return
       const st = touchStateSnap.current
       if (st === 'normal' && delta < 0) {
         sheetRef.current.style.transform = `translateY(${delta * 0.3}px)`
       } else if (st === 'expanded' && delta > 0) {
+        sheetRef.current.style.transform = `translateY(${delta}px)`
+      } else if (st === 'normal' && delta > 0) {
+        // Allow swipe-down from normal to close
         sheetRef.current.style.transform = `translateY(${delta}px)`
       }
     }
@@ -1055,9 +1064,19 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
         sheetRef.current.style.transition = 'transform 0.3s cubic-bezier(0.32,0.72,0,1), max-height 0.3s cubic-bezier(0.32,0.72,0,1)'
         sheetRef.current.style.transform = ''
       }
+
+      // If no significant move, treat as tap → toggle expanded/normal
+      if (!hasMoved || Math.abs(delta) < 10) {
+        setSheetState(st === 'expanded' ? 'normal' : 'expanded')
+        touchStartY.current = null
+        return
+      }
+
       const threshold = 30
       if (st === 'normal' && delta < -threshold) {
         setSheetState('expanded')
+      } else if (st === 'normal' && delta > threshold * 2) {
+        setSheetState('closed')
       } else if (st === 'expanded' && delta > threshold) {
         setSheetState('normal')
       }
@@ -1221,16 +1240,19 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
             <div ref={sheetRef}
               className="bg-white w-full rounded-t-3xl shadow-2xl flex flex-col pb-[env(safe-area-inset-bottom)]"
               style={{
-                maxHeight: sheetState === 'expanded' ? '95vh' : '85vh',
+                maxHeight: sheetState === 'expanded' ? '95vh' : '55vh',
                 transition: 'transform 0.3s cubic-bezier(0.32,0.72,0,1), max-height 0.3s cubic-bezier(0.32,0.72,0,1)',
               }}
               onClick={e => e.stopPropagation()}>
               {/* Handle + Header - zona de swipe completa */}
-              <div ref={handleRef} className="shrink-0"
+              <div ref={handleRef} className="shrink-0 cursor-grab active:cursor-grabbing"
                 style={{ touchAction: 'none' }}>
                 {/* Handle visual */}
-                <div className="flex justify-center pt-3 pb-2">
+                <div className="flex flex-col items-center pt-3 pb-2 gap-0.5">
                   <div className="w-12 h-1.5 bg-slate-300 rounded-full" />
+                  <span className="text-[9px] text-slate-300 font-bold uppercase tracking-wider select-none">
+                    {sheetState === 'normal' ? '↑ Expandir' : '↓ Reducir'}
+                  </span>
                 </div>
                 {/* Header */}
                 <div className="px-4 pb-3 flex items-center justify-between border-b border-slate-200">
