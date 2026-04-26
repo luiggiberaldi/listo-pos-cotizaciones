@@ -51,14 +51,6 @@ export const ACCIONES = {
     },
   },
   anular: {
-    vendedor: {
-      label: 'Cancelar despacho',
-      confirmTitle: '¿Cancelar este despacho?',
-      confirmMessage: 'Se restaurará el stock de todos los productos al inventario.',
-      confirmDetails: 'Esta acción no se puede deshacer.',
-      confirmText: 'Sí, cancelar',
-      variant: 'danger',
-    },
     supervisor: {
       label: 'Anular despacho',
       confirmTitle: '¿Anular este despacho?',
