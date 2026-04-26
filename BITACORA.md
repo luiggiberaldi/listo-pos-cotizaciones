@@ -1261,8 +1261,17 @@ Desktop (lg+): Dos columnas
    - Estado vacío con icono y mensaje
 5. **Mobile wrapper**: FAB + bottom sheet + modal de cantidad envueltos en `<div className="lg:hidden">`
 
-### Nota sobre error 500 en switch-operator (Vercel)
-Se reportó un 500 transitorio en `/api/auth/switch-operator` desde Vercel. Verificación directa contra ambos endpoints (Cloudflare y Vercel proxy) retorna 401 correctamente (no autenticado). El error fue transitorio — probablemente durante propagación del deploy.
+### Nota sobre error 500 en switch-operator (Vercel) — RESUELTO
+**Causa raíz**: `wrangler.jsonc` tenía placeholders vacíos (`"SUPABASE_SERVICE_KEY": ""`, etc.) en el bloque `vars`. Cada vez que GitHub Actions ejecutaba `wrangler deploy`, estos strings vacíos **sobreescribían** los secrets cifrados del Cloudflare Dashboard. Resultado: el worker de producción (`luigistorelogistics.workers.dev`) operaba sin `SUPABASE_SERVICE_KEY`, causando 500 en cualquier operación que requiriera acceso admin a Supabase.
+
+**Por qué funcionaba en camelAI**: `deploy.sh` inyectaba los valores reales desde `.dev.vars` antes del deploy.
+
+**Fix aplicado**:
+1. Eliminados los placeholders vacíos de `wrangler.jsonc` — solo quedan vars públicas
+2. `deploy.sh` actualizado para **agregar** las vars secretas (en vez de reemplazar strings vacíos)
+3. Los secrets de producción se manejan exclusivamente via Cloudflare Dashboard
+
+**REGLA**: Nunca poner `"SECRET_KEY": ""` en `wrangler.jsonc`. Las vars vacías tienen prioridad sobre secrets del Dashboard.
 
 ---
 
