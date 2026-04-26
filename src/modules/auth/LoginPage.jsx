@@ -334,26 +334,30 @@ function UserSelectStep() {
     e.preventDefault()
     setSuperError('')
 
-    // Verificación local del código — el código ES la autenticación
-    if (superPin !== '24457713') {
-      setSuperError('Código incorrecto')
-      setSuperPin('')
-      return
-    }
-
     try {
-      // Intentar setear app_metadata en el backend (best-effort)
       const { data: sessionData } = await supabase.auth.getSession()
       const token = sessionData?.session?.access_token
-      if (token) {
-        fetch(apiUrl('/api/auth/super-admin'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ code: superPin }),
-        }).then(() => supabase.auth.refreshSession()).catch(() => {})
+      if (!token) {
+        setSuperError('No hay sesión activa. Inicia sesión primero.')
+        return
       }
 
-      // Setear perfil sintético de desarrollador (no depende del backend)
+      // El backend valida el código — nunca viaja en el bundle del cliente
+      const res = await fetch(apiUrl('/api/auth/super-admin'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ code: superPin }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        setSuperError(err.error || 'Código incorrecto')
+        setSuperPin('')
+        return
+      }
+
+      await supabase.auth.refreshSession()
+
       const store = useAuthStore.getState()
       useAuthStore.setState({
         perfil: {

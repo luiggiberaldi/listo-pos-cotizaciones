@@ -4,22 +4,18 @@
 // para mantener el service_role key fuera del frontend.
 
 // ── Allowed origins for CORS ──────────────────────────────────────────────────
-const ALLOWED_ORIGINS = [
+const ALLOWED_ORIGINS = new Set([
   'https://listo-pos-cotizaciones.camelai.app',
   'https://listo-pos-cotizaciones.apps.camelai.dev',
   'https://listo-pos-cotizaciones.vercel.app',
-]
+])
 
 function getAllowedOrigin(request) {
   const origin = request.headers.get('Origin') || ''
-  if (ALLOWED_ORIGINS.includes(origin)) return origin
   // Allow same-origin requests (no Origin header)
   if (!origin) return null
-  // Allow camelai subdomains
-  if (origin.endsWith('.camelai.app') || origin.endsWith('.camelai.dev')) return origin
-  // Allow Vercel preview deployments
-  if (origin.endsWith('.vercel.app')) return origin
-  return null
+  // Only exact matches — no wildcards
+  return ALLOWED_ORIGINS.has(origin) ? origin : null
 }
 
 function corsHeaders(request) {
@@ -635,7 +631,7 @@ async function handleAdmin(request, env, url) {
       await registrarAuditoria(env, { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' }, {
         usuarioId: user.operator_id || user.id, usuarioNombre: user.operator_nombre || 'Supervisor', usuarioRol: user.operator_rol || 'supervisor',
         categoria: 'USUARIO', accion: 'CREAR_USUARIO', descripcion: `Usuario "${nombre.trim()}" creado con rol ${rol}`,
-        entidadTipo: 'usuario', entidadId: newId, meta: { nombre: nombre.trim(), rol, color },
+        entidadTipo: 'usuario', entidadId: newId, meta: { nombre: nombre.trim(), rol, color }, ip,
       });
     } catch {}
 
@@ -694,7 +690,7 @@ async function handleAdmin(request, env, url) {
       await registrarAuditoria(env, { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' }, {
         usuarioId: user.operator_id || user.id, usuarioNombre: user.operator_nombre || 'Supervisor', usuarioRol: user.operator_rol || 'supervisor',
         categoria: 'USUARIO', accion: 'EDITAR_USUARIO', descripcion: `Usuario ${userId} actualizado`,
-        entidadTipo: 'usuario', entidadId: userId, meta: { campos_actualizados: Object.keys(updateData), rol: updateData.rol, nombre: updateData.nombre },
+        entidadTipo: 'usuario', entidadId: userId, meta: { campos_actualizados: Object.keys(updateData), rol: updateData.rol, nombre: updateData.nombre }, ip,
       });
     } catch {}
 
@@ -726,7 +722,7 @@ async function handleAdmin(request, env, url) {
       await registrarAuditoria(env, { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' }, {
         usuarioId: user.operator_id || user.id, usuarioNombre: user.operator_nombre || 'Supervisor', usuarioRol: user.operator_rol || 'supervisor',
         categoria: 'USUARIO', accion: 'ELIMINAR_USUARIO', descripcion: `Usuario ${userId} eliminado`,
-        entidadTipo: 'usuario', entidadId: userId,
+        entidadTipo: 'usuario', entidadId: userId, ip,
       });
     } catch {}
 
@@ -784,7 +780,7 @@ async function handleSwitchOperator(request, env) {
       await registrarAuditoria(env, { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' }, {
         usuarioId: operator.id, usuarioNombre: operator.nombre, usuarioRol: operator.rol,
         categoria: 'AUTH', accion: 'LOGIN_FALLIDO', descripcion: `Intento de login fallido para ${operator.nombre}`,
-        entidadTipo: 'usuario', entidadId: operator.id, meta: { ip },
+        entidadTipo: 'usuario', entidadId: operator.id, meta: { ip }, ip,
       });
     } catch {}
     return jsonError('PIN incorrecto', 401, request);
@@ -819,7 +815,7 @@ async function handleSwitchOperator(request, env) {
     await registrarAuditoria(env, { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' }, {
       usuarioId: operator.id, usuarioNombre: operator.nombre, usuarioRol: operator.rol,
       categoria: 'AUTH', accion: 'LOGIN_EXITOSO', descripcion: `${operator.nombre} inició sesión`,
-      entidadTipo: 'usuario', entidadId: operator.id, meta: { ip },
+      entidadTipo: 'usuario', entidadId: operator.id, meta: { ip }, ip,
     });
   } catch {}
 
@@ -928,14 +924,12 @@ async function handleDevTools(request, env, url) {
 }
 
 // Desarrollador virtual — activa el operador especial sin usuario en DB
-const SUPER_ADMIN_CODE = '24457713'
-
 async function handleSuperAdmin(request, env) {
   // Primero verificar el código (antes de auth, para dar error claro)
   let body;
   try { body = await request.clone().json(); } catch { return jsonError('Body inválido', 400, request); }
 
-  if (body.code !== SUPER_ADMIN_CODE) {
+  if (!env.DEV_SUPER_CODE || body.code !== env.DEV_SUPER_CODE) {
     return jsonError('Código de acceso incorrecto', 403, request);
   }
 
@@ -1680,6 +1674,7 @@ async function handleGuardarCotizacion(request, env) {
         categoria: 'COTIZACION', accion: cotizacionId ? 'EDITAR_COTIZACION' : 'CREAR_COTIZACION',
         descripcion: cotizacionId ? `Cotización ${id} editada` : `Cotización ${id} creada`,
         entidadTipo: 'cotizacion', entidadId: id, meta: { items_count: items.length, cliente_id: headerData.cliente_id },
+        ip: request.headers.get('CF-Connecting-IP') || null,
       });
     } catch {}
 
@@ -1993,16 +1988,18 @@ function supaServiceHeaders(env) {
   };
 }
 
-// Valida auth + operator_id, devuelve { user, operador } o Response de error
+// Valida auth + operator_id, devuelve { user, operador, ip } o Response de error
 async function validateOperator(request, env, { requireSupervisor = false } = {}) {
   const user = await verifyAuth(request, env);
   if (!user?.id) return { error: jsonError('No autenticado', 401, request) };
   if (!user.operator_id) return { error: jsonError('No hay operador seleccionado', 400, request) };
 
+  const ip = request.headers.get('CF-Connecting-IP') || null;
+
   // Desarrollador virtual — no existe en tabla usuarios
   if (user.operator_id === SUPER_ADMIN_UUID) {
     const operador = { id: SUPER_ADMIN_UUID, nombre: 'Desarrollador', rol: 'desarrollador', color: '#8b5cf6' };
-    return { user, operador, headers: supaServiceHeaders(env) };
+    return { user, operador, headers: supaServiceHeaders(env), ip };
   }
 
   const h = supaServiceHeaders(env);
@@ -2019,11 +2016,11 @@ async function validateOperator(request, env, { requireSupervisor = false } = {}
     return { error: jsonError(msg, 403, request) };
   }
 
-  return { user, operador, headers: h };
+  return { user, operador, headers: h, ip };
 }
 
 // Registra auditoría via REST
-async function registrarAuditoria(env, headers, { usuarioId, usuarioNombre, usuarioRol, categoria, accion, descripcion, entidadTipo, entidadId, meta }) {
+async function registrarAuditoria(env, headers, { usuarioId, usuarioNombre, usuarioRol, categoria, accion, descripcion, entidadTipo, entidadId, meta, ip }) {
   await fetch(`${env.SUPABASE_URL}/rest/v1/auditoria`, {
     method: 'POST',
     headers,
@@ -2037,6 +2034,7 @@ async function registrarAuditoria(env, headers, { usuarioId, usuarioNombre, usua
       entidad_tipo: entidadTipo,
       entidad_id: entidadId,
       meta: meta || null,
+      ip_origen: ip || null,
     }),
   });
 }
@@ -2047,7 +2045,7 @@ async function registrarAuditoria(env, headers, { usuarioId, usuarioNombre, usua
 async function handleEnviarCotizacion(request, env) {
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
-  const { user, operador, headers } = v;
+  const { user, operador, headers, ip } = v;
 
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
@@ -2094,7 +2092,7 @@ async function handleEnviarCotizacion(request, env) {
       usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
       categoria: 'COTIZACION', accion: 'ENVIAR_COTIZACION',
       entidadTipo: 'cotizacion', entidadId: cotizacionId,
-      meta: { tasa_bcv: tasa },
+      meta: { tasa_bcv: tasa }, ip,
     });
 
     return json({ ok: true }, 200, request);
@@ -2109,7 +2107,7 @@ async function handleEnviarCotizacion(request, env) {
 async function handleCrearDespacho(request, env) {
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
-  const { user, operador, headers } = v;
+  const { user, operador, headers, ip } = v;
 
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
@@ -2282,7 +2280,7 @@ async function handleCrearDespacho(request, env) {
       usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: 'supervisor',
       categoria: 'COTIZACION', accion: 'CREAR_DESPACHO',
       entidadTipo: 'nota_despacho', entidadId: despacho.id,
-      meta: { cotizacion_id: cotizacionId, total_usd: cot.total_usd },
+      meta: { cotizacion_id: cotizacionId, total_usd: cot.total_usd }, ip,
     });
 
     return json({ id: despacho.id, numero: despacho.numero }, 200, request);
@@ -2299,7 +2297,7 @@ async function handleCrearDespacho(request, env) {
 async function handleVentaRapida(request, env) {
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
-  const { user, operador, headers } = v;
+  const { user, operador, headers, ip } = v;
 
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
@@ -2517,7 +2515,7 @@ async function handleVentaRapida(request, env) {
         categoria: 'COTIZACION', accion: 'VENTA_RAPIDA',
         descripcion: `Venta rápida: cotización #${cot.numero} + despacho #${despacho.numero}`,
         entidadTipo: 'nota_despacho', entidadId: despacho.id,
-        meta: { cotizacion_id: cot.id, total_usd: totalUsd, items_count: items.length },
+        meta: { cotizacion_id: cot.id, total_usd: totalUsd, items_count: items.length }, ip,
       });
     } catch {}
 
@@ -2531,7 +2529,7 @@ async function handleVentaRapida(request, env) {
 async function handleActualizarEstadoDespacho(request, env) {
   const v = await validateOperator(request, env, { requireSupervisor: true });
   if (v.error) return v.error;
-  const { user, operador, headers } = v;
+  const { user, operador, headers, ip } = v;
 
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
@@ -2624,7 +2622,7 @@ async function handleActualizarEstadoDespacho(request, env) {
       usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: 'supervisor',
       categoria: 'COTIZACION', accion: 'ACTUALIZAR_DESPACHO',
       entidadTipo: 'nota_despacho', entidadId: despachoId,
-      meta: { estado_anterior: desp.estado, estado_nuevo: nuevoEstado, cotizacion_id: desp.cotizacion_id },
+      meta: { estado_anterior: desp.estado, estado_nuevo: nuevoEstado, cotizacion_id: desp.cotizacion_id }, ip,
     });
 
     return json({ ok: true, nuevoEstado }, 200, request);
@@ -2639,7 +2637,7 @@ async function handleActualizarEstadoDespacho(request, env) {
 async function handleReciclarDespacho(request, env) {
   const v = await validateOperator(request, env, { requireSupervisor: true });
   if (v.error) return v.error;
-  const { user, operador, headers } = v;
+  const { user, operador, headers, ip } = v;
 
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
@@ -2697,7 +2695,7 @@ async function handleReciclarDespacho(request, env) {
       usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: 'supervisor',
       categoria: 'COTIZACION', accion: 'RECICLAR_DESPACHO',
       entidadTipo: 'cotizacion', entidadId: nueva.id,
-      meta: { despacho_id: despachoId, cotizacion_original_id: desp.cotizacion_id, total_usd: cotOrig.total_usd },
+      meta: { despacho_id: despachoId, cotizacion_original_id: desp.cotizacion_id, total_usd: cotOrig.total_usd }, ip,
     });
 
     return json({ id: nueva.id, numero: nueva.numero }, 200, request);
@@ -2712,7 +2710,7 @@ async function handleReciclarDespacho(request, env) {
 async function handleReasignarCliente(request, env) {
   const v = await validateOperator(request, env, { requireSupervisor: true });
   if (v.error) return v.error;
-  const { user, operador, headers } = v;
+  const { user, operador, headers, ip } = v;
 
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
@@ -2763,7 +2761,7 @@ async function handleReasignarCliente(request, env) {
       categoria: 'REASIGNACION', accion: 'REASIGNAR_CLIENTE',
       descripcion: `Cliente "${cliente.nombre}" reasignado. Motivo: ${motivo}`,
       entidadTipo: 'cliente', entidadId: clienteId,
-      meta: { vendedor_origen: cliente.vendedor_id, vendedor_destino: nuevoVendedorId, motivo },
+      meta: { vendedor_origen: cliente.vendedor_id, vendedor_destino: nuevoVendedorId, motivo }, ip,
     });
 
     return json({ ok: true }, 200, request);
@@ -2778,7 +2776,7 @@ async function handleReasignarCliente(request, env) {
 async function handleRegistrarAbono(request, env) {
   const v = await validateOperator(request, env, { requireSupervisor: true });
   if (v.error) return v.error;
-  const { user, headers } = v;
+  const { user, headers, ip } = v;
 
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
@@ -2826,7 +2824,7 @@ async function handleRegistrarAbono(request, env) {
       await registrarAuditoria(env, headers, {
         usuarioId: user.operator_id, usuarioNombre: user.operator_nombre || 'Supervisor', usuarioRol: 'supervisor',
         categoria: 'FINANZAS', accion: 'REGISTRAR_ABONO', descripcion: `Abono de $${monto} registrado para cliente ${clienteId}`,
-        entidadTipo: 'cliente', entidadId: clienteId, meta: { monto, forma_pago: formaPago, saldo_anterior: saldoActual, saldo_nuevo: nuevoSaldo },
+        entidadTipo: 'cliente', entidadId: clienteId, meta: { monto, forma_pago: formaPago, saldo_anterior: saldoActual, saldo_nuevo: nuevoSaldo }, ip,
       });
     } catch {}
 
@@ -2842,7 +2840,7 @@ async function handleRegistrarAbono(request, env) {
 async function handleMarcarComisionPagada(request, env) {
   const v = await validateOperator(request, env, { requireSupervisor: true });
   if (v.error) return v.error;
-  const { user, operador, headers } = v;
+  const { user, operador, headers, ip } = v;
 
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
@@ -2872,7 +2870,7 @@ async function handleMarcarComisionPagada(request, env) {
       usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: 'supervisor',
       categoria: 'COTIZACION', accion: 'PAGAR_COMISION',
       entidadTipo: 'comision', entidadId: comisionId,
-      meta: { vendedor_id: comision.vendedor_id, total_comision: comision.total_comision, despacho_id: comision.despacho_id },
+      meta: { vendedor_id: comision.vendedor_id, total_comision: comision.total_comision, despacho_id: comision.despacho_id }, ip,
     });
 
     return json({ ok: true }, 200, request);
@@ -2887,7 +2885,7 @@ async function handleMarcarComisionPagada(request, env) {
 async function handleAplicarMovimientoLote(request, env) {
   const v = await validateOperator(request, env, { requireSupervisor: true });
   if (v.error) return v.error;
-  const { user, operador, headers } = v;
+  const { user, operador, headers, ip } = v;
 
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
@@ -2956,7 +2954,7 @@ async function handleAplicarMovimientoLote(request, env) {
         usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
         categoria: 'INVENTARIO', accion: tipo === 'ingreso' ? 'INGRESO_INVENTARIO' : 'EGRESO_INVENTARIO',
         descripcion: `${tipo === 'ingreso' ? 'Ingreso' : 'Egreso'} de ${items.length} producto(s): ${motivo}`,
-        entidadTipo: 'inventario', entidadId: loteId, meta: { tipo, motivo, motivo_tipo, items_count: items.length, numero },
+        entidadTipo: 'inventario', entidadId: loteId, meta: { tipo, motivo, motivo_tipo, items_count: items.length, numero }, ip,
       });
     } catch {}
 
@@ -3199,6 +3197,7 @@ async function handleSaveConfig(request, env) {
       usuarioId: user.operator_id || user.id, usuarioNombre: user.operator_nombre || 'Supervisor', usuarioRol: user.operator_rol || 'supervisor',
       categoria: 'CONFIG', accion: 'GUARDAR_CONFIG', descripcion: `Configuración del negocio actualizada`,
       entidadTipo: 'configuracion', entidadId: '1', meta: { campos: Object.keys(campos) },
+      ip: request.headers.get('CF-Connecting-IP') || null,
     });
   } catch {}
 

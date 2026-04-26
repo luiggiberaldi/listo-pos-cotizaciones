@@ -34,3 +34,5 @@ frames/
 
 # Scripts internos (contienen credenciales y datos sensibles)
 scripts/
+.env.production
+.env.bak
