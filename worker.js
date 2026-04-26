@@ -2276,14 +2276,6 @@ async function handleCrearDespacho(request, env) {
       });
     }
 
-    // 9. Calcular comisión (usar RPC con service key — esta función no usa get_operador_id)
-    try {
-      await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcular_comision_despacho`, {
-        method: 'POST', headers,
-        body: JSON.stringify({ p_despacho_id: despacho.id }),
-      });
-    } catch { /* comisión no es crítica */ }
-
     // 10. Auditoría
     await registrarAuditoria(env, headers, {
       usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: 'supervisor',
@@ -2616,8 +2608,8 @@ async function handleActualizarEstadoDespacho(request, env) {
       body: JSON.stringify(updateData),
     });
 
-    // 5. Si entregada, calcular comisión
-    if (nuevoEstado === 'entregada') {
+    // 5. Si despachada o entregada, calcular comisión
+    if (nuevoEstado === 'despachada' || nuevoEstado === 'entregada') {
       try {
         await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcular_comision_despacho`, {
           method: 'POST', headers,
