@@ -21,10 +21,23 @@ function traducirError(mensaje) {
   return 'Error al iniciar sesión. Intenta de nuevo'
 }
 
-// ─── Helper: obtener token de sesión actual ───────────────────────────────────
+// ─── Helper: obtener token de sesión actual (con refresh si está expirado) ────
 async function getAccessToken() {
   const { data } = await supabase.auth.getSession()
-  return data?.session?.access_token ?? null
+  const token = data?.session?.access_token
+  if (!token) return null
+
+  // Verificar si el token está próximo a expirar (menos de 60s de vida)
+  const exp = data.session.expires_at // epoch en segundos
+  if (exp && exp - Math.floor(Date.now() / 1000) < 60) {
+    try {
+      const { data: refreshed } = await supabase.auth.refreshSession()
+      return refreshed?.session?.access_token ?? token
+    } catch {
+      return token // usar el que hay si falla el refresh
+    }
+  }
+  return token
 }
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -80,13 +93,26 @@ const useAuthStore = create((set, get) => ({
               set({ user: session.user })
               const opId = session.user.app_metadata?.operator_id
               console.log('[AUTH] operator_id en metadata:', opId)
-              console.log('[AUTH] cargando perfil...')
-              const perfilPromise = get()._cargarPerfil(session.user)
-              const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('timeout')), 3000)
-              )
-              await Promise.race([perfilPromise, timeoutPromise])
-              console.log('[AUTH] perfil cargado OK, perfil:', !!get().perfil)
+              if (opId) {
+                // Refrescar JWT si está próximo a expirar antes de cargar perfil
+                const exp = session.expires_at
+                if (exp && exp - Math.floor(Date.now() / 1000) < 120) {
+                  console.log('[AUTH] JWT próximo a expirar, refrescando...')
+                  try {
+                    const { data: refreshed } = await supabase.auth.refreshSession()
+                    if (refreshed?.session?.user) {
+                      set({ user: refreshed.session.user })
+                    }
+                  } catch (e) {
+                    console.log('[AUTH] refresh falló, usando sesión actual:', e.message)
+                  }
+                }
+                console.log('[AUTH] cargando perfil...')
+                await get()._cargarPerfil(session.user)
+                console.log('[AUTH] perfil cargado OK, perfil:', !!get().perfil)
+              } else {
+                console.log('[AUTH] sin operator_id, esperando selección')
+              }
             } else {
               console.log('[AUTH] INITIAL_SESSION sin user (no hay sesión)')
             }

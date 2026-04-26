@@ -1398,6 +1398,35 @@ Para evitar que este error se repita, se debería implementar una de estas estra
 ### Errores / Bloqueantes
 - El error se repite cada vez que hay un deploy con cambios en chunks JS y el usuario no limpia su cache/SW
 
+## SESIÓN 16 — 26/04/2026 — Fix: Race condition de autenticación al recargar
+
+### Síntoma
+
+Al recargar la página (F5), a veces la app muestra la pantalla de selección de operador en vez de ir directo al perfil activo. Al intentar ingresar el PIN, muestra "PIN incorrecto". Pero si se recarga otra vez con F5, entra directamente al perfil correcto sin pedir PIN.
+
+### Causa raíz (doble)
+
+**1. Timeout agresivo de 3s en `_cargarPerfil` durante INITIAL_SESSION:**
+En `useAuthStore.js`, el handler de `INITIAL_SESSION` usaba `Promise.race` con un timeout de 3000ms para cargar el perfil del operador. Si Supabase respondía lento (red móvil, latencia), el timeout ganaba la carrera y se seteaba `initialized=true` con `perfil=null`. Esto hacía que `LoginPage` mostrara la pantalla de selección de operador prematuramente.
+
+**2. `getAccessToken()` devolvía JWT cacheado/expirado:**
+La función usaba `supabase.auth.getSession()` que retorna el JWT del cache local sin verificar si está expirado. Cuando el usuario intentaba ingresar PIN en la pantalla prematura, `switchOperator()` enviaba un JWT vencido al Worker. El Worker rechazaba la request → error genérico "PIN incorrecto".
+
+### Solución implementada
+
+**Fix 1 — Eliminar el timeout interno de 3s:**
+Se removió el `Promise.race` con timeout de 3s. Ahora `_cargarPerfil()` se ejecuta sin límite de tiempo artificialmente bajo. El timeout externo de 8s (para sesiones con localStorage) sigue actuando como red de seguridad.
+
+**Fix 2 — Refresh proactivo de JWT en INITIAL_SESSION:**
+Antes de cargar perfil, si el JWT tiene menos de 120s de vida, se ejecuta `refreshSession()` para obtener un token fresco. Esto evita que requests posteriores (como switchOperator) fallen por JWT expirado.
+
+**Fix 3 — `getAccessToken()` con refresh automático:**
+La función ahora verifica `expires_at` del JWT. Si quedan menos de 60s, ejecuta `refreshSession()` automáticamente antes de devolver el token. Fallback: si el refresh falla, devuelve el token existente.
+
+### Archivos modificados
+
+- `src/store/useAuthStore.js` — `getAccessToken()`, `initialize()` → handler INITIAL_SESSION
+
 ---
 
 ## GLOSARIO
