@@ -133,16 +133,21 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     }
   }
 
-  // Helper: imprimir PDF blob (PC: iframe oculto + print dialog, Móvil: descarga directa)
+  // Helper: imprimir PDF blob (abre diálogo de impresión en PC y móvil)
   function printOrDownloadPdf(blob, filename) {
     const url = URL.createObjectURL(blob)
     const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
     if (isMobile) {
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filename
-      a.click()
-      setTimeout(() => URL.revokeObjectURL(url), 5000)
+      // Abrir PDF en nueva pestaña — el visor nativo permite imprimir/compartir
+      const w = window.open(url, '_blank')
+      if (!w) {
+        // Si el popup fue bloqueado, descargar como fallback
+        const a = document.createElement('a')
+        a.href = url
+        a.download = filename
+        a.click()
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 60000)
     } else {
       const iframe = document.createElement('iframe')
       iframe.style.position = 'fixed'
