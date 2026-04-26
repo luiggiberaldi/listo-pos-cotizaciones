@@ -933,24 +933,23 @@ function SectionH3({ icon: Icon, children }) {
 // Inspirado en PreciosAlDia: FAB + bottom sheet en móvil, panel lateral en desktop
 function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente, onAnterior, preciosMap = {} }) {
   const [sheetOpen, setSheetOpen] = useState(false)
+  const fabRef = useRef(null)
   const swipeStartY = useRef(null)
 
-  function handleTouchStart(e) {
-    swipeStartY.current = e.touches[0].clientY
+  // Swipe-up usando Pointer Events + setPointerCapture
+  // Evita que el browser robe el gesto para scroll de página
+  const onPointerDown = (e) => {
+    swipeStartY.current = e.clientY
+    e.currentTarget.setPointerCapture(e.pointerId)
   }
-
-  function handleTouchMove(e) {
+  const onPointerMove = (e) => {
     if (swipeStartY.current === null) return
-    const dy = swipeStartY.current - e.touches[0].clientY
-    if (dy > 30) {
+    if (swipeStartY.current - e.clientY > 30) {
       swipeStartY.current = null
       setSheetOpen(true)
     }
   }
-
-  function handleTouchEnd() {
-    swipeStartY.current = null
-  }
+  const onPointerUp = () => { swipeStartY.current = null }
 
   const totalItems = items.reduce((s, it) => s + it.cantidad, 0)
 
@@ -1069,10 +1068,11 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
         {/* FAB: solo visible cuando hay items y el sheet está cerrado */}
         {items.length > 0 && !sheetOpen && (
           <button type="button"
+            ref={fabRef}
             onClick={() => setSheetOpen(true)}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
             className="fixed bottom-20 left-3 right-3 z-[98] p-3.5 rounded-2xl shadow-xl flex items-center justify-between active:scale-[0.97] transition-all md:bottom-4"
             style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)', boxShadow: '0 8px 30px rgba(27,54,93,0.35)' }}>
             <div className="flex items-center gap-3">
