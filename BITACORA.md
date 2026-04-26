@@ -1261,17 +1261,69 @@ Desktop (lg+): Dos columnas
    - Estado vacío con icono y mensaje
 5. **Mobile wrapper**: FAB + bottom sheet + modal de cantidad envueltos en `<div className="lg:hidden">`
 
-### Nota sobre error 500 en switch-operator (Vercel) — RESUELTO
+### Nota sobre error 500 en switch-operator (Vercel) — RESUELTO (26/04/2026)
+
+**Síntoma**: POST `/api/auth/switch-operator` retornaba 500 desde `vercel.app`. Funcionaba correctamente en camelAI.
+
 **Causa raíz**: `wrangler.jsonc` tenía placeholders vacíos (`"SUPABASE_SERVICE_KEY": ""`, etc.) en el bloque `vars`. Cada vez que GitHub Actions ejecutaba `wrangler deploy`, estos strings vacíos **sobreescribían** los secrets cifrados del Cloudflare Dashboard. Resultado: el worker de producción (`luigistorelogistics.workers.dev`) operaba sin `SUPABASE_SERVICE_KEY`, causando 500 en cualquier operación que requiriera acceso admin a Supabase.
 
 **Por qué funcionaba en camelAI**: `deploy.sh` inyectaba los valores reales desde `.dev.vars` antes del deploy.
 
-**Fix aplicado**:
-1. Eliminados los placeholders vacíos de `wrangler.jsonc` — solo quedan vars públicas
-2. `deploy.sh` actualizado para **agregar** las vars secretas (en vez de reemplazar strings vacíos)
-3. Los secrets de producción se manejan exclusivamente via Cloudflare Dashboard
+**Diagnóstico**: Se creó endpoint temporal `/api/dev/check-secrets` que reportó:
+```
+Producción:  SUPABASE_SERVICE_KEY_len: 0   ← vacío (destruido)
+camelAI:     SUPABASE_SERVICE_KEY_len: 219 ← correcto
+```
 
-**REGLA**: Nunca poner `"SECRET_KEY": ""` en `wrangler.jsonc`. Las vars vacías tienen prioridad sobre secrets del Dashboard.
+**Fix aplicado (3 pasos)**:
+1. **wrangler.jsonc**: Eliminados los 5 placeholders vacíos (`GROQ_KEYS_A/B/C`, `SUPABASE_SERVICE_KEY`, `VAPID_PRIVATE_KEY`). Solo quedan vars públicas (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `VAPID_PUBLIC_KEY`, `DEV_SUPER_CODE`).
+2. **deploy.sh**: Reescrito para **agregar** las vars secretas al jsonc dinámicamente (en vez de reemplazar strings vacíos que ya no existen).
+3. **GitHub Actions** (`deploy-worker.yml`): Actualizado con paso "Inyectar secrets en wrangler.jsonc" que lee de GitHub Secrets (`GROQ_KEYS_A/B/C`, `SUPABASE_SERVICE_KEY`, `VAPID_PRIVATE_KEY`) y los inyecta antes del `wrangler deploy`.
+4. **Cloudflare Dashboard**: Se re-ingresaron manualmente los 5 secrets que habían sido destruidos por deploys anteriores. Verificado con endpoint de diagnóstico — todos reportaron longitudes correctas.
+
+**Secrets necesarios en GitHub Actions** (Settings → Secrets → Actions):
+| Secret | Descripción |
+|---|---|
+| `CF_API_TOKEN` | Token de API de Cloudflare (ya existía) |
+| `CF_ACCOUNT_ID` | ID de cuenta Cloudflare (ya existía) |
+| `VITE_SUPABASE_URL` | URL de Supabase para build frontend (ya existía) |
+| `VITE_SUPABASE_ANON_KEY` | Anon key para build frontend (ya existía) |
+| `GROQ_KEYS_A` | Pool A de API keys de Groq (5 keys, separadas por coma) |
+| `GROQ_KEYS_B` | Pool B de API keys de Groq |
+| `GROQ_KEYS_C` | Pool C de API keys de Groq |
+| `SUPABASE_SERVICE_KEY` | JWT service_role de Supabase |
+| `VAPID_PRIVATE_KEY` | Clave privada VAPID para push notifications |
+
+**REGLAS aprendidas**:
+1. **Nunca** poner `"SECRET_KEY": ""` en `wrangler.jsonc` — las vars vacías sobreescriben secrets del Dashboard
+2. Los secrets deben estar en **tres lugares**: Cloudflare Dashboard (backup), GitHub Secrets (para GitHub Actions), y `.dev.vars` local (para `deploy.sh` a camelAI)
+3. Siempre verificar con endpoint de diagnóstico después de cambiar la estrategia de secrets
+
+### Flujo de deploy actualizado (post-fix)
+```
+┌─────────────────────────────────────────────────────────┐
+│ PRODUCCIÓN (Vercel → luigistorelogistics.workers.dev)   │
+│                                                          │
+│ 1. git push main                                         │
+│ 2. GitHub Actions:                                       │
+│    a. bun install + bun run build                        │
+│    b. Node script inyecta secrets de GitHub Secrets      │
+│       en wrangler.jsonc temporalmente                    │
+│    c. wrangler deploy --config wrangler.jsonc            │
+│ 3. Vercel: build frontend + rewrites /api/* al worker    │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│ DESARROLLO (camelAI → dispatch namespace chiridion)      │
+│                                                          │
+│ 1. bash deploy.sh                                        │
+│    a. source .dev.vars                                   │
+│    b. Node script inyecta secrets en wrangler.jsonc      │
+│    c. bun run build                                      │
+│    d. wrangler deploy --dispatch-namespace chiridion      │
+│    e. Restaura wrangler.jsonc original                   │
+└─────────────────────────────────────────────────────────┘
+```
 
 ---
 
