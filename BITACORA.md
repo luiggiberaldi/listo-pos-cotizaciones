@@ -1234,6 +1234,38 @@ NO en `wrangler.jsonc`. Los secrets en `wrangler.jsonc` quedan expuestos en el r
 
 ---
 
+## RESPONSIVIDAD DESKTOP — VENTA RÁPIDA (26/04/2026)
+
+### Problema
+VentaRapidaView solo tenía layout móvil: wizard de columna única con FAB + bottom sheet para el carrito. En pantallas desktop (lg+) se veía apretado y no aprovechaba el espacio horizontal.
+
+### Solución
+Se copió el patrón de dos columnas de `CotizacionBuilder.jsx` al Step 1 (Productos) de `VentaRapidaView.jsx`:
+
+```
+Mobile (<lg): Sin cambios — FAB flotante + bottom sheet deslizable
+Desktop (lg+): Dos columnas
+  ├─ Izquierda: Catálogo de productos (flex-1)
+  └─ Derecha: Carrito sticky (w-80, sticky top-[73px])
+```
+
+### Cambios en `src/views/VentaRapidaView.jsx`
+
+1. **Contenedor padding**: `pb-24` → `pb-24 lg:pb-4` (sin padding extra en desktop)
+2. **Split layout wrapper**: `<div className="flex flex-col lg:flex-row lg:gap-4">` envuelve catálogo + carrito
+3. **Columna izquierda**: `<div className="flex-1 min-w-0">` contiene grid/lista de productos
+4. **Columna derecha (desktop)**: `<div className="hidden lg:flex w-80 shrink-0 lg:sticky lg:top-[73px] ...">` carrito con:
+   - Header con icono + contador de items
+   - Lista scrollable de items con stepper de cantidad
+   - Footer con subtotal (USD + Bs) y botón "Siguiente"
+   - Estado vacío con icono y mensaje
+5. **Mobile wrapper**: FAB + bottom sheet + modal de cantidad envueltos en `<div className="lg:hidden">`
+
+### Nota sobre error 500 en switch-operator (Vercel)
+Se reportó un 500 transitorio en `/api/auth/switch-operator` desde Vercel. Verificación directa contra ambos endpoints (Cloudflare y Vercel proxy) retorna 401 correctamente (no autenticado). El error fue transitorio — probablemente durante propagación del deploy.
+
+---
+
 ## GLOSARIO
 
 | Término | Significado |
