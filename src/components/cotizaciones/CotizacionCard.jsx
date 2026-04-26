@@ -94,6 +94,8 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
 
   async function imprimirCotizacion() {
     setPrintLoading(true)
+    // Abrir ventana INMEDIATAMENTE en el click para evitar bloqueo de popup
+    const printWindow = window.open('about:blank', '_blank')
     try {
       const [{ generarPDF }, itemsRes, clienteData, vendedorRes] = await Promise.all([
         import('../../services/pdf/cotizacionPDF'),
@@ -109,14 +111,22 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
       }
       const blob = await generarPDF({ cotizacion: cotConDatos, items: itemsRes.data ?? [], config, monedaPDF: monedaPdf, tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio, returnBlob: true })
       const url = URL.createObjectURL(blob)
-      const printWindow = window.open(url)
-      if (printWindow) {
+      if (printWindow && !printWindow.closed) {
+        printWindow.location.href = url
         printWindow.addEventListener('load', () => {
           printWindow.print()
           URL.revokeObjectURL(url)
         })
+      } else {
+        // Fallback: descargar si popup fue bloqueado
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${numDisplay.replace(/\s+/g, '_')}.pdf`
+        a.click()
+        URL.revokeObjectURL(url)
       }
     } catch (err) {
+      if (printWindow && !printWindow.closed) printWindow.close()
       showToast('Error al imprimir: ' + (err.message || 'Error desconocido'), 'error')
     } finally {
       setPrintLoading(false)

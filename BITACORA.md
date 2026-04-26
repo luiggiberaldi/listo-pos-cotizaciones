@@ -589,6 +589,7 @@ Repetido 4 veces (React Query reintenta 3 veces). La página mostraba "Error al 
 | 1 | 14/04/2026 | S8 | 400 Bad Request en query de clientes | `tipo_cliente` seleccionado en hook pero columna no existía en BD | Ejecutar migration 019 vía Supabase Management API | ✅ Resuelto |
 | 2 | 24/04/2026 | S10 | 401 Unauthorized en `/api/clientes` desde Vercel | Worker en workers.dev desactualizado + Vercel rewrites no reenvían Authorization header | Apuntar frontend a Worker de camelai + GitHub Actions para auto-deploy | ✅ Resuelto |
 | 3 | 25/04/2026 | S11b | `referencia_pago` y `forma_pago_cliente` se guardaban pero no se mostraban en PDF ni detalle | Campos implementados en backend/hook pero no integrados en la UI de salida | Agregados al PDF, DetalleModal y DespachoCard | ✅ Resuelto |
+| 4 | 26/04/2026 | S15 | Chunks JS no cargan en Vercel: `Failed to fetch dynamically imported module` + `MIME type "text/html"` | Service Worker (PWA) cacheaba `index.html` viejo que referenciaba hashes de chunks que ya no existen en el servidor (ej: `CotizacionesView-DWqyXTdQ.js`, `useTransportistas-B9MZUd0X.js`) | Limpiar Service Worker + cache del navegador manualmente (ver solución completa abajo) | ⚠️ Recurrente |
 
 ---
 
@@ -1335,6 +1336,67 @@ camelAI:     SUPABASE_SERVICE_KEY_len: 219 ← correcto
 │ Secrets: .dev.vars (gitignored)                          │
 └─────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## SESIÓN 15 — 26/04/2026 — Error recurrente: chunks JS rotos por cache del Service Worker
+
+### Síntoma
+
+Al abrir la app en `https://listo-pos-cotizaciones.vercel.app`, la consola muestra:
+```
+useTransportistas-B9MZUd0X.js:1 Failed to load module script: Expected a JavaScript-or-Wasm module script
+but the server responded with a MIME type of "text/html". Strict MIME type checking is enforced for
+module scripts per HTML spec.
+
+TypeError: Failed to fetch dynamically imported module:
+https://listo-pos-cotizaciones.vercel.app/assets/CotizacionesView-DWqyXTdQ.js
+```
+
+La app queda en pantalla blanca o con error de carga al intentar navegar a cualquier vista (Cotizaciones, Transportistas, etc.).
+
+### Causa raíz
+
+**El Service Worker (PWA) cachea el `index.html` con hashes de chunks del build anterior.** Cuando Vercel despliega un nuevo build, los nombres de los chunks cambian (ej: `CotizacionesView-DWqyXTdQ.js` → `CotizacionesView-Cm27_ox_.js`). Pero el Service Worker sigue sirviendo el `index.html` viejo desde cache, que pide chunks que ya no existen en el servidor. El servidor devuelve el fallback HTML (SPA routing), y el browser lo rechaza por MIME type incorrecto (`text/html` en vez de `application/javascript`).
+
+**¿Por qué no se auto-actualiza?** El SW tiene `skipWaiting()` y `clients.claim()`, pero estos solo se ejecutan cuando el browser detecta un SW nuevo. Si el usuario tiene la pestaña abierta sin recargar, o la PWA está instalada, el SW viejo sigue activo indefinidamente sirviendo assets obsoletos.
+
+### Solución para el usuario (manual, por dispositivo)
+
+**Opción A — Hard refresh:**
+- PC: `Ctrl+Shift+R` (Windows/Linux) o `Cmd+Shift+R` (Mac)
+- Si no funciona, usar Opción B
+
+**Opción B — Limpiar Service Worker y cache (definitiva):**
+1. Abrir DevTools (F12)
+2. Ir a pestaña **Application**
+3. Panel izquierdo → **Service Workers** → marcar **"Update on reload"**
+4. Panel izquierdo → **Storage** → click **"Clear site data"** (marcar todo)
+5. Recargar la página
+
+**Opción C — Desde barra de dirección (Chrome):**
+1. Ir a `chrome://serviceworker-internals`
+2. Buscar `listo-pos-cotizaciones.vercel.app`
+3. Click **Unregister**
+4. Recargar la página
+
+### Solución preventiva (pendiente de implementar)
+
+Para evitar que este error se repita, se debería implementar una de estas estrategias:
+
+1. **Version check en el SW:** Al activarse, el SW compara su versión con la del servidor. Si hay mismatch, purga el cache y recarga.
+2. **Cache-busting en index.html:** Agregar un meta tag o query param con el hash del build.
+3. **Stale-while-revalidate para HTML:** El SW sirve el HTML viejo pero inmediatamente descarga el nuevo en background y notifica al usuario ("Hay una actualización disponible, recarga para aplicar").
+4. **No cachear index.html en el SW:** Solo cachear assets con hash (JS, CSS, imágenes). El `index.html` siempre se pide al servidor.
+
+### Acciones realizadas en esta sesión
+
+1. Sincronizado repo local con remote (`git pull` — 180+ commits por delante)
+2. Build y deploy a Cloudflare Workers (secundario) con código actualizado
+3. Documentado el error en bitácora y registro de errores
+
+### Errores / Bloqueantes
+- El error se repite cada vez que hay un deploy con cambios en chunks JS y el usuario no limpia su cache/SW
 
 ---
 

@@ -136,6 +136,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   async function imprimirDespacho() {
     setPrintLoading(true)
     setShowPrintMenu(false)
+    // Abrir ventana INMEDIATAMENTE en el click para evitar bloqueo de popup
+    const printWindow = window.open('about:blank', '_blank')
     try {
       const session = (await supabase.auth.getSession()).data.session
       const [{ generarDespachoPDF }, itemsRes, clienteData, vendedorRes, transportistaRes] = await Promise.all([
@@ -160,14 +162,22 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       }
       const blob = await generarDespachoPDF({ despacho: desConDatos, items: itemsRes.data ?? [], config, formaPago: despacho.forma_pago || '', monedaPDF: 'bs', tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio, returnBlob: true })
       const url = URL.createObjectURL(blob)
-      const printWindow = window.open(url)
-      if (printWindow) {
+      if (printWindow && !printWindow.closed) {
+        printWindow.location.href = url
         printWindow.addEventListener('load', () => {
           printWindow.print()
           URL.revokeObjectURL(url)
         })
+      } else {
+        // Fallback: descargar si popup fue bloqueado
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${numDisplay}-nota-entrega.pdf`
+        a.click()
+        URL.revokeObjectURL(url)
       }
     } catch (err) {
+      if (printWindow && !printWindow.closed) printWindow.close()
       showToast('Error al imprimir: ' + (err.message || 'Error desconocido'), 'error')
     } finally {
       setPrintLoading(false)
@@ -177,6 +187,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   async function imprimirOrdenDespacho() {
     setPrintLoading(true)
     setShowPrintMenu(false)
+    // Abrir ventana INMEDIATAMENTE en el click para evitar bloqueo de popup
+    const printWindow = window.open('about:blank', '_blank')
     try {
       const session = (await supabase.auth.getSession()).data.session
       const [{ generarOrdenDespachoPDF }, itemsRes, clienteData, vendedorRes, transportistaRes] = await Promise.all([
@@ -201,14 +213,22 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       }
       const blob = await generarOrdenDespachoPDF({ despacho: desConDatos, items: itemsRes.data ?? [], config, formaPago: despacho.forma_pago || '', monedaPDF: monedaPdf, tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio, returnBlob: true })
       const url = URL.createObjectURL(blob)
-      const printWindow = window.open(url)
-      if (printWindow) {
+      if (printWindow && !printWindow.closed) {
+        printWindow.location.href = url
         printWindow.addEventListener('load', () => {
           printWindow.print()
           URL.revokeObjectURL(url)
         })
+      } else {
+        // Fallback: descargar si popup fue bloqueado
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${numDisplay}-orden-despacho.pdf`
+        a.click()
+        URL.revokeObjectURL(url)
       }
     } catch (err) {
+      if (printWindow && !printWindow.closed) printWindow.close()
       showToast('Error al imprimir orden: ' + (err.message || 'Error desconocido'), 'error')
     } finally {
       setPrintLoading(false)
