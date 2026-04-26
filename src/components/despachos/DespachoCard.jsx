@@ -275,10 +275,10 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const confirmConfig = accionPendiente?.actionConfig || {}
 
   return (
-    <div className="group bg-white rounded-2xl border border-slate-200 hover:shadow-lg transition-all duration-200 flex flex-col" onClick={(e) => { if (e.target.closest('button') || e.target.closest('[data-no-click]')) return; setShowDetalle(true) }}>
+    <div className="group bg-white rounded-2xl border border-slate-200 hover:shadow-lg transition-all duration-200 overflow-hidden flex flex-col" onClick={(e) => { if (e.target.closest('button') || e.target.closest('[data-no-click]')) return; setShowDetalle(true) }}>
 
       {/* ── Header strip con color del vendedor ── */}
-      <div className="relative h-16 shrink-0 flex items-end justify-between px-4 pb-2 rounded-t-2xl"
+      <div className="relative h-[4.5rem] shrink-0 flex items-end justify-between px-4 pb-2"
         title={despacho.vendedor?.nombre ? `Vendedor: ${despacho.vendedor.nombre}` : undefined}
         style={{ background: `linear-gradient(135deg, ${vendedorColor}ee 0%, ${vendedorColor}99 100%)` }}>
         <div className="absolute inset-0 opacity-10"
@@ -286,9 +286,9 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)',
             backgroundSize: '12px 12px',
           }} />
-        <div className="relative z-10 min-w-0 flex items-center gap-1.5 overflow-hidden">
-          <p className="font-black text-white font-mono leading-tight drop-shadow whitespace-nowrap text-base sm:text-lg">{numDisplay}</p>
-          <span className="text-[9px] sm:text-[10px] font-mono text-white/70 bg-white/15 px-1 py-0.5 rounded whitespace-nowrap truncate">{cotNum}</span>
+        <div className="relative z-10 min-w-0">
+          <p className="font-black text-white font-mono leading-tight drop-shadow" style={{fontSize:'20px'}}>{numDisplay}</p>
+          <span className="text-[9px] sm:text-[10px] font-mono text-white/60 bg-white/15 px-1 py-0.5 rounded whitespace-nowrap">{cotNum}</span>
         </div>
         <div className="relative z-10 shrink-0 ml-1">
           <EstadoBadge estado={despacho.estado} rol={rol} />
@@ -355,17 +355,17 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         </button>
 
         {/* Fila de acciones: N. Entrega (Bs fijo) + moneda/O.Despacho agrupados + imprimir */}
-        <div className="flex items-center gap-0.5 mt-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
+        <div className="flex items-center gap-1 mt-2 flex-wrap">
           {/* N. Entrega — siempre Bs */}
           <button onClick={descargarPDF} disabled={pdfLoading}
-            className="flex items-center gap-1 px-2 py-2 rounded-lg text-[11px] font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40 shrink-0">
+            className="flex items-center gap-1 px-2 py-2 rounded-lg text-[11px] font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40">
             {pdfLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Download size={13} />}
             N.Entrega
             <span className="text-[8px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-0.5 py-0.5 rounded leading-none">Bs</span>
           </button>
 
           {/* O. Despacho con selector de moneda agrupado */}
-          <div className="flex items-center shrink-0 rounded-lg border border-slate-200 divide-x divide-slate-200">
+          <div className="flex items-center rounded-lg border border-slate-200 divide-x divide-slate-200">
             <div className="relative" data-no-click>
               <button ref={monedaBtnRef} onClick={toggleMonedaMenu}
                 title="Moneda para Orden de Despacho"
@@ -396,7 +396,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             </button>
           </div>
 
-          <div className="relative shrink-0">
+          <div className="relative">
             <button onClick={() => setShowPrintMenu(v => !v)}
               onBlur={() => setTimeout(() => setShowPrintMenu(false), 200)}
               disabled={printLoading}
@@ -423,7 +423,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           </div>
           {getMobileSheetActions().length > 0 && (
             <button onClick={() => setShowSheet(true)}
-              className="ml-auto flex items-center gap-0.5 px-2 py-2 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 active:bg-slate-100 transition-colors shrink-0">
+              className="ml-auto flex items-center gap-1 px-2 py-2 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 active:bg-slate-100 transition-colors">
               <MoreHorizontal size={13} /> Más
             </button>
           )}
