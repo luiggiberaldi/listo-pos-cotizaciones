@@ -90,9 +90,10 @@ const useAuthStore = create((set, get) => ({
           try {
             if (session?.user) {
               console.log('[AUTH] INITIAL_SESSION con user, seteando user...')
-              set({ user: session.user })
               const opId = session.user.app_metadata?.operator_id
               console.log('[AUTH] operator_id en metadata:', opId)
+              // Marcar _cargandoPerfil para que RutaProtegida muestre PantallaCarga
+              set({ user: session.user, _cargandoPerfil: !!opId })
               if (opId) {
                 // Refrescar JWT si está próximo a expirar antes de cargar perfil
                 const exp = session.expires_at
@@ -121,7 +122,8 @@ const useAuthStore = create((set, get) => ({
           } finally {
             clearTimeout(timeoutId)
             console.log('[AUTH] seteando initialized=true')
-            set({ initialized: true })
+            // Set atómico: initialized + limpiar flag de carga
+            set({ initialized: true, _cargandoPerfil: false })
           }
         }
 
