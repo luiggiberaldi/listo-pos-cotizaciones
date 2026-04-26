@@ -249,18 +249,6 @@ export default {
       return handleSuperAdmin(request, env);
     }
 
-    // ── TEMPORAL: diagnóstico de secrets (eliminar después) ──────────────
-    if (url.pathname === '/api/dev/check-secrets' && request.method === 'POST') {
-      let body; try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
-      if (body.code !== env.DEV_SUPER_CODE) return jsonError('No autorizado', 403, request);
-      return json({
-        SUPABASE_SERVICE_KEY_len: env.SUPABASE_SERVICE_KEY?.length || 0,
-        SUPABASE_SERVICE_KEY_prefix: env.SUPABASE_SERVICE_KEY?.slice(0, 10) || 'EMPTY',
-        GROQ_KEYS_A_len: env.GROQ_KEYS_A?.length || 0,
-        VAPID_PRIVATE_KEY_len: env.VAPID_PRIVATE_KEY?.length || 0,
-      }, 200, request);
-    }
-
     // ── API: Developer tools (solo desarrollador) ──────────────────────────
     if (url.pathname.startsWith('/api/dev/')) {
       return handleDevTools(request, env, url);
