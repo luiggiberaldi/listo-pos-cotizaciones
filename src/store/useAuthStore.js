@@ -40,6 +40,7 @@ const useAuthStore = create((set, get) => ({
 
   // ─── Inicializar: suscribirse a cambios de auth ────────────────────────────
   initialize: () => {
+    console.log('[AUTH] initialize() llamado')
     // Detectar si hay sesión guardada para dar más tiempo
     let haySession = false
     try {
@@ -47,35 +48,53 @@ const useAuthStore = create((set, get) => ({
       const sbKey = keys.find(k => k.startsWith('sb-') && k.endsWith('-auth-token'))
       if (sbKey && localStorage.getItem(sbKey)) haySession = true
     } catch { /* ignorar */ }
+    console.log('[AUTH] haySession:', haySession)
 
     const timeoutId = setTimeout(() => {
-      if (!get().initialized) {
-        // Si hay sesión guardada, no forzar user: null — dejar que Supabase la restaure
-        if (haySession) {
-          set({ initialized: true })
-        } else {
-          set({ initialized: true, user: null, perfil: null })
-        }
+      const state = get()
+      console.log('[AUTH] timeout principal disparado — initialized:', state.initialized, 'user:', !!state.user, 'perfil:', !!state.perfil)
+      if (!state.initialized) {
+        console.log('[AUTH] forzando initialized=true por timeout')
+        set({ initialized: true })
       }
-    }, haySession ? 5000 : 2000)
+    }, haySession ? 8000 : 2000)
 
+    // Segundo timeout: si hay user pero no perfil después de 12s, limpiar para evitar loop
+    const safetyTimeoutId = setTimeout(() => {
+      const { user, perfil, initialized } = get()
+      console.log('[AUTH] safety timeout — initialized:', initialized, 'user:', !!user, 'perfil:', !!perfil)
+      if (user && !perfil) {
+        console.log('[AUTH] safety: user sin perfil, forzando perfil=null')
+        set({ initialized: true, perfil: null })
+      }
+    }, 12000)
+
+    console.log('[AUTH] registrando onAuthStateChange...')
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('[AUTH] evento:', event, 'session:', !!session, 'user:', session?.user?.email)
         if (event === 'INITIAL_SESSION') {
           try {
             if (session?.user) {
-              // Setear user inmediatamente para que LoginPage sepa que hay sesión
+              console.log('[AUTH] INITIAL_SESSION con user, seteando user...')
               set({ user: session.user })
+              const opId = session.user.app_metadata?.operator_id
+              console.log('[AUTH] operator_id en metadata:', opId)
+              console.log('[AUTH] cargando perfil...')
               const perfilPromise = get()._cargarPerfil(session.user)
               const timeoutPromise = new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('timeout')), 3000)
               )
               await Promise.race([perfilPromise, timeoutPromise])
+              console.log('[AUTH] perfil cargado OK, perfil:', !!get().perfil)
+            } else {
+              console.log('[AUTH] INITIAL_SESSION sin user (no hay sesión)')
             }
-          } catch {
-            // Error al cargar perfil inicial — se ignora
+          } catch (err) {
+            console.log('[AUTH] error cargando perfil inicial:', err.message)
           } finally {
             clearTimeout(timeoutId)
+            console.log('[AUTH] seteando initialized=true')
             set({ initialized: true })
           }
         }
@@ -113,6 +132,7 @@ const useAuthStore = create((set, get) => ({
 
     return () => {
       clearTimeout(timeoutId)
+      clearTimeout(safetyTimeoutId)
       subscription.unsubscribe()
     }
   },

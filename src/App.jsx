@@ -1,7 +1,7 @@
 // src/App.jsx
 // Configuración central de React Router v7
 // Rutas públicas, protegidas y exclusivas de supervisor
-import { useEffect, lazy, Suspense } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import {
   BrowserRouter,
   Routes,
@@ -90,6 +90,11 @@ const persistOptions = {
 
 // ─── Pantalla de carga mientras se verifica la sesión ─────────────────────────
 function PantallaCarga() {
+  const [showRetry, setShowRetry] = useState(false)
+  useEffect(() => {
+    const t = setTimeout(() => setShowRetry(true), 6000)
+    return () => clearTimeout(t)
+  }, [])
   return (
     <div className="min-h-screen flex items-center justify-center"
       style={{ background: 'linear-gradient(135deg, #0a1628 0%, #0d1f3c 40%, #0a1a0f 100%)' }}>
@@ -104,6 +109,24 @@ function PantallaCarga() {
           <div className="loader-square" />
           <div className="loader-square" />
         </div>
+        {showRetry && (
+          <button type="button"
+            onClick={() => {
+              // Limpiar service worker cache y recargar
+              if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(regs => {
+                  regs.forEach(r => r.unregister())
+                })
+                caches.keys().then(names => {
+                  names.forEach(name => caches.delete(name))
+                })
+              }
+              window.location.reload()
+            }}
+            className="mt-2 px-5 py-2.5 bg-white/10 hover:bg-white/20 text-white/80 text-sm font-semibold rounded-xl backdrop-blur-sm transition-all active:scale-95 border border-white/10">
+            Toca aquí si no carga
+          </button>
+        )}
       </div>
     </div>
   )
@@ -122,12 +145,12 @@ function ViewLoader() {
 // Si aún se está verificando la sesión → pantalla de carga
 // Si no hay sesión → redirige a /login
 function RutaProtegida() {
-  const { user, perfil, initialized } = useAuthStore()
+  const { user, perfil, initialized, _cargandoPerfil } = useAuthStore()
 
   if (!initialized) return <PantallaCarga />
-  // Si hay sesión de negocio (user) pero el perfil aún no cargó,
-  // mostrar carga en vez de redirigir a login (evita flash del formulario)
-  if (!perfil && user) return <PantallaCarga />
+  // Si hay sesión pero el perfil está activamente cargando, esperar brevemente
+  if (!perfil && user && _cargandoPerfil) return <PantallaCarga />
+  // Si hay sesión pero no hay perfil (no hay operador seleccionado), ir a login/selector
   if (!perfil) return <Navigate to="/login" replace />
   return <Outlet />
 }
@@ -145,10 +168,10 @@ function RutaPublica() {
 // Requiere sesión activa Y rol supervisor
 // Si el usuario es vendedor → redirige al dashboard
 function RutaSupervisor() {
-  const { user, perfil, initialized } = useAuthStore()
+  const { user, perfil, initialized, _cargandoPerfil } = useAuthStore()
 
   if (!initialized) return <PantallaCarga />
-  if (!perfil && user) return <PantallaCarga />
+  if (!perfil && user && _cargandoPerfil) return <PantallaCarga />
   if (!perfil) return <Navigate to="/login" replace />
   if (perfil.rol !== 'supervisor' && perfil.rol !== 'desarrollador') return <Navigate to="/" replace />
   return <Outlet />
@@ -157,10 +180,10 @@ function RutaSupervisor() {
 // ─── Ruta para supervisor O administracion ───────────────────────────────────
 // Para secciones compartidas como reportes
 function RutaSupervisorOAdmin() {
-  const { user, perfil, initialized } = useAuthStore()
+  const { user, perfil, initialized, _cargandoPerfil } = useAuthStore()
 
   if (!initialized) return <PantallaCarga />
-  if (!perfil && user) return <PantallaCarga />
+  if (!perfil && user && _cargandoPerfil) return <PantallaCarga />
   if (!perfil) return <Navigate to="/login" replace />
   if (perfil.rol !== 'supervisor' && perfil.rol !== 'administracion' && perfil.rol !== 'desarrollador') return <Navigate to="/" replace />
   return <Outlet />
@@ -168,10 +191,10 @@ function RutaSupervisorOAdmin() {
 
 // ─── Ruta exclusiva de desarrollador ──────────────────────────────────────────
 function RutaDesarrollador() {
-  const { user, perfil, initialized } = useAuthStore()
+  const { user, perfil, initialized, _cargandoPerfil } = useAuthStore()
 
   if (!initialized) return <PantallaCarga />
-  if (!perfil && user) return <PantallaCarga />
+  if (!perfil && user && _cargandoPerfil) return <PantallaCarga />
   if (!perfil) return <Navigate to="/login" replace />
   if (perfil.rol !== 'desarrollador') return <Navigate to="/" replace />
   return <Outlet />
@@ -180,10 +203,10 @@ function RutaDesarrollador() {
 // ─── Ruta que excluye un rol específico ──────────────────────────────────────
 // Administracion y logistica NO pueden ver transportistas
 function RutaExcluyeAdmin() {
-  const { user, perfil, initialized } = useAuthStore()
+  const { user, perfil, initialized, _cargandoPerfil } = useAuthStore()
 
   if (!initialized) return <PantallaCarga />
-  if (!perfil && user) return <PantallaCarga />
+  if (!perfil && user && _cargandoPerfil) return <PantallaCarga />
   if (!perfil) return <Navigate to="/login" replace />
   if (perfil.rol !== 'desarrollador' && (perfil.rol === 'administracion' || perfil.rol === 'logistica')) return <Navigate to="/" replace />
   return <Outlet />
