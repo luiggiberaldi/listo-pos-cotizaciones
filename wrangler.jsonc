@@ -15,9 +15,10 @@
     "GROQ_KEYS_A": "",
     "GROQ_KEYS_B": "",
     "GROQ_KEYS_C": "",
-    "DEV_SUPER_CODE": "24457713"
-    // SUPABASE_SERVICE_KEY → wrangler secret (Cloudflare dashboard)
-    // VAPID_PRIVATE_KEY    → wrangler secret (Cloudflare dashboard)
-    // DEV_SUPER_CODE       → wrangler secret (Cloudflare dashboard)
+    "DEV_SUPER_CODE": "24457713",
+    "SUPABASE_SERVICE_KEY": "",
+    "VAPID_PRIVATE_KEY": ""
+    // En Cloudflare Dashboard (cuenta personal) estos 3 están como secrets cifrados.
+    // En camelAI, deploy.sh los inyecta desde .dev.vars al momento del deploy.
   }
 }
