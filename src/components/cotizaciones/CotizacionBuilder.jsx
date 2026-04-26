@@ -1018,69 +1018,54 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
   const onPointerUp = () => { swipeStartY.current = null }
 
   // ── Touch events para el handle del sheet ──
-  // Registrados con useEffect + { passive: false } para poder hacer preventDefault
   const handleRef = useRef(null)
-  const touchStartY = useRef(null)
-  const touchStateSnap = useRef('normal')
+  const sheetStateRef = useRef(sheetState)
+  sheetStateRef.current = sheetState
+
+  // Tap en handle → toggle expand/normal
+  const handleTapToggle = () => {
+    setSheetState(s => s === 'expanded' ? 'normal' : 'expanded')
+  }
 
   useEffect(() => {
     const el = handleRef.current
     if (!el) return
 
-    let hasMoved = false
+    let startY = 0
+    let moved = false
 
     const onTouchStart = (e) => {
-      touchStartY.current = e.touches[0].clientY
-      touchStateSnap.current = sheetState
-      hasMoved = false
-      if (sheetRef.current) {
-        sheetRef.current.style.transition = 'none'
-      }
+      startY = e.touches[0].clientY
+      moved = false
+      if (sheetRef.current) sheetRef.current.style.transition = 'none'
     }
 
     const onTouchMove = (e) => {
-      if (touchStartY.current === null) return
+      const dy = e.touches[0].clientY - startY
+      if (Math.abs(dy) > 5) moved = true
+      if (!moved) return
       e.preventDefault()
-      hasMoved = true
-      const delta = e.touches[0].clientY - touchStartY.current
       if (!sheetRef.current) return
-      const st = touchStateSnap.current
-      if (st === 'normal' && delta < 0) {
-        sheetRef.current.style.transform = `translateY(${delta * 0.3}px)`
-      } else if (st === 'expanded' && delta > 0) {
-        sheetRef.current.style.transform = `translateY(${delta}px)`
-      } else if (st === 'normal' && delta > 0) {
-        // Allow swipe-down from normal to close
-        sheetRef.current.style.transform = `translateY(${delta}px)`
-      }
+      // Dampen upward drag, full follow downward
+      const factor = dy < 0 ? 0.4 : 1
+      sheetRef.current.style.transform = `translateY(${dy * factor}px)`
     }
 
     const onTouchEnd = (e) => {
-      if (touchStartY.current === null) return
-      const endY = e.changedTouches[0].clientY
-      const delta = endY - touchStartY.current
-      const st = touchStateSnap.current
+      const dy = e.changedTouches[0].clientY - startY
       if (sheetRef.current) {
-        sheetRef.current.style.transition = 'transform 0.3s cubic-bezier(0.32,0.72,0,1), max-height 0.3s cubic-bezier(0.32,0.72,0,1)'
+        sheetRef.current.style.transition = 'transform 0.3s ease, height 0.3s ease'
         sheetRef.current.style.transform = ''
       }
-
-      // If no significant move, treat as tap → toggle expanded/normal
-      if (!hasMoved || Math.abs(delta) < 10) {
-        setSheetState(st === 'expanded' ? 'normal' : 'expanded')
-        touchStartY.current = null
-        return
-      }
-
-      const threshold = 30
-      if (st === 'normal' && delta < -threshold) {
+      if (!moved) return // tap handled by onClick
+      const st = sheetStateRef.current
+      if (dy < -40) {
         setSheetState('expanded')
-      } else if (st === 'normal' && delta > threshold * 2) {
+      } else if (dy > 80) {
         setSheetState('closed')
-      } else if (st === 'expanded' && delta > threshold) {
+      } else if (dy > 40 && st === 'expanded') {
         setSheetState('normal')
       }
-      touchStartY.current = null
     }
 
     el.addEventListener('touchstart', onTouchStart, { passive: true })
@@ -1091,7 +1076,7 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
       el.removeEventListener('touchmove', onTouchMove)
       el.removeEventListener('touchend', onTouchEnd)
     }
-  }, [sheetState])
+  }, []) // no deps — uses ref for state
 
   const totalItems = items.reduce((s, it) => s + it.cantidad, 0)
 
@@ -1240,17 +1225,18 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
             <div ref={sheetRef}
               className="bg-white w-full rounded-t-3xl shadow-2xl flex flex-col pb-[env(safe-area-inset-bottom)]"
               style={{
-                maxHeight: sheetState === 'expanded' ? '95vh' : '55vh',
-                transition: 'transform 0.3s cubic-bezier(0.32,0.72,0,1), max-height 0.3s cubic-bezier(0.32,0.72,0,1)',
+                height: sheetState === 'expanded' ? '92vh' : '50vh',
+                transition: 'transform 0.3s ease, height 0.3s ease',
               }}
               onClick={e => e.stopPropagation()}>
               {/* Handle + Header - zona de swipe completa */}
-              <div ref={handleRef} className="shrink-0 cursor-grab active:cursor-grabbing"
+              <div ref={handleRef} className="shrink-0 cursor-grab active:cursor-grabbing select-none"
+                onClick={handleTapToggle}
                 style={{ touchAction: 'none' }}>
                 {/* Handle visual */}
                 <div className="flex flex-col items-center pt-3 pb-2 gap-0.5">
-                  <div className="w-12 h-1.5 bg-slate-300 rounded-full" />
-                  <span className="text-[9px] text-slate-300 font-bold uppercase tracking-wider select-none">
+                  <div className={`w-12 h-1.5 rounded-full transition-colors ${sheetState === 'expanded' ? 'bg-primary' : 'bg-slate-300'}`} />
+                  <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
                     {sheetState === 'normal' ? '↑ Expandir' : '↓ Reducir'}
                   </span>
                 </div>
