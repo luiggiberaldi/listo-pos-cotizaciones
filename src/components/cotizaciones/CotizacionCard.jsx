@@ -92,10 +92,35 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
     }
   }
 
+  // Helper: imprimir PDF blob (PC: iframe oculto + print dialog, Móvil: descarga directa)
+  function printOrDownloadPdf(blob, filename) {
+    const url = URL.createObjectURL(blob)
+    const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
+    if (isMobile) {
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 5000)
+    } else {
+      const iframe = document.createElement('iframe')
+      iframe.style.position = 'fixed'
+      iframe.style.right = '0'
+      iframe.style.bottom = '0'
+      iframe.style.width = '0'
+      iframe.style.height = '0'
+      iframe.style.border = 'none'
+      iframe.src = url
+      document.body.appendChild(iframe)
+      iframe.onload = () => {
+        try { iframe.contentWindow.print() } catch { window.open(url) }
+        setTimeout(() => { document.body.removeChild(iframe); URL.revokeObjectURL(url) }, 60000)
+      }
+    }
+  }
+
   async function imprimirCotizacion() {
     setPrintLoading(true)
-    // Abrir ventana INMEDIATAMENTE en el click para evitar bloqueo de popup
-    const printWindow = window.open('about:blank', '_blank')
     try {
       const [{ generarPDF }, itemsRes, clienteData, vendedorRes] = await Promise.all([
         import('../../services/pdf/cotizacionPDF'),
@@ -110,23 +135,8 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         vendedor: vendedorRes.data || cotizacion.vendedor,
       }
       const blob = await generarPDF({ cotizacion: cotConDatos, items: itemsRes.data ?? [], config, monedaPDF: monedaPdf, tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio, returnBlob: true })
-      const url = URL.createObjectURL(blob)
-      if (printWindow && !printWindow.closed) {
-        printWindow.location.href = url
-        printWindow.addEventListener('load', () => {
-          printWindow.print()
-          URL.revokeObjectURL(url)
-        })
-      } else {
-        // Fallback: descargar si popup fue bloqueado
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `${numDisplay.replace(/\s+/g, '_')}.pdf`
-        a.click()
-        URL.revokeObjectURL(url)
-      }
+      printOrDownloadPdf(blob, `${numDisplay.replace(/\s+/g, '_')}.pdf`)
     } catch (err) {
-      if (printWindow && !printWindow.closed) printWindow.close()
       showToast('Error al imprimir: ' + (err.message || 'Error desconocido'), 'error')
     } finally {
       setPrintLoading(false)
