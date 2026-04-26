@@ -939,10 +939,16 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
     swipeStartY.current = e.touches[0].clientY
   }
 
-  function handleTouchEnd(e) {
+  function handleTouchMove(e) {
     if (swipeStartY.current === null) return
-    const dy = swipeStartY.current - e.changedTouches[0].clientY
-    if (dy > 30) setSheetOpen(true)
+    const dy = swipeStartY.current - e.touches[0].clientY
+    if (dy > 30) {
+      swipeStartY.current = null
+      setSheetOpen(true)
+    }
+  }
+
+  function handleTouchEnd() {
     swipeStartY.current = null
   }
 
@@ -1065,6 +1071,7 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
           <button type="button"
             onClick={() => setSheetOpen(true)}
             onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
             className="fixed bottom-20 left-3 right-3 z-[98] p-3.5 rounded-2xl shadow-xl flex items-center justify-between active:scale-[0.97] transition-all md:bottom-4"
             style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)', boxShadow: '0 8px 30px rgba(27,54,93,0.35)' }}>
