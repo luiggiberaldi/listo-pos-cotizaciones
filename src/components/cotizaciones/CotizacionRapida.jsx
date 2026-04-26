@@ -598,7 +598,7 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
         {tasa > 0 && (
           <div className="flex items-center justify-between pt-1">
             <span className="text-[9px] sm:text-[10px] text-slate-400 flex items-center gap-1">
-              <DollarSign size={8} /> BCV: {fmtRate(tasa)} Bs/$
+              <DollarSign size={8} /> BCV: {fmtRate(tasaHook.tasaBcv?.precio || 0)} Bs/$
               {tasaHook.tasaUsdt?.precio > 0 && (
                 <> · <span className="text-indigo-500">USDT: {fmtRate(tasaHook.tasaUsdt.precio)}</span></>
               )}

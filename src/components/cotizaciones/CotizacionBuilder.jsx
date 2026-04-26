@@ -2179,7 +2179,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                 {tasaHook.tasaEfectiva > 0 && (
                   <div className="flex items-center justify-between pt-2 border-t border-slate-50 mt-2">
                     <span className="text-[11px] text-slate-400 flex items-center gap-1">
-                      <DollarSign size={10} /> BCV: {new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(tasaHook.tasaEfectiva)} Bs/$
+                      <DollarSign size={10} /> BCV: {new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(tasaHook.tasaBcv?.precio || 0)} Bs/$
                       {tasaHook.tasaUsdt?.precio > 0 && (
                         <> · <span className="text-indigo-500">USDT: {new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(tasaHook.tasaUsdt.precio)}</span></>
                       )}
