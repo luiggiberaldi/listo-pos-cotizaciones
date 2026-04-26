@@ -12,13 +12,10 @@
     "SUPABASE_URL": "https://oyfyuszgjwcepjpngclv.supabase.co",
     "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im95Znl1c3pnandjZXBqcG5nY2x2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0Mjk0NDMsImV4cCI6MjA5MTAwNTQ0M30.auhmnHCQ3a9wyv0nmhqWi1Q8iz0wavResvgsly6Gibs",
     "VAPID_PUBLIC_KEY": "BBtDi5JNFg-JiIwE3ImrimyyiwcRY0-H8K7Q8PnvnOOHTAGBU5gpnU6SXjHN6MVg6tai7cmiGhpjHOsgFMWs5mc",
-    "GROQ_KEYS_A": "",
-    "GROQ_KEYS_B": "",
-    "GROQ_KEYS_C": "",
-    "DEV_SUPER_CODE": "24457713",
-    "SUPABASE_SERVICE_KEY": "",
-    "VAPID_PRIVATE_KEY": ""
-    // En Cloudflare Dashboard (cuenta personal) estos 3 están como secrets cifrados.
-    // En camelAI, deploy.sh los inyecta desde .dev.vars al momento del deploy.
+    "DEV_SUPER_CODE": "24457713"
+    // GROQ_KEYS_A/B/C, SUPABASE_SERVICE_KEY, VAPID_PRIVATE_KEY:
+    //   Producción (GitHub Actions) → secrets cifrados en Cloudflare Dashboard
+    //   camelAI → deploy.sh los inyecta desde .dev.vars
+    //   NO poner placeholders vacíos aquí — sobreescriben los secrets del Dashboard
   }
 }

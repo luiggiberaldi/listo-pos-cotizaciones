@@ -737,7 +737,6 @@ async function handleAdmin(request, env, url) {
 // ══════════════════════════════════════════════════════════════════════════════
 
 async function handleSwitchOperator(request, env) {
-  try {
   // Rate limit
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown'
   if (isRateLimited(`switch:${ip}`)) {
@@ -756,8 +755,6 @@ async function handleSwitchOperator(request, env) {
   if (!isValidUuid(operator_id)) return jsonError('operator_id inválido', 400, request);
 
   // Fetch operator from usuarios table
-  const skLen = env.SUPABASE_SERVICE_KEY?.length || 0;
-  console.log(`[SWITCH-OP] SUPABASE_SERVICE_KEY length: ${skLen}, operator_id: ${operator_id}`);
   const res = await fetch(
     `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${operator_id}&activo=eq.true&select=id,nombre,rol,pin_hash,pin_salt,color`,
     {
@@ -767,11 +764,7 @@ async function handleSwitchOperator(request, env) {
       },
     }
   );
-  if (!res.ok) {
-    const errBody = await res.text().catch(() => '');
-    console.log(`[SWITCH-OP] Fetch operator failed: ${res.status} ${errBody}`);
-    return jsonError('Error al buscar operador', 500, request);
-  }
+  if (!res.ok) return jsonError('Error al buscar operador', 500, request);
   const [operator] = await res.json();
   if (!operator) return jsonError('Operador no encontrado o inactivo', 404, request);
 
@@ -830,10 +823,6 @@ async function handleSwitchOperator(request, env) {
     ok: true,
     operator: { id: operator.id, nombre: operator.nombre, rol: operator.rol, color: operator.color },
   }, 200, request);
-  } catch (switchErr) {
-    console.error(`[SWITCH-OP] Unhandled error: ${switchErr.message}`, switchErr.stack);
-    return jsonError(`Error interno: ${switchErr.message}`, 500, request);
-  }
 }
 
 async function handleClearOperator(request, env) {
