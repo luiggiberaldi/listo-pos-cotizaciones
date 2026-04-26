@@ -180,7 +180,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
   const canDespachar = (esSupervisor || esPropietario) && ['enviada', 'aceptada'].includes(cotizacion.estado) && onDespachar && !despacho
   const canAnular = !despachoAnulado && cotizacion.estado !== 'anulada' && cotizacion.estado !== 'vencida' && cotizacion.estado !== 'rechazada' && (esBorrador || ((esSupervisor || esPropietario) && (esEnviada || (cotizacion.estado === 'aceptada' && !despacho))))
   const canReciclar = esSupervisor && (despachoAnulado || ['rechazada', 'anulada', 'vencida'].includes(cotizacion.estado))
-  const hasSecondaryActions = canDespachar || canAnular
+  const hasSecondaryActions = canAnular
 
   // ── Acción primaria para móvil ──
   function getPrimaryAction() {
@@ -198,15 +198,12 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
   const primaryAction = getPrimaryAction()
   const pColors = PRIMARY_ACTION_COLORS[primaryAction.key] || PRIMARY_ACTION_COLORS.ver
 
-  // ── Acciones para el bottom sheet móvil ──
+  // ── Acciones para el bottom sheet móvil (solo las que NO están ya visibles) ──
   function getMobileSheetActions() {
     const actions = []
-    if (primaryAction.key !== 'ver')
-      actions.push({ label: 'Ver detalle', icon: Eye, onClick: () => setShowDetalle(true) })
+    // Ver detalle, PDF, Imprimir ya están en la fila secundaria — no repetir
     if ((canEdit || canVersion) && primaryAction.key !== 'editar')
       actions.push({ label: canVersion ? (getAction('revisar', rol).label || 'Nueva versión') : (getAction('editar', rol).label || 'Editar'), icon: Pencil, onClick: () => onEditar(cotizacion), textColor: 'text-sky-600' })
-    if (canPdf)
-      actions.push({ label: 'Descargar PDF', icon: FileDown, onClick: descargarPDF, disabled: pdfLoading })
     if (canWhatsApp && primaryAction.key !== 'whatsapp')
       actions.push({ label: 'Compartir por WhatsApp', icon: MessageCircle, onClick: handleWhatsApp, disabled: waLoading, textColor: 'text-emerald-600' })
     if (canDespachar && primaryAction.key !== 'despachar')
@@ -496,20 +493,11 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
             {showActions && (
               <div className="absolute right-0 bottom-full mb-1 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
                 onMouseDown={e => e.preventDefault()}>
-                {canDespachar && (
-                  <button onClick={() => { onDespachar(cotizacion); setShowActions(false) }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-indigo-600 hover:bg-indigo-50 transition-colors text-left">
-                    <Truck size={14} />{getAction('despachar', rol).label || 'Despachar'}
-                  </button>
-                )}
                 {canAnular && (
-                  <>
-                    {canDespachar && <div className="my-1 border-t border-slate-100" />}
                     <button onClick={() => { onAnular(cotizacion); setShowActions(false) }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-500 hover:bg-red-50 transition-colors text-left">
                       <Ban size={14} />{getAction('anular', rol).label || 'Anular'}
                     </button>
-                  </>
                 )}
               </div>
             )}

@@ -15,6 +15,7 @@ import { useVentaRapida } from '../hooks/useVentaRapida'
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import { useTransportistas } from '../hooks/useTransportistas'
+import CustomSelect from '../components/ui/CustomSelect'
 import useAuthStore from '../store/useAuthStore'
 import { round2, mulR } from '../utils/dinero'
 import { calcTotales } from '../utils/calcTotales'
@@ -1044,13 +1045,18 @@ function Step2Pago({
         <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">
           Transportista (opcional)
         </label>
-        <select value={transportistaId} onChange={e => setTransportistaId(e.target.value)}
-          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm bg-white focus:ring-2 focus:ring-sky-200 focus:border-sky-400 outline-none">
-          <option value="">— Sin transportista —</option>
-          {transportistas.map(t => (
-            <option key={t.id} value={t.id}>{t.nombre}{t.vehiculo ? ` — ${t.vehiculo}` : ''}</option>
-          ))}
-        </select>
+        <CustomSelect
+          value={transportistaId}
+          onChange={setTransportistaId}
+          placeholder="— Sin transportista —"
+          clearable
+          icon={Truck}
+          options={transportistas.map(t => ({
+            value: t.id,
+            label: t.nombre,
+            sub: t.vehiculo || undefined,
+          }))}
+        />
       </div>
 
       {/* Flete */}

@@ -11,6 +11,7 @@ import {
 import { useLogs, useLogStats, useLogAnalysis, useLogPurge } from '../hooks/useLogs'
 import { adminAPI, devAPI } from '../services/supabase/adminClient'
 import useAuthStore from '../store/useAuthStore'
+import CustomSelect from '../components/ui/CustomSelect'
 import PageHeader from '../components/ui/PageHeader'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import { showToast } from '../components/ui/Toast'
@@ -570,12 +571,32 @@ export default function LogsView() {
           {/* Filters + Actions */}
           <div className="flex flex-wrap items-center gap-2 mb-3">
             <Filter size={14} className="text-slate-400" />
-            <select value={nivel} onChange={e => { setNivel(e.target.value); setPage(1) }} className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white">
-              {NIVELES.map(n => <option key={n.value} value={n.value}>{n.label}</option>)}
-            </select>
-            <select value={origen} onChange={e => { setOrigen(e.target.value); setPage(1) }} className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white">
-              {ORIGENES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
+            <div className="flex gap-1">
+              {NIVELES.map(n => (
+                <button key={n.value} type="button"
+                  onClick={() => { setNivel(n.value); setPage(1) }}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                    nivel === n.value
+                      ? 'bg-slate-800 text-white border-slate-800'
+                      : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                  }`}>
+                  {n.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-1">
+              {ORIGENES.map(o => (
+                <button key={o.value} type="button"
+                  onClick={() => { setOrigen(o.value); setPage(1) }}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1 ${
+                    origen === o.value
+                      ? 'bg-slate-800 text-white border-slate-800'
+                      : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                  }`}>
+                  {o.icon && <o.icon size={11} />}{o.label}
+                </button>
+              ))}
+            </div>
             <input
               type="text"
               value={categoria}
@@ -752,13 +773,16 @@ export default function LogsView() {
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
             <div className="flex flex-wrap items-center gap-2 mb-3">
               <Filter size={14} className="text-slate-400" />
-              <select value={auditCategoria} onChange={e => { setAuditCategoria(e.target.value); setAuditPage(1) }}
-                className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white">
-                <option value="">Todas las categorías</option>
-                {Object.keys(CATEGORIA_ICONS).map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
+              <CustomSelect
+                value={auditCategoria}
+                onChange={v => { setAuditCategoria(v); setAuditPage(1) }}
+                placeholder="Todas las categorías"
+                clearable
+                options={Object.keys(CATEGORIA_ICONS).map(cat => ({
+                  value: cat,
+                  label: cat,
+                }))}
+              />
               <button onClick={() => { loadAudit(1); loadAuditStats() }}
                 disabled={auditLoading}
                 className="ml-auto text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1 px-2 py-1.5 border border-slate-200 rounded-lg bg-white disabled:opacity-50">

@@ -276,6 +276,65 @@ function ItemCard({ item, idx, onChange, onDelete, tasa = 0, precios }) {
   )
 }
 
+// ─── Swipe-left para eliminar producto ──────────────────────────────────────
+function SwipeToDelete({ children, enabled, onDelete }) {
+  const ref = useRef(null)
+  const startX = useRef(0)
+  const currentX = useRef(0)
+  const swiping = useRef(false)
+
+  if (!enabled) return children
+
+  function handleTouchStart(e) {
+    startX.current = e.touches[0].clientX
+    currentX.current = 0
+    swiping.current = false
+    if (ref.current) ref.current.style.transition = 'none'
+  }
+
+  function handleTouchMove(e) {
+    const dx = e.touches[0].clientX - startX.current
+    const offset = Math.min(0, Math.max(-80, dx))
+    currentX.current = offset
+    if (offset < -10) swiping.current = true
+    if (ref.current) ref.current.style.transform = `translateX(${offset}px)`
+  }
+
+  function handleTouchEnd() {
+    if (!ref.current) return
+    ref.current.style.transition = 'transform 0.25s ease'
+    if (currentX.current < -50) {
+      ref.current.style.transform = 'translateX(-72px)'
+    } else {
+      ref.current.style.transform = 'translateX(0)'
+    }
+  }
+
+  function handleClick(e) {
+    if (swiping.current) { e.stopPropagation(); e.preventDefault() }
+  }
+
+  return (
+    <div className="relative overflow-hidden rounded-xl">
+      <button type="button" onClick={(e) => { e.stopPropagation(); onDelete() }}
+        className="absolute right-0 top-0 bottom-0 w-[72px] flex items-center justify-center bg-red-500 text-white rounded-r-xl active:bg-red-600 transition-colors">
+        <div className="flex flex-col items-center gap-0.5">
+          <Trash2 size={16} />
+          <span className="text-[9px] font-bold">Quitar</span>
+        </div>
+      </button>
+      <div ref={ref}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onClickCapture={handleClick}
+        className="relative z-[1] bg-white rounded-xl">
+        {children}
+      </div>
+    </div>
+  )
+}
+
 // ─── Buscador de productos ────────────────────────────────────────────────────
 const PRODUCTOS_POR_PAGINA = 30
 
@@ -438,7 +497,8 @@ function BuscadorProductos({ onAgregar, onScanClick, itemsAgregados = [], tasa =
               const itemInCart = itemsMap[p.id]
               const stock = Number(p.stock_actual) || 0
               return (
-                <div key={p.id}
+                <SwipeToDelete key={p.id} enabled={yaAgregado && !!itemInCart} onDelete={() => onEliminarItem(itemInCart?._idx)}>
+                <div
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-all min-h-[48px] ${
                     bloqueado
                       ? 'opacity-40 cursor-not-allowed border-slate-100 bg-white'
@@ -509,6 +569,7 @@ function BuscadorProductos({ onAgregar, onScanClick, itemsAgregados = [], tasa =
                     </div>
                   )}
                 </div>
+                </SwipeToDelete>
               )
             })}
           </div>

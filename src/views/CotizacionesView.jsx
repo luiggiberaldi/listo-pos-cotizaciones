@@ -257,7 +257,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
           <div className="flex flex-wrap gap-2">
             {FORMAS_PAGO.map(fp => (
               <button key={fp} type="button"
-                onClick={() => setFormaPago(fp === formaPago ? '' : fp)}
+                onClick={() => { const v = fp === formaPago ? '' : fp; setFormaPago(v); setFormaPagoCliente(v) }}
                 className={`px-4 py-2.5 rounded-lg text-sm font-semibold border transition-all min-h-[44px] ${
                   formaPago === fp
                     ? 'bg-indigo-500 text-white border-indigo-500 shadow-sm'
@@ -272,39 +272,20 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
           )}
         </div>
 
-        {/* Pago del cliente */}
-        <div className="space-y-3">
-          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-            Pago del cliente
-          </p>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Forma de pago</label>
-              <select
-                value={formaPagoCliente}
-                onChange={e => setFormaPagoCliente(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-lg text-sm border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 min-h-[44px]"
-                disabled={cargando}
-              >
-                <option value="">— Seleccionar —</option>
-                {['Efectivo', 'Zelle', 'Pago Móvil', 'USDT', 'Transferencia'].map(f => (
-                  <option key={f} value={f}>{f}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Referencia / comprobante</label>
-              <input
-                type="text"
-                value={referenciaPago}
-                onChange={e => setReferenciaPago(e.target.value)}
-                placeholder="Nº confirmación..."
-                className="w-full px-3 py-2.5 rounded-lg text-sm border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 min-h-[44px]"
-                disabled={cargando}
-              />
-            </div>
-          </div>
+        {/* Referencia de pago */}
+        {formaPago && (
+        <div>
+          <label className="block text-xs font-semibold text-slate-600 mb-1">Referencia / comprobante (opcional)</label>
+          <input
+            type="text"
+            value={referenciaPago}
+            onChange={e => setReferenciaPago(e.target.value)}
+            placeholder="Nº confirmación, comprobante..."
+            className="w-full px-3 py-2.5 rounded-xl text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:bg-white min-h-[44px]"
+            disabled={cargando}
+          />
         </div>
+        )}
 
         {/* Transportista */}
         <div className="space-y-2">
@@ -316,7 +297,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
               type="button"
               onClick={() => setShowTransportistaMenu(v => !v)}
               onBlur={() => setTimeout(() => setShowTransportistaMenu(false), 200)}
-              className="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-slate-200 bg-white hover:border-indigo-300 transition-colors text-left min-h-[44px]"
+              className="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-slate-200 bg-slate-50 hover:border-indigo-300 transition-colors text-left min-h-[44px]"
             >
               <span className="flex items-center gap-2 truncate">
                 <Truck size={15} className="text-slate-400 shrink-0" />
@@ -379,7 +360,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
               value={fleteUsd}
               onChange={e => setFleteUsd(e.target.value)}
               placeholder="0.00"
-              className="w-full px-4 py-2.5 rounded-lg text-sm font-medium border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition-colors min-h-[44px]"
+              className="w-full px-4 py-2.5 rounded-xl text-sm font-medium border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 focus:bg-white transition-colors min-h-[44px]"
               disabled={cargando}
             />
             {Number(fleteUsd) > 0 && (

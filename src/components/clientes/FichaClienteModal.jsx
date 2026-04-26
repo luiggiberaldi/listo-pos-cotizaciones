@@ -65,16 +65,20 @@ function FormAbono({ clienteId, onSuccess }) {
 
         {/* Forma de pago */}
         <div>
-          <label className="block text-xs font-semibold text-slate-600 mb-1">Forma de pago</label>
-          <select
-            value={formaPago}
-            onChange={e => setFormaPago(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
-          >
+          <label className="block text-xs font-semibold text-slate-600 mb-1.5">Forma de pago</label>
+          <div className="flex flex-wrap gap-1.5">
             {['Efectivo', 'Zelle', 'Pago Móvil', 'USDT', 'Transferencia'].map(f => (
-              <option key={f} value={f}>{f}</option>
+              <button key={f} type="button"
+                onClick={() => setFormaPago(f)}
+                className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-all ${
+                  formaPago === f
+                    ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300 hover:text-emerald-600'
+                }`}>
+                {f}
+              </button>
             ))}
-          </select>
+          </div>
         </div>
       </div>
 

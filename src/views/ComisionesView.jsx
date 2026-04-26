@@ -304,18 +304,42 @@ export default function ComisionesView() {
         <div className="flex items-center gap-1.5 text-xs font-bold text-slate-500 uppercase tracking-wide">
           <Filter size={12} />Filtros
         </div>
-        <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)} className={selectCls}>
-          <option value="">Todas</option>
-          <option value="pendiente">Pendientes</option>
-          <option value="pagada">Pagadas</option>
-        </select>
+        <div className="flex gap-1">
+          {[{ value: '', label: 'Todas' }, { value: 'pendiente', label: 'Pendientes' }, { value: 'pagada', label: 'Pagadas' }].map(opt => (
+            <button key={opt.value} type="button"
+              onClick={() => setFiltroEstado(opt.value)}
+              className={`px-3 py-2 rounded-xl text-sm font-semibold border transition-all ${
+                filtroEstado === opt.value
+                  ? 'bg-slate-800 text-white border-slate-800'
+                  : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+              }`}>
+              {opt.label}
+            </button>
+          ))}
+        </div>
         {esPrivilegiado && (
-          <select value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)} className={selectCls}>
-            <option value="">Todos los vendedores</option>
+          <div className="flex gap-1 flex-wrap">
+            <button type="button"
+              onClick={() => setFiltroVendedor('')}
+              className={`px-3 py-2 rounded-xl text-sm font-semibold border transition-all ${
+                !filtroVendedor
+                  ? 'bg-slate-800 text-white border-slate-800'
+                  : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+              }`}>
+              Todos
+            </button>
             {vendedores.map(v => (
-              <option key={v.id} value={v.id}>{v.nombre}</option>
+              <button key={v.id} type="button"
+                onClick={() => setFiltroVendedor(v.id)}
+                className={`px-3 py-2 rounded-xl text-sm font-semibold border transition-all ${
+                  filtroVendedor === v.id
+                    ? 'bg-slate-800 text-white border-slate-800'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                }`}>
+                {v.nombre}
+              </button>
             ))}
-          </select>
+          </div>
         )}
         {comisiones.length > 0 && (
           <button
