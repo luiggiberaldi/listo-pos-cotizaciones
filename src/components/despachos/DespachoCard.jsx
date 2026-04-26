@@ -293,11 +293,11 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)',
             backgroundSize: '12px 12px',
           }} />
-        <div className="relative z-10 min-w-0 flex items-center gap-2">
-          <p className="font-black text-white font-mono leading-tight drop-shadow" style={{fontSize:'20px'}}>{numDisplay}</p>
-          <span className="text-[10px] font-mono text-white/70 bg-white/15 px-1.5 py-0.5 rounded">{cotNum}</span>
+        <div className="relative z-10 min-w-0 flex items-center gap-1.5 overflow-hidden">
+          <p className="font-black text-white font-mono leading-tight drop-shadow whitespace-nowrap text-base sm:text-lg">{numDisplay}</p>
+          <span className="text-[9px] sm:text-[10px] font-mono text-white/70 bg-white/15 px-1 py-0.5 rounded whitespace-nowrap truncate">{cotNum}</span>
         </div>
-        <div className="relative z-10 shrink-0">
+        <div className="relative z-10 shrink-0 ml-1">
           <EstadoBadge estado={despacho.estado} rol={rol} />
         </div>
       </div>
@@ -362,13 +362,13 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         </button>
 
         {/* Fila de acciones: N. Entrega (Bs fijo) + moneda/O.Despacho agrupados + imprimir */}
-        <div className="flex items-center gap-1 mt-2 overflow-x-auto pb-1 -mx-1 px-1">
+        <div className="flex items-center gap-0.5 mt-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
           {/* N. Entrega — siempre Bs */}
           <button onClick={descargarPDF} disabled={pdfLoading}
-            className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40 shrink-0">
-            {pdfLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Download size={14} />}
-            N. Entrega
-            <span className="text-[9px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-1 py-0.5 rounded leading-none">Bs</span>
+            className="flex items-center gap-1 px-2 py-2 rounded-lg text-[11px] font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40 shrink-0">
+            {pdfLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Download size={13} />}
+            N.Entrega
+            <span className="text-[8px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-0.5 py-0.5 rounded leading-none">Bs</span>
           </button>
 
           {/* O. Despacho con selector de moneda agrupado */}
@@ -376,7 +376,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             <div className="relative" data-no-click>
               <button ref={monedaBtnRef} onClick={toggleMonedaMenu}
                 title="Moneda para Orden de Despacho"
-                className="flex items-center gap-0.5 px-2 py-2 rounded-l-lg text-xs font-medium text-slate-400 hover:bg-slate-50 transition-colors">
+                className="flex items-center gap-0.5 px-1.5 py-2 rounded-l-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 transition-colors">
                 {MONEDA_OPTIONS.find(o => o.key === monedaPdf)?.icon}
                 <ChevronDown size={9} />
               </button>
@@ -397,9 +397,9 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
               )}
             </div>
             <button onClick={descargarOrdenDespacho} disabled={ordenLoading}
-              className="flex items-center gap-1 px-2.5 py-2 rounded-r-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40">
-              {ordenLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Download size={14} />}
-              O. Despacho
+              className="flex items-center gap-1 px-2 py-2 rounded-r-lg text-[11px] font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40">
+              {ordenLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Download size={13} />}
+              O.Desp
             </button>
           </div>
 
@@ -407,9 +407,9 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             <button onClick={() => setShowPrintMenu(v => !v)}
               onBlur={() => setTimeout(() => setShowPrintMenu(false), 200)}
               disabled={printLoading}
-              className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40">
-              {printLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Printer size={14} />}
-              Imprimir <ChevronDown size={10} />
+              className="flex items-center gap-1 px-2 py-2 rounded-lg text-[11px] font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40">
+              {printLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Printer size={13} />}
+              Impr. <ChevronDown size={9} />
             </button>
             {showPrintMenu && (
               <div className="absolute left-0 bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
@@ -430,8 +430,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           </div>
           {getMobileSheetActions().length > 0 && (
             <button onClick={() => setShowSheet(true)}
-              className="ml-auto flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:bg-slate-50 active:bg-slate-100 transition-colors">
-              <MoreHorizontal size={14} /> Más
+              className="ml-auto flex items-center gap-0.5 px-2 py-2 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 active:bg-slate-100 transition-colors shrink-0">
+              <MoreHorizontal size={13} /> Más
             </button>
           )}
         </div>
