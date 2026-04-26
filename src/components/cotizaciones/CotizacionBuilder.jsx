@@ -933,6 +933,18 @@ function SectionH3({ icon: Icon, children }) {
 // Inspirado en PreciosAlDia: FAB + bottom sheet en móvil, panel lateral en desktop
 function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente, onAnterior, preciosMap = {} }) {
   const [sheetOpen, setSheetOpen] = useState(false)
+  const swipeStartY = useRef(null)
+
+  function handleTouchStart(e) {
+    swipeStartY.current = e.touches[0].clientY
+  }
+
+  function handleTouchEnd(e) {
+    if (swipeStartY.current === null) return
+    const dy = swipeStartY.current - e.changedTouches[0].clientY
+    if (dy > 30) setSheetOpen(true)
+    swipeStartY.current = null
+  }
 
   const totalItems = items.reduce((s, it) => s + it.cantidad, 0)
 
@@ -954,13 +966,13 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
           <div key={it._key} className="px-3 sm:px-4 py-2 group">
             {/* Fila 1: nombre completo + total línea */}
             <div className="flex items-start justify-between gap-2 mb-1">
-              <p className="flex-1 text-[10px] sm:text-[11px] font-bold text-slate-700 leading-snug line-clamp-2">{it.nombreSnap}</p>
+              <p className="flex-1 text-[12px] sm:text-[12px] font-bold text-slate-700 leading-snug line-clamp-2">{it.nombreSnap}</p>
               <span className="text-[11px] sm:text-xs font-black text-slate-800 shrink-0">{fmtUsd(linea)}</span>
             </div>
             {/* Fila 2: precio unitario + unidad + controles */}
             <div className="flex items-center gap-1.5">
-              <span className="text-[9px] sm:text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1 rounded">{fmtUsd(it.precioUnitUsd)}</span>
-              <span className="text-[9px] text-slate-400">{it.unidadSnap}</span>
+              <span className="text-[11px] sm:text-[11px] font-bold text-emerald-600 bg-emerald-50 px-1 rounded">{fmtUsd(it.precioUnitUsd)}</span>
+              <span className="text-[11px] text-slate-400">{it.unidadSnap}</span>
               <div className="flex items-center bg-slate-50 rounded-lg border border-slate-100 overflow-hidden ml-auto">
                 <button type="button"
                   onClick={() => it.cantidad <= 1 ? onEliminar(idx) : onCambiar(idx, 'cantidad', Math.max(0.01, it.cantidad - 1))}
@@ -981,7 +993,7 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
                     const v = parseFloat(String(e.target.value).replace(',', '.'))
                     onCambiar(idx, 'cantidad', (!isNaN(v) && v > 0) ? v : 1)
                   }}
-                  className="w-8 h-7 text-center text-[11px] font-black text-slate-700 bg-white border-x border-slate-100 outline-none"
+                  className="w-8 h-7 text-center text-[12px] font-black text-slate-700 bg-white border-x border-slate-100 outline-none"
                 />
                 <button type="button"
                   onClick={() => onCambiar(idx, 'cantidad', it.cantidad + 1)}
@@ -1026,7 +1038,7 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
       {items.length > 0 && (
         <div className="flex justify-between items-end px-1">
           <div>
-            <span className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider">Subtotal</span>
+            <span className="text-[12px] sm:text-xs font-black text-slate-400 uppercase tracking-wider">Subtotal</span>
             {tasa > 0 && <p className="text-[11px] text-slate-400 mt-0.5">{fmtBs(usdToBs(subtotal, tasa))}</p>}
           </div>
           <span className="text-xl sm:text-2xl font-black text-slate-800">{fmtUsd(subtotal)}</span>
@@ -1052,6 +1064,8 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
         {items.length > 0 && !sheetOpen && (
           <button type="button"
             onClick={() => setSheetOpen(true)}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
             className="fixed bottom-20 left-3 right-3 z-[98] p-3.5 rounded-2xl shadow-xl flex items-center justify-between active:scale-[0.97] transition-all md:bottom-4"
             style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)', boxShadow: '0 8px 30px rgba(27,54,93,0.35)' }}>
             <div className="flex items-center gap-3">

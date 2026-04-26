@@ -2102,16 +2102,12 @@ async function handleCrearDespacho(request, env) {
     const esSupervisorOp = operador.rol === 'supervisor';
     const esPropietario = cot.vendedor_id === (user.operator_id || user.id);
 
-    // Vendedores solo pueden despachar cotizaciones aceptadas y propias
-    if (!esSupervisorOp) {
-      if (cot.estado !== 'aceptada') {
-        return jsonError('Solo puedes despachar cotizaciones ya aceptadas por el supervisor', 400, request);
-      }
-      if (!esPropietario) {
-        return jsonError('Solo puedes despachar tus propias cotizaciones', 400, request);
-      }
-    } else if (!['enviada', 'aceptada'].includes(cot.estado)) {
+    // Todos pueden despachar cotizaciones enviadas o aceptadas propias
+    if (!['enviada', 'aceptada'].includes(cot.estado)) {
       return jsonError('La cotización debe estar enviada o aceptada para despachar', 400, request);
+    }
+    if (!esSupervisorOp && !esPropietario) {
+      return jsonError('Solo puedes despachar tus propias cotizaciones', 400, request);
     }
 
     // 2. Verificar que no exista despacho
@@ -2121,8 +2117,8 @@ async function handleCrearDespacho(request, env) {
       return jsonError('Ya existe una nota de despacho para esta cotización', 400, request);
     }
 
-    // 3. Si está enviada, aceptarla (solo supervisor)
-    if (cot.estado === 'enviada' && esSupervisorOp) {
+    // 3. Si está enviada, aceptarla automáticamente
+    if (cot.estado === 'enviada') {
       await fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${cotizacionId}`, {
         method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
         body: JSON.stringify({ estado: 'aceptada' }),
