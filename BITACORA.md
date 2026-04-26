@@ -1300,9 +1300,14 @@ camelAI:     SUPABASE_SERVICE_KEY_len: 219 ← correcto
 3. Siempre verificar con endpoint de diagnóstico después de cambiar la estrategia de secrets
 
 ### Flujo de deploy actualizado (post-fix)
+
+**⚠️ IMPORTANTE: El despliegue principal y primario es VERCEL.** Vercel es la URL que usan los usuarios finales. camelAI es solo para desarrollo/pruebas. Si algo no funciona en Vercel, es un bug de producción — no importa si funciona en camelAI.
+
 ```
 ┌─────────────────────────────────────────────────────────┐
-│ PRODUCCIÓN (Vercel → luigistorelogistics.workers.dev)   │
+│ ★ PRODUCCIÓN — PRIMARIO (Vercel)                         │
+│   URL: https://listo-pos-cotizaciones.vercel.app         │
+│   Backend: luigistorelogistics.workers.dev               │
 │                                                          │
 │ 1. git push main                                         │
 │ 2. GitHub Actions:                                       │
@@ -1311,10 +1316,14 @@ camelAI:     SUPABASE_SERVICE_KEY_len: 219 ← correcto
 │       en wrangler.jsonc temporalmente                    │
 │    c. wrangler deploy --config wrangler.jsonc            │
 │ 3. Vercel: build frontend + rewrites /api/* al worker    │
+│                                                          │
+│ Secrets: GitHub Secrets + Cloudflare Dashboard            │
 └─────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────┐
-│ DESARROLLO (camelAI → dispatch namespace chiridion)      │
+│ DESARROLLO — SECUNDARIO (camelAI)                        │
+│   URL: https://listo-pos-cotizaciones-*.camelai.app      │
+│   Backend: dispatch namespace chiridion                   │
 │                                                          │
 │ 1. bash deploy.sh                                        │
 │    a. source .dev.vars                                   │
@@ -1322,6 +1331,8 @@ camelAI:     SUPABASE_SERVICE_KEY_len: 219 ← correcto
 │    c. bun run build                                      │
 │    d. wrangler deploy --dispatch-namespace chiridion      │
 │    e. Restaura wrangler.jsonc original                   │
+│                                                          │
+│ Secrets: .dev.vars (gitignored)                          │
 └─────────────────────────────────────────────────────────┘
 ```
 
