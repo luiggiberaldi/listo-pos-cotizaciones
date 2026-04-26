@@ -7,15 +7,17 @@ import { PackageCheck, Truck, DollarSign, BarChart3, Settings, AlertCircle } fro
 
 const BOTTOM_ITEMS = [
   { path: '/', label: 'Inicio', icon: LayoutDashboard },
-  { path: '/cotizaciones', label: 'Cotizaciones', icon: FileText, labelByRole: { administracion: 'Despachos' }, excludeRoles: ['logistica'] },
-  { path: '/despachos', label: 'Despachos', icon: PackageCheck, labelByRole: { logistica: 'Entregas' }, onlyRoles: ['logistica'] },
-  { path: '/clientes', label: 'Clientes', icon: Users, excludeRoles: ['logistica'] },
-  { path: '/inventario', label: 'Inventario', icon: Package, excludeRoles: ['logistica'] },
+  { path: '/cotizaciones', label: 'Cotizar', icon: FileText, labelByRole: { administracion: 'Despachos' }, excludeRoles: ['logistica'] },
+  { path: '/despachos', label: 'Despacho', icon: PackageCheck, labelByRole: { logistica: 'Entregas' }, onlyRoles: ['logistica', 'supervisor'] },
+  { path: '/venta-rapida', label: 'Rápida', icon: Zap, onlyRoles: ['vendedor', 'supervisor'] },
+  { path: '/clientes', label: 'Clientes', icon: Users, onlyRoles: ['vendedor', 'administracion'] },
+  { path: '/inventario', label: 'Inventario', icon: Package, onlyRoles: ['administracion'] },
 ]
 
 const MORE_ITEMS = [
-  { path: '/venta-rapida', label: 'Venta rápida', icon: Zap, onlyRoles: ['vendedor', 'supervisor'] },
-  { path: '/despachos', label: 'Despachos', icon: PackageCheck, excludeRoles: ['logistica'] },
+  { path: '/clientes', label: 'Clientes', icon: Users, onlyRoles: ['supervisor'] },
+  { path: '/inventario', label: 'Inventario', icon: Package, excludeRoles: ['logistica', 'administracion'] },
+  { path: '/despachos', label: 'Despachos', icon: PackageCheck, excludeRoles: ['logistica', 'supervisor'] },
   { path: '/transportistas', label: 'Transportistas', icon: Truck, excludeRoles: ['administracion', 'logistica'] },
   { path: '/comisiones', label: 'Comisiones', icon: DollarSign, excludeRoles: ['logistica'] },
   { path: '/reportes', label: 'Reportes', icon: BarChart3, requiresPrivileged: true },
@@ -90,7 +92,7 @@ export default function BottomNav({ esSupervisor, esAdministracion = false, rol:
               to={path}
               end={path === '/'}
               className={({ isActive }) => `
-                flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl transition-all min-w-[56px]
+                flex flex-col items-center gap-0.5 py-1.5 px-1.5 rounded-xl transition-all min-w-[48px]
                 ${isActive ? 'text-amber-400' : 'text-white/50 active:text-white/80'}
               `}
             >
@@ -99,7 +101,7 @@ export default function BottomNav({ esSupervisor, esAdministracion = false, rol:
                   <div className={`p-1.5 rounded-lg transition-all ${isActive ? 'bg-amber-400/15' : ''}`}>
                     <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
                   </div>
-                  <span className={`text-xs font-bold ${isActive ? 'text-amber-400' : ''}`}>{displayLabel}</span>
+                  <span className={`text-[10px] font-bold ${isActive ? 'text-amber-400' : ''}`}>{displayLabel}</span>
                 </>
               )}
             </NavLink>
@@ -108,14 +110,14 @@ export default function BottomNav({ esSupervisor, esAdministracion = false, rol:
           {/* Botón "Más" */}
           <button
             onClick={() => setShowMore(v => !v)}
-            className={`flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl transition-all min-w-[56px]
+            className={`flex flex-col items-center gap-0.5 py-1.5 px-1.5 rounded-xl transition-all min-w-[48px]
               ${showMore ? 'text-amber-400' : 'text-white/50 active:text-white/80'}
             `}
           >
             <div className={`p-1.5 rounded-lg transition-all ${showMore ? 'bg-amber-400/15' : ''}`}>
               <MoreHorizontal size={20} strokeWidth={showMore ? 2.5 : 2} />
             </div>
-            <span className={`text-xs font-bold ${showMore ? 'text-amber-400' : ''}`}>Más</span>
+            <span className={`text-[10px] font-bold ${showMore ? 'text-amber-400' : ''}`}>Más</span>
           </button>
         </div>
       </nav>

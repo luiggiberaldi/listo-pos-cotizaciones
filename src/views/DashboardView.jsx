@@ -6,7 +6,7 @@ import { useMemo } from 'react'
 import {
   LayoutDashboard, FileText, Users, DollarSign, TrendingUp, Clock,
   Plus, UserCog, ClipboardList, ArrowRight, Package, UserRound,
-  BarChart2, AlertCircle, Truck, PackageCheck, AlertTriangle, MapPin, Calendar,
+  BarChart2, AlertCircle, Truck, PackageCheck, AlertTriangle, MapPin, Calendar, Zap,
 } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import supabase     from '../services/supabase/client'
@@ -178,10 +178,17 @@ export default function DashboardView() {
         title="Inicio"
         subtitle={subtitle}
         action={!esAdministracion && !esLogistica ? (
-          <button onClick={() => navigate('/cotizaciones?nueva=1')} className="flex items-center gap-2 text-white font-bold text-sm px-5 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98]"
-            style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
-            <Plus size={16} strokeWidth={2.5} />Nueva
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => navigate('/venta-rapida')}
+              className="flex items-center gap-1.5 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98]"
+              style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
+              <Zap size={15} strokeWidth={2.5} />Rápida
+            </button>
+            <button onClick={() => navigate('/cotizaciones?nueva=1')}
+              className="flex items-center gap-1.5 font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow active:scale-[0.98] border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
+              <FileText size={15} strokeWidth={2} />Cotización
+            </button>
+          </div>
         ) : null}
       />
 

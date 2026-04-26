@@ -1,15 +1,16 @@
 // src/views/VentaRapidaView.jsx
 // Venta rápida — wizard de 3 pasos: cliente+productos, pago, confirmar
 import { useState, useRef, useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Zap, User, X, Plus, Minus, Package, ArrowLeft, ArrowRight, Loader2,
   Search, CheckCircle, ShoppingCart, DollarSign, Truck, CreditCard,
-  AlertCircle, ChevronRight, UserPlus, ChevronUp, Hash, FileText,
+  AlertCircle, ChevronRight, ChevronLeft, UserPlus, ChevronUp, Hash, FileText, Trash2,
 } from 'lucide-react'
 import { useClientes } from '../hooks/useClientes'
 import ClienteForm from '../components/clientes/ClienteForm'
 import { useInventario, useCategorias } from '../hooks/useInventario'
-import { parseSearchTerms, smartMatchProducto } from '../utils/smartSearch'
+import { smartSearchProductos } from '../utils/smartSearch'
 import { useVentaRapida } from '../hooks/useVentaRapida'
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
@@ -17,7 +18,7 @@ import { useTransportistas } from '../hooks/useTransportistas'
 import useAuthStore from '../store/useAuthStore'
 import { round2, mulR } from '../utils/dinero'
 import { calcTotales } from '../utils/calcTotales'
-import { fmtUsdSimple as fmtUsd, fmtBs } from '../utils/format'
+import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../utils/format'
 import { guardarProductoReciente, getProductosRecientes } from '../components/cotizaciones/ProductosRecientes'
 import { showToast } from '../components/ui/Toast'
 import PageHeader from '../components/ui/PageHeader'
@@ -27,6 +28,7 @@ const FORMAS_PAGO = ['Efectivo', 'Zelle', 'Pago Móvil', 'USDT', 'Transferencia'
 export default function VentaRapidaView() {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
+  const navigate = useNavigate()
   const { data: clientes = [] } = useClientes()
   const { data: inventarioData } = useInventario({ pageSize: 1000 })
   const productos = inventarioData?.productos ?? inventarioData ?? []
@@ -52,7 +54,6 @@ export default function VentaRapidaView() {
 
   // Step 2: Pago + Envío
   const [formaPago, setFormaPago] = useState('')
-  const [formaPagoCliente, setFormaPagoCliente] = useState('')
   const [referenciaPago, setReferenciaPago] = useState('')
   const [transportistaId, setTransportistaId] = useState('')
   const [fleteUsd, setFleteUsd] = useState('')
@@ -103,14 +104,18 @@ export default function VentaRapidaView() {
       ).slice(0, 8)
     : []
 
-  // Filtrar productos
-  const searchTerms = productoBusqueda.trim() ? parseSearchTerms(productoBusqueda) : null
-  const productosFiltrados = useMemo(() => productos.filter(p => {
-    if (!p.activo) return false
-    const coincideTexto = !searchTerms || smartMatchProducto(p, searchTerms)
-    const coincideCat = !catActiva || (p.categoria ?? '').toUpperCase().startsWith(catActiva.toUpperCase())
-    return coincideTexto && coincideCat
-  }), [productos, searchTerms, catActiva])
+  // Filtrar productos con smart search (ranking por relevancia)
+  const productosFiltrados = useMemo(() => {
+    const activos = productos.filter(p => p.activo !== false)
+    if (!productoBusqueda.trim() && !catActiva) return activos
+    // Filtro por categoría
+    const porCat = catActiva
+      ? activos.filter(p => (p.categoria ?? '').toUpperCase().startsWith(catActiva.toUpperCase()))
+      : activos
+    // Smart search con ranking
+    if (!productoBusqueda.trim()) return porCat
+    return smartSearchProductos(porCat, productoBusqueda)
+  }, [productos, productoBusqueda, catActiva])
 
   const recientes = getProductosRecientes(perfil?.id)
     .map(r => productos.find(p => p.id === r.id))
@@ -155,6 +160,13 @@ export default function VentaRapidaView() {
     }))
   }
 
+  function setCantidadDirecta(productoId, cantidad) {
+    const n = Math.max(1, Math.floor(Number(cantidad) || 1))
+    setItems(prev => prev.map(it =>
+      it.productoId === productoId ? { ...it, cantidad: n } : it
+    ))
+  }
+
   function cambiarPrecio(productoId, precio) {
     setItems(prev => prev.map(it =>
       it.productoId === productoId ? { ...it, precioUnitUsd: Math.max(0, Number(precio) || 0) } : it
@@ -173,7 +185,7 @@ export default function VentaRapidaView() {
       transportistaId: transportistaId || null,
       fleteUsd: flete,
       formaPago,
-      formaPagoCliente: formaPagoCliente || null,
+      formaPagoCliente: formaPago,
       referenciaPago: referenciaPago || null,
       notas,
       notasCliente: null,
@@ -192,11 +204,11 @@ export default function VentaRapidaView() {
         setClienteId('')
         setItems([])
         setFormaPago('')
-        setFormaPagoCliente('')
         setReferenciaPago('')
         setTransportistaId('')
         setFleteUsd('')
         setNotas('')
+        navigate('/despachos')
       },
     })
   }
@@ -274,6 +286,7 @@ export default function VentaRapidaView() {
             agregarProducto={agregarProducto}
             items={items}
             cambiarCantidad={cambiarCantidad}
+            setCantidadDirecta={setCantidadDirecta}
             cambiarPrecio={cambiarPrecio}
             quitarItem={quitarItem}
             totalItems={totalItems}
@@ -282,6 +295,8 @@ export default function VentaRapidaView() {
             tasa={tasa}
             mobileCartOpen={mobileCartOpen}
             setMobileCartOpen={setMobileCartOpen}
+            step1Valid={step1Valid}
+            onSiguiente={() => setStep(1)}
           />
         )}
 
@@ -289,8 +304,6 @@ export default function VentaRapidaView() {
           <Step2Pago
             formaPago={formaPago}
             setFormaPago={setFormaPago}
-            formaPagoCliente={formaPagoCliente}
-            setFormaPagoCliente={setFormaPagoCliente}
             referenciaPago={referenciaPago}
             setReferenciaPago={setReferenciaPago}
             transportistas={transportistas}
@@ -315,7 +328,6 @@ export default function VentaRapidaView() {
             totalBs={totalBs}
             tasa={tasa}
             formaPago={formaPago}
-            formaPagoCliente={formaPagoCliente}
             referenciaPago={referenciaPago}
             transportistaSeleccionado={transportistaSeleccionado}
             notas={notas}
@@ -323,19 +335,18 @@ export default function VentaRapidaView() {
         )}
       </div>
 
-      {/* Bottom bar with nav buttons */}
+      {/* Bottom bar with nav buttons — hidden on step 0 (use cart FAB instead) */}
+      {step > 0 && (
       <div className="sticky bottom-0 bg-white border-t border-slate-200 px-4 py-3 flex items-center justify-between gap-3 z-20">
-        {step > 0 ? (
-          <button onClick={() => setStep(step - 1)}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors">
-            <ArrowLeft size={16} /> Atrás
-          </button>
-        ) : <div />}
+        <button onClick={() => setStep(step - 1)}
+          className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors">
+          <ArrowLeft size={16} /> Atrás
+        </button>
 
         {step < 2 ? (
           <button
             onClick={() => setStep(step + 1)}
-            disabled={step === 0 ? !step1Valid : !step2Valid}
+            disabled={!step2Valid}
             className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-sky-600 hover:bg-sky-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
             Siguiente <ArrowRight size={16} />
           </button>
@@ -348,6 +359,77 @@ export default function VentaRapidaView() {
             Crear venta rápida
           </button>
         )}
+      </div>
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Swipe-to-delete wrapper (mobile only)
+// ─────────────────────────────────────────────────────────────────────────────
+function SwipeToDelete({ children, enabled, onDelete }) {
+  const ref = useRef(null)
+  const startX = useRef(0)
+  const currentX = useRef(0)
+  const swiping = useRef(false)
+
+  if (!enabled) return children
+
+  function handleTouchStart(e) {
+    startX.current = e.touches[0].clientX
+    currentX.current = 0
+    swiping.current = false
+    if (ref.current) ref.current.style.transition = 'none'
+  }
+
+  function handleTouchMove(e) {
+    const dx = e.touches[0].clientX - startX.current
+    // Only allow swipe left (negative dx)
+    const offset = Math.min(0, Math.max(-80, dx))
+    currentX.current = offset
+    if (offset < -10) swiping.current = true
+    if (ref.current) ref.current.style.transform = `translateX(${offset}px)`
+  }
+
+  function handleTouchEnd() {
+    if (!ref.current) return
+    ref.current.style.transition = 'transform 0.25s ease'
+    if (currentX.current < -50) {
+      // Snap to reveal delete
+      ref.current.style.transform = 'translateX(-72px)'
+    } else {
+      ref.current.style.transform = 'translateX(0)'
+    }
+  }
+
+  // Prevent click propagation when swiping
+  function handleClick(e) {
+    if (swiping.current) {
+      e.stopPropagation()
+      e.preventDefault()
+    }
+  }
+
+  return (
+    <div className="relative overflow-hidden rounded-xl">
+      {/* Delete button behind */}
+      <button type="button" onClick={(e) => { e.stopPropagation(); onDelete() }}
+        className="absolute right-0 top-0 bottom-0 w-[72px] flex items-center justify-center bg-red-500 text-white rounded-r-xl active:bg-red-600 transition-colors">
+        <div className="flex flex-col items-center gap-0.5">
+          <Trash2 size={16} />
+          <span className="text-[9px] font-bold">Quitar</span>
+        </div>
+      </button>
+      {/* Swipeable content */}
+      <div ref={ref}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onClickCapture={handleClick}
+        className="relative z-[1] bg-white rounded-xl"
+      >
+        {children}
       </div>
     </div>
   )
@@ -364,12 +446,60 @@ function Step1Productos({
   productoBusqueda, setProductoBusqueda, productoInputRef,
   categorias, catActiva, setCatActiva,
   productosFiltrados, recientes, idsAgregados, agregarProducto,
-  items, cambiarCantidad, cambiarPrecio, quitarItem,
+  items, cambiarCantidad, setCantidadDirecta, cambiarPrecio, quitarItem,
   totalItems, totalUsd, totalBs, tasa,
   mobileCartOpen, setMobileCartOpen,
+  step1Valid, onSiguiente,
 }) {
+  // Scroll arrows for categories
+  const scrollRef = useRef(null)
+  const [canScrollLeft, setCanScrollLeft] = useState(false)
+  const [canScrollRight, setCanScrollRight] = useState(false)
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const [editQty, setEditQty] = useState(null) // { productoId, nombre, cantidad }
+
+  function checkScroll() {
+    const el = scrollRef.current
+    if (!el) return
+    setCanScrollLeft(el.scrollLeft > 4)
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4)
+  }
+
+  useEffect(() => {
+    checkScroll()
+    const el = scrollRef.current
+    if (!el) return
+    el.addEventListener('scroll', checkScroll, { passive: true })
+    const ro = new ResizeObserver(checkScroll)
+    ro.observe(el)
+    return () => { el.removeEventListener('scroll', checkScroll); ro.disconnect() }
+  }, [categorias])
+
+  function scrollCats(dir) {
+    scrollRef.current?.scrollBy({ left: dir * 200, behavior: 'smooth' })
+  }
+
+  // Block scroll when sheet is open
+  useEffect(() => {
+    if (sheetOpen) {
+      document.body.style.overflow = 'hidden'
+      return () => { document.body.style.overflow = '' }
+    }
+  }, [sheetOpen])
+
+  // Ordenar: productos con stock primero, luego sin stock
+  const productosOrdenados = useMemo(() => {
+    return [...productosFiltrados].sort((a, b) => {
+      const aStock = (Number(a.stock_actual) || 0) > 0 ? 0 : 1
+      const bStock = (Number(b.stock_actual) || 0) > 0 ? 0 : 1
+      return aStock - bStock
+    })
+  }, [productosFiltrados])
+
+  const productosVisibles = productosOrdenados.slice(0, 30)
+
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-4 space-y-4 pb-24">
       {/* Nuevo cliente modal */}
       {showNuevoCliente && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -456,99 +586,337 @@ function Step1Productos({
       {/* Productos */}
       <div>
         <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">Productos</label>
+
+        {/* ── Barra de búsqueda (estilo Fase 2) ── */}
         <div className="relative mb-2">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           <input ref={productoInputRef}
-            type="text" placeholder="Buscar producto..."
+            type="text" placeholder="Buscar por nombre o código..."
             value={productoBusqueda}
             onChange={e => setProductoBusqueda(e.target.value)}
-            className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-sky-200 focus:border-sky-400 outline-none"
+            className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-slate-200 bg-slate-50 shadow-inner text-sm focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400 transition-all"
           />
+          {productoBusqueda && (
+            <button type="button" onClick={() => setProductoBusqueda('')}
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-600 transition-colors">
+              <X size={14} />
+            </button>
+          )}
         </div>
 
-        {/* Categorías */}
+        {/* ── Categorías en pills scrollables con flechas ── */}
         {categorias.length > 0 && (
-          <div className="flex gap-1.5 overflow-x-auto pb-2 mb-2 scrollbar-hide">
-            <button onClick={() => setCatActiva('')}
-              className={`shrink-0 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${!catActiva ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
-              Todos
+          <div className="relative flex items-center gap-1 mb-2">
+            <button type="button" onClick={() => scrollCats(-1)}
+              className={`shrink-0 p-1 rounded-full border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 transition-all ${canScrollLeft ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+              <ChevronLeft size={14} />
             </button>
-            {categorias.map(cat => (
-              <button key={cat} onClick={() => setCatActiva(cat === catActiva ? '' : cat)}
-                className={`shrink-0 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${cat === catActiva ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
-                {cat}
-              </button>
-            ))}
+            <div ref={scrollRef} className="flex-1 overflow-x-auto scrollbar-hide">
+              <div className="flex gap-1.5 py-0.5 w-max">
+                <button onClick={() => setCatActiva('')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap ${
+                    !catActiva ? 'bg-primary text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                  }`}>
+                  Todos
+                </button>
+                {categorias.map(cat => (
+                  <button key={cat} onClick={() => setCatActiva(cat === catActiva ? '' : cat)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap ${
+                      cat === catActiva ? 'bg-primary text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                    }`}>
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button type="button" onClick={() => scrollCats(1)}
+              className={`shrink-0 p-1 rounded-full border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 transition-all ${canScrollRight ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+              <ChevronRight size={14} />
+            </button>
           </div>
         )}
 
-        {/* Product list */}
-        <div className="space-y-1 max-h-48 overflow-auto rounded-xl border border-slate-200 bg-white">
-          {(productoBusqueda || catActiva ? productosFiltrados : recientes.length > 0 ? recientes : productosFiltrados).slice(0, 20).map(p => {
+        {/* ── Tarjetas de productos ── */}
+        {/* Vista lista compacta (móvil < md) */}
+        <div className="flex flex-col gap-1.5 md:hidden">
+          {productosVisibles.map(p => {
+            const added = idsAgregados.has(p.id)
+            const itemInCart = added ? items.find(it => it.productoId === p.id) : null
+            const stock = Number(p.stock_actual) || 0
+            const sinStock = stock <= 0
+            const tieneMultiprecios = p.precio_2 != null || p.precio_3 != null
+            return (
+              <SwipeToDelete key={p.id} enabled={added} onDelete={() => quitarItem(p.id)}>
+                <div
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-all min-h-[48px] ${
+                    sinStock
+                      ? 'opacity-40 cursor-not-allowed border-slate-100 bg-white'
+                      : added
+                        ? 'border-emerald-300 bg-emerald-50/50 shadow-sm shadow-emerald-100/80'
+                        : 'border-slate-200 bg-white hover:border-primary/50 active:scale-[0.98]'
+                  }`}
+                  onClick={() => !added && !sinStock && agregarProducto(p)}
+                >
+                  {/* Indicador izquierdo */}
+                  <div className={`w-7 h-7 rounded-lg shrink-0 flex items-center justify-center ${
+                    added ? 'bg-emerald-100' : 'bg-slate-100'
+                  }`}>
+                    {added
+                      ? <CheckCircle size={14} className="text-emerald-500" />
+                      : <Package size={14} className="text-slate-400" />
+                    }
+                  </div>
+                  {/* Nombre */}
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-xs font-bold leading-tight truncate ${
+                      added ? 'text-emerald-700' : 'text-slate-700'
+                    }`}>
+                      {p.nombre}
+                    </p>
+                    {tieneMultiprecios && (
+                      <p className="text-[9px] font-bold text-primary/60">{[p.precio_2 != null && 'P2', p.precio_3 != null && 'P3'].filter(Boolean).length + 1} precios</p>
+                    )}
+                  </div>
+                  {/* Stepper inline OR Precio+stock */}
+                  {added && itemInCart ? (
+                    <div className="shrink-0 flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
+                      <button type="button"
+                        onClick={() => itemInCart.cantidad <= 1 ? quitarItem(p.id) : cambiarCantidad(p.id, -1)}
+                        className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 active:bg-red-100 active:text-red-500 transition-colors">
+                        {itemInCart.cantidad <= 1 ? <Trash2 size={11} strokeWidth={2.5} /> : <Minus size={12} strokeWidth={3} />}
+                      </button>
+                      <button type="button"
+                        onClick={() => setEditQty({ productoId: p.id, nombre: p.nombre, cantidad: itemInCart.cantidad, stock })}
+                        className="w-9 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-xs font-black text-slate-700 active:bg-sky-50 active:border-sky-300">
+                        {itemInCart.cantidad}
+                      </button>
+                      <button type="button"
+                        onClick={() => cambiarCantidad(p.id, 1)}
+                        className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 active:bg-emerald-100 transition-colors">
+                        <Plus size={12} strokeWidth={3} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="shrink-0 text-right">
+                      <p className={`text-xs font-black ${added ? 'text-emerald-600' : 'text-slate-800'}`}>
+                        {fmtUsd(p.precio_usd)}
+                      </p>
+                      {tasa > 0 && (
+                        <p className="text-[9px] text-slate-400">{fmtBs(usdToBs(p.precio_usd, tasa))}</p>
+                      )}
+                      <p className={`text-[9px] font-medium ${
+                        sinStock ? 'text-red-500' : stock <= 5 ? 'text-amber-500' : 'text-emerald-500'
+                      }`}>
+                        {sinStock ? 'Agotado' : `${stock} disp.`}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </SwipeToDelete>
+            )
+          })}
+        </div>
+
+        {/* Vista grid (desktop md+) */}
+        <div className="hidden md:grid md:grid-cols-4 lg:grid-cols-5 gap-2">
+          {productosVisibles.map(p => {
             const added = idsAgregados.has(p.id)
             const stock = Number(p.stock_actual) || 0
+            const sinStock = stock <= 0
+            const tieneMultiprecios = p.precio_2 != null || p.precio_3 != null
             return (
-              <button key={p.id} onClick={() => !added && stock > 0 && agregarProducto(p)}
-                disabled={added || stock <= 0}
-                className={`w-full text-left px-3 py-2 flex items-center gap-2 text-sm border-b border-slate-50 last:border-0 transition-colors ${
-                  added ? 'bg-emerald-50 opacity-60' : stock <= 0 ? 'opacity-40' : 'hover:bg-sky-50'
+              <button key={p.id} type="button"
+                onClick={() => !added && !sinStock && agregarProducto(p)}
+                disabled={sinStock}
+                className={`relative bg-white rounded-xl border p-2 flex flex-col items-center text-center transition-all active:scale-95 hover:shadow-sm ${
+                  sinStock
+                    ? 'opacity-40 cursor-not-allowed border-slate-100'
+                    : added
+                      ? 'border-emerald-300 shadow-sm shadow-emerald-100/80'
+                      : 'border-slate-200 hover:border-primary/50'
                 }`}>
-                <Package size={14} className="text-slate-400 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="truncate font-medium text-slate-700">{p.nombre}</p>
-                  <p className="text-xs text-slate-400">{p.codigo} · {fmtUsd(p.precio_usd)} · Stock: {stock}</p>
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-1.5 ${
+                  added ? 'bg-emerald-50' : 'bg-slate-50'
+                }`}>
+                  {added
+                    ? <CheckCircle size={18} className="text-emerald-400" />
+                    : <Package size={18} className="text-slate-300" />
+                  }
                 </div>
-                {added ? <CheckCircle size={16} className="text-emerald-500 shrink-0" /> :
-                 stock > 0 ? <Plus size={16} className="text-sky-500 shrink-0" /> : null}
+                <p className={`text-[11px] font-bold leading-tight line-clamp-2 mb-1 ${
+                  added ? 'text-emerald-700' : 'text-slate-700'
+                }`}>
+                  {p.nombre}
+                </p>
+                <p className={`text-[11px] font-black ${added ? 'text-emerald-600' : 'text-slate-800'}`}>
+                  {fmtUsd(p.precio_usd)}
+                </p>
+                {tieneMultiprecios && (
+                  <p className="text-[8px] font-bold text-primary/60">{[p.precio_2 != null && 'P2', p.precio_3 != null && 'P3'].filter(Boolean).length + 1} precios</p>
+                )}
+                {tasa > 0 && (
+                  <p className="text-[9px] text-slate-400 leading-tight">{fmtBs(usdToBs(p.precio_usd, tasa))}</p>
+                )}
+                <p className={`text-[9px] font-medium mt-0.5 ${
+                  sinStock ? 'text-red-500' : stock <= 5 ? 'text-amber-500' : 'text-emerald-500'
+                }`}>
+                  {sinStock ? 'Agotado' : `${stock} disp.`}
+                </p>
               </button>
             )
           })}
-          {productosFiltrados.length === 0 && productoBusqueda && (
-            <p className="px-3 py-4 text-sm text-slate-400 text-center">Sin resultados</p>
-          )}
         </div>
+
+        {productosFiltrados.length === 0 && productoBusqueda && (
+          <div className="text-center py-10">
+            <Search size={28} className="mx-auto text-slate-200 mb-3" />
+            <p className="text-sm font-bold text-slate-400">Sin resultados</p>
+            <p className="text-xs text-slate-300 mt-1">Prueba con otro término o categoría</p>
+          </div>
+        )}
       </div>
 
-      {/* Cart (items added) */}
-      {items.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Carrito ({totalItems} items)
-            </span>
-            <span className="text-sm font-bold text-slate-800">{fmtUsd(totalUsd)}</span>
+      {/* ── Modal para editar cantidad exacta ── */}
+      {editQty && (
+        <div className="fixed inset-0 z-[101] bg-black/40 flex items-center justify-center p-4 md:hidden"
+          onClick={() => setEditQty(null)}>
+          <div className="bg-white rounded-2xl p-5 w-full max-w-[280px] shadow-2xl" onClick={e => e.stopPropagation()}>
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Cantidad</p>
+            <p className="text-sm font-bold text-slate-700 truncate mb-3">{editQty.nombre}</p>
+            <input
+              type="text"
+              inputMode="numeric"
+              autoFocus
+              min={1}
+              max={editQty.stock || 99999}
+              defaultValue={editQty.cantidad}
+              onFocus={e => e.target.select()}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  const val = Math.max(1, Math.floor(Number(e.target.value) || 1))
+                  setCantidadDirecta(editQty.productoId, val)
+                  setEditQty(null)
+                }
+              }}
+              className="w-full text-center text-2xl font-black text-slate-800 py-3 rounded-xl border-2 border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-200 outline-none"
+            />
+            <div className="flex gap-2 mt-3">
+              <button onClick={() => setEditQty(null)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-slate-100 hover:bg-slate-200 text-slate-600">
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  const input = document.querySelector('[type=number][inputMode=numeric]')
+                  const val = Math.max(1, Math.floor(Number(input?.value) || 1))
+                  setCantidadDirecta(editQty.productoId, val)
+                  setEditQty(null)
+                }}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-sky-600 hover:bg-sky-700">
+                Aceptar
+              </button>
+            </div>
           </div>
-          <div className="space-y-2">
-            {items.map(it => (
-              <div key={it.productoId} className="flex items-center gap-2 p-2.5 bg-white border border-slate-200 rounded-xl">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-700 truncate">{it.nombreSnap}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs text-slate-400">{fmtUsd(it.precioUnitUsd)} × {it.cantidad}</span>
-                    <span className="text-xs font-semibold text-slate-600">{fmtUsd(round2(it.precioUnitUsd * it.cantidad))}</span>
+        </div>
+      )}
+
+      {/* ── FAB flotante (visible cuando hay items y sheet cerrado) ── */}
+      {items.length > 0 && !sheetOpen && (
+        <button type="button"
+          onClick={() => setSheetOpen(true)}
+          className="fixed bottom-[8.5rem] left-3 right-3 z-[96] p-3.5 rounded-2xl shadow-xl flex items-center justify-between active:scale-[0.97] transition-all md:bottom-16"
+          style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)', boxShadow: '0 8px 30px rgba(27,54,93,0.35)' }}>
+          <div className="flex items-center gap-3">
+            <div className="bg-white/20 p-2 rounded-xl">
+              <ShoppingCart size={18} className="text-white" />
+            </div>
+            <div className="text-left">
+              <div className="text-[10px] font-bold text-white/70 uppercase tracking-wider">Ver Carrito</div>
+              <div className="text-white font-black text-sm">{totalItems} item{totalItems !== 1 ? 's' : ''}</div>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-xl font-black text-white leading-none">{fmtUsd(totalUsd)}</div>
+            {tasa > 0 && <div className="text-[10px] font-bold text-white/70 mt-0.5">{fmtBs(totalBs)}</div>}
+          </div>
+        </button>
+      )}
+
+      {/* ── Bottom Sheet del carrito ── */}
+      {sheetOpen && (
+        <div className="fixed inset-0 z-[100] flex flex-col justify-end bg-slate-900/60 backdrop-blur-sm"
+          onClick={() => setSheetOpen(false)}>
+          <div className="bg-white w-full rounded-t-3xl shadow-2xl flex flex-col pb-[env(safe-area-inset-bottom)]"
+            style={{ maxHeight: '85vh' }}
+            onClick={e => e.stopPropagation()}>
+            {/* Handle */}
+            <div className="flex justify-center pt-3 pb-2">
+              <div className="w-12 h-1.5 bg-slate-300 rounded-full" />
+            </div>
+            {/* Header */}
+            <div className="px-4 pb-3 flex items-center justify-between border-b border-slate-200">
+              <h3 className="font-black text-slate-800 text-lg flex items-center gap-2">
+                <ShoppingCart size={18} style={{ color: '#1B365D' }} /> Carrito
+              </h3>
+              <button onClick={() => setSheetOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-slate-100">
+                <X size={18} className="text-slate-400" />
+              </button>
+            </div>
+            {/* Items list */}
+            <div className="flex-1 overflow-auto px-3 py-2 divide-y divide-slate-50">
+              {items.map(it => {
+                const linea = round2(it.precioUnitUsd * it.cantidad)
+                return (
+                  <div key={it.productoId} className="py-2">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <p className="flex-1 text-[12px] font-bold text-slate-700 leading-snug line-clamp-2">{it.nombreSnap}</p>
+                      <span className="text-[11px] font-black text-slate-800 shrink-0">{fmtUsd(linea)}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-1 rounded">{fmtUsd(it.precioUnitUsd)}</span>
+                      <div className="flex items-center bg-slate-50 rounded-lg border border-slate-100 overflow-hidden ml-auto">
+                        <button type="button"
+                          onClick={() => it.cantidad <= 1 ? quitarItem(it.productoId) : cambiarCantidad(it.productoId, -1)}
+                          className="w-8 h-7 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors active:scale-90">
+                          <Minus size={12} strokeWidth={3} />
+                        </button>
+                        <span className="w-8 h-7 text-center text-[12px] font-black text-slate-700 bg-white border-x border-slate-100 leading-7">
+                          {it.cantidad}
+                        </span>
+                        <button type="button"
+                          onClick={() => cambiarCantidad(it.productoId, 1)}
+                          className="w-8 h-7 flex items-center justify-center text-slate-400 hover:text-emerald-500 transition-colors active:scale-90">
+                          <Plus size={12} strokeWidth={3} />
+                        </button>
+                      </div>
+                      <button type="button" onClick={() => quitarItem(it.productoId)}
+                        className="w-7 h-7 rounded-md bg-red-50 hover:bg-red-100 flex items-center justify-center shrink-0 transition-colors active:scale-95">
+                        <Trash2 size={12} className="text-red-400" />
+                      </button>
+                    </div>
                   </div>
+                )
+              })}
+            </div>
+            {/* Footer */}
+            <div className="border-t border-slate-200 p-3 pb-6 space-y-2 bg-white">
+              <div className="flex justify-between items-end px-1">
+                <div>
+                  <span className="text-[12px] font-black text-slate-400 uppercase tracking-wider">Subtotal</span>
+                  {tasa > 0 && <p className="text-[11px] text-slate-400 mt-0.5">{fmtBs(totalBs)}</p>}
                 </div>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => cambiarCantidad(it.productoId, -1)}
-                    className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
-                    <Minus size={14} />
-                  </button>
-                  <span className="w-8 text-center text-sm font-semibold">{it.cantidad}</span>
-                  <button onClick={() => cambiarCantidad(it.productoId, 1)}
-                    className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
-                    <Plus size={14} />
-                  </button>
-                </div>
-                <button onClick={() => quitarItem(it.productoId)}
-                  className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500">
-                  <X size={16} />
-                </button>
+                <span className="text-xl font-black text-slate-800">{fmtUsd(totalUsd)}</span>
               </div>
-            ))}
+              <button type="button"
+                onClick={() => { setSheetOpen(false); if (step1Valid) onSiguiente() }}
+                disabled={!step1Valid}
+                className="w-full flex items-center justify-center gap-2 py-3 text-white font-bold text-sm rounded-xl transition-all active:scale-[0.98] shadow-lg disabled:opacity-40"
+                style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
+                Siguiente <ArrowRight size={16} />
+              </button>
+            </div>
           </div>
-          {tasa > 0 && (
-            <p className="text-xs text-slate-400 mt-2 text-right">≈ {fmtBs(totalBs)}</p>
-          )}
         </div>
       )}
     </div>
@@ -559,17 +927,17 @@ function Step1Productos({
 // Step 2: Pago y Envío
 // ─────────────────────────────────────────────────────────────────────────────
 function Step2Pago({
-  formaPago, setFormaPago, formaPagoCliente, setFormaPagoCliente,
+  formaPago, setFormaPago,
   referenciaPago, setReferenciaPago,
   transportistas, transportistaId, setTransportistaId,
   fleteUsd, setFleteUsd, notas, setNotas,
 }) {
   return (
     <div className="p-4 space-y-5">
-      {/* Forma de pago (empresa) */}
+      {/* Forma de pago del cliente */}
       <div>
         <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 block">
-          Forma de pago <span className="text-red-400">*</span>
+          Forma de pago del cliente <span className="text-red-400">*</span>
         </label>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {FORMAS_PAGO.map(fp => (
@@ -585,28 +953,14 @@ function Step2Pago({
         </div>
       </div>
 
-      {/* Pago del cliente */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">
-            Forma de pago del cliente
-          </label>
-          <select value={formaPagoCliente} onChange={e => setFormaPagoCliente(e.target.value)}
-            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm bg-white focus:ring-2 focus:ring-sky-200 focus:border-sky-400 outline-none">
-            <option value="">— Seleccionar —</option>
-            {FORMAS_PAGO.filter(fp => fp !== 'Cta por cobrar').map(fp => (
-              <option key={fp} value={fp}>{fp}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">
-            Referencia / comprobante
-          </label>
-          <input type="text" value={referenciaPago} onChange={e => setReferenciaPago(e.target.value)}
-            placeholder="Ej: REF-12345"
-            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-sky-200 focus:border-sky-400 outline-none" />
-        </div>
+      {/* Referencia */}
+      <div>
+        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">
+          Referencia / comprobante
+        </label>
+        <input type="text" value={referenciaPago} onChange={e => setReferenciaPago(e.target.value)}
+          placeholder="Ej: REF-12345"
+          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-sky-200 focus:border-sky-400 outline-none" />
       </div>
 
       {/* Transportista */}
@@ -629,7 +983,7 @@ function Step2Pago({
           <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">
             Monto del flete (USD)
           </label>
-          <input type="number" min="0" step="0.01" value={fleteUsd} onChange={e => setFleteUsd(e.target.value)}
+          <input type="text" inputMode="decimal" value={fleteUsd} onChange={e => { const v = e.target.value; if (/^[0-9]*[.,]?[0-9]*$/.test(v)) setFleteUsd(v) }}
             placeholder="0.00"
             className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-sky-200 focus:border-sky-400 outline-none" />
         </div>
@@ -653,7 +1007,7 @@ function Step2Pago({
 // ─────────────────────────────────────────────────────────────────────────────
 function Step3Confirmar({
   clienteSeleccionado, items, subtotal, ivaUsd, totalUsd, flete, totalConFlete,
-  totalBs, tasa, formaPago, formaPagoCliente, referenciaPago, transportistaSeleccionado, notas,
+  totalBs, tasa, formaPago, referenciaPago, transportistaSeleccionado, notas,
 }) {
   return (
     <div className="p-4 space-y-4">
@@ -728,12 +1082,6 @@ function Step3Confirmar({
           <CreditCard size={14} className="text-slate-400" />
           <span className="text-slate-700">{formaPago}</span>
         </div>
-        {formaPagoCliente && (
-          <div className="flex items-center gap-2 text-sm">
-            <DollarSign size={14} className="text-slate-400" />
-            <span className="text-slate-600">Cliente pagó con: {formaPagoCliente}</span>
-          </div>
-        )}
         {referenciaPago && (
           <div className="flex items-center gap-2 text-sm">
             <Hash size={14} className="text-slate-400" />

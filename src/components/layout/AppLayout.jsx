@@ -49,9 +49,9 @@ function NotifIcon({ type }) {
 // ─── Definición de rutas de navegación ────────────────────────────────────────
 const NAV_TODOS = [
   { path: '/',               label: 'Inicio',         icono: LayoutDashboard },
-  { path: '/clientes',       label: 'Clientes',       icono: Users,          excludeRoles: ['logistica'] },
   { path: '/cotizaciones',   label: 'Cotizaciones',   icono: FileText,       labelByRole: { administracion: 'Despachos' }, excludeRoles: ['logistica'] },
   { path: '/venta-rapida',   label: 'Venta rápida',   icono: Zap,            onlyRoles: ['vendedor', 'supervisor'] },
+  { path: '/clientes',       label: 'Clientes',       icono: Users,          excludeRoles: ['logistica'] },
   { path: '/despachos',      label: 'Despachos',      icono: PackageCheck,   labelByRole: { logistica: 'Entregas' } },
   { path: '/inventario',     label: 'Inventario',     icono: Package,        excludeRoles: ['logistica'] },
   { path: '/transportistas', label: 'Transportistas', icono: Truck,          excludeRoles: ['administracion', 'logistica'] },
@@ -182,25 +182,27 @@ export default function AppLayout() {
   }
 
   function cerrarMenu() { setMenuOpen(false) }
+  // En móvil el drawer siempre muestra labels completos
+  const collapsed = sidebarCollapsed && !menuOpen
 
   return (
-    <div className="flex min-h-screen pt-14" style={{ background: '#f1f5f9' }}>
+    <div className="flex min-h-screen pt-12 md:pt-14" style={{ background: '#f1f5f9' }}>
 
       {/* ── Barra superior (móvil + desktop) ────────────────────────────── */}
-      <div className="fixed top-0 left-0 right-0 z-40 px-4 h-14 flex items-center justify-between gap-4"
+      <div className="fixed top-0 left-0 right-0 z-40 px-3 md:px-4 h-12 md:h-14 flex items-center justify-between gap-2 md:gap-4"
         style={{ background: 'linear-gradient(135deg, #0a1628 0%, #0d1f3c 100%)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
 
         {/* Hamburger — solo móvil */}
         <button
           onClick={() => setMenuOpen(true)}
-          className="md:hidden p-3 rounded-xl transition-colors text-white/60 hover:text-white hover:bg-white/10"
+          className="md:hidden p-2.5 rounded-xl transition-colors text-white/60 hover:text-white hover:bg-white/10"
           aria-label="Abrir menú"
         >
-          <Menu size={22} />
+          <Menu size={20} />
         </button>
 
         {/* Logo — solo móvil */}
-        <img src="/logo.png" alt="Construacero Carabobo" className="md:hidden h-8 w-auto object-contain" style={{ filter: 'brightness(1.1)' }} />
+        <img src="/logo.png" alt="Construacero Carabobo" className="md:hidden h-7 w-auto object-contain" style={{ filter: 'brightness(1.1)' }} />
 
         {/* Título de página — solo desktop */}
         {currentPage && (
@@ -386,12 +388,12 @@ export default function AppLayout() {
 
           <img src="/logo.png" alt="Construacero Carabobo"
             className={`object-contain transition-all duration-300 select-none pointer-events-none ${
-              sidebarCollapsed ? 'h-[36px] w-[36px]' : 'h-[60px] md:h-[72px] xl:h-[95px]'
+              collapsed ? 'h-[36px] w-[36px]' : 'h-[60px] md:h-[72px] xl:h-[95px]'
             }`}
             style={{ filter: 'brightness(1.05) drop-shadow(0 0 12px rgba(184,134,11,0.2))' }}
             draggable={false}
           />
-          {!sidebarCollapsed && (
+          {!collapsed && (
             <div className="mt-1.5 md:mt-2 hidden md:flex items-center gap-2 w-full justify-center">
               <div className="h-px flex-1 opacity-20" style={{ background: 'linear-gradient(to right, transparent, #B8860B)' }} />
               <span className="text-[9px] font-bold tracking-[0.25em] uppercase whitespace-nowrap" style={{ color: 'rgba(184,134,11,0.7)' }}>
@@ -409,22 +411,22 @@ export default function AppLayout() {
           {NAV_TODOS
             .filter(item => esDesarrollador || ((!item.excludeRoles || !item.excludeRoles.includes(perfil?.rol)) && (!item.onlyRoles || item.onlyRoles.includes(perfil?.rol))))
             .map(({ path, label, labelByRole, icono: Icono }) => (
-            <NavItem key={path} path={path} label={labelByRole?.[perfil?.rol] || label} Icono={Icono} onClick={cerrarMenu} collapsed={sidebarCollapsed} />
+            <NavItem key={path} path={path} label={labelByRole?.[perfil?.rol] || label} Icono={Icono} onClick={cerrarMenu} collapsed={collapsed} />
           ))}
           {esPrivilegiado && (
             <>
-              {!sidebarCollapsed && (
+              {!collapsed && (
                 <div className="pt-4 pb-1.5 px-3">
                   <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'rgba(184,134,11,0.7)' }}>
                     Administración
                   </p>
                 </div>
               )}
-              {sidebarCollapsed && <div className="pt-3 mt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }} />}
+              {collapsed && <div className="pt-3 mt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }} />}
               {NAV_SUPERVISOR
                 .filter(item => esDesarrollador || ((!item.excludeRoles || !item.excludeRoles.includes(perfil?.rol)) && (!item.onlyRoles || item.onlyRoles.includes(perfil?.rol))))
                 .map(({ path, label, icono: Icono }) => (
-                <NavItem key={path} path={path} label={label} Icono={Icono} onClick={cerrarMenu} collapsed={sidebarCollapsed} />
+                <NavItem key={path} path={path} label={label} Icono={Icono} onClick={cerrarMenu} collapsed={collapsed} />
               ))}
             </>
           )}
@@ -434,14 +436,14 @@ export default function AppLayout() {
         <div className="relative z-10 p-2 pb-20 md:pb-2 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           <button
             onClick={handleSwitchOut}
-            className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} p-3 rounded-2xl transition-all active:scale-[0.98] group`}
+            className={`w-full flex items-center ${collapsed ? 'justify-center' : 'gap-3'} p-3 rounded-2xl transition-all active:scale-[0.98] group`}
             style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}
             onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)' }}
             onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)' }}
-            title={sidebarCollapsed ? 'Cambiar operador' : undefined}
+            title={collapsed ? 'Cambiar operador' : undefined}
           >
             <LoginAvatar user={perfil} size="sm" />
-            {!sidebarCollapsed && (
+            {!collapsed && (
               <>
                 <div className="flex-1 min-w-0 text-left">
                   <p className="text-sm font-black text-white/90 truncate leading-tight">

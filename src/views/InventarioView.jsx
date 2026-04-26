@@ -5,6 +5,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Package, Plus, Search, RefreshCw, X, Filter, LayoutGrid, List, AlertTriangle, ArrowLeftRight, FileText } from 'lucide-react'
+import { smartSearchProductos } from '../utils/smartSearch'
 import useAuthStore from '../store/useAuthStore'
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import CustomSelect from '../components/ui/CustomSelect'
@@ -88,15 +89,21 @@ export default function InventarioView() {
   const [tabActivo,        setTabActivo]        = useState('productos') // 'productos' | 'movimientos'
   const [showListaPrecios, setShowListaPrecios] = useState(false)
 
-  // Data — todos los productos (sin filtro de búsqueda) para el modal de movimientos
-  const { data: inventarioData, isLoading, isError, refetch } = useInventario({ busqueda, categoria, pageSize: 1000 })
-  const productos = inventarioData?.productos ?? inventarioData ?? []
+  // Data — todos los productos (sin filtro de búsqueda, filtro client-side con smartSearch)
+  const { data: inventarioData, isLoading, isError, refetch } = useInventario({ categoria, pageSize: 1000 })
+  const productosRaw = inventarioData?.productos ?? inventarioData ?? []
   const { data: todosData } = useInventario({ pageSize: 1000 })
   const todosProductos = todosData?.productos ?? todosData ?? []
   const { data: categorias = [] } = useCategorias()
   const desactivar = useDesactivarProducto()
   const borrar = useBorrarProducto()
   const { data: stockComprometido = {} } = useStockComprometido()
+
+  // Smart search client-side con ranking por relevancia
+  const productos = useMemo(() => {
+    if (!busqueda.trim()) return productosRaw
+    return smartSearchProductos(productosRaw, busqueda)
+  }, [productosRaw, busqueda])
 
   // Filtrar por stock bajo (client-side) — stock bajo primero, stock 0 al final
   const productosFiltrados = useMemo(() => {

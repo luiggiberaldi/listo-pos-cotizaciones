@@ -146,6 +146,11 @@ export default {
       return handleCrearDespacho(request, env);
     }
 
+    // ── API: venta rápida (cotización + despacho atómico) ──────────────────
+    if (url.pathname === '/api/ventas-rapidas/crear' && request.method === 'POST') {
+      return handleVentaRapida(request, env);
+    }
+
     // ── API: actualizar estado de despacho (bypass RLS) ─────────────────────
     if (url.pathname === '/api/despachos/estado' && request.method === 'POST') {
       return handleActualizarEstadoDespacho(request, env);
@@ -2269,6 +2274,240 @@ async function handleCrearDespacho(request, env) {
 // ══════════════════════════════════════════════════════════════════════════════
 // 3. ACTUALIZAR ESTADO DESPACHO
 // ══════════════════════════════════════════════════════════════════════════════
+
+// ── Venta Rápida: crea cotización aceptada + despacho en un solo paso ───────
+async function handleVentaRapida(request, env) {
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { user, operador, headers } = v;
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+
+  const {
+    clienteId, transportistaId, fleteUsd,
+    formaPago, formaPagoCliente, referenciaPago,
+    notas, notasCliente, items,
+    descuentoGlobalPct, costoEnvioUsd, tasaBcv,
+  } = body;
+
+  if (!clienteId) return jsonError('Falta clienteId', 400, request);
+  if (!items || !Array.isArray(items) || items.length === 0) return jsonError('Faltan items', 400, request);
+
+  const flete = Math.max(0, Number(fleteUsd) || 0);
+  const descPct = Math.max(0, Number(descuentoGlobalPct) || 0);
+  const envio = Math.max(0, Number(costoEnvioUsd) || 0);
+
+  // Validate items
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    if (!it.productoId) return jsonError(`Item ${i + 1}: falta productoId`, 400, request);
+    if (typeof it.cantidad !== 'number' || it.cantidad <= 0) return jsonError(`Item ${i + 1}: cantidad debe ser > 0`, 400, request);
+    if (typeof it.precioUnitUsd !== 'number' || it.precioUnitUsd < 0) return jsonError(`Item ${i + 1}: precio inválido`, 400, request);
+  }
+
+  try {
+    // 1. Obtener productos para verificar stock y obtener snapshots
+    const prodIds = items.map(i => i.productoId);
+    const prodRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/productos?id=in.(${prodIds.join(',')})&activo=eq.true&select=id,nombre,codigo,unidad,stock_actual,precio_usd`,
+      { headers }
+    );
+    const productos = await prodRes.json();
+    const stockMap = Object.fromEntries(productos.map(p => [p.id, p]));
+
+    // Verify stock
+    for (const item of items) {
+      const prod = stockMap[item.productoId];
+      if (!prod) return jsonError(`Producto no encontrado o inactivo`, 400, request);
+      if (Number(prod.stock_actual) < item.cantidad) {
+        return jsonError(`Stock insuficiente: "${prod.nombre}" requiere ${item.cantidad} pero solo hay ${prod.stock_actual}`, 400, request);
+      }
+    }
+
+    // 2. Calculate totals
+    let subtotal = 0;
+    const cotItems = items.map((it, idx) => {
+      const prod = stockMap[it.productoId];
+      const linea = it.precioUnitUsd * it.cantidad;
+      subtotal += linea;
+      return {
+        producto_id: it.productoId,
+        nombre_snap: prod.nombre,
+        codigo_snap: prod.codigo || null,
+        unidad_snap: prod.unidad || 'und',
+        cantidad: it.cantidad,
+        precio_unit_usd: it.precioUnitUsd,
+        descuento_pct: it.descuentoPct || 0,
+        total_linea_usd: it.precioUnitUsd * it.cantidad,
+        orden: idx,
+      };
+    });
+
+    const descMonto = subtotal * (descPct / 100);
+    const subtotalDesc = subtotal - descMonto;
+    const totalUsd = subtotalDesc + envio;
+
+    // 3. Create cotización in estado 'aceptada'
+    const cotBody = {
+      cliente_id: clienteId,
+      vendedor_id: user.operator_id,
+      estado: 'aceptada',
+      subtotal_usd: subtotal,
+      descuento_global_pct: descPct,
+      descuento_usd: descMonto,
+      costo_envio_usd: envio,
+      total_usd: totalUsd,
+      tasa_bcv_snapshot: tasaBcv || null,
+      total_bs_snapshot: tasaBcv ? totalUsd * tasaBcv : null,
+      notas_cliente: notasCliente || null,
+      notas_internas: notas || null,
+      transportista_id: transportistaId || null,
+      enviada_en: new Date().toISOString(),
+    };
+    console.log('[VR] Creating cotización:', JSON.stringify(cotBody));
+    const cotRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?select=id,numero`, {
+      method: 'POST',
+      headers: { ...headers, Prefer: 'return=representation' },
+      body: JSON.stringify(cotBody),
+    });
+    if (!cotRes.ok) {
+      const err = await cotRes.text();
+      console.error('[VR] Cotización error:', err);
+      return jsonError(`Error al crear cotización: ${err}`, 500, request);
+    }
+    const [cot] = await cotRes.json();
+    console.log('[VR] Cotización created:', cot?.id, cot?.numero);
+
+    // 4. Insert cotización items
+    const ciRows = cotItems.map(it => ({ ...it, cotizacion_id: cot.id }));
+    console.log('[VR] Inserting items:', ciRows.length);
+    const ciRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizacion_items`, {
+      method: 'POST', headers,
+      body: JSON.stringify(ciRows),
+    });
+    if (!ciRes.ok) {
+      const err = await ciRes.text();
+      console.error('[VR] Items error:', err);
+      return jsonError(`Error al insertar items: ${err}`, 500, request);
+    }
+
+    // 5. Deduct stock and register kardex
+    const loteId = crypto.randomUUID();
+    const movimientos = [];
+    for (const item of items) {
+      const prod = stockMap[item.productoId];
+      const stockAnterior = Number(prod.stock_actual);
+      const nuevoStock = stockAnterior - item.cantidad;
+      await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${item.productoId}`, {
+        method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
+        body: JSON.stringify({ stock_actual: nuevoStock }),
+      });
+      movimientos.push({
+        lote_id: loteId,
+        tipo: 'egreso',
+        motivo: `Venta rápida — Despacho #${cot.numero}`,
+        motivo_tipo: 'otro',
+        producto_id: item.productoId,
+        producto_nombre: prod.nombre,
+        cantidad: item.cantidad,
+        stock_anterior: stockAnterior,
+        stock_nuevo: nuevoStock,
+        usuario_id: user.operator_id,
+        usuario_nombre: operador.nombre,
+        usuario_color: operador.color || null,
+      });
+    }
+    if (movimientos.length > 0) {
+      await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos`, {
+        method: 'POST', headers,
+        body: JSON.stringify(movimientos),
+      });
+    }
+
+    // 6. Create nota de despacho
+    const totalConFlete = totalUsd + flete;
+    const despRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?select=id,numero`, {
+      method: 'POST',
+      headers: { ...headers, Prefer: 'return=representation' },
+      body: JSON.stringify({
+        cotizacion_id: cot.id,
+        cliente_id: clienteId,
+        vendedor_id: user.operator_id,
+        transportista_id: transportistaId || null,
+        estado: 'pendiente',
+        total_usd: totalConFlete,
+        flete_usd: flete,
+        notas: notas || null,
+        forma_pago: formaPago || null,
+        forma_pago_cliente: formaPagoCliente || formaPago || null,
+        referencia_pago: referenciaPago || null,
+        creado_por: user.operator_id,
+      }),
+    });
+    if (!despRes.ok) {
+      const err = await despRes.text();
+      console.error('[VR] Despacho error:', err);
+      return jsonError(`Error al crear despacho: ${err}`, 500, request);
+    }
+    const [despacho] = await despRes.json();
+    console.log('[VR] Despacho created:', despacho?.id, despacho?.numero);
+
+    // 7. Si es Cta por cobrar, registrar cargo CxC
+    if (formaPago === 'Cta por cobrar' && despacho) {
+      const saldoRes = await fetch(
+        `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteId}&select=saldo_pendiente`,
+        { headers }
+      );
+      const [clienteSaldo] = await saldoRes.json();
+      const saldoActual = Number(clienteSaldo?.saldo_pendiente || 0);
+      const nuevoSaldo = saldoActual + totalConFlete;
+
+      await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
+        method: 'POST', headers,
+        body: JSON.stringify({
+          cliente_id: clienteId,
+          despacho_id: despacho.id,
+          tipo: 'cargo',
+          monto_usd: totalConFlete,
+          saldo_usd: nuevoSaldo,
+          descripcion: `Venta rápida — Despacho #${despacho.numero}`,
+          registrado_por: user.operator_id,
+        }),
+      });
+
+      await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteId}`, {
+        method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
+        body: JSON.stringify({ saldo_pendiente: nuevoSaldo }),
+      });
+    }
+
+    // 8. Calcular comisión
+    try {
+      await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcular_comision_despacho`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ p_despacho_id: despacho.id }),
+      });
+    } catch { /* no crítico */ }
+
+    // 9. Auditoría
+    try {
+      await registrarAuditoria(env, headers, {
+        usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
+        categoria: 'COTIZACION', accion: 'VENTA_RAPIDA',
+        descripcion: `Venta rápida: cotización #${cot.numero} + despacho #${despacho.numero}`,
+        entidadTipo: 'nota_despacho', entidadId: despacho.id,
+        meta: { cotizacion_id: cot.id, total_usd: totalUsd, items_count: items.length },
+      });
+    } catch {}
+
+    return json({ id: despacho.id, numero: despacho.numero, cotizacionId: cot.id }, 200, request);
+  } catch (e) {
+    console.error('[VR] Uncaught error:', e.message, e.stack);
+    return jsonError(e.message || 'Error al crear venta rápida', 500, request);
+  }
+}
+
 async function handleActualizarEstadoDespacho(request, env) {
   const v = await validateOperator(request, env, { requireSupervisor: true });
   if (v.error) return v.error;

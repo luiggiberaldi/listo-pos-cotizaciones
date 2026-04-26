@@ -64,5 +64,8 @@ export function useVentaRapida() {
         targetRole: 'supervisor',
       })
     },
+    onError: (err) => {
+      showToast(err.message || 'Error al crear venta rápida', 'error')
+    },
   })
 }
