@@ -2125,12 +2125,14 @@ async function handleCrearDespacho(request, env) {
     const esSupervisorOp = operador.rol === 'supervisor';
     const esPropietario = cot.vendedor_id === operador.id;
 
+    console.log(`[DESPACHO] operador.id=${operador.id}, user.operator_id=${user.operator_id}, cot.vendedor_id=${cot.vendedor_id}, esPropietario=${esPropietario}, esSupervisor=${esSupervisorOp}, cot.estado=${cot.estado}`);
+
     // Todos pueden despachar cotizaciones enviadas o aceptadas propias
     if (!['enviada', 'aceptada'].includes(cot.estado)) {
       return jsonError('La cotización debe estar enviada o aceptada para despachar', 400, request);
     }
     if (!esSupervisorOp && !esPropietario) {
-      return jsonError('Solo puedes despachar tus propias cotizaciones', 400, request);
+      return jsonError(`Solo puedes despachar tus propias cotizaciones (op:${operador.id} vs vend:${cot.vendedor_id})`, 400, request);
     }
 
     // 2. Verificar que no exista despacho
