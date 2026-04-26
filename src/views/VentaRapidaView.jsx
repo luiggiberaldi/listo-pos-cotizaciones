@@ -564,7 +564,7 @@ function Step1Productos({
   const productosVisibles = productosOrdenados.slice(0, 30)
 
   return (
-    <div className="p-4 space-y-4 pb-24">
+    <div className="p-4 space-y-4 pb-24 lg:pb-4">
       {/* Nuevo cliente modal */}
       {showNuevoCliente && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -648,6 +648,10 @@ function Step1Productos({
         )}
       </div>
 
+      {/* ── Split: catálogo izquierda + carrito derecha (desktop) ── */}
+      <div className="flex flex-col lg:flex-row lg:gap-4">
+      {/* ── Columna izquierda: Productos ── */}
+      <div className="flex-1 min-w-0">
       {/* Productos */}
       <div>
         <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">Productos</label>
@@ -840,7 +844,80 @@ function Step1Productos({
           </div>
         )}
       </div>
+      </div>{/* ── Fin columna izquierda ── */}
 
+      {/* ── Columna derecha: Carrito sticky (desktop) ── */}
+      <div className="hidden lg:flex w-80 shrink-0 lg:sticky lg:top-[73px] self-start bg-white rounded-2xl border border-slate-200 flex-col overflow-hidden shadow-sm" style={{ maxHeight: 'calc(100vh - 90px)' }}>
+        <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-2">
+          <ShoppingCart size={18} style={{ color: '#1B365D' }} />
+          <h3 className="font-black text-slate-800 text-base">Carrito</h3>
+          <span className="ml-auto text-xs font-bold text-slate-400">{totalItems} item{totalItems !== 1 ? 's' : ''}</span>
+        </div>
+        {items.length === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center py-10 text-slate-300">
+            <ShoppingCart size={32} className="mb-2 opacity-40" />
+            <p className="text-sm font-medium">Carrito vacío</p>
+          </div>
+        ) : (
+          <>
+            <div className="flex-1 overflow-y-auto px-3 py-2 divide-y divide-slate-50" style={{ maxHeight: 'calc(100vh - 360px)' }}>
+              {items.map(it => {
+                const linea = round2(it.precioUnitUsd * it.cantidad)
+                return (
+                  <div key={it.productoId} className="py-2">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <p className="flex-1 text-[12px] font-bold text-slate-700 leading-snug line-clamp-2">{it.nombreSnap}</p>
+                      <span className="text-[11px] font-black text-slate-800 shrink-0">{fmtUsd(linea)}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-1 rounded">{fmtUsd(it.precioUnitUsd)}</span>
+                      <div className="flex items-center bg-slate-50 rounded-lg border border-slate-100 overflow-hidden ml-auto">
+                        <button type="button"
+                          onClick={() => it.cantidad <= 1 ? quitarItem(it.productoId) : cambiarCantidad(it.productoId, -1)}
+                          className="w-8 h-7 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors active:scale-90">
+                          <Minus size={12} strokeWidth={3} />
+                        </button>
+                        <span className="w-8 h-7 text-center text-[12px] font-black text-slate-700 bg-white border-x border-slate-100 leading-7">
+                          {it.cantidad}
+                        </span>
+                        <button type="button"
+                          onClick={() => cambiarCantidad(it.productoId, 1)}
+                          className="w-8 h-7 flex items-center justify-center text-slate-400 hover:text-emerald-500 transition-colors active:scale-90">
+                          <Plus size={12} strokeWidth={3} />
+                        </button>
+                      </div>
+                      <button type="button" onClick={() => quitarItem(it.productoId)}
+                        className="w-7 h-7 rounded-md bg-red-50 hover:bg-red-100 flex items-center justify-center shrink-0 transition-colors active:scale-95">
+                        <Trash2 size={12} className="text-red-400" />
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            <div className="border-t border-slate-200 p-3 space-y-2 bg-white">
+              <div className="flex justify-between items-end px-1">
+                <div>
+                  <span className="text-[12px] font-black text-slate-400 uppercase tracking-wider">Subtotal</span>
+                  {tasa > 0 && <p className="text-[11px] text-slate-400 mt-0.5">{fmtBs(totalBs)}</p>}
+                </div>
+                <span className="text-xl font-black text-slate-800">{fmtUsd(totalUsd)}</span>
+              </div>
+              <button type="button"
+                onClick={() => { if (step1Valid) onSiguiente() }}
+                disabled={!step1Valid}
+                className="w-full flex items-center justify-center gap-2 py-3 text-white font-bold text-sm rounded-xl transition-all active:scale-[0.98] shadow-lg disabled:opacity-40"
+                style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
+                Siguiente <ArrowRight size={16} />
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+      </div>{/* ── Fin split layout ── */}
+
+      {/* ── Mobile-only: Modal cantidad, FAB, Bottom Sheet ── */}
+      <div className="lg:hidden">
       {/* ── Modal para editar cantidad exacta ── */}
       {editQty && (
         <div className="fixed inset-0 z-[101] bg-black/40 flex items-center justify-center p-4 md:hidden"
@@ -996,6 +1073,7 @@ function Step1Productos({
           </div>
         </div>
       )}
+      </div>{/* ── Fin lg:hidden ── */}
     </div>
   )
 }
