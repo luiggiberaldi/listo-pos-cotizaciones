@@ -217,6 +217,9 @@ export default {
     if (url.pathname === '/api/admin/factory-reset' && request.method === 'DELETE') {
       return handleTesterClearAll(request, env);
     }
+    if (url.pathname === '/api/admin/reset-operacional' && request.method === 'DELETE') {
+      return handleResetOperacional(request, env);
+    }
 
     // ── API: guardar configuración (bypass RLS) ──────────────────────────
     if (url.pathname === '/api/admin/config' && request.method === 'PUT') {
@@ -2839,6 +2842,70 @@ async function handleTesterClearAll(request, env) {
     const elapsed = Date.now() - start;
     logStep(`✓ Limpieza completada en ${elapsed}ms`);
     return json({ ok: true, elapsed_ms: elapsed, log }, 200, request);
+  } catch (e) {
+    logStep(`✗ ERROR: ${e.message}`);
+    return json({ ok: false, error: e.message, log }, 500, request);
+  }
+}
+
+// ── Reset Operacional (borra cotizaciones/despachos/comisiones, conserva clientes/inventario) ──
+async function handleResetOperacional(request, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return jsonError('Server misconfigured', 500, request);
+  const user = await verifyAuth(request, env);
+  if (!user?.id) return jsonError('No autenticado', 401, request);
+  const isSup = await verifySupervisor(user.operator_id, env);
+  if (!isSup) return jsonError('Solo supervisores', 403, request);
+
+  const start = Date.now();
+  const log = [];
+  function logStep(msg) { log.push({ ts: Date.now() - start, msg }) }
+
+  logStep('=== RESET OPERACIONAL — Inicio ===');
+  logStep(`Usuario: ${user.id}`);
+
+  try {
+    // Intentar vía RPC factory_reset_operacional (hace deletes + reinicia sequences a 200)
+    const rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/factory_reset_operacional`, {
+      method: 'POST',
+      headers: {
+        apikey: env.SUPABASE_SERVICE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=representation',
+      },
+      body: '{}',
+    });
+
+    if (rpcRes.ok) {
+      const rpcData = await rpcRes.json().catch(() => ({}));
+      const elapsed = Date.now() - start;
+      logStep(`✓ RPC factory_reset_operacional OK en ${elapsed}ms`);
+      return json({ ok: true, elapsed_ms: elapsed, correlativo_inicio: 200, log }, 200, request);
+    }
+
+    // Fallback: borrar manualmente (sin reset de sequences — migración no aplicada)
+    logStep(`RPC no disponible (HTTP ${rpcRes.status}), usando borrado manual...`);
+
+    logStep('Eliminando comisiones...');
+    await supaDelete(env, 'comisiones', logStep);
+    logStep('Eliminando cuentas_por_cobrar...');
+    await supaDelete(env, 'cuentas_por_cobrar', logStep);
+    logStep('Eliminando notas_despacho...');
+    await supaDelete(env, 'notas_despacho', logStep);
+    logStep('Eliminando cotizacion_items...');
+    await supaDelete(env, 'cotizacion_items', logStep);
+    logStep('Eliminando cotizaciones...');
+    await supaDelete(env, 'cotizaciones', logStep);
+    logStep('Eliminando auditoria...');
+    await supaDelete(env, 'auditoria', logStep);
+    logStep('Eliminando system_logs...');
+    await supaDelete(env, 'system_logs', logStep);
+    logStep('Clientes, transportistas e inventario conservados.');
+    logStep('⚠ Sequences no reiniciadas — aplica migración 067 en Supabase para reset a 200.');
+
+    const elapsed = Date.now() - start;
+    logStep(`✓ Borrado manual completado en ${elapsed}ms`);
+    return json({ ok: true, elapsed_ms: elapsed, correlativo_inicio: null, warning: 'Sequences no reiniciadas — aplica migración 067', log }, 200, request);
   } catch (e) {
     logStep(`✗ ERROR: ${e.message}`);
     return json({ ok: false, error: e.message, log }, 500, request);

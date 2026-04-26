@@ -229,6 +229,9 @@ export default function ConfiguracionView() {
   const [resetLoading, setResetLoading] = useState(false)
   const [resetMsg, setResetMsg]         = useState(null)
   const [confirmReset, setConfirmReset] = useState(false)
+  const [resetOpLoading, setResetOpLoading] = useState(false)
+  const [resetOpMsg, setResetOpMsg]         = useState(null)
+  const [confirmResetOp, setConfirmResetOp] = useState(false)
   const [restoreMsg, setRestoreMsg]         = useState(null)
   const [restoreLoading, setRestoreLoading] = useState(false)
   const [confirmRestore, setConfirmRestore] = useState(false)
@@ -311,6 +314,18 @@ export default function ConfiguracionView() {
     } catch (err) {
       setResetMsg({ tipo: 'error', texto: err.message || 'Error al reiniciar' })
     } finally { setResetLoading(false) }
+  }
+
+  async function handleResetOperacional() {
+    setResetOpLoading(true); setResetOpMsg(null); setConfirmResetOp(false)
+    try {
+      const result = await adminAPI.resetOperacional()
+      const correlativos = result?.correlativo_inicio ? ` Los correlativos inician en COT-00${result.correlativo_inicio}.` : ''
+      const warning = result?.warning ? ` ⚠ ${result.warning}` : ''
+      setResetOpMsg({ tipo: 'ok', texto: `Reinicio completado. Clientes e inventario conservados.${correlativos}${warning}` })
+    } catch (err) {
+      setResetOpMsg({ tipo: 'error', texto: err.message || 'Error al reiniciar' })
+    } finally { setResetOpLoading(false) }
   }
 
   async function handleBackup() {
@@ -619,6 +634,43 @@ export default function ConfiguracionView() {
                 <div className={`flex items-center gap-1.5 text-sm font-medium mt-2 ${resetMsg.tipo === 'ok' ? 'text-emerald-600' : 'text-red-600'}`}>
                   {resetMsg.tipo === 'ok' ? <CheckCircle size={15} /> : <AlertCircle size={15} />}
                   {resetMsg.texto}
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-red-100 pt-4 mt-2">
+              <p className="text-xs text-slate-500 mb-3">
+                Borra cotizaciones, despachos y comisiones. <strong>Clientes, inventario, transportistas y usuarios se conservan.</strong> Los correlativos se reinician a <strong>COT-00200</strong>.
+              </p>
+              {!confirmResetOp ? (
+                <button type="button" onClick={() => setConfirmResetOp(true)}
+                  className="flex items-center gap-2 bg-orange-700 hover:bg-orange-800 text-white font-semibold text-sm px-5 py-2.5 rounded-xl transition-colors shadow-sm">
+                  <AlertTriangle size={15} />Reinicio operacional
+                </button>
+              ) : (
+                <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 space-y-3">
+                  <p className="text-sm font-semibold text-orange-900">
+                    ¿Estás seguro? Se borrarán cotizaciones, despachos y comisiones. Los correlativos reinician en <strong>COT-00200</strong>. <strong>Clientes e inventario se conservan.</strong>
+                  </p>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={handleResetOperacional} disabled={resetOpLoading}
+                      className="flex items-center gap-1.5 bg-orange-700 hover:bg-orange-800 text-white font-semibold text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-50">
+                      {resetOpLoading
+                        ? <><div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />Reiniciando...</>
+                        : 'Sí, reiniciar operacional'
+                      }
+                    </button>
+                    <button type="button" onClick={() => setConfirmResetOp(false)}
+                      className="text-sm font-medium text-slate-600 px-4 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors">
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+              {resetOpMsg && (
+                <div className={`flex items-center gap-1.5 text-sm font-medium mt-2 ${resetOpMsg.tipo === 'ok' ? 'text-emerald-600' : 'text-red-600'}`}>
+                  {resetOpMsg.tipo === 'ok' ? <CheckCircle size={15} /> : <AlertCircle size={15} />}
+                  {resetOpMsg.texto}
                 </div>
               )}
             </div>

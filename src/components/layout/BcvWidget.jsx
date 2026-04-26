@@ -23,8 +23,6 @@ export default function BcvWidget({ soloLectura = false }) {
   const [showConfig, setShowConfig] = useState(false)
   const [tasaInput, setTasaInput] = useState(tasaManual)
   const [tasaConfirmada, setTasaConfirmada] = useState(!!tasaManual)
-  // Modo pendiente de confirmación (para sincronizar con botón Listo)
-  const [modoPendiente, setModoPendiente] = useState(null)
   const bcvRef = useRef(null)
 
   // Cerrar popover al hacer click fuera
@@ -56,27 +54,15 @@ export default function BcvWidget({ soloLectura = false }) {
     }
   }
 
-  // Seleccionar modo (pendiente hasta confirmar con Listo)
+  // Seleccionar modo — aplica inmediatamente sin confirmación previa
   function seleccionarModo(key) {
-    if (key === modoTasa) {
-      setModoPendiente(null)
-      return
-    }
-    setModoPendiente(key)
+    if (key === modoTasa) return
+    setModoTasa(key)
+    if (key === 'manual') setTasaConfirmada(false)
   }
 
-  // Confirmar cambio de modo
-  function confirmarModo() {
-    if (!modoPendiente) return
-    setModoTasa(modoPendiente)
-    if (modoPendiente === 'manual') {
-      setTasaConfirmada(false)
-    }
-    setModoPendiente(null)
-  }
-
-  // Modo visual: el pendiente o el actual
-  const modoVisual = modoPendiente || modoTasa
+  // Modo visual = modo activo
+  const modoVisual = modoTasa
 
   // Detectar tasa desactualizada (> 30 min)
   const STALE_MS = 30 * 60 * 1000
@@ -128,17 +114,6 @@ export default function BcvWidget({ soloLectura = false }) {
         ))}
       </div>
 
-      {/* Botón Listo para confirmar cambio de modo */}
-      {modoPendiente && modoPendiente !== 'manual' && (
-        <button
-          onClick={confirmarModo}
-          className="w-full py-2.5 rounded-xl text-sm font-bold text-white transition-all active:scale-[0.98]"
-          style={{ background: 'linear-gradient(135deg, #6366f1, #818cf8)', boxShadow: '0 4px 15px rgba(99,102,241,0.3)' }}
-        >
-          Listo — Cambiar a {MODO_CONFIG[modoPendiente]?.label}
-        </button>
-      )}
-
       {/* Contenido según modo */}
       {modoVisual === 'usdt' && (
         <div className="p-3 rounded-xl space-y-2" style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)' }}>
@@ -175,20 +150,7 @@ export default function BcvWidget({ soloLectura = false }) {
       {modoVisual === 'manual' && (
         <div className="p-3 rounded-xl space-y-3" style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.12)' }}>
           <p className="text-xs font-bold text-amber-400">Tasa manual</p>
-          {/* Si es modo pendiente (aún no confirmado), mostrar botón Listo primero */}
-          {modoPendiente === 'manual' && (
-            <button
-              onClick={confirmarModo}
-              className="w-full py-2.5 rounded-xl text-sm font-bold text-white transition-all active:scale-[0.98] mb-2"
-              style={{ background: 'linear-gradient(135deg, #B8860B, #d4a017)', boxShadow: '0 4px 15px rgba(180,135,11,0.3)' }}
-            >
-              Listo — Cambiar a Manual
-            </button>
-          )}
-          {/* Solo mostrar input si ya está en modo manual confirmado */}
-          {modoTasa === 'manual' && (
-            <>
-              <div className="flex gap-2 items-center">
+          <div className="flex gap-2 items-center">
                 <div className="relative flex-1">
                   <input type="number" min="0.01" step="0.01"
                     value={tasaInput}
@@ -217,8 +179,6 @@ export default function BcvWidget({ soloLectura = false }) {
                 {tasaBcv.precio > 0 && <span>BCV: {fmtRate(tasaBcv.precio)}</span>}
                 {tasaUsdt.precio > 0 && <span>USDT: {fmtRate(tasaUsdt.precio)}</span>}
               </div>
-            </>
-          )}
         </div>
       )}
     </div>

@@ -8,8 +8,8 @@ if [ ! -f .dev.vars ]; then
   exit 0
 fi
 
-# Leer keys de .dev.vars
-source .dev.vars
+# Leer keys de .dev.vars (export para que node las herede)
+set -a && source .dev.vars && set +a
 
 # Backup
 cp wrangler.jsonc wrangler.jsonc.bak
