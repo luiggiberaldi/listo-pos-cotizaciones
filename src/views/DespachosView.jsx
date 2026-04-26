@@ -165,11 +165,11 @@ export default function DespachosView() {
       <OnboardingSequence rol={rol} page="/despachos" />
 
       {/* Filtros de estado + vendedor */}
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-1">
         <Filter size={14} className="text-slate-400 shrink-0" />
         {getFiltrosDespacho(perfil?.rol).map(({ valor, label }) => (
           <button key={valor} onClick={() => setEstadoFiltro(valor)}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border whitespace-nowrap shrink-0 ${
               estadoFiltro === valor
                 ? 'bg-indigo-500 text-white border-indigo-500'
                 : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'
