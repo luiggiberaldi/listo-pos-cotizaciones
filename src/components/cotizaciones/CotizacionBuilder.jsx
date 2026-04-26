@@ -1074,7 +1074,7 @@ function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente,
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             className="fixed bottom-20 left-3 right-3 z-[98] p-3.5 rounded-2xl shadow-xl flex items-center justify-between active:scale-[0.97] transition-all md:bottom-4"
-            style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)', boxShadow: '0 8px 30px rgba(27,54,93,0.35)' }}>
+            style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)', boxShadow: '0 8px 30px rgba(27,54,93,0.35)', touchAction: 'none' }}>
             <div className="flex items-center gap-3">
               <div className="bg-white/20 p-2 rounded-xl">
                 <ShoppingCart size={18} className="text-white" />
