@@ -264,9 +264,9 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   const condLineH = 5.5
   const condBoxH = condTitleH + condiciones.length * condLineH + condPadding * 2 + 1
 
-  // Posicionar a 6mm encima del slogan
+  // Posicionar a 8mm encima del slogan
   const sloganY = PAGE_H - 35
-  y = sloganY - 6 - condBoxH
+  y = sloganY - 8 - condBoxH
 
   // Fondo azul claro
   doc.setFillColor(230, 242, 255)
