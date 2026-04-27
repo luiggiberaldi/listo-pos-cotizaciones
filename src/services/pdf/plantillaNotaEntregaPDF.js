@@ -153,8 +153,8 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
     { label: 'CÓD.',        x: MARGIN + 11,   w: 20,  align: 'center' },
     { label: 'DESCRIPCIÓN', x: MARGIN + 31,   w: 97,  align: 'center' },
     { label: 'UNID.',       x: MARGIN + 128,  w: 11,  align: 'center' },
-    { label: 'PRECIO',      x: MARGIN + 139,  w: 22,  align: 'center' },
-    { label: 'TOTAL',       x: MARGIN + 161,  w: 21,  align: 'right'  },
+    { label: 'PRECIO Bs',   x: MARGIN + 139,  w: 22,  align: 'center' },
+    { label: 'TOTAL Bs',    x: MARGIN + 161,  w: 21,  align: 'right'  },
   ]
 
   // Cabecera oscura
@@ -214,12 +214,12 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   doc.setFontSize(7.5)
   doc.setTextColor(...C_DARK)
   doc.text('FORMA DE PAGO:', MARGIN + 3, fpY + 6)
-  drawCheck(doc, 'EFECTIVO',   MARGIN + 38, fpY + 6)
-  drawCheck(doc, 'ZELLE',      MARGIN + 60, fpY + 6)
-  drawCheck(doc, 'P. MÓVIL',   MARGIN + 78, fpY + 6)
-  drawCheck(doc, 'USDT',       MARGIN + 98, fpY + 6)
-  drawCheck(doc, 'TRANSF.',    MARGIN + 114, fpY + 6)
-  drawCheck(doc, 'CTA X COB.', MARGIN + 134, fpY + 6)
+  drawCheck(doc, 'EFECTIVO Bs',  MARGIN + 38, fpY + 6)
+  drawCheck(doc, 'ZELLE Bs',     MARGIN + 62, fpY + 6)
+  drawCheck(doc, 'P. MÓVIL Bs',  MARGIN + 82, fpY + 6)
+  drawCheck(doc, 'USDT Bs',      MARGIN + 104, fpY + 6)
+  drawCheck(doc, 'TRANSF. Bs',   MARGIN + 122, fpY + 6)
+  drawCheck(doc, 'CTA X COB. Bs', MARGIN + 144, fpY + 6)
 
   // Barra TOTAL — fondo blanco, texto negro (para llenar a mano)
   const totTopY = fpY + 9
@@ -229,7 +229,7 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(11)
   doc.setTextColor(...C_DARK)
-  doc.text('TOTAL', MARGIN + 4, totTopY + 7)
+  doc.text('TOTAL Bs', MARGIN + 4, totTopY + 7)
   // Línea para monto
   doc.setLineWidth(0.4)
   doc.setDrawColor(150, 150, 150)

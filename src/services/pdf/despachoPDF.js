@@ -407,7 +407,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   if (formasPagoArr.length > 0) {
     const parts = formasPagoArr.map(fp => {
       const nombre = fp.metodo?.toUpperCase() || ''
-      const monto = fp.monto != null && fp.monto !== '' ? ` $${Number(fp.monto).toFixed(2)}` : ''
+      const monto = fp.monto != null && fp.monto !== '' ? ` ${fmtTotal(Number(fp.monto), monedaPDF, tasa, factorBcv)}` : ''
       return nombre + monto
     })
     doc.setFont('helvetica', 'bold')
