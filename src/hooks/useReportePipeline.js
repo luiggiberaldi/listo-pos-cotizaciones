@@ -8,7 +8,7 @@ export const REPORTE_PIPELINE_KEY = ['reporte-pipeline']
 
 export function useReportePipeline({ from, to }) {
   const { perfil } = useAuthStore()
-  const esPrivilegiado = perfil?.rol === 'supervisor' || perfil?.rol === 'administracion'
+  const esPrivilegiado = perfil?.rol === 'supervisor' || perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador'
 
   return useQuery({
     queryKey: [...REPORTE_PIPELINE_KEY, from, to, esPrivilegiado, perfil?.id],

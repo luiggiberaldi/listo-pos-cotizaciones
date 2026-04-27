@@ -12,7 +12,7 @@ export const REPORTE_KEY = ['reporte-ventas']
  */
 export function useReporteVentas({ from, to, prevFrom, prevTo }) {
   const { perfil } = useAuthStore()
-  const esPrivilegiado = perfil?.rol === 'supervisor' || perfil?.rol === 'administracion'
+  const esPrivilegiado = perfil?.rol === 'supervisor' || perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador'
 
   return useQuery({
     queryKey: [...REPORTE_KEY, from, to, prevFrom, prevTo, esPrivilegiado, perfil?.id],

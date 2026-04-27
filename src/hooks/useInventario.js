@@ -15,7 +15,7 @@ export const INVENTARIO_KEY = ['inventario']
 // ─── Lista de productos ───────────────────────────────────────────────────────
 export function useInventario({ busqueda = '', categoria = '', page = 0, pageSize = 100 } = {}) {
   const { perfil } = useAuthStore()
-  const esPrivilegiado = perfil?.rol === 'supervisor' || perfil?.rol === 'administracion'
+  const esPrivilegiado = perfil?.rol === 'supervisor' || perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador'
 
   return useQuery({
     queryKey: [...INVENTARIO_KEY, busqueda, categoria, esPrivilegiado, page, pageSize],
@@ -107,7 +107,7 @@ function getCategoryGroup(cat) {
 // ─── Categorías únicas (para el filtro) ──────────────────────────────────────
 export function useCategorias() {
   const { perfil } = useAuthStore()
-  const esPrivilegiado = perfil?.rol === 'supervisor' || perfil?.rol === 'administracion'
+  const esPrivilegiado = perfil?.rol === 'supervisor' || perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador'
 
   return useQuery({
     queryKey: [...INVENTARIO_KEY, 'categorias'],

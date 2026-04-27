@@ -21,7 +21,7 @@ export function useDespachos({ estado = '' } = {}) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const esLogistica = perfil?.rol === 'logistica'
-  const esPrivilegiado = esSupervisor || perfil?.rol === 'administracion'
+  const esPrivilegiado = esSupervisor || perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador'
   const veTodos = esPrivilegiado || esLogistica
 
   return useQuery({

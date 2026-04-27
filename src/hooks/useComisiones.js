@@ -11,7 +11,7 @@ export const COMISIONES_KEY = ['comisiones']
 // ─── Lista de comisiones ────────────────────────────────────────────────────
 export function useComisiones({ estado = '', vendedorId = '' } = {}) {
   const { perfil } = useAuthStore()
-  const esPrivilegiado = perfil?.rol === 'supervisor' || perfil?.rol === 'administracion'
+  const esPrivilegiado = perfil?.rol === 'supervisor' || perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador'
 
   return useQuery({
     queryKey: [...COMISIONES_KEY, estado, vendedorId, esPrivilegiado, perfil?.id],
@@ -50,7 +50,7 @@ export function useComisiones({ estado = '', vendedorId = '' } = {}) {
 // ─── Resumen de comisiones ──────────────────────────────────────────────────
 export function useComisionesResumen() {
   const { perfil } = useAuthStore()
-  const esPrivilegiado = perfil?.rol === 'supervisor' || perfil?.rol === 'administracion'
+  const esPrivilegiado = perfil?.rol === 'supervisor' || perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador'
 
   return useQuery({
     queryKey: [...COMISIONES_KEY, 'resumen', esPrivilegiado, perfil?.id],

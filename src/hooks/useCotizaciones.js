@@ -20,7 +20,7 @@ export const COTIZACIONES_KEY = ['cotizaciones']
 export function useCotizaciones({ estado = '', clienteId = '' } = {}) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
-  const esPrivilegiado = esSupervisor || perfil?.rol === 'administracion'
+  const esPrivilegiado = esSupervisor || perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador'
 
   return useQuery({
     queryKey: [...COTIZACIONES_KEY, estado, clienteId, esPrivilegiado, perfil?.id],
