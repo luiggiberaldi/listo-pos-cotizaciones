@@ -314,7 +314,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   const transportista = despacho.transportista_id ? (despacho.transportista || null) : null
 
   // Datos del chofer fijos al fondo de la página (footer)
-  const CHOFER_H = 22
+  const CHOFER_H = 30
   const choferY = PAGE_H - MARGIN - CHOFER_H
 
   // Total 6mm más alto que antes (originalmente ~36mm offset, ahora 30mm)
@@ -432,37 +432,39 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   doc.setTextColor(...C_DARK)
   doc.text('DATOS DEL CHOFER Y DEL VEHÍCULO', MARGIN + 2, choferY + 4)
 
-  const cellY = choferY + 6
-  const cellH = 12
-  const allFields = [
-    { label: 'CHOFER', val: transportista?.nombre || '', minW: 32 },
-    { label: 'C.I.', val: transportista?.rif || '', minW: 22 },
-    { label: 'PLACA', val: transportista?.zona_cobertura || '', minW: 22 },
-    { label: 'COLOR', val: transportista?.color || '', minW: 18 },
-    { label: 'VEHÍCULO', val: transportista?.vehiculo || '', minW: 28 },
-    { label: 'PLACA CHUTO', val: transportista?.placa_chuto || '', minW: 22 },
-    { label: 'PLACA BATEA', val: transportista?.placa_batea || '', minW: 22 },
+  // Grid 2×3
+  const ROW_H = 12
+  const colW = CONTENT_W / 3
+  const row1Y = choferY + 6
+  const row2Y = row1Y + ROW_H
+  const row1Fields = [
+    { label: 'CHOFER', val: transportista?.nombre || '' },
+    { label: 'C.I.', val: transportista?.rif || '' },
+    { label: 'COLOR', val: transportista?.color || '' },
   ]
-  // Solo mostrar campos que tengan datos (CHOFER siempre visible)
-  const choferFields = allFields.filter((f, i) => i === 0 || f.val)
-  // Distribuir ancho: usar minW como base, repartir el sobrante proporcionalmente
-  const totalMin = choferFields.reduce((s, f) => s + f.minW, 0)
-  const extra = CONTENT_W - totalMin
-  choferFields.forEach((f, i) => {
-    const fx = MARGIN + choferFields.slice(0, i).reduce((s, c) => s + c._w, 0)
-    f._w = f.minW + (extra > 0 ? extra * (f.minW / totalMin) : 0)
-    doc.setDrawColor(120, 120, 120)
-    doc.setLineWidth(0.3)
-    doc.rect(fx, cellY, f._w, cellH, 'S')
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(7)
-    doc.setTextColor(100, 100, 100)
-    doc.text(f.label + ':', fx + 2, cellY + 4)
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
-    doc.setTextColor(0, 0, 0)
-    if (f.val) doc.text(f.val, fx + 2, cellY + 9.5)
-  })
+  const row2Fields = [
+    { label: 'VEHÍCULO', val: transportista?.vehiculo || '' },
+    { label: 'PLACA CHUTO', val: transportista?.placa_chuto || '' },
+    { label: 'PLACA BATEA', val: transportista?.placa_batea || '' },
+  ]
+  function drawRow(fields, ry) {
+    fields.forEach((f, i) => {
+      const fx = MARGIN + i * colW
+      doc.setDrawColor(120, 120, 120)
+      doc.setLineWidth(0.3)
+      doc.rect(fx, ry, colW, ROW_H, 'S')
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(7)
+      doc.setTextColor(100, 100, 100)
+      doc.text(f.label + ':', fx + 2, ry + 4)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9)
+      doc.setTextColor(0, 0, 0)
+      if (f.val) doc.text(f.val, fx + 2, ry + 9.5)
+    })
+  }
+  drawRow(row1Fields, row1Y)
+  drawRow(row2Fields, row2Y)
 
   // ── NO cuentas, NO slogan, NO condiciones ──
 

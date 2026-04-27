@@ -61,7 +61,7 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
     if (!campos.rif.trim()) { setError('La cédula / RIF es obligatoria'); return }
     if (!campos.color.trim()) { setError('El color es obligatorio'); return }
     if (!campos.vehiculo.trim()) { setError('El vehículo es obligatorio'); return }
-    if (!campos.placa_chuto.trim()) { setError('La placa es obligatoria'); return }
+    if (!campos.zona_cobertura.trim()) { setError('La placa es obligatoria'); return }
     onGuardar({ ...campos, rif: formatearRifTransp(rifPrefijo, campos.rif) })
   }
 
@@ -117,12 +117,12 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
             placeholder="Ej: Mack Granite 2020" className={inputCls} disabled={cargando} />
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Placa</label>
+          <label className="text-sm font-medium text-slate-700">Placa *</label>
           <input value={campos.zona_cobertura} onChange={e => cambiar('zona_cobertura', e.target.value)}
             placeholder="Ej: AB123CD" className={inputCls} disabled={cargando} />
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Placa chuto *</label>
+          <label className="text-sm font-medium text-slate-700">Placa chuto</label>
           <input value={campos.placa_chuto} onChange={e => cambiar('placa_chuto', e.target.value)}
             placeholder="Ej: AB123CD" className={inputCls} disabled={cargando} />
         </div>

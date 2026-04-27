@@ -1,6 +1,6 @@
 // src/components/despachos/DespachoCard.jsx
 import { useState, useRef, memo } from 'react'
-import { FileText, Calendar, Truck, CheckCircle, Ban, RefreshCcw, Download, Loader2, Eye, MoreHorizontal, ChevronDown, DollarSign, Printer, Check, Tag } from 'lucide-react'
+import { FileText, Calendar, Truck, CheckCircle, Ban, RefreshCcw, Download, Loader2, Eye, MoreHorizontal, ChevronDown, DollarSign, Printer, Check, Tag, Pencil } from 'lucide-react'
 import EstadoBadge from '../cotizaciones/EstadoBadge'
 import MobileActionSheet from '../cotizaciones/MobileActionSheet'
 import ConfirmModal from '../ui/ConfirmModal'
@@ -12,6 +12,7 @@ import { apiUrl } from '../../services/apiBase'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
 import DetalleModal from '../ui/DetalleModal'
 import DescuentoModal from './DescuentoModal'
+import EditDespachoModal from './EditDespachoModal'
 import { showToast } from '../ui/Toast'
 
 export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular, onReciclar, tasa = 0, config = {}, estadoCambiando = false }) {
@@ -26,6 +27,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const [printLoading, setPrintLoading] = useState(false)
   const [showDetalle, setShowDetalle] = useState(false)
   const [showDescuento, setShowDescuento] = useState(false)
+  const [showEdit, setShowEdit] = useState(false)
   const [showSheet, setShowSheet]     = useState(false)
   const [showMonedaMenu, setShowMonedaMenu] = useState(false)
   const [showPrintMenu, setShowPrintMenu] = useState(false)
@@ -50,6 +52,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const canAnular = esPrivilegiado && (despacho.estado === 'pendiente' || despacho.estado === 'despachada')
   const canReciclar = (esSupervisor || esDesarrollador) && despacho.estado === 'anulada' && onReciclar
   const canDescuento = (perfil?.rol === 'logistica' || esSupervisor || esDesarrollador) && ['pendiente', 'despachada'].includes(despacho.estado)
+  const canEditar = despacho.estado === 'pendiente' && (esPrivilegiado || despacho.vendedor_id === perfil?.id)
   const descuentoTotal = Number(despacho.descuento_total_usd || 0)
   const totalConDescuento = Number(despacho.total_usd || 0) - descuentoTotal
 
@@ -278,6 +281,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     }
     if (canReciclar && primaryAction.key !== 'reciclar')
       actions.push({ label: getDespachoAction('reciclar', rol).label || 'Reutilizar', icon: RefreshCcw, onClick: () => onReciclar(despacho), textColor: 'text-teal-600' })
+    if (canEditar)
+      actions.push({ label: 'Editar despacho', icon: Pencil, onClick: () => setShowEdit(true), textColor: 'text-indigo-600' })
     if (canAnular) {
       const cfg = getDespachoAction('anular', rol)
       actions.push({ label: cfg.label || 'Anular', icon: Ban, onClick: () => onAnular(despacho), danger: true })
@@ -289,7 +294,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const confirmConfig = accionPendiente?.actionConfig || {}
 
   return (
-    <div className="group bg-white rounded-2xl border border-slate-200 hover:shadow-lg transition-all duration-200 overflow-hidden flex flex-col" onClick={(e) => { if (e.target.closest('button') || e.target.closest('[data-no-click]')) return; setShowDetalle(true) }}>
+    <div className="group bg-white rounded-2xl border border-slate-200 hover:shadow-lg transition-all duration-200 overflow-hidden flex flex-col" onClick={(e) => { if (e.target.closest('button') || e.target.closest('[data-no-click]') || showEdit || showDetalle || showDescuento) return; setShowDetalle(true) }}>
 
       {/* ── Header strip con color del vendedor ── */}
       <div className="relative h-[4.5rem] shrink-0 flex items-end justify-between px-4 pb-2"
@@ -454,6 +459,12 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
               {descuentoTotal > 0 && <span className="text-[8px] font-bold text-amber-700 bg-amber-100 border border-amber-300 px-1 py-0.5 rounded-full leading-none">✓</span>}
             </button>
           )}
+          {canEditar && (
+            <button onClick={() => setShowEdit(true)}
+              className="flex items-center gap-1 px-2 py-2 rounded-lg text-[11px] font-medium text-indigo-600 hover:bg-indigo-50 transition-colors">
+              <Pencil size={13} /> Editar
+            </button>
+          )}
           {getMobileSheetActions().length > 0 && (
             <button onClick={() => setShowSheet(true)}
               className="ml-auto flex items-center gap-1 px-2 py-2 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 active:bg-slate-100 transition-colors">
@@ -509,6 +520,12 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-amber-600 hover:bg-amber-50 transition-colors">
             <Tag size={13} /> Descuento
             {descuentoTotal > 0 && <span className="text-[8px] font-bold text-amber-700 bg-amber-100 border border-amber-300 px-1 py-0.5 rounded-full leading-none ml-0.5">✓</span>}
+          </button>
+        )}
+        {canEditar && (
+          <button onClick={() => setShowEdit(true)}
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-indigo-600 hover:bg-indigo-50 transition-colors">
+            <Pencil size={13} /> Editar
           </button>
         )}
         <div className="ml-auto flex items-center gap-1.5 flex-wrap justify-end">
@@ -616,6 +633,12 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       <DescuentoModal
         isOpen={showDescuento}
         onClose={() => setShowDescuento(false)}
+        despacho={despacho}
+      />
+
+      <EditDespachoModal
+        isOpen={showEdit}
+        onClose={() => setShowEdit(false)}
         despacho={despacho}
       />
     </div>

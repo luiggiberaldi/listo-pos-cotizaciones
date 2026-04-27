@@ -261,6 +261,37 @@ export function useActualizarEstadoDespacho() {
   })
 }
 
+// ─── Editar despacho pendiente (pago, transportista, notas) ─────────────────
+export function useEditarDespacho() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, notas }) => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('No autenticado')
+
+      const res = await fetch(apiUrl('/api/despachos/editar-pago'), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, notas }),
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Error al editar despacho')
+      return result
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: DESPACHOS_KEY })
+      showToast('Despacho actualizado', 'success')
+    },
+    onError: (error) => {
+      showToast(error.message || 'Error al editar despacho', 'error')
+    },
+  })
+}
+
 // ─── Reciclar despacho anulado → cotización borrador (via Worker API) ────────
 export function useReciclarDespacho() {
   const qc = useQueryClient()

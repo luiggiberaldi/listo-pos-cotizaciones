@@ -2686,7 +2686,7 @@ async function handleEditarPagoDespacho(request, env) {
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
 
-  const { despachoId, formaPago, formaPagoCliente, referenciaPago } = body;
+  const { despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, notas } = body;
   if (!despachoId) return jsonError('Falta despachoId', 400, request);
 
   const h = {
@@ -2695,18 +2695,43 @@ async function handleEditarPagoDespacho(request, env) {
     'Content-Type': 'application/json',
   };
 
-  // Verificar que el despacho existe y no está anulada
-  const checkRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&select=id,estado`, { headers: h });
+  // Verificar que el despacho existe, su estado y vendedor
+  const checkRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&select=id,estado,vendedor_id,flete_usd,total_usd,cotizacion_id`, { headers: h });
   if (!checkRes.ok) return jsonError('Error al verificar despacho', 500, request);
   const despachos = await checkRes.json();
   if (!despachos.length) return jsonError('Despacho no encontrado', 404, request);
-  if (despachos[0].estado === 'anulada') return jsonError('No se puede editar un despacho anulado', 400, request);
+  const despacho = despachos[0];
+  if (despacho.estado !== 'pendiente') return jsonError('Solo se puede editar un despacho en estado "Por Aprobar"', 400, request);
 
-  // Actualizar campos de pago
+  // Verificar permisos: admin o vendedor dueño
+  const operadorId = user.operator_id || user.id;
+  let rolUsuario = user.operator_rol || '';
+  // Si no tenemos rol del operador, obtenerlo de la tabla usuarios
+  if (!rolUsuario && operadorId) {
+    const rolRes = await fetch(`${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${operadorId}&select=rol`, { headers: h });
+    if (rolRes.ok) {
+      const [u] = await rolRes.json();
+      if (u) rolUsuario = u.rol;
+    }
+  }
+  const esAdmin = ['supervisor', 'administracion', 'desarrollador'].includes(rolUsuario);
+  const esVendedorDueno = despacho.vendedor_id === operadorId;
+  if (!esAdmin && !esVendedorDueno) return jsonError('No tienes permiso para editar este despacho', 403, request);
+
+  // Actualizar campos
   const campos = {};
   if (formaPago !== undefined) campos.forma_pago = formaPago;
   if (formaPagoCliente !== undefined) campos.forma_pago_cliente = formaPagoCliente;
   if (referenciaPago !== undefined) campos.referencia_pago = referenciaPago;
+  if (transportistaId !== undefined) campos.transportista_id = transportistaId || null;
+  if (fleteUsd !== undefined) {
+    const nuevoFlete = Number(fleteUsd) || 0;
+    const fleteAnterior = Number(despacho.flete_usd) || 0;
+    campos.flete_usd = nuevoFlete;
+    // Recalcular total_usd: total actual - flete anterior + nuevo flete
+    campos.total_usd = Number(despacho.total_usd) - fleteAnterior + nuevoFlete;
+  }
+  if (notas !== undefined) campos.notas = notas || null;
 
   if (Object.keys(campos).length === 0) return jsonError('No hay campos para actualizar', 400, request);
 
@@ -2715,10 +2740,7 @@ async function handleEditarPagoDespacho(request, env) {
     headers: { ...h, Prefer: 'return=minimal' },
     body: JSON.stringify(campos),
   });
-  if (!upRes.ok) return jsonError('Error al actualizar pago', 500, request);
-
-  // Si es Cta por cobrar → verificar/crear CxC; si cambia de Cta por cobrar a otro → ajustar CxC
-  // (simplificado: solo actualizamos los campos, la lógica CxC se maneja aparte)
+  if (!upRes.ok) return jsonError('Error al actualizar despacho', 500, request);
 
   // Auditoría
   try {
@@ -2728,7 +2750,7 @@ async function handleEditarPagoDespacho(request, env) {
       usuarioRol: user.operator_rol || 'supervisor',
       categoria: 'COTIZACION',
       accion: 'EDITAR_PAGO_DESPACHO',
-      descripcion: `Forma de pago del despacho ${despachoId.slice(0,8)} actualizada`,
+      descripcion: `Despacho ${despachoId.slice(0,8)} editado (pago/transportista/notas)`,
       entidadTipo: 'despacho',
       entidadId: despachoId,
       meta: campos,

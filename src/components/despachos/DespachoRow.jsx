@@ -1,16 +1,17 @@
 // src/components/despachos/DespachoRow.jsx
 // Fila compacta de despacho para vista de lista
 import { memo } from 'react'
-import { Calendar, Eye, FileText } from 'lucide-react'
+import { Calendar, Eye, FileText, Pencil } from 'lucide-react'
 import EstadoBadge from '../cotizaciones/EstadoBadge'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs } from '../../utils/format'
 
-export default memo(function DespachoRow({ despacho, onVer, tasa = 0 }) {
+export default memo(function DespachoRow({ despacho, onVer, onEditar, tasa = 0 }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
-  const esPrivilegiado = esSupervisor || perfil?.rol === 'administracion'
+  const esPrivilegiado = esSupervisor || perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador'
   const vendedorColor = despacho.vendedor?.color || '#64748b'
+  const canEditar = despacho.estado === 'pendiente' && (esPrivilegiado || despacho.vendedor_id === perfil?.id)
 
   const numDisplay = despacho.cotizacion
     ? `DES-${String(despacho.cotizacion.numero).padStart(5, '0')}`
@@ -65,8 +66,15 @@ export default memo(function DespachoRow({ despacho, onVer, tasa = 0 }) {
           )}
         </div>
 
-        {/* Ver detalle */}
-        <div className="shrink-0">
+        {/* Acciones */}
+        <div className="shrink-0 flex items-center gap-1">
+          {canEditar && onEditar && (
+            <button onClick={() => onEditar(despacho)}
+              className="p-1.5 rounded-lg text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+              title="Editar despacho">
+              <Pencil size={15} />
+            </button>
+          )}
           <button onClick={() => onVer(despacho)}
             className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-light transition-colors"
             title="Ver detalle">

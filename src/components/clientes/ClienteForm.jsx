@@ -158,8 +158,8 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
     } else if (campos.telefono) {
       const telLimpio = campos.telefono.replace(/[\s\-]/g, '')
       // Debe ser un número móvil venezolano: 4XX seguido de 7 dígitos
-      if (!/^4(12|14|16|24|26)\d{7}$/.test(telLimpio)) {
-        errs.telefono = 'Debe ser un número móvil válido (412, 414, 416, 424, 426)'
+      if (!/^4(12|14|16|22|24|26)\d{7}$/.test(telLimpio)) {
+        errs.telefono = 'Debe ser un número móvil válido (412, 414, 416, 422, 424, 426)'
       }
     }
     if (!campos.estado) {

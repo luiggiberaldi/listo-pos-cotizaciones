@@ -11,7 +11,7 @@ export default memo(function CotizacionRow({ cotizacion, onEditar, onVer, tasa =
   const esSupervisor = perfil?.rol === 'supervisor'
   const esBorrador = cotizacion.estado === 'borrador'
   const esPropietario = cotizacion.vendedor_id === perfil?.id
-  const canVersion = !esBorrador && ['enviada', 'aceptada', 'rechazada'].includes(cotizacion.estado) && (!esSupervisor || esPropietario)
+  const canEdit = esBorrador && esPropietario && !despacho
   const vendedorColor = cotizacion.vendedor?.color || '#64748b'
   const despacho = cotizacion.despacho
 
@@ -77,10 +77,10 @@ export default memo(function CotizacionRow({ cotizacion, onEditar, onVer, tasa =
             title="Ver detalle">
             <Eye size={15} />
           </button>
-          {(esBorrador || canVersion) && (
+          {canEdit && (
             <button onClick={() => onEditar(cotizacion)}
               className="p-1.5 rounded-lg text-slate-400 hover:text-sky-600 hover:bg-sky-50 transition-colors"
-              title={esBorrador ? 'Editar' : 'Revisar'}>
+              title="Editar">
               <Pencil size={15} />
             </button>
           )}

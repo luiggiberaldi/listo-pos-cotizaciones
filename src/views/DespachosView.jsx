@@ -13,6 +13,7 @@ import { getFiltrosDespacho } from '../utils/estadoLabels'
 import VendedorFilterPill from '../components/ui/VendedorFilterPill'
 import DespachoCard from '../components/despachos/DespachoCard'
 import DespachoRow  from '../components/despachos/DespachoRow'
+import EditDespachoModal from '../components/despachos/EditDespachoModal'
 import DetalleModal from '../components/ui/DetalleModal'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import EmptyState   from '../components/ui/EmptyState'
@@ -103,6 +104,7 @@ export default function DespachosView() {
   const [despachoAAnular, setDespachoAAnular] = useState(null)
   const [despachoAReciclar, setDespachoAReciclar] = useState(null)
   const [despachoDetalle, setDespachoDetalle] = useState(null)
+  const [despachoEditar, setDespachoEditar] = useState(null)
 
   const { data: despachos = [], isLoading, isError, refetch } = useDespachos({ estado: estadoFiltro })
   const cambiarEstado = useActualizarEstadoDespacho()
@@ -243,6 +245,7 @@ export default function DespachosView() {
                 key={d.id}
                 despacho={d}
                 onVer={setDespachoDetalle}
+                onEditar={setDespachoEditar}
                 tasa={tasaEfectiva}
               />
             ))}
@@ -261,6 +264,13 @@ export default function DespachosView() {
         tipo="despacho"
         registro={despachoDetalle}
         tasa={tasaEfectiva}
+      />
+
+      {/* Edit modal para vista lista */}
+      <EditDespachoModal
+        isOpen={!!despachoEditar}
+        onClose={() => setDespachoEditar(null)}
+        despacho={despachoEditar}
       />
 
       {/* Confirm anular — con mensajes por rol */}
