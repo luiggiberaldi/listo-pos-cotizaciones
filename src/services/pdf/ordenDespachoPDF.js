@@ -344,7 +344,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
 
   // ── Recuadro unificado: FORMA DE PAGO + DESGLOSE + TOTAL ──
 
-  // Fila FORMA DE PAGO — checkboxes con palomita en los seleccionados
+  // Fila FORMA DE PAGO — solo los elegidos con checkbox y palomita
   const fpY = ty
   doc.setDrawColor(120, 120, 120)
   doc.setLineWidth(0.3)
@@ -355,40 +355,29 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   doc.setTextColor(...C_DARK)
   doc.text('FORMA DE PAGO:', MARGIN + 3, fpY + 6)
 
-  // Métodos de pago con checkbox
-  const allMetodos = ['EFECTIVO', 'ZELLE', 'P. MÓVIL', 'USDT', 'TRANSF.', 'CTA X COB.']
-  const selectedNames = formasPagoArr.map(fp => (fp.metodo || '').toUpperCase())
   const checkSize = 3.5
   let cx = MARGIN + 38
-  allMetodos.forEach(m => {
-    const isChecked = selectedNames.some(s =>
-      s === m || s.includes(m.replace('.', '').replace(' ', '')) ||
-      (m === 'P. MÓVIL' && s.includes('MOVIL')) || (m === 'P. MÓVIL' && s.includes('MÓVIL')) || (m === 'P. MÓVIL' && s.includes('PAGO M')) ||
-      (m === 'TRANSF.' && s.includes('TRANSF')) ||
-      (m === 'CTA X COB.' && (s.includes('CTA') || s.includes('COBRAR') || s.includes('CREDITO') || s.includes('CRÉDITO'))) ||
-      (m === 'EFECTIVO' && s.includes('EFECTIVO')) ||
-      (m === 'ZELLE' && s.includes('ZELLE')) ||
-      (m === 'USDT' && s.includes('USDT'))
-    )
-    // Dibujar checkbox
+  formasPagoArr.forEach(fp => {
+    const nombre = (fp.metodo || '').toUpperCase()
+    if (!nombre) return
     const boxY = fpY + 2.5
+    // Checkbox
     doc.setDrawColor(80, 80, 80)
     doc.setLineWidth(0.3)
     doc.rect(cx, boxY, checkSize, checkSize, 'S')
-    if (isChecked) {
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(8)
-      doc.setTextColor(...C_DARK)
-      // Checkmark ✓
-      doc.setLineWidth(0.5)
-      doc.line(cx + 0.7, boxY + 2, cx + 1.4, boxY + 3)
-      doc.line(cx + 1.4, boxY + 3, cx + 2.8, boxY + 0.8)
-    }
+    // Checkmark
+    doc.setLineWidth(0.5)
+    doc.line(cx + 0.7, boxY + 2, cx + 1.4, boxY + 3)
+    doc.line(cx + 1.4, boxY + 3, cx + 2.8, boxY + 0.8)
+    const monto = fp.monto != null && fp.monto !== '' ? ` $${Number(fp.monto).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''
+    const txt = nombre + monto
     // Label
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(8)
     doc.setTextColor(...C_DARK)
-    doc.text(m, cx + checkSize + 1.2, fpY + 6)
+    doc.text(txt, cx + checkSize + 1.2, fpY + 6)
+    cx += checkSize + 1.2 + doc.getTextWidth(txt) + 4
+  })
     cx += checkSize + 1.2 + doc.getTextWidth(m) + 3
   })
 
