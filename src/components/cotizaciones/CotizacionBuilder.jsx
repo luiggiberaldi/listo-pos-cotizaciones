@@ -1077,7 +1077,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                       <p className="text-[10px] text-slate-400 mt-1">
                         Tasa: {new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2 }).format(tasaHook.tasaEfectiva)} Bs/$
                         {(monedaPDF === 'bcv' || monedaPDF === 'mixto_bcv') && tasaHook.tasaUsdt?.precio > 0 && tasaHook.tasaBcv?.precio > 0 && (
-                          <> · Factor BCV: {(tasaHook.tasaUsdt.precio / tasaHook.tasaBcv.precio).toFixed(2)}</>
+                          <> · Factor BCV: {(tasaHook.tasaUsdt.precio / tasaHook.tasaBcv.precio).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</>
                         )}
                       </p>
                     )}

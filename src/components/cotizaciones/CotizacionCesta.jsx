@@ -189,7 +189,7 @@ export default function CestaPanel({ items, onCambiar, onEliminar, subtotal, tas
                         }`}
                       >
                         <span className={`text-[10px] font-bold uppercase tracking-widest ${active ? 'text-white/80' : 'text-slate-400'}`}>{n.label}</span>
-                        <span className={`text-xs font-black ${active ? 'text-white' : 'text-slate-800'}`}>${Number(n.value).toFixed(2)}</span>
+                        <span className={`text-xs font-black ${active ? 'text-white' : 'text-slate-800'}`}>${Number(n.value).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       </button>
                     )
                   })}

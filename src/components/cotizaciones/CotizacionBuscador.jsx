@@ -40,7 +40,7 @@ export function PrecioSelector({ precios, currentPrice, onSelect, tasa = 0, mobi
                 }`}
               >
                 <span className={`text-[11px] font-bold uppercase tracking-widest ${active ? 'text-white/80' : 'text-slate-400'}`}>{n.label}</span>
-                <span className={`text-base font-black mt-0.5 ${active ? 'text-white' : 'text-slate-800'}`}>${Number(n.value).toFixed(2)}</span>
+                <span className={`text-base font-black mt-0.5 ${active ? 'text-white' : 'text-slate-800'}`}>${Number(n.value).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </button>
             )
           })}
@@ -61,7 +61,7 @@ export function PrecioSelector({ precios, currentPrice, onSelect, tasa = 0, mobi
                 ? 'bg-primary text-white'
                 : 'bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600'
             }`}
-            title={`${n.label}: $${Number(n.value).toFixed(2)}`}
+            title={`${n.label}: $${Number(n.value).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
           >
             {n.label}
           </button>

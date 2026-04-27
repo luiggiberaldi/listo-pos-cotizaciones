@@ -224,7 +224,7 @@ export default function ListaPreciosModal({
               ))}
             </div>
             {['bs', 'mixto', 'mixto_bcv', 'bcv'].includes(moneda) && tasa > 0 && (
-              <p className="text-xs text-slate-400 ml-1">Tasa vigente: Bs {tasa.toFixed(2)}</p>
+              <p className="text-xs text-slate-400 ml-1">Tasa vigente: Bs {tasa.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
             )}
             {['bs', 'mixto', 'mixto_bcv', 'bcv'].includes(moneda) && tasa <= 0 && (
               <p className="text-xs text-amber-600 font-medium ml-1">No hay tasa disponible — se mostrará en USD</p>

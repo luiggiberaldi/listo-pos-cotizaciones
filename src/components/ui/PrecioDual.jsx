@@ -6,7 +6,7 @@ export default function PrecioDual({ usd, tasa, className = '', size = 'sm' }) {
   if (usd == null) return <span className="text-slate-400">—</span>
 
   const bs = usdToBs(usd, tasa)
-  const formattedUsd = `$${Number(usd).toFixed(2)}`
+  const formattedUsd = `$${Number(usd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
   const sizes = {
     xs: { usd: 'text-xs font-semibold', bs: 'text-[10px]' },
@@ -32,7 +32,7 @@ export function PrecioDualInline({ usd, tasa, className = '' }) {
   if (usd == null) return <span className="text-slate-400">—</span>
 
   const bs = usdToBs(usd, tasa)
-  const formattedUsd = `$${Number(usd).toFixed(2)}`
+  const formattedUsd = `$${Number(usd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
   return (
     <span className={className}>

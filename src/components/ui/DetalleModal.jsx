@@ -212,7 +212,7 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
             return formasDisplay.map((fp, i) => (
               <span key={i} className="inline-flex items-center gap-1">
                 <CreditCard size={12} className="text-slate-400" />
-                <strong className="text-slate-700">{fp.metodo}{fp.monto != null ? ` $${Number(fp.monto).toFixed(2)}` : ''}</strong>
+                <strong className="text-slate-700">{fp.metodo}{fp.monto != null ? ` $${Number(fp.monto).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}</strong>
               </span>
             ))
           })()}

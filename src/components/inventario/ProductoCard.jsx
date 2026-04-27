@@ -6,7 +6,7 @@ import StockComprometidoDetalle from './StockComprometidoDetalle'
 
 function fmtUsd(n) {
   if (n == null) return '—'
-  return `$${Number(n).toFixed(2)}`
+  return `$${Number(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
 // Color determinista basado en la cadena de categoría

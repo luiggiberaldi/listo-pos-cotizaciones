@@ -6,7 +6,7 @@ import { WATERMARK_LOGO } from './watermarkBase64'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmtUsd(n) {
-  return `$${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  return `$${Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 function fmtBs(n) {
   return `Bs ${Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -93,7 +93,7 @@ function drawHeader(doc, logoData, config, moneda, tasa) {
   doc.setFont('helvetica', 'normal')
   const fechaTxt = new Date().toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })
   const tasaTxt = (moneda === 'bs' || moneda === 'mixto' || moneda === 'mixto_bcv' || moneda === 'bcv') && tasa > 0
-    ? `  ·  Tasa: Bs ${tasa.toFixed(2)}`
+    ? `  ·  Tasa: Bs ${tasa.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
     : ''
   doc.text(fechaTxt + tasaTxt, PAGE_W - MARGIN, HDR_H - 3, { align: 'right' })
 

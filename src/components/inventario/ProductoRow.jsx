@@ -6,7 +6,7 @@ import { fmtBs, usdToBs } from '../../utils/format'
 
 function fmtUsd(n) {
   if (n == null) return '—'
-  return `$${Number(n).toFixed(2)}`
+  return `$${Number(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
 // Mismo hash determinista que ProductoCard

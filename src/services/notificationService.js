@@ -215,7 +215,7 @@ export function notifyStockBajo(productos, currentRole = null) {
 }
 
 export function notifyCotizacionEnviada(numero, clienteNombre, vendedorNombre, totalUsd, currentRole = null) {
-  const total = totalUsd ? ` — $${Number(totalUsd).toFixed(2)}` : ''
+  const total = totalUsd ? ` — $${Number(totalUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''
   const de = vendedorNombre ? ` de ${vendedorNombre}` : ''
   createNotification(
     NOTIF_TYPES.COTIZACION_ENVIADA,

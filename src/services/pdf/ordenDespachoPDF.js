@@ -358,7 +358,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   if (formasPagoArr.length > 0) {
     const parts = formasPagoArr.map(fp => {
       const nombre = fp.metodo?.toUpperCase() || ''
-      const monto = fp.monto != null && fp.monto !== '' ? ` $${Number(fp.monto).toFixed(2)}` : ''
+      const monto = fp.monto != null && fp.monto !== '' ? ` $${Number(fp.monto).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''
       return nombre + monto
     })
     doc.setFont('helvetica', 'bold')

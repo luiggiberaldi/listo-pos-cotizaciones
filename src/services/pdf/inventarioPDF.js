@@ -6,10 +6,10 @@ import { WATERMARK_LOGO } from './watermarkBase64'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmtUsd(n) {
-  return `$${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  return `$${Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 function fmtNum(n) {
-  return Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+  return Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
 }
 
 // ─── Layout y Colores ────────────────────────────────────────────────────────

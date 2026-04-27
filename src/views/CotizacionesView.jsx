@@ -315,11 +315,11 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                   ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                   : 'bg-red-50 text-red-600 border border-red-200'
               }`}>
-                <span>Asignado: ${montoAsignado.toFixed(2)}</span>
-                <span>Total: ${totalConFlete.toFixed(2)}</span>
+                <span>Asignado: ${montoAsignado.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <span>Total: ${totalConFlete.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 {pagoCuadrado
                   ? <span className="text-emerald-500">✓</span>
-                  : <span className="text-red-400">Faltan ${(totalConFlete - montoAsignado).toFixed(2)}</span>
+                  : <span className="text-red-400">Faltan ${(totalConFlete - montoAsignado).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 }
               </div>
             </div>
@@ -422,7 +422,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
             />
             {Number(fleteUsd) > 0 && (
               <p className="text-xs text-indigo-500 font-medium">
-                Total con flete: ${(Number(cotizacion?.total_usd || 0) + Number(fleteUsd)).toFixed(2)}
+                Total con flete: ${(Number(cotizacion?.total_usd || 0) + Number(fleteUsd)).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             )}
           </div>

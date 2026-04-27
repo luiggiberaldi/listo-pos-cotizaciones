@@ -2,11 +2,11 @@
 // Funciones compartidas de formateo
 
 export function fmtUsd(n) {
-  return `$${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  return `$${Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
 export function fmtUsdSimple(n) {
-  return `$${Number(n || 0).toFixed(2)}`
+  return `$${Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
 export function fmtBs(n) {

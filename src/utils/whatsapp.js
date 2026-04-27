@@ -51,7 +51,7 @@ async function subirPdfTemporal(pdfBlob, pdfFilename) {
  * Genera el mensaje para WhatsApp (con link al PDF)
  */
 export function generarMensaje({ nombreNegocio, nombreCliente, numDisplay, totalUsd, nombreVendedor, items = [], pdfUrl = null }) {
-  const total = `$${Number(totalUsd || 0).toFixed(2)}`
+  const total = `$${Number(totalUsd || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   const empresa = nombreNegocio || 'Construacero Carabobo'
   const saludo = nombreCliente ? `Estimado/a *${nombreCliente}*,` : 'Estimado/a cliente,'
 
@@ -67,7 +67,7 @@ export function generarMensaje({ nombreNegocio, nombreCliente, numDisplay, total
     const cant = Number(it.cantidad || 1)
     const precio = Number(it.precio_unit_usd || it.precioUnitUsd || 0)
     const subtotal = cant * precio
-    return `- ${it.nombre_snap || it.nombreSnap} x${cant} -- *$${subtotal.toFixed(2)}*`
+    return `- ${it.nombre_snap || it.nombreSnap} x${cant} -- *$${subtotal.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}*`
   })
 
   const hayMas = items.length > 15
