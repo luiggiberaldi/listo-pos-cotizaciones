@@ -3,7 +3,7 @@
 import { NavLink } from 'react-router-dom'
 import { LayoutDashboard, FileText, Users, Package, MoreHorizontal, Zap } from 'lucide-react'
 import { useState } from 'react'
-import { PackageCheck, Truck, DollarSign, BarChart3, Settings, AlertCircle } from 'lucide-react'
+import { PackageCheck, Truck, DollarSign, BarChart3, Settings, AlertCircle, FlaskConical } from 'lucide-react'
 
 const BOTTOM_ITEMS = [
   { path: '/', label: 'Inicio', icon: LayoutDashboard },
@@ -22,6 +22,7 @@ const MORE_ITEMS = [
   { path: '/comisiones', label: 'Comisiones', icon: DollarSign, excludeRoles: ['logistica'] },
   { path: '/reportes', label: 'Reportes', icon: BarChart3, requiresPrivileged: true },
   { path: '/configuracion', label: 'Configuración', icon: Settings, supervisorOnly: true },
+  { path: '/tester', label: 'Tester', icon: FlaskConical, onlyRoles: ['desarrollador'] },
 ]
 
 export default function BottomNav({ esSupervisor, esAdministracion = false, rol: rolProp }) {
@@ -55,6 +56,7 @@ export default function BottomNav({ esSupervisor, esAdministracion = false, rol:
                 key={path}
                 to={path}
                 onClick={() => setShowMore(false)}
+                style={{ touchAction: 'manipulation' }}
                 className={({ isActive }) => `
                   flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl transition-all
                   ${isActive ? 'bg-white/10 text-amber-400' : 'text-white/60 hover:text-white hover:bg-white/5'}
@@ -91,8 +93,9 @@ export default function BottomNav({ esSupervisor, esAdministracion = false, rol:
               key={path}
               to={path}
               end={path === '/'}
+              style={{ touchAction: 'manipulation' }}
               className={({ isActive }) => `
-                flex flex-col items-center gap-0.5 py-1.5 px-1.5 rounded-xl transition-all min-w-[48px]
+                flex flex-col items-center gap-0.5 py-1.5 px-1.5 rounded-xl transition-colors min-w-[48px]
                 ${isActive ? 'text-amber-400' : 'text-white/50 active:text-white/80'}
               `}
             >

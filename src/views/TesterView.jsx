@@ -16,8 +16,8 @@ export default function TesterView() {
       <Link to="/tester-flow"
         className="flex items-center justify-between p-4 rounded-xl bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 transition-colors group">
         <div>
-          <p className="text-sm font-bold text-indigo-700">Tester Determinista (36 pasos)</p>
-          <p className="text-xs text-indigo-500 mt-0.5">Flujo completo con aserciones exactas: producto → cotización → despacho → descuentos → comisión → CxC</p>
+          <p className="text-sm font-bold text-indigo-700">Tester Determinista (64 pasos)</p>
+          <p className="text-xs text-indigo-500 mt-0.5">Flujo completo con aserciones exactas: producto → cotización → despacho → descuentos → comisión → CxC → transportistas → venta rápida → anulación → reciclaje</p>
         </div>
         <ArrowRight size={18} className="text-indigo-400 group-hover:translate-x-1 transition-transform shrink-0" />
       </Link>

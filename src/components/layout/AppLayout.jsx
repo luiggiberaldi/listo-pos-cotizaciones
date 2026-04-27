@@ -92,16 +92,18 @@ const NavItem = memo(function NavItem({ path, label, Icono, onClick, collapsed }
       title={collapsed ? label : undefined}
       className={({ isActive }) => `
         flex items-center ${collapsed ? 'justify-center' : 'gap-3'} ${collapsed ? 'px-2' : 'px-3'} py-1.5 md:py-1.5 xl:py-2 rounded-xl
-        text-sm font-bold transition-all duration-200
+        text-sm font-bold transition-colors duration-150
         ${isActive
           ? 'text-white shadow-lg'
           : 'text-white/75 hover:text-white hover:bg-white/10'
         }
       `}
-      style={({ isActive }) => isActive
-        ? { background: 'linear-gradient(135deg, rgba(27,54,93,0.9), rgba(184,134,11,0.7))', boxShadow: '0 4px 15px rgba(184,134,11,0.2)', border: '1px solid rgba(184,134,11,0.25)' }
-        : {}
-      }
+      style={({ isActive }) => ({
+        touchAction: 'manipulation',
+        ...(isActive
+          ? { background: 'linear-gradient(135deg, rgba(27,54,93,0.9), rgba(184,134,11,0.7))', boxShadow: '0 4px 15px rgba(184,134,11,0.2)', border: '1px solid rgba(184,134,11,0.25)' }
+          : {})
+      })}
     >
       <Icono size={18} />
       {!collapsed && <span>{label}</span>}

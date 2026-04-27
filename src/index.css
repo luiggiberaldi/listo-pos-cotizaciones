@@ -22,6 +22,11 @@
     padding: 0;
   }
 
+  /* Eliminar 300ms tap-delay en dispositivos touch */
+  a, button, [role="button"], input, select, textarea {
+    touch-action: manipulation;
+  }
+
   /* Prevenir caret/cursor de texto en elementos no interactivos (Chrome Android) */
   body {
     -webkit-user-select: none;

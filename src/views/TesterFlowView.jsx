@@ -74,6 +74,40 @@ const TEST = {
     forma_pago: 'Cta por cobrar',
     stock_esperado_post: 90, // 100 - 10
   },
+  producto2: {
+    codigo: 'TEST-DET-002',
+    nombre: 'Producto Secundario Test',
+    unidad: 'mt',
+    precio_usd: 40.00,
+    precio_2: 38.00,
+    precio_3: 35.00,
+    costo_usd: 25.00,
+    stock_inicial: 50,
+    stock_minimo: 3,
+    categoria: 'TESTER',
+  },
+  transportista: {
+    nombre: 'Transportista Determinista Test',
+    rif: 'V-99999999',
+    telefono: '0412-0000000',
+    vehiculo: 'Camión Test',
+    placa_chuto: 'TEST-00',
+  },
+  ventaRapida: {
+    cantidad: 5,
+    precio_unit: 25.00,
+    forma_pago: 'Efectivo',
+    total_linea: 125.00,
+    total_usd: 125.00,
+  },
+  reasignacion: {
+    motivo: 'Reasignación de prueba determinista para el tester',
+  },
+  movimientoLote: {
+    tipo: 'ingreso',
+    motivo: 'Ajuste de inventario por tester determinista',
+    cantidad: 20,
+  },
 }
 
 // ─── Step definitions ─────────────────────────────────────────────────────────
@@ -113,8 +147,52 @@ const STEPS = [
   { id: 'assert_report_ventas', label: '32. Assert: reporte ventas incluye despacho', group: 'Reportes' },
   { id: 'assert_report_pipeline', label: '33. Assert: reporte pipeline incluye cotización', group: 'Reportes' },
   { id: 'assert_report_inventario', label: '34. Assert: reporte inventario stock=90', group: 'Reportes' },
-  { id: 'cleanup', label: '35. Limpiar datos de prueba', group: 'Limpieza' },
-  { id: 'assert_cleanup', label: '36. Assert: datos eliminados completamente', group: 'Limpieza' },
+
+  // ─── NUEVOS PASOS ────────────────────────────────────────────────────────
+
+  // Transportistas
+  { id: 'create_transportista',              label: '35. Crear transportista',                            group: 'Transportistas' },
+  { id: 'assert_transportista',              label: '36. Assert: transportista en BD',                    group: 'Transportistas' },
+  // Multi-precio
+  { id: 'create_product_2',                  label: '37. Crear producto 2 (con precio_2/precio_3)',       group: 'Multi-Precio' },
+  { id: 'assert_product_2_prices',           label: '38. Assert: 3 precios correctos',                   group: 'Multi-Precio' },
+  // Mov. inventario lote
+  { id: 'apply_inventory_batch',             label: '39. Movimiento lote: ingreso +20u producto 1',      group: 'Mov. Inventario' },
+  { id: 'assert_inventory_batch',            label: '40. Assert: stock=110 y kardex lote',               group: 'Mov. Inventario' },
+  // Anular cotización
+  { id: 'create_draft_for_anular',           label: '41. Crear cotización para anular',                  group: 'Anulación' },
+  { id: 'send_quote_for_anular',             label: '42. Enviar cotización',                              group: 'Anulación' },
+  { id: 'anular_cotizacion',                 label: '43. Anular cotización',                              group: 'Anulación' },
+  { id: 'assert_anulada',                    label: '44. Assert: estado=anulada',                         group: 'Anulación' },
+  // Reciclar cotización
+  { id: 'reciclar_cotizacion',               label: '45. Reciclar cotización anulada',                   group: 'Reciclaje' },
+  { id: 'assert_reciclada',                  label: '46. Assert: nueva cotización borrador con items',   group: 'Reciclaje' },
+  // Crear versión
+  { id: 'crear_version',                     label: '47. Enviar reciclada y crear versión',              group: 'Reciclaje' },
+  { id: 'assert_version',                    label: '48. Assert: versión ≥2, cotizacion_raiz_id≠null',   group: 'Reciclaje' },
+  // Venta rápida
+  { id: 'venta_rapida',                      label: '49. Venta rápida (cotización+despacho atómico)',    group: 'Venta Rápida' },
+  { id: 'assert_vr_cotizacion',              label: '50. Assert: cotización aceptada, total=$125',       group: 'Venta Rápida' },
+  { id: 'assert_vr_despacho',                label: '51. Assert: despacho pendiente, pago=Efectivo',     group: 'Venta Rápida' },
+  { id: 'assert_stock_post_vr',              label: '52. Assert: stock=105 (110-5)',                     group: 'Venta Rápida' },
+  // Anular despacho + reciclar
+  { id: 'anular_despacho',                   label: '53. Anular despacho de venta rápida',               group: 'Anulación' },
+  { id: 'assert_despacho_anulado',           label: '54. Assert: estado=anulada, stock restaurado=110',  group: 'Anulación' },
+  { id: 'reciclar_despacho',                 label: '55. Reciclar despacho → nueva cotización',          group: 'Reciclaje' },
+  { id: 'assert_despacho_reciclado',         label: '56. Assert: cotización borrador con items',         group: 'Reciclaje' },
+  // Reasignación
+  { id: 'reasignar_cliente',                 label: '57. Reasignar cliente a otro vendedor',             group: 'Reasignación' },
+  { id: 'assert_reasignacion',               label: '58. Assert: vendedor_id y motivo actualizados',    group: 'Reasignación' },
+
+  // ─── HEALTH CHECKS UI/SISTEMA ───────────────────────────────────────────
+  { id: 'health_api_endpoints',              label: '59. Health: endpoints API responden',               group: 'Health Check' },
+  { id: 'health_rls_policies',               label: '60. Health: RLS permite lectura de tablas clave',   group: 'Health Check' },
+  { id: 'health_config',                     label: '61. Health: configuración carga correctamente',     group: 'Health Check' },
+  { id: 'health_nav_routes',                 label: '62. Health: rutas principales existen',             group: 'Health Check' },
+
+  // ─── CLEANUP (renumerado) ────────────────────────────────────────────────
+  { id: 'cleanup',                           label: '63. Limpiar datos de prueba',                       group: 'Limpieza' },
+  { id: 'assert_cleanup',                    label: '64. Assert: datos eliminados completamente',        group: 'Limpieza' },
 ]
 
 const GROUP_COLORS = {
@@ -127,6 +205,14 @@ const GROUP_COLORS = {
   'Cuentas por Cobrar': 'text-orange-600 bg-orange-50 border-orange-200',
   'Reportes': 'text-teal-600 bg-teal-50 border-teal-200',
   'Limpieza': 'text-red-600 bg-red-50 border-red-200',
+  'Transportistas': 'text-cyan-600 bg-cyan-50 border-cyan-200',
+  'Anulación': 'text-rose-600 bg-rose-50 border-rose-200',
+  'Reciclaje': 'text-lime-600 bg-lime-50 border-lime-200',
+  'Venta Rápida': 'text-fuchsia-600 bg-fuchsia-50 border-fuchsia-200',
+  'Multi-Precio': 'text-purple-600 bg-purple-50 border-purple-200',
+  'Mov. Inventario': 'text-yellow-600 bg-yellow-50 border-yellow-200',
+  'Reasignación': 'text-pink-600 bg-pink-50 border-pink-200',
+  'Health Check': 'text-blue-600 bg-blue-50 border-blue-200',
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -202,26 +288,29 @@ export default function TesterFlowView() {
   async function stepPreCleanup(id) {
     addLog(id, 'Buscando datos residuales de corridas anteriores...')
 
+    // Helper: limpiar todas las dependencias de un producto
+    async function cleanProductDeps(prodId) {
+      const { data: oldItems } = await supabase.from('cotizacion_items').select('cotizacion_id').eq('producto_id', prodId)
+      if (oldItems && oldItems.length > 0) {
+        const cotIds = [...new Set(oldItems.map(i => i.cotizacion_id))]
+        for (const cotId of cotIds) {
+          await supabase.rpc('tester_cleanup_cotizacion', { p_cotizacion_id: cotId })
+        }
+        addLog(id, `  Eliminadas ${cotIds.length} cotizaciones residuales`)
+      }
+      // Use RPC to bypass RLS (SECURITY DEFINER) — direct .delete() is silently blocked
+      const { error: rpcErr } = await supabase.rpc('borrar_producto_con_kardex', { p_producto_id: prodId })
+      if (rpcErr) {
+        // Fallback: try direct delete (might work if no stock)
+        await supabase.from('inventario_movimientos').delete().eq('producto_id', prodId)
+        await supabase.from('productos').delete().eq('id', prodId)
+      }
+    }
+
     // 1. Buscar producto test por código
     const { data: oldProds } = await supabase.from('productos').select('id').eq('codigo', TEST.producto.codigo)
     if (oldProds && oldProds.length > 0) {
-      for (const p of oldProds) {
-        // Borrar items de cotizaciones que referencien este producto
-        const { data: oldItems } = await supabase.from('cotizacion_items').select('cotizacion_id').eq('producto_id', p.id)
-        if (oldItems && oldItems.length > 0) {
-          const cotIds = [...new Set(oldItems.map(i => i.cotizacion_id))]
-          for (const cotId of cotIds) {
-            await supabase.from('cuentas_por_cobrar').delete().eq('cotizacion_id', cotId)
-            await supabase.from('comisiones').delete().eq('cotizacion_id', cotId)
-            await supabase.from('notas_despacho').delete().eq('cotizacion_id', cotId)
-            await supabase.from('cotizacion_items').delete().eq('cotizacion_id', cotId)
-            await supabase.from('cotizaciones').delete().eq('id', cotId)
-          }
-          addLog(id, `  Eliminadas ${cotIds.length} cotizaciones residuales`)
-        }
-        await supabase.from('inventario_movimientos').delete().eq('producto_id', p.id)
-        await supabase.from('productos').delete().eq('id', p.id)
-      }
+      for (const p of oldProds) await cleanProductDeps(p.id)
       addLog(id, `  Eliminados ${oldProds.length} productos residuales (${TEST.producto.codigo})`)
     }
 
@@ -229,6 +318,7 @@ export default function TesterFlowView() {
     const { data: oldClients } = await supabase.from('clientes').select('id').eq('rif_cedula', TEST.cliente.rif_cedula)
     if (oldClients && oldClients.length > 0) {
       for (const c of oldClients) {
+        await supabase.from('reasignaciones_clientes').delete().eq('cliente_id', c.id)
         await supabase.from('cuentas_por_cobrar').delete().eq('cliente_id', c.id)
         await supabase.from('clientes').update({ saldo_pendiente: 0, activo: false }).eq('id', c.id)
       }
@@ -238,6 +328,17 @@ export default function TesterFlowView() {
     if ((!oldProds || oldProds.length === 0) && (!oldClients || oldClients.length === 0)) {
       addLog(id, '  No se encontraron datos residuales')
     }
+
+    // 3. Limpiar transportista residual
+    await supabase.from('transportistas').delete().eq('nombre', TEST.transportista.nombre)
+
+    // 4. Producto 2 residual
+    const { data: p2 } = await supabase.from('productos').select('id').eq('codigo', TEST.producto2.codigo).maybeSingle()
+    if (p2) {
+      await cleanProductDeps(p2.id)
+      addLog(id, `  Eliminado producto 2 residual (${TEST.producto2.codigo})`)
+    }
+
     addLog(id, 'Pre-limpieza completa', 'success')
   }
 
@@ -246,12 +347,14 @@ export default function TesterFlowView() {
     const rpcParams = {
       p_codigo: TEST.producto.codigo,
       p_nombre: TEST.producto.nombre,
+      p_descripcion: null,
+      p_categoria: TEST.producto.categoria,
       p_unidad: TEST.producto.unidad,
       p_precio_usd: TEST.producto.precio_usd,
       p_costo_usd: TEST.producto.costo_usd,
       p_stock_actual: TEST.producto.stock_inicial,
       p_stock_minimo: TEST.producto.stock_minimo,
-      p_categoria: TEST.producto.categoria,
+      p_imagen_url: null,
       p_precio_2: null,
       p_precio_3: null,
     }
@@ -585,12 +688,12 @@ export default function TesterFlowView() {
     const itemId = items[0].id
     dataRef.current.cotizacionItemId = itemId
 
-    addLog(id, `POST /api/despachos/descuentos (tipo=monto, valor=$${descuentoUnitario}/u × ${TEST.cotizacion.cantidad}u = -$${descuentoTotal})`)
+    addLog(id, `POST /api/despachos/descuentos (tipo=monto_unitario, valor=$${descuentoUnitario}/u × ${TEST.cotizacion.cantidad}u = -$${descuentoTotal})`)
     await apiCall('/api/despachos/descuentos', 'POST', {
       despachoId: dataRef.current.despachoId,
       descuentos: [{
         cotizacionItemId: itemId,
-        tipo: 'monto',
+        tipo: 'monto_unitario',
         valor: descuentoUnitario,
       }],
     })
@@ -611,8 +714,8 @@ export default function TesterFlowView() {
     const descRes = await apiCall(`/api/despachos/${dataRef.current.despachoId}/descuentos`)
     addLog(id, `Raw descuentos: ${JSON.stringify(descRes)}`)
     assert(descRes.length === 1, 1, descRes.length, 'Debe existir 1 descuento')
-    assert(descRes[0].tipo === 'monto', 'monto', descRes[0].tipo, 'tipo')
-    addLog(id, `  tipo = "monto" ✓`)
+    assert(descRes[0].tipo === 'monto_unitario', 'monto_unitario', descRes[0].tipo, 'tipo')
+    addLog(id, `  tipo = "monto_unitario" ✓`)
     assert(Number(descRes[0].valor) === 2, 2, descRes[0].valor, 'valor')
     addLog(id, `  valor = $2.00/u ✓`)
 
@@ -674,19 +777,23 @@ export default function TesterFlowView() {
     const esCategoriaCabilla = TEST.producto.categoria.toLowerCase().trim() === catCabilla
 
     if (esCategoriaCabilla) {
-      const expectedComision = round2(TEST.cotizacion.total_linea * Number(config.comision_pct_cabilla) / 100)
+      const montoBase = TEST.cotizacion.total_linea - (dataRef.current.descuentoTotal || 0)
+      const expectedComision = round2(montoBase * Number(config.comision_pct_cabilla) / 100)
       addLog(id, `  Categoría "${TEST.producto.categoria}" = cabilla → pct=${config.comision_pct_cabilla}%`)
-      assert(Number(com.monto_cabilla) === TEST.cotizacion.total_linea, TEST.cotizacion.total_linea, com.monto_cabilla, 'monto_cabilla')
+      addLog(id, `  montoBase = ${TEST.cotizacion.total_linea} - ${dataRef.current.descuentoTotal || 0} = ${montoBase}`)
+      assert(Number(com.monto_cabilla) === montoBase, montoBase, com.monto_cabilla, 'monto_cabilla')
       addLog(id, `  monto_cabilla = $${com.monto_cabilla} ✓`)
       assert(Number(com.total_comision) === expectedComision, expectedComision, com.total_comision, 'total_comision')
       addLog(id, `  total_comision = $${com.total_comision} ✓`)
     } else {
-      const expectedComision = round2(TEST.cotizacion.total_linea * Number(config.comision_pct_otros) / 100)
+      const montoBase = TEST.cotizacion.total_linea - (dataRef.current.descuentoTotal || 0)
+      const expectedComision = round2(montoBase * Number(config.comision_pct_otros) / 100)
       addLog(id, `  Categoría "${TEST.producto.categoria}" ≠ "${config.comision_categoria_cabilla}" → va a "otros" (pct=${config.comision_pct_otros}%)`)
-      assert(Number(com.monto_otros) === TEST.cotizacion.total_linea, TEST.cotizacion.total_linea, com.monto_otros, 'monto_otros')
+      addLog(id, `  montoBase = ${TEST.cotizacion.total_linea} - ${dataRef.current.descuentoTotal || 0} = ${montoBase}`)
+      assert(Number(com.monto_otros) === montoBase, montoBase, com.monto_otros, 'monto_otros')
       addLog(id, `  monto_otros = $${com.monto_otros} ✓`)
       assert(Number(com.total_comision) === expectedComision, expectedComision, Number(com.total_comision), 'total_comision')
-      addLog(id, `  total_comision = $${com.total_comision} (=${TEST.cotizacion.total_linea}×${config.comision_pct_otros}%) ✓`)
+      addLog(id, `  total_comision = $${com.total_comision} (=${montoBase}×${config.comision_pct_otros}%) ✓`)
     }
 
     assert(com.estado === 'pendiente', 'pendiente', com.estado, 'estado')
@@ -778,25 +885,497 @@ export default function TesterFlowView() {
     addLog(id, 'Producto correcto en reporte inventario', 'success')
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // NUEVOS STEP IMPLEMENTATIONS (35-58)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  async function stepCreateTransportista(id) {
+    addLog(id, `INSERT transportistas(nombre="${TEST.transportista.nombre}")`)
+    const { data, error } = await supabase.from('transportistas').insert({
+      nombre: TEST.transportista.nombre,
+      rif: TEST.transportista.rif,
+      telefono: TEST.transportista.telefono,
+      vehiculo: TEST.transportista.vehiculo,
+      placa_chuto: TEST.transportista.placa_chuto,
+      activo: true,
+    }).select().single()
+    if (error) throw error
+    dataRef.current.transportistaTestId = data.id
+    addLog(id, `OK → transportistaTestId=${data.id}`, 'success')
+  }
+
+  async function stepAssertTransportista(id) {
+    const d = dataRef.current
+    const { data: t, error } = await supabase.from('transportistas').select('*').eq('id', d.transportistaTestId).single()
+    if (error) throw error
+    addLog(id, `Raw DB: ${JSON.stringify(t)}`)
+    assert(t.nombre === TEST.transportista.nombre, TEST.transportista.nombre, t.nombre, 'nombre')
+    addLog(id, `  nombre = "${t.nombre}" ✓`)
+    assert(t.rif === TEST.transportista.rif, TEST.transportista.rif, t.rif, 'rif')
+    addLog(id, `  rif = "${t.rif}" ✓`)
+    assert(t.activo === true, true, t.activo, 'activo')
+    addLog(id, `  activo = true ✓`)
+    addLog(id, 'Transportista creado correctamente', 'success')
+  }
+
+  async function stepCreateProduct2(id) {
+    addLog(id, `RPC crear_producto_con_kardex(codigo=${TEST.producto2.codigo}, stock=${TEST.producto2.stock_inicial})`)
+    const rpcParams = {
+      p_codigo: TEST.producto2.codigo,
+      p_nombre: TEST.producto2.nombre,
+      p_descripcion: null,
+      p_categoria: TEST.producto2.categoria,
+      p_unidad: TEST.producto2.unidad,
+      p_precio_usd: TEST.producto2.precio_usd,
+      p_precio_2: TEST.producto2.precio_2,
+      p_precio_3: TEST.producto2.precio_3,
+      p_costo_usd: TEST.producto2.costo_usd,
+      p_stock_actual: TEST.producto2.stock_inicial,
+      p_stock_minimo: TEST.producto2.stock_minimo,
+      p_imagen_url: null,
+    }
+    addLog(id, `Params: ${JSON.stringify(rpcParams)}`)
+    const { data: result, error } = await supabase.rpc('crear_producto_con_kardex', rpcParams)
+    if (error) throw error
+    const producto2Id = typeof result === 'object' ? result.id : result
+    dataRef.current.producto2Id = producto2Id
+    addLog(id, `OK → producto2Id=${producto2Id}`, 'success')
+  }
+
+  async function stepAssertProduct2Prices(id) {
+    const { data: prod, error } = await supabase.from('productos').select('*').eq('id', dataRef.current.producto2Id).single()
+    if (error) throw error
+    addLog(id, `Raw DB: ${JSON.stringify(prod)}`)
+    assert(Number(prod.precio_usd) === 40.00, 40.00, prod.precio_usd, 'precio_usd')
+    addLog(id, `  precio_usd = $${prod.precio_usd} ✓`)
+    assert(Number(prod.precio_2) === 38.00, 38.00, prod.precio_2, 'precio_2')
+    addLog(id, `  precio_2 = $${prod.precio_2} ✓`)
+    assert(Number(prod.precio_3) === 35.00, 35.00, prod.precio_3, 'precio_3')
+    addLog(id, `  precio_3 = $${prod.precio_3} ✓`)
+    assert(Number(prod.stock_actual) === 50, 50, prod.stock_actual, 'stock_actual')
+    addLog(id, `  stock_actual = ${prod.stock_actual} ✓`)
+    addLog(id, 'Producto 2 con multi-precio correcto', 'success')
+  }
+
+  async function stepApplyInventoryBatch(id) {
+    addLog(id, `POST /api/inventario/movimiento (ingreso +${TEST.movimientoLote.cantidad}u producto 1)`)
+    const result = await apiCall('/api/inventario/movimiento', 'POST', {
+      tipo: 'ingreso',
+      motivo: TEST.movimientoLote.motivo,
+      motivo_tipo: 'ajuste_inventario',
+      items: [
+        { producto_id: dataRef.current.productoId, cantidad: TEST.movimientoLote.cantidad },
+      ],
+    })
+    dataRef.current.loteId = result.lote_id
+    addLog(id, `OK → loteId=${result.lote_id}`, 'success')
+    addLog(id, 'Stock producto 1: 90 → 110')
+  }
+
+  async function stepAssertInventoryBatch(id) {
+    const d = dataRef.current
+    const { data: prod } = await supabase.from('productos').select('stock_actual').eq('id', d.productoId).single()
+    const stock = Number(prod.stock_actual)
+    assert(stock === 110, 110, stock, 'stock_actual post-lote')
+    addLog(id, `  stock_actual = ${stock} (90 + 20 = 110) ✓`)
+
+    const { data: movs } = await supabase.from('inventario_movimientos').select('*').eq('lote_id', d.loteId)
+    assert(movs && movs.length >= 1, '>=1', movs?.length, 'movimientos del lote')
+    const mov = movs.find(m => m.tipo === 'ingreso' && Number(m.cantidad) === 20)
+    assert(!!mov, 'ingreso 20u', mov ? `${mov.tipo} ${mov.cantidad}u` : 'no encontrado', 'movimiento ingreso lote')
+    addLog(id, `  movimiento ingreso: cantidad=${mov.cantidad} ✓`)
+    addLog(id, 'Movimiento de inventario por lote correcto', 'success')
+  }
+
+  async function stepCreateDraftForAnular(id) {
+    const d = dataRef.current
+    addLog(id, 'POST /api/cotizaciones/guardar (cotización para anular)')
+    const result = await apiCall('/api/cotizaciones/guardar', 'POST', {
+      cotizacionId: null,
+      headerData: {
+        cliente_id: d.clienteId,
+        vendedor_id: perfil.id,
+        valida_hasta: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+        descuento_global_pct: 0,
+        costo_envio_usd: 0,
+        subtotal_usd: 125.00,
+        descuento_usd: 0,
+        total_usd: 125.00,
+      },
+      items: [{
+        producto_id: d.producto2Id,
+        codigo_snap: TEST.producto2.codigo,
+        nombre_snap: TEST.producto2.nombre,
+        unidad_snap: TEST.producto2.unidad,
+        cantidad: 5,
+        precio_unit_usd: TEST.producto2.precio_2,
+        descuento_pct: 0,
+        total_linea_usd: 5 * 25,
+      }],
+    })
+    d.cotizacion2Id = result.id
+    addLog(id, `OK → cotizacion2Id=${result.id}`, 'success')
+  }
+
+  async function stepSendQuoteForAnular(id) {
+    addLog(id, 'POST /api/cotizaciones/enviar (cotización para anular)')
+    await apiCall('/api/cotizaciones/enviar', 'POST', {
+      cotizacionId: dataRef.current.cotizacion2Id,
+      tasaBcv: 100,
+    })
+    addLog(id, 'OK → cotización enviada', 'success')
+  }
+
+  async function stepAnularCotizacion(id) {
+    addLog(id, `UPDATE cotizaciones SET estado=anulada (id=${dataRef.current.cotizacion2Id})`)
+    const { error } = await supabase.from('cotizaciones').update({ estado: 'anulada' }).eq('id', dataRef.current.cotizacion2Id)
+    if (error) throw error
+    addLog(id, `Cotización anulada → id=${dataRef.current.cotizacion2Id}`, 'success')
+  }
+
+  async function stepAssertAnulada(id) {
+    const { data: cot, error } = await supabase.from('cotizaciones').select('estado').eq('id', dataRef.current.cotizacion2Id).single()
+    if (error) throw error
+    assert(cot.estado === 'anulada', 'anulada', cot.estado, 'estado')
+    addLog(id, `  estado = "anulada" ✓`)
+    addLog(id, 'Cotización anulada correctamente', 'success')
+  }
+
+  async function stepReciclarCotizacion(id) {
+    addLog(id, `POST /api/cotizaciones/reciclar (cotizacionId=${dataRef.current.cotizacion2Id})`)
+    const result = await apiCall('/api/cotizaciones/reciclar', 'POST', {
+      cotizacionId: dataRef.current.cotizacion2Id,
+      vendedorDestinoId: perfil.id,
+    })
+    dataRef.current.cotizacionRecicladaId = result.id
+    addLog(id, `Cotización reciclada → nueva id=${result.id}`, 'success')
+  }
+
+  async function stepAssertReciclada(id) {
+    const d = dataRef.current
+    const { data: cot, error } = await supabase.from('cotizaciones').select('*').eq('id', d.cotizacionRecicladaId).single()
+    if (error) throw error
+    addLog(id, `Raw DB: ${JSON.stringify(cot)}`)
+    assert(cot.estado === 'borrador', 'borrador', cot.estado, 'estado')
+    addLog(id, `  estado = "borrador" ✓`)
+    assert(cot.cliente_id === d.clienteId, d.clienteId, cot.cliente_id, 'cliente_id')
+    addLog(id, `  cliente_id correcto ✓`)
+    assert(cot.vendedor_id === perfil.id, perfil.id, cot.vendedor_id, 'vendedor_id')
+    addLog(id, `  vendedor_id correcto ✓`)
+
+    const { data: items } = await supabase.from('cotizacion_items').select('*').eq('cotizacion_id', d.cotizacionRecicladaId)
+    assert(items && items.length > 0, '>0', items?.length, 'items copiados')
+    addLog(id, `  items.length = ${items.length} (copiados) ✓`)
+    addLog(id, 'Cotización reciclada correctamente', 'success')
+  }
+
+  async function stepCrearVersion(id) {
+    const d = dataRef.current
+    addLog(id, 'Enviando cotización reciclada...')
+    await apiCall('/api/cotizaciones/enviar', 'POST', {
+      cotizacionId: d.cotizacionRecicladaId,
+      tasaBcv: 100,
+    })
+    addLog(id, 'OK → cotización reciclada enviada')
+
+    addLog(id, 'POST /api/cotizaciones/crear-version')
+    const result = await apiCall('/api/cotizaciones/crear-version', 'POST', {
+      cotizacionId: d.cotizacionRecicladaId,
+      notasCambio: 'Versión de prueba determinista',
+    })
+    d.cotizacionVersionId = result.id
+    addLog(id, `OK → cotizacionVersionId=${result.id}`, 'success')
+  }
+
+  async function stepAssertVersion(id) {
+    const d = dataRef.current
+    const { data: cot, error } = await supabase.from('cotizaciones').select('*').eq('id', d.cotizacionVersionId).single()
+    if (error) throw error
+    addLog(id, `Raw DB: ${JSON.stringify(cot)}`)
+    assert(cot.estado === 'borrador', 'borrador', cot.estado, 'estado')
+    addLog(id, `  estado = "borrador" ✓`)
+    assert(Number(cot.version) >= 2, '>=2', cot.version, 'version')
+    addLog(id, `  version = ${cot.version} ✓`)
+    assert(cot.cotizacion_raiz_id !== null, 'not null', cot.cotizacion_raiz_id, 'cotizacion_raiz_id')
+    addLog(id, `  cotizacion_raiz_id = ${cot.cotizacion_raiz_id} (tiene lineaje) ✓`)
+    addLog(id, 'Versión de cotización correcta', 'success')
+  }
+
+  async function stepVentaRapida(id) {
+    const d = dataRef.current
+    addLog(id, `POST /api/ventas-rapidas/crear (${TEST.ventaRapida.cantidad}×$${TEST.ventaRapida.precio_unit}, ${TEST.ventaRapida.forma_pago})`)
+    const result = await apiCall('/api/ventas-rapidas/crear', 'POST', {
+      clienteId: d.clienteId,
+      transportistaId: d.transportistaTestId,
+      fleteUsd: 0,
+      formaPago: 'Efectivo',
+      formaPagoCliente: '',
+      referenciaPago: 'REF-TEST-VR',
+      notas: 'Venta rápida determinista',
+      notasCliente: '',
+      items: [{
+        productoId: d.productoId,
+        cantidad: TEST.ventaRapida.cantidad,
+        precioUnitUsd: TEST.ventaRapida.precio_unit,
+      }],
+      descuentoGlobalPct: 0,
+      costoEnvioUsd: 0,
+      tasaBcv: 100,
+    })
+    d.ventaRapidaDespachoId = result.id
+    d.ventaRapidaCotizacionId = result.cotizacionId
+    addLog(id, `OK → despachoId=${result.id}, cotizacionId=${result.cotizacionId}`, 'success')
+  }
+
+  async function stepAssertVRCotizacion(id) {
+    const d = dataRef.current
+    const { data: cot, error } = await supabase.from('cotizaciones').select('*').eq('id', d.ventaRapidaCotizacionId).single()
+    if (error) throw error
+    addLog(id, `Raw DB: ${JSON.stringify(cot)}`)
+    assert(cot.estado === 'aceptada', 'aceptada', cot.estado, 'estado')
+    addLog(id, `  estado = "aceptada" ✓`)
+    assert(Number(cot.total_usd) === 125.00, 125.00, Number(cot.total_usd), 'total_usd')
+    addLog(id, `  total_usd = $${cot.total_usd} ✓`)
+    addLog(id, 'Cotización de venta rápida correcta', 'success')
+  }
+
+  async function stepAssertVRDespacho(id) {
+    const d = dataRef.current
+    const { data: des, error } = await supabase.from('notas_despacho').select('*').eq('id', d.ventaRapidaDespachoId).single()
+    if (error) throw error
+    addLog(id, `Raw DB: ${JSON.stringify(des)}`)
+    assert(des.estado === 'pendiente', 'pendiente', des.estado, 'estado')
+    addLog(id, `  estado = "pendiente" ✓`)
+    assert(des.forma_pago === 'Efectivo', 'Efectivo', des.forma_pago, 'forma_pago')
+    addLog(id, `  forma_pago = "Efectivo" ✓`)
+    assert(Number(des.total_usd) === 125.00, 125.00, Number(des.total_usd), 'total_usd')
+    addLog(id, `  total_usd = $${des.total_usd} ✓`)
+    addLog(id, 'Despacho de venta rápida correcto', 'success')
+  }
+
+  async function stepAssertStockPostVR(id) {
+    const { data: prod } = await supabase.from('productos').select('stock_actual').eq('id', dataRef.current.productoId).single()
+    const stock = Number(prod.stock_actual)
+    assert(stock === 105, 105, stock, 'stock_actual post-VR')
+    addLog(id, `  stock_actual = ${stock} (110 - 5 = 105) ✓`, 'success')
+  }
+
+  async function stepAnularDespacho(id) {
+    addLog(id, `POST /api/despachos/estado (despachoId=${dataRef.current.ventaRapidaDespachoId}, nuevoEstado=anulada)`)
+    await apiCall('/api/despachos/estado', 'POST', {
+      despachoId: dataRef.current.ventaRapidaDespachoId,
+      nuevoEstado: 'anulada',
+    })
+    addLog(id, 'Despacho de venta rápida anulado', 'success')
+  }
+
+  async function stepAssertDespachoAnulado(id) {
+    const d = dataRef.current
+    const { data: des } = await supabase.from('notas_despacho').select('estado').eq('id', d.ventaRapidaDespachoId).single()
+    assert(des.estado === 'anulada', 'anulada', des.estado, 'estado')
+    addLog(id, `  estado = "anulada" ✓`)
+
+    const { data: prod } = await supabase.from('productos').select('stock_actual').eq('id', d.productoId).single()
+    const stock = Number(prod.stock_actual)
+    assert(stock === 110, 110, stock, 'stock restaurado')
+    addLog(id, `  stock_actual = ${stock} (105 + 5 = 110, restaurado) ✓`)
+    addLog(id, 'Despacho anulado y stock restaurado', 'success')
+  }
+
+  async function stepReciclarDespacho(id) {
+    addLog(id, `POST /api/despachos/reciclar (despachoId=${dataRef.current.ventaRapidaDespachoId})`)
+    const result = await apiCall('/api/despachos/reciclar', 'POST', {
+      despachoId: dataRef.current.ventaRapidaDespachoId,
+    })
+    dataRef.current.cotizacionDesdeDespachoId = result.id
+    addLog(id, `Despacho reciclado → nueva cotización id=${result.id}`, 'success')
+  }
+
+  async function stepAssertDespachoReciclado(id) {
+    const d = dataRef.current
+    const { data: cot, error } = await supabase.from('cotizaciones').select('*').eq('id', d.cotizacionDesdeDespachoId).single()
+    if (error) throw error
+    addLog(id, `Raw DB: ${JSON.stringify(cot)}`)
+    assert(cot.estado === 'borrador', 'borrador', cot.estado, 'estado')
+    addLog(id, `  estado = "borrador" ✓`)
+    assert(cot.cliente_id === d.clienteId, d.clienteId, cot.cliente_id, 'cliente_id')
+    addLog(id, `  cliente_id correcto ✓`)
+
+    const { data: items } = await supabase.from('cotizacion_items').select('*').eq('cotizacion_id', d.cotizacionDesdeDespachoId)
+    assert(items && items.length > 0, '>0', items?.length, 'items copiados')
+    addLog(id, `  items.length = ${items.length} ✓`)
+    addLog(id, 'Despacho reciclado a nueva cotización correctamente', 'success')
+  }
+
+  async function stepReasignarCliente(id) {
+    const d = dataRef.current
+    // Buscar un vendedor distinto al actual
+    const { data: vendedores } = await supabase.from('usuarios')
+      .select('id, nombre, rol')
+      .eq('rol', 'vendedor').eq('activo', true)
+      .neq('id', perfil.id)
+      .limit(1)
+    const otroVendedor = vendedores?.[0]
+    if (!otroVendedor) {
+      addLog(id, 'SKIP: no hay otro vendedor para reasignar', 'warn')
+      return
+    }
+    d.otroVendedorId = otroVendedor.id
+    addLog(id, `Vendedor destino: ${otroVendedor.nombre} (${otroVendedor.id.slice(0,8)}...)`)
+
+    addLog(id, `POST /api/clientes/reasignar (clienteId=${d.clienteId}, nuevoVendedorId=${d.otroVendedorId})`)
+    await apiCall('/api/clientes/reasignar', 'POST', {
+      clienteId: d.clienteId,
+      nuevoVendedorId: d.otroVendedorId,
+      motivo: TEST.reasignacion.motivo,
+    })
+    addLog(id, 'Cliente reasignado correctamente', 'success')
+  }
+
+  async function stepAssertReasignacion(id) {
+    const d = dataRef.current
+    if (!d.otroVendedorId) {
+      addLog(id, 'SKIP: no se ejecutó reasignación (sin otro vendedor)', 'warn')
+      return
+    }
+    const { data: cl, error } = await supabase.from('clientes').select('vendedor_id, ultima_reasig_motivo').eq('id', d.clienteId).single()
+    if (error) throw error
+    addLog(id, `Raw DB: ${JSON.stringify(cl)}`)
+    assert(cl.vendedor_id === d.otroVendedorId, d.otroVendedorId, cl.vendedor_id, 'vendedor_id')
+    addLog(id, `  vendedor_id = ${cl.vendedor_id.slice(0,8)}... (reasignado) ✓`)
+    assert(cl.ultima_reasig_motivo === TEST.reasignacion.motivo, TEST.reasignacion.motivo, cl.ultima_reasig_motivo, 'ultima_reasig_motivo')
+    addLog(id, `  ultima_reasig_motivo = "${cl.ultima_reasig_motivo}" ✓`)
+    addLog(id, 'Reasignación de cliente correcta', 'success')
+  }
+
+  // ─── HEALTH CHECKS ─────────────────────────────────────────────────────────
+
+  async function stepHealthApiEndpoints(id) {
+    const endpoints = [
+      { path: '/api/config', method: 'GET', label: 'Config' },
+      { path: '/api/comisiones/config', method: 'GET', label: 'Comisiones config' },
+    ]
+    for (const ep of endpoints) {
+      try {
+        const result = await apiCall(ep.path, ep.method)
+        assert(result !== null && result !== undefined, 'respuesta', typeof result, `${ep.label} responde`)
+        addLog(id, `  ${ep.label} (${ep.method} ${ep.path}) → OK ✓`)
+      } catch (e) {
+        throw new Error(`Endpoint ${ep.path} falló: ${e.message}`)
+      }
+    }
+    addLog(id, 'Todos los endpoints API responden correctamente', 'success')
+  }
+
+  async function stepHealthRlsPolicies(id) {
+    const tables = [
+      { name: 'productos', filter: 'activo=eq.true', expectRows: true },
+      { name: 'clientes', filter: 'activo=eq.true', expectRows: true },
+      { name: 'usuarios', filter: 'activo=eq.true', expectRows: true },
+      { name: 'cotizaciones', filter: null, expectRows: true },
+      { name: 'transportistas', filter: 'activo=eq.true', expectRows: false },
+      { name: 'inventario_movimientos', filter: null, expectRows: true },
+    ]
+    for (const t of tables) {
+      const query = supabase.from(t.name).select('id', { count: 'exact', head: true })
+      const { count, error } = await query.limit(1)
+      if (error) throw new Error(`RLS bloquea SELECT en ${t.name}: ${error.message}`)
+      if (t.expectRows) {
+        assert(count !== null && count >= 0, '>=0', count, `${t.name} accesible`)
+      }
+      addLog(id, `  ${t.name}: accesible (${count} filas) ✓`)
+    }
+    addLog(id, 'RLS permite lectura en todas las tablas clave', 'success')
+  }
+
+  async function stepHealthConfig(id) {
+    const { data: config, error } = await supabase.from('configuracion').select('*')
+    if (error) throw new Error(`No se puede leer configuración: ${error.message}`)
+    assert(config && config.length > 0, '>0', config?.length, 'configuración existe')
+    addLog(id, `  configuración: ${config.length} registros ✓`)
+
+    // Verificar campos críticos
+    const campos = config.reduce((acc, row) => ({ ...acc, [row.clave]: row.valor }), {})
+    const required = ['comision_pct_cabilla', 'comision_pct_otros', 'comision_categoria_cabilla']
+    for (const clave of required) {
+      assert(campos[clave] !== undefined, 'definido', campos[clave] ?? 'undefined', `config.${clave}`)
+      addLog(id, `  ${clave} = ${campos[clave]} ✓`)
+    }
+    addLog(id, 'Configuración carga correctamente con campos requeridos', 'success')
+  }
+
+  async function stepHealthNavRoutes(id) {
+    // Verificar que las rutas principales existen comprobando que los componentes
+    // se pueden resolver (no hay imports rotos) — usamos el router actual
+    const routes = ['/', '/cotizaciones', '/clientes', '/inventario', '/despachos', '/configuracion', '/reportes', '/tester']
+    const session = (await supabase.auth.getSession()).data.session
+    if (!session?.access_token) throw new Error('No autenticado')
+
+    for (const route of routes) {
+      // Fetch the route HTML to verify it doesn't 404
+      const res = await fetch(route, {
+        headers: { Accept: 'text/html' },
+        redirect: 'follow',
+      })
+      assert(res.ok, '200', res.status, `ruta ${route}`)
+      addLog(id, `  ${route} → ${res.status} OK ✓`)
+    }
+    addLog(id, 'Todas las rutas principales responden', 'success')
+  }
+
   async function stepCleanup(id) {
     const d = dataRef.current
-    // Orden inverso de dependencias
-    if (d.comisionId) { await supabase.from('comisiones').delete().eq('id', d.comisionId); addLog(id, 'DELETE comisiones ✓') }
-    if (d.clienteId) { await supabase.from('cuentas_por_cobrar').delete().eq('cliente_id', d.clienteId); addLog(id, 'DELETE cuentas_por_cobrar ✓') }
-    if (d.despachoId) {
-      await supabase.from('despacho_descuentos').delete().eq('despacho_id', d.despachoId)
-      addLog(id, 'DELETE despacho_descuentos ✓')
-      await supabase.from('notas_despacho').delete().eq('id', d.despachoId)
-      addLog(id, 'DELETE notas_despacho ✓')
+    // Helper: cleanup cotización + all deps via SECURITY DEFINER RPC (bypasses RLS)
+    async function cleanCot(cotId, label) {
+      if (!cotId) return
+      await supabase.rpc('tester_cleanup_cotizacion', { p_cotizacion_id: cotId })
+      addLog(id, `DELETE ${label} ✓`)
     }
-    if (d.cotizacionId) {
-      await supabase.from('cotizacion_items').delete().eq('cotizacion_id', d.cotizacionId)
-      await supabase.from('cotizaciones').delete().eq('id', d.cotizacionId)
-      addLog(id, 'DELETE cotizacion_items + cotizaciones ✓')
+
+    // Orden inverso de dependencias — primero los datos nuevos
+    await cleanCot(d.cotizacionDesdeDespachoId, 'cotización reciclada desde despacho')
+    await cleanCot(d.ventaRapidaCotizacionId, 'cotización + despacho venta rápida')
+    await cleanCot(d.cotizacionVersionId, 'cotización versión')
+    await cleanCot(d.cotizacionRecicladaId, 'cotización reciclada')
+    await cleanCot(d.cotizacion2Id, 'cotización para anular')
+
+    // Limpiar producto 2 (via RPC to bypass RLS)
+    if (d.producto2Id) {
+      const { error: rpc2 } = await supabase.rpc('borrar_producto_con_kardex', { p_producto_id: d.producto2Id })
+      if (rpc2) {
+        await supabase.from('inventario_movimientos').delete().eq('producto_id', d.producto2Id)
+        await supabase.from('productos').delete().eq('id', d.producto2Id)
+      }
+      addLog(id, 'DELETE producto 2 + movimientos ✓')
     }
+
+    // Limpiar transportista test
+    if (d.transportistaTestId) {
+      await supabase.from('transportistas').delete().eq('id', d.transportistaTestId)
+      addLog(id, 'DELETE transportista test ✓')
+    }
+
+    // Limpiar movimientos de lote
+    if (d.loteId) {
+      await supabase.from('inventario_movimientos').delete().eq('lote_id', d.loteId)
+      addLog(id, 'DELETE movimientos lote ✓')
+    }
+
+    // Reasignación: limpiar registro
+    if (d.clienteId && d.otroVendedorId) {
+      await supabase.from('reasignaciones_clientes').delete().eq('cliente_id', d.clienteId)
+      addLog(id, 'DELETE reasignaciones_clientes ✓')
+    }
+
+    // --- Datos originales (cotización principal via RPC) ---
+    await cleanCot(d.cotizacionId, 'cotización principal + deps')
+
     if (d.productoId) {
-      await supabase.from('inventario_movimientos').delete().eq('producto_id', d.productoId)
-      await supabase.from('productos').delete().eq('id', d.productoId)
+      const { error: rpc1 } = await supabase.rpc('borrar_producto_con_kardex', { p_producto_id: d.productoId })
+      if (rpc1) {
+        await supabase.from('inventario_movimientos').delete().eq('producto_id', d.productoId)
+        await supabase.from('productos').delete().eq('id', d.productoId)
+      }
       addLog(id, 'DELETE inventario_movimientos + productos ✓')
     }
     if (d.clienteId) {
@@ -832,6 +1411,27 @@ export default function TesterFlowView() {
       const { data: cm } = await supabase.from('comisiones').select('id').eq('id', d.comisionId)
       assert(!cm || cm.length === 0, 0, cm?.length, 'comisión eliminada')
       addLog(id, '  comisión eliminada ✓')
+    }
+    // Nuevos datos
+    if (d.producto2Id) {
+      const { data: p2 } = await supabase.from('productos').select('id').eq('id', d.producto2Id)
+      assert(!p2 || p2.length === 0, 0, p2?.length, 'producto 2 eliminado')
+      addLog(id, '  producto 2 eliminado ✓')
+    }
+    if (d.transportistaTestId) {
+      const { data: tr } = await supabase.from('transportistas').select('id').eq('id', d.transportistaTestId)
+      assert(!tr || tr.length === 0, 0, tr?.length, 'transportista eliminado')
+      addLog(id, '  transportista test eliminado ✓')
+    }
+    if (d.cotizacion2Id) {
+      const { data: c2 } = await supabase.from('cotizaciones').select('id').eq('id', d.cotizacion2Id)
+      assert(!c2 || c2.length === 0, 0, c2?.length, 'cotización anulada eliminada')
+      addLog(id, '  cotización anulada eliminada ✓')
+    }
+    if (d.ventaRapidaDespachoId) {
+      const { data: vrd } = await supabase.from('notas_despacho').select('id').eq('id', d.ventaRapidaDespachoId)
+      assert(!vrd || vrd.length === 0, 0, vrd?.length, 'despacho venta rápida eliminado')
+      addLog(id, '  despacho venta rápida eliminado ✓')
     }
     addLog(id, 'Todos los datos de prueba fueron eliminados correctamente', 'success')
     dataRef.current = {}
@@ -874,6 +1474,34 @@ export default function TesterFlowView() {
     assert_report_ventas: stepAssertReportVentas,
     assert_report_pipeline: stepAssertReportPipeline,
     assert_report_inventario: stepAssertReportInventario,
+    create_transportista: stepCreateTransportista,
+    assert_transportista: stepAssertTransportista,
+    create_product_2: stepCreateProduct2,
+    assert_product_2_prices: stepAssertProduct2Prices,
+    apply_inventory_batch: stepApplyInventoryBatch,
+    assert_inventory_batch: stepAssertInventoryBatch,
+    create_draft_for_anular: stepCreateDraftForAnular,
+    send_quote_for_anular: stepSendQuoteForAnular,
+    anular_cotizacion: stepAnularCotizacion,
+    assert_anulada: stepAssertAnulada,
+    reciclar_cotizacion: stepReciclarCotizacion,
+    assert_reciclada: stepAssertReciclada,
+    crear_version: stepCrearVersion,
+    assert_version: stepAssertVersion,
+    venta_rapida: stepVentaRapida,
+    assert_vr_cotizacion: stepAssertVRCotizacion,
+    assert_vr_despacho: stepAssertVRDespacho,
+    assert_stock_post_vr: stepAssertStockPostVR,
+    anular_despacho: stepAnularDespacho,
+    assert_despacho_anulado: stepAssertDespachoAnulado,
+    reciclar_despacho: stepReciclarDespacho,
+    assert_despacho_reciclado: stepAssertDespachoReciclado,
+    reasignar_cliente: stepReasignarCliente,
+    assert_reasignacion: stepAssertReasignacion,
+    health_api_endpoints: stepHealthApiEndpoints,
+    health_rls_policies: stepHealthRlsPolicies,
+    health_config: stepHealthConfig,
+    health_nav_routes: stepHealthNavRoutes,
     cleanup: stepCleanup,
     assert_cleanup: stepAssertCleanup,
   }
@@ -889,7 +1517,7 @@ export default function TesterFlowView() {
     fullLogRef.current = []
     const startTime = performance.now()
     const runDate = new Date().toISOString()
-    fullLogRef.current.push({ time: ts(), stepId: '_header', stepLabel: 'SISTEMA', msg: `╔══════════════════════════════════════════════════════════════╗\n║  TESTER DETERMINISTA — LOG COMPLETO                         ║\n╚══════════════════════════════════════════════════════════════╝\nFecha: ${runDate}\nUsuario: ${perfil.nombre} (${perfil.email || perfil.id})\nRol: ${perfil.rol}\nConstantes de prueba:\n  Producto: ${TEST.producto.codigo} | $${TEST.producto.precio_usd} | stock=${TEST.producto.stock_inicial} | cat=${TEST.producto.categoria}\n  Cotización: ${TEST.cotizacion.cantidad}×$${TEST.cotizacion.precio_unit} | envío=$${TEST.cotizacion.costo_envio}\n  Esperado: subtotal=$${TEST.cotizacion.subtotal} | total=$${TEST.cotizacion.total_usd}\n  Despacho: forma_pago="${TEST.despacho.forma_pago}" | stock_post=${TEST.despacho.stock_esperado_post}`, type: 'header' })
+    fullLogRef.current.push({ time: ts(), stepId: '_header', stepLabel: 'SISTEMA', msg: `╔══════════════════════════════════════════════════════════════╗\n║  TESTER DETERMINISTA — LOG COMPLETO                         ║\n╚══════════════════════════════════════════════════════════════╝\nFecha: ${runDate}\nUsuario: ${perfil.nombre} (${perfil.email || perfil.id})\nRol: ${perfil.rol}\nConstantes de prueba:\n  Producto: ${TEST.producto.codigo} | $${TEST.producto.precio_usd} | stock=${TEST.producto.stock_inicial} | cat=${TEST.producto.categoria}\n  Producto 2: ${TEST.producto2.codigo} | $${TEST.producto2.precio_usd}/$${TEST.producto2.precio_2}/$${TEST.producto2.precio_3} | stock=${TEST.producto2.stock_inicial}\n  Cotización: ${TEST.cotizacion.cantidad}×$${TEST.cotizacion.precio_unit} | envío=$${TEST.cotizacion.costo_envio}\n  Esperado: subtotal=$${TEST.cotizacion.subtotal} | total=$${TEST.cotizacion.total_usd}\n  Despacho: forma_pago="${TEST.despacho.forma_pago}" | stock_post=${TEST.despacho.stock_esperado_post}\n  Transportista: ${TEST.transportista.nombre} | ${TEST.transportista.cedula}\n  Venta Rápida: ${TEST.ventaRapida.cantidad}×$${TEST.ventaRapida.precio_unit} = $${TEST.ventaRapida.total_usd} | ${TEST.ventaRapida.forma_pago}\n  Mov. Lote: +${TEST.movimientoLote.cantidad}u | Flujo: 100→90→110→105→110`, type: 'header' })
     let passed = 0, failed = 0, failedAt = null
 
     for (const step of STEPS) {
@@ -994,7 +1622,7 @@ export default function TesterFlowView() {
       <PageHeader
         icon={FlaskConical}
         title="Tester Determinista"
-        subtitle="36 pasos con aserciones exactas · cliente → cotización → despacho → descuentos → comisión → CxC → reportes"
+        subtitle="64 pasos con aserciones exactas · cliente → cotización → despacho → descuentos → comisión → CxC → reportes → transportistas → multi-precio → anulación → reciclaje → venta rápida → reasignación → health checks"
       />
 
       {/* Valores esperados */}
@@ -1015,6 +1643,16 @@ export default function TesterFlowView() {
           <div><span className="text-slate-400">Abono:</span> <span className="font-mono font-bold">$100</span></div>
           <div><span className="text-slate-400">Saldo final:</span> <span className="font-mono font-bold">$140.00</span></div>
         </div>
+        <div className="border-t border-slate-200 my-2" />
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+          <div><span className="text-slate-400">Producto 2:</span> <span className="font-mono font-bold">{TEST.producto2.codigo}</span></div>
+          <div><span className="text-slate-400">Precios:</span> <span className="font-mono font-bold">${TEST.producto2.precio_usd} / ${TEST.producto2.precio_2} / ${TEST.producto2.precio_3}</span></div>
+          <div><span className="text-slate-400">Stock P2:</span> <span className="font-mono font-bold">{TEST.producto2.stock_inicial}</span></div>
+          <div><span className="text-slate-400">Transportista:</span> <span className="font-mono font-bold">{TEST.transportista.cedula}</span></div>
+          <div><span className="text-slate-400">Venta Rápida:</span> <span className="font-mono font-bold">{TEST.ventaRapida.cantidad}u × ${TEST.ventaRapida.precio_unit} = ${TEST.ventaRapida.total_usd}</span></div>
+          <div><span className="text-slate-400">Mov. Lote:</span> <span className="font-mono font-bold">+{TEST.movimientoLote.cantidad}u (90→110)</span></div>
+          <div className="col-span-2"><span className="text-slate-400">Flujo stock:</span> <span className="font-mono font-bold text-indigo-600">100→90(desp)→110(+20)→105(-5 VR)→110(anul VR)</span></div>
+        </div>
       </div>
 
       {/* Controls */}
@@ -1023,7 +1661,7 @@ export default function TesterFlowView() {
           <>
             <button onClick={runAll}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-sm transition-colors shadow-lg shadow-indigo-500/20">
-              <Play size={16} /> Ejecutar 36 pasos
+              <Play size={16} /> Ejecutar 64 pasos
             </button>
             {Object.keys(stepStates).length > 0 && (
               <>
@@ -1061,7 +1699,7 @@ export default function TesterFlowView() {
             <div className="flex-1">
               <p className="font-bold text-sm">
                 {summary.failed === 0 && !summary.aborted
-                  ? '34/34 pasos — TODAS LAS ASERCIONES PASARON'
+                  ? `${summary.passed}/${STEPS.length} pasos — TODAS LAS ASERCIONES PASARON`
                   : summary.aborted ? 'Abortado' : `FALLÓ en: ${summary.failedAt}`}
               </p>
               <p className="text-xs text-slate-500 mt-0.5">

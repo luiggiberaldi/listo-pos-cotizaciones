@@ -22,7 +22,7 @@ export function useUsuarios() {
       // Ocultar cuenta "Super Admin" de todo el sistema
       return (data ?? []).filter(u => u.nombre !== 'Super Admin')
     },
-    enabled: perfil?.rol === 'supervisor',
+    enabled: perfil?.rol === 'supervisor' || perfil?.rol === 'desarrollador',
     staleTime: 1000 * 60 * 10,
     gcTime: 1000 * 60 * 15,
   })
