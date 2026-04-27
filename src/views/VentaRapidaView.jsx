@@ -801,15 +801,14 @@ function Step1Productos({
                         {itemInCart.cantidad <= 1 ? <Trash2 size={11} strokeWidth={2.5} /> : <Minus size={12} strokeWidth={3} />}
                       </button>
                       <input
+                        key={`grid-qty-${p.id}-${itemInCart.cantidad}`}
                         type="text"
                         inputMode="numeric"
-                        value={itemInCart.cantidad}
+                        defaultValue={itemInCart.cantidad}
                         onClick={e => e.target.select()}
                         onFocus={e => e.target.select()}
-                        onChange={e => {
-                          const val = e.target.value.replace(/[^0-9]/g, '');
-                          if (val === '' || val === '0') return;
-                          const num = Math.min(Math.max(1, parseInt(val, 10)), stock || 99999);
+                        onBlur={e => {
+                          const num = Math.min(Math.max(1, parseInt(e.target.value, 10) || 1), stock || 99999);
                           setCantidadDirecta(p.id, num);
                         }}
                         onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }}
@@ -934,15 +933,17 @@ function Step1Productos({
                           <Minus size={12} strokeWidth={3} />
                         </button>
                         <input
+                          key={`cart-qty-${it.productoId}-${it.cantidad}`}
                           type="text"
                           inputMode="numeric"
-                          value={it.cantidad}
-                          onChange={e => {
-                            const val = e.target.value.replace(/[^0-9]/g, '')
-                            if (val === '') setCantidadDirecta(it.productoId, 1)
-                            else setCantidadDirecta(it.productoId, Math.max(1, Number(val)))
-                          }}
+                          defaultValue={it.cantidad}
                           onFocus={e => e.target.select()}
+                          onClick={e => e.target.select()}
+                          onBlur={e => {
+                            const num = Math.max(1, parseInt(e.target.value, 10) || 1)
+                            setCantidadDirecta(it.productoId, num)
+                          }}
+                          onKeyDown={e => { if (e.key === 'Enter') e.target.blur() }}
                           className="w-9 h-7 text-center text-[12px] font-black text-slate-700 bg-white border-x border-slate-100 outline-none focus:bg-sky-50 focus:border-sky-300"
                         />
                         <button type="button"

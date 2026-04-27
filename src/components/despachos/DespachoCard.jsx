@@ -340,8 +340,20 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
 
       {/* ── Referencia de pago del cliente ── */}
       {(despacho.forma_pago_cliente || despacho.referencia_pago) && (
-        <div className="mx-4 mb-1.5 flex items-center gap-2 text-[11px] text-slate-400">
-          {despacho.forma_pago_cliente && <span className="font-medium">{despacho.forma_pago_cliente}</span>}
+        <div className="mx-4 mb-1.5 flex items-center gap-2 text-[11px] text-slate-400 flex-wrap">
+          {despacho.forma_pago_cliente && (() => {
+            try {
+              const parsed = typeof despacho.forma_pago_cliente === 'string' ? JSON.parse(despacho.forma_pago_cliente) : despacho.forma_pago_cliente
+              if (Array.isArray(parsed)) {
+                return parsed.map((p, i) => (
+                  <span key={i} className="font-medium">{p.metodo} {fmtUsd(Number(p.monto))}</span>
+                ))
+              }
+              return <span className="font-medium">{despacho.forma_pago_cliente}</span>
+            } catch {
+              return <span className="font-medium">{despacho.forma_pago_cliente}</span>
+            }
+          })()}
           {despacho.forma_pago_cliente && despacho.referencia_pago && <span>·</span>}
           {despacho.referencia_pago && <span className="font-mono">Ref: {despacho.referencia_pago}</span>}
         </div>
