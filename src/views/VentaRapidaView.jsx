@@ -1248,11 +1248,35 @@ function Step2Pago({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Helpers RIF para formulario de transportista
+// ─────────────────────────────────────────────────────────────────────────────
+const PREFIJOS_RIF_VR = ['V', 'J', 'E', 'G', 'P']
+
+function parsearRifVR(rif) {
+  if (!rif) return { prefijo: 'V', numero: '' }
+  const limpio = rif.trim().toUpperCase()
+  const match = limpio.match(/^([VJEGP])-?(.*)$/)
+  if (match) return { prefijo: match[1], numero: match[2].replace(/\./g, '') }
+  return { prefijo: 'V', numero: limpio.replace(/\./g, '') }
+}
+
+function formatearRifVR(prefijo, numero) {
+  const limpio = numero.replace(/[^\d-]/g, '')
+  if (!limpio) return ''
+  if (prefijo === 'V') return `V${limpio.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`
+  return `${prefijo}-${limpio}`
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Formulario compacto para crear transportista inline
 // ─────────────────────────────────────────────────────────────────────────────
 function TransportistaFormCompact({ onGuardar, onCancelar, cargando }) {
+  const [rifPrefijo, setRifPrefijo] = useState('V')
+  const [rifNumero, setRifNumero] = useState('')
   const [nombre, setNombre] = useState('')
+  const [color, setColor] = useState('')
   const [vehiculo, setVehiculo] = useState('')
+  const [placa, setPlaca] = useState('')
   const [placaChuto, setPlacaChuto] = useState('')
   const [placaBatea, setPlacaBatea] = useState('')
   const [error, setError] = useState('')
@@ -1260,7 +1284,15 @@ function TransportistaFormCompact({ onGuardar, onCancelar, cargando }) {
   function submit(e) {
     e.preventDefault()
     if (!nombre.trim()) { setError('El nombre es obligatorio'); return }
-    onGuardar({ nombre, vehiculo, placa_chuto: placaChuto, placa_batea: placaBatea })
+    onGuardar({
+      nombre,
+      rif: formatearRifVR(rifPrefijo, rifNumero),
+      color,
+      vehiculo,
+      zona_cobertura: placa,
+      placa_chuto: placaChuto,
+      placa_batea: placaBatea,
+    })
   }
 
   const inputCls = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-400 placeholder:text-slate-400'
@@ -1274,9 +1306,49 @@ function TransportistaFormCompact({ onGuardar, onCancelar, cargando }) {
             placeholder="Nombre del transportista" className={inputCls} disabled={cargando} />
         </div>
         <div className="space-y-1">
+          <label className="text-xs font-medium text-slate-600">Cédula / RIF</label>
+          <div className="flex gap-1 mb-1">
+            {PREFIJOS_RIF_VR.map(p => (
+              <button key={p} type="button" disabled={cargando}
+                onClick={() => setRifPrefijo(p)}
+                className={`px-2 py-1 rounded-lg text-xs font-bold transition-all ${
+                  rifPrefijo === p ? 'bg-sky-500 text-white shadow-sm scale-105' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                } disabled:opacity-50`}>
+                {p}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center">
+            <span className="inline-flex items-center px-2.5 rounded-l-xl border border-r-0 border-slate-200 bg-slate-100 text-sm font-bold text-slate-600 select-none h-[42px]">
+              {rifPrefijo}{rifPrefijo !== 'V' ? '-' : ''}
+            </span>
+            <input value={rifNumero} onChange={e => {
+              if (rifPrefijo === 'V') {
+                setRifNumero(e.target.value.replace(/\D/g, '').slice(0, 9))
+              } else {
+                const val = e.target.value.replace(/[^\d-]/g, '')
+                if (val.replace(/-/g, '').length > 10) return
+                setRifNumero(val)
+              }
+            }}
+              placeholder={rifPrefijo === 'V' ? '24457713' : '30123456-7'}
+              className={`${inputCls} !rounded-l-none`} disabled={cargando} inputMode="numeric" />
+          </div>
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-slate-600">Color</label>
+          <input value={color} onChange={e => setColor(e.target.value)}
+            placeholder="Ej: Rojo, Blanco" className={inputCls} disabled={cargando} />
+        </div>
+        <div className="space-y-1">
           <label className="text-xs font-medium text-slate-600">Vehículo</label>
           <input value={vehiculo} onChange={e => setVehiculo(e.target.value)}
             placeholder="Ej: Mack Granite 2020" className={inputCls} disabled={cargando} />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-slate-600">Placa</label>
+          <input value={placa} onChange={e => setPlaca(e.target.value.toUpperCase())}
+            placeholder="Ej: AB123CD" className={inputCls} disabled={cargando} />
         </div>
         <div className="space-y-1">
           <label className="text-xs font-medium text-slate-600">Placa chuto</label>
