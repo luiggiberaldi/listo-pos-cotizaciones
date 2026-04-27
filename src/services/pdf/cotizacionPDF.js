@@ -20,9 +20,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   const logoData = await cargarLogo(config.logo_url)
   const rif = config.rif_negocio || 'J-50115913-0'
 
-  const numDisplay = cotizacion.version > 1
-    ? `Nº- ${String(cotizacion.numero).padStart(5, '0')} Rev.${cotizacion.version}`
-    : `Nº- ${String(cotizacion.numero).padStart(5, '0')}`
+  const numDisplay = `Nº- ${String(cotizacion.numero).padStart(5, '0')}`
 
   // ══════════════════════════════════════════════════════════════════════════
   // 1. CABECERA GIGANTE AMARILLA

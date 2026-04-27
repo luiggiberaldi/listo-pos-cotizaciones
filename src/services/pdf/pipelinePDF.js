@@ -317,7 +317,7 @@ export async function generarPipelinePDF({ reporte, rango, config = {} }) {
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(6.5)
       doc.setTextColor(...C_DARK)
-      doc.text(`${c.numero}${c.version > 1 ? `v${c.version}` : ''}`, tpCols[0].x + 1, y + 3)
+      doc.text(`${c.numero}`, tpCols[0].x + 1, y + 3)
       doc.text(c.cliente.substring(0, 25), tpCols[1].x + 1, y + 3)
 
       if (c.vendedorColor) {

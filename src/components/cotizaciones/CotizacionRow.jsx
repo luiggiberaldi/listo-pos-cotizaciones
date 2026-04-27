@@ -15,9 +15,7 @@ export default memo(function CotizacionRow({ cotizacion, onEditar, onVer, tasa =
   const vendedorColor = cotizacion.vendedor?.color || '#64748b'
   const despacho = cotizacion.despacho
 
-  const numDisplay = cotizacion.version > 1
-    ? `COT-${String(cotizacion.numero).padStart(5, '0')} Rev.${cotizacion.version}`
-    : `COT-${String(cotizacion.numero).padStart(5, '0')}`
+  const numDisplay = `COT-${String(cotizacion.numero).padStart(5, '0')}`
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 hover:shadow-md transition-all flex items-stretch overflow-hidden">

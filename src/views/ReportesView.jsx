@@ -486,7 +486,7 @@ function TabCotizaciones({ range, configNeg }) {
             { label: 'Total USD', align: 'text-right' }, { label: 'Días', align: 'text-right' },
           ]}
           rows={topPendientes.map(c => [
-            { content: `${c.numero}${c.version > 1 ? ` v${c.version}` : ''}`, className: 'text-slate-500 font-medium' },
+            { content: `${c.numero}`, className: 'text-slate-500 font-medium' },
             { content: c.cliente, className: 'font-semibold text-slate-700' },
             { content: <div className="flex items-center gap-1.5">
               <div className="w-4 h-4 rounded-full shrink-0" style={{ background: c.vendedorColor || '#64748b' }} />

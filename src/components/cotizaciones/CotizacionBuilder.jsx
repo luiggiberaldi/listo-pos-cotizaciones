@@ -680,9 +680,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
       const { data: cotEnviada } = await supabase
         .from(tabla).select('numero, version').eq('id', id).single()
       if (cotEnviada) {
-        const nd = cotEnviada.version > 1
-          ? `COT-${String(cotEnviada.numero).padStart(5, '0')} Rev.${cotEnviada.version}`
-          : `COT-${String(cotEnviada.numero).padStart(5, '0')}`
+        const nd = `COT-${String(cotEnviada.numero).padStart(5, '0')}`
         setNumDisplay(nd)
       }
 
@@ -820,16 +818,11 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
             )}
             <h2 className="font-bold text-slate-800 text-sm sm:text-base md:text-lg truncate">
               {paso === 4 ? 'Cotización enviada' :
-               esEdicion
-                ? cotizacionExistente.version > 1
-                  ? `Rev.${cotizacionExistente.version}`
-                  : `Editar`
-                : 'Nueva cotización'}
+               esEdicion ? 'Editar' : 'Nueva cotización'}
             </h2>
             {esEdicion && cotizacionExistente.numero && (
               <span className="hidden sm:inline text-[10px] font-mono font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full shrink-0">
                 COT-{String(cotizacionExistente.numero).padStart(5, '0')}
-                {cotizacionExistente.version > 1 && ` Rev.${cotizacionExistente.version}`}
               </span>
             )}
           </div>

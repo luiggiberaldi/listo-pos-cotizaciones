@@ -335,6 +335,26 @@ export function useCrearVersion() {
   })
 }
 
+// ─── Reabrir cotización para edición (estado → borrador, sin crear versión) ──
+export function useReabrirCotizacion() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (cotizacionId) => {
+      const headers = await getAuthHeaders()
+      const res = await fetch(apiUrl('/api/cotizaciones/reabrir'), {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ cotizacionId }),
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Error al reabrir cotización')
+      return result
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: COTIZACIONES_KEY }),
+  })
+}
+
 // ─── Reciclar cotización (supervisor: rechazada/anulada/vencida → borrador) ──
 export function useReciclarCotizacion() {
   const qc = useQueryClient()

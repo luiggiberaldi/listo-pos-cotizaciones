@@ -49,9 +49,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
   const { data: config = {} } = useConfigNegocio()
   const { tasaBcv, tasaUsdt } = useTasaCambio()
 
-  const numDisplay = cotizacion.version > 1
-    ? `COT-${String(cotizacion.numero).padStart(5, '0')} Rev.${cotizacion.version}`
-    : `COT-${String(cotizacion.numero).padStart(5, '0')}`
+  const numDisplay = `COT-${String(cotizacion.numero).padStart(5, '0')}`
 
   function seleccionarMoneda(moneda) {
     setMonedaPdf(moneda)
@@ -196,10 +194,9 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
   const vendedorColor = cotizacion.vendedor?.color || '#64748b'
   const despacho = cotizacion.despacho
   const despachoAnulado = despacho?.estado === 'anulada'
-  const canEdit = esBorrador
+  const canEdit = !despacho && cotizacion.estado !== 'anulada' && cotizacion.estado !== 'vencida' && (!esSupervisor || esPropietario)
   const esPropietario = cotizacion.vendedor_id === perfil?.id
   const clienteAjeno = cotizacion.cliente?.vendedor_id && cotizacion.cliente.vendedor_id !== cotizacion.vendedor_id
-  const canVersion = !esBorrador && !despachoAnulado && ['enviada', 'aceptada', 'rechazada'].includes(cotizacion.estado) && (!esSupervisor || esPropietario)
   const canPdf = cotizacion.estado !== 'borrador' && cotizacion.estado !== 'anulada'
   const canWhatsApp = !despachoAnulado && (cotizacion.estado === 'enviada' || cotizacion.estado === 'aceptada')
   const canDespachar = (esSupervisor || esPropietario) && ['enviada', 'aceptada'].includes(cotizacion.estado) && onDespachar && !despacho
@@ -227,8 +224,8 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
   function getMobileSheetActions() {
     const actions = []
     // Ver detalle, PDF, Imprimir ya están en la fila secundaria — no repetir
-    if ((canEdit || canVersion) && primaryAction.key !== 'editar')
-      actions.push({ label: canVersion ? (getAction('revisar', rol).label || 'Nueva versión') : (getAction('editar', rol).label || 'Editar'), icon: Pencil, onClick: () => onEditar(cotizacion), textColor: 'text-sky-600' })
+    if (canEdit && primaryAction.key !== 'editar')
+      actions.push({ label: getAction('editar', rol).label || 'Editar', icon: Pencil, onClick: () => onEditar(cotizacion), textColor: 'text-sky-600' })
     if (canWhatsApp && primaryAction.key !== 'whatsapp')
       actions.push({ label: 'Compartir por WhatsApp', icon: MessageCircle, onClick: handleWhatsApp, disabled: waLoading, textColor: 'text-emerald-600' })
     if (canDespachar && primaryAction.key !== 'despachar')
@@ -442,12 +439,6 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
           <button onClick={() => onEditar(cotizacion)}
             className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
             <Pencil size={13} /> {getAction('editar', rol).label}
-          </button>
-        )}
-        {canVersion && (
-          <button onClick={() => onEditar(cotizacion)}
-            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
-            <Pencil size={13} /> {getAction('revisar', rol).label}
           </button>
         )}
         {canPdf && (

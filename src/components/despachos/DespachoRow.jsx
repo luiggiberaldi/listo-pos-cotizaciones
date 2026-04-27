@@ -17,7 +17,7 @@ export default memo(function DespachoRow({ despacho, onVer, tasa = 0 }) {
     : `DES-${String(despacho.numero).padStart(5, '0')}`
 
   const cotNum = despacho.cotizacion
-    ? `COT-${String(despacho.cotizacion.numero).padStart(5, '0')}${despacho.cotizacion.version > 1 ? ` Rev.${despacho.cotizacion.version}` : ''}`
+    ? `COT-${String(despacho.cotizacion.numero).padStart(5, '0')}`
     : null
 
   return (

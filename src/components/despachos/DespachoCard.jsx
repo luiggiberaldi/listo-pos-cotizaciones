@@ -42,7 +42,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const vendedorColor = despacho.vendedor?.color || '#64748b'
 
   const cotNum = despacho.cotizacion
-    ? `COT-${String(despacho.cotizacion.numero).padStart(5, '0')}${despacho.cotizacion.version > 1 ? ` Rev.${despacho.cotizacion.version}` : ''}`
+    ? `COT-${String(despacho.cotizacion.numero).padStart(5, '0')}`
     : '—'
 
   const canDespachar = (esAdministracion || esDesarrollador) && despacho.estado === 'pendiente'

@@ -142,7 +142,7 @@ function HistorialCotizaciones({ clienteId, onVerCotizacion }) {
 
   function fmtNumero(cot) {
     const num = `COT-${String(cot.numero).padStart(5, '0')}`
-    return cot.version > 1 ? `${num} Rev.${cot.version}` : num
+    return num
   }
 
   function fmtFechaCorta(iso) {

@@ -3,11 +3,11 @@
 // El builder reemplaza la lista in-page (sin navegación adicional)
 import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { FileText, Plus, RefreshCw, Copy, AlertTriangle, PackageCheck, Loader2, X, AlertCircle, LayoutGrid, List, ChevronDown, Truck } from 'lucide-react'
+import { FileText, Plus, RefreshCw, AlertTriangle, PackageCheck, Loader2, X, AlertCircle, LayoutGrid, List, ChevronDown, Truck } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import supabase from '../services/supabase/client'
 import { useTasaCambio } from '../hooks/useTasaCambio'
-import { useCotizaciones, useAnularCotizacion, useActualizarEstado, useCrearVersion, useReciclarCotizacion } from '../hooks/useCotizaciones'
+import { useCotizaciones, useAnularCotizacion, useActualizarEstado, useReabrirCotizacion, useReciclarCotizacion } from '../hooks/useCotizaciones'
 import { useCrearDespacho, useActualizarEstadoDespacho } from '../hooks/useDespachos'
 import { useCotizacion } from '../hooks/useCotizaciones'
 import CotizacionCard    from '../components/cotizaciones/CotizacionCard'
@@ -101,9 +101,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
     return stock !== undefined && stock < Number(i.cantidad)
   })
 
-  const numDisplay = cotizacion.version > 1
-    ? `COT-${String(cotizacion.numero).padStart(5, '0')} Rev.${cotizacion.version}`
-    : `COT-${String(cotizacion.numero).padStart(5, '0')}`
+  const numDisplay = `COT-${String(cotizacion.numero).padStart(5, '0')}`
 
   const totalConFlete = Number(cotizacion?.total_usd || 0) + Number(fleteUsd || 0)
   const montoAsignado = formasPago.reduce((s, fp) => s + (Number(fp.monto) || 0), 0)
@@ -452,46 +450,8 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
   )
 }
 
-// ─── Modal de confirmación para crear versión ─────────────────────────────────
-function ModalVersionar({ cotizacion, onConfirm, onCancel, cargando }) {
-  if (!cotizacion) return null
-  const num = `COT-${String(cotizacion.numero).padStart(5, '0')}`
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-sm p-4 sm:p-6 space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-primary-light rounded-xl flex items-center justify-center">
-            <Copy size={20} className="text-primary" />
-          </div>
-          <h3 className="font-black text-slate-800 text-lg">Crear copia editable</h3>
-        </div>
-
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-2.5">
-          <AlertTriangle size={15} className="text-amber-600 shrink-0 mt-0.5" />
-          <p className="text-sm text-amber-800">
-            <strong>{num}</strong> ya fue enviada y no se puede modificar. Se creará una <strong>copia editable</strong> (Rev.{(cotizacion.version ?? 1) + 1}) con los mismos datos, y la cotización original quedará <strong>anulada automáticamente</strong>.
-          </p>
-        </div>
-
-        <div className="flex flex-col-reverse sm:flex-row gap-3">
-          <button onClick={onCancel} disabled={cargando}
-            className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-700 font-semibold text-base hover:bg-slate-50 transition-colors disabled:opacity-50">
-            Cancelar
-          </button>
-          <button onClick={onConfirm} disabled={cargando}
-            className="flex-1 py-3 rounded-xl bg-primary hover:bg-primary-hover text-white font-semibold text-base transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-            {cargando
-              ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Creando...</>
-              : <><Copy size={16} />Crear copia editable</>}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // ─── Vista lista ──────────────────────────────────────────────────────────────
-function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
+function ListaCotizaciones({ onNueva, onEditar }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const esAdministracion = perfil?.rol === 'administracion'
@@ -589,13 +549,8 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
     cambiarEstado.mutate({ id, estado, numero, clienteNombre, totalUsd, vendedorId })
   }
 
-  // Al hacer click en "editar": si es borrador → editar directo; si no → versionar
   function handleEditar(cot) {
-    if (cot.estado === 'borrador') {
-      onEditar(cot)
-    } else {
-      onVersionar(cot)
-    }
+    onEditar(cot)
   }
 
   return (
@@ -764,7 +719,6 @@ export default function CotizacionesView() {
   const [modo,      setModo]      = useState('lista')           // 'lista' | 'builder'
   const [editandoId, setEditandoId] = useState(null)            // ID del borrador a editar
   const [clientePreseleccionado, setClientePreseleccionado] = useState(null) // cliente_id desde URL
-  const [cotVersionar, setCotVersionar] = useState(null)        // cotización pendiente de confirmación para versionar
 
   // Si viene ?nueva=1 del dashboard o clientes, abrir wizard directamente
   useEffect(() => {
@@ -777,7 +731,7 @@ export default function CotizacionesView() {
   }, [searchParams, setSearchParams])
 
   const { data: cotizacionParaEditar } = useCotizacion(editandoId)
-  const crearVersion = useCrearVersion()
+  const reabrirCotizacion = useReabrirCotizacion()
 
   function abrirNueva() {
     setEditandoId(null)
@@ -785,7 +739,16 @@ export default function CotizacionesView() {
     setModo('builder')
   }
 
-  function abrirEditar(cot) {
+  async function abrirEditar(cot) {
+    // Si no es borrador, reabrir primero (cambiar estado a borrador)
+    if (cot.estado !== 'borrador') {
+      try {
+        await reabrirCotizacion.mutateAsync(cot.id)
+      } catch (e) {
+        showToast(e.message || 'Error al reabrir cotización', 'error')
+        return
+      }
+    }
     setEditandoId(cot.id)
     setModo('builder')
   }
@@ -793,24 +756,6 @@ export default function CotizacionesView() {
   function volver() {
     setModo('lista')
     setEditandoId(null)
-  }
-
-  // Cuando el usuario quiere "editar" una cotización NO borrador → mostrar confirmación
-  function iniciarVersionado(cot) {
-    setCotVersionar(cot)
-  }
-
-  async function confirmarVersionado() {
-    if (!cotVersionar) return
-    try {
-      const nuevoId = await crearVersion.mutateAsync(cotVersionar.id)
-      showToast(`Se creó Rev.${(cotVersionar.version || 1) + 1} como borrador editable. La cotización original fue anulada.`, 'success')
-      setCotVersionar(null)
-      setEditandoId(nuevoId)
-      setModo('builder')
-    } catch (e) {
-      showToast(e.message || 'Error al crear versión', 'error')
-    }
   }
 
   if (modo === 'builder') {
@@ -834,19 +779,9 @@ export default function CotizacionesView() {
   }
 
   return (
-    <>
-      <ListaCotizaciones
-        onNueva={abrirNueva}
-        onEditar={abrirEditar}
-        onVersionar={iniciarVersionado}
-      />
-
-      <ModalVersionar
-        cotizacion={cotVersionar}
-        onConfirm={confirmarVersionado}
-        onCancel={() => setCotVersionar(null)}
-        cargando={crearVersion.isPending}
-      />
-    </>
+    <ListaCotizaciones
+      onNueva={abrirNueva}
+      onEditar={abrirEditar}
+    />
   )
 }

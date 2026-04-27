@@ -291,9 +291,7 @@ function DetalleEntidad({ tipo, id, tasa = 0 }) {
   }
 
   if (data._tipo === 'cotizacion') {
-    const numDisplay = data.version > 1
-      ? `#${data.numero} Rev.${data.version}`
-      : `#${data.numero}`
+    const numDisplay = `#${data.numero}`
 
     return (
       <div className="space-y-2">
