@@ -37,7 +37,6 @@ const ESTADOS_FILTRO = [
   { valor: 'borrador',  label: 'Borradores' },
   { valor: 'enviada',   label: 'Enviadas' },
   { valor: 'aceptada',  label: 'Aprobadas' },
-  { valor: 'rechazada', label: 'No aceptadas' },
   { valor: 'anulada',   label: 'Canceladas' },
 ]
 
