@@ -561,21 +561,26 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
 
     const cellY = ty + 6
     const cellH = 12
-    const choferFields = [
-      { label: 'CHOFER', val: transportista?.nombre || '' },
-      { label: 'C.I.', val: transportista?.rif || '' },
-      { label: 'PLACA', val: transportista?.zona_cobertura || '' },
-      { label: 'COLOR', val: transportista?.color || '' },
-      { label: 'VEHÍCULO', val: transportista?.vehiculo || '' },
-      { label: 'PLACA CHUTO', val: transportista?.placa_chuto || '' },
-      { label: 'PLACA BATEA', val: transportista?.placa_batea || '' },
+    const allFields = [
+      { label: 'CHOFER', val: transportista?.nombre || '', minW: 32 },
+      { label: 'C.I.', val: transportista?.rif || '', minW: 22 },
+      { label: 'PLACA', val: transportista?.zona_cobertura || '', minW: 22 },
+      { label: 'COLOR', val: transportista?.color || '', minW: 18 },
+      { label: 'VEHÍCULO', val: transportista?.vehiculo || '', minW: 28 },
+      { label: 'PLACA CHUTO', val: transportista?.placa_chuto || '', minW: 22 },
+      { label: 'PLACA BATEA', val: transportista?.placa_batea || '', minW: 22 },
     ]
-    const colW = CONTENT_W / choferFields.length
+    // Solo mostrar campos que tengan datos (CHOFER siempre visible)
+    const choferFields = allFields.filter((f, i) => i === 0 || f.val)
+    // Distribuir ancho: usar minW como base, repartir el sobrante proporcionalmente
+    const totalMin = choferFields.reduce((s, f) => s + f.minW, 0)
+    const extra = CONTENT_W - totalMin
     choferFields.forEach((f, i) => {
-      const fx = MARGIN + i * colW
+      const fx = MARGIN + choferFields.slice(0, i).reduce((s, c) => s + c._w, 0)
+      f._w = f.minW + (extra > 0 ? extra * (f.minW / totalMin) : 0)
       doc.setDrawColor(120, 120, 120)
       doc.setLineWidth(0.3)
-      doc.rect(fx, cellY, colW, cellH, 'S')
+      doc.rect(fx, cellY, f._w, cellH, 'S')
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(7)
       doc.setTextColor(100, 100, 100)
