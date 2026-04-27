@@ -17,8 +17,9 @@ import { showToast } from '../ui/Toast'
 export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular, onReciclar, tasa = 0, config = {}, estadoCambiando = false }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
+  const esDesarrollador = perfil?.rol === 'desarrollador'
   const esAdministracion = perfil?.rol === 'administracion'
-  const esPrivilegiado = esSupervisor || esAdministracion
+  const esPrivilegiado = esSupervisor || esAdministracion || esDesarrollador
   const rol = perfil?.rol || 'vendedor'
   const [pdfLoading, setPdfLoading]   = useState(false)
   const [ordenLoading, setOrdenLoading] = useState(false)
@@ -46,8 +47,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const canDespachar = esPrivilegiado && despacho.estado === 'pendiente'
   const canEntregar = (esPrivilegiado || perfil?.rol === 'logistica') && despacho.estado === 'despachada'
   const canAnular = esPrivilegiado && (despacho.estado === 'pendiente' || despacho.estado === 'despachada')
-  const canReciclar = esSupervisor && despacho.estado === 'anulada' && onReciclar
-  const canDescuento = (perfil?.rol === 'logistica' || esSupervisor || perfil?.rol === 'desarrollador') && ['pendiente', 'despachada'].includes(despacho.estado)
+  const canReciclar = (esSupervisor || esDesarrollador) && despacho.estado === 'anulada' && onReciclar
+  const canDescuento = (perfil?.rol === 'logistica' || esSupervisor || esDesarrollador) && ['pendiente', 'despachada'].includes(despacho.estado)
   const descuentoTotal = Number(despacho.descuento_total_usd || 0)
   const totalConDescuento = Number(despacho.total_usd || 0) - descuentoTotal
 

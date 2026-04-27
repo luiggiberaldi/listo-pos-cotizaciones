@@ -24,38 +24,13 @@ node -e "
 const fs = require('fs');
 let f = fs.readFileSync('wrangler.jsonc','utf8');
 
-// Insertar secrets justo después de la última var existente (DEV_SUPER_CODE line)
-const secrets = {
-  GROQ_KEYS_A: process.env.GROQ_KEYS_A || '',
-  GROQ_KEYS_B: process.env.GROQ_KEYS_B || '',
-  GROQ_KEYS_C: process.env.GROQ_KEYS_C || '',
-  SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_KEY || '',
-  VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY || '',
-};
+// Reemplazar placeholders vacíos de GROQ_KEYS en wrangler.jsonc
+['GROQ_KEYS_A', 'GROQ_KEYS_B', 'GROQ_KEYS_C'].forEach(key => {
+  const val = process.env[key] || '';
+  f = f.replace(new RegExp('(\"' + key + '\": \")(\")'), '\$1' + val + '\$2');
+});
 
-// Find '\"DEV_SUPER_CODE\": \"..\"' line and add secrets after it
-const lines = f.split('\n');
-const idx = lines.findIndex(l => l.includes('DEV_SUPER_CODE'));
-if (idx === -1) { console.error('DEV_SUPER_CODE not found in wrangler.jsonc'); process.exit(1); }
-
-// Add comma to DEV_SUPER_CODE line if not present
-if (!lines[idx].trimEnd().endsWith(',')) {
-  lines[idx] = lines[idx].replace(/(\".*)$/, '\$1,');
-}
-
-// Build secret lines
-const secretLines = Object.entries(secrets)
-  .map(([k, v], i, arr) => '    \"' + k + '\": \"' + v + '\"' + (i < arr.length - 1 ? ',' : ''))
-  .join('\n');
-
-// Insert after DEV_SUPER_CODE line (skip any comment lines)
-let insertAt = idx + 1;
-while (insertAt < lines.length && lines[insertAt].trim().startsWith('//')) {
-  insertAt++;
-}
-lines.splice(insertAt, 0, secretLines);
-
-fs.writeFileSync('wrangler.jsonc', lines.join('\n'));
+fs.writeFileSync('wrangler.jsonc', f);
 "
 
 # Build y deploy

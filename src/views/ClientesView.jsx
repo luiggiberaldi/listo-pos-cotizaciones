@@ -98,6 +98,7 @@ export default function ClientesView() {
   const { perfil } = useAuthStore()
   const navigate = useNavigate()
   const esAdministracion = perfil?.rol === 'administracion'
+  const esDesarrollador = perfil?.rol === 'desarrollador'
 
   // Búsqueda y filtros
   const [busqueda, setBusqueda] = useState('')

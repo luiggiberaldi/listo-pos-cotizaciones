@@ -40,7 +40,8 @@ const ESTADO_LABEL = {
 function useMetricas() {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
-  const esPrivilegiado = esSupervisor || perfil?.rol === 'administracion'
+  const esDesarrollador = perfil?.rol === 'desarrollador'
+  const esPrivilegiado = esSupervisor || perfil?.rol === 'administracion' || esDesarrollador
 
   return useQuery({
     queryKey: ['dashboard_metricas', perfil?.id, esPrivilegiado],
@@ -96,7 +97,7 @@ function useMetricas() {
         delMesCount: delMes.length, pendientesRespuesta, tasaAceptacion,
       }
     },
-    enabled: !!perfil && (perfil.rol === 'vendedor' || perfil.rol === 'supervisor'),
+    enabled: !!perfil && (perfil.rol === 'vendedor' || perfil.rol === 'supervisor' || perfil.rol === 'desarrollador'),
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 15,
   })
@@ -136,9 +137,10 @@ export default function DashboardView() {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const esAdministracion = perfil?.rol === 'administracion'
+  const esDesarrollador = perfil?.rol === 'desarrollador'
   const esLogistica = perfil?.rol === 'logistica'
   const esVendedor = perfil?.rol === 'vendedor'
-  const esPrivilegiado = esSupervisor || esAdministracion
+  const esPrivilegiado = esSupervisor || esAdministracion || esDesarrollador
 
   const { data: m, isLoading } = useMetricas()
   const { data: dm, isLoading: dmLoading } = useDashboardMetrics()
@@ -166,7 +168,7 @@ export default function DashboardView() {
     <div className="p-3 sm:p-4 md:p-5 lg:p-6 space-y-3 sm:space-y-4 md:space-y-5">
 
       {/* Tip de onboarding — solo vendedor/supervisor */}
-      {(esVendedor || esSupervisor) && (
+      {(esVendedor || esSupervisor || esDesarrollador) && (
         <OnboardingTip tipId="dashboard_intro">
           ¡Bienvenido! Usa el botón <strong>"Rápida"</strong> para crear cotizaciones al instante, o <strong>"Nueva"</strong> para el asistente paso a paso. En móvil, el botón dorado flotante ⚡ te lleva directo a cotizar.
         </OnboardingTip>
@@ -296,7 +298,7 @@ export default function DashboardView() {
           )}
 
           {/* ── SUPERVISOR ── */}
-          {esSupervisor && (
+          {(esSupervisor || esDesarrollador) && (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               <MetricCard
                 icon={DollarSign}
@@ -469,7 +471,7 @@ export default function DashboardView() {
       )}
 
       {/* ── VENDEDOR / SUPERVISOR: Desglose por estado ── */}
-      {(esVendedor || esSupervisor) && (
+      {(esVendedor || esSupervisor || esDesarrollador) && (
         <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
           <h2 className="font-bold text-slate-700 text-sm uppercase tracking-wide">
             Cotizaciones por estado — histórico
@@ -533,7 +535,7 @@ export default function DashboardView() {
       )}
 
       {/* ── VENDEDOR / SUPERVISOR: Actividad del mes + accesos rápidos ── */}
-      {(esVendedor || esSupervisor) && !isLoading && m && (
+      {(esVendedor || esSupervisor || esDesarrollador) && !isLoading && m && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Este mes */}
           <div className="relative overflow-hidden rounded-2xl p-5"
@@ -554,7 +556,7 @@ export default function DashboardView() {
           </div>
 
           {/* Accesos rápidos (supervisor) */}
-          {esSupervisor ? (
+          {(esSupervisor || esDesarrollador) ? (
             <div className="bg-white border border-slate-200 rounded-2xl p-5 flex flex-col gap-3">
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
                 <Users size={12} />Accesos rápidos
@@ -587,7 +589,7 @@ export default function DashboardView() {
       )}
 
       {/* ── VENDEDOR / SUPERVISOR: Resumen de comisiones ── */}
-      {(esVendedor || esSupervisor) && !isLoading && comResumen && comResumen.total > 0 && (
+      {(esVendedor || esSupervisor || esDesarrollador) && !isLoading && comResumen && comResumen.total > 0 && (
         <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="font-bold text-slate-700 text-sm uppercase tracking-wide flex items-center gap-2">

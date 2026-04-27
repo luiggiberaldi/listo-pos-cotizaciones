@@ -89,8 +89,9 @@ export default function DespachosView() {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const esAdministracion = perfil?.rol === 'administracion'
+  const esDesarrollador = perfil?.rol === 'desarrollador'
   const esLogistica = perfil?.rol === 'logistica'
-  const esPrivilegiado = esSupervisor || esAdministracion
+  const esPrivilegiado = esSupervisor || esAdministracion || esDesarrollador
   const rol = perfil?.rol || 'vendedor'
   const { tasaEfectiva } = useTasaCambio()
   const { data: config = {} } = useConfigNegocio()

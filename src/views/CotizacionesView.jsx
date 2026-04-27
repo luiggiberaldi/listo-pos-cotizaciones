@@ -435,6 +435,7 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const esAdministracion = perfil?.rol === 'administracion'
+  const esDesarrollador = perfil?.rol === 'desarrollador'
   const { tasaEfectiva } = useTasaCambio()
   const [estadoFiltro, setEstadoFiltro] = useState('')
   const [vendedorFiltro, setVendedorFiltro] = useState('')
@@ -579,7 +580,7 @@ function ListaCotizaciones({ onNueva, onEditar, onVersionar }) {
       {/* Filtros: fila 2 — vendedor + controles de vista */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          {esSupervisor && vendedores.length > 1 && (
+          {(esSupervisor || esDesarrollador) && vendedores.length > 1 && (
             <VendedorFilterPill vendedores={vendedores} value={vendedorFiltro} onChange={setVendedorFiltro} />
           )}
         </div>

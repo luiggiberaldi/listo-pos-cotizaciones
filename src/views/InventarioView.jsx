@@ -52,10 +52,11 @@ export default function InventarioView() {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const esAdministracion = perfil?.rol === 'administracion'
-  // Solo administracion puede crear/editar/borrar productos
-  const puedeGestionarInventario = esAdministracion
-  // Supervisor y admin ven costo, tabs, kardex, etc.
-  const esPrivilegiado = esSupervisor || esAdministracion
+  const esDesarrollador = perfil?.rol === 'desarrollador'
+  // Solo administracion y desarrollador pueden crear/editar/borrar productos
+  const puedeGestionarInventario = esAdministracion || esDesarrollador
+  // Supervisor, admin y desarrollador ven costo, tabs, kardex, etc.
+  const esPrivilegiado = esSupervisor || esAdministracion || esDesarrollador
   const { tasaEfectiva } = useTasaCambio()
   const { data: configNeg = {} } = useConfigNegocio()
 

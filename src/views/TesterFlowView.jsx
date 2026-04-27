@@ -99,20 +99,22 @@ const STEPS = [
   { id: 'assert_kardex_egreso', label: '18. Assert: kardex egreso 100→90, motivo=venta', group: 'Despachos' },
   { id: 'assert_stock_comprometido_post', label: '19. Assert: stock comprometido=0 (liberado)', group: 'Despachos' },
   { id: 'assert_cxc_cargo', label: '20. Assert: CxC cargo=$260.00, saldo=$260.00', group: 'Cuentas por Cobrar' },
-  { id: 'mark_dispatched', label: '21. Marcar despachada', group: 'Despachos' },
-  { id: 'assert_dispatched', label: '22. Assert: estado=despachada, despachada_en≠null', group: 'Despachos' },
-  { id: 'mark_delivered', label: '23. Marcar entregada', group: 'Despachos' },
-  { id: 'assert_delivered', label: '24. Assert: estado=entregada, entregada_en≠null', group: 'Despachos' },
-  { id: 'assert_commission', label: '25. Assert: comisión generada con % config', group: 'Comisiones' },
-  { id: 'pay_commission', label: '26. Pagar comisión', group: 'Comisiones' },
-  { id: 'assert_commission_paid', label: '27. Assert: comisión estado=pagada', group: 'Comisiones' },
-  { id: 'register_payment', label: '28. Registrar abono CxC ($100)', group: 'Cuentas por Cobrar' },
-  { id: 'assert_cxc_abono', label: '29. Assert: saldo=$160.00 (260.00-100)', group: 'Cuentas por Cobrar' },
-  { id: 'assert_report_ventas', label: '30. Assert: reporte ventas incluye despacho', group: 'Reportes' },
-  { id: 'assert_report_pipeline', label: '31. Assert: reporte pipeline incluye cotización', group: 'Reportes' },
-  { id: 'assert_report_inventario', label: '32. Assert: reporte inventario stock=90', group: 'Reportes' },
-  { id: 'cleanup', label: '33. Limpiar datos de prueba', group: 'Limpieza' },
-  { id: 'assert_cleanup', label: '34. Assert: datos eliminados completamente', group: 'Limpieza' },
+  { id: 'apply_descuento', label: '21. Aplicar descuento $2/u al artículo (10u → -$20)', group: 'Descuentos' },
+  { id: 'assert_descuento', label: '22. Assert: descuento_total=$20, CxC y saldo actualizados', group: 'Descuentos' },
+  { id: 'mark_dispatched', label: '23. Marcar despachada', group: 'Despachos' },
+  { id: 'assert_dispatched', label: '24. Assert: estado=despachada, despachada_en≠null', group: 'Despachos' },
+  { id: 'mark_delivered', label: '25. Marcar entregada', group: 'Despachos' },
+  { id: 'assert_delivered', label: '26. Assert: estado=entregada, entregada_en≠null', group: 'Despachos' },
+  { id: 'assert_commission', label: '27. Assert: comisión generada con % config', group: 'Comisiones' },
+  { id: 'pay_commission', label: '28. Pagar comisión', group: 'Comisiones' },
+  { id: 'assert_commission_paid', label: '29. Assert: comisión estado=pagada', group: 'Comisiones' },
+  { id: 'register_payment', label: '30. Registrar abono CxC ($100)', group: 'Cuentas por Cobrar' },
+  { id: 'assert_cxc_abono', label: '31. Assert: saldo=$140.00 (240-100)', group: 'Cuentas por Cobrar' },
+  { id: 'assert_report_ventas', label: '32. Assert: reporte ventas incluye despacho', group: 'Reportes' },
+  { id: 'assert_report_pipeline', label: '33. Assert: reporte pipeline incluye cotización', group: 'Reportes' },
+  { id: 'assert_report_inventario', label: '34. Assert: reporte inventario stock=90', group: 'Reportes' },
+  { id: 'cleanup', label: '35. Limpiar datos de prueba', group: 'Limpieza' },
+  { id: 'assert_cleanup', label: '36. Assert: datos eliminados completamente', group: 'Limpieza' },
 ]
 
 const GROUP_COLORS = {
@@ -120,6 +122,7 @@ const GROUP_COLORS = {
   'Clientes': 'text-sky-600 bg-sky-50 border-sky-200',
   'Cotizaciones': 'text-indigo-600 bg-indigo-50 border-indigo-200',
   'Despachos': 'text-violet-600 bg-violet-50 border-violet-200',
+  'Descuentos': 'text-orange-600 bg-orange-50 border-orange-200',
   'Comisiones': 'text-emerald-600 bg-emerald-50 border-emerald-200',
   'Cuentas por Cobrar': 'text-orange-600 bg-orange-50 border-orange-200',
   'Reportes': 'text-teal-600 bg-teal-50 border-teal-200',
@@ -571,6 +574,60 @@ export default function TesterFlowView() {
     addLog(id, 'CxC cargo correcto', 'success')
   }
 
+  async function stepApplyDescuento(id) {
+    // Aplicar descuento de $2/unidad al artículo (10 unidades → descuento total = $20)
+    const descuentoUnitario = 2.00
+    const descuentoTotal = descuentoUnitario * TEST.cotizacion.cantidad // 2 × 10 = $20
+    dataRef.current.descuentoTotal = descuentoTotal
+
+    // Obtener el cotizacion_item_id
+    const { data: items } = await supabase.from('cotizacion_items').select('id').eq('cotizacion_id', dataRef.current.cotizacionId)
+    const itemId = items[0].id
+    dataRef.current.cotizacionItemId = itemId
+
+    addLog(id, `POST /api/despachos/descuentos (tipo=monto, valor=$${descuentoUnitario}/u × ${TEST.cotizacion.cantidad}u = -$${descuentoTotal})`)
+    await apiCall('/api/despachos/descuentos', 'POST', {
+      despachoId: dataRef.current.despachoId,
+      descuentos: [{
+        cotizacionItemId: itemId,
+        tipo: 'monto',
+        valor: descuentoUnitario,
+      }],
+    })
+    addLog(id, 'OK → descuento aplicado', 'success')
+  }
+
+  async function stepAssertDescuento(id) {
+    const descuentoTotal = dataRef.current.descuentoTotal // $20
+    const totalConDescuento = TEST.cotizacion.total_usd - descuentoTotal // 260 - 20 = $240
+
+    // 1. Verificar descuento en despacho
+    const { data: des } = await supabase.from('notas_despacho').select('descuento_total_usd').eq('id', dataRef.current.despachoId).single()
+    addLog(id, `Raw descuento_total_usd: ${JSON.stringify(des)}`)
+    assert(round2(Number(des.descuento_total_usd)) === descuentoTotal, descuentoTotal, des.descuento_total_usd, 'descuento_total_usd')
+    addLog(id, `  descuento_total_usd = $${des.descuento_total_usd} ✓`)
+
+    // 2. Verificar descuento en tabla despacho_descuentos
+    const descRes = await apiCall(`/api/despachos/${dataRef.current.despachoId}/descuentos`)
+    addLog(id, `Raw descuentos: ${JSON.stringify(descRes)}`)
+    assert(descRes.length === 1, 1, descRes.length, 'Debe existir 1 descuento')
+    assert(descRes[0].tipo === 'monto', 'monto', descRes[0].tipo, 'tipo')
+    addLog(id, `  tipo = "monto" ✓`)
+    assert(Number(descRes[0].valor) === 2, 2, descRes[0].valor, 'valor')
+    addLog(id, `  valor = $2.00/u ✓`)
+
+    // 3. Verificar CxC actualizada (cargo debería reflejar el descuento)
+    const { data: cl } = await supabase.from('clientes').select('saldo_pendiente').eq('id', dataRef.current.clienteId).single()
+    const saldo = round2(Number(cl.saldo_pendiente || 0))
+    addLog(id, `  saldo_pendiente = $${saldo} (esperado: $${totalConDescuento})`)
+    assert(saldo === totalConDescuento, totalConDescuento, saldo, 'saldo_pendiente post-descuento')
+    addLog(id, `  saldo_pendiente = $${saldo} ($260 - $20 descuento = $240) ✓`)
+
+    // Update expected total for later assertions
+    dataRef.current.totalConDescuento = totalConDescuento
+    addLog(id, 'Descuento aplicado y verificado correctamente', 'success')
+  }
+
   async function stepMarkDispatched(id) {
     addLog(id, 'POST /api/despachos/estado (nuevoEstado=despachada)')
     await apiCall('/api/despachos/estado', 'POST', { despachoId: dataRef.current.despachoId, nuevoEstado: 'despachada' })
@@ -671,13 +728,15 @@ export default function TesterFlowView() {
   }
 
   async function stepAssertCxCAbono(id) {
-    const expectedSaldo = round2(TEST.cotizacion.total_usd - dataRef.current.montoAbono)
+    // Total con descuento = $240, abono = $100, saldo esperado = $140
+    const totalBase = dataRef.current.totalConDescuento || TEST.cotizacion.total_usd
+    const expectedSaldo = round2(totalBase - dataRef.current.montoAbono)
     const { data: cl } = await supabase.from('clientes').select('saldo_pendiente').eq('id', dataRef.current.clienteId).single()
     addLog(id, `Raw saldo post-abono: ${JSON.stringify(cl)}`)
     const saldo = round2(Number(cl.saldo_pendiente || 0))
-    addLog(id, `Cálculo: $${TEST.cotizacion.total_usd} - $${dataRef.current.montoAbono} = $${expectedSaldo} | Actual: $${saldo}`)
-    assert(saldo === expectedSaldo, expectedSaldo, saldo, `saldo_pendiente ($${TEST.cotizacion.total_usd} - $${dataRef.current.montoAbono})`)
-    addLog(id, `  saldo_pendiente = $${saldo} ($260.00 - $100 = $160.00) ✓`)
+    addLog(id, `Cálculo: $${totalBase} - $${dataRef.current.montoAbono} = $${expectedSaldo} | Actual: $${saldo}`)
+    assert(saldo === expectedSaldo, expectedSaldo, saldo, `saldo_pendiente ($${totalBase} - $${dataRef.current.montoAbono})`)
+    addLog(id, `  saldo_pendiente = $${saldo} ($${totalBase} - $${dataRef.current.montoAbono} = $${expectedSaldo}) ✓`)
 
     // Verificar transacción abono
     const { data: txs } = await supabase.from('cuentas_por_cobrar').select('*').eq('cliente_id', dataRef.current.clienteId).eq('tipo', 'abono')
@@ -724,7 +783,12 @@ export default function TesterFlowView() {
     // Orden inverso de dependencias
     if (d.comisionId) { await supabase.from('comisiones').delete().eq('id', d.comisionId); addLog(id, 'DELETE comisiones ✓') }
     if (d.clienteId) { await supabase.from('cuentas_por_cobrar').delete().eq('cliente_id', d.clienteId); addLog(id, 'DELETE cuentas_por_cobrar ✓') }
-    if (d.despachoId) { await supabase.from('notas_despacho').delete().eq('id', d.despachoId); addLog(id, 'DELETE notas_despacho ✓') }
+    if (d.despachoId) {
+      await supabase.from('despacho_descuentos').delete().eq('despacho_id', d.despachoId)
+      addLog(id, 'DELETE despacho_descuentos ✓')
+      await supabase.from('notas_despacho').delete().eq('id', d.despachoId)
+      addLog(id, 'DELETE notas_despacho ✓')
+    }
     if (d.cotizacionId) {
       await supabase.from('cotizacion_items').delete().eq('cotizacion_id', d.cotizacionId)
       await supabase.from('cotizaciones').delete().eq('id', d.cotizacionId)
@@ -796,6 +860,8 @@ export default function TesterFlowView() {
     assert_kardex_egreso: stepAssertKardexEgreso,
     assert_stock_comprometido_post: stepAssertStockComprometidoPost,
     assert_cxc_cargo: stepAssertCxCCargo,
+    apply_descuento: stepApplyDescuento,
+    assert_descuento: stepAssertDescuento,
     mark_dispatched: stepMarkDispatched,
     assert_dispatched: stepAssertDispatched,
     mark_delivered: stepMarkDelivered,
@@ -903,11 +969,11 @@ export default function TesterFlowView() {
     fullLogRef.current = []
   }
 
-  if (perfil?.rol !== 'supervisor') {
+  if (perfil?.rol !== 'supervisor' && perfil?.rol !== 'desarrollador') {
     return (
       <div className="p-4 md:p-6 lg:p-8">
-        <PageHeader icon={FlaskConical} title="Tester Determinista" subtitle="Solo supervisores" />
-        <div className="mt-4 p-4 bg-red-50 text-red-700 rounded-xl text-sm font-medium">Requiere rol supervisor.</div>
+        <PageHeader icon={FlaskConical} title="Tester Determinista" subtitle="Solo supervisores y desarrolladores" />
+        <div className="mt-4 p-4 bg-red-50 text-red-700 rounded-xl text-sm font-medium">Requiere rol supervisor o desarrollador.</div>
       </div>
     )
   }
@@ -928,7 +994,7 @@ export default function TesterFlowView() {
       <PageHeader
         icon={FlaskConical}
         title="Tester Determinista"
-        subtitle="34 pasos con aserciones exactas · cliente → cotización → despacho → comisión → CxC → reportes"
+        subtitle="36 pasos con aserciones exactas · cliente → cotización → despacho → descuentos → comisión → CxC → reportes"
       />
 
       {/* Valores esperados */}
@@ -944,8 +1010,10 @@ export default function TesterFlowView() {
           <div><span className="text-slate-400 font-bold">Total:</span> <span className="font-mono font-black text-indigo-600">${TEST.cotizacion.total_usd}</span></div>
           <div><span className="text-slate-400">Stock post:</span> <span className="font-mono font-bold">{TEST.despacho.stock_esperado_post}</span></div>
           <div><span className="text-slate-400">Forma pago:</span> <span className="font-mono font-bold">{TEST.despacho.forma_pago}</span></div>
+          <div><span className="text-slate-400">Descuento:</span> <span className="font-mono font-bold">$2/u×10 = -$20</span></div>
+          <div><span className="text-slate-400">Total c/desc:</span> <span className="font-mono font-bold">$240.00</span></div>
           <div><span className="text-slate-400">Abono:</span> <span className="font-mono font-bold">$100</span></div>
-          <div><span className="text-slate-400">Saldo final:</span> <span className="font-mono font-bold">$160.00</span></div>
+          <div><span className="text-slate-400">Saldo final:</span> <span className="font-mono font-bold">$140.00</span></div>
         </div>
       </div>
 
@@ -955,7 +1023,7 @@ export default function TesterFlowView() {
           <>
             <button onClick={runAll}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-sm transition-colors shadow-lg shadow-indigo-500/20">
-              <Play size={16} /> Ejecutar 34 pasos
+              <Play size={16} /> Ejecutar 36 pasos
             </button>
             {Object.keys(stepStates).length > 0 && (
               <>

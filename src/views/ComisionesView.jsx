@@ -207,7 +207,8 @@ export default function ComisionesView() {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const esAdministracion = perfil?.rol === 'administracion'
-  const esPrivilegiado = esSupervisor || esAdministracion
+  const esDesarrollador = perfil?.rol === 'desarrollador'
+  const esPrivilegiado = esSupervisor || esAdministracion || esDesarrollador
 
   const [filtroEstado,   setFiltroEstado]   = useState('')
   const [filtroVendedor, setFiltroVendedor] = useState('')
@@ -372,7 +373,7 @@ export default function ComisionesView() {
               key={g.vendedor?.id || 'unknown'}
               vendedor={g.vendedor}
               comisiones={g.items}
-              esSupervisor={esSupervisor}
+              esSupervisor={esSupervisor || esDesarrollador}
               onMarcarPagada={(comision) => setComisionAPagar(comision)}
               marcando={marcar.isPending}
               onExportarPDF={exportarPDF}

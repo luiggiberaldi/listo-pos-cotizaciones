@@ -1,336 +1,468 @@
 // src/components/despachos/DescuentoModal.jsx
-// Modal para aplicar descuentos por artículo en un despacho (solo logística/supervisor)
-import { useEffect, useState, useMemo } from 'react'
-import { X, Tag, Loader2, Trash2, Plus } from 'lucide-react'
+// Modal de descuentos por artículo — solo logística/supervisor
+import { useEffect, useState, useMemo, useCallback } from 'react'
+import { X, Tag, Loader2, Trash2, AlertCircle, ChevronRight, Truck, ChevronLeft, Check } from 'lucide-react'
 import supabase from '../../services/supabase/client'
 import { fmtUsdSimple as fmtUsd } from '../../utils/format'
 import { useDespachoDescuentos, useGuardarDescuentos } from '../../hooks/useDespachoDescuentos'
 
 const TIPOS = [
-  { key: 'porcentaje', label: '%', desc: 'del total' },
-  { key: 'monto', label: '$', desc: 'fijo' },
-  { key: 'monto_unitario', label: '$/u', desc: 'por unidad' },
+  { key: 'porcentaje', label: '%' },
+  { key: 'monto', label: '$' },
 ]
 
+function calcMonto(tipo, valor, totalLinea, cantidad) {
+  if (!valor || Number(valor) <= 0) return 0
+  const v = Number(valor)
+  if (tipo === 'porcentaje') return v > 100 ? totalLinea : Math.round(totalLinea * v / 100 * 10000) / 10000
+  if (tipo === 'monto_unitario') { const m = v * Number(cantidad); return Math.round(Math.min(m, totalLinea) * 10000) / 10000 }
+  // tipo 'monto' = descuento por unidad → multiplicar por cantidad
+  const m = v * Number(cantidad)
+  return Math.round(Math.min(m, totalLinea) * 10000) / 10000
+}
+
+function getError(d, item) {
+  if (!d?.valor || Number(d.valor) <= 0) return null
+  const v = Number(d.valor), t = Number(item.total_linea_usd)
+  if (d.tipo === 'porcentaje' && v > 100) return 'Máximo 100%'
+  if (d.tipo === 'monto' && v * Number(item.cantidad) > t) return `Máximo ${fmtUsd(t / Number(item.cantidad))}/u`
+  if (d.tipo === 'monto_unitario' && v * Number(item.cantidad) > t) return 'Excede el total'
+  return null
+}
+
+/* ─── Tarjeta de artículo (edición) ────────────────────────────────────── */
+function ItemRow({ item, desc, montoDesc, soloLectura, editandoId, onEdit, onUpdate, onRemove }) {
+  const total = Number(item.total_linea_usd || 0)
+  const precioUnit = Number(item.precio_unit_usd || 0)
+  const cantidad = Number(item.cantidad || 0)
+  const tiene = !!desc && montoDesc > 0
+  const editando = editandoId === item.id
+  const error = desc ? getError(desc, item) : null
+  const nuevoTotal = total - montoDesc
+  const nuevoPrecioUnit = cantidad > 0 ? nuevoTotal / cantidad : 0
+
+  return (
+    <div className={`transition-all rounded-2xl ${
+      editando ? 'bg-amber-50 ring-1 ring-amber-200' :
+      tiene ? 'bg-amber-50/50 ring-1 ring-amber-100' :
+      'bg-white ring-1 ring-slate-100'
+    }`}>
+      <button type="button"
+        onClick={() => !soloLectura && onEdit(editando ? null : item.id)}
+        disabled={soloLectura && !tiene}
+        className={`w-full text-left px-4 py-3 ${soloLectura ? 'cursor-default' : 'cursor-pointer active:bg-black/[0.02]'} transition-colors rounded-2xl`}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] font-semibold text-slate-800 leading-snug truncate">{item.nombre_snap}</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              {item.codigo_snap && <span className="font-mono mr-1.5">{item.codigo_snap}</span>}
+              {cantidad} {item.unidad_snap || 'und'}
+            </p>
+          </div>
+          {!soloLectura && !tiene && (
+            <ChevronRight size={16} className={`shrink-0 mt-1 transition-transform ${editando ? 'rotate-90 text-amber-500' : 'text-slate-300'}`} />
+          )}
+        </div>
+        <div className="mt-2 flex items-end justify-between gap-4">
+          <div>
+            <p className="text-[10px] text-slate-400 uppercase tracking-wide leading-none mb-0.5">Precio unit.</p>
+            {tiene ? (
+              <p className="text-[13px] leading-tight">
+                <span className="text-slate-400 line-through mr-1.5">{fmtUsd(precioUnit)}</span>
+                <span className="font-bold text-amber-700">{fmtUsd(nuevoPrecioUnit)}</span>
+              </p>
+            ) : (
+              <p className="text-[13px] font-semibold text-slate-700 leading-tight">{fmtUsd(precioUnit)}</p>
+            )}
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] text-slate-400 uppercase tracking-wide leading-none mb-0.5">Total</p>
+            {tiene ? (
+              <div className="flex items-center gap-2">
+                <span className="text-[12px] text-slate-400 line-through">{fmtUsd(total)}</span>
+                <span className="text-[16px] font-bold text-amber-700 leading-tight">{fmtUsd(nuevoTotal)}</span>
+              </div>
+            ) : (
+              <p className="text-[16px] font-bold text-slate-700 leading-tight">{fmtUsd(total)}</p>
+            )}
+          </div>
+        </div>
+      </button>
+
+      {editando && !soloLectura && (
+        <div className="px-4 pb-3.5 pt-1 space-y-2.5 border-t border-amber-100/80">
+          <div className="flex items-center gap-2">
+            <div className="flex rounded-lg overflow-hidden ring-1 ring-amber-200 bg-white shrink-0">
+              {TIPOS.map(t => (
+                <button key={t.key} onClick={() => onUpdate(item.id, 'tipo', t.key)}
+                  className={`w-10 py-[7px] text-[11px] font-bold transition-all text-center ${
+                    desc?.tipo === t.key ? 'bg-amber-500 text-white' : 'text-amber-500/50 hover:bg-amber-50'
+                  }`}>{t.label}</button>
+              ))}
+            </div>
+            <div className="relative flex-1">
+              {desc?.tipo !== 'porcentaje' && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-[13px] pointer-events-none">$</span>}
+              <input type="number" inputMode="decimal" step="any" min="0"
+                max={desc?.tipo === 'porcentaje' ? 100 : undefined}
+                value={desc?.valor || ''} onChange={e => onUpdate(item.id, 'valor', e.target.value)}
+                onFocus={e => e.target.select()} placeholder="0" autoFocus
+                className={`w-full py-2 text-[15px] font-semibold rounded-lg tabular-nums focus:outline-none focus:ring-2 transition-all ${
+                  desc?.tipo !== 'porcentaje' ? 'pl-7 pr-3' : 'pl-3 pr-8'
+                } ${error ? 'border border-red-300 bg-red-50/50 focus:ring-red-200 text-red-700' : 'border border-amber-200 bg-white focus:ring-amber-300 text-slate-800'}`} />
+              {desc?.tipo === 'porcentaje' && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 text-[14px] pointer-events-none font-semibold">%</span>}
+            </div>
+            {tiene && (
+              <button onClick={() => onRemove(item.id)} className="p-2 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all shrink-0">
+                <Trash2 size={15} />
+              </button>
+            )}
+          </div>
+          {error && <p className="text-[11px] text-red-500 font-medium flex items-center gap-1 pl-0.5"><AlertCircle size={11} /> {error}</p>}
+        </div>
+      )}
+
+      {soloLectura && tiene && (
+        <div className="px-4 pb-3 -mt-1">
+          <span className="inline-flex items-center gap-1 bg-amber-100/80 text-amber-700 rounded-md px-2 py-1 text-[11px] font-semibold">
+            <Tag size={10} />
+            {desc.tipo === 'porcentaje' ? `${desc.valor}%` : desc.tipo === 'monto_unitario' ? `${fmtUsd(desc.valor)}/u` : fmtUsd(desc.valor)}
+            = -{fmtUsd(montoDesc)}
+          </span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ─── Pantalla de confirmación ─────────────────────────────────────────── */
+function Confirmacion({ items, descLocal, calc, flete, subtotalProductos, totalDespacho, totalFinal, onConfirmar, onVolver, guardando }) {
+  const itemsConDesc = items.filter(i => calc.porItem[i.id] > 0)
+  const itemsSinDesc = items.filter(i => !calc.porItem[i.id])
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header confirmación */}
+      <div className="shrink-0 px-5 pt-4 pb-3 border-b border-slate-100">
+        <div className="flex items-center gap-3">
+          <button onClick={onVolver} disabled={guardando}
+            className="p-1.5 -ml-1.5 rounded-lg hover:bg-slate-100 transition-colors text-slate-400 hover:text-slate-600">
+            <ChevronLeft size={20} />
+          </button>
+          <div>
+            <p className="text-[15px] font-bold text-slate-800">Confirmar descuentos</p>
+            <p className="text-[11px] text-slate-400">Revisa el resumen antes de guardar</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Informe scrolleable */}
+      <div className="flex-1 overflow-y-auto min-h-0 overscroll-contain">
+        <div className="p-4 sm:p-5 space-y-4">
+
+          {/* Artículos CON descuento */}
+          {itemsConDesc.length > 0 && (
+            <div>
+              <p className="text-[10px] font-semibold text-amber-600 uppercase tracking-wider mb-2">
+                Artículos con descuento ({itemsConDesc.length})
+              </p>
+              <div className="space-y-1">
+                {itemsConDesc.map(item => {
+                  const d = descLocal[item.id]
+                  const monto = calc.porItem[item.id]
+                  const total = Number(item.total_linea_usd)
+                  const precioUnit = Number(item.precio_unit_usd)
+                  const cant = Number(item.cantidad)
+                  const nuevoTotal = total - monto
+                  const nuevoPrecioUnit = cant > 0 ? nuevoTotal / cant : 0
+                  const tipoLabel = d.tipo === 'porcentaje' ? `${d.valor}%` : fmtUsd(d.valor)
+
+                  return (
+                    <div key={item.id} className="bg-amber-50/60 rounded-xl px-3.5 py-2.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[12px] font-semibold text-slate-800 truncate">{item.nombre_snap}</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5">
+                            {cant} {item.unidad_snap || 'und'} · Descuento: {tipoLabel}
+                          </p>
+                        </div>
+                        <span className="text-[11px] font-bold text-amber-600 shrink-0">-{fmtUsd(monto)}</span>
+                      </div>
+                      <div className="flex justify-between mt-1.5 text-[11px]">
+                        <div>
+                          <span className="text-slate-400">Unit: </span>
+                          <span className="text-slate-400 line-through">{fmtUsd(precioUnit)}</span>
+                          <span className="text-amber-700 font-semibold ml-1">{fmtUsd(nuevoPrecioUnit)}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400">Total: </span>
+                          <span className="text-slate-400 line-through">{fmtUsd(total)}</span>
+                          <span className="text-amber-700 font-bold ml-1">{fmtUsd(nuevoTotal)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Artículos SIN descuento */}
+          {itemsSinDesc.length > 0 && (
+            <div>
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                Sin cambios ({itemsSinDesc.length})
+              </p>
+              <div className="space-y-1">
+                {itemsSinDesc.map(item => (
+                  <div key={item.id} className="flex items-center justify-between bg-slate-50/60 rounded-xl px-3.5 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[12px] font-medium text-slate-500 truncate">{item.nombre_snap}</p>
+                      <p className="text-[10px] text-slate-400">{Number(item.cantidad)} {item.unidad_snap || 'und'}</p>
+                    </div>
+                    <span className="text-[12px] font-semibold text-slate-500 tabular-nums shrink-0">{fmtUsd(item.total_linea_usd)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Resumen financiero */}
+          <div className="bg-slate-50 rounded-2xl p-4 space-y-2">
+            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Resumen</p>
+
+            <div className="flex justify-between text-[12px] text-slate-500">
+              <span>Subtotal productos</span>
+              <span className="tabular-nums">{fmtUsd(subtotalProductos)}</span>
+            </div>
+
+            {flete > 0 && (
+              <div className="flex justify-between text-[12px] text-slate-500">
+                <span className="flex items-center gap-1"><Truck size={11} /> Flete</span>
+                <span className="tabular-nums">{fmtUsd(flete)}</span>
+              </div>
+            )}
+
+            {calc.total > 0 && (
+              <div className="flex justify-between text-[13px]">
+                <span className="text-amber-600 font-semibold">Descuento total</span>
+                <span className="font-bold text-amber-600 tabular-nums">-{fmtUsd(calc.total)}</span>
+              </div>
+            )}
+
+            <div className="border-t border-dashed border-slate-300 my-1" />
+
+            <div className="flex justify-between items-baseline">
+              <span className="font-extrabold text-slate-800 text-[16px]">Total a cobrar</span>
+              <span className="font-black text-slate-800 text-xl tabular-nums">{fmtUsd(Math.max(0, totalFinal))}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Botones confirmar / volver */}
+      <div className="shrink-0 px-5 pt-2 pb-4 sm:rounded-b-3xl space-y-2">
+        <button onClick={onConfirmar} disabled={guardando}
+          className="w-full py-3.5 rounded-2xl text-[14px] font-bold text-white transition-all
+            shadow-lg active:shadow-sm active:translate-y-px
+            bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 shadow-green-200/50
+            disabled:opacity-60">
+          {guardando
+            ? <span className="flex items-center justify-center gap-2"><Loader2 size={16} className="animate-spin" /> Guardando...</span>
+            : <span className="flex items-center justify-center gap-2"><Check size={16} /> Confirmar y guardar</span>
+          }
+        </button>
+        <button onClick={onVolver} disabled={guardando}
+          className="w-full py-2.5 rounded-2xl text-[13px] font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition-all">
+          Volver a editar
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MODAL PRINCIPAL
+   ═══════════════════════════════════════════════════════════════════════════ */
 export default function DescuentoModal({ isOpen, onClose, despacho }) {
   const [items, setItems] = useState([])
   const [cargandoItems, setCargandoItems] = useState(false)
-  // { [cotizacionItemId]: { tipo: 'porcentaje'|'monto'|'monto_unitario', valor: string } }
   const [descLocal, setDescLocal] = useState({})
+  const [editandoId, setEditandoId] = useState(null)
+  const [confirmando, setConfirmando] = useState(false)
 
   const despachoId = despacho?.id
-  const { data: descuentosGuardados = [], isLoading: cargandoDesc } = useDespachoDescuentos(isOpen ? despachoId : null)
+  const { data: guardados = [], isLoading: cargandoDesc } = useDespachoDescuentos(isOpen ? despachoId : null)
   const guardarMut = useGuardarDescuentos()
 
-  // Cargar ítems de la cotización
   useEffect(() => {
     if (!isOpen || !despacho?.cotizacion_id) return
     setCargandoItems(true)
     supabase
       .from('cotizacion_items')
-      .select('id, codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, total_linea_usd, orden')
+      .select('id,codigo_snap,nombre_snap,unidad_snap,cantidad,precio_unit_usd,total_linea_usd,orden')
       .eq('cotizacion_id', despacho.cotizacion_id)
       .order('orden')
-      .then(({ data }) => {
-        setItems(data ?? [])
-        setCargandoItems(false)
-      })
+      .then(({ data }) => { setItems(data ?? []); setCargandoItems(false) })
   }, [isOpen, despacho?.cotizacion_id])
 
-  // Inicializar descuentos locales cuando se cargan los guardados
   useEffect(() => {
-    if (!descuentosGuardados.length) {
-      setDescLocal({})
-      return
-    }
-    const map = {}
-    for (const d of descuentosGuardados) {
-      map[d.cotizacion_item_id] = { tipo: d.tipo, valor: String(d.valor) }
-    }
-    setDescLocal(map)
-  }, [descuentosGuardados])
+    if (!guardados.length) { setDescLocal({}); return }
+    const m = {}
+    for (const d of guardados) m[d.cotizacion_item_id] = { tipo: d.tipo, valor: String(d.valor) }
+    setDescLocal(m)
+  }, [guardados])
 
-  // Calcular montos de descuento
-  const calculos = useMemo(() => {
-    const result = {}
-    let totalDesc = 0
+  useEffect(() => { if (!isOpen) { setEditandoId(null); setConfirmando(false) } }, [isOpen])
+
+  const calc = useMemo(() => {
+    const porItem = {}
+    let total = 0
     for (const item of items) {
       const d = descLocal[item.id]
-      if (!d || !d.valor || Number(d.valor) <= 0) continue
-      const totalLinea = Number(item.total_linea_usd)
-      const valor = Number(d.valor)
-      let monto
-      if (d.tipo === 'porcentaje') {
-        monto = valor > 100 ? totalLinea : totalLinea * valor / 100
-      } else if (d.tipo === 'monto_unitario') {
-        monto = valor * Number(item.cantidad)
-        if (monto > totalLinea) monto = totalLinea
-      } else {
-        monto = valor > totalLinea ? totalLinea : valor
-      }
-      monto = Math.round(monto * 10000) / 10000
-      result[item.id] = monto
-      totalDesc += monto
+      if (!d?.valor || Number(d.valor) <= 0) continue
+      const m = calcMonto(d.tipo, d.valor, Number(item.total_linea_usd), item.cantidad)
+      if (m > 0) { porItem[item.id] = m; total += m }
     }
-    return { porItem: result, totalDescuento: totalDesc }
+    return { porItem, total: Math.round(total * 10000) / 10000 }
   }, [items, descLocal])
 
-  const subtotalOriginal = items.reduce((s, i) => s + Number(i.total_linea_usd || 0), 0)
-  const totalFinal = Number(despacho?.total_usd || subtotalOriginal) - calculos.totalDescuento
-  const itemsConDescuento = Object.keys(descLocal).length
+  const subtotalProductos = items.reduce((s, i) => s + Number(i.total_linea_usd || 0), 0)
+  const flete = Number(despacho?.flete_usd || 0)
+  const totalDespacho = Number(despacho?.total_usd || (subtotalProductos + flete))
+  const totalFinal = totalDespacho - calc.total
+  const tieneErrores = items.some(i => { const d = descLocal[i.id]; return d && getError(d, i) })
 
-  function toggleDescuento(itemId) {
-    setDescLocal(prev => {
-      if (prev[itemId]) {
-        const next = { ...prev }
-        delete next[itemId]
-        return next
-      }
-      return { ...prev, [itemId]: { tipo: 'porcentaje', valor: '' } }
-    })
-  }
+  const handleUpdate = useCallback((id, field, value) => {
+    setDescLocal(prev => ({ ...prev, [id]: { ...(prev[id] || { tipo: 'porcentaje', valor: '' }), [field]: value } }))
+  }, [])
 
-  function updateDesc(itemId, field, value) {
-    setDescLocal(prev => ({
-      ...prev,
-      [itemId]: { ...prev[itemId], [field]: value },
-    }))
-  }
+  const handleRemove = useCallback(id => {
+    setDescLocal(prev => { const n = { ...prev }; delete n[id]; return n })
+    setEditandoId(null)
+  }, [])
 
-  function descExplicacion(d, item) {
-    if (!d || !d.valor || Number(d.valor) <= 0) return null
-    const v = Number(d.valor)
-    const cant = Number(item.cantidad)
-    if (d.tipo === 'porcentaje') return `${v}% de ${fmtUsd(item.total_linea_usd)}`
-    if (d.tipo === 'monto_unitario') return `${fmtUsd(v)} × ${cant} ${item.unidad_snap || 'und'}`
-    return null
-  }
+  const handleEdit = useCallback(id => {
+    if (id && !descLocal[id]) {
+      setDescLocal(prev => ({ ...prev, [id]: { tipo: 'porcentaje', valor: '' } }))
+    }
+    setEditandoId(id)
+  }, [descLocal])
 
-  async function handleGuardar() {
+  async function handleConfirmar() {
     const descuentos = []
-    for (const [itemId, d] of Object.entries(descLocal)) {
-      const valor = Number(d.valor)
-      if (valor <= 0) continue
-      descuentos.push({ cotizacionItemId: itemId, tipo: d.tipo, valor })
+    for (const [id, d] of Object.entries(descLocal)) {
+      const v = Number(d.valor)
+      if (v <= 0 || getError(d, items.find(i => i.id === id))) continue
+      descuentos.push({ cotizacionItemId: id, tipo: d.tipo, valor: v })
     }
     await guardarMut.mutateAsync({ despachoId, descuentos })
+    setConfirmando(false)
     onClose()
   }
 
   if (!isOpen || !despacho) return null
-
   const cargando = cargandoItems || cargandoDesc
   const soloLectura = !['pendiente', 'despachada'].includes(despacho.estado)
+  const nDesc = Object.keys(calc.porItem).length
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm"
-      onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] sm:max-h-[85vh] flex flex-col overflow-hidden pb-[env(safe-area-inset-bottom)]">
+    <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm"
+      onClick={e => e.target === e.currentTarget && !confirmando && onClose()}>
+      <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-md sm:mx-4
+        max-h-[94vh] sm:max-h-[85vh] flex flex-col pb-[env(safe-area-inset-bottom)]">
 
-        {/* Header */}
-        <div className="relative shrink-0 flex items-center justify-between px-5 py-3.5"
-          style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' }}>
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-              <Tag size={15} className="text-white" />
+        {/* ── Vista de confirmación ──────────────────────────────────── */}
+        {confirmando ? (
+          <Confirmacion
+            items={items} descLocal={descLocal} calc={calc}
+            flete={flete} subtotalProductos={subtotalProductos}
+            totalDespacho={totalDespacho} totalFinal={totalFinal}
+            onConfirmar={handleConfirmar}
+            onVolver={() => setConfirmando(false)}
+            guardando={guardarMut.isPending}
+          />
+        ) : (
+          <>
+            {/* Header */}
+            <div className="shrink-0 flex items-center justify-between px-5 py-4 rounded-t-3xl sm:rounded-t-3xl"
+              style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' }}>
+              <div>
+                <p className="font-bold text-white text-base leading-tight">Descuentos</p>
+                <p className="text-[11px] text-white/70 font-medium mt-0.5">
+                  Despacho #{String(despacho.numero).padStart(5, '0')}
+                </p>
+              </div>
+              <button onClick={onClose}
+                className="p-2 -mr-1 rounded-xl bg-white/15 hover:bg-white/25 transition-colors">
+                <X size={16} className="text-white" />
+              </button>
             </div>
-            <div>
-              <p className="font-bold text-white text-sm leading-tight">
-                Descuentos
-              </p>
-              <p className="text-[11px] text-white/70 font-medium">
-                DES-{String(despacho.numero).padStart(5, '0')}
-              </p>
-            </div>
-          </div>
-          <button onClick={onClose}
-            className="p-2 rounded-xl bg-white/15 hover:bg-white/25 transition-colors">
-            <X size={16} className="text-white" />
-          </button>
-        </div>
 
-        {/* Contenido */}
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2.5">
-          {cargando ? (
-            <div className="flex items-center justify-center py-12 text-slate-400">
-              <Loader2 size={20} className="animate-spin mr-2" />Cargando...
-            </div>
-          ) : items.length === 0 ? (
-            <p className="text-sm text-slate-400 text-center py-10">Sin productos</p>
-          ) : (
-            items.map(item => {
-              const totalLinea = Number(item.total_linea_usd || 0)
-              const tieneDesc = !!descLocal[item.id]
-              const montoDesc = calculos.porItem[item.id] || 0
-              const d = descLocal[item.id]
-              const valorInvalido = d && d.tipo === 'porcentaje' && Number(d.valor) > 100
-              const valorExcede = d && d.tipo === 'monto' && Number(d.valor) > totalLinea
-              const valorExcedeUnit = d && d.tipo === 'monto_unitario' && Number(d.valor) * Number(item.cantidad) > totalLinea
-              const hayError = valorInvalido || valorExcede || valorExcedeUnit
-              const explicacion = d ? descExplicacion(d, item) : null
-
-              return (
-                <div key={item.id} className={`rounded-xl transition-all ${
-                  tieneDesc
-                    ? 'bg-amber-50 ring-1 ring-amber-200 shadow-sm'
-                    : 'bg-slate-50 ring-1 ring-slate-100'
-                }`}>
-                  {/* Info del producto */}
-                  <div className="flex items-center justify-between gap-2 px-3.5 pt-3 pb-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[13px] font-semibold text-slate-800 leading-tight truncate">{item.nombre_snap}</p>
-                      <p className="text-[11px] text-slate-400 mt-0.5">
-                        {item.codigo_snap && <span className="font-mono mr-2">{item.codigo_snap}</span>}
-                        {Number(item.cantidad)} {item.unidad_snap || 'und'} × {fmtUsd(item.precio_unit_usd)}
-                      </p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      {tieneDesc && montoDesc > 0 ? (
-                        <>
-                          <p className="text-[11px] text-slate-400 line-through leading-tight">{fmtUsd(totalLinea)}</p>
-                          <p className="text-sm font-bold text-amber-700 leading-tight">{fmtUsd(totalLinea - montoDesc)}</p>
-                        </>
-                      ) : (
-                        <p className="text-sm font-bold text-slate-700">{fmtUsd(totalLinea)}</p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Controles de descuento */}
-                  {!soloLectura && (
-                    <div className="px-3.5 pb-3">
-                      {!tieneDesc ? (
-                        <button
-                          onClick={() => toggleDescuento(item.id)}
-                          className="flex items-center gap-1.5 text-[11px] text-slate-400 hover:text-amber-600 transition-colors py-0.5"
-                        >
-                          <Plus size={12} /> Agregar descuento
-                        </button>
-                      ) : (
-                        <div className="space-y-1.5">
-                          <div className="flex items-center gap-1.5">
-                            {/* Selector tipo */}
-                            <div className="flex rounded-lg overflow-hidden ring-1 ring-amber-200 bg-white">
-                              {TIPOS.map(t => (
-                                <button
-                                  key={t.key}
-                                  onClick={() => updateDesc(item.id, 'tipo', t.key)}
-                                  className={`px-2.5 py-1.5 text-[11px] font-bold transition-all ${
-                                    d.tipo === t.key
-                                      ? 'bg-amber-500 text-white shadow-inner'
-                                      : 'text-amber-600/70 hover:bg-amber-50'
-                                  }`}
-                                  title={t.desc}
-                                >
-                                  {t.label}
-                                </button>
-                              ))}
-                            </div>
-
-                            {/* Input valor */}
-                            <div className="relative flex-1 max-w-[120px]">
-                              <input
-                                type="number"
-                                inputMode="decimal"
-                                step="any"
-                                min="0"
-                                value={d.valor}
-                                onChange={e => updateDesc(item.id, 'valor', e.target.value)}
-                                onFocus={e => e.target.select()}
-                                placeholder="0"
-                                className={`w-full pl-2.5 pr-2 py-1.5 text-sm font-medium border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
-                                  hayError
-                                    ? 'border-red-300 bg-red-50 focus:ring-red-200 text-red-700'
-                                    : 'border-amber-200 bg-white focus:ring-amber-300 text-slate-800'
-                                }`}
-                              />
-                            </div>
-
-                            {/* Preview monto */}
-                            {montoDesc > 0 && (
-                              <span className={`text-xs font-bold px-2 py-1 rounded-md ${
-                                hayError ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700'
-                              }`}>
-                                -{fmtUsd(montoDesc)}
-                              </span>
-                            )}
-
-                            {/* Eliminar */}
-                            <button
-                              onClick={() => toggleDescuento(item.id)}
-                              className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all ml-auto"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-
-                          {/* Explicación contextual */}
-                          {explicacion && (
-                            <p className="text-[10px] text-amber-500 pl-1 font-medium">{explicacion}</p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Solo lectura: mostrar descuento existente */}
-                  {soloLectura && tieneDesc && montoDesc > 0 && (
-                    <div className="px-3.5 pb-3">
-                      <div className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-700 rounded-md px-2 py-1 text-[11px] font-medium">
-                        <Tag size={10} />
-                        {d.tipo === 'porcentaje' ? `${d.valor}%` : d.tipo === 'monto_unitario' ? `${fmtUsd(d.valor)}/u` : fmtUsd(d.valor)}
-                        <span className="text-amber-500">(-{fmtUsd(montoDesc)})</span>
-                      </div>
-                    </div>
-                  )}
+            {/* Contenido */}
+            <div className="flex-1 overflow-y-auto min-h-0 overscroll-contain">
+              {cargando ? (
+                <div className="flex items-center justify-center py-20 gap-2 text-slate-400">
+                  <Loader2 size={20} className="animate-spin text-amber-400" />
+                  <span className="text-sm">Cargando...</span>
                 </div>
-              )
-            })
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="border-t border-slate-100 px-5 py-3.5 bg-gradient-to-b from-slate-50 to-white shrink-0">
-          {/* Resumen */}
-          <div className="space-y-1.5 mb-3">
-            {calculos.totalDescuento > 0 && (
-              <>
-                <div className="flex justify-between text-xs text-slate-500">
-                  <span>Subtotal</span>
-                  <span>{fmtUsd(Number(despacho?.total_usd || subtotalOriginal))}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-amber-600 flex items-center gap-1">
-                    <Tag size={10} />
-                    Descuentos ({itemsConDescuento} {itemsConDescuento === 1 ? 'artículo' : 'artículos'})
-                  </span>
-                  <span className="font-bold text-amber-600">-{fmtUsd(calculos.totalDescuento)}</span>
-                </div>
-                <div className="border-t border-dashed border-slate-200 pt-1.5" />
-              </>
-            )}
-            <div className="flex justify-between font-black text-slate-800 text-base">
-              <span>Total final</span>
-              <span>{fmtUsd(Math.max(0, totalFinal))}</span>
-            </div>
-          </div>
-
-          {!soloLectura && (
-            <button
-              onClick={handleGuardar}
-              disabled={guardarMut.isPending}
-              className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50
-                bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 active:from-amber-700 active:to-amber-800
-                shadow-lg shadow-amber-200/50 active:shadow-sm active:translate-y-px"
-            >
-              {guardarMut.isPending ? (
-                <span className="flex items-center justify-center gap-2"><Loader2 size={14} className="animate-spin" /> Guardando...</span>
+              ) : items.length === 0 ? (
+                <p className="text-sm text-slate-400 text-center py-20">Sin artículos</p>
               ) : (
-                'Guardar descuentos'
+                <div className="p-3 sm:p-4 space-y-2">
+                  {items.map(item => (
+                    <ItemRow key={item.id} item={item}
+                      desc={descLocal[item.id]} montoDesc={calc.porItem[item.id] || 0}
+                      soloLectura={soloLectura} editandoId={editandoId}
+                      onEdit={handleEdit} onUpdate={handleUpdate} onRemove={handleRemove} />
+                  ))}
+                </div>
               )}
-            </button>
-          )}
-        </div>
+            </div>
+
+            {/* Footer */}
+            {!cargando && items.length > 0 && (
+              <div className="shrink-0 border-t border-slate-100 px-5 pt-3 pb-4 sm:rounded-b-3xl">
+                <div className="space-y-1 mb-3">
+                  <div className="flex justify-between text-[12px] text-slate-400">
+                    <span>Subtotal productos</span>
+                    <span className="tabular-nums">{fmtUsd(subtotalProductos)}</span>
+                  </div>
+                  {flete > 0 && (
+                    <div className="flex justify-between text-[12px] text-slate-400">
+                      <span className="flex items-center gap-1"><Truck size={11} /> Flete</span>
+                      <span className="tabular-nums">{fmtUsd(flete)}</span>
+                    </div>
+                  )}
+                  {calc.total > 0 && (
+                    <div className="flex justify-between text-[12px]">
+                      <span className="text-amber-600 font-medium">Descuento{nDesc > 1 ? ` (${nDesc} arts.)` : ''}</span>
+                      <span className="font-bold text-amber-600 tabular-nums">-{fmtUsd(calc.total)}</span>
+                    </div>
+                  )}
+                  <div className="border-t border-dashed border-slate-200 my-1" />
+                  <div className="flex justify-between items-baseline">
+                    <span className="font-extrabold text-slate-800 text-[15px]">Total a cobrar</span>
+                    <span className="font-black text-slate-800 text-lg tabular-nums">{fmtUsd(Math.max(0, totalFinal))}</span>
+                  </div>
+                </div>
+
+                {!soloLectura && (
+                  <button onClick={() => setConfirmando(true)}
+                    disabled={tieneErrores}
+                    className={`w-full py-3.5 rounded-2xl text-[14px] font-bold text-white transition-all
+                      shadow-lg active:shadow-sm active:translate-y-px ${
+                      tieneErrores ? 'bg-slate-300 cursor-not-allowed shadow-none'
+                        : 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 shadow-amber-200/50'
+                    }`}>
+                    {tieneErrores ? 'Corrige los errores'
+                      : calc.total > 0 ? `Revisar y guardar (-${fmtUsd(calc.total)})` : 'Guardar descuentos'
+                    }
+                  </button>
+                )}
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   )
