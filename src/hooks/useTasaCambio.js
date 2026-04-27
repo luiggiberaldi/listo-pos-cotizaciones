@@ -206,7 +206,7 @@ export function useTasaCambio() {
 
       if (usdtData && usdtData.precio > 0) {
         setTasaUsdt({
-          precio: Math.round(usdtData.precio / 5) * 5,
+          precio: Math.ceil(usdtData.precio) + 2,
           fuente: usdtData.fuente,
           ultimaActualizacion: new Date().toISOString(),
         })
