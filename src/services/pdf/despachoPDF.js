@@ -7,7 +7,7 @@ import {
   C_DARK, C_WHITE,
   CUENTAS_BANCARIAS,
   fmtUsd, fmtBs, fmtBcvUsd, fmtPrecio, fmtTotal, fmtFecha,
-  hexToRgb, drawCheck, drawWatermark,
+  hexToRgb, drawCheck, drawWatermark, drawAnuladaWatermark,
 } from './pdfShared'
 
 export async function generarDespachoPDF({ despacho, items = [], config = {}, formaPago = '', monedaPDF = '$', tasa = 0, tasaUsdt = 0, tasaBcv = 0, returnBlob = false }) {
@@ -49,6 +49,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
 
   // ── Marca de agua central ──
   drawWatermark(doc)
+  if (despacho.estado === 'anulada') drawAnuladaWatermark(doc)
 
   // ══════════════════════════════════════════════════════════════════════════
   // 2. DATOS DEL CLIENTE — cuadrícula profesional

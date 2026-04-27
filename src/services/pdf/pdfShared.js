@@ -109,6 +109,22 @@ export function drawWatermark(doc) {
   } catch (_) {}
 }
 
+/** Dibuja marca de agua "ANULADA" en rojo, diagonal, semitransparente */
+export function drawAnuladaWatermark(doc) {
+  try {
+    doc.saveGraphicsState()
+    const gState = new doc.GState({ opacity: 0.25 })
+    doc.setGState(gState)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(60)
+    doc.setTextColor(200, 0, 0)
+    const cx = PAGE_W / 2
+    const cy = PAGE_H / 2
+    doc.text('ANULADA', cx, cy, { align: 'center', angle: 45 })
+    doc.restoreGraphicsState()
+  } catch (_) {}
+}
+
 /** Verifica si necesita salto de página, agrega nueva con watermark si es necesario */
 export function checkPage(doc, y, needed = 30) {
   if (y + needed > PAGE_H - 25) {

@@ -6,7 +6,7 @@ import {
   PAGE_W, PAGE_H, MARGIN, CONTENT_W,
   C_DARK, C_WHITE,
   fmtUsd, fmtBs, fmtBcvUsd, fmtPrecio, fmtTotal, fmtFecha,
-  drawCheck, drawWatermark,
+  drawCheck, drawWatermark, drawAnuladaWatermark,
 } from './pdfShared'
 
 export async function generarOrdenDespachoPDF({ despacho, items = [], config = {}, formaPago = '', monedaPDF = '$', tasa = 0, tasaUsdt = 0, tasaBcv = 0, returnBlob = false }) {
@@ -42,6 +42,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
 
   // ── Marca de agua central ──
   drawWatermark(doc)
+  if (despacho.estado === 'anulada') drawAnuladaWatermark(doc)
 
   // ══════════════════════════════════════════════════════════════════════════
   // 2. DATOS DEL CLIENTE
