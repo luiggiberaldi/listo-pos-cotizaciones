@@ -96,7 +96,7 @@ function UserCard({ user, onClick, index }) {
             {nombre}
           </p>
           <span
-            className="inline-flex items-center px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] font-bold uppercase tracking-wide transition-all duration-300 max-w-full"
+            className="inline-flex items-center px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] font-bold uppercase tracking-wide transition-all duration-300 max-w-full truncate"
             style={{
               background: acc.chip,
               border: `1px solid ${acc.chipBorder}`,
@@ -463,7 +463,7 @@ function UserSelectStep() {
 
         {/* ── PANEL PRINCIPAL ── */}
         <div
-          className="w-full max-w-[calc(100vw-1.5rem)] sm:max-w-sm md:max-w-md lg:max-w-sm xl:max-w-lg relative overflow-hidden rounded-2xl sm:rounded-3xl"
+          className="w-full max-w-[calc(100vw-1.5rem)] sm:max-w-sm md:max-w-md lg:max-w-md xl:max-w-lg relative overflow-hidden rounded-2xl sm:rounded-3xl"
           style={{
             background: 'rgba(255,255,255,0.04)',
             backdropFilter: 'blur(20px)',
