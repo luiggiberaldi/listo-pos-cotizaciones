@@ -9,7 +9,8 @@ import {
 import { useClientes } from '../../hooks/useClientes'
 import ClienteForm from '../clientes/ClienteForm'
 import { useInventario, useCategorias } from '../../hooks/useInventario'
-import { parseSearchTerms, smartMatchProducto } from '../../utils/smartSearch'
+import { useProductSearch } from '../../hooks/useProductSearch'
+import { useLineItems } from '../../hooks/useLineItems'
 import { useGuardarBorrador, useEnviarCotizacion } from '../../hooks/useCotizaciones'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
@@ -21,8 +22,6 @@ import { guardarProductoReciente, getProductosRecientes } from './ProductosRecie
 import { showToast } from '../ui/Toast'
 import { notifyClienteAjeno } from '../../services/notificationService'
 import { sendPushNotification } from '../../hooks/usePushNotifications'
-
-let _qCounter = 0
 
 export default function CotizacionRapida({ onVolver, onGuardado }) {
   const { perfil } = useAuthStore()
@@ -41,7 +40,7 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
   const [clienteOpen, setClienteOpen] = useState(false)
   const [productoBusqueda, setProductoBusqueda] = useState('')
   const [catActiva, setCatActiva] = useState('')
-  const [items, setItems] = useState([])
+  const { items, setItems, agregarItem: _agregarItem, editarItem: cambiarItem, eliminarItem, limpiar: limpiarItems } = useLineItems({ withDescuento: true, checkStock: true })
   const descuentoGlobalPct = 0
   const [error, setError] = useState('')
   const [guardando, setGuardando] = useState(false)
@@ -105,12 +104,7 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
     : []
 
   // Filtrar productos
-  const searchTerms = productoBusqueda.trim() ? parseSearchTerms(productoBusqueda) : null
-  const productosFiltrados = productos.filter(p => {
-    const coincideTexto = !searchTerms || smartMatchProducto(p, searchTerms)
-    const coincideCat = !catActiva || (p.categoria ?? '').toUpperCase().startsWith(catActiva.toUpperCase())
-    return coincideTexto && coincideCat
-  })
+  const productosFiltrados = useProductSearch(productos, productoBusqueda, catActiva)
 
   // Productos recientes
   const recientes = getProductosRecientes(perfil?.id)
@@ -124,40 +118,10 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
   }
 
   function agregarProducto(p) {
-    const stock = Number(p.stock_actual) || 0
     guardarProductoReciente(perfil?.id, p)
-    setItems(prev => {
-      const idx = prev.findIndex(it => it.productoId === p.id)
-      if (idx !== -1) {
-        if (prev[idx].cantidad >= stock) {
-          showToast(`Stock máximo: ${stock} ${p.unidad ?? 'und'}`, 'error')
-          return prev
-        }
-        setLastAdded(p.id)
-        setTimeout(() => setLastAdded(null), 600)
-        return prev.map((it, i) => i === idx ? { ...it, cantidad: it.cantidad + 1 } : it)
-      }
-      setLastAdded(p.id)
-      setTimeout(() => setLastAdded(null), 600)
-      return [...prev, {
-        _key: `qi-${++_qCounter}`,
-        productoId: p.id,
-        codigoSnap: p.codigo ?? '',
-        nombreSnap: p.nombre,
-        unidadSnap: p.unidad ?? 'und',
-        cantidad: 1,
-        precioUnitUsd: Number(p.precio_usd),
-        descuentoPct: 0,
-      }]
-    })
-  }
-
-  function cambiarItem(idx, campo, valor) {
-    setItems(prev => prev.map((it, i) => i === idx ? { ...it, [campo]: valor } : it))
-  }
-
-  function eliminarItem(idx) {
-    setItems(prev => prev.filter((_, i) => i !== idx))
+    _agregarItem(p)
+    setLastAdded(p.id)
+    setTimeout(() => setLastAdded(null), 600)
   }
 
   async function handleGuardar() {

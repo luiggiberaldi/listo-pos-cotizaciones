@@ -3,24 +3,11 @@
 // Basada en despachoPDF.js pero sin datos (solo líneas y espacio en blanco)
 import { jsPDF } from 'jspdf'
 import { LOGO_DESPACHO } from './logoDespachoBase64'
-import { WATERMARK_LOGO } from './watermarkBase64'
-
-const MARGIN    = 14
-const PAGE_W    = 216
-const PAGE_H    = 279
-const CONTENT_W = PAGE_W - MARGIN * 2
-const C_DARK    = [5, 8, 52]
-const C_WHITE   = [255, 255, 255]
-
-function drawCheck(doc, label, x, y) {
-  doc.setLineWidth(0.3)
-  doc.setDrawColor(...C_DARK)
-  doc.rect(x, y - 2.5, 3, 3, 'S')
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8)
-  doc.setTextColor(...C_DARK)
-  doc.text(label, x + 4.5, y)
-}
+import {
+  PAGE_W, PAGE_H, MARGIN, CONTENT_W,
+  C_DARK, C_WHITE,
+  drawCheck, drawWatermark,
+} from './pdfShared'
 
 export async function generarDespachoPlantillaPDF({ config = {} } = {}) {
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
@@ -51,13 +38,7 @@ export async function generarDespachoPlantillaPDF({ config = {} } = {}) {
   y = HDR_H + 11
 
   // Marca de agua
-  try {
-    const gState = new doc.GState({ opacity: 0.06 })
-    doc.setGState(gState)
-    const wmSize = 140
-    doc.addImage(WATERMARK_LOGO, 'PNG', (PAGE_W - wmSize) / 2, (PAGE_H - wmSize) / 2, wmSize, wmSize)
-    doc.setGState(new doc.GState({ opacity: 1 }))
-  } catch (_) {}
+  drawWatermark(doc)
 
   // ══════════════════════════════════════════════════════════════════════════
   // 2-3. CUADRÍCULA DATOS DEL CLIENTE — formato profesional (vacío)

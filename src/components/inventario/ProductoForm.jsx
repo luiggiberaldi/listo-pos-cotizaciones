@@ -146,16 +146,13 @@ export default function ProductoForm({ producto = null, onSuccess, onCancel }) {
         productoResult = await crear.mutateAsync(campos)
       }
 
-      // Subir imagen si hay una nueva
+      // Subir imagen si hay una nueva, o eliminarla
       const productoId = productoResult?.id ?? producto?.id
       if (imagenBlob && productoId) {
         const url = await subirImagenProducto(supabase, productoId, imagenBlob)
         await supabase.from('productos').update({ imagen_url: url }).eq('id', productoId)
       } else if (imagenEliminada && productoId) {
         await supabase.from('productos').update({ imagen_url: null }).eq('id', productoId)
-      } else if (esEdicion && productoId && producto.imagen_url) {
-        // Restaurar imagen_url en caso de que el RPC la haya limpiado
-        await supabase.from('productos').update({ imagen_url: producto.imagen_url }).eq('id', productoId)
       }
 
       onSuccess?.()

@@ -1,24 +1,15 @@
 // src/services/supabase/adminClient.js
 // Cliente para operaciones admin — llama al Worker backend en /api/admin/
 // El service_role key NUNCA se expone al frontend.
-import supabase from './client'
-import { apiUrl } from '../apiBase'
-
-async function getAuthToken() {
-  const { data } = await supabase.auth.getSession()
-  return data?.session?.access_token ?? null
-}
+import { apiUrl, getAuthHeaders } from '../apiBase'
 
 async function adminFetch(path, method = 'POST', body = null) {
-  const token = await getAuthToken()
-  if (!token) throw new Error('No autenticado')
+  const headers = await getAuthHeaders()
+  if (!headers.Authorization || headers.Authorization === 'Bearer undefined') throw new Error('No autenticado')
 
   const res = await fetch(apiUrl(`/api/admin/${path}`), {
     method,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
+    headers,
     ...(body ? { body: JSON.stringify(body) } : {}),
   })
 
@@ -37,12 +28,9 @@ export const adminAPI = {
   deleteUser: (id) => adminFetch(`users/${id}`, 'DELETE'),
 
   async downloadBackup() {
-    const token = await getAuthToken()
-    if (!token) throw new Error('No autenticado')
+    const headers = await getAuthHeaders()
 
-    const res = await fetch(apiUrl('/api/admin/backup'), {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    const res = await fetch(apiUrl('/api/admin/backup'), { headers })
 
     if (!res.ok) {
       const text = await res.text()
@@ -79,8 +67,7 @@ export const adminAPI = {
   },
 
   async restoreBackup(file) {
-    const token = await getAuthToken()
-    if (!token) throw new Error('No autenticado')
+    const headers = await getAuthHeaders()
 
     const text = await file.text()
     let backup
@@ -88,10 +75,7 @@ export const adminAPI = {
 
     const res = await fetch(apiUrl('/api/admin/restore'), {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
+      headers,
       body: JSON.stringify(backup),
     })
 
@@ -116,12 +100,9 @@ export const adminAPI = {
   getLogStats: () => adminFetch('logs/stats', 'GET'),
 
   async downloadLogs() {
-    const token = await getAuthToken()
-    if (!token) throw new Error('No autenticado')
+    const headers = await getAuthHeaders()
 
-    const res = await fetch(apiUrl('/api/admin/logs/download'), {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    const res = await fetch(apiUrl('/api/admin/logs/download'), { headers })
 
     if (!res.ok) {
       const text = await res.text()
@@ -169,11 +150,10 @@ export const adminAPI = {
 
 // ── Dev Tools API (solo desarrollador) ──────────────────────────────────
 async function devFetch(path, method = 'GET') {
-  const token = await getAuthToken()
-  if (!token) throw new Error('No autenticado')
+  const headers = await getAuthHeaders()
   const res = await fetch(apiUrl(`/api/dev/${path}`), {
     method,
-    headers: { Authorization: `Bearer ${token}` },
+    headers,
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(data.error || `Error ${res.status}`)

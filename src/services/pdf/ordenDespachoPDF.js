@@ -2,60 +2,12 @@
 // Genera PDF de Orden de Despacho — sin footer, cuentas, slogan ni condiciones
 import { jsPDF } from 'jspdf'
 import { LOGO_DESPACHO } from './logoDespachoBase64'
-import { WATERMARK_LOGO } from './watermarkBase64'
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-function fmtUsd(n) {
-  return `$${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-function fmtBs(n) {
-  return `Bs ${Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-function fmtBcvUsd(n) {
-  return `$${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-function fmtPrecio(n, moneda, tasa, factorBcv) {
-  if (moneda === 'bs' && tasa > 0) return fmtBs(Number(n || 0) * tasa)
-  if ((moneda === 'bcv' || moneda === 'mixto_bcv') && factorBcv > 0) return fmtBcvUsd(Number(n || 0) * factorBcv)
-  return fmtUsd(n)
-}
-function fmtTotal(n, moneda, tasa, factorBcv) {
-  if (moneda === 'bs' && tasa > 0) return fmtBs(Number(n || 0) * tasa)
-  if (moneda === 'bcv' && factorBcv > 0) return fmtBcvUsd(Number(n || 0) * factorBcv)
-  if (moneda === 'mixto' && tasa > 0) return `${fmtUsd(n)} / ${fmtBs(Number(n || 0) * tasa)}`
-  if (moneda === 'mixto_bcv' && factorBcv > 0 && tasa > 0) return `${fmtBcvUsd(Number(n || 0) * factorBcv)} / ${fmtBs(Number(n || 0) * tasa)}`
-  return fmtUsd(n)
-}
-function fmtFecha(f) {
-  if (!f) return '—'
-  const d = new Date(f)
-  return d.toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' })
-}
-
-// ─── Constantes de diseño ─────────────────────────────────────────────────────
-const MARGIN    = 14
-const PAGE_W    = 216
-const PAGE_H    = 279
-const CONTENT_W = PAGE_W - MARGIN * 2
-
-const C_DARK    = [5, 8, 52]
-const C_WHITE   = [255, 255, 255]
-
-function drawCheck(doc, label, x, y, checked = false) {
-  doc.setLineWidth(0.3)
-  doc.setDrawColor(...C_DARK)
-  doc.rect(x, y - 2.5, 3, 3, 'S')
-  if (checked) {
-    doc.setLineWidth(0.5)
-    doc.line(x + 0.4, y - 1.2, x + 1.5, y + 0.2)
-    doc.line(x + 1.5, y + 0.2, x + 2.8, y - 2.2)
-    doc.setLineWidth(0.3)
-  }
-  doc.setFont('helvetica', checked ? 'bold' : 'normal')
-  doc.setFontSize(8)
-  doc.setTextColor(...C_DARK)
-  doc.text(label, x + 4.5, y)
-}
+import {
+  PAGE_W, PAGE_H, MARGIN, CONTENT_W,
+  C_DARK, C_WHITE,
+  fmtUsd, fmtBs, fmtBcvUsd, fmtPrecio, fmtTotal, fmtFecha,
+  drawCheck, drawWatermark,
+} from './pdfShared'
 
 export async function generarOrdenDespachoPDF({ despacho, items = [], config = {}, formaPago = '', monedaPDF = '$', tasa = 0, tasaUsdt = 0, tasaBcv = 0, returnBlob = false }) {
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
@@ -89,13 +41,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   y = HDR_H + 17
 
   // ── Marca de agua central ──
-  try {
-    const gState = new doc.GState({ opacity: 0.06 })
-    doc.setGState(gState)
-    const wmSize = 140
-    doc.addImage(WATERMARK_LOGO, 'PNG', (PAGE_W - wmSize) / 2, (PAGE_H - wmSize) / 2, wmSize, wmSize)
-    doc.setGState(new doc.GState({ opacity: 1 }))
-  } catch (_) {}
+  drawWatermark(doc)
 
   // ══════════════════════════════════════════════════════════════════════════
   // 2. DATOS DEL CLIENTE

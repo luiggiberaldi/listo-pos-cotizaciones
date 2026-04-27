@@ -2,55 +2,12 @@
 // Genera PDF profesional de Reporte de Comisiones — formato Construacero Carabobo
 import { jsPDF } from 'jspdf'
 import { cargarLogo } from './pdfLogo'
-import { WATERMARK_LOGO } from './watermarkBase64'
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-function fmtUsd(n) {
-  return `$${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-function fmtFecha(f) {
-  if (!f) return '—'
-  return new Date(f).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })
-}
-function fmtFechaCorta(f) {
-  if (!f) return '—'
-  return new Date(f).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: '2-digit' })
-}
-
-// ─── Layout y Colores ────────────────────────────────────────────────────────
-const PAGE_W    = 216
-const PAGE_H    = 279
-const MARGIN    = 14
-const CONTENT_W = PAGE_W - MARGIN * 2
-
-const C_PRIMARY = [58, 99, 168]
-const C_DARK    = [5, 8, 52]
-const C_WHITE   = [255, 255, 255]
-const C_EMERALD = [4, 120, 87]
-const C_AMBER   = [146, 64, 14]
-const C_GRAY    = [100, 116, 139]
-
-function hexToRgb(hex) {
-  const h = (hex || '').replace('#', '')
-  if (h.length !== 6) return C_DARK
-  return [parseInt(h.substring(0,2),16), parseInt(h.substring(2,4),16), parseInt(h.substring(4,6),16)]
-}
-
-// ─── Chequear salto de página ────────────────────────────────────────────────
-function checkPage(doc, y, needed = 30) {
-  if (y + needed > PAGE_H - 25) {
-    doc.addPage()
-    // Watermark en nueva página
-    try {
-      const gState = new doc.GState({ opacity: 0.06 })
-      doc.setGState(gState)
-      doc.addImage(WATERMARK_LOGO, 'PNG', (PAGE_W - 140) / 2, (PAGE_H - 140) / 2, 140, 140)
-      doc.setGState(new doc.GState({ opacity: 1 }))
-    } catch (_) {}
-    return MARGIN + 10
-  }
-  return y
-}
+import {
+  PAGE_W, PAGE_H, MARGIN, CONTENT_W,
+  C_PRIMARY, C_DARK, C_WHITE, C_EMERALD, C_AMBER, C_GRAY,
+  fmtUsd, fmtFecha, fmtFechaCorta,
+  hexToRgb, drawWatermark, checkPage,
+} from './pdfShared'
 
 // ─── Generar Reporte de Comisiones ───────────────────────────────────────────
 export async function generarComisionesPDF({ comisiones, vendedor = null, resumen = null, config = {} }) {
@@ -100,17 +57,12 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
   doc.text('Reporte de Comisiones', PAGE_W - MARGIN, HDR_H - 8, { align: 'right' })
   doc.setFontSize(8)
   doc.setFont('helvetica', 'normal')
-  doc.text(fmtFecha(new Date().toISOString()), PAGE_W - MARGIN, HDR_H - 3, { align: 'right' })
+  doc.text(fmtFecha(new Date().toISOString(), 'short-month'), PAGE_W - MARGIN, HDR_H - 3, { align: 'right' })
 
   y = HDR_H + 6
 
   // Watermark
-  try {
-    const gState = new doc.GState({ opacity: 0.06 })
-    doc.setGState(gState)
-    doc.addImage(WATERMARK_LOGO, 'PNG', (PAGE_W - 140) / 2, (PAGE_H - 140) / 2, 140, 140)
-    doc.setGState(new doc.GState({ opacity: 1 }))
-  } catch (_) {}
+  drawWatermark(doc)
 
   // ══════════════════════════════════════════════════════════════════════════
   // 2. INFO VENDEDOR (si aplica)
@@ -484,12 +436,7 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {} }) {
   y = HDR_H + 6
 
   // Watermark
-  try {
-    const gState = new doc.GState({ opacity: 0.06 })
-    doc.setGState(gState)
-    doc.addImage(WATERMARK_LOGO, 'PNG', (PAGE_W - 140) / 2, (PAGE_H - 140) / 2, 140, 140)
-    doc.setGState(new doc.GState({ opacity: 1 }))
-  } catch (_) {}
+  drawWatermark(doc)
 
   const kpis = reporte.kpis || {}
 

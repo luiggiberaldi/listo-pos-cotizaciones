@@ -2,33 +2,14 @@
 // Genera PDF profesional de Reporte de Despachos y Cobranza — formato Construacero Carabobo
 import { jsPDF } from 'jspdf'
 import { cargarLogo } from './pdfLogo'
-import { WATERMARK_LOGO } from './watermarkBase64'
+import {
+  PAGE_W, PAGE_H, MARGIN, CONTENT_W,
+  C_PRIMARY, C_DARK, C_WHITE, C_EMERALD, C_AMBER, C_RED, C_GRAY,
+  fmtUsd,
+  hexToRgb, drawWatermark, checkPage,
+} from './pdfShared'
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-function fmtUsd(n) {
-  return `$${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
-function hexToRgb(hex) {
-  const h = (hex || '').replace('#', '')
-  if (h.length !== 6) return [5, 8, 52]
-  return [parseInt(h.substring(0,2),16), parseInt(h.substring(2,4),16), parseInt(h.substring(4,6),16)]
-}
-
-// ─── Layout y Colores ────────────────────────────────────────────────────────
-const PAGE_W    = 216
-const PAGE_H    = 279
-const MARGIN    = 14
-const CONTENT_W = PAGE_W - MARGIN * 2
-
-const C_PRIMARY = [58, 99, 168]
-const C_DARK    = [5, 8, 52]
-const C_WHITE   = [255, 255, 255]
-const C_EMERALD = [4, 120, 87]
-const C_AMBER   = [146, 64, 14]
-const C_RED     = [185, 28, 28]
-const C_GRAY    = [100, 116, 139]
-
+// ─── Colores específicos de este reporte ────────────────────────────────────
 const ESTADO_COLORS = {
   pendiente:   C_AMBER,
   despachada:  C_PRIMARY,
@@ -42,20 +23,6 @@ const FP_COLORS = {
   'Pago Móvil':       [139, 92, 246],
   'USDT':             [245, 158, 11],
   'Sin especificar':  [148, 163, 184],
-}
-
-function checkPage(doc, y, needed = 30) {
-  if (y + needed > PAGE_H - 25) {
-    doc.addPage()
-    try {
-      const gState = new doc.GState({ opacity: 0.06 })
-      doc.setGState(gState)
-      doc.addImage(WATERMARK_LOGO, 'PNG', (PAGE_W - 140) / 2, (PAGE_H - 140) / 2, 140, 140)
-      doc.setGState(new doc.GState({ opacity: 1 }))
-    } catch (_) {}
-    return MARGIN + 10
-  }
-  return y
 }
 
 // ─── Generar Reporte de Despachos ───────────────────────────────────────────
@@ -101,12 +68,7 @@ export async function generarDespachoReportePDF({ reporte, rango, config = {} })
   y = HDR_H + 6
 
   // Watermark
-  try {
-    const gState = new doc.GState({ opacity: 0.06 })
-    doc.setGState(gState)
-    doc.addImage(WATERMARK_LOGO, 'PNG', (PAGE_W - 140) / 2, (PAGE_H - 140) / 2, 140, 140)
-    doc.setGState(new doc.GState({ opacity: 1 }))
-  } catch (_) {}
+  drawWatermark(doc)
 
   const { kpis, porEstado, porFormaPago, aging, porVendedor, topClientesPendientes } = reporte
 

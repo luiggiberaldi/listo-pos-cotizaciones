@@ -10,7 +10,8 @@ import {
 import { useClientes } from '../hooks/useClientes'
 import ClienteForm from '../components/clientes/ClienteForm'
 import { useInventario, useCategorias } from '../hooks/useInventario'
-import { smartSearchProductos } from '../utils/smartSearch'
+import { useProductSearch } from '../hooks/useProductSearch'
+import { useLineItems } from '../hooks/useLineItems'
 import { useVentaRapida } from '../hooks/useVentaRapida'
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
@@ -76,7 +77,7 @@ export default function VentaRapidaView() {
   const [clienteOpen, setClienteOpen] = useState(false)
   const [productoBusqueda, setProductoBusqueda] = useState('')
   const [catActiva, setCatActiva] = useState('')
-  const [items, setItems] = useState([])
+  const { items, setItems, agregarItem: _agregarItem, eliminarPorId: quitarItem, cambiarCantidad, setCantidadDirecta, cambiarPrecio } = useLineItems()
   const [showNuevoCliente, setShowNuevoCliente] = useState(false)
   const [mobileCartOpen, setMobileCartOpen] = useState(false)
   const [confirmAjeno, setConfirmAjeno] = useState(null)
@@ -179,17 +180,7 @@ export default function VentaRapidaView() {
     : []
 
   // Filtrar productos con smart search (ranking por relevancia)
-  const productosFiltrados = useMemo(() => {
-    const activos = productos.filter(p => p.activo !== false)
-    if (!productoBusqueda.trim() && !catActiva) return activos
-    // Filtro por categoría
-    const porCat = catActiva
-      ? activos.filter(p => (p.categoria ?? '').toUpperCase().startsWith(catActiva.toUpperCase()))
-      : activos
-    // Smart search con ranking
-    if (!productoBusqueda.trim()) return porCat
-    return smartSearchProductos(porCat, productoBusqueda)
-  }, [productos, productoBusqueda, catActiva])
+  const productosFiltrados = useProductSearch(productos, productoBusqueda, catActiva)
 
   const recientes = getProductosRecientes(perfil?.id)
     .map(r => productos.find(p => p.id === r.id))
@@ -208,48 +199,9 @@ export default function VentaRapidaView() {
 
   function agregarProducto(p) {
     guardarProductoReciente(perfil?.id, p)
-    setItems(prev => {
-      const existing = prev.find(it => it.productoId === p.id)
-      if (existing) {
-        return prev.map(it =>
-          it.productoId === p.id ? { ...it, cantidad: it.cantidad + 1 } : it
-        )
-      }
-      return [...prev, {
-        productoId: p.id,
-        codigoSnap: p.codigo || null,
-        nombreSnap: p.nombre,
-        unidadSnap: p.unidad || 'und',
-        cantidad: 1,
-        precioUnitUsd: Number(p.precio_usd) || 0,
-      }]
-    })
+    _agregarItem(p)
   }
 
-  function cambiarCantidad(productoId, delta) {
-    setItems(prev => prev.map(it => {
-      if (it.productoId !== productoId) return it
-      const nueva = Math.max(1, it.cantidad + delta)
-      return { ...it, cantidad: nueva }
-    }))
-  }
-
-  function setCantidadDirecta(productoId, cantidad) {
-    const n = Math.max(1, Math.floor(Number(cantidad) || 1))
-    setItems(prev => prev.map(it =>
-      it.productoId === productoId ? { ...it, cantidad: n } : it
-    ))
-  }
-
-  function cambiarPrecio(productoId, precio) {
-    setItems(prev => prev.map(it =>
-      it.productoId === productoId ? { ...it, precioUnitUsd: Math.max(0, Number(precio) || 0) } : it
-    ))
-  }
-
-  function quitarItem(productoId) {
-    setItems(prev => prev.filter(it => it.productoId !== productoId))
-  }
 
   async function handleSubmit() {
     if (!step1Valid || !step2Valid) return

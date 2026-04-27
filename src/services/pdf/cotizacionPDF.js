@@ -2,64 +2,13 @@
 // Genera PDF profesional de Cotización — formato Construacero Carabobo
 import { jsPDF } from 'jspdf'
 import { cargarLogo } from './pdfLogo'
-import { WATERMARK_LOGO } from './watermarkBase64'
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-function fmtUsd(n) {
-  return `$${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-function fmtBs(n) {
-  return `Bs ${Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-// Versión corta sin prefijo para celdas de tabla
-function fmtBsShort(n) {
-  return Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
-function fmtBcvUsd(n) {
-  return `$${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-function fmtFecha(f) {
-  if (!f) return '—'
-  return new Date(f + (f.includes('T') ? '' : 'T12:00:00')).toLocaleDateString('es-VE', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-  })
-}
-function fmtPrecio(n, moneda, tasa, factorBcv) {
-  if (moneda === 'bs' && tasa > 0) return fmtBs(Number(n || 0) * tasa)
-  if (moneda === 'bcv' && factorBcv > 0) return fmtBcvUsd(Number(n || 0) * factorBcv)
-  if (moneda === 'mixto_bcv' && factorBcv > 0) return fmtBcvUsd(Number(n || 0) * factorBcv)
-  return fmtUsd(n)
-}
-function fmtTotalLinea(n, moneda, tasa, factorBcv) {
-  if (moneda === 'bs' && tasa > 0) return fmtBs(Number(n || 0) * tasa)
-  if (moneda === 'bcv' && factorBcv > 0) return fmtBcvUsd(Number(n || 0) * factorBcv)
-  if (moneda === 'mixto' && tasa > 0) return `${fmtUsd(n)} / ${fmtBs(Number(n || 0) * tasa)}`
-  if (moneda === 'mixto_bcv' && factorBcv > 0 && tasa > 0) return `${fmtBcvUsd(Number(n || 0) * factorBcv)} / ${fmtBs(Number(n || 0) * tasa)}`
-  return fmtUsd(n)
-}
-
-// ─── Layout y Colores ──────────────────────────────────────────────────────────
-const PAGE_W    = 216
-const PAGE_H    = 279
-const MARGIN    = 14
-const CONTENT_W = PAGE_W - MARGIN * 2
-
-const C_PRIMARY = [58, 99, 168]     // Mariner — header, footer, accents
-const C_ACCENT  = [124, 184, 242]   // Maya Blue — table headers, labels
-const C_DARK    = [5, 8, 52]        // Midnight Express — text
-const C_WHITE   = [255, 255, 255]
-
-function hexToRgb(hex) {
-  const h = (hex || '').replace('#', '')
-  if (h.length !== 6) return C_DARK
-  return [parseInt(h.substring(0,2),16), parseInt(h.substring(2,4),16), parseInt(h.substring(4,6),16)]
-}
-
-// Cuentas bancarias de Construacero
-const CUENTAS_BANCARIAS = [
-  'CTA. CTE. BANESCO 0134 0187 0128 7104 1852',
-  'CTA. CTE. PROVINCIAL 0108 0071 4901 0129 1305',
-]
+import {
+  PAGE_W, PAGE_H, MARGIN, CONTENT_W,
+  C_PRIMARY, C_ACCENT, C_DARK, C_WHITE,
+  CUENTAS_BANCARIAS,
+  fmtFecha, fmtPrecio, fmtTotal,
+  hexToRgb, drawWatermark,
+} from './pdfShared'
 
 export async function generarPDF({ cotizacion, items = [], config = {}, returnBlob = false, monedaPDF = '$', tasa = 0, tasaUsdt = 0, tasaBcv = 0 }) {
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
@@ -134,13 +83,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   y = HDR_H + 6
 
   // ── Marca de agua central ──
-  try {
-    const gState = new doc.GState({ opacity: 0.06 })
-    doc.setGState(gState)
-    const wmSize = 140
-    doc.addImage(WATERMARK_LOGO, 'PNG', (PAGE_W - wmSize) / 2, (PAGE_H - wmSize) / 2, wmSize, wmSize)
-    doc.setGState(new doc.GState({ opacity: 1 }))
-  } catch (_) {}
+  drawWatermark(doc)
 
   // ══════════════════════════════════════════════════════════════════════════
   // 2. DATOS DEL CLIENTE — cuadrícula con celdas
@@ -363,7 +306,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
 
   const totLines = []
   if (ivaPct > 0) {
-    totLines.push({ label: `IVA (${ivaPct}%):`, val: fmtTotalLinea(ivaUsd, monedaPDF, tasaEfectivaTot, factorBcv), bold: false })
+    totLines.push({ label: `IVA (${ivaPct}%):`, val: fmtTotal(ivaUsd, monedaPDF, tasaEfectivaTot, factorBcv), bold: false })
   }
 
   // Borde del cuadro de totales
@@ -393,7 +336,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   doc.setFontSize(14)
   doc.setTextColor(...C_WHITE)
   doc.text('TOTAL', totX + 4, ty + 5.5)
-  doc.text(fmtTotalLinea(total, monedaPDF, tasaEfectivaTot, factorBcv), totX + totW - 4, ty + 5, { align: 'right' })
+  doc.text(fmtTotal(total, monedaPDF, tasaEfectivaTot, factorBcv), totX + totW - 4, ty + 5, { align: 'right' })
 
   // (Total en Bs omitido en modo USD — solo se muestra en mixto/bs)
 
