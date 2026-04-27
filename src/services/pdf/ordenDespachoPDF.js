@@ -423,6 +423,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   const choferFields = [
     { label: 'CHOFER', val: transportista?.nombre || '' },
     { label: 'C.I.', val: transportista?.rif || '' },
+    { label: 'PLACA', val: transportista?.zona_cobertura || '' },
     { label: 'COLOR', val: transportista?.color || '' },
     { label: 'VEHÍCULO', val: transportista?.vehiculo || '' },
     { label: 'PLACA CHUTO', val: transportista?.placa_chuto || '' },
