@@ -158,8 +158,11 @@ const useAuthStore = create((set, get) => ({
 
         if (event === 'SIGNED_IN' && session?.user) {
           if (!get()._cargandoPerfil) {
-            // Setear user para que la app sepa que hay sesión
-            set({ user: session.user })
+            // Solo actualizar user si cambió (evitar re-renders innecesarios durante navegación)
+            const currentUser = get().user
+            if (!currentUser || currentUser.id !== session.user.id) {
+              set({ user: session.user })
+            }
             // Solo cargar perfil si hay operador seleccionado en app_metadata
             const opId = session.user.app_metadata?.operator_id
             if (opId && (!get().perfil || get().perfil.id !== opId)) {
@@ -178,7 +181,11 @@ const useAuthStore = create((set, get) => ({
         }
 
         if (event === 'TOKEN_REFRESHED' && session?.user) {
-          set({ user: session.user })
+          // Solo actualizar user si realmente cambió (evitar re-renders innecesarios)
+          const currentUser = get().user
+          if (!currentUser || currentUser.id !== session.user.id || currentUser.email !== session.user.email) {
+            set({ user: session.user })
+          }
           // Si el token refrescado trae operador, actualizar perfil si no hay
           const opId = session.user.app_metadata?.operator_id
           if (opId && !get().perfil) {
@@ -271,6 +278,11 @@ const useAuthStore = create((set, get) => ({
       rol: data.rol,
       activo: data.activo,
       color: data.color ?? null,
+    }
+    // Solo actualizar si el perfil realmente cambió (evitar re-renders innecesarios)
+    const perfilActual = get().perfil
+    if (perfilActual && perfilActual.id === perfilNuevo.id && perfilActual.rol === perfilNuevo.rol && perfilActual.nombre === perfilNuevo.nombre && perfilActual.color === perfilNuevo.color) {
+      return // perfil idéntico, no disparar re-render
     }
     guardarPerfilCache(perfilNuevo)
     set({ user: authUser, perfil: perfilNuevo, error: null })

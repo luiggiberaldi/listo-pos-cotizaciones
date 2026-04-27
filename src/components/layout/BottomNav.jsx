@@ -1,6 +1,6 @@
 // src/components/layout/BottomNav.jsx
 // Barra de navegación inferior para móvil (thumb-friendly)
-import { NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import { LayoutDashboard, FileText, Users, Package, MoreHorizontal, Zap } from 'lucide-react'
 import { useState } from 'react'
 import { PackageCheck, Truck, DollarSign, BarChart3, Settings, AlertCircle, FlaskConical } from 'lucide-react'
@@ -28,7 +28,6 @@ export default function BottomNav({ esSupervisor, esAdministracion = false, rol:
   const esDesarrollador = rolProp === 'desarrollador'
   const esPrivilegiado = esSupervisor || esAdministracion || esDesarrollador
   const rol = rolProp || (esAdministracion ? 'administracion' : esSupervisor ? 'supervisor' : 'vendedor')
-  const navigate = useNavigate()
   const [showMore, setShowMore] = useState(false)
 
   const moreItemsFiltrados = MORE_ITEMS.filter(item => {
@@ -95,9 +94,7 @@ export default function BottomNav({ esSupervisor, esAdministracion = false, rol:
               key={path}
               to={path}
               end={path === '/'}
-              onClick={(e) => {
-                e.preventDefault()
-                navigate(path)
+              onClick={() => {
                 // Scroll main area to top on navigation
                 document.querySelector('main')?.scrollTo(0, 0)
                 window.scrollTo(0, 0)

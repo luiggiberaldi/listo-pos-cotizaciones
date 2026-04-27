@@ -1,7 +1,7 @@
 // src/App.jsx
 // Configuración central de React Router v7
 // Rutas públicas, protegidas y exclusivas de supervisor
-import { useState, useEffect, lazy, Suspense } from 'react'
+import { useState, useEffect, lazy, Suspense, useCallback } from 'react'
 import {
   BrowserRouter,
   Routes,
@@ -147,19 +147,23 @@ function ViewLoader() {
 // Si aún se está verificando la sesión → pantalla de carga
 // Si no hay sesión → redirige a /login
 function RutaProtegida() {
-  const { user, perfil, initialized, _cargandoPerfil } = useAuthStore()
+  // Selector estable: solo re-renderizar cuando cambian campos relevantes para routing
+  // (NO suscribirse a 'user' directamente — TOKEN_REFRESHED lo actualiza frecuentemente)
+  const hasUser = useAuthStore(useCallback(s => !!s.user, []))
+  const perfil = useAuthStore(useCallback(s => s.perfil, []))
+  const initialized = useAuthStore(useCallback(s => s.initialized, []))
+  const cargandoPerfil = useAuthStore(useCallback(s => s._cargandoPerfil, []))
 
   if (!initialized) return <PantallaCarga />
-  // Si hay sesión pero el perfil está activamente cargando, esperar brevemente
-  if (!perfil && user && _cargandoPerfil) return <PantallaCarga />
-  // Si hay sesión pero no hay perfil (no hay operador seleccionado), ir a login/selector
+  if (!perfil && hasUser && cargandoPerfil) return <PantallaCarga />
   if (!perfil) return <Navigate to="/login" replace />
   return <Outlet />
 }
 
 // ─── Ruta pública: redirige a / si ya hay sesión ──────────────────────────────
 function RutaPublica() {
-  const { perfil, initialized } = useAuthStore()
+  const perfil = useAuthStore(useCallback(s => s.perfil, []))
+  const initialized = useAuthStore(useCallback(s => s.initialized, []))
 
   if (!initialized) return <PantallaCarga />
   if (perfil) return <Navigate to="/" replace />
@@ -170,10 +174,13 @@ function RutaPublica() {
 // Requiere sesión activa Y rol supervisor
 // Si el usuario es vendedor → redirige al dashboard
 function RutaSupervisor() {
-  const { user, perfil, initialized, _cargandoPerfil } = useAuthStore()
+  const hasUser = useAuthStore(useCallback(s => !!s.user, []))
+  const perfil = useAuthStore(useCallback(s => s.perfil, []))
+  const initialized = useAuthStore(useCallback(s => s.initialized, []))
+  const cargandoPerfil = useAuthStore(useCallback(s => s._cargandoPerfil, []))
 
   if (!initialized) return <PantallaCarga />
-  if (!perfil && user && _cargandoPerfil) return <PantallaCarga />
+  if (!perfil && hasUser && cargandoPerfil) return <PantallaCarga />
   if (!perfil) return <Navigate to="/login" replace />
   if (perfil.rol !== 'supervisor' && perfil.rol !== 'desarrollador') return <Navigate to="/" replace />
   return <Outlet />
@@ -182,10 +189,13 @@ function RutaSupervisor() {
 // ─── Ruta para supervisor O administracion ───────────────────────────────────
 // Para secciones compartidas como reportes
 function RutaSupervisorOAdmin() {
-  const { user, perfil, initialized, _cargandoPerfil } = useAuthStore()
+  const hasUser = useAuthStore(useCallback(s => !!s.user, []))
+  const perfil = useAuthStore(useCallback(s => s.perfil, []))
+  const initialized = useAuthStore(useCallback(s => s.initialized, []))
+  const cargandoPerfil = useAuthStore(useCallback(s => s._cargandoPerfil, []))
 
   if (!initialized) return <PantallaCarga />
-  if (!perfil && user && _cargandoPerfil) return <PantallaCarga />
+  if (!perfil && hasUser && cargandoPerfil) return <PantallaCarga />
   if (!perfil) return <Navigate to="/login" replace />
   if (perfil.rol !== 'supervisor' && perfil.rol !== 'administracion' && perfil.rol !== 'desarrollador') return <Navigate to="/" replace />
   return <Outlet />
@@ -193,10 +203,13 @@ function RutaSupervisorOAdmin() {
 
 // ─── Ruta exclusiva de desarrollador ──────────────────────────────────────────
 function RutaDesarrollador() {
-  const { user, perfil, initialized, _cargandoPerfil } = useAuthStore()
+  const hasUser = useAuthStore(useCallback(s => !!s.user, []))
+  const perfil = useAuthStore(useCallback(s => s.perfil, []))
+  const initialized = useAuthStore(useCallback(s => s.initialized, []))
+  const cargandoPerfil = useAuthStore(useCallback(s => s._cargandoPerfil, []))
 
   if (!initialized) return <PantallaCarga />
-  if (!perfil && user && _cargandoPerfil) return <PantallaCarga />
+  if (!perfil && hasUser && cargandoPerfil) return <PantallaCarga />
   if (!perfil) return <Navigate to="/login" replace />
   if (perfil.rol !== 'desarrollador') return <Navigate to="/" replace />
   return <Outlet />
@@ -205,10 +218,13 @@ function RutaDesarrollador() {
 // ─── Ruta que excluye un rol específico ──────────────────────────────────────
 // Administracion y logistica NO pueden ver transportistas
 function RutaExcluyeAdmin() {
-  const { user, perfil, initialized, _cargandoPerfil } = useAuthStore()
+  const hasUser = useAuthStore(useCallback(s => !!s.user, []))
+  const perfil = useAuthStore(useCallback(s => s.perfil, []))
+  const initialized = useAuthStore(useCallback(s => s.initialized, []))
+  const cargandoPerfil = useAuthStore(useCallback(s => s._cargandoPerfil, []))
 
   if (!initialized) return <PantallaCarga />
-  if (!perfil && user && _cargandoPerfil) return <PantallaCarga />
+  if (!perfil && hasUser && cargandoPerfil) return <PantallaCarga />
   if (!perfil) return <Navigate to="/login" replace />
   if (perfil.rol !== 'desarrollador' && (perfil.rol === 'administracion' || perfil.rol === 'logistica')) return <Navigate to="/" replace />
   return <Outlet />
