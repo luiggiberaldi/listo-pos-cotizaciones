@@ -1,6 +1,7 @@
 // src/hooks/useDespachos.js
 // Queries y mutations para notas de despacho
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useCallback } from 'react'
 import supabase from '../services/supabase/client'
 import { apiUrl } from '../services/apiBase'
 import useAuthStore from '../store/useAuthStore'
@@ -18,7 +19,7 @@ export const DESPACHOS_KEY = ['despachos']
 
 // ─── Lista de despachos ─────────────────────────────────────────────────────
 export function useDespachos({ estado = '' } = {}) {
-  const { perfil } = useAuthStore()
+  const perfil = useAuthStore(useCallback(s => s.perfil, []))
   const esSupervisor = perfil?.rol === 'supervisor'
   const esLogistica = perfil?.rol === 'logistica'
   const esPrivilegiado = esSupervisor || perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador'

@@ -95,7 +95,6 @@ export default function BottomNav({ esSupervisor, esAdministracion = false, rol:
               to={path}
               end={path === '/'}
               onClick={() => {
-                // Scroll main area to top on navigation
                 document.querySelector('main')?.scrollTo(0, 0)
                 window.scrollTo(0, 0)
               }}

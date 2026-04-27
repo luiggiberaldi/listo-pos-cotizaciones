@@ -1,6 +1,6 @@
 // src/views/DespachosView.jsx
 // Vista principal de notas de despacho
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Package, PackageCheck, RefreshCw, Filter, LayoutGrid, List, FileDown, ChevronDown } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
@@ -86,7 +86,7 @@ function PlantillaDropdown({ config }) {
 
 export default function DespachosView() {
   const navigate = useNavigate()
-  const { perfil } = useAuthStore()
+  const perfil = useAuthStore(useCallback(s => s.perfil, []))
   const esSupervisor = perfil?.rol === 'supervisor'
   const esAdministracion = perfil?.rol === 'administracion'
   const esDesarrollador = perfil?.rol === 'desarrollador'

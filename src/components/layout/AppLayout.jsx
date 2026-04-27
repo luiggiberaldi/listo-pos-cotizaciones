@@ -1,6 +1,6 @@
 // src/components/layout/AppLayout.jsx
 // Layout principal: sidebar fijo en desktop, drawer en móvil
-import { useState, useRef, useEffect, memo } from 'react'
+import { useState, useRef, useEffect, memo, useCallback } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import {
   Users, FileText, Package, Truck, Zap,
@@ -113,7 +113,9 @@ const NavItem = memo(function NavItem({ path, label, Icono, onClick, collapsed }
 
 // ─── Layout principal ──────────────────────────────────────────────────────────
 export default function AppLayout() {
-  const { perfil, switchOut } = useAuthStore()
+  // Selectores granulares: NO suscribirse a 'user' (TOKEN_REFRESHED lo actualiza frecuentemente)
+  const perfil = useAuthStore(useCallback(s => s.perfil, []))
+  const switchOut = useAuthStore(useCallback(s => s.switchOut, []))
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth >= 768 && window.innerWidth < 1400)

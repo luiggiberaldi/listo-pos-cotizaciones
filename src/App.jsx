@@ -309,7 +309,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
-        <BrowserRouter>
+        <BrowserRouter unstable_useTransitions={false}>
           <ToastProvider>
             <OfflineBanner />
             <AppRoutes />

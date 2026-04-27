@@ -2,7 +2,7 @@
 // Escucha cambios en tablas clave vía Supabase Realtime
 // Invalida cache de React Query para mantener datos sincronizados entre terminales
 // productos y configuracion_negocio hacen refetch inmediato (datos críticos para POS)
-import { useEffect } from 'react'
+import { useEffect, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
 import useAuthStore from '../store/useAuthStore'
@@ -32,7 +32,7 @@ const TABLAS_INMEDIATAS = [
 
 export function useRealtimeSync() {
   const qc = useQueryClient()
-  const { perfil } = useAuthStore()
+  const perfil = useAuthStore(useCallback(s => s.perfil, []))
 
   useEffect(() => {
     if (!perfil) return

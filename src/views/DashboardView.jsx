@@ -2,7 +2,7 @@
 // Panel de inicio — dashboard específico por rol
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { useMemo } from 'react'
+import { useMemo, useCallback } from 'react'
 import {
   LayoutDashboard, FileText, Users, DollarSign, TrendingUp, Clock,
   Plus, UserCog, ClipboardList, ArrowRight, Package, UserRound,
@@ -38,7 +38,7 @@ const ESTADO_LABEL = {
 
 // ─── Hook de métricas de cotizaciones (vendedor + supervisor) ────────────────
 function useMetricas() {
-  const { perfil } = useAuthStore()
+  const perfil = useAuthStore(useCallback(s => s.perfil, []))
   const esSupervisor = perfil?.rol === 'supervisor'
   const esDesarrollador = perfil?.rol === 'desarrollador'
   const esPrivilegiado = esSupervisor || perfil?.rol === 'administracion' || esDesarrollador
@@ -134,7 +134,7 @@ function fmtRelativo(fecha) {
 
 // ─── Vista principal ──────────────────────────────────────────────────────────
 export default function DashboardView() {
-  const { perfil } = useAuthStore()
+  const perfil = useAuthStore(useCallback(s => s.perfil, []))
   const esSupervisor = perfil?.rol === 'supervisor'
   const esAdministracion = perfil?.rol === 'administracion'
   const esDesarrollador = perfil?.rol === 'desarrollador'
