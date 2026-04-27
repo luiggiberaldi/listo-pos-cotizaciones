@@ -83,14 +83,9 @@ const useAuthStore = create((set, get) => ({
     } catch { /* ignorar */ }
     console.log('[AUTH] haySession:', haySession)
 
-    // Restaurar perfil cacheado para evitar flash de login al recargar
-    if (haySession) {
-      const perfilCache = leerPerfilCache()
-      if (perfilCache) {
-        console.log('[AUTH] perfil restaurado desde cache:', perfilCache.nombre)
-        set({ perfil: perfilCache, initialized: true })
-      }
-    }
+    // SEGURIDAD: NO restaurar perfil desde cache al recargar.
+    // El usuario siempre debe re-seleccionar operador con PIN.
+    guardarPerfilCache(null)
 
     const timeoutId = setTimeout(() => {
       const state = get()
@@ -119,56 +114,29 @@ const useAuthStore = create((set, get) => ({
           try {
             if (session?.user) {
               console.log('[AUTH] INITIAL_SESSION con user, seteando user...')
-              const opId = session.user.app_metadata?.operator_id
-              console.log('[AUTH] operator_id en metadata:', opId)
-              // Marcar _cargandoPerfil para que RutaProtegida muestre PantallaCarga
-              set({ user: session.user, _cargandoPerfil: !!opId })
-              if (opId) {
-                // Refrescar JWT si está próximo a expirar antes de cargar perfil
-                const exp = session.expires_at
-                if (exp && exp - Math.floor(Date.now() / 1000) < 120) {
-                  console.log('[AUTH] JWT próximo a expirar, refrescando...')
-                  try {
-                    const { data: refreshed } = await supabase.auth.refreshSession()
-                    if (refreshed?.session?.user) {
-                      set({ user: refreshed.session.user })
-                    }
-                  } catch (e) {
-                    console.log('[AUTH] refresh falló, usando sesión actual:', e.message)
-                  }
-                }
-                console.log('[AUTH] cargando perfil...')
-                await get()._cargarPerfil(session.user)
-                console.log('[AUTH] perfil cargado OK, perfil:', !!get().perfil)
-              } else {
-                console.log('[AUTH] sin operator_id, esperando selección')
-              }
+              // SEGURIDAD: Solo setear user, NO cargar perfil automáticamente.
+              // El usuario debe seleccionar operador con PIN en cada sesión.
+              set({ user: session.user, _cargandoPerfil: false })
             } else {
               console.log('[AUTH] INITIAL_SESSION sin user (no hay sesión)')
             }
           } catch (err) {
-            console.log('[AUTH] error cargando perfil inicial:', err.message)
+            console.log('[AUTH] error en INITIAL_SESSION:', err.message)
           } finally {
             clearTimeout(timeoutId)
             console.log('[AUTH] seteando initialized=true')
-            // Set atómico: initialized + limpiar flag de carga
             set({ initialized: true, _cargandoPerfil: false })
           }
         }
 
         if (event === 'SIGNED_IN' && session?.user) {
-          if (!get()._cargandoPerfil) {
-            // Solo actualizar user si cambió (evitar re-renders innecesarios durante navegación)
-            const currentUser = get().user
-            if (!currentUser || currentUser.id !== session.user.id) {
-              set({ user: session.user })
-            }
-            // Solo cargar perfil si hay operador seleccionado en app_metadata
-            const opId = session.user.app_metadata?.operator_id
-            if (opId && (!get().perfil || get().perfil.id !== opId)) {
-              await get()._cargarPerfil(session.user)
-            }
+          // Solo actualizar user si cambió (evitar re-renders innecesarios)
+          const currentUser = get().user
+          if (!currentUser || currentUser.id !== session.user.id) {
+            set({ user: session.user })
           }
+          // SEGURIDAD: NO cargar perfil automáticamente desde metadata.
+          // El perfil solo se establece a través de switchOperator() (PIN).
         }
 
         if (event === 'SIGNED_OUT') {
@@ -186,11 +154,8 @@ const useAuthStore = create((set, get) => ({
           if (!currentUser || currentUser.id !== session.user.id || currentUser.email !== session.user.email) {
             set({ user: session.user })
           }
-          // Si el token refrescado trae operador, actualizar perfil si no hay
-          const opId = session.user.app_metadata?.operator_id
-          if (opId && !get().perfil) {
-            await get()._cargarPerfil(session.user)
-          }
+          // SEGURIDAD: NO cargar perfil automáticamente.
+          // Si el perfil ya está seteado (por switchOperator), se mantiene.
         }
       }
     )
@@ -304,15 +269,8 @@ const useAuthStore = create((set, get) => ({
       return { ok: false }
     }
 
-    // Setear user — el perfil se carga cuando se seleccione operador
+    // Setear user — el perfil SOLO se establece al seleccionar operador con PIN
     set({ user: data.user, loading: false, _cargandoPerfil: false, error: null })
-
-    // Si ya hay operador en metadata (sesión previa), cargar perfil
-    if (data.user.app_metadata?.operator_id) {
-      try {
-        await get()._cargarPerfil(data.user)
-      } catch { /* ignorar */ }
-    }
 
     return { ok: true }
   },
