@@ -800,11 +800,21 @@ function Step1Productos({
                         className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 active:bg-red-100 active:text-red-500 transition-colors">
                         {itemInCart.cantidad <= 1 ? <Trash2 size={11} strokeWidth={2.5} /> : <Minus size={12} strokeWidth={3} />}
                       </button>
-                      <button type="button"
-                        onClick={() => setEditQty({ productoId: p.id, nombre: p.nombre, cantidad: itemInCart.cantidad, stock })}
-                        className="w-9 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-xs font-black text-slate-700 active:bg-sky-50 active:border-sky-300">
-                        {itemInCart.cantidad}
-                      </button>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={itemInCart.cantidad}
+                        onClick={e => e.target.select()}
+                        onFocus={e => e.target.select()}
+                        onChange={e => {
+                          const val = e.target.value.replace(/[^0-9]/g, '');
+                          if (val === '' || val === '0') return;
+                          const num = Math.min(Math.max(1, parseInt(val, 10)), stock || 99999);
+                          setCantidadDirecta(p.id, num);
+                        }}
+                        onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }}
+                        className="w-9 h-7 rounded-lg bg-white border border-slate-200 text-center text-xs font-black text-slate-700 focus:border-sky-400 focus:ring-1 focus:ring-sky-200 outline-none"
+                      />
                       <button type="button"
                         onClick={() => cambiarCantidad(p.id, 1)}
                         className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 active:bg-emerald-100 transition-colors">
@@ -923,11 +933,18 @@ function Step1Productos({
                           className="w-8 h-7 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors active:scale-90">
                           <Minus size={12} strokeWidth={3} />
                         </button>
-                        <button type="button"
-                          onClick={() => setEditQty({ productoId: it.productoId, nombre: it.nombreSnap, cantidad: it.cantidad, stock: null })}
-                          className="w-8 h-7 text-center text-[12px] font-black text-slate-700 bg-white border-x border-slate-100 leading-7 active:bg-sky-50 active:border-sky-300">
-                          {it.cantidad}
-                        </button>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={it.cantidad}
+                          onChange={e => {
+                            const val = e.target.value.replace(/[^0-9]/g, '')
+                            if (val === '') setCantidadDirecta(it.productoId, 1)
+                            else setCantidadDirecta(it.productoId, Math.max(1, Number(val)))
+                          }}
+                          onFocus={e => e.target.select()}
+                          className="w-9 h-7 text-center text-[12px] font-black text-slate-700 bg-white border-x border-slate-100 outline-none focus:bg-sky-50 focus:border-sky-300"
+                        />
                         <button type="button"
                           onClick={() => cambiarCantidad(it.productoId, 1)}
                           className="w-8 h-7 flex items-center justify-center text-slate-400 hover:text-emerald-500 transition-colors active:scale-90">
