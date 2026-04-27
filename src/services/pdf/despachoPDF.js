@@ -395,7 +395,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const refPagoH = hasRefPago ? 7 : 0
   const fpY = choferStartY - 3 - 19 - desgloseH - refPagoH  // 19mm alto (9 + 10), 3mm gap
 
-  // Fila FORMA DE PAGO — solo las seleccionadas con montos
+  // Fila CRÉDITO
   doc.setDrawColor(120, 120, 120)
   doc.setLineWidth(0.3)
   doc.rect(MARGIN, fpY, CONTENT_W, 9, 'S')
@@ -403,18 +403,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(9)
   doc.setTextColor(...C_DARK)
-  doc.text('FORMA DE PAGO:', MARGIN + 3, fpY + 6)
-
-  if (formasPagoArr.length > 0) {
-    const parts = formasPagoArr.map(fp => {
-      const nombre = fp.metodo?.toUpperCase() || ''
-      const monto = fp.monto != null && fp.monto !== '' ? ` ${fmtTotal(Number(fp.monto), monedaPDF, tasa, factorBcv)}` : ''
-      return nombre + monto
-    })
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
-    doc.text(parts.join('   |   '), MARGIN + 38, fpY + 6)
-  }
+  doc.text('8 DÍAS DE CRÉDITO CONTINUO', MARGIN + 3, fpY + 6)
 
   // ── Referencia de pago (si existe) ──
   const refPago = despacho.referencia_pago || ''
