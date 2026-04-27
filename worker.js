@@ -2564,6 +2564,20 @@ async function handleCrearTransportista(request, env) {
   const user = await verifyAuth(request, env);
   if (!user?.id) return jsonError('No autenticado', 401, request);
 
+  // Validar rol: solo supervisor, vendedor y desarrollador pueden crear
+  const rolPermitido = ['supervisor', 'vendedor'];
+  if (user.operator_id !== SUPER_ADMIN_UUID) {
+    const hCheck = supaServiceHeaders(env);
+    const rolRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${user.operator_id}&activo=eq.true&select=rol`,
+      { headers: hCheck }
+    );
+    const [op] = await rolRes.json();
+    if (!op || !rolPermitido.includes(op.rol)) {
+      return jsonError('No tiene permiso para crear transportistas', 403, request);
+    }
+  }
+
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
 

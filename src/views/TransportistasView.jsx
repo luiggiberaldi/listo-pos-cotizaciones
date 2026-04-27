@@ -304,6 +304,7 @@ function SkeletonTransportistas() {
 export default function TransportistasView() {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
+  const puedeCrear = esSupervisor || perfil?.rol === 'vendedor'
 
   const [modalAbierto,          setModalAbierto]          = useState(false)
   const [editando,              setEditando]              = useState(null)
@@ -339,7 +340,7 @@ export default function TransportistasView() {
             <button onClick={() => refetch()} className="p-2 rounded-xl transition-colors text-slate-400 hover:text-slate-700 hover:bg-slate-100">
               <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
             </button>
-            {esSupervisor && (
+            {puedeCrear && (
               <button onClick={abrirNuevo} className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98]"
                 style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
                 <Plus size={16} />Nuevo transportista
@@ -361,9 +362,9 @@ export default function TransportistasView() {
         <EmptyState
           icon={Truck}
           title="No hay transportistas registrados"
-          description={esSupervisor ? 'Agrega el primer transportista.' : 'El supervisor aún no ha registrado transportistas.'}
-          actionLabel={esSupervisor ? 'Nuevo transportista' : undefined}
-          onAction={esSupervisor ? abrirNuevo : undefined}
+          description={puedeCrear ? 'Agrega el primer transportista.' : 'Aún no se han registrado transportistas.'}
+          actionLabel={puedeCrear ? 'Nuevo transportista' : undefined}
+          onAction={puedeCrear ? abrirNuevo : undefined}
         />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
