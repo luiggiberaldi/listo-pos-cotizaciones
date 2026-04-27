@@ -262,13 +262,17 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
                 if (val.length > 9) return
                 cambiar({ target: { name: 'rif_cedula', value: val } })
               } else {
-                // RIF: dígitos y guion para verificador
-                let val = e.target.value.replace(/[^\d-]/g, '')
-                if (val.replace(/-/g, '').length > 10) return
+                // RIF: solo dígitos, auto-insertar guión antes del verificador
+                let val = e.target.value.replace(/[^\d]/g, '')
+                if (val.length > 10) return
+                // Auto-format: 8+ dígitos → XXXXXXXX-D
+                if (val.length > 8) {
+                  val = val.slice(0, -1) + '-' + val.slice(-1)
+                }
                 cambiar({ target: { name: 'rif_cedula', value: val } })
               }
             }}
-            placeholder={rifPrefijo === 'V' ? '24457713' : '30123456-7'}
+            placeholder={rifPrefijo === 'V' ? '24457713' : '301234567'}
             className={`${inputClass} rounded-l-none`}
             disabled={cargando}
             inputMode="numeric"

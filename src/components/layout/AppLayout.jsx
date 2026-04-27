@@ -49,10 +49,10 @@ function NotifIcon({ type }) {
 // ─── Definición de rutas de navegación ────────────────────────────────────────
 const NAV_TODOS = [
   { path: '/',               label: 'Inicio',         icono: LayoutDashboard },
-  { path: '/cotizaciones',   label: 'Cotizaciones',   icono: FileText,       labelByRole: { administracion: 'Despachos' }, excludeRoles: ['logistica'] },
   { path: '/venta-rapida',   label: 'Venta rápida',   icono: Zap,            onlyRoles: ['vendedor', 'supervisor'] },
-  { path: '/clientes',       label: 'Clientes',       icono: Users,          excludeRoles: ['logistica'] },
+  { path: '/cotizaciones',   label: 'Cotizaciones',   icono: FileText,       labelByRole: { administracion: 'Despachos' }, excludeRoles: ['logistica'] },
   { path: '/despachos',      label: 'Despachos',      icono: PackageCheck,   labelByRole: { logistica: 'Entregas' } },
+  { path: '/clientes',       label: 'Clientes',       icono: Users,          excludeRoles: ['logistica'] },
   { path: '/inventario',     label: 'Inventario',     icono: Package,        excludeRoles: ['logistica'] },
   { path: '/transportistas', label: 'Transportistas', icono: Truck,          excludeRoles: ['administracion', 'logistica'] },
   { path: '/comisiones',     label: 'Comisiones',     icono: DollarSign,     excludeRoles: ['logistica'] },
@@ -174,6 +174,13 @@ export default function AppLayout() {
 
   // Página actual para título en topbar
   const location = useLocation()
+
+  // Scroll to top on route change
+  const mainRef = useRef(null)
+  useEffect(() => {
+    mainRef.current?.scrollTo(0, 0)
+    window.scrollTo(0, 0)
+  }, [location.pathname])
   const allNavItems = [...NAV_TODOS, ...NAV_SUPERVISOR]
   const currentPage = allNavItems.find(item =>
     item.path === '/' ? location.pathname === '/' : location.pathname.startsWith(item.path)
@@ -474,7 +481,7 @@ export default function AppLayout() {
       </aside>
 
       {/* ── Área de contenido ───────────────────────────────────────────── */}
-      <main className="flex-1 overflow-y-auto min-w-0 pb-20 md:pb-0">
+      <main ref={mainRef} className="flex-1 overflow-y-auto min-w-0 pb-20 md:pb-0">
         <div className="mx-auto max-w-screen-2xl">
           <div className="px-4 pt-1 md:px-6">
             <Breadcrumbs />

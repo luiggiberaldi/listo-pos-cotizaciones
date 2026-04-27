@@ -1,59 +1,113 @@
 // src/components/ui/DetalleModal.jsx
 // Modal genérico de detalle para cotizaciones y despachos
 import { useEffect, useState } from 'react'
-import { X, Package, Loader2, Calendar, Clock, User, FileText, History, CreditCard, Hash } from 'lucide-react'
+import { X, Package, Loader2, Calendar, Clock, User, FileText, History, CreditCard, Hash, Pencil, Check } from 'lucide-react'
 import supabase from '../../services/supabase/client'
+import { apiUrl } from '../../services/apiBase'
 import { fmtUsdSimple as fmtUsd, fmtFecha } from '../../utils/format'
 import useAuthStore from '../../store/useAuthStore'
+import { showToast } from './Toast'
 
-function ItemRow({ item, tasa = 0 }) {
+function calcDescMonto(desc, totalLinea, cantidad) {
+  if (!desc) return 0
+  const v = Number(desc.valor)
+  if (!v || v <= 0) return 0
+  if (desc.tipo === 'porcentaje') return Math.round(totalLinea * v / 100 * 10000) / 10000
+  return Math.round(Math.min(v * Number(cantidad), totalLinea) * 10000) / 10000
+}
+
+function ItemRow({ item, descuento }) {
   const cant     = Number(item.cantidad || 1)
   const precio   = Number(item.precio_unit_usd || 0)
   const total    = Number(item.total_linea_usd || cant * precio)
+  const descMonto = calcDescMonto(descuento, total, cant)
+  const totalFinal = total - descMonto
 
   return (
-    <tr className="border-b border-slate-100 last:border-0">
+    <tr className={`border-b border-slate-100 last:border-0 ${descMonto > 0 ? 'bg-amber-50/70' : ''}`}>
       <td className="py-3 pr-3">
         <p className="text-sm font-medium text-slate-800 leading-tight">{item.nombre_snap}</p>
         {item.codigo_snap && <p className="text-[11px] text-slate-400 font-mono mt-0.5">{item.codigo_snap}</p>}
+        {descMonto > 0 && (
+          <p className="text-[11px] text-amber-600 mt-0.5 font-medium">
+            Desc: {descuento.tipo === 'porcentaje' ? `${descuento.valor}%` : `${fmtUsd(descuento.valor)}/u`} = -{fmtUsd(descMonto)}
+          </p>
+        )}
       </td>
       <td className="py-3 px-3 text-center text-sm text-slate-600 whitespace-nowrap">
         {cant} <span className="text-slate-400 text-[11px]">{item.unidad_snap || 'und'}</span>
       </td>
-      <td className="py-3 px-3 text-right text-sm text-slate-600 whitespace-nowrap">{fmtUsd(precio)}</td>
-      <td className="py-3 pl-3 text-right text-sm font-bold text-slate-800 whitespace-nowrap">{fmtUsd(total)}</td>
+      <td className="py-3 px-3 text-right text-sm text-slate-600 whitespace-nowrap">
+        {descMonto > 0 ? (
+          <span>
+            <span className="line-through text-slate-400">{fmtUsd(precio)}</span>
+            <br /><span className="text-amber-700 font-medium">{fmtUsd(cant > 0 ? totalFinal / cant : 0)}</span>
+          </span>
+        ) : fmtUsd(precio)}
+      </td>
+      <td className="py-3 pl-3 text-right text-sm font-bold whitespace-nowrap">
+        {descMonto > 0 ? (
+          <span>
+            <span className="line-through text-slate-400 font-normal text-xs">{fmtUsd(total)}</span>
+            <br /><span className="text-amber-700">{fmtUsd(totalFinal)}</span>
+          </span>
+        ) : <span className="text-slate-800">{fmtUsd(total)}</span>}
+      </td>
     </tr>
   )
 }
 
-function ItemCard({ item }) {
+function ItemCard({ item, descuento }) {
   const cant     = Number(item.cantidad || 1)
   const precio   = Number(item.precio_unit_usd || 0)
   const total    = Number(item.total_linea_usd || cant * precio)
+  const descMonto = calcDescMonto(descuento, total, cant)
+  const totalFinal = total - descMonto
 
   return (
-    <div className="py-3 border-b border-slate-100 last:border-0">
+    <div className={`py-3 border-b border-slate-100 last:border-0 ${descMonto > 0 ? 'bg-amber-50/70 -mx-3 px-3 rounded-lg' : ''}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-slate-800 leading-tight">{item.nombre_snap}</p>
           {item.codigo_snap && <p className="text-[11px] text-slate-400 font-mono mt-0.5">{item.codigo_snap}</p>}
         </div>
-        <span className="text-sm font-bold text-slate-800 shrink-0">{fmtUsd(total)}</span>
+        {descMonto > 0 ? (
+          <div className="text-right shrink-0">
+            <span className="text-xs text-slate-400 line-through">{fmtUsd(total)}</span>
+            <p className="text-sm font-bold text-amber-700">{fmtUsd(totalFinal)}</p>
+          </div>
+        ) : (
+          <span className="text-sm font-bold text-slate-800 shrink-0">{fmtUsd(total)}</span>
+        )}
       </div>
       <div className="flex gap-3 mt-1 text-xs text-slate-500">
         <span>{cant} {item.unidad_snap || 'und'}</span>
         <span>× {fmtUsd(precio)}</span>
       </div>
+      {descMonto > 0 && (
+        <p className="text-[11px] text-amber-600 mt-1 font-medium">
+          Desc: {descuento.tipo === 'porcentaje' ? `${descuento.valor}%` : `${fmtUsd(descuento.valor)}/u`} = -{fmtUsd(descMonto)}
+        </p>
+      )}
     </div>
   )
 }
 
-export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', registro, tasa = 0 }) {
+export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', registro, tasa = 0, onPagoEditado }) {
   const [items, setItems]       = useState([])
   const [cargando, setCargando] = useState(false)
   const [versiones, setVersiones] = useState([])
+  const [descuentos, setDescuentos] = useState({}) // { cotizacion_item_id: { tipo, valor } }
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
+  const esPrivilegiado = ['supervisor', 'administracion', 'desarrollador'].includes(perfil?.rol)
+
+  // Edit forma de pago state
+  const [editandoPago, setEditandoPago] = useState(false)
+  const [editFormaPago, setEditFormaPago] = useState('')
+  const [editFormaPagoCliente, setEditFormaPagoCliente] = useState('')
+  const [editRefPago, setEditRefPago] = useState('')
+  const [guardandoPago, setGuardandoPago] = useState(false)
 
   useEffect(() => {
     if (!isOpen || !registro) return
@@ -63,13 +117,29 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
     setCargando(true)
     supabase
       .from('cotizacion_items')
-      .select('producto_id, codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, descuento_pct, total_linea_usd, orden')
+      .select('id, producto_id, codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, descuento_pct, total_linea_usd, orden')
       .eq('cotizacion_id', cotizacionId)
       .order('orden')
       .then(({ data }) => {
         setItems(data ?? [])
         setCargando(false)
       })
+
+    // Cargar descuentos si es despacho
+    if (!esCot && registro.id) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (!session?.access_token) return
+        fetch(apiUrl(`/api/despachos/${registro.id}/descuentos`), {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        }).then(r => r.ok ? r.json() : []).then(data => {
+          const m = {}
+          for (const d of (data || [])) m[d.cotizacion_item_id] = { tipo: d.tipo, valor: d.valor }
+          setDescuentos(m)
+        }).catch(() => {})
+      })
+    } else {
+      setDescuentos({})
+    }
 
     // Cargar historial de versiones para supervisor
     if (esSupervisor && tipo === 'cotizacion' && registro.numero) {
@@ -140,7 +210,95 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
           {!esCot && registro.referencia_pago && (
             <span className="inline-flex items-center gap-1"><Hash size={12} className="text-slate-400" /> Ref. pago: <strong className="font-mono text-slate-700">{registro.referencia_pago}</strong></span>
           )}
+          {!esCot && esPrivilegiado && registro.estado !== 'anulada' && (
+            <button onClick={() => {
+              setEditFormaPago(registro.forma_pago || '')
+              setEditFormaPagoCliente(registro.forma_pago_cliente || '')
+              setEditRefPago(registro.referencia_pago || '')
+              setEditandoPago(true)
+            }} className="inline-flex items-center gap-1 text-sky-500 hover:text-sky-700 transition-colors">
+              <Pencil size={11} /> <span className="text-[11px] font-medium">Editar pago</span>
+            </button>
+          )}
         </div>
+
+        {/* Editar forma de pago (inline) */}
+        {editandoPago && !esCot && (
+          <div className="px-5 py-3 border-b border-sky-200 bg-sky-50/50 space-y-3">
+            <div className="flex items-center gap-2 mb-1">
+              <CreditCard size={14} className="text-sky-500" />
+              <span className="text-sm font-bold text-slate-700">Editar forma de pago</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <label className="text-[11px] font-medium text-slate-500">Forma de pago (interna)</label>
+                <select value={editFormaPago} onChange={e => setEditFormaPago(e.target.value)}
+                  className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:ring-2 focus:ring-sky-200 outline-none">
+                  <option value="">— Sin definir —</option>
+                  {['Efectivo', 'Zelle', 'Pago Móvil', 'USDT', 'Transferencia', 'Cta por cobrar'].map(fp => (
+                    <option key={fp} value={fp}>{fp}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] font-medium text-slate-500">Forma de pago (cliente)</label>
+                <select value={editFormaPagoCliente} onChange={e => setEditFormaPagoCliente(e.target.value)}
+                  className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:ring-2 focus:ring-sky-200 outline-none">
+                  <option value="">— Sin definir —</option>
+                  {['Efectivo', 'Zelle', 'Pago Móvil', 'USDT', 'Transferencia', 'Cta por cobrar'].map(fp => (
+                    <option key={fp} value={fp}>{fp}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] font-medium text-slate-500">Referencia de pago</label>
+                <input type="text" value={editRefPago} onChange={e => setEditRefPago(e.target.value)}
+                  placeholder="Ej: REF-12345"
+                  className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:ring-2 focus:ring-sky-200 outline-none" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <button onClick={() => setEditandoPago(false)} disabled={guardandoPago}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+                Cancelar
+              </button>
+              <button disabled={guardandoPago} onClick={async () => {
+                setGuardandoPago(true)
+                try {
+                  const { data: { session } } = await supabase.auth.getSession()
+                  const res = await fetch(apiUrl('/api/despachos/editar-pago'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+                    body: JSON.stringify({
+                      despachoId: registro.id,
+                      formaPago: editFormaPago || null,
+                      formaPagoCliente: editFormaPagoCliente || null,
+                      referenciaPago: editRefPago || null,
+                    }),
+                  })
+                  if (!res.ok) {
+                    const err = await res.json().catch(() => ({}))
+                    throw new Error(err.error || 'Error al guardar')
+                  }
+                  // Update local display
+                  registro.forma_pago = editFormaPago || null
+                  registro.forma_pago_cliente = editFormaPagoCliente || null
+                  registro.referencia_pago = editRefPago || null
+                  setEditandoPago(false)
+                  showToast('Forma de pago actualizada', 'success')
+                  if (onPagoEditado) onPagoEditado()
+                } catch (e) {
+                  showToast(e.message || 'Error al guardar', 'error')
+                } finally {
+                  setGuardandoPago(false)
+                }
+              }}
+                className="px-3 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-600 text-white text-xs font-medium transition-colors disabled:opacity-50">
+                {guardandoPago ? 'Guardando...' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Cliente */}
         {registro.cliente?.nombre && (
@@ -179,13 +337,13 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
                     </tr>
                   </thead>
                   <tbody>
-                    {items.map(it => <ItemRow key={it.id} item={it} tasa={tasa} />)}
+                    {items.map(it => <ItemRow key={it.id} item={it} descuento={descuentos[it.id]} />)}
                   </tbody>
                 </table>
               </div>
               {/* Mobile card layout */}
               <div className="sm:hidden">
-                {items.map(it => <ItemCard key={it.id} item={it} />)}
+                {items.map(it => <ItemCard key={it.id} item={it} descuento={descuentos[it.id]} />)}
               </div>
             </>
           )}

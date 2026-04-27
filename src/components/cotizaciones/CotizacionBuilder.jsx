@@ -15,7 +15,7 @@ import { useClientes, useVendedores } from '../../hooks/useClientes'
 import { useInventario, useCategorias } from '../../hooks/useInventario'
 import { parseSearchTerms, smartMatchProducto } from '../../utils/smartSearch'
 import { useStockComprometido } from '../../hooks/useStockComprometido'
-import { useTransportistas }   from '../../hooks/useTransportistas'
+import { useTransportistas, useCrearTransportista }   from '../../hooks/useTransportistas'
 import { useGuardarBorrador, useEnviarCotizacion } from '../../hooks/useCotizaciones'
 import { useTasaCambio }       from '../../hooks/useTasaCambio'
 import { useConfigNegocio }    from '../../hooks/useConfigNegocio'
@@ -1041,6 +1041,109 @@ function ClienteSelector({ clientes, clienteId, onSelect }) {
 // ─── Componente principal (Wizard) ───────────────────────────────────────────
 
 // Mini header de sección consistente con el resto de la app
+// ─── Selector de transportista con opción de crear nuevo ─────────────────────
+function TransportistaSelector({ transportistas, transportistaId, setTransportistaId, disabled }) {
+  const [showForm, setShowForm] = useState(false)
+  const [formError, setFormError] = useState('')
+  const crearTransp = useCrearTransportista()
+
+  // Compact form state
+  const [nombre, setNombre] = useState('')
+  const [vehiculo, setVehiculo] = useState('')
+  const [placaChuto, setPlacaChuto] = useState('')
+  const [placaBatea, setPlacaBatea] = useState('')
+
+  async function handleCrear(e) {
+    e.preventDefault()
+    if (!nombre.trim()) { setFormError('El nombre es obligatorio'); return }
+    setFormError('')
+    try {
+      const nuevo = await crearTransp.mutateAsync({ nombre, vehiculo, placa_chuto: placaChuto, placa_batea: placaBatea })
+      setTransportistaId(nuevo.id)
+      setShowForm(false)
+      setNombre(''); setVehiculo(''); setPlacaChuto(''); setPlacaBatea('')
+      showToast('Transportista creado y seleccionado', 'success')
+    } catch (e) {
+      setFormError(e.message ?? 'Error al crear')
+    }
+  }
+
+  const inputCls = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400'
+
+  return (
+    <div className="space-y-1.5">
+      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Transportista</label>
+      <div className="flex items-center gap-2">
+        <div className="flex-1">
+          <CustomSelect
+            value={transportistaId}
+            onChange={setTransportistaId}
+            placeholder="— Sin transportista —"
+            clearable
+            icon={Truck}
+            options={transportistas.map(t => ({
+              value: t.id,
+              label: t.nombre,
+              sub: t.vehiculo || undefined,
+            }))}
+          />
+        </div>
+        <button type="button"
+          onClick={() => setShowForm(!showForm)}
+          disabled={disabled}
+          className="shrink-0 w-10 h-10 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 flex items-center justify-center transition-colors active:scale-95 disabled:opacity-50"
+          title="Crear nuevo transportista">
+          <Plus size={16} className="text-emerald-600" />
+        </button>
+      </div>
+      {showForm && (
+        <div className="mt-2 bg-white rounded-2xl border-2 border-emerald-200 shadow-lg p-3 sm:p-4 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="flex items-center gap-2 mb-3">
+            <Truck size={14} className="text-emerald-500" />
+            <span className="text-sm font-bold text-slate-700">Nuevo transportista</span>
+          </div>
+          {formError && <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-sm text-red-700 mb-3">{formError}</div>}
+          <form onSubmit={handleCrear} className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-slate-600">Nombre *</label>
+                <input value={nombre} onChange={e => { setNombre(e.target.value.replace(/\b\w/g, c => c.toUpperCase())); setFormError('') }}
+                  placeholder="Nombre del transportista" className={inputCls} disabled={crearTransp.isPending} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-slate-600">Vehículo</label>
+                <input value={vehiculo} onChange={e => setVehiculo(e.target.value)}
+                  placeholder="Ej: Mack Granite 2020" className={inputCls} disabled={crearTransp.isPending} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-slate-600">Placa chuto</label>
+                <input value={placaChuto} onChange={e => setPlacaChuto(e.target.value.toUpperCase())}
+                  placeholder="Ej: AB123CD" className={inputCls} disabled={crearTransp.isPending} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-slate-600">Placa batea</label>
+                <input value={placaBatea} onChange={e => setPlacaBatea(e.target.value.toUpperCase())}
+                  placeholder="Ej: XY456ZW" className={inputCls} disabled={crearTransp.isPending} />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <button type="button" onClick={() => { setShowForm(false); setFormError('') }} disabled={crearTransp.isPending}
+                className="px-3 py-2 rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50">
+                Cancelar
+              </button>
+              <button type="submit" disabled={crearTransp.isPending}
+                className="px-3 py-2 rounded-xl text-white text-xs font-semibold transition-colors disabled:opacity-50"
+                style={{ background: '#1B365D' }}>
+                {crearTransp.isPending ? 'Creando...' : 'Crear transportista'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function SectionH3({ icon: Icon, children }) {
   return (
     <div className="flex items-center gap-3 mb-1">
@@ -2048,6 +2151,14 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                       </p>
                     )}
                 </div>
+
+                {/* Transportista */}
+                <TransportistaSelector
+                  transportistas={transportistas}
+                  transportistaId={transportistaId}
+                  setTransportistaId={setTransportistaId}
+                  disabled={cargando}
+                />
               </div>
 
               {/* Notas */}

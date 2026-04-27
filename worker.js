@@ -107,6 +107,16 @@ export default {
       return handleLogFromClient(request, env);
     }
 
+    // ── API: leer configuración del negocio ─────────────────────────────
+    if (url.pathname === '/api/config' && request.method === 'GET') {
+      return handleGetConfig(request, env);
+    }
+
+    // ── API: leer configuración de comisiones ───────────────────────────
+    if (url.pathname === '/api/comisiones/config' && request.method === 'GET') {
+      return handleGetComisionesConfig(request, env);
+    }
+
     // ── API: listar todos los clientes (bypass RLS para vendedores) ───────
     if (url.pathname === '/api/clientes' && request.method === 'GET') {
       return handleListarClientes(request, env);
@@ -162,6 +172,11 @@ export default {
       return handleGuardarDescuentos(request, env);
     }
 
+    // ── API: editar forma de pago del despacho ──────────────────────────
+    if (url.pathname === '/api/despachos/editar-pago' && request.method === 'POST') {
+      return handleEditarPagoDespacho(request, env);
+    }
+
     // ── API: obtener descuentos de un despacho ────────────────────────────
     if (url.pathname.startsWith('/api/despachos/') && url.pathname.endsWith('/descuentos') && request.method === 'GET') {
       return handleObtenerDescuentos(request, env, url);
@@ -175,6 +190,11 @@ export default {
     // ── API: registrar abono CxC (bypass RLS) ──────────────────────────────
     if (url.pathname === '/api/cxc/abono' && request.method === 'POST') {
       return handleRegistrarAbono(request, env);
+    }
+
+    // ── API: crear transportista (bypass RLS) ───────────────────────────────
+    if (url.pathname === '/api/transportistas/crear' && request.method === 'POST') {
+      return handleCrearTransportista(request, env);
     }
 
     // ── API: marcar comisión pagada (bypass RLS) ────────────────────────────
@@ -2537,6 +2557,110 @@ async function handleVentaRapida(request, env) {
   }
 }
 
+// ── Editar forma de pago de un despacho ─────────────────────────────────────
+// ── Crear transportista (bypass RLS) ─────────────────────────────────────────
+async function handleCrearTransportista(request, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return jsonError('Server misconfigured', 500, request);
+  const user = await verifyAuth(request, env);
+  if (!user?.id) return jsonError('No autenticado', 401, request);
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+
+  const { nombre, rif, telefono, color, zona_cobertura, vehiculo, placa_chuto, placa_batea } = body;
+  if (!nombre?.trim()) return jsonError('El nombre es obligatorio', 400, request);
+
+  const h = {
+    apikey: env.SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    'Content-Type': 'application/json',
+    Prefer: 'return=representation',
+  };
+
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/transportistas`, {
+    method: 'POST',
+    headers: h,
+    body: JSON.stringify({
+      nombre: nombre.trim(),
+      rif: rif?.trim() || null,
+      telefono: telefono?.trim() || null,
+      color: color?.trim() || null,
+      zona_cobertura: zona_cobertura?.trim() || null,
+      vehiculo: vehiculo?.trim() || null,
+      placa_chuto: placa_chuto?.trim() || null,
+      placa_batea: placa_batea?.trim() || null,
+      activo: true,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    return jsonError(text || 'Error al crear transportista', res.status, request);
+  }
+  const rows = await res.json();
+  return json(rows[0] || {}, 201, request);
+}
+
+async function handleEditarPagoDespacho(request, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return jsonError('Server misconfigured', 500, request);
+  const user = await verifyAuth(request, env);
+  if (!user?.id) return jsonError('No autenticado', 401, request);
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+
+  const { despachoId, formaPago, formaPagoCliente, referenciaPago } = body;
+  if (!despachoId) return jsonError('Falta despachoId', 400, request);
+
+  const h = {
+    apikey: env.SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    'Content-Type': 'application/json',
+  };
+
+  // Verificar que el despacho existe y no está anulada
+  const checkRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&select=id,estado`, { headers: h });
+  if (!checkRes.ok) return jsonError('Error al verificar despacho', 500, request);
+  const despachos = await checkRes.json();
+  if (!despachos.length) return jsonError('Despacho no encontrado', 404, request);
+  if (despachos[0].estado === 'anulada') return jsonError('No se puede editar un despacho anulado', 400, request);
+
+  // Actualizar campos de pago
+  const campos = {};
+  if (formaPago !== undefined) campos.forma_pago = formaPago;
+  if (formaPagoCliente !== undefined) campos.forma_pago_cliente = formaPagoCliente;
+  if (referenciaPago !== undefined) campos.referencia_pago = referenciaPago;
+
+  if (Object.keys(campos).length === 0) return jsonError('No hay campos para actualizar', 400, request);
+
+  const upRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}`, {
+    method: 'PATCH',
+    headers: { ...h, Prefer: 'return=minimal' },
+    body: JSON.stringify(campos),
+  });
+  if (!upRes.ok) return jsonError('Error al actualizar pago', 500, request);
+
+  // Si es Cta por cobrar → verificar/crear CxC; si cambia de Cta por cobrar a otro → ajustar CxC
+  // (simplificado: solo actualizamos los campos, la lógica CxC se maneja aparte)
+
+  // Auditoría
+  try {
+    await registrarAuditoria(env, h, {
+      usuarioId: user.operator_id || user.id,
+      usuarioNombre: user.operator_nombre || 'Sistema',
+      usuarioRol: user.operator_rol || 'supervisor',
+      categoria: 'COTIZACION',
+      accion: 'EDITAR_PAGO_DESPACHO',
+      descripcion: `Forma de pago del despacho ${despachoId.slice(0,8)} actualizada`,
+      entidadTipo: 'despacho',
+      entidadId: despachoId,
+      meta: campos,
+      ip: request.headers.get('CF-Connecting-IP') || null,
+    });
+  } catch {}
+
+  return json({ ok: true }, 200, request);
+}
+
 async function handleActualizarEstadoDespacho(request, env) {
   const v = await validateOperator(request, env, { requireSupervisor: true });
   if (v.error) return v.error;
@@ -3364,6 +3488,41 @@ async function handleResetOperacional(request, env) {
 }
 
 // ── Seed Demo (datos deterministas de ferretería) ───────────────────────────
+
+// ── Leer configuración del negocio (GET /api/config) ────────────────────────
+async function handleGetConfig(request, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return jsonError('Server misconfigured', 500, request);
+  const user = await verifyAuth(request, env);
+  if (!user?.id) return jsonError('No autenticado', 401, request);
+
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/configuracion_negocio?id=eq.1&select=id,nombre_negocio,rif_negocio,telefono_negocio,direccion_negocio,email_negocio,logo_url,moneda_principal,validez_cotizacion_dias,pie_pagina_pdf,tasa_bcv_manual,iva_pct,gate_email,comision_pct_cabilla,comision_pct_otros,comision_categoria_cabilla,creado_en,actualizado_en`, {
+    headers: {
+      apikey: env.SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    },
+  });
+  if (!res.ok) return jsonError('Error al leer configuración', res.status, request);
+  const rows = await res.json();
+  return json(rows[0] || {}, 200, request);
+}
+
+// ── Leer configuración de comisiones (GET /api/comisiones/config) ────────────
+async function handleGetComisionesConfig(request, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return jsonError('Server misconfigured', 500, request);
+  const user = await verifyAuth(request, env);
+  if (!user?.id) return jsonError('No autenticado', 401, request);
+
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/configuracion_negocio?id=eq.1&select=comision_pct_cabilla,comision_pct_otros,comision_categoria_cabilla`, {
+    headers: {
+      apikey: env.SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    },
+  });
+  if (!res.ok) return jsonError('Error al leer config comisiones', res.status, request);
+  const rows = await res.json();
+  return json(rows[0] || {}, 200, request);
+}
+
 // ── Guardar configuración del negocio (bypass RLS) ─────────────────────────
 async function handleSaveConfig(request, env) {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return jsonError('Server misconfigured', 500, request);

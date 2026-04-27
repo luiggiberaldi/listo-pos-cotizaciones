@@ -14,7 +14,7 @@ import { smartSearchProductos } from '../utils/smartSearch'
 import { useVentaRapida } from '../hooks/useVentaRapida'
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
-import { useTransportistas } from '../hooks/useTransportistas'
+import { useTransportistas, useCrearTransportista } from '../hooks/useTransportistas'
 import CustomSelect from '../components/ui/CustomSelect'
 import useAuthStore from '../store/useAuthStore'
 import { round2, mulR } from '../utils/dinero'
@@ -1174,6 +1174,22 @@ function Step2Pago({
   transportistas, transportistaId, setTransportistaId,
   fleteUsd, setFleteUsd, notas, setNotas,
 }) {
+  const [showNuevoTransp, setShowNuevoTransp] = useState(false)
+  const crearTransp = useCrearTransportista()
+  const [transpError, setTranspError] = useState('')
+
+  async function handleCrearTransportista(campos) {
+    setTranspError('')
+    try {
+      const nuevo = await crearTransp.mutateAsync(campos)
+      setTransportistaId(nuevo.id)
+      setShowNuevoTransp(false)
+      showToast('Transportista creado y seleccionado', 'success')
+    } catch (e) {
+      setTranspError(e.message ?? 'Error al crear transportista')
+    }
+  }
+
   return (
     <div className="p-4 space-y-5">
       {/* Forma de pago del cliente */}
@@ -1210,18 +1226,48 @@ function Step2Pago({
         <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">
           Transportista (opcional)
         </label>
-        <CustomSelect
-          value={transportistaId}
-          onChange={setTransportistaId}
-          placeholder="— Sin transportista —"
-          clearable
-          icon={Truck}
-          options={transportistas.map(t => ({
-            value: t.id,
-            label: t.nombre,
-            sub: t.vehiculo || undefined,
-          }))}
-        />
+        <div className="flex items-center gap-2">
+          <div className="flex-1">
+            <CustomSelect
+              value={transportistaId}
+              onChange={setTransportistaId}
+              placeholder="— Sin transportista —"
+              clearable
+              icon={Truck}
+              options={transportistas.map(t => ({
+                value: t.id,
+                label: t.nombre,
+                sub: t.vehiculo || undefined,
+              }))}
+            />
+          </div>
+          <button type="button"
+            onClick={() => setShowNuevoTransp(!showNuevoTransp)}
+            className="shrink-0 w-10 h-10 rounded-xl bg-sky-50 hover:bg-sky-100 border border-sky-200 flex items-center justify-center transition-colors active:scale-95"
+            title="Crear nuevo transportista">
+            <Plus size={16} className="text-sky-600" />
+          </button>
+        </div>
+
+        {/* Formulario inline para crear transportista */}
+        {showNuevoTransp && (
+          <div className="mt-2 bg-white rounded-2xl border-2 border-sky-200 shadow-lg p-3 sm:p-4 animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="flex items-center gap-2 mb-3">
+              <Truck size={14} className="text-sky-500" />
+              <span className="text-sm font-bold text-slate-700">Nuevo transportista</span>
+            </div>
+            {transpError && (
+              <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-sm text-red-700 mb-3">
+                {transpError}
+              </div>
+            )}
+            <TransportistaFormCompact
+              onGuardar={handleCrearTransportista}
+              onCancelar={() => { setShowNuevoTransp(false); setTranspError('') }}
+              cargando={crearTransp.isPending}
+            />
+          </div>
+        )}
       </div>
 
       {/* Flete */}
@@ -1246,6 +1292,63 @@ function Step2Pago({
           className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-sky-200 focus:border-sky-400 outline-none resize-none" />
       </div>
     </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Formulario compacto para crear transportista inline
+// ─────────────────────────────────────────────────────────────────────────────
+function TransportistaFormCompact({ onGuardar, onCancelar, cargando }) {
+  const [nombre, setNombre] = useState('')
+  const [vehiculo, setVehiculo] = useState('')
+  const [placaChuto, setPlacaChuto] = useState('')
+  const [placaBatea, setPlacaBatea] = useState('')
+  const [error, setError] = useState('')
+
+  function submit(e) {
+    e.preventDefault()
+    if (!nombre.trim()) { setError('El nombre es obligatorio'); return }
+    onGuardar({ nombre, vehiculo, placa_chuto: placaChuto, placa_batea: placaBatea })
+  }
+
+  const inputCls = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-400 placeholder:text-slate-400'
+
+  return (
+    <form onSubmit={submit} className="space-y-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-slate-600">Nombre *</label>
+          <input value={nombre} onChange={e => { setNombre(e.target.value.replace(/\b\w/g, c => c.toUpperCase())); setError('') }}
+            placeholder="Nombre del transportista" className={inputCls} disabled={cargando} />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-slate-600">Vehículo</label>
+          <input value={vehiculo} onChange={e => setVehiculo(e.target.value)}
+            placeholder="Ej: Mack Granite 2020" className={inputCls} disabled={cargando} />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-slate-600">Placa chuto</label>
+          <input value={placaChuto} onChange={e => setPlacaChuto(e.target.value.toUpperCase())}
+            placeholder="Ej: AB123CD" className={inputCls} disabled={cargando} />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-slate-600">Placa batea</label>
+          <input value={placaBatea} onChange={e => setPlacaBatea(e.target.value.toUpperCase())}
+            placeholder="Ej: XY456ZW" className={inputCls} disabled={cargando} />
+        </div>
+      </div>
+      {error && <p className="text-xs text-red-500">{error}</p>}
+      <div className="flex justify-end gap-2 pt-1">
+        <button type="button" onClick={onCancelar} disabled={cargando}
+          className="px-3 py-2 rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50">
+          Cancelar
+        </button>
+        <button type="submit" disabled={cargando}
+          className="px-3 py-2 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-xs font-semibold transition-colors disabled:opacity-50">
+          {cargando ? 'Creando...' : 'Crear transportista'}
+        </button>
+      </div>
+    </form>
   )
 }
 

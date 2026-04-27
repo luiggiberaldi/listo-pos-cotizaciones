@@ -1289,17 +1289,16 @@ export default function TesterFlowView() {
   }
 
   async function stepHealthConfig(id) {
-    const { data: config, error } = await supabase.from('configuracion').select('*')
+    const { data: config, error } = await supabase.from('configuracion_negocio').select('*').eq('id', 1).single()
     if (error) throw new Error(`No se puede leer configuración: ${error.message}`)
-    assert(config && config.length > 0, '>0', config?.length, 'configuración existe')
-    addLog(id, `  configuración: ${config.length} registros ✓`)
+    assert(config !== null, 'existe', config, 'configuración existe')
+    addLog(id, `  configuración: 1 registro ✓`)
 
     // Verificar campos críticos
-    const campos = config.reduce((acc, row) => ({ ...acc, [row.clave]: row.valor }), {})
     const required = ['comision_pct_cabilla', 'comision_pct_otros', 'comision_categoria_cabilla']
     for (const clave of required) {
-      assert(campos[clave] !== undefined, 'definido', campos[clave] ?? 'undefined', `config.${clave}`)
-      addLog(id, `  ${clave} = ${campos[clave]} ✓`)
+      assert(config[clave] !== undefined && config[clave] !== null, 'definido', config[clave] ?? 'undefined', `config.${clave}`)
+      addLog(id, `  ${clave} = ${config[clave]} ✓`)
     }
     addLog(id, 'Configuración carga correctamente con campos requeridos', 'success')
   }
@@ -1349,10 +1348,10 @@ export default function TesterFlowView() {
       addLog(id, 'DELETE producto 2 + movimientos ✓')
     }
 
-    // Limpiar transportista test
+    // Limpiar transportista test (deactivate — RLS no permite DELETE)
     if (d.transportistaTestId) {
-      await supabase.from('transportistas').delete().eq('id', d.transportistaTestId)
-      addLog(id, 'DELETE transportista test ✓')
+      await supabase.from('transportistas').update({ activo: false }).eq('id', d.transportistaTestId)
+      addLog(id, 'DEACTIVATE transportista test ✓')
     }
 
     // Limpiar movimientos de lote
@@ -1419,9 +1418,9 @@ export default function TesterFlowView() {
       addLog(id, '  producto 2 eliminado ✓')
     }
     if (d.transportistaTestId) {
-      const { data: tr } = await supabase.from('transportistas').select('id').eq('id', d.transportistaTestId)
-      assert(!tr || tr.length === 0, 0, tr?.length, 'transportista eliminado')
-      addLog(id, '  transportista test eliminado ✓')
+      const { data: tr } = await supabase.from('transportistas').select('id,activo').eq('id', d.transportistaTestId)
+      assert(!tr || tr.length === 0 || tr[0].activo === false, 'inactivo o eliminado', tr?.[0]?.activo ?? 'no encontrado', 'transportista eliminado')
+      addLog(id, '  transportista test desactivado ✓')
     }
     if (d.cotizacion2Id) {
       const { data: c2 } = await supabase.from('cotizaciones').select('id').eq('id', d.cotizacion2Id)

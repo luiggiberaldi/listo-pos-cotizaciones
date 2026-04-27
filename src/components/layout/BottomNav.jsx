@@ -1,23 +1,22 @@
 // src/components/layout/BottomNav.jsx
 // Barra de navegación inferior para móvil (thumb-friendly)
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { LayoutDashboard, FileText, Users, Package, MoreHorizontal, Zap } from 'lucide-react'
 import { useState } from 'react'
 import { PackageCheck, Truck, DollarSign, BarChart3, Settings, AlertCircle, FlaskConical } from 'lucide-react'
 
+// Vendedor: Inicio, Cotizar, Despachos, Clientes + Más (4 fijos)
+// Otros roles ajustan según permisos
 const BOTTOM_ITEMS = [
   { path: '/', label: 'Inicio', icon: LayoutDashboard },
   { path: '/cotizaciones', label: 'Cotizar', icon: FileText, labelByRole: { administracion: 'Despachos' }, excludeRoles: ['logistica'] },
-  { path: '/despachos', label: 'Despacho', icon: PackageCheck, labelByRole: { logistica: 'Entregas' }, onlyRoles: ['logistica', 'supervisor'] },
-  { path: '/venta-rapida', label: 'Rápida', icon: Zap, onlyRoles: ['vendedor', 'supervisor'] },
-  { path: '/clientes', label: 'Clientes', icon: Users, onlyRoles: ['vendedor', 'administracion'] },
-  { path: '/inventario', label: 'Inventario', icon: Package, onlyRoles: ['administracion'] },
+  { path: '/despachos', label: 'Despacho', icon: PackageCheck, labelByRole: { logistica: 'Entregas' } },
+  { path: '/clientes', label: 'Clientes', icon: Users, excludeRoles: ['logistica'] },
 ]
 
 const MORE_ITEMS = [
-  { path: '/clientes', label: 'Clientes', icon: Users, onlyRoles: ['supervisor'] },
-  { path: '/inventario', label: 'Inventario', icon: Package, excludeRoles: ['logistica', 'administracion'] },
-  { path: '/despachos', label: 'Despachos', icon: PackageCheck, excludeRoles: ['logistica', 'supervisor'] },
+  { path: '/venta-rapida', label: 'Venta rápida', icon: Zap, onlyRoles: ['vendedor', 'supervisor'] },
+  { path: '/inventario', label: 'Inventario', icon: Package, excludeRoles: ['logistica'] },
   { path: '/transportistas', label: 'Transportistas', icon: Truck, excludeRoles: ['administracion', 'logistica'] },
   { path: '/comisiones', label: 'Comisiones', icon: DollarSign, excludeRoles: ['logistica'] },
   { path: '/reportes', label: 'Reportes', icon: BarChart3, requiresPrivileged: true },
@@ -29,7 +28,18 @@ export default function BottomNav({ esSupervisor, esAdministracion = false, rol:
   const esDesarrollador = rolProp === 'desarrollador'
   const esPrivilegiado = esSupervisor || esAdministracion || esDesarrollador
   const rol = rolProp || (esAdministracion ? 'administracion' : esSupervisor ? 'supervisor' : 'vendedor')
+  const navigate = useNavigate()
   const [showMore, setShowMore] = useState(false)
+
+  const moreItemsFiltrados = MORE_ITEMS.filter(item => {
+    if (esDesarrollador) return true
+    if (item.excludeRoles && item.excludeRoles.includes(rol)) return false
+    if (item.onlyRoles && !item.onlyRoles.includes(rol)) return false
+    if (item.supervisorOnly && !esSupervisor) return false
+    if (item.requiresPrivileged && !esPrivilegiado) return false
+    if (!esSupervisor && ['/auditoria', '/logs'].includes(item.path)) return false
+    return true
+  })
 
   return (
     <>
@@ -43,15 +53,7 @@ export default function BottomNav({ esSupervisor, esAdministracion = false, rol:
         <div className="fixed bottom-[4.5rem] left-3 right-3 z-[99] md:hidden rounded-2xl overflow-hidden shadow-2xl animate-in slide-in-from-bottom-2 fade-in duration-200"
           style={{ background: '#0f1f3c', border: '1px solid rgba(255,255,255,0.1)' }}>
           <div className="grid grid-cols-3 gap-1 p-3">
-            {MORE_ITEMS.filter(item => {
-              if (esDesarrollador) return true
-              if (item.excludeRoles && item.excludeRoles.includes(rol)) return false
-              if (item.onlyRoles && !item.onlyRoles.includes(rol)) return false
-              if (item.supervisorOnly && !esSupervisor) return false
-              if (item.requiresPrivileged && !esPrivilegiado) return false
-              if (!esSupervisor && ['/auditoria', '/logs'].includes(item.path)) return false
-              return true
-            }).map(({ path, label, icon: Icon }) => (
+            {moreItemsFiltrados.map(({ path, label, icon: Icon }) => (
               <NavLink
                 key={path}
                 to={path}
@@ -93,6 +95,13 @@ export default function BottomNav({ esSupervisor, esAdministracion = false, rol:
               key={path}
               to={path}
               end={path === '/'}
+              onClick={(e) => {
+                e.preventDefault()
+                navigate(path)
+                // Scroll main area to top on navigation
+                document.querySelector('main')?.scrollTo(0, 0)
+                window.scrollTo(0, 0)
+              }}
               style={{ touchAction: 'manipulation' }}
               className={({ isActive }) => `
                 flex flex-col items-center gap-0.5 py-1.5 px-1.5 rounded-xl transition-colors min-w-[48px]
@@ -110,7 +119,8 @@ export default function BottomNav({ esSupervisor, esAdministracion = false, rol:
             </NavLink>
           )})}
 
-          {/* Botón "Más" */}
+          {/* Botón "Más" — solo si hay items */}
+          {moreItemsFiltrados.length > 0 && (
           <button
             onClick={() => setShowMore(v => !v)}
             className={`flex flex-col items-center gap-0.5 py-1.5 px-1.5 rounded-xl transition-all min-w-[48px]
@@ -122,6 +132,7 @@ export default function BottomNav({ esSupervisor, esAdministracion = false, rol:
             </div>
             <span className={`text-[10px] font-bold ${showMore ? 'text-amber-400' : ''}`}>Más</span>
           </button>
+          )}
         </div>
       </nav>
     </>

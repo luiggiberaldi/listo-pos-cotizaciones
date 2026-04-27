@@ -140,7 +140,7 @@ function Confirmacion({ items, descLocal, calc, flete, subtotalProductos, totalD
   const itemsSinDesc = items.filter(i => !calc.porItem[i.id])
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col flex-1 min-h-0">
       {/* Header confirmación */}
       <div className="shrink-0 px-5 pt-4 pb-3 border-b border-slate-100">
         <div className="flex items-center gap-3">
@@ -157,7 +157,7 @@ function Confirmacion({ items, descLocal, calc, flete, subtotalProductos, totalD
 
       {/* Informe scrolleable */}
       <div className="flex-1 overflow-y-auto min-h-0 overscroll-contain">
-        <div className="p-4 sm:p-5 space-y-4">
+        <div className="p-4 sm:p-5 pb-6 space-y-4">
 
           {/* Artículos CON descuento */}
           {itemsConDesc.length > 0 && (
@@ -369,7 +369,7 @@ export default function DescuentoModal({ isOpen, onClose, despacho }) {
     <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm"
       onClick={e => e.target === e.currentTarget && !confirmando && onClose()}>
       <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-md sm:mx-4
-        max-h-[94vh] sm:max-h-[85vh] flex flex-col pb-[env(safe-area-inset-bottom)]">
+        max-h-[88vh] sm:max-h-[85vh] flex flex-col pb-[env(safe-area-inset-bottom)]">
 
         {/* ── Vista de confirmación ──────────────────────────────────── */}
         {confirmando ? (

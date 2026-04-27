@@ -299,7 +299,7 @@ function GateStep({ onPass }) {
 
 // ─── Paso 2: Seleccionar operador ────────────────────────────────────────────
 function UserSelectStep() {
-  const cached = (() => { try { return JSON.parse(localStorage.getItem(USUARIOS_CACHE_KEY) || '[]') } catch { return [] } })()
+  const cached = (() => { try { return JSON.parse(localStorage.getItem(USUARIOS_CACHE_KEY) || '[]').filter(u => u.rol !== 'desarrollador') } catch { return [] } })()
   const [usuarios,     setUsuarios]     = useState(cached)
   const [cargando,     setCargando]     = useState(cached.length === 0)
   const [errorLista,   setErrorLista]   = useState(null)
@@ -386,7 +386,7 @@ function UserSelectStep() {
     if (error) {
       if (usuarios.length === 0) setErrorLista('No se pudo cargar la lista de usuarios')
     } else {
-      const lista = data ?? []
+      const lista = (data ?? []).filter(u => u.rol !== 'desarrollador')
       setUsuarios(lista)
       localStorage.setItem(USUARIOS_CACHE_KEY, JSON.stringify(lista))
     }

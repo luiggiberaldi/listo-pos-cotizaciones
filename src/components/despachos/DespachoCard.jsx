@@ -30,6 +30,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const [showMonedaMenu, setShowMonedaMenu] = useState(false)
   const [showPrintMenu, setShowPrintMenu] = useState(false)
   const monedaBtnRef = useRef(null)
+  const monedaBtnRefDesktop = useRef(null)
   const [monedaMenuPos, setMonedaMenuPos] = useState({ top: 0, left: 0 })
   const [monedaPdf, setMonedaPdf] = useState(() => localStorage.getItem('construacero_moneda_pdf') || '$')
   const [accionPendiente, setAccionPendiente] = useState(null) // { id, estado, actionConfig }
@@ -60,7 +61,9 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
 
   function toggleMonedaMenu() {
     if (showMonedaMenu) { setShowMonedaMenu(false); return }
-    const rect = monedaBtnRef.current?.getBoundingClientRect()
+    // Use the visible ref (mobile or desktop)
+    const btn = monedaBtnRef.current?.offsetParent ? monedaBtnRef.current : monedaBtnRefDesktop.current
+    const rect = btn?.getBoundingClientRect()
     if (rect) setMonedaMenuPos({ top: rect.top, left: rect.left })
     setShowMonedaMenu(true)
   }
@@ -521,7 +524,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           {/* O. Despacho con selector de moneda agrupado */}
           <div className="flex items-center rounded-lg border border-slate-200 divide-x divide-slate-200">
             <div className="relative" data-no-click>
-              <button ref={monedaBtnRef} onClick={toggleMonedaMenu}
+              <button ref={monedaBtnRefDesktop} onClick={toggleMonedaMenu}
                 title="Moneda para Orden de Despacho"
                 className="flex items-center gap-0.5 px-2 py-1.5 rounded-l-lg text-xs font-medium text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors">
                 {MONEDA_OPTIONS.find(o => o.key === monedaPdf)?.icon}
