@@ -143,7 +143,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const rValX = rLblX + rightLblW
 
   // Fila 1: ODC / Correlativo
-  drawCell(rLblX, gY, rightLblW, rowH, 'ODC', undefined, { fontSize: 8, center: false })
+  drawCell(rLblX, gY, rightLblW, rowH, 'ODC', undefined, { fontSize: 8, center: true })
   doc.rect(rLblX, gY, rightLblW, rowH, 'S')
   drawCell(rValX, gY, rightValW, rowH, null, undefined)
   doc.setFont('helvetica', 'bold')
