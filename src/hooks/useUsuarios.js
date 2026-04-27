@@ -19,8 +19,8 @@ export function useUsuarios() {
         .select('id, nombre, rol, activo, creado_en, color, telefono')
         .order('nombre')
       if (error) throw error
-      // Ocultar cuenta "Super Admin" de todo el sistema
-      return (data ?? []).filter(u => u.nombre !== 'Super Admin')
+      // Ocultar cuenta "Super Admin" y desarrolladores de todo el sistema
+      return (data ?? []).filter(u => u.nombre !== 'Super Admin' && u.rol !== 'desarrollador')
     },
     enabled: perfil?.rol === 'supervisor' || perfil?.rol === 'desarrollador',
     staleTime: 1000 * 60 * 10,

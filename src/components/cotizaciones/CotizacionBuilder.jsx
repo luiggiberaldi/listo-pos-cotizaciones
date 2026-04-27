@@ -1013,13 +1013,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                     )}
                 </div>
 
-                {/* Transportista */}
-                <TransportistaSelector
-                  transportistas={transportistas}
-                  transportistaId={transportistaId}
-                  setTransportistaId={setTransportistaId}
-                  disabled={cargando}
-                />
+                {/* Transportista - oculto por solicitud */}
               </div>
 
               {/* Notas */}
