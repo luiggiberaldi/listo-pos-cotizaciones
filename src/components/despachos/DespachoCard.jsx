@@ -45,7 +45,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     ? `COT-${String(despacho.cotizacion.numero).padStart(5, '0')}${despacho.cotizacion.version > 1 ? ` Rev.${despacho.cotizacion.version}` : ''}`
     : '—'
 
-  const canDespachar = esPrivilegiado && despacho.estado === 'pendiente'
+  const canDespachar = (esAdministracion || esDesarrollador) && despacho.estado === 'pendiente'
   const canEntregar = (esPrivilegiado || perfil?.rol === 'logistica') && despacho.estado === 'despachada'
   const canAnular = esPrivilegiado && (despacho.estado === 'pendiente' || despacho.estado === 'despachada')
   const canReciclar = (esSupervisor || esDesarrollador) && despacho.estado === 'anulada' && onReciclar

@@ -71,11 +71,10 @@ const FORMAS_PAGO = ['Efectivo', 'Zelle', 'Pago Móvil', 'USDT', 'Transferencia'
 
 function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 }) {
   const { data: detalle } = useCotizacion(cotizacion?.id)
-  const [formaPago, setFormaPago] = useState('')
+  const [formasPago, setFormasPago] = useState([]) // [{metodo, monto}]
   const [transportistaId, setTransportistaId] = useState('')
   const [fleteUsd, setFleteUsd] = useState('')
   const [referenciaPago, setReferenciaPago] = useState('')
-  const [formaPagoCliente, setFormaPagoCliente] = useState('')
   const [showTransportistaMenu, setShowTransportistaMenu] = useState(false)
   const [stockMap, setStockMap] = useState({})
   const { data: transportistas = [] } = useTransportistas()
@@ -105,6 +104,24 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
   const numDisplay = cotizacion.version > 1
     ? `COT-${String(cotizacion.numero).padStart(5, '0')} Rev.${cotizacion.version}`
     : `COT-${String(cotizacion.numero).padStart(5, '0')}`
+
+  const totalConFlete = Number(cotizacion?.total_usd || 0) + Number(fleteUsd || 0)
+  const montoAsignado = formasPago.reduce((s, fp) => s + (Number(fp.monto) || 0), 0)
+  const pagoCuadrado = formasPago.length > 0 && Math.abs(montoAsignado - totalConFlete) < 0.02
+
+  const toggleForma = (metodo) => {
+    setFormasPago(prev => {
+      const existe = prev.find(fp => fp.metodo === metodo)
+      if (existe) return prev.filter(fp => fp.metodo !== metodo)
+      // Si es el primero, asignar el total restante automáticamente
+      const restante = totalConFlete - prev.reduce((s, fp) => s + (Number(fp.monto) || 0), 0)
+      return [...prev, { metodo, monto: restante > 0 ? Number(restante.toFixed(2)) : '' }]
+    })
+  }
+
+  const setMontoForma = (metodo, monto) => {
+    setFormasPago(prev => prev.map(fp => fp.metodo === metodo ? { ...fp, monto } : fp))
+  }
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
@@ -249,31 +266,71 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
           </div>
         </div>
 
-        {/* Forma de pago */}
+        {/* Forma de pago — multi-select con montos */}
         <div className="space-y-2">
           <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-            Forma de pago <span className="text-red-500">*</span>
+            Formas de pago <span className="text-red-500">*</span>
           </p>
           <div className="flex flex-wrap gap-2">
-            {FORMAS_PAGO.map(fp => (
-              <button key={fp} type="button"
-                onClick={() => { const v = fp === formaPago ? '' : fp; setFormaPago(v); setFormaPagoCliente(v) }}
-                className={`px-4 py-2.5 rounded-lg text-sm font-semibold border transition-all min-h-[44px] ${
-                  formaPago === fp
-                    ? 'bg-indigo-500 text-white border-indigo-500 shadow-sm'
-                    : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600'
-                }`}>
-                {fp}
-              </button>
-            ))}
+            {FORMAS_PAGO.map(fp => {
+              const activo = formasPago.some(f => f.metodo === fp)
+              return (
+                <button key={fp} type="button"
+                  onClick={() => toggleForma(fp)}
+                  className={`px-4 py-2.5 rounded-lg text-sm font-semibold border transition-all min-h-[44px] ${
+                    activo
+                      ? 'bg-indigo-500 text-white border-indigo-500 shadow-sm'
+                      : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600'
+                  }`}>
+                  {fp}
+                </button>
+              )
+            })}
           </div>
-          {!formaPago && (
-            <p className="text-xs text-slate-400">Selecciona una forma de pago para continuar</p>
+
+          {/* Montos por forma seleccionada */}
+          {formasPago.length > 0 && (
+            <div className="space-y-2 mt-2">
+              {formasPago.map(fp => (
+                <div key={fp.metodo} className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-slate-600 w-28 truncate">{fp.metodo}</span>
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={fp.monto}
+                      onChange={e => setMontoForma(fp.metodo, e.target.value)}
+                      placeholder="0.00"
+                      className="w-full pl-7 pr-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:bg-white"
+                      disabled={cargando}
+                    />
+                  </div>
+                </div>
+              ))}
+              {/* Barra de validación */}
+              <div className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm font-semibold ${
+                pagoCuadrado
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : 'bg-red-50 text-red-600 border border-red-200'
+              }`}>
+                <span>Asignado: ${montoAsignado.toFixed(2)}</span>
+                <span>Total: ${totalConFlete.toFixed(2)}</span>
+                {pagoCuadrado
+                  ? <span className="text-emerald-500">✓</span>
+                  : <span className="text-red-400">Faltan ${(totalConFlete - montoAsignado).toFixed(2)}</span>
+                }
+              </div>
+            </div>
+          )}
+          {formasPago.length === 0 && (
+            <p className="text-xs text-slate-400">Selecciona al menos una forma de pago</p>
           )}
         </div>
 
         {/* Referencia de pago */}
-        {formaPago && (
+        {formasPago.length > 0 && (
         <div>
           <label className="block text-xs font-semibold text-slate-600 mb-1">Referencia / comprobante (opcional)</label>
           <input
@@ -379,8 +436,11 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
             className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-700 font-semibold text-base hover:bg-slate-50 transition-colors disabled:opacity-50">
             Cancelar
           </button>
-          <button onClick={() => onConfirm(formaPago, transportistaId || null, Number(fleteUsd) || 0, referenciaPago, formaPagoCliente)} disabled={cargando || items.length === 0 || !formaPago}
-            title={!formaPago ? 'Selecciona una forma de pago' : undefined}
+          <button onClick={() => {
+              const fpJson = JSON.stringify(formasPago)
+              onConfirm(fpJson, transportistaId || null, Number(fleteUsd) || 0, referenciaPago, fpJson)
+            }} disabled={cargando || items.length === 0 || !pagoCuadrado}
+            title={formasPago.length === 0 ? 'Selecciona forma de pago' : !pagoCuadrado ? 'Los montos no cuadran con el total' : undefined}
             className="flex-1 py-3 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-semibold text-base transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20">
             {cargando
               ? <><Loader2 size={16} className="animate-spin" />Procesando...</>

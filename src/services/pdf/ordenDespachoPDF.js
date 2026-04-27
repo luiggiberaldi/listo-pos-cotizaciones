@@ -141,17 +141,17 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
     while (cNombre.length > 1 && doc.getTextWidth(cNombre + '…') > maxClienteW) cNombre = cNombre.slice(0, -1)
     cNombre += '…'
   }
-  doc.text(cNombre, MARGIN + clienteLblW + 2, f4Y + rowH / 2 + 1)
+  doc.text(cNombre, MARGIN + clienteLblW + clienteValW / 2, f4Y + rowH / 2 + 1, { align: 'center' })
 
   doc.rect(MARGIN + clienteLblW + clienteValW, f4Y, rifLblW, rowH, 'S')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7.5)
-  doc.text('R.I.F.,C.I.', MARGIN + clienteLblW + clienteValW + 2, f4Y + rowH / 2 + 1)
+  doc.text('R.I.F.,C.I.', MARGIN + clienteLblW + clienteValW + rifLblW / 2, f4Y + rowH / 2 + 1, { align: 'center' })
 
   doc.rect(MARGIN + clienteLblW + clienteValW + rifLblW, f4Y, rifValW, rowH, 'S')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(10)
-  doc.text(cliente.rif_cedula || '—', MARGIN + clienteLblW + clienteValW + rifLblW + 2, f4Y + rowH / 2 + 1)
+  doc.text(cliente.rif_cedula || '—', MARGIN + clienteLblW + clienteValW + rifLblW + rifValW / 2, f4Y + rowH / 2 + 1, { align: 'center' })
 
   // ── Fila 5: DIRECCIÓN ──
   const f5Y = f4Y + rowH
@@ -171,7 +171,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
     while (dStr.length > 1 && doc.getTextWidth(dStr + '…') > maxDirW) dStr = dStr.slice(0, -1)
     dStr += '…'
   }
-  doc.text(dStr, MARGIN + dirLblW + 2, f5Y + rowH / 2 + 1)
+  doc.text(dStr, MARGIN + dirLblW + (CONTENT_W - dirLblW) / 2, f5Y + rowH / 2 + 1, { align: 'center' })
 
   // ── Fila 6: TELÉFONO + VENDEDOR ──
   const f6Y = f5Y + rowH
@@ -188,7 +188,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   doc.rect(MARGIN + tlfLblW, f6Y, tlfValW, rowH, 'S')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(10)
-  doc.text(cliente.telefono || '—', MARGIN + tlfLblW + 2, f6Y + rowH / 2 + 1)
+  doc.text(cliente.telefono || '—', MARGIN + tlfLblW + tlfValW / 2, f6Y + rowH / 2 + 1, { align: 'center' })
 
   doc.rect(MARGIN + tlfLblW + tlfValW, f6Y, vendLblW, rowH, 'S')
   doc.setFont('helvetica', 'bold')
@@ -206,7 +206,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
     while (vStr.length > 1 && doc.getTextWidth(vStr + '…') > maxVendW) vStr = vStr.slice(0, -1)
     vStr += '…'
   }
-  doc.text(vStr, MARGIN + tlfLblW + tlfValW + vendLblW + 2, f6Y + rowH / 2 + 1)
+  doc.text(vStr, MARGIN + tlfLblW + tlfValW + vendLblW + vendValW / 2, f6Y + rowH / 2 + 1, { align: 'center' })
 
   y = f6Y + rowH + 2
 
@@ -331,11 +331,19 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   const desgloseH = (hasFlete ? 14 : 0) + (hasDescuento ? (hasFlete ? 7 : 14) : 0)
   const ty = choferY - 24 - desgloseH
 
-  const fp = (formaPago || despacho.forma_pago || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  // Parsear formas de pago (JSON array o string legacy)
+  let formasPagoArr = []
+  const fpRaw = formaPago || despacho.forma_pago || ''
+  try {
+    const parsed = JSON.parse(fpRaw)
+    if (Array.isArray(parsed)) formasPagoArr = parsed
+  } catch {
+    if (fpRaw) formasPagoArr = [{ metodo: fpRaw, monto: null }]
+  }
 
   // ── Recuadro unificado: FORMA DE PAGO + DESGLOSE + TOTAL ──
 
-  // Fila FORMA DE PAGO arriba (con borde)
+  // Fila FORMA DE PAGO — solo las seleccionadas con montos
   const fpY = ty
   doc.setDrawColor(120, 120, 120)
   doc.setLineWidth(0.3)
@@ -345,12 +353,17 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   doc.setFontSize(7.5)
   doc.setTextColor(...C_DARK)
   doc.text('FORMA DE PAGO:', MARGIN + 3, fpY + 6)
-  drawCheck(doc, 'EFECTIVO',   MARGIN + 38, fpY + 6, fp === 'efectivo')
-  drawCheck(doc, 'ZELLE',      MARGIN + 60, fpY + 6, fp === 'zelle')
-  drawCheck(doc, 'P. MÓVIL',   MARGIN + 78, fpY + 6, fp === 'pago movil')
-  drawCheck(doc, 'USDT',       MARGIN + 98, fpY + 6, fp === 'usdt')
-  drawCheck(doc, 'TRANSF.',    MARGIN + 114, fpY + 6, fp === 'transferencia')
-  drawCheck(doc, 'CTA X COB.', MARGIN + 134, fpY + 6, fp === 'cta por cobrar')
+
+  if (formasPagoArr.length > 0) {
+    const parts = formasPagoArr.map(fp => {
+      const nombre = fp.metodo?.toUpperCase() || ''
+      const monto = fp.monto != null && fp.monto !== '' ? ` $${Number(fp.monto).toFixed(2)}` : ''
+      return nombre + monto
+    })
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7.5)
+    doc.text(parts.join('   |   '), MARGIN + 38, fpY + 6)
+  }
 
   // Desglose Subtotal + Flete + Descuento
   let desY = fpY + 9

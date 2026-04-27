@@ -2277,15 +2277,24 @@ async function handleCrearDespacho(request, env) {
     }
     const [despacho] = await despRes.json();
 
-    // 8. Si es Cta por cobrar, registrar cargo CxC
-    if (formaPago === 'Cta por cobrar' && despacho) {
+    // 8. Si incluye Cta por cobrar, registrar cargo CxC (parcial o total)
+    let montoCxC = 0;
+    try {
+      const fps = JSON.parse(formaPago);
+      if (Array.isArray(fps)) {
+        const cxc = fps.find(f => f.metodo === 'Cta por cobrar');
+        if (cxc) montoCxC = Number(cxc.monto) || 0;
+      }
+    } catch { if (formaPago === 'Cta por cobrar') montoCxC = totalConFlete; }
+
+    if (montoCxC > 0 && despacho) {
       const saldoRes = await fetch(
         `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${cot.cliente_id}&select=saldo_pendiente`,
         { headers }
       );
       const [clienteSaldo] = await saldoRes.json();
       const saldoActual = Number(clienteSaldo?.saldo_pendiente || 0);
-      const nuevoSaldo = saldoActual + totalConFlete;
+      const nuevoSaldo = saldoActual + montoCxC;
 
       await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
         method: 'POST', headers,
@@ -2293,7 +2302,7 @@ async function handleCrearDespacho(request, env) {
           cliente_id: cot.cliente_id,
           despacho_id: despacho.id,
           tipo: 'cargo',
-          monto_usd: totalConFlete,
+          monto_usd: montoCxC,
           saldo_usd: nuevoSaldo,
           descripcion: `Orden de despacho #${cot.numero}`,
           registrado_por: user.operator_id,
@@ -2502,15 +2511,24 @@ async function handleVentaRapida(request, env) {
     const [despacho] = await despRes.json();
     console.log('[VR] Despacho created:', despacho?.id, despacho?.numero);
 
-    // 7. Si es Cta por cobrar, registrar cargo CxC
-    if (formaPago === 'Cta por cobrar' && despacho) {
+    // 7. Si incluye Cta por cobrar, registrar cargo CxC (parcial o total)
+    let montoCxCVR = 0;
+    try {
+      const fps = JSON.parse(formaPago);
+      if (Array.isArray(fps)) {
+        const cxc = fps.find(f => f.metodo === 'Cta por cobrar');
+        if (cxc) montoCxCVR = Number(cxc.monto) || 0;
+      }
+    } catch { if (formaPago === 'Cta por cobrar') montoCxCVR = totalConFlete; }
+
+    if (montoCxCVR > 0 && despacho) {
       const saldoRes = await fetch(
         `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteId}&select=saldo_pendiente`,
         { headers }
       );
       const [clienteSaldo] = await saldoRes.json();
       const saldoActual = Number(clienteSaldo?.saldo_pendiente || 0);
-      const nuevoSaldo = saldoActual + totalConFlete;
+      const nuevoSaldo = saldoActual + montoCxCVR;
 
       await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
         method: 'POST', headers,
@@ -2518,7 +2536,7 @@ async function handleVentaRapida(request, env) {
           cliente_id: clienteId,
           despacho_id: despacho.id,
           tipo: 'cargo',
-          monto_usd: totalConFlete,
+          monto_usd: montoCxCVR,
           saldo_usd: nuevoSaldo,
           descripcion: `Venta rápida — Despacho #${despacho.numero}`,
           registrado_por: user.operator_id,
@@ -2676,7 +2694,7 @@ async function handleEditarPagoDespacho(request, env) {
 }
 
 async function handleActualizarEstadoDespacho(request, env) {
-  const v = await validateOperator(request, env, { requireSupervisor: true });
+  const v = await validateOperator(request, env);
   if (v.error) return v.error;
   const { user, operador, headers, ip } = v;
 
@@ -2699,7 +2717,27 @@ async function handleActualizarEstadoDespacho(request, env) {
       return jsonError(`No se puede pasar de "${desp.estado}" a "${nuevoEstado}"`, 400, request);
     }
 
-    // 3. Si se anula, devolver stock y registrar kardex
+    // 2b. Aprobar (pendiente→despachada): solo administración y desarrollador
+    const rolOp = operador.rol;
+    if (desp.estado === 'pendiente' && nuevoEstado === 'despachada') {
+      if (rolOp !== 'administracion' && rolOp !== 'desarrollador') {
+        return jsonError('Solo administración puede aprobar despachos', 403, request);
+      }
+    }
+
+    // 2c. Entregar (despachada→entregada): administración, logística, desarrollador
+    if (desp.estado === 'despachada' && nuevoEstado === 'entregada') {
+      if (!['administracion', 'logistica', 'desarrollador', 'supervisor'].includes(rolOp)) {
+        return jsonError('No tiene permiso para marcar como entregada', 403, request);
+      }
+    }
+
+    // 2d. Anular: solo administración, supervisor, desarrollador
+    if (nuevoEstado === 'anulada') {
+      if (!['administracion', 'supervisor', 'desarrollador'].includes(rolOp)) {
+        return jsonError('No tiene permiso para anular despachos', 403, request);
+      }
+    }
     if (nuevoEstado === 'anulada') {
       const ciRes = await fetch(
         `${env.SUPABASE_URL}/rest/v1/cotizacion_items?cotizacion_id=eq.${desp.cotizacion_id}&producto_id=not.is.null&select=producto_id,cantidad,nombre_snap`,

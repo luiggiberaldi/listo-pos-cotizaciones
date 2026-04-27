@@ -44,6 +44,9 @@ export function useDespachos({ estado = '' } = {}) {
 
       if (estado) query = query.eq('estado', estado)
 
+      // Logística solo ve despachos aprobados (despachada/entregada), NO pendientes
+      if (esLogistica && !estado) query = query.in('estado', ['despachada', 'entregada'])
+
       // Vendedores solo ven sus propios despachos; logística/admin/supervisor ven todos
       if (!veTodos) query = query.eq('vendedor_id', perfil.id)
 

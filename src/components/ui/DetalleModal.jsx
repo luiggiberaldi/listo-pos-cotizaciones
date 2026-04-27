@@ -104,8 +104,7 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
 
   // Edit forma de pago state
   const [editandoPago, setEditandoPago] = useState(false)
-  const [editFormaPago, setEditFormaPago] = useState('')
-  const [editFormaPagoCliente, setEditFormaPagoCliente] = useState('')
+  const [editFormasPago, setEditFormasPago] = useState([]) // [{metodo, monto}]
   const [editRefPago, setEditRefPago] = useState('')
   const [guardandoPago, setGuardandoPago] = useState(false)
 
@@ -204,16 +203,30 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
               COT-{String(registro.cotizacion.numero).padStart(5, '0')}{registro.cotizacion.version > 1 ? ` Rev.${registro.cotizacion.version}` : ''}
             </strong></span>
           )}
-          {!esCot && registro.forma_pago_cliente && (
-            <span className="inline-flex items-center gap-1"><CreditCard size={12} className="text-slate-400" /> Pago: <strong className="text-slate-700">{registro.forma_pago_cliente}</strong></span>
-          )}
+          {!esCot && registro.forma_pago && (() => {
+            let formasDisplay = []
+            try {
+              const parsed = JSON.parse(registro.forma_pago)
+              if (Array.isArray(parsed)) formasDisplay = parsed
+            } catch { formasDisplay = [{ metodo: registro.forma_pago, monto: null }] }
+            return formasDisplay.map((fp, i) => (
+              <span key={i} className="inline-flex items-center gap-1">
+                <CreditCard size={12} className="text-slate-400" />
+                <strong className="text-slate-700">{fp.metodo}{fp.monto != null ? ` $${Number(fp.monto).toFixed(2)}` : ''}</strong>
+              </span>
+            ))
+          })()}
           {!esCot && registro.referencia_pago && (
             <span className="inline-flex items-center gap-1"><Hash size={12} className="text-slate-400" /> Ref. pago: <strong className="font-mono text-slate-700">{registro.referencia_pago}</strong></span>
           )}
           {!esCot && esPrivilegiado && registro.estado !== 'anulada' && (
             <button onClick={() => {
-              setEditFormaPago(registro.forma_pago || '')
-              setEditFormaPagoCliente(registro.forma_pago_cliente || '')
+              let fps = []
+              try {
+                const parsed = JSON.parse(registro.forma_pago || '[]')
+                if (Array.isArray(parsed)) fps = parsed
+              } catch { if (registro.forma_pago) fps = [{ metodo: registro.forma_pago, monto: '' }] }
+              setEditFormasPago(fps)
               setEditRefPago(registro.referencia_pago || '')
               setEditandoPago(true)
             }} className="inline-flex items-center gap-1 text-sky-500 hover:text-sky-700 transition-colors">
@@ -227,35 +240,50 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
           <div className="px-5 py-3 border-b border-sky-200 bg-sky-50/50 space-y-3">
             <div className="flex items-center gap-2 mb-1">
               <CreditCard size={14} className="text-sky-500" />
-              <span className="text-sm font-bold text-slate-700">Editar forma de pago</span>
+              <span className="text-sm font-bold text-slate-700">Editar formas de pago</span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="space-y-1">
-                <label className="text-[11px] font-medium text-slate-500">Forma de pago (interna)</label>
-                <select value={editFormaPago} onChange={e => setEditFormaPago(e.target.value)}
-                  className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:ring-2 focus:ring-sky-200 outline-none">
-                  <option value="">— Sin definir —</option>
-                  {['Efectivo', 'Zelle', 'Pago Móvil', 'USDT', 'Transferencia', 'Cta por cobrar'].map(fp => (
-                    <option key={fp} value={fp}>{fp}</option>
-                  ))}
-                </select>
+            <div className="flex flex-wrap gap-2">
+              {['Efectivo', 'Zelle', 'Pago Móvil', 'USDT', 'Transferencia', 'Cta por cobrar'].map(fp => {
+                const activo = editFormasPago.some(f => f.metodo === fp)
+                return (
+                  <button key={fp} type="button"
+                    onClick={() => {
+                      setEditFormasPago(prev => {
+                        if (activo) return prev.filter(f => f.metodo !== fp)
+                        return [...prev, { metodo: fp, monto: '' }]
+                      })
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                      activo
+                        ? 'bg-sky-500 text-white border-sky-500'
+                        : 'bg-white text-slate-600 border-slate-200 hover:border-sky-300'
+                    }`}>
+                    {fp}
+                  </button>
+                )
+              })}
+            </div>
+            {editFormasPago.length > 0 && (
+              <div className="space-y-2">
+                {editFormasPago.map(fp => (
+                  <div key={fp.metodo} className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-slate-600 w-24 truncate">{fp.metodo}</span>
+                    <div className="relative flex-1">
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
+                      <input type="number" min="0" step="0.01" value={fp.monto}
+                        onChange={e => setEditFormasPago(prev => prev.map(f => f.metodo === fp.metodo ? { ...f, monto: e.target.value } : f))}
+                        placeholder="0.00"
+                        className="w-full pl-6 pr-2 py-1.5 rounded-lg text-xs border border-slate-200 bg-white focus:ring-2 focus:ring-sky-200 outline-none" />
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="space-y-1">
-                <label className="text-[11px] font-medium text-slate-500">Forma de pago (cliente)</label>
-                <select value={editFormaPagoCliente} onChange={e => setEditFormaPagoCliente(e.target.value)}
-                  className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:ring-2 focus:ring-sky-200 outline-none">
-                  <option value="">— Sin definir —</option>
-                  {['Efectivo', 'Zelle', 'Pago Móvil', 'USDT', 'Transferencia', 'Cta por cobrar'].map(fp => (
-                    <option key={fp} value={fp}>{fp}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-[11px] font-medium text-slate-500">Referencia de pago</label>
-                <input type="text" value={editRefPago} onChange={e => setEditRefPago(e.target.value)}
-                  placeholder="Ej: REF-12345"
-                  className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:ring-2 focus:ring-sky-200 outline-none" />
-              </div>
+            )}
+            <div className="space-y-1">
+              <label className="text-[11px] font-medium text-slate-500">Referencia de pago</label>
+              <input type="text" value={editRefPago} onChange={e => setEditRefPago(e.target.value)}
+                placeholder="Ej: REF-12345"
+                className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:ring-2 focus:ring-sky-200 outline-none" />
             </div>
             <div className="flex justify-end gap-2 pt-1">
               <button onClick={() => setEditandoPago(false)} disabled={guardandoPago}
@@ -265,14 +293,15 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
               <button disabled={guardandoPago} onClick={async () => {
                 setGuardandoPago(true)
                 try {
+                  const fpJson = editFormasPago.length > 0 ? JSON.stringify(editFormasPago) : null
                   const { data: { session } } = await supabase.auth.getSession()
                   const res = await fetch(apiUrl('/api/despachos/editar-pago'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
                     body: JSON.stringify({
                       despachoId: registro.id,
-                      formaPago: editFormaPago || null,
-                      formaPagoCliente: editFormaPagoCliente || null,
+                      formaPago: fpJson,
+                      formaPagoCliente: fpJson,
                       referenciaPago: editRefPago || null,
                     }),
                   })
@@ -280,9 +309,8 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
                     const err = await res.json().catch(() => ({}))
                     throw new Error(err.error || 'Error al guardar')
                   }
-                  // Update local display
-                  registro.forma_pago = editFormaPago || null
-                  registro.forma_pago_cliente = editFormaPagoCliente || null
+                  registro.forma_pago = fpJson
+                  registro.forma_pago_cliente = fpJson
                   registro.referencia_pago = editRefPago || null
                   setEditandoPago(false)
                   showToast('Forma de pago actualizada', 'success')

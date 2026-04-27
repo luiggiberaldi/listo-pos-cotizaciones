@@ -83,7 +83,7 @@ export default function VentaRapidaView() {
   const [confirmAjeno, setConfirmAjeno] = useState(null)
 
   // Step 2: Pago + Envío
-  const [formaPago, setFormaPago] = useState('')
+  const [formasPago, setFormasPago] = useState([]) // [{metodo, monto}]
   const [referenciaPago, setReferenciaPago] = useState('')
   const [transportistaId, setTransportistaId] = useState('')
   const [fleteUsd, setFleteUsd] = useState('')
@@ -110,18 +110,19 @@ export default function VentaRapidaView() {
     if (ventaRapida.isPending) return
     const timer = setTimeout(() => {
       if (items.length > 0 || clienteId) {
-        saveDraft({ step, clienteId, items, formaPago, referenciaPago, transportistaId, fleteUsd, notas }, perfil?.id)
+        saveDraft({ step, clienteId, items, formasPago, referenciaPago, transportistaId, fleteUsd, notas }, perfil?.id)
       }
     }, 1500)
     return () => clearTimeout(timer)
-  }, [step, clienteId, items, formaPago, referenciaPago, transportistaId, fleteUsd, notas, ventaRapida.isPending])
+  }, [step, clienteId, items, formasPago, referenciaPago, transportistaId, fleteUsd, notas, ventaRapida.isPending])
 
   function restoreDraft() {
     const d = draftRef.current
     if (!d) return
     if (d.clienteId) setClienteId(d.clienteId)
     if (d.items?.length > 0) setItems(d.items)
-    if (d.formaPago) setFormaPago(d.formaPago)
+    if (d.formasPago?.length > 0) setFormasPago(d.formasPago)
+    else if (d.formaPago) setFormasPago([{ metodo: d.formaPago, monto: '' }])
     if (d.referenciaPago) setReferenciaPago(d.referenciaPago)
     if (d.transportistaId) setTransportistaId(d.transportistaId)
     if (d.fleteUsd) setFleteUsd(d.fleteUsd)
@@ -149,9 +150,12 @@ export default function VentaRapidaView() {
   const totalItems = items.reduce((s, it) => s + it.cantidad, 0)
   const transportistaSeleccionado = transportistas.find(t => t.id === transportistaId)
 
+  const montoAsignadoVR = formasPago.reduce((s, fp) => s + (Number(fp.monto) || 0), 0)
+  const pagoCuadradoVR = formasPago.length > 0 && Math.abs(montoAsignadoVR - totalConFlete) < 0.02
+
   // Validaciones
   const step1Valid = !!clienteId && items.length > 0
-  const step2Valid = !!formaPago
+  const step2Valid = pagoCuadradoVR
 
   // Close cliente dropdown on outside click
   useEffect(() => {
@@ -205,13 +209,14 @@ export default function VentaRapidaView() {
 
   async function handleSubmit() {
     if (!step1Valid || !step2Valid) return
+    const fpJson = JSON.stringify(formasPago)
     ventaRapida.mutate({
       clienteId,
       clienteNombre: clienteSeleccionado?.nombre,
       transportistaId: transportistaId || null,
       fleteUsd: flete,
-      formaPago,
-      formaPagoCliente: formaPago,
+      formaPago: fpJson,
+      formaPagoCliente: fpJson,
       referenciaPago: referenciaPago || null,
       notas,
       notasCliente: null,
@@ -230,7 +235,7 @@ export default function VentaRapidaView() {
         setStep(0)
         setClienteId('')
         setItems([])
-        setFormaPago('')
+        setFormasPago([])
         setReferenciaPago('')
         setTransportistaId('')
         setFleteUsd('')
@@ -342,8 +347,9 @@ export default function VentaRapidaView() {
 
         {step === 1 && (
           <Step2Pago
-            formaPago={formaPago}
-            setFormaPago={setFormaPago}
+            formasPago={formasPago}
+            setFormasPago={setFormasPago}
+            totalConFlete={totalConFlete}
             referenciaPago={referenciaPago}
             setReferenciaPago={setReferenciaPago}
             transportistas={transportistas}
@@ -367,7 +373,7 @@ export default function VentaRapidaView() {
             totalConFlete={totalConFlete}
             totalBs={totalBs}
             tasa={tasa}
-            formaPago={formaPago}
+            formasPago={formasPago}
             referenciaPago={referenciaPago}
             transportistaSeleccionado={transportistaSeleccionado}
             notas={notas}
@@ -1121,7 +1127,7 @@ function Step1Productos({
 // Step 2: Pago y Envío
 // ─────────────────────────────────────────────────────────────────────────────
 function Step2Pago({
-  formaPago, setFormaPago,
+  formasPago, setFormasPago, totalConFlete,
   referenciaPago, setReferenciaPago,
   transportistas, transportistaId, setTransportistaId,
   fleteUsd, setFleteUsd, notas, setNotas,
@@ -1129,6 +1135,22 @@ function Step2Pago({
   const [showNuevoTransp, setShowNuevoTransp] = useState(false)
   const crearTransp = useCrearTransportista()
   const [transpError, setTranspError] = useState('')
+
+  const montoAsignado = formasPago.reduce((s, fp) => s + (Number(fp.monto) || 0), 0)
+  const pagoCuadrado = formasPago.length > 0 && Math.abs(montoAsignado - totalConFlete) < 0.02
+
+  const toggleForma = (metodo) => {
+    setFormasPago(prev => {
+      const existe = prev.find(fp => fp.metodo === metodo)
+      if (existe) return prev.filter(fp => fp.metodo !== metodo)
+      const restante = totalConFlete - prev.reduce((s, fp) => s + (Number(fp.monto) || 0), 0)
+      return [...prev, { metodo, monto: restante > 0 ? Number(restante.toFixed(2)) : '' }]
+    })
+  }
+
+  const setMontoForma = (metodo, monto) => {
+    setFormasPago(prev => prev.map(fp => fp.metodo === metodo ? { ...fp, monto } : fp))
+  }
 
   async function handleCrearTransportista(campos) {
     setTranspError('')
@@ -1147,20 +1169,58 @@ function Step2Pago({
       {/* Forma de pago del cliente */}
       <div>
         <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 block">
-          Forma de pago del cliente <span className="text-red-400">*</span>
+          Formas de pago <span className="text-red-400">*</span>
         </label>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {FORMAS_PAGO.map(fp => (
-            <button key={fp} onClick={() => setFormaPago(fp)}
-              className={`px-3 py-2.5 rounded-xl text-sm font-medium border transition-all ${
-                formaPago === fp
-                  ? 'bg-sky-50 border-sky-300 text-sky-700 ring-1 ring-sky-200'
-                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-              }`}>
-              {fp}
-            </button>
-          ))}
+          {FORMAS_PAGO.map(fp => {
+            const activo = formasPago.some(f => f.metodo === fp)
+            return (
+              <button key={fp} onClick={() => toggleForma(fp)}
+                className={`px-3 py-2.5 rounded-xl text-sm font-medium border transition-all ${
+                  activo
+                    ? 'bg-sky-50 border-sky-300 text-sky-700 ring-1 ring-sky-200'
+                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}>
+                {fp}
+              </button>
+            )
+          })}
         </div>
+
+        {/* Montos por forma seleccionada */}
+        {formasPago.length > 0 && (
+          <div className="space-y-2 mt-3">
+            {formasPago.map(fp => (
+              <div key={fp.metodo} className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-slate-600 w-28 truncate">{fp.metodo}</span>
+                <div className="relative flex-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={fp.monto}
+                    onChange={e => setMontoForma(fp.metodo, e.target.value)}
+                    placeholder="0.00"
+                    className="w-full pl-7 pr-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-sky-200 focus:bg-white"
+                  />
+                </div>
+              </div>
+            ))}
+            <div className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm font-semibold ${
+              pagoCuadrado
+                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                : 'bg-red-50 text-red-600 border border-red-200'
+            }`}>
+              <span>Asignado: ${montoAsignado.toFixed(2)}</span>
+              <span>Total: ${totalConFlete.toFixed(2)}</span>
+              {pagoCuadrado
+                ? <span className="text-emerald-500">✓</span>
+                : <span className="text-red-400">Faltan ${(totalConFlete - montoAsignado).toFixed(2)}</span>
+              }
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Referencia */}
@@ -1381,7 +1441,7 @@ function TransportistaFormCompact({ onGuardar, onCancelar, cargando }) {
 // ─────────────────────────────────────────────────────────────────────────────
 function Step3Confirmar({
   clienteSeleccionado, items, subtotal, ivaUsd, totalUsd, flete, totalConFlete,
-  totalBs, tasa, formaPago, referenciaPago, transportistaSeleccionado, notas,
+  totalBs, tasa, formasPago, referenciaPago, transportistaSeleccionado, notas,
 }) {
   return (
     <div className="p-4 space-y-4">
@@ -1452,10 +1512,15 @@ function Step3Confirmar({
       {/* Pago */}
       <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
         <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Pago</h3>
-        <div className="flex items-center gap-2 text-sm">
-          <CreditCard size={14} className="text-slate-400" />
-          <span className="text-slate-700">{formaPago}</span>
-        </div>
+        {formasPago.map(fp => (
+          <div key={fp.metodo} className="flex items-center justify-between text-sm">
+            <div className="flex items-center gap-2">
+              <CreditCard size={14} className="text-slate-400" />
+              <span className="text-slate-700">{fp.metodo}</span>
+            </div>
+            <span className="font-semibold text-slate-800">{fmtUsd(Number(fp.monto) || 0)}</span>
+          </div>
+        ))}
         {referenciaPago && (
           <div className="flex items-center gap-2 text-sm">
             <Hash size={14} className="text-slate-400" />
