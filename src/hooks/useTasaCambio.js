@@ -1,8 +1,10 @@
 // src/hooks/useTasaCambio.js
 // Hook de tasas de cambio — BCV + USDT (Binance P2P) + Manual
+// Sincronización en tiempo real via configuracion_negocio + Supabase Realtime
 // Construacero Carabobo
 import { useState, useEffect, useCallback, useRef } from 'react'
 import supabase from '../services/supabase/client'
+import { useConfigNegocio, useActualizarConfig } from './useConfigNegocio'
 
 const STORAGE_KEY = 'construacero_tasa_v1'
 const STORAGE_KEY_USDT = 'construacero_tasa_usdt_v1'
@@ -36,6 +38,10 @@ function parseSafeFloat(val) {
 }
 
 export function useTasaCambio() {
+  // Config de BD (fuente de verdad para modo + tasa manual)
+  const { data: config } = useConfigNegocio()
+  const actualizarConfig = useActualizarConfig()
+
   // Tasa BCV
   const [tasaBcv, setTasaBcv] = useState(() => {
     try {
@@ -58,14 +64,12 @@ export function useTasaCambio() {
   const [modoTasa, setModoTasa] = useState(() => {
     const saved = localStorage.getItem(STORAGE_KEY_MODO)
     if (saved && MODOS_VALIDOS.includes(saved)) {
-      // Migrar bcv → usdt (BCV ya no es opción visible)
       if (saved === 'bcv') {
         localStorage.setItem(STORAGE_KEY_MODO, 'usdt')
         return 'usdt'
       }
       return saved
     }
-    // Migrar legacy: si tenía modo_auto=true → usdt, si false → manual
     const legacy = localStorage.getItem('construacero_tasa_modo_auto')
     if (legacy !== null) {
       localStorage.removeItem('construacero_tasa_modo_auto')
@@ -85,7 +89,28 @@ export function useTasaCambio() {
   const tasaRef = useRef(tasaBcv)
   const tasaUsdtRef = useRef(tasaUsdt)
 
-  // Persistir cambios
+  // Timestamp del último cambio local (para evitar eco del realtime)
+  const localChangeTsRef = useRef(0)
+
+  // ─── Sincronizar desde config BD (fuente de verdad) ──────────────────────────
+  // Cuando useRealtimeSync detecta cambio en configuracion_negocio, refetch config,
+  // y este effect actualiza modo + tasa manual para TODOS los usuarios en tiempo real
+  useEffect(() => {
+    if (!config || config.tasa_bcv_manual === undefined) return
+    // Ignorar si nosotros mismos hicimos el cambio (evitar eco)
+    if (Date.now() - localChangeTsRef.current < 5000) return
+
+    const dbManual = Number(config.tasa_bcv_manual) || 0
+    if (dbManual > 0) {
+      setModoTasa('manual')
+      setTasaManual(String(dbManual))
+    } else {
+      // Solo cambiar a usdt si estábamos en manual (evitar override al cargar)
+      setModoTasa(prev => prev === 'manual' ? 'usdt' : prev)
+    }
+  }, [config?.tasa_bcv_manual, config?.actualizado_en])
+
+  // Persistir en localStorage (cache rápido para recargas)
   useEffect(() => {
     tasaRef.current = tasaBcv
     if (tasaBcv.precio > 0) localStorage.setItem(STORAGE_KEY, JSON.stringify(tasaBcv))
@@ -150,14 +175,12 @@ export function useTasaCambio() {
 
   // Fetch tasa BCV — múltiples fuentes con fallback
   const fetchBcv = useCallback(async () => {
-    // Fuente 1 (prioritaria): Google Apps Script propio
     try {
       const data = await fetchConTimeout('https://script.google.com/macros/s/AKfycbxT9sKz_XWRWuQx_XP-BJ33T0hoAgJsLwhZA00v6nPt4Ij4jRjq-90mDGLVCsS6FXwW9Q/exec?token=Lvbp1994', 8000)
       const precio = parseSafeFloat(data?.bcv?.price)
       if (precio > 0) return { precio, fuente: 'BCV Oficial' }
     } catch { /* intenta siguiente fuente */ }
 
-    // Fuente 2: dolarapi.com
     try {
       const data = await fetchConTimeout('https://ve.dolarapi.com/v1/dolares', 8000)
       if (data && Array.isArray(data)) {
@@ -169,14 +192,12 @@ export function useTasaCambio() {
       }
     } catch { /* intenta siguiente fuente */ }
 
-    // Fuente 2: pydolarve.org
     try {
       const data = await fetchConTimeout('https://pydolarve.org/api/v1/dollar?monitor=bcv', 8000)
       const precio = parseSafeFloat(data?.price)
       if (precio > 0) return { precio, fuente: 'BCV Oficial' }
     } catch { /* intenta siguiente fuente */ }
 
-    // Fuente 3: exchangedynamics
     try {
       const data = await fetchConTimeout('https://api.exchangedynamics.com/rates/VES', 8000)
       const precio = parseSafeFloat(data?.USD)
@@ -231,7 +252,6 @@ export function useTasaCambio() {
       lastFetchRef.ts = Date.now()
     }, UPDATE_INTERVAL)
 
-    // Refresca al volver a la pestaña si pasó más de MIN_REFRESH_INTERVAL
     const onVisible = () => {
       if (document.visibilityState === 'visible' && Date.now() - lastFetchRef.ts > MIN_REFRESH_INTERVAL) {
         fetchTasa(true)
@@ -255,13 +275,25 @@ export function useTasaCambio() {
     }
   }, [fetchTasa])
 
-  // ─── Realtime sync: broadcast cambios de tasa a otros dispositivos ──────────
+  // ─── Realtime sync: broadcast + persistencia en BD ────────────────────────────
   const _ignoreNextBroadcast = useRef(false)
   const channelRef = useRef(null)
 
-  // Wrappers que broadcast al cambiar
+  // Guardar modo + valor en BD (dispara realtime a todos los clientes)
+  const guardarTasaEnBD = useCallback((modo, valorManual) => {
+    localChangeTsRef.current = Date.now()
+    const tasa_bcv_manual = modo === 'manual' && parseFloat(valorManual) > 0
+      ? parseFloat(valorManual)
+      : 0
+    actualizarConfig.mutate({ tasa_bcv_manual })
+  }, [actualizarConfig])
+
+  // Wrappers que persisten en BD + broadcast instantáneo
   const setModoTasaSync = useCallback((modo) => {
     setModoTasa(modo)
+    // Guardar en BD (esto dispara realtime para otros usuarios)
+    guardarTasaEnBD(modo, modo === 'manual' ? tasaManual : '0')
+    // Broadcast instantáneo como backup rápido
     _ignoreNextBroadcast.current = true
     try {
       channelRef.current?.send({
@@ -270,10 +302,13 @@ export function useTasaCambio() {
         payload: { modoTasa: modo, tasaManual: modo === 'manual' ? tasaManual : null, ts: Date.now() },
       })
     } catch { /* silencioso */ }
-  }, [tasaManual])
+  }, [tasaManual, guardarTasaEnBD])
 
   const setTasaManualSync = useCallback((val) => {
     setTasaManual(val)
+    // Guardar en BD
+    guardarTasaEnBD('manual', val)
+    // Broadcast instantáneo como backup rápido
     _ignoreNextBroadcast.current = true
     try {
       channelRef.current?.send({
@@ -282,9 +317,9 @@ export function useTasaCambio() {
         payload: { modoTasa: 'manual', tasaManual: val, ts: Date.now() },
       })
     } catch { /* silencioso */ }
-  }, [])
+  }, [guardarTasaEnBD])
 
-  // Escuchar cambios de otros dispositivos
+  // Escuchar broadcast de otros dispositivos (sync instantáneo)
   useEffect(() => {
     const channel = supabase
       .channel('tasa-sync')

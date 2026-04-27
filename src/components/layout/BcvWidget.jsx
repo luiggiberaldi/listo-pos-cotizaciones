@@ -50,7 +50,6 @@ export default function BcvWidget({ soloLectura = false }) {
     if (parseFloat(tasaInput) > 0) {
       setTasaManual(tasaInput)
       setTasaConfirmada(true)
-      setModoPendiente(null)
     }
   }
 
