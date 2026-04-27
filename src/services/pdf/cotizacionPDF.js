@@ -264,6 +264,10 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   const condLineH = 5.5
   const condBoxH = condTitleH + condiciones.length * condLineH + condPadding * 2 + 1
 
+  // Posicionar a 4mm encima del slogan
+  const sloganY = PAGE_H - 35
+  y = sloganY - 4 - condBoxH
+
   // Fondo azul claro
   doc.setFillColor(230, 242, 255)
   doc.setDrawColor(...C_ACCENT)
@@ -345,14 +349,11 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
 
   // ── (Sección de firma eliminada) ──
 
-  // ── Slogan — fijo 10mm sobre el footer (hazardY = PAGE_H - 30) ──
-  const sloganY = PAGE_H - 35
-  if (y < sloganY) {
-    doc.setFont('helvetica', 'bolditalic')
-    doc.setFontSize(16)
-    doc.setTextColor(...C_DARK)
-    doc.text('"Todo lo puedo en Cristo que me fortalece" — Filipenses 4:13', PAGE_W / 2, sloganY, { align: 'center' })
-  }
+  // ── Slogan — fijo sobre el footer ──
+  doc.setFont('helvetica', 'bolditalic')
+  doc.setFontSize(16)
+  doc.setTextColor(...C_DARK)
+  doc.text('"Todo lo puedo en Cristo que me fortalece" — Filipenses 4:13', PAGE_W / 2, sloganY, { align: 'center' })
 
   // ══════════════════════════════════════════════════════════════════════════
   // 5. FOOTER CON FRANJA DE PRECAUCIÓN

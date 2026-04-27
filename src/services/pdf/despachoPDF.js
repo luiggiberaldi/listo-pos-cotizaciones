@@ -400,7 +400,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.rect(MARGIN, fpY, CONTENT_W, 9, 'S')
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7.5)
+  doc.setFontSize(9)
   doc.setTextColor(...C_DARK)
   doc.text('FORMA DE PAGO:', MARGIN + 3, fpY + 6)
 
@@ -411,7 +411,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
       return nombre + monto
     })
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7.5)
+    doc.setFontSize(9)
     doc.text(parts.join('   |   '), MARGIN + 38, fpY + 6)
   }
 
