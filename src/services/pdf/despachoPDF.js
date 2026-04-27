@@ -18,7 +18,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const rif = config.rif_negocio || 'J-50115913-0'
   let y = 0
 
-  const numDes = `N°- ${String(despacho.numero).padStart(5, '0')}`
+  const numDes = `N°- ${String(despacho.cotizacion?.numero ?? despacho.numero).padStart(5, '0')}`
 
   // ══════════════════════════════════════════════════════════════════════════
   // 1. CABECERA HORIZONTAL COMPACTA (blanco y negro)

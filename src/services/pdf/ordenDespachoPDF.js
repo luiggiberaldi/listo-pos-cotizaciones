@@ -15,7 +15,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   const factorBcv = (tasaUsdt > 0 && tasaBcv > 0) ? tasaUsdt / tasaBcv : 0
   let y = 0
 
-  const numDes = `N°- ${String(despacho.numero).padStart(5, '0')}`
+  const numDes = `N°- ${String(despacho.cotizacion?.numero ?? despacho.numero).padStart(5, '0')}`
 
   // ══════════════════════════════════════════════════════════════════════════
   // 1. CABECERA
