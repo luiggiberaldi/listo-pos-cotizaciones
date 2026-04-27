@@ -208,7 +208,7 @@ function colorTransportista(str = '') {
 }
 
 // ─── Tarjeta ──────────────────────────────────────────────────────────────────
-function TransportistaCard({ transportista, esSupervisor, onEditar, onDesactivar }) {
+function TransportistaCard({ transportista, esSupervisor, puedeEditar, onEditar, onDesactivar }) {
   const color = colorTransportista(transportista.nombre)
 
   return (
@@ -259,19 +259,21 @@ function TransportistaCard({ transportista, esSupervisor, onEditar, onDesactivar
         )}
       </div>
 
-      {/* ── Acciones (solo supervisor) ── */}
-      {esSupervisor && (
+      {/* ── Acciones ── */}
+      {(puedeEditar || esSupervisor) && (
         <div className="border-t border-slate-100 px-3 py-2 flex items-center gap-1">
           <button onClick={() => onEditar(transportista)} title="Editar"
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
             <Pencil size={13} />
             Editar
           </button>
-          <button onClick={() => onDesactivar(transportista)} title="Desactivar"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 active:bg-red-100 transition-colors ml-auto">
-            <Ban size={13} />
-            Eliminar
-          </button>
+          {esSupervisor && (
+            <button onClick={() => onDesactivar(transportista)} title="Desactivar"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 active:bg-red-100 transition-colors ml-auto">
+              <Ban size={13} />
+              Eliminar
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -373,6 +375,7 @@ export default function TransportistasView() {
               key={t.id}
               transportista={t}
               esSupervisor={esSupervisor}
+              puedeEditar={puedeCrear}
               onEditar={abrirEditar}
               onDesactivar={setDesactivandoTransp}
             />
