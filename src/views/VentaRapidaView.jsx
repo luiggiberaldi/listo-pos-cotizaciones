@@ -509,6 +509,7 @@ function Step1Productos({
   const sheetStateRef = useRef(sheetState)
   sheetStateRef.current = sheetState
   const [editQty, setEditQty] = useState(null) // { productoId, nombre, cantidad }
+  const editQtyRef = useRef(null)
 
   function checkScroll() {
     const el = scrollRef.current
@@ -922,9 +923,11 @@ function Step1Productos({
                           className="w-8 h-7 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors active:scale-90">
                           <Minus size={12} strokeWidth={3} />
                         </button>
-                        <span className="w-8 h-7 text-center text-[12px] font-black text-slate-700 bg-white border-x border-slate-100 leading-7">
+                        <button type="button"
+                          onClick={() => setEditQty({ productoId: it.productoId, nombre: it.nombreSnap, cantidad: it.cantidad, stock: null })}
+                          className="w-8 h-7 text-center text-[12px] font-black text-slate-700 bg-white border-x border-slate-100 leading-7 active:bg-sky-50 active:border-sky-300">
                           {it.cantidad}
-                        </span>
+                        </button>
                         <button type="button"
                           onClick={() => cambiarCantidad(it.productoId, 1)}
                           className="w-8 h-7 flex items-center justify-center text-slate-400 hover:text-emerald-500 transition-colors active:scale-90">
@@ -971,6 +974,7 @@ function Step1Productos({
             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Cantidad</p>
             <p className="text-sm font-bold text-slate-700 truncate mb-3">{editQty.nombre}</p>
             <input
+              ref={editQtyRef}
               type="text"
               inputMode="numeric"
               autoFocus
@@ -994,8 +998,7 @@ function Step1Productos({
               </button>
               <button
                 onClick={() => {
-                  const input = document.querySelector('[type=number][inputMode=numeric]')
-                  const val = Math.max(1, Math.floor(Number(input?.value) || 1))
+                  const val = Math.max(1, Math.floor(Number(editQtyRef.current?.value) || 1))
                   setCantidadDirecta(editQty.productoId, val)
                   setEditQty(null)
                 }}
@@ -1080,9 +1083,11 @@ function Step1Productos({
                           className="w-8 h-7 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors active:scale-90">
                           <Minus size={12} strokeWidth={3} />
                         </button>
-                        <span className="w-8 h-7 text-center text-[12px] font-black text-slate-700 bg-white border-x border-slate-100 leading-7">
+                        <button type="button"
+                          onClick={() => setEditQty({ productoId: it.productoId, nombre: it.nombreSnap, cantidad: it.cantidad, stock: null })}
+                          className="w-8 h-7 text-center text-[12px] font-black text-slate-700 bg-white border-x border-slate-100 leading-7 active:bg-sky-50 active:border-sky-300">
                           {it.cantidad}
-                        </span>
+                        </button>
                         <button type="button"
                           onClick={() => cambiarCantidad(it.productoId, 1)}
                           className="w-8 h-7 flex items-center justify-center text-slate-400 hover:text-emerald-500 transition-colors active:scale-90">
