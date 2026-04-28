@@ -1228,7 +1228,7 @@ function Step2Pago({
   }
 
   return (
-    <div className="p-4 space-y-5">
+    <div className="p-4 flex flex-col gap-5 h-full min-h-0">
       {/* Forma de pago del cliente */}
       <div>
         <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 block">
@@ -1348,13 +1348,13 @@ function Step2Pago({
       )}
 
       {/* Notas */}
-      <div>
+      <div className="flex flex-col flex-1 min-h-0">
         <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">
           Notas (opcional)
         </label>
         <textarea value={notas} onChange={e => setNotas(e.target.value)}
-          rows={2} placeholder="Observaciones internas..."
-          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-sky-200 focus:border-sky-400 outline-none resize-none" />
+          placeholder="Observaciones internas..."
+          className="flex-1 min-h-[80px] w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-sky-200 focus:border-sky-400 outline-none resize-none" />
       </div>
     </div>
   )
