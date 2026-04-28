@@ -45,6 +45,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
   const [showPrintMenu, setShowPrintMenu] = useState(false)
   const [showDownloadMenu, setShowDownloadMenu] = useState(false)
   const [showMoreMenu, setShowMoreMenu] = useState(false)
+  const [showWhatsAppMenu, setShowWhatsAppMenu] = useState(false)
   const [monedaPdf, setMonedaPdf] = useState(() => localStorage.getItem('construacero_moneda_pdf') || '$')
   const { data: config = {} } = useConfigNegocio()
   const { tasaBcv, tasaUsdt } = useTasaCambio()
@@ -348,18 +349,45 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
       {/* ══════════ MOBILE ACTIONS (< md) ══════════ */}
       {!esAdministracion && (
       <div className="md:hidden mt-auto border-t border-slate-100 p-2.5">
-        {/* Botón primario */}
-        <button
-          onClick={primaryAction.action}
-          disabled={primaryAction.loading}
-          className={`w-full flex items-center justify-center gap-2 min-h-[44px] rounded-xl text-sm font-bold transition-all active:scale-[0.98] disabled:opacity-50 ${pColors.bg} ${pColors.text} ${pColors.active}`}
-        >
-          {primaryAction.loading
-            ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-            : <primaryAction.icon size={16} />
-          }
-          {primaryAction.label}
-        </button>
+        {/* Botón primario — si es WhatsApp, incluye dropdown de moneda */}
+        {primaryAction.key === 'whatsapp' ? (
+          <div className="relative">
+            <button
+              onClick={() => setShowWhatsAppMenu(v => !v)}
+              onBlur={() => setTimeout(() => setShowWhatsAppMenu(false), 200)}
+              disabled={waLoading}
+              className={`w-full flex items-center justify-center gap-2 min-h-[44px] rounded-xl text-sm font-bold transition-all active:scale-[0.98] disabled:opacity-50 ${pColors.bg} ${pColors.text} ${pColors.active}`}
+            >
+              {waLoading
+                ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                : <MessageCircle size={16} />
+              }
+              WhatsApp <ChevronDown size={11} />
+            </button>
+            {showWhatsAppMenu && (
+              <div className="absolute left-0 right-0 bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
+                onMouseDown={e => e.preventDefault()}>
+                <MonedaSelector onSelect={() => {}} onClose={() => setShowWhatsAppMenu(false)} />
+                <button onClick={() => { handleWhatsApp(); setShowWhatsAppMenu(false) }}
+                  className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-emerald-700 hover:bg-emerald-50 text-left font-medium">
+                  <MessageCircle size={14} /> Enviar por WhatsApp
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <button
+            onClick={primaryAction.action}
+            disabled={primaryAction.loading}
+            className={`w-full flex items-center justify-center gap-2 min-h-[44px] rounded-xl text-sm font-bold transition-all active:scale-[0.98] disabled:opacity-50 ${pColors.bg} ${pColors.text} ${pColors.active}`}
+          >
+            {primaryAction.loading
+              ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+              : <primaryAction.icon size={16} />
+            }
+            {primaryAction.label}
+          </button>
+        )}
 
         {/* Fila: Imprimir + Descargar + Más */}
         <div className="flex items-center gap-1 mt-2">
@@ -426,15 +454,35 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
       {/* ══════════ DESKTOP ACTIONS (md+) ══════════ */}
       {!esAdministracion && (
       <div className="hidden md:flex mt-auto border-t border-slate-100 px-3 py-2 items-center gap-1 flex-wrap">
-        {/* Botón primario */}
-        {primaryAction.key !== 'ver' && (
+        {/* Botón primario — si es WhatsApp, incluye dropdown de moneda */}
+        {primaryAction.key === 'whatsapp' ? (
+          <div className="relative">
+            <button onClick={() => setShowWhatsAppMenu(v => !v)}
+              onBlur={() => setTimeout(() => setShowWhatsAppMenu(false), 200)}
+              disabled={waLoading}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all disabled:opacity-50 whitespace-nowrap ${pColors.bg} ${pColors.text} ${pColors.active}`}>
+              {waLoading ? <Loader2 size={12} className="animate-spin" /> : <MessageCircle size={12} />}
+              WhatsApp <ChevronDown size={9} />
+            </button>
+            {showWhatsAppMenu && (
+              <div className="absolute left-0 bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
+                onMouseDown={e => e.preventDefault()}>
+                <MonedaSelector onSelect={() => {}} onClose={() => setShowWhatsAppMenu(false)} />
+                <button onClick={() => { handleWhatsApp(); setShowWhatsAppMenu(false) }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-emerald-700 hover:bg-emerald-50 text-left font-medium">
+                  <MessageCircle size={14} /> Enviar por WhatsApp
+                </button>
+              </div>
+            )}
+          </div>
+        ) : primaryAction.key !== 'ver' ? (
           <button onClick={primaryAction.action}
             disabled={primaryAction.loading}
             className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all disabled:opacity-50 whitespace-nowrap ${pColors.bg} ${pColors.text} ${pColors.active}`}>
             {primaryAction.loading ? <Loader2 size={12} className="animate-spin" /> : <primaryAction.icon size={12} />}
             {primaryAction.label}
           </button>
-        )}
+        ) : null}
 
         {canPdf && (
           <>
