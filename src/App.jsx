@@ -245,10 +245,10 @@ function AppRoutes() {
     if (localStorage.getItem('modo-accesible') === '1') {
       document.documentElement.classList.add('modo-accesible')
     }
-    const savedZoom = localStorage.getItem('app-zoom')
-    if (savedZoom && savedZoom !== '100') {
-      document.documentElement.style.setProperty('--app-zoom', `${savedZoom}%`)
-    }
+    // Limpiar zoom legacy si existía
+    localStorage.removeItem('app-zoom')
+    document.documentElement.style.removeProperty('zoom')
+    document.documentElement.style.removeProperty('--app-zoom')
   }, [])
 
   return (
