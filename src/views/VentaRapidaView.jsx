@@ -859,14 +859,6 @@ function Step1Productos({
                       ? 'border-emerald-300 shadow-sm shadow-emerald-100/80'
                       : 'border-slate-200 hover:border-primary/50'
                 }`}>
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-1 ${
-                  added ? 'bg-emerald-50' : 'bg-slate-50'
-                }`}>
-                  {added
-                    ? <CheckCircle size={15} className="text-emerald-400" />
-                    : <Package size={15} className="text-slate-300" />
-                  }
-                </div>
                 <p className={`text-[10px] font-bold leading-tight line-clamp-2 mb-0.5 ${
                   added ? 'text-emerald-700' : 'text-slate-700'
                 }`}>

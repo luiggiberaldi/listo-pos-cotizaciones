@@ -495,18 +495,6 @@ export default function BuscadorProductos({ onAgregar, onScanClick, itemsAgregad
                           : 'border-slate-200 hover:border-primary/50'
                   }`}>
 
-                  {/* Icono / imagen */}
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-1 overflow-hidden ${
-                    yaAgregado ? 'bg-emerald-50' : 'bg-slate-50'
-                  }`}>
-                    {p.imagen_url
-                      ? <img src={p.imagen_url} alt="" className="h-full w-full object-contain" loading="lazy" />
-                      : <div className={yaAgregado ? 'text-emerald-400' : 'text-slate-300'}>
-                          {yaAgregado ? <CheckCircle size={15} /> : <Package size={15} />}
-                        </div>
-                    }
-                  </div>
-
                   {/* Nombre */}
                   <p className={`text-[10px] font-bold leading-tight line-clamp-2 mb-0.5 ${
                     yaAgregado ? 'text-emerald-700' : 'text-slate-700'
