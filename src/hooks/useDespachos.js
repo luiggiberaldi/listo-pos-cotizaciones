@@ -18,12 +18,14 @@ import { sendPushNotification } from './usePushNotifications'
 export const DESPACHOS_KEY = ['despachos']
 
 // ─── Lista de despachos ─────────────────────────────────────────────────────
-export function useDespachos({ estado = '' } = {}) {
+export function useDespachos({ estado = '', veTodos: veTodosParam = false } = {}) {
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
   const esSupervisor = perfil?.rol === 'supervisor'
   const esLogistica = perfil?.rol === 'logistica'
-  const esPrivilegiado = esSupervisor || perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador'
-  const veTodos = esPrivilegiado || esLogistica
+  const esAdmin = perfil?.rol === 'administracion'
+  const esDesarrollador = perfil?.rol === 'desarrollador'
+  // Admin siempre ve todos; logística siempre ve todos; supervisor/dev solo si toggle activo
+  const veTodos = esAdmin || esLogistica || ((esSupervisor || esDesarrollador) && veTodosParam)
 
   return useQuery({
     queryKey: [...DESPACHOS_KEY, estado, veTodos, perfil?.id],

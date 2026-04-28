@@ -23,6 +23,7 @@ import Skeleton          from '../components/ui/Skeleton'
 import { useVendedores } from '../hooks/useClientes'
 import { useTransportistas, useCrearTransportista } from '../hooks/useTransportistas'
 import VendedorFilterPill from '../components/ui/VendedorFilterPill'
+import ToggleVistaPersonal from '../components/ui/ToggleVistaPersonal'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../utils/format'
 import { showToast } from '../components/ui/Toast'
 import PageHeader from '../components/ui/PageHeader'
@@ -537,6 +538,7 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
   const { tasaEfectiva } = useTasaCambio()
   const [estadoFiltro, setEstadoFiltro] = useState('')
   const [vendedorFiltro, setVendedorFiltro] = useState('')
+  const [verTodos, setVerTodos] = useState(false)
   const [pagina, setPagina] = useState(1)
   const [vistaMode, setVistaMode] = useState(() => localStorage.getItem('cotizaciones_vista') || (window.innerWidth < 768 ? 'list' : 'grid'))
   const [cotizacionAAnular, setCotizacionAAnular] = useState(null)
@@ -552,7 +554,7 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
     }
   }, [despacharCotizacion])
 
-  const { data: cotizaciones = [], isLoading, isError, refetch } = useCotizaciones({ estado: estadoFiltro })
+  const { data: cotizaciones = [], isLoading, isError, refetch } = useCotizaciones({ estado: estadoFiltro, veTodos: verTodos })
   const { data: vendedores = [] } = useVendedores()
 
   // Filtrar por vendedor (solo supervisor) y adaptar para admin
@@ -575,7 +577,7 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
   }, [cotizacionesFiltradas, pagina])
 
   // Reset página al cambiar filtro
-  useEffect(() => { setPagina(1) }, [estadoFiltro, vendedorFiltro])
+  useEffect(() => { setPagina(1) }, [estadoFiltro, vendedorFiltro, verTodos])
 
   const anular        = useAnularCotizacion()
   const cambiarEstado = useActualizarEstado()
@@ -679,10 +681,13 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
         </div>
       </div>
 
-      {/* Filtros: fila 2 — vendedor + controles de vista */}
+      {/* Filtros: fila 2 — toggle vista personal + vendedor + controles de vista */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          {(esSupervisor || esDesarrollador) && vendedores.length > 1 && (
+          {(esSupervisor || esDesarrollador) && (
+            <ToggleVistaPersonal value={verTodos} onChange={v => { setVerTodos(v); setVendedorFiltro(''); setPagina(1) }} />
+          )}
+          {(esSupervisor || esDesarrollador) && verTodos && vendedores.length > 1 && (
             <VendedorFilterPill vendedores={vendedores} value={vendedorFiltro} onChange={setVendedorFiltro} />
           )}
         </div>

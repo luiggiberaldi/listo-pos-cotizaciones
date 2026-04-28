@@ -11,6 +11,7 @@ import { useVendedores } from '../hooks/useClientes'
 import { getDespachoAction } from '../utils/despachoActions'
 import { getFiltrosDespacho } from '../utils/estadoLabels'
 import VendedorFilterPill from '../components/ui/VendedorFilterPill'
+import ToggleVistaPersonal from '../components/ui/ToggleVistaPersonal'
 import DespachoCard from '../components/despachos/DespachoCard'
 import DespachoRow  from '../components/despachos/DespachoRow'
 import EditDespachoModal from '../components/despachos/EditDespachoModal'
@@ -99,6 +100,7 @@ export default function DespachosView() {
   const { data: vendedores = [] } = useVendedores()
   const [estadoFiltro, setEstadoFiltro] = useState('')
   const [vendedorFiltro, setVendedorFiltro] = useState('')
+  const [verTodos, setVerTodos] = useState(false)
   const [pagina, setPagina] = useState(1)
   const [vistaMode, setVistaMode] = useState(() => localStorage.getItem('despachos_vista') || (window.innerWidth < 768 ? 'list' : 'grid'))
   const [despachoAAnular, setDespachoAAnular] = useState(null)
@@ -106,7 +108,7 @@ export default function DespachosView() {
   const [despachoDetalle, setDespachoDetalle] = useState(null)
   const [despachoEditar, setDespachoEditar] = useState(null)
 
-  const { data: despachos = [], isLoading, isError, refetch } = useDespachos({ estado: estadoFiltro })
+  const { data: despachos = [], isLoading, isError, refetch } = useDespachos({ estado: estadoFiltro, veTodos: verTodos })
   const cambiarEstado = useActualizarEstadoDespacho()
   const reciclar = useReciclarDespacho()
 
@@ -124,7 +126,7 @@ export default function DespachosView() {
   }, [despachosFiltrados, pagina])
 
   // Reset página al cambiar filtro
-  useEffect(() => { setPagina(1) }, [estadoFiltro, vendedorFiltro])
+  useEffect(() => { setPagina(1) }, [estadoFiltro, vendedorFiltro, verTodos])
 
   // Config de confirmación por rol
   const anularConfig = getDespachoAction('anular', rol)
@@ -181,8 +183,13 @@ export default function DespachosView() {
           </button>
         ))}
 
-        {/* Filtro por vendedor — supervisor y administracion */}
-        {esPrivilegiado && vendedores.length > 1 && (
+        {/* Toggle Mis datos / Todos — supervisor/dev */}
+        {(esSupervisor || esDesarrollador) && (
+          <ToggleVistaPersonal value={verTodos} onChange={v => { setVerTodos(v); setVendedorFiltro(''); setPagina(1) }} />
+        )}
+
+        {/* Filtro por vendedor — admin siempre, supervisor/dev solo con "Todos" activo */}
+        {((esAdministracion || esLogistica) || (esPrivilegiado && verTodos)) && vendedores.length > 1 && (
           <>
             <div className="w-px h-5 bg-slate-200 mx-1 hidden sm:block" />
             <VendedorFilterPill vendedores={vendedores} value={vendedorFiltro} onChange={setVendedorFiltro} />

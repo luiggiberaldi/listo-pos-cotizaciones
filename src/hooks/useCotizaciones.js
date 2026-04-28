@@ -17,13 +17,17 @@ import { STOCK_COMPROMETIDO_KEY } from './useStockComprometido'
 export const COTIZACIONES_KEY = ['cotizaciones']
 
 // ─── Lista de cotizaciones ────────────────────────────────────────────────────
-export function useCotizaciones({ estado = '', clienteId = '' } = {}) {
+export function useCotizaciones({ estado = '', clienteId = '', veTodos = false } = {}) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
-  const esPrivilegiado = esSupervisor || perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador'
+  const esDesarrollador = perfil?.rol === 'desarrollador'
+  const esAdmin = perfil?.rol === 'administracion'
+  // Admin siempre ve todos; supervisor/dev solo si toggle activo
+  const esPrivilegiado = esAdmin || esSupervisor || esDesarrollador
+  const verTodosEfectivo = esAdmin || ((esSupervisor || esDesarrollador) && veTodos)
 
   return useQuery({
-    queryKey: [...COTIZACIONES_KEY, estado, clienteId, esPrivilegiado, perfil?.id],
+    queryKey: [...COTIZACIONES_KEY, estado, clienteId, esPrivilegiado, verTodosEfectivo, perfil?.id],
     queryFn: async () => {
       // Privilegiado (supervisor/admin): tabla directa; Vendedor: vista (sin notas_internas)
       const tabla = esPrivilegiado ? 'cotizaciones' : 'v_cotizaciones_vendedor'
@@ -37,7 +41,7 @@ export function useCotizaciones({ estado = '', clienteId = '' } = {}) {
         .order('creado_en', { ascending: false })
         .limit(200)
 
-      if (!esPrivilegiado) query = query.eq('vendedor_id', perfil.id)
+      if (!verTodosEfectivo) query = query.eq('vendedor_id', perfil.id)
       if (estado) query = query.eq('estado', estado)
       if (clienteId) query = query.eq('cliente_id', clienteId)
 

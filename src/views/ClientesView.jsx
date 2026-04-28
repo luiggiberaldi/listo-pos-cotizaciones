@@ -18,6 +18,7 @@ import EmptyState        from '../components/ui/EmptyState'
 import Skeleton          from '../components/ui/Skeleton'
 import Pagination        from '../components/ui/Pagination'
 import PageHeader        from '../components/ui/PageHeader'
+import ToggleVistaPersonal from '../components/ui/ToggleVistaPersonal'
 
 const ITEMS_POR_PAGINA = 12
 
@@ -97,8 +98,10 @@ function SkeletonClientes() {
 export default function ClientesView() {
   const { perfil } = useAuthStore()
   const navigate = useNavigate()
+  const esSupervisor = perfil?.rol === 'supervisor'
   const esAdministracion = perfil?.rol === 'administracion'
   const esDesarrollador = perfil?.rol === 'desarrollador'
+  const mostrarToggle = esSupervisor || esDesarrollador
 
   // Búsqueda y filtros
   const [busqueda, setBusqueda] = useState('')
@@ -106,6 +109,7 @@ export default function ClientesView() {
   const [filtroTipo, setFiltroTipo]         = useState('')
   const [filtroVendedor, setFiltroVendedor] = useState('')
   const [filtroConDeuda, setFiltroConDeuda] = useState(false)
+  const [verTodos, setVerTodos] = useState(false)
   const [vistaMode, setVistaMode] = useState(() => localStorage.getItem('clientes_vista') || (window.innerWidth < 768 ? 'list' : 'grid'))
   const [pagina, setPagina] = useState(1)
 
@@ -127,12 +131,14 @@ export default function ClientesView() {
   // Filtrado local
   const clientesFiltrados = useMemo(() => {
     return clientes.filter(c => {
+      // Supervisor/dev con toggle en "Mis datos": solo ver propios
+      if (mostrarToggle && !verTodos && c.vendedor_id !== perfil?.id) return false
       if (filtroTipo     && c.tipo_cliente !== filtroTipo)               return false
       if (filtroVendedor && c.vendedor_id  !== filtroVendedor)           return false
       if (filtroConDeuda && !(Number(c.saldo_pendiente || 0) > 0))      return false
       return true
     })
-  }, [clientes, filtroTipo, filtroVendedor, filtroConDeuda])
+  }, [clientes, filtroTipo, filtroVendedor, filtroConDeuda, mostrarToggle, verTodos, perfil?.id])
 
   const hayFiltros = filtroTipo || filtroVendedor || filtroConDeuda
 
@@ -296,6 +302,11 @@ export default function ClientesView() {
           Filtros:
         </div>
 
+        {/* Toggle Mis datos / Todos — solo supervisor/dev */}
+        {mostrarToggle && (
+          <ToggleVistaPersonal value={verTodos} onChange={v => { setVerTodos(v); setFiltroVendedor(''); setPagina(1) }} />
+        )}
+
         {/* Tipo */}
         <Dropdown
           value={filtroTipo}
@@ -307,13 +318,15 @@ export default function ClientesView() {
           ]}
         />
 
-        {/* Vendedor */}
-        <Dropdown
-          value={filtroVendedor}
-          onChange={v => { setFiltroVendedor(v); setPagina(1) }}
-          placeholder="Todos los vendedores"
-          options={vendedores.map(v => ({ value: v.id, label: v.nombre }))}
-        />
+        {/* Vendedor — solo visible cuando "Todos" está activo o para admin */}
+        {(!mostrarToggle || verTodos) && (
+          <Dropdown
+            value={filtroVendedor}
+            onChange={v => { setFiltroVendedor(v); setPagina(1) }}
+            placeholder="Todos los vendedores"
+            options={vendedores.map(v => ({ value: v.id, label: v.nombre }))}
+          />
+        )}
 
         {/* Solo con deuda */}
         <button
