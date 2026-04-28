@@ -155,13 +155,6 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
 
         {/* Aviso */}
         <div className="flex-1 min-h-0 overflow-y-auto space-y-4">
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-2.5">
-          <AlertTriangle size={15} className="text-amber-600 shrink-0 mt-0.5" />
-          <p className="text-sm text-amber-800">
-            Revise el detalle antes de confirmar. Al crear la orden de despacho,
-            el <strong>stock se descontará automáticamente</strong> del inventario.
-          </p>
-        </div>
 
         {/* Cliente */}
         <div className="bg-slate-50 rounded-xl px-4 py-2.5 flex items-center justify-between">

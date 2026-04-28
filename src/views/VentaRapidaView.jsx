@@ -1498,12 +1498,6 @@ function Step3Confirmar({
 }) {
   return (
     <div className="p-4 space-y-4">
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2">
-        <AlertCircle size={16} className="text-amber-600 mt-0.5 shrink-0" />
-        <p className="text-sm text-amber-800">
-          Al confirmar se creará la cotización y el despacho. El stock se descontará inmediatamente.
-        </p>
-      </div>
 
       {/* Cliente */}
       <div className="bg-white border border-slate-200 rounded-xl p-4">
