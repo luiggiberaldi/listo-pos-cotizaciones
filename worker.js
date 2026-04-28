@@ -316,6 +316,7 @@ export default {
 
       } catch (e) {
         // Log unhandled API errors to system_logs
+        console.error(`[API ERROR] ${request.method} ${url.pathname}:`, e.message, e.stack?.slice(0, 500))
         const user = await verifyAuth(request, env).catch(() => null)
         await logToSystem(env, {
           nivel: 'error',
@@ -779,6 +780,7 @@ async function handleAdmin(request, env, url) {
 // ══════════════════════════════════════════════════════════════════════════════
 
 async function handleSwitchOperator(request, env) {
+  console.log('[SWITCH-OP] Start')
   // Rate limit
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown'
   if (isRateLimited(`switch:${ip}`)) {
@@ -788,6 +790,7 @@ async function handleSwitchOperator(request, env) {
   // Verify business account is authenticated
   const user = await verifyAuth(request, env);
   if (!user?.id) return jsonError('No autenticado', 401, request);
+  console.log('[SWITCH-OP] Auth OK, user:', user.id)
 
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
@@ -795,6 +798,7 @@ async function handleSwitchOperator(request, env) {
   const { operator_id, pin } = body;
   if (!operator_id || !pin) return jsonError('operator_id y pin requeridos', 400, request);
   if (!isValidUuid(operator_id)) return jsonError('operator_id inválido', 400, request);
+  console.log('[SWITCH-OP] operator_id:', operator_id)
 
   // Fetch operator from usuarios table
   const res = await fetch(
@@ -806,9 +810,11 @@ async function handleSwitchOperator(request, env) {
       },
     }
   );
+  console.log('[SWITCH-OP] Supabase fetch status:', res.status)
   if (!res.ok) return jsonError('Error al buscar operador', 500, request);
   const [operator] = await res.json();
   if (!operator) return jsonError('Operador no encontrado o inactivo', 404, request);
+  console.log('[SWITCH-OP] Operator found:', operator.nombre, 'has pin_hash:', !!operator.pin_hash)
 
   // Validate PIN
   if (!operator.pin_hash || !operator.pin_salt) {

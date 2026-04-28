@@ -363,6 +363,7 @@ export default function AppLayout() {
       )}
 
       {/* ── Sidebar / Drawer ─────────────────────────────────────────────── */}
+      <div className={`relative shrink-0 transition-all duration-300 ease-out ${sidebarCollapsed ? 'md:w-[72px]' : 'md:w-64'}`}>
       <aside
         className={`
           fixed inset-y-0 left-0 z-50 flex flex-col shrink-0
@@ -370,7 +371,7 @@ export default function AppLayout() {
           ${menuOpen ? 'translate-x-0' : '-translate-x-full'}
           ${sidebarCollapsed ? 'md:w-[72px]' : 'md:w-64'}
           w-64 md:translate-x-0 md:static md:z-auto md:h-[calc(100vh-3.5rem)] md:sticky md:top-14
-          overflow-visible
+          overflow-hidden
         `}
         style={{
           background: 'linear-gradient(180deg, #0a1628 0%, #0d1f3c 60%, #0a1a0f 100%)',
@@ -378,7 +379,7 @@ export default function AppLayout() {
           boxShadow: '4px 0 24px rgba(0,0,0,0.3)',
         }}
       >
-        <div className="flex flex-col h-full min-h-0 overflow-hidden">
+        <div className="flex flex-col h-full min-h-0">
         {/* Malla de puntos decorativa */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-[0.03]">
           <svg width="100%" height="100%"><defs><pattern id="sdot" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="white"/></pattern></defs><rect width="100%" height="100%" fill="url(#sdot)"/></svg>
@@ -413,8 +414,6 @@ export default function AppLayout() {
               <div className="h-px flex-1 opacity-20" style={{ background: 'linear-gradient(to left, transparent, #B8860B)' }} />
             </div>
           )}
-
-          {/* Botón colapsar — movido fuera del overflow-hidden */}
         </div>
 
         {/* Navegación */}
@@ -468,18 +467,18 @@ export default function AppLayout() {
           </button>
         </div>
         </div>
-
-        {/* Botón colapsar — solo desktop, fuera del overflow-hidden */}
-        <button
-          onClick={() => setSidebarCollapsed(c => !c)}
-          className="hidden md:flex absolute -right-3 top-28 w-6 h-6 rounded-full items-center justify-center transition-all hover:scale-110 z-50"
-          style={{ background: '#0d1f3c', border: '1px solid rgba(255,255,255,0.15)', boxShadow: '0 2px 8px rgba(0,0,0,0.4)', color: 'rgba(255,255,255,0.5)' }}
-          title={sidebarCollapsed ? 'Expandir menú' : 'Colapsar menú'}
-        >
-          {sidebarCollapsed ? <PanelLeftOpen size={13} /> : <PanelLeftClose size={13} />}
-        </button>
-
       </aside>
+
+      {/* Botón colapsar — solo desktop, fuera del aside para no ser recortado por overflow-hidden */}
+      <button
+        onClick={() => setSidebarCollapsed(c => !c)}
+        className="hidden md:flex absolute -right-3 top-28 w-6 h-6 rounded-full items-center justify-center transition-all hover:scale-110 z-50"
+        style={{ background: '#0d1f3c', border: '1px solid rgba(255,255,255,0.15)', boxShadow: '0 2px 8px rgba(0,0,0,0.4)', color: 'rgba(255,255,255,0.5)' }}
+        title={sidebarCollapsed ? 'Expandir menú' : 'Colapsar menú'}
+      >
+        {sidebarCollapsed ? <PanelLeftOpen size={13} /> : <PanelLeftClose size={13} />}
+      </button>
+      </div>
 
       {/* ── Área de contenido ───────────────────────────────────────────── */}
       <main ref={mainRef} className="flex-1 overflow-y-auto min-w-0 pb-20 md:pb-0 flex flex-col">
