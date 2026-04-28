@@ -266,7 +266,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     <div className="group bg-white rounded-2xl border border-slate-200 hover:shadow-lg transition-all duration-200 overflow-hidden flex flex-col" onClick={(e) => { if (e.target.closest('button') || e.target.closest('[data-no-click]') || showEdit || showDetalle || showDescuento) return; setShowDetalle(true) }}>
 
       {/* ── Header strip con color del vendedor ── */}
-      <div className="relative h-[4.5rem] shrink-0 flex items-end justify-between px-4 pb-2"
+      <div className="relative h-14 shrink-0 flex items-end justify-between px-3 pb-1.5"
         title={despacho.vendedor?.nombre ? `Vendedor: ${despacho.vendedor.nombre}` : undefined}
         style={{ background: `linear-gradient(135deg, ${vendedorColor}ee 0%, ${vendedorColor}99 100%)` }}>
         <div className="absolute inset-0 opacity-10"
@@ -275,7 +275,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             backgroundSize: '12px 12px',
           }} />
         <div className="relative z-10 min-w-0">
-          <p className="font-black text-white font-mono leading-tight drop-shadow" style={{fontSize:'20px'}}>{numDisplay}</p>
+          <p className="font-black text-white font-mono leading-tight drop-shadow text-base">{numDisplay}</p>
           <span className="text-[9px] sm:text-[10px] font-mono text-white/60 bg-white/15 px-1 py-0.5 rounded whitespace-nowrap">{cotNum}</span>
         </div>
         <div className="relative z-10 shrink-0 ml-1">
@@ -284,7 +284,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       </div>
 
       {/* ── Fecha relevante + Cliente ── */}
-      <div className="px-4 pt-3 pb-2 space-y-1.5">
+      <div className="px-3 pt-2 pb-1.5 space-y-1">
         <div className="flex items-center gap-1.5 text-xs text-slate-400">
           <Calendar size={11} />
           {despacho.estado === 'entregada' && despacho.entregada_en
@@ -309,7 +309,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
 
       {/* ── Referencia de pago del cliente ── */}
       {(despacho.forma_pago_cliente || despacho.referencia_pago) && (
-        <div className="mx-4 mb-1.5 flex items-center gap-2 text-[11px] text-slate-400 flex-wrap">
+        <div className="mx-3 mb-1 flex items-center gap-2 text-[11px] text-slate-400 flex-wrap">
           {despacho.forma_pago_cliente && (() => {
             try {
               const parsed = typeof despacho.forma_pago_cliente === 'string' ? JSON.parse(despacho.forma_pago_cliente) : despacho.forma_pago_cliente
@@ -329,7 +329,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       )}
 
       {/* ── Total ── */}
-      <div className="mx-4 mb-3 bg-slate-50 rounded-xl px-3.5 py-3 flex items-center justify-between">
+      <div className="mx-3 mb-2 bg-slate-50 rounded-xl px-3 py-2 flex items-center justify-between">
         <span className="text-xs font-medium text-slate-400">Total</span>
         <div className="text-right">
           {descuentoTotal > 0 ? (
@@ -441,13 +441,13 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       </div>
 
       {/* ══════════ DESKTOP ACTIONS (md+) ══════════ */}
-      <div className="hidden md:flex mt-auto border-t border-slate-100 px-3 py-2 items-center gap-1.5">
+      <div className="hidden md:flex mt-auto border-t border-slate-100 px-3 py-2 items-center gap-1 flex-wrap">
         {/* Botón primario */}
         {primaryAction.key !== 'ver' && (
           <button onClick={primaryAction.action}
             disabled={estadoCambiando}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50 ${pColors.bg} ${pColors.text} ${pColors.active}`}>
-            {estadoCambiando ? <Loader2 size={13} className="animate-spin" /> : <primaryAction.icon size={13} />}
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all disabled:opacity-50 whitespace-nowrap ${pColors.bg} ${pColors.text} ${pColors.active}`}>
+            {estadoCambiando ? <Loader2 size={12} className="animate-spin" /> : <primaryAction.icon size={12} />}
             {primaryAction.label}
           </button>
         )}
@@ -457,9 +457,9 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           <button onClick={() => setShowPrintMenu(v => !v)}
             onBlur={() => setTimeout(() => setShowPrintMenu(false), 200)}
             disabled={printLoading}
-            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-50">
-            {printLoading ? <Loader2 size={13} className="animate-spin" /> : <Printer size={13} />}
-            Imprimir <ChevronDown size={10} />
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-50 whitespace-nowrap">
+            {printLoading ? <Loader2 size={12} className="animate-spin" /> : <Printer size={12} />}
+            Imprimir <ChevronDown size={9} />
           </button>
           {showPrintMenu && (
             <div className="absolute left-0 bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
@@ -483,9 +483,9 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           <button onClick={() => setShowDownloadMenu(v => !v)}
             onBlur={() => setTimeout(() => setShowDownloadMenu(false), 200)}
             disabled={pdfLoading || ordenLoading}
-            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-50">
-            {(pdfLoading || ordenLoading) ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
-            Descargar <ChevronDown size={10} />
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-50 whitespace-nowrap">
+            {(pdfLoading || ordenLoading) ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+            Descargar <ChevronDown size={9} />
           </button>
           {showDownloadMenu && (
             <div className="absolute left-0 bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
@@ -506,15 +506,15 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
 
         {canEditar && (
           <button onClick={() => setShowEdit(true)}
-            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-indigo-600 hover:bg-indigo-50 transition-colors">
-            <Pencil size={13} /> Editar
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-indigo-600 hover:bg-indigo-50 transition-colors whitespace-nowrap">
+            <Pencil size={12} /> Editar
           </button>
         )}
 
         {/* Más (···) */}
         <button onClick={() => setShowSheet(true)}
-          className="ml-auto flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:bg-slate-50 transition-colors">
-          <MoreHorizontal size={13} /> Más
+          className="ml-auto flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 transition-colors whitespace-nowrap">
+          <MoreHorizontal size={12} /> Más
         </button>
       </div>
 
