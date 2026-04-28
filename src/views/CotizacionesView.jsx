@@ -2,7 +2,7 @@
 // Vista principal: lista de cotizaciones + builder integrado
 // El builder reemplaza la lista in-page (sin navegación adicional)
 import { useState, useEffect, useMemo } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { FileText, Plus, RefreshCw, AlertTriangle, PackageCheck, Loader2, X, AlertCircle, LayoutGrid, List, ChevronDown, Truck } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import supabase from '../services/supabase/client'
@@ -529,6 +529,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
 
 // ─── Vista lista ──────────────────────────────────────────────────────────────
 function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
+  const navigate = useNavigate()
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const esAdministracion = perfil?.rol === 'administracion'
@@ -605,6 +606,7 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
         notas: notas || null,
       })
       setCotizacionADespachar(null)
+      navigate('/despachos')
     } catch (err) {
       showToast(err.message || 'Error al crear despacho', 'error')
     }

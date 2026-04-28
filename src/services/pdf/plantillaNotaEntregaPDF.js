@@ -205,7 +205,7 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   const choferStartY = sloganY - 9 - TRANS_H
   const fpY = choferStartY - 3 - 19
 
-  // ── Forma de pago (sin marcar) ──
+  // ── Condiciones de pago ──
   doc.setDrawColor(120, 120, 120)
   doc.setLineWidth(0.3)
   doc.rect(MARGIN, fpY, CONTENT_W, 9, 'S')
@@ -213,13 +213,7 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7.5)
   doc.setTextColor(...C_DARK)
-  doc.text('FORMA DE PAGO:', MARGIN + 3, fpY + 6)
-  drawCheck(doc, 'EFECTIVO Bs',  MARGIN + 38, fpY + 6)
-  drawCheck(doc, 'ZELLE Bs',     MARGIN + 62, fpY + 6)
-  drawCheck(doc, 'P. MÓVIL Bs',  MARGIN + 82, fpY + 6)
-  drawCheck(doc, 'USDT Bs',      MARGIN + 104, fpY + 6)
-  drawCheck(doc, 'TRANSF. Bs',   MARGIN + 122, fpY + 6)
-  drawCheck(doc, 'CTA X COB. Bs', MARGIN + 144, fpY + 6)
+  doc.text('8 días de crédito continuo', MARGIN + 3, fpY + 6)
 
   // Barra TOTAL — fondo blanco, texto negro (para llenar a mano)
   const totTopY = fpY + 9
