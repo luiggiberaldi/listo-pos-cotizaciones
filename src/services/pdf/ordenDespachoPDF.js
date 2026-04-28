@@ -378,8 +378,6 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
     doc.text(txt, cx + checkSize + 1.2, fpY + 6)
     cx += checkSize + 1.2 + doc.getTextWidth(txt) + 4
   })
-    cx += checkSize + 1.2 + doc.getTextWidth(m) + 3
-  })
 
   // Desglose Subtotal + Flete + Descuento
   let desY = fpY + 9
