@@ -152,9 +152,36 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, onBorra
                 </span>
               )}
             </div>
-            <p className="font-black text-slate-800 text-base sm:text-lg leading-none">{fmtUsd(producto.precio_usd)}</p>
+
+            {/* P1 — precio principal */}
+            <div className="flex items-baseline gap-1.5">
+              {(producto.precio_2 != null || producto.precio_3 != null) && (
+                <span className="text-[8px] font-semibold text-slate-400 uppercase tracking-wide shrink-0">Detal</span>
+              )}
+              <p className="font-black text-slate-800 text-base sm:text-lg leading-none">{fmtUsd(producto.precio_usd)}</p>
+            </div>
             {tasa > 0 && producto.precio_usd != null && (
               <p className="text-[10px] text-slate-400 mt-0.5">{fmtBs(usdToBs(producto.precio_usd, tasa))}</p>
+            )}
+
+            {/* P2 / P3 — precios secundarios */}
+            {(producto.precio_2 != null || producto.precio_3 != null) && (
+              <div className="flex flex-wrap gap-1 mt-2 pt-1.5 border-t border-slate-200">
+                {producto.precio_2 != null && (
+                  <div className="flex flex-col bg-white border border-slate-200 rounded-lg px-2 py-1 min-w-0">
+                    <span className="text-[8px] font-semibold text-slate-400 uppercase tracking-wide">Mayor</span>
+                    <span className="text-[11px] font-bold text-slate-700 leading-tight">{fmtUsd(producto.precio_2)}</span>
+                    {tasa > 0 && <span className="text-[9px] text-slate-400 leading-none">{fmtBs(usdToBs(producto.precio_2, tasa))}</span>}
+                  </div>
+                )}
+                {producto.precio_3 != null && (
+                  <div className="flex flex-col bg-white border border-slate-200 rounded-lg px-2 py-1 min-w-0">
+                    <span className="text-[8px] font-semibold text-slate-400 uppercase tracking-wide">Especial</span>
+                    <span className="text-[11px] font-bold text-slate-700 leading-tight">{fmtUsd(producto.precio_3)}</span>
+                    {tasa > 0 && <span className="text-[9px] text-slate-400 leading-none">{fmtBs(usdToBs(producto.precio_3, tasa))}</span>}
+                  </div>
+                )}
+              </div>
             )}
           </div>
 
