@@ -197,7 +197,7 @@ export default function AppLayout() {
   const collapsed = sidebarCollapsed && !menuOpen
 
   return (
-    <div className="flex h-screen pt-12 md:pt-14" style={{ background: '#f1f5f9' }}>
+    <div className="flex h-screen pt-12 md:pt-14 overflow-hidden" style={{ background: '#f1f5f9' }}>
 
       {/* ── Barra superior (móvil + desktop) ────────────────────────────── */}
       <div className="fixed top-0 left-0 right-0 z-40 px-3 md:px-4 h-12 md:h-14 flex items-center justify-between gap-2 md:gap-4"
