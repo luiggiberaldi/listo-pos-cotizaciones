@@ -1050,8 +1050,6 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                         { value: '$',         label: 'USDT ($)' },
                         { value: 'bcv',       label: 'Dólar BCV' },
                         { value: 'bs',        label: 'Bolívares (Bs)' },
-                        { value: 'mixto',     label: 'Mixto USDT' },
-                        { value: 'mixto_bcv', label: 'Mixto BCV' },
                       ].map(opt => (
                         <button key={opt.value} type="button"
                           onClick={() => setMonedaPDF(opt.value)}

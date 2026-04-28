@@ -61,8 +61,6 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
     { key: '$', icon: <DollarSign size={14} className="text-emerald-500" />, label: 'USDT ($)' },
     { key: 'bcv', icon: <span className="text-sm font-bold text-teal-500 w-[14px] text-center">$</span>, label: 'Dólar BCV' },
     { key: 'bs', icon: <span className="text-sm font-bold text-blue-500 w-[14px] text-center">Bs</span>, label: 'Bolívares' },
-    { key: 'mixto', icon: <span className="text-xs font-bold text-amber-500 w-[18px] text-center shrink-0">$Bs</span>, label: 'Mixto USDT' },
-    { key: 'mixto_bcv', icon: <span className="text-xs font-bold text-orange-500 w-[18px] text-center shrink-0">$Bs</span>, label: 'Mixto BCV' },
   ]
 
   const monedaLabel = MONEDA_OPTIONS.find(o => o.key === monedaPdf)?.label || 'USDT ($)'

@@ -71,8 +71,6 @@ export default function ListaPreciosModal({
     { value: '$', label: 'USDT ($)', icon: '$' },
     { value: 'bcv', label: 'Dólar BCV', icon: '$' },
     { value: 'bs', label: 'Bolívares', icon: 'Bs' },
-    { value: 'mixto', label: 'Mixto USDT', icon: '$/Bs' },
-    { value: 'mixto_bcv', label: 'Mixto BCV', icon: '$/Bs' },
   ]
 
   const COLUMNAS_OPT = [
