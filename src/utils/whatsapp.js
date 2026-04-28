@@ -119,8 +119,7 @@ export async function compartirPorWhatsApp({ pdfBlob, pdfFilename, telefono, men
     }
   }
 
-  // ── PC: descargar PDF + abrir WhatsApp Web con mensaje ──
-  // Intentar subir el PDF y regenerar mensaje con el link
+  // ── PC: siempre descargar PDF + abrir WhatsApp Web con mensaje ──
   let mensajeFinal = mensaje
   if (pdfBlob && mensajeParams) {
     try {
@@ -128,16 +127,17 @@ export async function compartirPorWhatsApp({ pdfBlob, pdfFilename, telefono, men
       mensajeFinal = generarMensaje({ ...mensajeParams, pdfUrl })
     } catch (err) {
       console.error('[WhatsApp] Error subiendo PDF:', err?.message || err)
-      // En PC sin link: descargar el PDF para que lo adjunte manualmente
-      if (!isMobile && pdfBlob) {
-        const url = URL.createObjectURL(pdfBlob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = pdfFilename || 'cotizacion.pdf'
-        a.click()
-        setTimeout(() => URL.revokeObjectURL(url), 5000)
-      }
     }
+  }
+
+  // En PC: descargar el PDF automáticamente para que lo pueda adjuntar
+  if (!isMobile && pdfBlob) {
+    const url = URL.createObjectURL(pdfBlob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = pdfFilename || 'cotizacion.pdf'
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 5000)
   }
 
   // Abrir WhatsApp directo al número del cliente
