@@ -13,6 +13,11 @@ if (localStorage.getItem('modo-accesible') === '1') {
   document.documentElement.classList.add('modo-accesible')
 }
 
+// Evitar que scroll con rueda del mouse cambie valores en inputs numéricos
+document.addEventListener('wheel', (e) => {
+  if (e.target?.type === 'number') e.target.blur()
+}, { passive: true })
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <App />
