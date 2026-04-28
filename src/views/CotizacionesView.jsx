@@ -326,21 +326,6 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
           )}
         </div>
 
-        {/* Referencia de pago */}
-        {formasPago.length > 0 && (
-        <div>
-          <label className="block text-xs font-semibold text-slate-600 mb-1">Referencia / comprobante (opcional)</label>
-          <input
-            type="text"
-            value={referenciaPago}
-            onChange={e => setReferenciaPago(e.target.value)}
-            placeholder="Nº confirmación, comprobante..."
-            className="w-full px-3 py-2.5 rounded-xl text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:bg-white min-h-[44px]"
-            disabled={cargando}
-          />
-        </div>
-        )}
-
         {/* Transportista */}
         <div className="space-y-2">
           <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">

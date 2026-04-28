@@ -1286,16 +1286,6 @@ function Step2Pago({
         )}
       </div>
 
-      {/* Referencia */}
-      <div>
-        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">
-          Referencia / comprobante
-        </label>
-        <input type="text" value={referenciaPago} onChange={e => setReferenciaPago(e.target.value)}
-          placeholder="Ej: REF-12345"
-          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-sky-200 focus:border-sky-400 outline-none" />
-      </div>
-
       {/* Transportista */}
       <div>
         <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">
@@ -1584,12 +1574,6 @@ function Step3Confirmar({
             <span className="font-semibold text-slate-800">{fmtUsd(Number(fp.monto) || 0)}</span>
           </div>
         ))}
-        {referenciaPago && (
-          <div className="flex items-center gap-2 text-sm">
-            <Hash size={14} className="text-slate-400" />
-            <span className="text-slate-600">Ref: {referenciaPago}</span>
-          </div>
-        )}
       </div>
 
       {/* Transportista */}
