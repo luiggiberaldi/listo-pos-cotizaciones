@@ -1,5 +1,6 @@
 // src/components/cotizaciones/CotizacionCard.jsx
 import { useState, memo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { FileText, User, Calendar, Pencil, Ban, XCircle, FileDown, MessageCircle, Loader2, Truck, ChevronDown, DollarSign, RefreshCw, Eye, Clock, PackageCheck, MoreHorizontal, AlertTriangle, Printer, Check, Download } from 'lucide-react'
 import EstadoBadge from './EstadoBadge'
 import MobileActionSheet from './MobileActionSheet'
@@ -31,6 +32,7 @@ async function fetchClienteViaAPI(clienteId) {
 }
 
 export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, onCambiarEstado, onDespachar, onReciclar, onCambiarEstadoDespacho, tasa = 0 }) {
+  const navigate = useNavigate()
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const esAdministracion = perfil?.rol === 'administracion'
@@ -263,7 +265,9 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
           <div className="flex items-center justify-end gap-1.5 flex-wrap">
             <EstadoBadge estado={cotizacion.estado} />
             {despacho && (
-              <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+              <button
+                onClick={(e) => { e.stopPropagation(); navigate('/despachos') }}
+                className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full cursor-pointer hover:opacity-80 transition-opacity ${
                 despacho.estado === 'entregada' ? 'bg-emerald-500 text-white' :
                 despacho.estado === 'despachada' ? 'bg-blue-500 text-white' :
                 despacho.estado === 'anulada' ? 'bg-red-400 text-white' :
@@ -273,7 +277,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
                  despacho.estado === 'despachada' ? <><Truck size={10} /> En camino</> :
                  despacho.estado === 'entregada' ? <><PackageCheck size={10} /> Entregada</> :
                  despacho.estado === 'anulada' ? <><XCircle size={10} /> Despacho anulado</> : despacho.estado}
-              </span>
+              </button>
             )}
           </div>
         </div>
