@@ -325,10 +325,10 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                   : 'bg-red-50 text-red-600 border border-red-200'
               }`}>
                 <span>Asignado: ${montoAsignado.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                <span>Total: ${totalConFlete.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <span>Total: ${totalSinFlete.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 {pagoCuadrado
                   ? <span className="text-emerald-500">✓</span>
-                  : <span className="text-red-400">Faltan ${(totalConFlete - montoAsignado).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  : <span className="text-red-400">Faltan ${(totalSinFlete - montoAsignado).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 }
               </div>
             </div>

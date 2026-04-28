@@ -48,7 +48,7 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
   const totalBase = Number(despacho.total_usd || 0) - Number(despacho.flete_usd || 0)
   const totalConFlete = totalBase + (Number(fleteUsd) || 0)
   const montoAsignado = formasPago.reduce((s, fp) => s + (Number(fp.monto) || 0), 0)
-  const pagoCuadrado = formasPago.length > 0 && Math.abs(montoAsignado - totalConFlete) < 0.02
+  const pagoCuadrado = formasPago.length > 0 && Math.abs(montoAsignado - totalBase) < 0.02
 
   const numDisplay = despacho.cotizacion
     ? `DES-${String(despacho.cotizacion.numero).padStart(5, '0')}`
@@ -58,7 +58,7 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
     setFormasPago(prev => {
       const existe = prev.find(fp => fp.metodo === metodo)
       if (existe) return prev.filter(fp => fp.metodo !== metodo)
-      const restante = totalConFlete - prev.reduce((s, fp) => s + (Number(fp.monto) || 0), 0)
+      const restante = totalBase - prev.reduce((s, fp) => s + (Number(fp.monto) || 0), 0)
       return [...prev, { metodo, monto: restante > 0 ? Number(restante.toFixed(2)) : '' }]
     })
   }
@@ -156,10 +156,10 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
                     : 'bg-red-50 text-red-600 border border-red-200'
                 }`}>
                   <span>Asignado: ${montoAsignado.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                  <span>Total: ${totalConFlete.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span>Total: ${totalBase.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   {pagoCuadrado
                     ? <span className="text-emerald-500">✓</span>
-                    : <span className="text-red-400">Faltan ${(totalConFlete - montoAsignado).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    : <span className="text-red-400">Faltan ${(totalBase - montoAsignado).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   }
                 </div>
               </div>
