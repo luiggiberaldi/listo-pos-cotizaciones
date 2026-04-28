@@ -259,7 +259,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
             backgroundSize: '12px 12px',
           }} />
         <div className="relative z-10 flex items-start justify-between gap-2">
-          <p className="font-black text-white font-mono leading-tight drop-shadow text-base min-w-0 truncate">{numDisplay}</p>
+          <p className="font-black text-white font-mono leading-tight drop-shadow text-base shrink-0">{numDisplay}</p>
           <div className="flex flex-col items-end gap-1 shrink-0">
             <EstadoBadge estado={cotizacion.estado} />
             {despacho && (
