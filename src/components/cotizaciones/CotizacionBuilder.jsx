@@ -395,7 +395,7 @@ function TransportistaSelector({ transportistas, transportistaId, setTransportis
   )
 }
 
-export default function CotizacionBuilder({ cotizacionExistente = null, clientePreseleccionado = null, onVolver, onGuardado }) {
+export default function CotizacionBuilder({ cotizacionExistente = null, clientePreseleccionado = null, onVolver, onGuardado, onDespachar }) {
   const esEdicion = !!cotizacionExistente
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
@@ -1259,82 +1259,88 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
         {/* PASO 4: Confirmación post-envío                                */}
         {/* ═══════════════════════════════════════════════════════════════ */}
         {paso === 4 && (
-          <div className="flex items-center justify-center min-h-[50vh] px-2">
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden max-w-md w-full">
+          <div className="flex items-center justify-center min-h-[40vh] px-2">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden max-w-sm w-full">
 
-              {/* Header de éxito con animación sutil */}
-              <div className="relative h-28 sm:h-32 flex flex-col items-center justify-center"
+              {/* Header de éxito compacto */}
+              <div className="relative h-20 flex flex-col items-center justify-center"
                 style={{ background: 'linear-gradient(135deg, #1B365D 0%, #2d5a8e 50%, #B8860B 100%)' }}>
                 <div className="absolute inset-0 opacity-[0.07] pointer-events-none"
                   style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '14px 14px' }} />
-                <div className="relative z-10 w-14 h-14 rounded-full flex items-center justify-center bg-white/20 backdrop-blur-sm border-2 border-white/40 shadow-lg">
-                  <CheckCircle size={28} color="white" strokeWidth={2.5} />
+                <div className="relative z-10 w-10 h-10 rounded-full flex items-center justify-center bg-white/20 backdrop-blur-sm border-2 border-white/40 shadow-lg">
+                  <CheckCircle size={20} color="white" strokeWidth={2.5} />
                 </div>
-                <p className="relative z-10 text-white/80 text-xs font-medium mt-2 tracking-wide uppercase">Enviada exitosamente</p>
+                <p className="relative z-10 text-white/80 text-[10px] font-medium mt-1 tracking-wide uppercase">Enviada exitosamente</p>
               </div>
 
-              <div className="p-5 sm:p-6 md:p-8 space-y-5 text-center">
-                {/* Número de cotización destacado */}
+              <div className="p-4 space-y-3 text-center">
+                {/* Número de cotización */}
                 <div>
-                  <h3 className="text-lg font-bold text-slate-800">Cotización enviada</h3>
+                  <h3 className="text-sm font-bold text-slate-800">Cotización enviada</h3>
                   {numDisplay && (
-                    <p className="font-black text-2xl font-mono mt-1 tracking-tight" style={{ color: '#1B365D' }}>{numDisplay}</p>
+                    <p className="font-black text-xl font-mono mt-0.5 tracking-tight" style={{ color: '#1B365D' }}>{numDisplay}</p>
                   )}
                 </div>
 
-                {/* Resumen con separadores */}
-                <div className="bg-slate-50 rounded-xl p-4 divide-y divide-slate-100">
-                  <div className="flex justify-between py-2.5 first:pt-0">
-                    <span className="text-xs font-medium text-slate-400 uppercase tracking-wide">Cliente</span>
-                    <span className="font-semibold text-slate-800 text-sm">{clienteSeleccionado?.nombre}</span>
+                {/* Resumen compacto */}
+                <div className="bg-slate-50 rounded-xl p-3 divide-y divide-slate-100">
+                  <div className="flex justify-between py-1.5 first:pt-0">
+                    <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Cliente</span>
+                    <span className="font-semibold text-slate-800 text-xs">{clienteSeleccionado?.nombre}</span>
                   </div>
-                  <div className="flex justify-between py-2.5">
-                    <span className="text-xs font-medium text-slate-400 uppercase tracking-wide">Total</span>
-                    <span className="font-bold text-slate-900 text-base">{fmtUsd(totalUsd)}</span>
+                  <div className="flex justify-between py-1.5">
+                    <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Total</span>
+                    <span className="font-bold text-slate-900 text-sm">{fmtUsd(totalUsd)}</span>
                   </div>
-                  <div className="flex justify-between py-2.5 last:pb-0">
-                    <span className="text-xs font-medium text-slate-400 uppercase tracking-wide">Items</span>
-                    <span className="font-medium text-slate-700 text-sm">{items.length} producto{items.length !== 1 ? 's' : ''}</span>
+                  <div className="flex justify-between py-1.5 last:pb-0">
+                    <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Items</span>
+                    <span className="font-medium text-slate-700 text-xs">{items.length} producto{items.length !== 1 ? 's' : ''}</span>
                   </div>
                 </div>
 
                 {/* Acciones */}
-                <div className="space-y-3 pt-1">
+                <div className="space-y-2">
                   {/* Resumen detallado expandible */}
                   <button onClick={() => setShowResumen(v => !v)}
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all active:scale-[0.98]"
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-xs transition-all active:scale-[0.98]"
                     style={{ backgroundColor: '#1B365D10', color: '#1B365D' }}>
-                    <Eye size={16} />
+                    <Eye size={14} />
                     {showResumen ? 'Ocultar resumen' : 'Ver resumen'}
                   </button>
                   {showResumen && (
-                    <div className="bg-slate-50 rounded-xl p-3 space-y-2 max-h-60 overflow-y-auto text-left">
+                    <div className="bg-slate-50 rounded-xl p-2.5 space-y-1.5 max-h-48 overflow-y-auto text-left">
                       {items.map((item, i) => (
-                        <div key={i} className="flex items-start justify-between gap-2 py-1.5 border-b border-slate-100 last:border-0">
+                        <div key={i} className="flex items-start justify-between gap-2 py-1 border-b border-slate-100 last:border-0">
                           <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-slate-700 truncate">{item.nombre}</p>
+                            <p className="text-[11px] font-semibold text-slate-700 truncate">{item.nombre}</p>
                             <p className="text-[10px] text-slate-400">{item.cantidad} × {fmtUsd(item.precioUnitUsd)}</p>
                           </div>
-                          <p className="text-xs font-bold text-slate-800 shrink-0">{fmtUsd(item.cantidad * item.precioUnitUsd)}</p>
+                          <p className="text-[11px] font-bold text-slate-800 shrink-0">{fmtUsd(item.cantidad * item.precioUnitUsd)}</p>
                         </div>
                       ))}
                     </div>
                   )}
 
-                  <div className="flex flex-col xs:flex-row gap-2 sm:gap-3">
+                  <div className="flex gap-2">
                     <button onClick={handleWhatsApp} disabled={waLoading}
-                      className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-sm rounded-xl transition-all active:scale-[0.98] disabled:opacity-50">
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-xs rounded-xl transition-all active:scale-[0.98] disabled:opacity-50">
                       {waLoading
-                        ? <div className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
-                        : <MessageCircle size={16} />}
+                        ? <div className="w-3.5 h-3.5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+                        : <MessageCircle size={14} />}
                       WhatsApp
                     </button>
+                    {onDespachar && (
+                      <button onClick={() => onDespachar({ id: cotizacionId, numero: numDisplay.replace('COT-', '').replace(/^0+/, ''), total_usd: totalUsd })}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs rounded-xl transition-all active:scale-[0.98]">
+                        <Truck size={14} /> Despachar
+                      </button>
+                    )}
                   </div>
 
                   <button onClick={onGuardado}
-                    className="w-full py-3.5 text-white font-bold text-sm rounded-xl transition-all shadow-lg hover:shadow-xl active:scale-[0.98] flex items-center justify-center gap-2"
+                    className="w-full py-3 text-white font-bold text-xs rounded-xl transition-all shadow-lg hover:shadow-xl active:scale-[0.98] flex items-center justify-center gap-2"
                     style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
-                    <Plus size={16} /> Nueva cotización
+                    <Plus size={14} /> Nueva cotización
                   </button>
 
                   <button onClick={onVolver}

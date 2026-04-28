@@ -546,6 +546,15 @@ function ListaCotizaciones({ onNueva, onEditar }) {
   const [vistaMode, setVistaMode] = useState(() => localStorage.getItem('cotizaciones_vista') || (window.innerWidth < 768 ? 'list' : 'grid'))
   const [cotizacionAAnular, setCotizacionAAnular] = useState(null)
   const [cotizacionADespachar, setCotizacionADespachar] = useState(null)
+  const [pendienteDespachar, setPendienteDespachar] = useState(null)
+
+  // Abrir modal de despacho después de volver del builder
+  useEffect(() => {
+    if (pendienteDespachar && modo === 'lista') {
+      setCotizacionADespachar(pendienteDespachar)
+      setPendienteDespachar(null)
+    }
+  }, [pendienteDespachar, modo])
   const [cotizacionAReciclar, setCotizacionAReciclar] = useState(null)
   const [vendedorReciclar, setVendedorReciclar] = useState('')
   const [cotizacionDetalle, setCotizacionDetalle] = useState(null)
@@ -858,6 +867,7 @@ export default function CotizacionesView() {
         clientePreseleccionado={clientePreseleccionado}
         onVolver={volver}
         onGuardado={volver}
+        onDespachar={(cot) => { setPendienteDespachar(cot); volver() }}
       />
     )
   }

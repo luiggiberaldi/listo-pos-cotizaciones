@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { X, Package, Loader2, Calendar, Clock, User, FileText, CreditCard, Hash, Pencil, Check } from 'lucide-react'
 import supabase from '../../services/supabase/client'
 import { apiUrl } from '../../services/apiBase'
-import { fmtUsdSimple as fmtUsd, fmtFecha } from '../../utils/format'
+import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs } from '../../utils/format'
 import useAuthStore from '../../store/useAuthStore'
 import { showToast } from './Toast'
 
@@ -380,6 +380,11 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
             <div className="flex justify-between font-black text-slate-800 text-base pt-1 border-t border-slate-200">
               <span>Total</span><span>{fmtUsd(total)}</span>
             </div>
+            {tasa > 0 && (
+              <div className="flex justify-end text-xs text-slate-400">
+                <span>{fmtBs(usdToBs(total, tasa))}</span>
+              </div>
+            )}
           </div>
         )}
         {!esCot && (
@@ -397,6 +402,11 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
             <div className={`flex justify-between font-black text-slate-800 text-base ${Number(registro.descuento_total_usd || 0) > 0 ? 'pt-1 border-t border-slate-200' : ''}`}>
               <span>Total</span><span>{fmtUsd(total - Number(registro.descuento_total_usd || 0))}</span>
             </div>
+            {tasa > 0 && (
+              <div className="flex justify-end text-xs text-slate-400">
+                <span>{fmtBs(usdToBs(total - Number(registro.descuento_total_usd || 0), tasa))}</span>
+              </div>
+            )}
           </div>
         )}
       </div>

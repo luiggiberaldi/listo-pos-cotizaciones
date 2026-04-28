@@ -259,12 +259,10 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
             backgroundSize: '12px 12px',
           }} />
         <div className="relative z-10 space-y-1">
-          <div className="flex items-center justify-between gap-2">
-            <p className="font-black text-white font-mono leading-tight drop-shadow text-base whitespace-nowrap">{numDisplay}</p>
+          <p className="font-black text-white font-mono leading-tight drop-shadow text-base">{numDisplay}</p>
+          <div className="flex items-center justify-end gap-1.5 flex-wrap">
             <EstadoBadge estado={cotizacion.estado} />
-          </div>
-          {despacho && (
-            <div className="flex justify-end">
+            {despacho && (
               <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
                 despacho.estado === 'entregada' ? 'bg-emerald-500 text-white' :
                 despacho.estado === 'despachada' ? 'bg-blue-500 text-white' :
@@ -276,8 +274,8 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
                  despacho.estado === 'entregada' ? <><PackageCheck size={10} /> Entregada</> :
                  despacho.estado === 'anulada' ? <><XCircle size={10} /> Despacho anulado</> : despacho.estado}
               </span>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
