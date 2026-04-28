@@ -31,6 +31,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const [showSheet, setShowSheet]     = useState(false)
   const [showPrintMenu, setShowPrintMenu] = useState(false)
   const [showDownloadMenu, setShowDownloadMenu] = useState(false)
+  const [showMoreMenu, setShowMoreMenu] = useState(false)
   const [accionPendiente, setAccionPendiente] = useState(null) // { id, estado, actionConfig }
   const { tasaBcv, tasaUsdt } = useTasaCambio()
 
@@ -511,11 +512,56 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           </button>
         )}
 
-        {/* Más (···) */}
-        <button onClick={() => setShowSheet(true)}
-          className="ml-auto flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 transition-colors whitespace-nowrap">
-          <MoreHorizontal size={12} /> Más
-        </button>
+        {/* Más (···) dropdown desktop */}
+        <div className="relative ml-auto">
+          <button onClick={() => setShowMoreMenu(v => !v)}
+            onBlur={() => setTimeout(() => setShowMoreMenu(false), 200)}
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 transition-colors whitespace-nowrap">
+            <MoreHorizontal size={12} /> Más
+          </button>
+          {showMoreMenu && (
+            <div className="absolute right-0 bottom-full mb-1 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
+              onMouseDown={e => e.preventDefault()}>
+              <button onClick={() => { setShowDetalle(true); setShowMoreMenu(false) }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
+                <Eye size={14} /> Ver detalle
+              </button>
+              {canDescuento && (
+                <button onClick={() => { setShowDescuento(true); setShowMoreMenu(false) }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-amber-600 hover:bg-amber-50 text-left">
+                  <Tag size={14} /> Descuento {descuentoTotal > 0 && '✓'}
+                </button>
+              )}
+              {canDespachar && primaryAction.key !== 'despachar' && (
+                <button onClick={() => { const cfg = getDespachoAction('despachar', rol); setAccionPendiente({ id: despacho.id, estado: 'despachada', actionConfig: cfg }); setShowMoreMenu(false) }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 text-left">
+                  <Truck size={14} /> {getDespachoAction('despachar', rol).label || 'Despachar'}
+                </button>
+              )}
+              {canEntregar && primaryAction.key !== 'entregar' && (
+                <button onClick={() => { const cfg = getDespachoAction('entregar', rol) || { label: 'Marcar entregada', confirm: '¿Confirmar entrega realizada?', color: 'emerald' }; setAccionPendiente({ id: despacho.id, estado: 'entregada', actionConfig: cfg }); setShowMoreMenu(false) }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-emerald-600 hover:bg-emerald-50 text-left">
+                  <CheckCircle size={14} /> Marcar entregada
+                </button>
+              )}
+              {canReciclar && primaryAction.key !== 'reciclar' && (
+                <button onClick={() => { onReciclar(despacho); setShowMoreMenu(false) }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-teal-600 hover:bg-teal-50 text-left">
+                  <RefreshCcw size={14} /> Reutilizar
+                </button>
+              )}
+              {canAnular && (
+                <>
+                  <div className="border-t border-slate-100 my-1" />
+                  <button onClick={() => { onAnular(despacho); setShowMoreMenu(false) }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-500 hover:bg-red-50 text-left">
+                    <Ban size={14} /> Anular despacho
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Confirm despachar / entregada — con detalles de consecuencias */}
