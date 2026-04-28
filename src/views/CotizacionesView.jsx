@@ -113,16 +113,17 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
 
   const numDisplay = `COT-${String(cotizacion.numero).padStart(5, '0')}`
 
-  const totalConFlete = Number(cotizacion?.total_usd || 0) + Number(fleteUsd || 0)
+  const totalSinFlete = Number(cotizacion?.total_usd || 0)
+  const totalConFlete = totalSinFlete + Number(fleteUsd || 0)
   const montoAsignado = formasPago.reduce((s, fp) => s + (Number(fp.monto) || 0), 0)
-  const pagoCuadrado = formasPago.length > 0 && Math.abs(montoAsignado - totalConFlete) < 0.02
+  const pagoCuadrado = formasPago.length > 0 && Math.abs(montoAsignado - totalSinFlete) < 0.02
 
   const toggleForma = (metodo) => {
     setFormasPago(prev => {
       const existe = prev.find(fp => fp.metodo === metodo)
       if (existe) return prev.filter(fp => fp.metodo !== metodo)
       // Si es el primero, asignar el total restante automáticamente
-      const restante = totalConFlete - prev.reduce((s, fp) => s + (Number(fp.monto) || 0), 0)
+      const restante = totalSinFlete - prev.reduce((s, fp) => s + (Number(fp.monto) || 0), 0)
       return [...prev, { metodo, monto: restante > 0 ? Number(restante.toFixed(2)) : '' }]
     })
   }
