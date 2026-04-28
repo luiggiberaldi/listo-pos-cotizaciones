@@ -290,10 +290,10 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
           {fmtFecha(cotizacion.creado_en)}
         </div>
         {cotizacion.cliente?.nombre && (
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold text-slate-700 truncate">{cotizacion.cliente.nombre}</span>
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-slate-700 leading-snug">{cotizacion.cliente.nombre}</p>
             {(esSupervisor || esAdministracion) && cotizacion.vendedor && (
-              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0 ml-2"
+              <span className="inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full"
                 style={{ backgroundColor: vendedorColor + '18', color: vendedorColor, border: `1px solid ${vendedorColor}40` }}>
                 {cotizacion.vendedor.nombre}
               </span>
