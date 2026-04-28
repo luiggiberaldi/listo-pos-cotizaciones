@@ -297,7 +297,10 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         </div>
         {despacho.cliente?.nombre && (
           <div className="space-y-1">
-            <p className="text-sm font-semibold text-slate-700 leading-snug">{despacho.cliente.nombre}</p>
+            <p className="text-sm font-bold leading-snug"
+              style={{ color: despacho.cliente.vendedor?.color || '#334155' }}>
+              {despacho.cliente.nombre}
+            </p>
             {esPrivilegiado && despacho.vendedor && (
               <span className="inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full"
                 style={{ backgroundColor: vendedorColor + '18', color: vendedorColor, border: `1px solid ${vendedorColor}40` }}>

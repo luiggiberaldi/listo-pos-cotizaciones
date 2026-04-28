@@ -291,7 +291,10 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         </div>
         {cotizacion.cliente?.nombre && (
           <div className="space-y-1">
-            <p className="text-sm font-semibold text-slate-700 leading-snug">{cotizacion.cliente.nombre}</p>
+            <p className="text-sm font-bold leading-snug"
+              style={{ color: cotizacion.cliente.vendedor?.color || '#334155' }}>
+              {cotizacion.cliente.nombre}
+            </p>
             {(esSupervisor || esAdministracion) && cotizacion.vendedor && (
               <span className="inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full"
                 style={{ backgroundColor: vendedorColor + '18', color: vendedorColor, border: `1px solid ${vendedorColor}40` }}>
