@@ -996,7 +996,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
             </div>
 
             {/* Split: catálogo izquierda + cesta derecha */}
-            <div className="flex-1 min-h-0 flex flex-col lg:flex-row lg:gap-4">
+            <div className="flex-1 min-h-0 flex flex-col lg:flex-row lg:gap-3">
 
               {/* ── Catálogo de productos ── */}
               <div className="flex-1 min-h-0 min-w-0 flex flex-col bg-white rounded-2xl border border-slate-200 p-3 sm:p-5 overflow-hidden">
@@ -1015,7 +1015,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
               </div>
 
               {/* ── Cesta flotante ── */}
-              <div className="w-full lg:w-80 shrink-0 lg:sticky lg:top-[73px]">
+              <div className="w-full lg:w-64 shrink-0 lg:sticky lg:top-[73px]">
                 <CestaPanel
                   items={items}
                   onCambiar={cambiarItem}
@@ -1035,7 +1035,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
         {/* PASO 3: Resumen, descuentos, notas y envío                     */}
         {/* ═══════════════════════════════════════════════════════════════ */}
         {paso === 3 && (
-          <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 items-start">
+          <div className="flex flex-col lg:flex-row gap-3 lg:gap-4 items-start">
 
             {/* ── Columna izquierda: formularios ── */}
             <div className="flex-1 min-w-0 space-y-4">
@@ -1128,7 +1128,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
             </div>
 
             {/* ── Columna derecha: panel sticky de resumen ── */}
-            <div className="w-full lg:w-80 xl:w-96 shrink-0 lg:sticky lg:top-[73px] space-y-3">
+            <div className="w-full lg:w-64 xl:w-80 shrink-0 lg:sticky lg:top-[73px] space-y-3">
 
               {/* Cliente */}
               <div className="bg-white rounded-2xl border border-slate-200 p-4">

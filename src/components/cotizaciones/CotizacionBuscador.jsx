@@ -366,7 +366,7 @@ export default function BuscadorProductos({ onAgregar, onScanClick, itemsAgregad
 
       {/* Cargando */}
       {isLoading && (
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-1.5">
           {[1,2,3,4,5,6].map(i => (
             <div key={i} className="rounded-xl border border-slate-100 overflow-hidden">
               <div className="h-10 bg-slate-100 animate-pulse" />
@@ -472,7 +472,7 @@ export default function BuscadorProductos({ onAgregar, onScanClick, itemsAgregad
           </div>
 
           {/* ── Vista grid con fotos (desktop md+) ── */}
-          <div className="hidden md:grid md:grid-cols-4 lg:grid-cols-5 gap-2">
+          <div className="hidden md:grid md:grid-cols-5 lg:grid-cols-6 gap-1.5">
             {visibles.map(p => {
               const yaAgregado = idsAgregados.has(p.id)
               const sinStock   = p.stock_actual != null && p.stock_actual <= 0
@@ -485,7 +485,7 @@ export default function BuscadorProductos({ onAgregar, onScanClick, itemsAgregad
                   onClick={() => !bloqueado && agregarConReciente(p)}
                   disabled={bloqueado}
                   title={sinPrecio ? 'Sin precio — no se puede cotizar' : sinStock ? 'Sin stock' : comprometido > 0 ? `${comprometido} comprometidas en cotizaciones activas` : undefined}
-                  className={`relative bg-white rounded-xl border p-2 flex flex-col items-center text-center transition-all active:scale-95 hover:shadow-sm ${
+                  className={`relative bg-white rounded-xl border p-1.5 flex flex-col items-center text-center transition-all active:scale-95 hover:shadow-sm ${
                     bloqueado
                       ? 'opacity-40 cursor-not-allowed border-slate-100'
                       : yaAgregado
@@ -496,19 +496,19 @@ export default function BuscadorProductos({ onAgregar, onScanClick, itemsAgregad
                   }`}>
 
                   {/* Icono / imagen */}
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-1.5 overflow-hidden ${
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-1 overflow-hidden ${
                     yaAgregado ? 'bg-emerald-50' : 'bg-slate-50'
                   }`}>
                     {p.imagen_url
                       ? <img src={p.imagen_url} alt="" className="h-full w-full object-contain" loading="lazy" />
                       : <div className={yaAgregado ? 'text-emerald-400' : 'text-slate-300'}>
-                          {yaAgregado ? <CheckCircle size={18} /> : <Package size={18} />}
+                          {yaAgregado ? <CheckCircle size={15} /> : <Package size={15} />}
                         </div>
                     }
                   </div>
 
                   {/* Nombre */}
-                  <p className={`text-[11px] font-bold leading-tight line-clamp-2 mb-1 ${
+                  <p className={`text-[10px] font-bold leading-tight line-clamp-2 mb-0.5 ${
                     yaAgregado ? 'text-emerald-700' : 'text-slate-700'
                   }`}>
                     {p.nombre}
