@@ -313,25 +313,6 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           </div>
         )}
       </div>
-      {(despacho.forma_pago_cliente || despacho.referencia_pago) && (
-        <div className="mx-3 mb-1 flex items-center gap-2 text-[11px] text-slate-400 flex-wrap">
-          {despacho.forma_pago_cliente && (() => {
-            try {
-              const parsed = typeof despacho.forma_pago_cliente === 'string' ? JSON.parse(despacho.forma_pago_cliente) : despacho.forma_pago_cliente
-              if (Array.isArray(parsed)) {
-                return parsed.map((p, i) => (
-                  <span key={i} className="font-medium">{p.metodo} {fmtUsd(Number(p.monto))}</span>
-                ))
-              }
-              return <span className="font-medium">{despacho.forma_pago_cliente}</span>
-            } catch {
-              return <span className="font-medium">{despacho.forma_pago_cliente}</span>
-            }
-          })()}
-          {despacho.forma_pago_cliente && despacho.referencia_pago && <span>·</span>}
-          {despacho.referencia_pago && <span className="font-mono">Ref: {despacho.referencia_pago}</span>}
-        </div>
-      )}
 
       {/* ── Total ── */}
       <div className="mx-3 mb-2 bg-slate-50 rounded-xl px-3 py-2 flex items-center justify-between">
