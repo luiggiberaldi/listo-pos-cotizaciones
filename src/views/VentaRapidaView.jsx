@@ -274,7 +274,7 @@ export default function VentaRapidaView() {
       )}
 
       {/* Step indicator */}
-      <div className="flex items-center justify-center gap-1 sm:gap-2 px-4 py-3 bg-white/60 border-b border-slate-200/60">
+      <div className="flex items-center justify-center gap-1 sm:gap-2 px-4 py-2 bg-white/60 border-b border-slate-200/60">
         {steps.map((s, i) => {
           const Icon = s.icon
           const active = i === step
@@ -610,7 +610,7 @@ function Step1Productos({
   const productosVisibles = productosOrdenados.slice(0, 30)
 
   return (
-    <div className="p-4 space-y-4 pb-24 lg:pb-4">
+    <div className="p-3 space-y-3 pb-24 lg:pb-3">
       {/* Nuevo cliente modal */}
       {showNuevoCliente && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -695,7 +695,7 @@ function Step1Productos({
       </div>
 
       {/* ── Split: catálogo izquierda + carrito derecha (desktop) ── */}
-      <div className="flex flex-col lg:flex-row lg:gap-4">
+      <div className="flex flex-col lg:flex-row lg:gap-3">
       {/* ── Columna izquierda: Productos ── */}
       <div className="flex-1 min-w-0">
       {/* Productos */}
@@ -842,7 +842,7 @@ function Step1Productos({
         </div>
 
         {/* Vista grid (desktop md+) */}
-        <div className="hidden md:grid md:grid-cols-4 lg:grid-cols-5 gap-2">
+        <div className="hidden md:grid md:grid-cols-5 lg:grid-cols-6 gap-1.5">
           {productosVisibles.map(p => {
             const added = idsAgregados.has(p.id)
             const stock = Number(p.stock_actual) || 0
@@ -852,22 +852,22 @@ function Step1Productos({
               <button key={p.id} type="button"
                 onClick={() => !added && !sinStock && agregarProducto(p)}
                 disabled={sinStock}
-                className={`relative bg-white rounded-xl border p-2 flex flex-col items-center text-center transition-all active:scale-95 hover:shadow-sm ${
+                className={`relative bg-white rounded-xl border p-1.5 flex flex-col items-center text-center transition-all active:scale-95 hover:shadow-sm ${
                   sinStock
                     ? 'opacity-40 cursor-not-allowed border-slate-100'
                     : added
                       ? 'border-emerald-300 shadow-sm shadow-emerald-100/80'
                       : 'border-slate-200 hover:border-primary/50'
                 }`}>
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-1.5 ${
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-1 ${
                   added ? 'bg-emerald-50' : 'bg-slate-50'
                 }`}>
                   {added
-                    ? <CheckCircle size={18} className="text-emerald-400" />
-                    : <Package size={18} className="text-slate-300" />
+                    ? <CheckCircle size={15} className="text-emerald-400" />
+                    : <Package size={15} className="text-slate-300" />
                   }
                 </div>
-                <p className={`text-[11px] font-bold leading-tight line-clamp-2 mb-1 ${
+                <p className={`text-[10px] font-bold leading-tight line-clamp-2 mb-0.5 ${
                   added ? 'text-emerald-700' : 'text-slate-700'
                 }`}>
                   {p.nombre}
@@ -902,8 +902,8 @@ function Step1Productos({
       </div>{/* ── Fin columna izquierda ── */}
 
       {/* ── Columna derecha: Carrito sticky (desktop) ── */}
-      <div className="hidden lg:flex w-80 shrink-0 lg:sticky lg:top-[73px] self-start bg-white rounded-2xl border border-slate-200 flex-col overflow-hidden shadow-sm" style={{ maxHeight: 'calc(100vh - 90px)' }}>
-        <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-2">
+      <div className="hidden lg:flex w-64 shrink-0 lg:sticky lg:top-[73px] self-start bg-white rounded-2xl border border-slate-200 flex-col overflow-hidden shadow-sm" style={{ maxHeight: 'calc(100vh - 90px)' }}>
+        <div className="px-3 py-2.5 border-b border-slate-200 flex items-center gap-2">
           <ShoppingCart size={18} style={{ color: '#1B365D' }} />
           <h3 className="font-black text-slate-800 text-base">Carrito</h3>
           <span className="ml-auto text-xs font-bold text-slate-400">{totalItems} item{totalItems !== 1 ? 's' : ''}</span>
