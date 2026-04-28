@@ -370,7 +370,7 @@ export default function AppLayout() {
           ${menuOpen ? 'translate-x-0' : '-translate-x-full'}
           ${sidebarCollapsed ? 'md:w-[72px]' : 'md:w-64'}
           w-64 md:translate-x-0 md:static md:z-auto md:h-[calc(100vh-3.5rem)] md:sticky md:top-14
-          overflow-hidden
+          overflow-visible
         `}
         style={{
           background: 'linear-gradient(180deg, #0a1628 0%, #0d1f3c 60%, #0a1a0f 100%)',
@@ -378,7 +378,7 @@ export default function AppLayout() {
           boxShadow: '4px 0 24px rgba(0,0,0,0.3)',
         }}
       >
-        <div className="flex flex-col h-full min-h-0">
+        <div className="flex flex-col h-full min-h-0 overflow-hidden">
         {/* Malla de puntos decorativa */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-[0.03]">
           <svg width="100%" height="100%"><defs><pattern id="sdot" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="white"/></pattern></defs><rect width="100%" height="100%" fill="url(#sdot)"/></svg>
