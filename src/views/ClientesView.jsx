@@ -101,7 +101,7 @@ export default function ClientesView() {
   const esSupervisor = perfil?.rol === 'supervisor'
   const esAdministracion = perfil?.rol === 'administracion'
   const esDesarrollador = perfil?.rol === 'desarrollador'
-  const mostrarToggle = esSupervisor || esDesarrollador
+  const mostrarToggle = esSupervisor || esDesarrollador || perfil?.rol === 'vendedor'
 
   // Búsqueda y filtros
   const [busqueda, setBusqueda] = useState('')
