@@ -483,7 +483,7 @@ export default function AppLayout() {
       </aside>
 
       {/* ── Área de contenido ───────────────────────────────────────────── */}
-      <main ref={mainRef} className="flex-1 overflow-y-auto min-w-0 pb-20 md:pb-0">
+      <main ref={mainRef} className="flex-1 overflow-y-auto min-w-0 pb-20 md:pb-0" style={{ zoom: 'var(--app-zoom, 100%)' }}>
         <div className="mx-auto max-w-screen-2xl">
           <div className="px-4 pt-1 md:px-6">
             <Breadcrumbs />

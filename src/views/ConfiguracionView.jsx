@@ -258,7 +258,7 @@ export default function ConfiguracionView() {
     const clamped = Math.max(70, Math.min(130, val))
     setZoom(clamped)
     localStorage.setItem('app-zoom', String(clamped))
-    document.documentElement.style.zoom = `${clamped}%`
+    document.documentElement.style.setProperty('--app-zoom', `${clamped}%`)
   }
 
   const [campos, setCampos] = useState({
