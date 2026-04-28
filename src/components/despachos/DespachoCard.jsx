@@ -1,6 +1,6 @@
 // src/components/despachos/DespachoCard.jsx
-import { useState, useRef, memo } from 'react'
-import { FileText, Calendar, Truck, CheckCircle, Ban, RefreshCcw, Download, Loader2, Eye, MoreHorizontal, ChevronDown, DollarSign, Printer, Check, Tag, Pencil } from 'lucide-react'
+import { useState, memo } from 'react'
+import { FileText, Calendar, Truck, CheckCircle, Ban, RefreshCcw, Download, Loader2, Eye, MoreHorizontal, ChevronDown, Printer, Tag, Pencil } from 'lucide-react'
 import EstadoBadge from '../cotizaciones/EstadoBadge'
 import MobileActionSheet from '../cotizaciones/MobileActionSheet'
 import ConfirmModal from '../ui/ConfirmModal'
@@ -29,12 +29,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const [showDescuento, setShowDescuento] = useState(false)
   const [showEdit, setShowEdit] = useState(false)
   const [showSheet, setShowSheet]     = useState(false)
-  const [showMonedaMenu, setShowMonedaMenu] = useState(false)
   const [showPrintMenu, setShowPrintMenu] = useState(false)
-  const monedaBtnRef = useRef(null)
-  const monedaBtnRefDesktop = useRef(null)
-  const [monedaMenuPos, setMonedaMenuPos] = useState({ top: 0, left: 0 })
-  const [monedaPdf, setMonedaPdf] = useState(() => localStorage.getItem('construacero_moneda_pdf') || '$')
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false)
   const [accionPendiente, setAccionPendiente] = useState(null) // { id, estado, actionConfig }
   const { tasaBcv, tasaUsdt } = useTasaCambio()
 
@@ -55,31 +51,6 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const canEditar = despacho.estado === 'pendiente' && (esPrivilegiado || despacho.vendedor_id === perfil?.id)
   const descuentoTotal = Number(despacho.descuento_total_usd || 0)
   const totalConDescuento = Number(despacho.total_usd || 0) - descuentoTotal
-
-  function seleccionarMoneda(moneda) {
-    setMonedaPdf(moneda)
-    localStorage.setItem('construacero_moneda_pdf', moneda)
-    setShowMonedaMenu(false)
-  }
-
-  function toggleMonedaMenu() {
-    if (showMonedaMenu) { setShowMonedaMenu(false); return }
-    // Use the visible ref (mobile or desktop)
-    const btn = monedaBtnRef.current?.offsetParent ? monedaBtnRef.current : monedaBtnRefDesktop.current
-    const rect = btn?.getBoundingClientRect()
-    if (rect) setMonedaMenuPos({ top: rect.top, left: rect.left })
-    setShowMonedaMenu(true)
-  }
-
-  const MONEDA_OPTIONS = [
-    { key: '$', icon: <DollarSign size={14} className="text-emerald-500" />, label: 'USDT ($)' },
-    { key: 'bcv', icon: <span className="text-sm font-bold text-teal-500 w-[14px] text-center">$</span>, label: 'Dólar BCV' },
-    { key: 'bs', icon: <span className="text-sm font-bold text-blue-500 w-[14px] text-center">Bs</span>, label: 'Bolívares' },
-    { key: 'mixto', icon: <span className="text-xs font-bold text-amber-500 w-[18px] text-center shrink-0">$Bs</span>, label: 'Mixto USDT' },
-    { key: 'mixto_bcv', icon: <span className="text-xs font-bold text-orange-500 w-[18px] text-center shrink-0">$Bs</span>, label: 'Mixto BCV' },
-  ]
-
-  const monedaLabel = MONEDA_OPTIONS.find(o => o.key === monedaPdf)?.label || 'USDT ($)'
 
   async function descargarPDF() {
     setPdfLoading(true)
@@ -137,7 +108,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         vendedor: vendedorRes.data || despacho.vendedor,
         transportista: transportistaRes.data || despacho.transportista,
       }
-      await generarOrdenDespachoPDF({ despacho: desConDatos, items: itemsRes.data ?? [], config, formaPago: despacho.forma_pago || '', monedaPDF: monedaPdf, tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio })
+      await generarOrdenDespachoPDF({ despacho: desConDatos, items: itemsRes.data ?? [], config, formaPago: despacho.forma_pago || '', monedaPDF: '$', tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio })
     } catch (err) {
       showToast('Error al generar Orden de Despacho: ' + (err.message || 'Error desconocido'), 'error')
     } finally {
@@ -236,7 +207,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         vendedor: vendedorRes.data || despacho.vendedor,
         transportista: transportistaRes.data || despacho.transportista,
       }
-      const blob = await generarOrdenDespachoPDF({ despacho: desConDatos, items: itemsRes.data ?? [], config, formaPago: despacho.forma_pago || '', monedaPDF: monedaPdf, tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio, returnBlob: true })
+      const blob = await generarOrdenDespachoPDF({ despacho: desConDatos, items: itemsRes.data ?? [], config, formaPago: despacho.forma_pago || '', monedaPDF: '$', tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio, returnBlob: true })
       printOrDownloadPdf(blob, `${numDisplay}-orden-despacho.pdf`)
     } catch (err) {
       showToast('Error al imprimir orden: ' + (err.message || 'Error desconocido'), 'error')
@@ -265,12 +236,12 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const primaryAction = getPrimaryAction()
   const pColors = PRIMARY_ACTION_COLORS[primaryAction.key] || PRIMARY_ACTION_COLORS.ver
 
-  // ── Acciones para el bottom sheet móvil ──
+  // ── Acciones para el bottom sheet móvil (Más) ──
   function getMobileSheetActions() {
     const actions = []
-    if (primaryAction.key !== 'ver')
-      actions.push({ label: 'Ver detalle', icon: Eye, onClick: () => setShowDetalle(true) })
-    actions.push({ label: 'Descargar PDF', icon: Download, onClick: descargarPDF, disabled: pdfLoading })
+    actions.push({ label: 'Ver detalle', icon: Eye, onClick: () => setShowDetalle(true) })
+    if (canDescuento)
+      actions.push({ label: `Descuento${descuentoTotal > 0 ? ' ✓' : ''}`, icon: Tag, onClick: () => setShowDescuento(true), textColor: 'text-amber-600' })
     if (canDespachar && primaryAction.key !== 'despachar') {
       const cfg = getDespachoAction('despachar', rol)
       actions.push({ label: cfg.label || 'Aprobar despacho', icon: Truck, onClick: () => setAccionPendiente({ id: despacho.id, estado: 'despachada', actionConfig: cfg }), textColor: 'text-blue-600' })
@@ -281,8 +252,6 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     }
     if (canReciclar && primaryAction.key !== 'reciclar')
       actions.push({ label: getDespachoAction('reciclar', rol).label || 'Reutilizar', icon: RefreshCcw, onClick: () => onReciclar(despacho), textColor: 'text-teal-600' })
-    if (canEditar)
-      actions.push({ label: 'Editar despacho', icon: Pencil, onClick: () => setShowEdit(true), textColor: 'text-indigo-600' })
     if (canAnular) {
       const cfg = getDespachoAction('anular', rol)
       actions.push({ label: cfg.label || 'Anular', icon: Ban, onClick: () => onAnular(despacho), danger: true })
@@ -384,7 +353,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
 
       {/* ══════════ MOBILE ACTIONS (< md) ══════════ */}
       <div className="md:hidden mt-auto border-t border-slate-100 p-2.5">
-        {/* Botón primario — full width, thumb-friendly */}
+        {/* Botón primario — full width */}
         <button
           onClick={primaryAction.action}
           disabled={estadoCambiando}
@@ -397,92 +366,71 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           {primaryAction.label}
         </button>
 
-        {/* Fila de acciones: N. Entrega (Bs fijo) + moneda/O.Despacho agrupados + imprimir */}
-        <div className="flex items-center gap-1 mt-2 flex-wrap">
-          {/* N. Entrega — siempre Bs */}
-          <button onClick={descargarPDF} disabled={pdfLoading}
-            className="flex items-center gap-1 px-2 py-2 rounded-lg text-[11px] font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40">
-            {pdfLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Download size={13} />}
-            N.Entrega
-            <span className="text-[8px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-0.5 py-0.5 rounded leading-none">Bs</span>
-          </button>
-
-          {/* O. Despacho con selector de moneda agrupado */}
-          <div className="flex items-center rounded-lg border border-slate-200 divide-x divide-slate-200">
-            <div className="relative" data-no-click>
-              <button ref={monedaBtnRef} onClick={toggleMonedaMenu}
-                title="Moneda para Orden de Despacho"
-                className="flex items-center gap-0.5 px-1.5 py-2 rounded-l-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 transition-colors">
-                {MONEDA_OPTIONS.find(o => o.key === monedaPdf)?.icon}
-                <ChevronDown size={9} />
-              </button>
-              {showMonedaMenu && (
-                <>
-                  <div className="fixed inset-0 z-[9998]" onClick={() => setShowMonedaMenu(false)} />
-                  <div className="fixed w-44 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-[9999]"
-                    style={{ top: monedaMenuPos.top - 8, left: monedaMenuPos.left, transform: 'translateY(-100%)' }}>
-                  {MONEDA_OPTIONS.map(opt => (
-                    <button key={opt.key} onClick={() => seleccionarMoneda(opt.key)}
-                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left whitespace-nowrap ${monedaPdf === opt.key ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-700 hover:bg-slate-50'}`}>
-                      {opt.icon} {opt.label}
-                      {monedaPdf === opt.key && <Check size={14} className="ml-auto text-emerald-500" />}
-                    </button>
-                  ))}
-                  </div>
-                </>
-              )}
-            </div>
-            <button onClick={descargarOrdenDespacho} disabled={ordenLoading}
-              className="flex items-center gap-1 px-2 py-2 rounded-r-lg text-[11px] font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40">
-              {ordenLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Download size={13} />}
-              O.Desp
-            </button>
-          </div>
-
+        {/* Fila de acciones: Imprimir + Descargar + Editar + Más */}
+        <div className="flex items-center gap-1 mt-2">
+          {/* Imprimir dropdown */}
           <div className="relative">
             <button onClick={() => setShowPrintMenu(v => !v)}
               onBlur={() => setTimeout(() => setShowPrintMenu(false), 200)}
               disabled={printLoading}
-              className="flex items-center gap-1 px-2 py-2 rounded-lg text-[11px] font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40">
+              className="flex items-center gap-1 px-2.5 py-2 rounded-lg text-[11px] font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40">
               {printLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Printer size={13} />}
-              Impr. <ChevronDown size={9} />
+              Imprimir <ChevronDown size={9} />
             </button>
             {showPrintMenu && (
               <div className="absolute left-0 bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
                 onMouseDown={e => e.preventDefault()}>
                 <button onClick={imprimirDespacho}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
-                  <Printer size={14} />
-                  Nota de Entrega
+                  className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 text-left">
+                  <Printer size={14} /> Nota de Entrega
                   <span className="ml-auto text-[9px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-1 py-0.5 rounded leading-none">Bs</span>
                 </button>
                 <button onClick={imprimirOrdenDespacho}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
+                  className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 text-left">
                   <Printer size={14} /> Orden de Despacho
-                  <span className="ml-auto text-[9px] font-medium text-slate-400">{monedaLabel}</span>
+                  <span className="ml-auto text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-1 py-0.5 rounded leading-none">USD</span>
                 </button>
               </div>
             )}
           </div>
-          {canDescuento && (
-            <button onClick={() => setShowDescuento(true)}
-              className="flex items-center gap-1 px-2 py-2 rounded-lg text-[11px] font-medium text-amber-600 hover:bg-amber-50 transition-colors">
-              <Tag size={13} /> Desc.
-              {descuentoTotal > 0 && <span className="text-[8px] font-bold text-amber-700 bg-amber-100 border border-amber-300 px-1 py-0.5 rounded-full leading-none">✓</span>}
+
+          {/* Descargar dropdown */}
+          <div className="relative">
+            <button onClick={() => setShowDownloadMenu(v => !v)}
+              onBlur={() => setTimeout(() => setShowDownloadMenu(false), 200)}
+              disabled={pdfLoading || ordenLoading}
+              className="flex items-center gap-1 px-2.5 py-2 rounded-lg text-[11px] font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40">
+              {(pdfLoading || ordenLoading) ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Download size={13} />}
+              Descargar <ChevronDown size={9} />
             </button>
-          )}
+            {showDownloadMenu && (
+              <div className="absolute left-0 bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
+                onMouseDown={e => e.preventDefault()}>
+                <button onClick={() => { descargarPDF(); setShowDownloadMenu(false) }}
+                  className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 text-left">
+                  <Download size={14} /> Nota de Entrega
+                  <span className="ml-auto text-[9px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-1 py-0.5 rounded leading-none">Bs</span>
+                </button>
+                <button onClick={() => { descargarOrdenDespacho(); setShowDownloadMenu(false) }}
+                  className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 text-left">
+                  <Download size={14} /> Orden de Despacho
+                  <span className="ml-auto text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-1 py-0.5 rounded leading-none">USD</span>
+                </button>
+              </div>
+            )}
+          </div>
+
           {canEditar && (
             <button onClick={() => setShowEdit(true)}
-              className="flex items-center gap-1 px-2 py-2 rounded-lg text-[11px] font-medium text-indigo-600 hover:bg-indigo-50 transition-colors">
+              className="flex items-center gap-1 px-2.5 py-2 rounded-lg text-[11px] font-medium text-indigo-600 hover:bg-indigo-50 transition-colors">
               <Pencil size={13} /> Editar
             </button>
           )}
-          {getMobileSheetActions().length > 0 && (
-            <button onClick={() => setShowSheet(true)}
-              className="ml-auto flex items-center gap-1 px-2 py-2 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 active:bg-slate-100 transition-colors">
-              <MoreHorizontal size={13} /> Más
-            </button>
-          )}
+
+          <button onClick={() => setShowSheet(true)}
+            className="ml-auto flex items-center gap-1 px-2.5 py-2 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 active:bg-slate-100 transition-colors">
+            <MoreHorizontal size={13} /> Más
+          </button>
         </div>
 
         <MobileActionSheet
@@ -493,129 +441,81 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       </div>
 
       {/* ══════════ DESKTOP ACTIONS (md+) ══════════ */}
-      <div className="hidden md:flex mt-auto border-t border-slate-100 px-3 py-2 items-center gap-1.5 flex-wrap">
-        {/* Ver detalle */}
-        <button onClick={() => setShowDetalle(true)}
-          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-primary hover:bg-primary-light transition-colors">
-          <Eye size={13} /> Ver
-        </button>
-        {canDespachar && (
-          <button onClick={() => {
-              const cfg = getDespachoAction('despachar', rol)
-              setAccionPendiente({ id: despacho.id, estado: 'despachada', actionConfig: cfg })
-            }}
+      <div className="hidden md:flex mt-auto border-t border-slate-100 px-3 py-2 items-center gap-1.5">
+        {/* Botón primario */}
+        {primaryAction.key !== 'ver' && (
+          <button onClick={primaryAction.action}
             disabled={estadoCambiando}
-            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50">
-            {estadoCambiando ? <Loader2 size={13} className="animate-spin" /> : <Truck size={13} />}
-            {getDespachoAction('despachar', rol).label || 'Aprobar despacho'}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50 ${pColors.bg} ${pColors.text} ${pColors.active}`}>
+            {estadoCambiando ? <Loader2 size={13} className="animate-spin" /> : <primaryAction.icon size={13} />}
+            {primaryAction.label}
           </button>
         )}
-        {canEntregar && (
-          <button onClick={() => {
-              const cfg = getDespachoAction('entregar', rol) || { label: 'Marcar entregada', confirm: '¿Confirmar entrega realizada?', color: 'emerald' }
-              setAccionPendiente({ id: despacho.id, estado: 'entregada', actionConfig: cfg })
-            }}
-            disabled={estadoCambiando}
-            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-50">
-            {estadoCambiando ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle size={13} />}
-            Marcar entregada
+
+        {/* Imprimir dropdown */}
+        <div className="relative">
+          <button onClick={() => setShowPrintMenu(v => !v)}
+            onBlur={() => setTimeout(() => setShowPrintMenu(false), 200)}
+            disabled={printLoading}
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-50">
+            {printLoading ? <Loader2 size={13} className="animate-spin" /> : <Printer size={13} />}
+            Imprimir <ChevronDown size={10} />
           </button>
-        )}
-        {canReciclar && (
-          <button onClick={() => onReciclar(despacho)}
-            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-teal-600 hover:bg-teal-50 transition-colors">
-            <RefreshCcw size={13} /> {getDespachoAction('reciclar', rol).label || 'Reutilizar'}
+          {showPrintMenu && (
+            <div className="absolute left-0 bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
+              onMouseDown={e => e.preventDefault()}>
+              <button onClick={imprimirDespacho}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
+                <Printer size={14} /> Nota de Entrega
+                <span className="ml-auto text-[9px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-1 py-0.5 rounded leading-none">Bs</span>
+              </button>
+              <button onClick={imprimirOrdenDespacho}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
+                <Printer size={14} /> Orden de Despacho
+                <span className="ml-auto text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-1 py-0.5 rounded leading-none">USD</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Descargar dropdown */}
+        <div className="relative">
+          <button onClick={() => setShowDownloadMenu(v => !v)}
+            onBlur={() => setTimeout(() => setShowDownloadMenu(false), 200)}
+            disabled={pdfLoading || ordenLoading}
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-50">
+            {(pdfLoading || ordenLoading) ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+            Descargar <ChevronDown size={10} />
           </button>
-        )}
-        {canDescuento && (
-          <button onClick={() => setShowDescuento(true)}
-            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-amber-600 hover:bg-amber-50 transition-colors">
-            <Tag size={13} /> Descuento
-            {descuentoTotal > 0 && <span className="text-[8px] font-bold text-amber-700 bg-amber-100 border border-amber-300 px-1 py-0.5 rounded-full leading-none ml-0.5">✓</span>}
-          </button>
-        )}
+          {showDownloadMenu && (
+            <div className="absolute left-0 bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
+              onMouseDown={e => e.preventDefault()}>
+              <button onClick={() => { descargarPDF(); setShowDownloadMenu(false) }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
+                <Download size={14} /> Nota de Entrega
+                <span className="ml-auto text-[9px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-1 py-0.5 rounded leading-none">Bs</span>
+              </button>
+              <button onClick={() => { descargarOrdenDespacho(); setShowDownloadMenu(false) }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
+                <Download size={14} /> Orden de Despacho
+                <span className="ml-auto text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-1 py-0.5 rounded leading-none">USD</span>
+              </button>
+            </div>
+          )}
+        </div>
+
         {canEditar && (
           <button onClick={() => setShowEdit(true)}
             className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-indigo-600 hover:bg-indigo-50 transition-colors">
             <Pencil size={13} /> Editar
           </button>
         )}
-        <div className="ml-auto flex items-center gap-1.5 flex-wrap justify-end">
-          {/* N. Entrega — siempre Bs */}
-          <button onClick={descargarPDF} disabled={pdfLoading}
-            title="Descargar Nota de Entrega (siempre en Bs)"
-            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-50">
-            {pdfLoading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-            N. Entrega
-            <span className="text-[9px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-1 py-0.5 rounded leading-none">Bs</span>
-          </button>
 
-          {/* O. Despacho con selector de moneda agrupado */}
-          <div className="flex items-center rounded-lg border border-slate-200 divide-x divide-slate-200">
-            <div className="relative" data-no-click>
-              <button ref={monedaBtnRefDesktop} onClick={toggleMonedaMenu}
-                title="Moneda para Orden de Despacho"
-                className="flex items-center gap-0.5 px-2 py-1.5 rounded-l-lg text-xs font-medium text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors">
-                {MONEDA_OPTIONS.find(o => o.key === monedaPdf)?.icon}
-                <ChevronDown size={9} />
-              </button>
-              {showMonedaMenu && (
-                <>
-                  <div className="fixed inset-0 z-[9998]" onClick={() => setShowMonedaMenu(false)} />
-                  <div className="fixed w-40 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-[9999]"
-                    style={{ top: monedaMenuPos.top - 8, left: monedaMenuPos.left, transform: 'translateY(-100%)' }}>
-                  {MONEDA_OPTIONS.map(opt => (
-                    <button key={opt.key} onClick={() => seleccionarMoneda(opt.key)}
-                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left ${monedaPdf === opt.key ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-700 hover:bg-slate-50'}`}>
-                      {opt.icon} {opt.label}
-                      {monedaPdf === opt.key && <Check size={14} className="ml-auto text-emerald-500" />}
-                    </button>
-                  ))}
-                  </div>
-                </>
-              )}
-            </div>
-            <button onClick={descargarOrdenDespacho} disabled={ordenLoading}
-              title="Descargar Orden de Despacho"
-              className="flex items-center gap-1 px-2 py-1.5 rounded-r-lg text-xs font-medium text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-50">
-              {ordenLoading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-              O. Despacho
-            </button>
-          </div>
-
-          <div className="relative">
-            <button onClick={() => setShowPrintMenu(v => !v)}
-              onBlur={() => setTimeout(() => setShowPrintMenu(false), 200)}
-              disabled={printLoading}
-              title="Imprimir documento"
-              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-50">
-              {printLoading ? <Loader2 size={13} className="animate-spin" /> : <Printer size={13} />}
-              Imprimir <ChevronDown size={10} />
-            </button>
-            {showPrintMenu && (
-              <div className="absolute right-0 bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
-                onMouseDown={e => e.preventDefault()}>
-                <button onClick={imprimirDespacho}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
-                  <Printer size={14} />
-                  Nota de Entrega
-                  <span className="ml-auto text-[9px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-1 py-0.5 rounded leading-none">Bs</span>
-                </button>
-                <button onClick={imprimirOrdenDespacho}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
-                  <Printer size={14} /> Orden de Despacho
-                  <span className="ml-auto text-[9px] font-medium text-slate-400">{monedaLabel}</span>
-                </button>
-              </div>
-            )}
-          </div>
-          {canAnular && (
-            <button onClick={() => onAnular(despacho)}
-              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 transition-colors whitespace-nowrap">
-              <Ban size={13} /> {getDespachoAction('anular', rol).label || 'Anular'}
-            </button>
-          )}
-        </div>
+        {/* Más (···) */}
+        <button onClick={() => setShowSheet(true)}
+          className="ml-auto flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:bg-slate-50 transition-colors">
+          <MoreHorizontal size={13} /> Más
+        </button>
       </div>
 
       {/* Confirm despachar / entregada — con detalles de consecuencias */}
