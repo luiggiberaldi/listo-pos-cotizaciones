@@ -1,5 +1,5 @@
 // src/components/inventario/ProductoCard.jsx
-import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle, Package, Trash2, ClipboardList } from 'lucide-react'
+import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle, Package, Trash2, ClipboardList, TrendingUp } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtBs, usdToBs } from '../../utils/format'
 import StockComprometidoDetalle from './StockComprometidoDetalle'
@@ -22,39 +22,42 @@ function colorCategoria(str = '') {
   return { fg, bg }
 }
 
-function BadgeStock({ actual, minimo, comprometido = 0, productoId }) {
+function StockBadge({ actual, minimo, comprometido = 0, productoId }) {
   const agotado = actual <= 0
   const bajo = !agotado && minimo > 0 && actual <= minimo
   const disponible = actual - comprometido
   const sobrecomprometido = comprometido > 0 && disponible < 0
 
   if (agotado) return (
-    <span className="flex items-center gap-1 text-[10px] font-bold text-red-700 bg-red-100 border border-red-200 px-1.5 py-0.5 rounded-full">
-      Agotado
-    </span>
-  )
-  if (sobrecomprometido) return (
     <div className="text-right">
-      <span className="flex items-center gap-1 text-[10px] font-semibold text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-full">
-        <AlertTriangle size={9} />
-        {Number(actual).toLocaleString('es-VE')}
+      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-red-700 bg-red-100 border border-red-300 px-2 py-0.5 rounded-full">
+        Agotado
       </span>
-      <StockComprometidoDetalle productoId={productoId} comprometido={comprometido} />
     </div>
   )
-  if (bajo) return (
-    <div className="text-right">
-      <span className="flex items-center gap-1 text-[10px] font-semibold text-orange-600 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded-full">
-        <AlertTriangle size={9} />
-        {Number(actual).toLocaleString('es-VE')}
-      </span>
-      {comprometido > 0 && <StockComprometidoDetalle productoId={productoId} comprometido={comprometido} />}
-    </div>
-  )
+
+  const badgeClass = sobrecomprometido
+    ? 'text-red-700 bg-red-100 border-red-300'
+    : bajo
+      ? 'text-amber-700 bg-amber-100 border-amber-300'
+      : 'text-emerald-700 bg-emerald-100 border-emerald-300'
+
   return (
-    <div className="text-right">
-      <span className="text-[10px] text-slate-400">Stock: {Number(actual).toLocaleString('es-VE')}</span>
-      {comprometido > 0 && <div><StockComprometidoDetalle productoId={productoId} comprometido={comprometido} /></div>}
+    <div className="text-right space-y-0.5">
+      <div className={`inline-flex items-center gap-1 text-[11px] font-bold border px-2 py-0.5 rounded-full ${badgeClass}`}>
+        {(sobrecomprometido || bajo) && <AlertTriangle size={10} />}
+        {Number(actual).toLocaleString('es-VE')}
+      </div>
+      {comprometido > 0 && (
+        <div>
+          <StockComprometidoDetalle productoId={productoId} comprometido={comprometido} />
+          {sobrecomprometido && (
+            <div className="text-[10px] text-red-600 font-semibold">
+              Disp: {Number(disponible).toLocaleString('es-VE')}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -70,6 +73,13 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, onBorra
   const agotado = stockActual <= 0
   const stockBajo = !agotado && stockMinimo > 0 && stockActual <= stockMinimo
 
+  // Margen de ganancia
+  const precio = Number(producto.precio_usd)
+  const costo = Number(producto.costo_usd)
+  const margen = esPrivilegiado && precio > 0 && costo > 0
+    ? Math.round(((precio - costo) / precio) * 100)
+    : null
+
   return (
     <div className={`rounded-2xl border hover:shadow-lg transition-all duration-200 flex flex-col overflow-hidden ${
       agotado
@@ -79,14 +89,14 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, onBorra
           : 'bg-white border-slate-200 hover:border-sky-200 hover:shadow-sky-50'
     }`}>
 
-      {/* Imagen — 80px fijo */}
-      <div className={`relative w-full h-20 flex items-center justify-center overflow-hidden shrink-0 ${agotado ? 'opacity-50 grayscale' : ''}`}
+      {/* Imagen — más baja en móvil */}
+      <div className={`relative w-full h-16 sm:h-20 flex items-center justify-center overflow-hidden shrink-0 ${agotado ? 'opacity-50 grayscale' : ''}`}
         style={{ background: producto.imagen_url ? '#f8fafc' : bg }}>
         {producto.imagen_url ? (
           <img src={producto.imagen_url} alt={producto.nombre}
             className="w-full h-full object-cover" loading="lazy" />
         ) : (
-          <Package size={28} style={{ color: fg, opacity: 0.7 }} />
+          <Package size={24} style={{ color: fg, opacity: 0.7 }} />
         )}
         {agotado && (
           <div className="absolute inset-0 flex items-center justify-center bg-red-900/40">
@@ -103,78 +113,102 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, onBorra
       </div>
 
       {/* Contenido */}
-      <div className={`px-3 pt-2.5 pb-3 flex flex-col gap-2 flex-1 ${agotado ? 'opacity-70' : ''}`}>
+      <div className={`px-2 sm:px-3 pt-2 pb-2.5 flex flex-col gap-1.5 sm:gap-2 flex-1 ${agotado ? 'opacity-70' : ''}`}>
 
-        {/* Código + nombre + categoría */}
-        <div className="min-h-[48px]">
-          {producto.codigo && (
-            <div className="flex items-center gap-1 mb-0.5">
-              <Hash size={9} className="text-slate-400" />
-              <span className="text-[10px] text-slate-400 font-mono truncate">{producto.codigo}</span>
-            </div>
-          )}
-          <h3 className="font-bold text-slate-800 text-xs leading-snug line-clamp-2">{producto.nombre}</h3>
+        {/* Código + unidad + nombre + categoría */}
+        <div>
+          <div className="flex items-center justify-between mb-0.5 gap-1">
+            {producto.codigo && (
+              <div className="flex items-center gap-0.5 min-w-0">
+                <Hash size={8} className="text-slate-400 shrink-0" />
+                <span className="text-[9px] text-slate-400 font-mono truncate">{producto.codigo}</span>
+              </div>
+            )}
+            {producto.unidad && (
+              <span className="inline-flex items-center gap-0.5 text-[9px] text-slate-500 bg-slate-100 px-1 py-0.5 rounded-full shrink-0 ml-auto">
+                <Layers size={7} className="text-slate-400" />{producto.unidad}
+              </span>
+            )}
+          </div>
+          <h3 className="font-bold text-slate-800 text-[11px] sm:text-xs leading-snug line-clamp-2">{producto.nombre}</h3>
           {producto.categoria && (
-            <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+            <span className="inline-flex items-center gap-0.5 mt-0.5 text-[9px] font-semibold px-1.5 py-0.5 rounded-full max-w-full truncate"
               style={{ background: bg, color: fg }}>
-              <Tag size={8} />{producto.categoria}
+              <Tag size={7} /><span className="truncate">{producto.categoria}</span>
             </span>
           )}
         </div>
 
-        {/* Precios y stock */}
-        <div className="pt-2 border-t border-slate-100 space-y-1.5 mt-auto">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] text-slate-500">Precio venta</span>
-            <div className="text-right">
-              <span className="font-bold text-slate-800 text-xs">{fmtUsd(producto.precio_usd)}</span>
+        {/* Precios, margen y stock */}
+        <div className="pt-1.5 border-t border-slate-100 space-y-1 mt-auto">
+
+          {/* Precio venta */}
+          <div className="flex items-start justify-between gap-1">
+            <span className="text-[10px] text-slate-500 shrink-0 pt-px">Precio</span>
+            <div className="text-right min-w-0">
+              <span className="font-bold text-slate-800 text-xs sm:text-sm">{fmtUsd(producto.precio_usd)}</span>
               {tasa > 0 && producto.precio_usd != null && (
-                <div className="text-[9px] text-slate-400">{fmtBs(usdToBs(producto.precio_usd, tasa))}</div>
+                <div className="text-[9px] text-slate-400 leading-none">{fmtBs(usdToBs(producto.precio_usd, tasa))}</div>
               )}
             </div>
           </div>
 
+          {/* Costo + margen (solo privilegiados) */}
           {esPrivilegiado && producto.costo_usd != null && (
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] text-slate-400">Costo</span>
-              <div className="text-right">
-                <span className="text-[10px] text-slate-500">{fmtUsd(producto.costo_usd)}</span>
-                {tasa > 0 && (
-                  <div className="text-[9px] text-slate-400">{fmtBs(usdToBs(producto.costo_usd, tasa))}</div>
+            <div className="flex items-start justify-between gap-1">
+              <span className="text-[10px] text-slate-400 shrink-0 pt-px">Costo</span>
+              <div className="flex items-start gap-1 min-w-0">
+                {margen !== null && (
+                  <span className={`inline-flex items-center gap-0.5 text-[9px] font-bold px-1 py-0.5 rounded-full shrink-0 ${
+                    margen >= 30 ? 'text-emerald-700 bg-emerald-100' :
+                    margen >= 15 ? 'text-amber-700 bg-amber-100' :
+                    'text-red-700 bg-red-100'
+                  }`}>
+                    <TrendingUp size={7} />+{margen}%
+                  </span>
                 )}
+                <div className="text-right min-w-0">
+                  <span className="text-[10px] text-slate-500">{fmtUsd(producto.costo_usd)}</span>
+                  {tasa > 0 && (
+                    <div className="text-[9px] text-slate-400 leading-none">{fmtBs(usdToBs(producto.costo_usd, tasa))}</div>
+                  )}
+                </div>
               </div>
             </div>
           )}
 
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1">
-              <Layers size={9} className="text-slate-400" />
-              <span className="text-[10px] text-slate-400">{producto.unidad}</span>
-            </div>
-            <BadgeStock actual={producto.stock_actual} minimo={producto.stock_minimo} comprometido={comprometido} productoId={producto.id} />
+          {/* Stock */}
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[10px] text-slate-400 shrink-0">Stock</span>
+            <StockBadge
+              actual={producto.stock_actual}
+              minimo={producto.stock_minimo}
+              comprometido={comprometido}
+              productoId={producto.id}
+            />
           </div>
         </div>
       </div>
 
-      {/* Acciones — iconos compactos (solo administracion puede CRUD, supervisor y admin ven kardex) */}
+      {/* Acciones — iconos en móvil, texto en sm+ */}
       {esPrivilegiado && (
-        <div className="border-t border-slate-100 px-1.5 py-1.5 flex items-center justify-between">
+        <div className="border-t border-slate-100 px-1 py-1 flex items-center justify-between gap-0.5">
           <button onClick={() => onKardex(producto)} title="Kardex"
-            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-violet-600 hover:bg-violet-50 transition-colors">
-            <ClipboardList size={11} />Kardex
+            className="flex items-center gap-0.5 px-1.5 sm:px-2 py-1 rounded-lg text-[10px] font-medium text-violet-600 hover:bg-violet-50 transition-colors">
+            <ClipboardList size={11} /><span className="hidden sm:inline">Kardex</span>
           </button>
           {esAdministracion && (
             <>
               <button onClick={() => onEditar(producto)} title="Editar"
-                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-sky-600 hover:bg-sky-50 transition-colors">
-                <Pencil size={11} />Editar
+                className="flex items-center gap-0.5 px-1.5 sm:px-2 py-1 rounded-lg text-[10px] font-medium text-sky-600 hover:bg-sky-50 transition-colors">
+                <Pencil size={11} /><span className="hidden sm:inline">Editar</span>
               </button>
               <button onClick={() => onDesactivar(producto)} title="Desactivar"
-                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-amber-500 hover:bg-amber-50 transition-colors">
-                <EyeOff size={11} />
+                className="flex items-center gap-0.5 px-1.5 sm:px-2 py-1 rounded-lg text-[10px] font-medium text-amber-500 hover:bg-amber-50 transition-colors">
+                <EyeOff size={11} /><span className="hidden sm:inline">Desact.</span>
               </button>
               <button onClick={() => onBorrar(producto)} title="Borrar"
-                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-red-500 hover:bg-red-50 transition-colors">
+                className="flex items-center gap-0.5 px-1.5 sm:px-2 py-1 rounded-lg text-[10px] font-medium text-red-400 hover:bg-red-50 transition-colors">
                 <Trash2 size={11} />
               </button>
             </>
