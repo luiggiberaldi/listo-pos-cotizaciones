@@ -21,52 +21,6 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-          # No VITE_WORKER_ORIGIN — en workers.dev el frontend y API son same-origin
-
-      - name: Inyectar secrets en wrangler.jsonc
-        run: |
-          node -e "
-          const fs = require('fs');
-          let f = fs.readFileSync('wrangler.jsonc','utf8');
-          const lines = f.split('\n');
-          const idx = lines.findIndex(l => l.includes('DEV_SUPER_CODE'));
-          if (idx === -1) { console.error('DEV_SUPER_CODE not found'); process.exit(1); }
-
-          // Solo inyectar secrets que tengan valor (evita sobreescribir Dashboard con vacíos)
-          const allSecrets = {
-            GROQ_KEYS_A: process.env.GROQ_KEYS_A || '',
-            GROQ_KEYS_B: process.env.GROQ_KEYS_B || '',
-            GROQ_KEYS_C: process.env.GROQ_KEYS_C || '',
-            SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_KEY || '',
-            VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY || '',
-          };
-          const secrets = Object.fromEntries(
-            Object.entries(allSecrets).filter(([, v]) => v.length > 0)
-          );
-          if (Object.keys(secrets).length === 0) {
-            console.log('⚠️  No hay secrets configurados en GitHub — desplegando sin inyectar (Dashboard los provee)');
-            process.exit(0);
-          }
-
-          if (!lines[idx].trimEnd().endsWith(',')) {
-            lines[idx] = lines[idx].replace(/(\\\".*)$/, '\$1,');
-          }
-          const entries = Object.entries(secrets);
-          const secretLines = entries
-            .map(([k, v], i) => '    \"' + k + '\": \"' + v + '\"' + (i < entries.length - 1 ? ',' : ''))
-            .join('\n');
-          let insertAt = idx + 1;
-          while (insertAt < lines.length && lines[insertAt].trim().startsWith('//')) { insertAt++; }
-          lines.splice(insertAt, 0, secretLines);
-          fs.writeFileSync('wrangler.jsonc', lines.join('\n'));
-          console.log('✅ ' + entries.length + ' secrets inyectados en wrangler.jsonc');
-          "
-        env:
-          GROQ_KEYS_A: ${{ secrets.GROQ_KEYS_A }}
-          GROQ_KEYS_B: ${{ secrets.GROQ_KEYS_B }}
-          GROQ_KEYS_C: ${{ secrets.GROQ_KEYS_C }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
 
       - name: Deploy a Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
