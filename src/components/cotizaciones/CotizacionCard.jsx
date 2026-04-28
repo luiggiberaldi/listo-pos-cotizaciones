@@ -252,7 +252,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
     <div className="group bg-white rounded-2xl border border-slate-200 hover:shadow-lg transition-all duration-200 flex flex-col">
 
       {/* ── Header strip con color del vendedor ── */}
-      <div className="relative h-14 shrink-0 flex items-end justify-between px-3 pb-1.5 rounded-t-2xl overflow-hidden"
+      <div className="relative shrink-0 px-3 py-2 rounded-t-2xl overflow-hidden"
         title={cotizacion.vendedor?.nombre ? `Vendedor: ${cotizacion.vendedor.nombre}` : undefined}
         style={{ background: `linear-gradient(135deg, ${vendedorColor}ee 0%, ${vendedorColor}99 100%)` }}>
         <div className="absolute inset-0 opacity-10"
@@ -260,24 +260,24 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
             backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)',
             backgroundSize: '12px 12px',
           }} />
-        <div className="relative z-10 min-w-0">
-          <p className="font-black text-white font-mono leading-tight drop-shadow text-base">{numDisplay}</p>
-        </div>
-        <div className="relative z-10 shrink-0 flex flex-col items-end gap-1">
-          <EstadoBadge estado={cotizacion.estado} />
-          {despacho && (
-            <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
-              despacho.estado === 'entregada' ? 'bg-emerald-500 text-white' :
-              despacho.estado === 'despachada' ? 'bg-blue-500 text-white' :
-              despacho.estado === 'anulada' ? 'bg-red-400 text-white' :
-              'bg-indigo-500 text-white'
-            }`}>
-              {despacho.estado === 'pendiente' ? <><Clock size={10} /> Despacho pendiente</> :
-               despacho.estado === 'despachada' ? <><Truck size={10} /> En camino</> :
-               despacho.estado === 'entregada' ? <><PackageCheck size={10} /> Entregada</> :
-               despacho.estado === 'anulada' ? <><XCircle size={10} /> Despacho anulado</> : despacho.estado}
-            </span>
-          )}
+        <div className="relative z-10 flex items-start justify-between gap-2">
+          <p className="font-black text-white font-mono leading-tight drop-shadow text-base min-w-0 truncate">{numDisplay}</p>
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            <EstadoBadge estado={cotizacion.estado} />
+            {despacho && (
+              <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                despacho.estado === 'entregada' ? 'bg-emerald-500 text-white' :
+                despacho.estado === 'despachada' ? 'bg-blue-500 text-white' :
+                despacho.estado === 'anulada' ? 'bg-red-400 text-white' :
+                'bg-indigo-500 text-white'
+              }`}>
+                {despacho.estado === 'pendiente' ? <><Clock size={10} /> Despacho pendiente</> :
+                 despacho.estado === 'despachada' ? <><Truck size={10} /> En camino</> :
+                 despacho.estado === 'entregada' ? <><PackageCheck size={10} /> Entregada</> :
+                 despacho.estado === 'anulada' ? <><XCircle size={10} /> Despacho anulado</> : despacho.estado}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 

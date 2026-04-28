@@ -301,10 +301,17 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.setDrawColor(200, 200, 200)
 
   items.forEach((item) => {
-    const ROW_H = ROW_H_BASE
+    // Calcular cuántas líneas necesita la descripción
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    const descLines = doc.splitTextToSize(item.nombre_snap || '', COLS[2].w - 4)
+    const lineH = 4.5
+    const ROW_H = Math.max(ROW_H_BASE, descLines.length * lineH + 4)
 
     if (y + ROW_H > PAGE_H - 108) { doc.addPage(); y = MARGIN }
 
+    doc.setLineWidth(0.2)
+    doc.setDrawColor(200, 200, 200)
     doc.rect(MARGIN, y, CONTENT_W, ROW_H, 'S')
     COLS.forEach(col => { doc.line(col.x, y, col.x, y + ROW_H) })
 
@@ -312,33 +319,28 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     doc.setFontSize(9)
     doc.setTextColor(...C_DARK)
 
-    const singleMidY = y + ROW_H / 2 + 1.2
-    doc.text(String(item.cantidad), COLS[0].x + COLS[0].w / 2, singleMidY, { align: 'center' })
+    const midY = y + ROW_H / 2 + 1.2
+    doc.text(String(item.cantidad), COLS[0].x + COLS[0].w / 2, midY, { align: 'center' })
     doc.setFontSize(8)
-    doc.text(item.codigo_snap || '—', COLS[1].x + COLS[1].w / 2, singleMidY, { align: 'center' })
-
-    // Descripción — siempre 1 línea, auto-reduce fuente si no cabe
-    const descText = item.nombre_snap || ''
-    const descMaxW = COLS[2].w - 4
-    let descFS = 9
-    doc.setFontSize(descFS)
-    while (descFS > 5 && doc.getTextWidth(descText) > descMaxW) {
-      descFS -= 0.5
-      doc.setFontSize(descFS)
-    }
-    doc.text(descText, COLS[2].x + 2, singleMidY)
+    doc.text(item.codigo_snap || '—', COLS[1].x + COLS[1].w / 2, midY, { align: 'center' })
     doc.setFontSize(9)
 
-    doc.text(item.unidad_snap || '—', COLS[3].x + COLS[3].w / 2, singleMidY, { align: 'center' })
+    // Render all lines of the description
+    const descStartY = y + (ROW_H - descLines.length * lineH) / 2 + lineH
+    descLines.forEach((line, idx) => {
+      doc.text(line, COLS[2].x + 2, descStartY + idx * lineH)
+    })
+
+    doc.text(item.unidad_snap || '—', COLS[3].x + COLS[3].w / 2, midY, { align: 'center' })
 
     const precioText = fmtPrecio(item.precio_unit_usd, monedaPDF, tasa, factorBcv)
     const totalText = fmtPrecio(item.total_linea_usd, monedaPDF, tasa, factorBcv)
     doc.setFontSize(10.5)
-    doc.text(precioText, COLS[4].x + COLS[4].w - 2, singleMidY, { align: 'right' })
+    doc.text(precioText, COLS[4].x + COLS[4].w - 2, midY, { align: 'right' })
 
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(10.5)
-    doc.text(totalText, COLS[5].x + COLS[5].w - 2, singleMidY, { align: 'right' })
+    doc.text(totalText, COLS[5].x + COLS[5].w - 2, midY, { align: 'right' })
     doc.setFontSize(9)
 
     y += ROW_H
@@ -389,13 +391,18 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     if (fpRaw) formasPagoArr = [{ metodo: fpRaw, monto: null }]
   }
 
+  // Si hay una sola forma de pago sin monto, asignar el total
+  if (formasPagoArr.length === 1 && (formasPagoArr[0].monto == null || formasPagoArr[0].monto === '')) {
+    formasPagoArr[0].monto = totalFinal
+  }
+
   const choferStartY = sloganY - 9 - TRANS_H
   const desgloseH = (hasFlete ? 14 : 0) + (hasDescuento ? (hasFlete ? 7 : 14) : 0)  // filas de 7mm
   const hasRefPago = !!(despacho.referencia_pago)
   const refPagoH = hasRefPago ? 7 : 0
   const fpY = choferStartY - 3 - 19 - desgloseH - refPagoH  // 19mm alto (9 + 10), 3mm gap
 
-  // Fila CRÉDITO
+  // Fila FORMA DE PAGO con checkboxes marcados
   doc.setDrawColor(120, 120, 120)
   doc.setLineWidth(0.3)
   doc.rect(MARGIN, fpY, CONTENT_W, 9, 'S')
@@ -403,7 +410,32 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(9)
   doc.setTextColor(...C_DARK)
-  doc.text('8 DÍAS DE CRÉDITO CONTINUO', MARGIN + 3, fpY + 6)
+
+  if (formasPagoArr.length > 0) {
+    doc.text('FORMA DE PAGO:', MARGIN + 3, fpY + 6)
+    const checkSize = 3.5
+    let cx = MARGIN + 38
+    formasPagoArr.forEach(fp => {
+      const nombre = (fp.metodo || '').toUpperCase()
+      if (!nombre) return
+      const boxY = fpY + 2.5
+      doc.setDrawColor(80, 80, 80)
+      doc.setLineWidth(0.3)
+      doc.rect(cx, boxY, checkSize, checkSize, 'S')
+      doc.setLineWidth(0.5)
+      doc.line(cx + 0.7, boxY + 2, cx + 1.4, boxY + 3)
+      doc.line(cx + 1.4, boxY + 3, cx + 2.8, boxY + 0.8)
+      const monto = fp.monto != null && fp.monto !== '' ? ` $${Number(fp.monto).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''
+      const txt = nombre + monto
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8)
+      doc.setTextColor(...C_DARK)
+      doc.text(txt, cx + checkSize + 1.2, fpY + 6)
+      cx += checkSize + 1.2 + doc.getTextWidth(txt) + 4
+    })
+  } else {
+    doc.text('8 DÍAS DE CRÉDITO CONTINUO', MARGIN + 3, fpY + 6)
+  }
 
   // ── Referencia de pago (si existe) ──
   const refPago = despacho.referencia_pago || ''

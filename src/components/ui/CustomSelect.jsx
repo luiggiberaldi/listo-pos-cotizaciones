@@ -1,6 +1,6 @@
 // src/components/ui/CustomSelect.jsx
 // Selector personalizado con búsqueda — reemplaza el <select> nativo
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Search, ChevronDown, X, Check, Plus } from 'lucide-react'
 
 /**
@@ -30,18 +30,46 @@ export default function CustomSelect({
 }) {
   const [abierto, setAbierto] = useState(false)
   const [busqueda, setBusqueda] = useState('')
+  const [openUp, setOpenUp] = useState(false)
   const ref = useRef(null)
+  const searchRef = useRef(null)
 
   const showSearch = searchable ?? (creatable || options.length > 5)
 
-  // Cerrar al hacer click fuera
+  // Cerrar al hacer click/touch fuera
   useEffect(() => {
-    function handleClick(e) {
+    function handleOutside(e) {
       if (ref.current && !ref.current.contains(e.target)) setAbierto(false)
     }
-    if (abierto) document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
+    if (abierto) {
+      document.addEventListener('mousedown', handleOutside)
+      document.addEventListener('touchstart', handleOutside, { passive: true })
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleOutside)
+      document.removeEventListener('touchstart', handleOutside)
+    }
   }, [abierto])
+
+  // Calcular dirección del dropdown y hacer scroll + focus
+  useEffect(() => {
+    if (!abierto || !ref.current) return
+
+    const rect = ref.current.getBoundingClientRect()
+    const viewH = window.visualViewport?.height || window.innerHeight
+    const spaceBelow = viewH - rect.bottom
+    // Si hay poco espacio abajo (menos de 220px), abrir arriba
+    setOpenUp(spaceBelow < 220)
+
+    // Scroll el trigger a la vista en móvil
+    requestAnimationFrame(() => {
+      ref.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      // Focus search input manualmente (autoFocus no siempre funciona en móvil)
+      if (showSearch && searchRef.current) {
+        setTimeout(() => searchRef.current?.focus(), 50)
+      }
+    })
+  }, [abierto, showSearch])
 
   const seleccionada = options.find(o => o.value === value)
   // Si el valor actual no está en options (fue creado), mostrarlo como seleccionado
@@ -72,6 +100,7 @@ export default function CustomSelect({
   function toggle() {
     if (disabled) return
     setAbierto(!abierto)
+    if (abierto) setBusqueda('')
   }
 
   return (
@@ -110,26 +139,33 @@ export default function CustomSelect({
 
       {/* Dropdown */}
       {abierto && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1.5 bg-white rounded-xl border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden">
+        <div className={`absolute z-50 left-0 right-0 bg-white rounded-xl border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden ${
+          openUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
+        }`}>
           {/* Buscador */}
           {showSearch && (
             <div className="p-2 border-b border-slate-100">
               <div className="relative">
                 <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 <input
+                  ref={searchRef}
                   type="text"
+                  inputMode="search"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
                   value={busqueda}
                   onChange={e => setBusqueda(e.target.value)}
                   placeholder="Buscar..."
                   className="w-full pl-7 pr-3 py-1.5 text-sm border border-slate-100 rounded-lg bg-slate-50 focus:outline-none focus:ring-1 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400"
-                  autoFocus
                 />
               </div>
             </div>
           )}
 
           {/* Lista */}
-          <div className="max-h-52 overflow-y-auto py-1">
+          <div className="max-h-52 overflow-y-auto py-1 overscroll-contain">
             {filtradas.length === 0 && !puedeCrear ? (
               <p className="text-sm text-slate-400 text-center py-4">
                 {busqueda ? 'Sin resultados' : 'Sin opciones'}

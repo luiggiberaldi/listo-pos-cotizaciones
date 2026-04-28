@@ -187,12 +187,21 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   doc.setDrawColor(200, 200, 200)
 
   items.forEach((item) => {
+    // Calcular cuántas líneas necesita la descripción
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    const descLines = doc.splitTextToSize(item.nombre_snap || '', COLS[2].w - 4)
+    const lineH = 4.5
+    const rowH = Math.max(ROW_H, descLines.length * lineH + 4)
+
     if (y > PAGE_H - 55) { doc.addPage(); y = MARGIN }
 
-    doc.rect(MARGIN, y, CONTENT_W, ROW_H, 'S')
-    COLS.forEach(col => { doc.line(col.x, y, col.x, y + ROW_H) })
+    doc.setLineWidth(0.2)
+    doc.setDrawColor(200, 200, 200)
+    doc.rect(MARGIN, y, CONTENT_W, rowH, 'S')
+    COLS.forEach(col => { doc.line(col.x, y, col.x, y + rowH) })
 
-    const midY = y + ROW_H / 2 + 1.2
+    const midY = y + rowH / 2 + 1.2
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
     doc.setTextColor(...C_DARK)
@@ -201,8 +210,11 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     doc.setFontSize(8)
     doc.text(item.codigo_snap || '—', COLS[1].x + COLS[1].w / 2, midY, { align: 'center' })
     doc.setFontSize(9)
-    const descLines = doc.splitTextToSize(item.nombre_snap || '', COLS[2].w - 4)
-    doc.text(descLines[0], COLS[2].x + 2, midY)
+    // Render all lines of the description
+    const descStartY = y + (rowH - descLines.length * lineH) / 2 + lineH
+    descLines.forEach((line, idx) => {
+      doc.text(line, COLS[2].x + 2, descStartY + idx * lineH)
+    })
     doc.text(item.unidad_snap || '—', COLS[3].x + COLS[3].w / 2, midY, { align: 'center' })
 
     const tasaEfectiva = tasa > 0 ? tasa : Number(cotizacion.tasa_bcv_snapshot || 0)
@@ -217,7 +229,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     doc.text(totalText, COLS[5].x + COLS[5].w - 2, midY, { align: 'right' })
     doc.setFontSize(9)
 
-    y += ROW_H
+    y += rowH
   })
 
   // Notas Adicionales

@@ -244,10 +244,17 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   doc.setDrawColor(200, 200, 200)
 
   items.forEach((item) => {
-    const ROW_H = ROW_H_BASE
+    // Calcular cuántas líneas necesita la descripción
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    const descLines = doc.splitTextToSize(item.nombre_snap || '', COLS[2].w - 4)
+    const lineH = 4.5
+    const ROW_H = Math.max(ROW_H_BASE, descLines.length * lineH + 4)
 
     if (y + ROW_H > PAGE_H - 108) { doc.addPage(); y = MARGIN }
 
+    doc.setLineWidth(0.2)
+    doc.setDrawColor(200, 200, 200)
     doc.rect(MARGIN, y, CONTENT_W, ROW_H, 'S')
     COLS.forEach(col => { doc.line(col.x, y, col.x, y + ROW_H) })
 
@@ -255,33 +262,28 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
     doc.setFontSize(9)
     doc.setTextColor(...C_DARK)
 
-    const singleMidY = y + ROW_H / 2 + 1.2
-    doc.text(String(item.cantidad), COLS[0].x + COLS[0].w / 2, singleMidY, { align: 'center' })
+    const midY = y + ROW_H / 2 + 1.2
+    doc.text(String(item.cantidad), COLS[0].x + COLS[0].w / 2, midY, { align: 'center' })
     doc.setFontSize(8)
-    doc.text(item.codigo_snap || '—', COLS[1].x + COLS[1].w / 2, singleMidY, { align: 'center' })
-
-    // Descripción — siempre 1 línea, auto-reduce fuente si no cabe
-    const descText = item.nombre_snap || ''
-    const descMaxW = COLS[2].w - 4
-    let descFS = 9
-    doc.setFontSize(descFS)
-    while (descFS > 5 && doc.getTextWidth(descText) > descMaxW) {
-      descFS -= 0.5
-      doc.setFontSize(descFS)
-    }
-    doc.text(descText, COLS[2].x + 2, singleMidY)
+    doc.text(item.codigo_snap || '—', COLS[1].x + COLS[1].w / 2, midY, { align: 'center' })
     doc.setFontSize(9)
 
-    doc.text(item.unidad_snap || '—', COLS[3].x + COLS[3].w / 2, singleMidY, { align: 'center' })
+    // Render all lines of the description
+    const descStartY = y + (ROW_H - descLines.length * lineH) / 2 + lineH
+    descLines.forEach((line, idx) => {
+      doc.text(line, COLS[2].x + 2, descStartY + idx * lineH)
+    })
+
+    doc.text(item.unidad_snap || '—', COLS[3].x + COLS[3].w / 2, midY, { align: 'center' })
 
     const precioText = fmtPrecio(item.precio_unit_usd, monedaPDF, tasa, factorBcv)
     const totalText = fmtPrecio(item.total_linea_usd, monedaPDF, tasa, factorBcv)
     doc.setFontSize(10.5)
-    doc.text(precioText, COLS[4].x + COLS[4].w - 2, singleMidY, { align: 'right' })
+    doc.text(precioText, COLS[4].x + COLS[4].w - 2, midY, { align: 'right' })
 
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(10.5)
-    doc.text(totalText, COLS[5].x + COLS[5].w - 2, singleMidY, { align: 'right' })
+    doc.text(totalText, COLS[5].x + COLS[5].w - 2, midY, { align: 'right' })
     doc.setFontSize(9)
 
     y += ROW_H
@@ -342,7 +344,10 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
     if (fpRaw) formasPagoArr = [{ metodo: fpRaw, monto: null }]
   }
 
-  // ── Recuadro unificado: FORMA DE PAGO + DESGLOSE + TOTAL ──
+  // Si hay una sola forma de pago sin monto, asignar el total
+  if (formasPagoArr.length === 1 && (formasPagoArr[0].monto == null || formasPagoArr[0].monto === '')) {
+    formasPagoArr[0].monto = totalFinal
+  }
 
   // Fila FORMA DE PAGO — solo los elegidos con checkbox y palomita
   const fpY = ty
