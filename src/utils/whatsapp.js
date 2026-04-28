@@ -93,12 +93,33 @@ export function generarMensaje({ nombreNegocio, nombreCliente, numDisplay, total
 
 /**
  * Comparte una cotización por WhatsApp
- * 1. Sube el PDF a Supabase Storage
- * 2. Abre wa.me directo al número del cliente con el link del PDF
+ * - Móvil: usa Web Share API para adjuntar el PDF directamente
+ * - PC: descarga el PDF automáticamente y abre wa.me con el mensaje
  */
 export async function compartirPorWhatsApp({ pdfBlob, pdfFilename, telefono, mensaje, mensajeParams = null }) {
   const telFormateado = formatearTelefono(telefono)
+  const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
 
+  // ── Móvil: intentar Web Share API con archivo adjunto ──
+  if (isMobile && pdfBlob && navigator.canShare) {
+    try {
+      const pdfFile = new File([pdfBlob], pdfFilename || 'cotizacion.pdf', { type: 'application/pdf' })
+      const shareData = {
+        text: mensaje,
+        files: [pdfFile],
+      }
+      if (navigator.canShare(shareData)) {
+        await navigator.share(shareData)
+        return { method: 'web_share_api' }
+      }
+    } catch (err) {
+      // Si el usuario cancela el share (AbortError), no es un error real
+      if (err.name === 'AbortError') return { method: 'web_share_cancelled' }
+      console.warn('[WhatsApp] Web Share API falló, usando fallback:', err?.message)
+    }
+  }
+
+  // ── PC: descargar PDF + abrir WhatsApp Web con mensaje ──
   // Intentar subir el PDF y regenerar mensaje con el link
   let mensajeFinal = mensaje
   if (pdfBlob && mensajeParams) {
@@ -107,6 +128,15 @@ export async function compartirPorWhatsApp({ pdfBlob, pdfFilename, telefono, men
       mensajeFinal = generarMensaje({ ...mensajeParams, pdfUrl })
     } catch (err) {
       console.error('[WhatsApp] Error subiendo PDF:', err?.message || err)
+      // En PC sin link: descargar el PDF para que lo adjunte manualmente
+      if (!isMobile && pdfBlob) {
+        const url = URL.createObjectURL(pdfBlob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = pdfFilename || 'cotizacion.pdf'
+        a.click()
+        setTimeout(() => URL.revokeObjectURL(url), 5000)
+      }
     }
   }
 
@@ -116,5 +146,5 @@ export async function compartirPorWhatsApp({ pdfBlob, pdfFilename, telefono, men
     : `https://wa.me/?text=${encodeURIComponent(mensajeFinal)}`
 
   window.open(waUrl, '_blank', 'noopener')
-  return { method: 'wa_link' }
+  return { method: isMobile ? 'wa_link_mobile' : 'wa_link_desktop' }
 }
