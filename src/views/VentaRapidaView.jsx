@@ -661,7 +661,7 @@ function Step1Productos({
       )}
 
       {/* Cliente selector */}
-      <div ref={clienteRef} className="relative">
+      <div ref={clienteRef} className="relative bg-white rounded-2xl border border-slate-200 p-3 shadow-sm">
         <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">Cliente</label>
         {clienteSeleccionado ? (
           <div className="flex items-center gap-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
@@ -711,7 +711,7 @@ function Step1Productos({
       {/* ── Columna izquierda: Productos ── */}
       <div className="flex-1 min-w-0">
       {/* Productos */}
-      <div>
+      <div className="bg-white rounded-2xl border border-slate-200 p-3 shadow-sm">
         <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">Productos</label>
 
         {/* ── Barra de búsqueda (estilo Fase 2) ── */}
