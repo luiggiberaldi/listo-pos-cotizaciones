@@ -375,7 +375,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
                   Imprimir <ChevronDown size={9} />
                 </button>
                 {showPrintMenu && (
-                  <div className="absolute left-0 bottom-full mb-1 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
+                  <div className="absolute left-0 bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
                     onMouseDown={e => e.preventDefault()}>
                     <MonedaSelector onSelect={() => {}} onClose={() => setShowPrintMenu(false)} />
                     <button onClick={() => { imprimirCotizacion(); setShowPrintMenu(false) }}
@@ -396,7 +396,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
                   Descargar <ChevronDown size={9} />
                 </button>
                 {showDownloadMenu && (
-                  <div className="absolute left-0 bottom-full mb-1 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
+                  <div className="absolute left-0 bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
                     onMouseDown={e => e.preventDefault()}>
                     <MonedaSelector onSelect={() => {}} onClose={() => setShowDownloadMenu(false)} />
                     <button onClick={() => { descargarPDF(); setShowDownloadMenu(false) }}
@@ -448,7 +448,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
                 Imprimir <ChevronDown size={9} />
               </button>
               {showPrintMenu && (
-                <div className="absolute left-0 bottom-full mb-1 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
+                <div className="absolute left-0 bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
                   onMouseDown={e => e.preventDefault()}>
                   <MonedaSelector onSelect={() => {}} onClose={() => setShowPrintMenu(false)} />
                   <button onClick={() => { imprimirCotizacion(); setShowPrintMenu(false) }}
@@ -469,7 +469,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
                 Descargar <ChevronDown size={9} />
               </button>
               {showDownloadMenu && (
-                <div className="absolute left-0 bottom-full mb-1 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
+                <div className="absolute left-0 bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
                   onMouseDown={e => e.preventDefault()}>
                   <MonedaSelector onSelect={() => {}} onClose={() => setShowDownloadMenu(false)} />
                   <button onClick={() => { descargarPDF(); setShowDownloadMenu(false) }}
@@ -490,7 +490,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
             <MoreHorizontal size={12} /> Más
           </button>
           {showMoreMenu && (
-            <div className="absolute right-0 bottom-full mb-1 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
+            <div className="absolute right-0 bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
               onMouseDown={e => e.preventDefault()}>
               <button onClick={() => { setShowDetalle(true); setShowMoreMenu(false) }}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
