@@ -191,7 +191,7 @@ export default function VentaRapidaView() {
         (c.rif_cedula ?? '').toLowerCase().includes(clienteBusqueda.toLowerCase()) ||
         (c.telefono ?? '').includes(clienteBusqueda)
       ).slice(0, 8)
-    : []
+    : clientes.slice(0, 8)
 
   // Filtrar productos con smart search (ranking por relevancia)
   const productosFiltrados = useProductSearch(productos, productoBusqueda, catActiva)
