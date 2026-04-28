@@ -1,7 +1,7 @@
 // src/modules/auth/LoginPage.jsx
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { RefreshCw, Mail, Key, Eye, EyeOff, ArrowRight, Download } from 'lucide-react'
+import { RefreshCw, Mail, Key, Eye, EyeOff, ArrowRight, Download, LogOut } from 'lucide-react'
 import supabase from '../../services/supabase/client'
 import useAuthStore from '../../store/useAuthStore'
 import { apiUrl } from '../../services/apiBase'
@@ -298,7 +298,7 @@ function GateStep({ onPass }) {
 }
 
 // ─── Paso 2: Seleccionar operador ────────────────────────────────────────────
-function UserSelectStep() {
+function UserSelectStep({ onLogout }) {
   const cached = (() => { try { return JSON.parse(localStorage.getItem(USUARIOS_CACHE_KEY) || '[]').filter(u => u.rol !== 'desarrollador') } catch { return [] } })()
   const [usuarios,     setUsuarios]     = useState(cached)
   const [cargando,     setCargando]     = useState(cached.length === 0)
@@ -492,16 +492,32 @@ function UserSelectStep() {
                   Selecciona tu usuario e ingresa tu PIN
                 </p>
               </div>
-              <button
-                onClick={cargarUsuarios.bind(null, false)}
-                disabled={cargando}
-                className="p-2 sm:p-2.5 rounded-xl transition-all disabled:opacity-40 shrink-0 ml-2"
-                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.5)' }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
-              >
-                <RefreshCw size={14} className={cargando ? 'animate-spin' : ''} />
-              </button>
+              <div className="flex items-center gap-2 shrink-0 ml-2">
+                <button
+                  onClick={cargarUsuarios.bind(null, false)}
+                  disabled={cargando}
+                  className="p-2 sm:p-2.5 rounded-xl transition-all disabled:opacity-40"
+                  style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.5)' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
+                  title="Recargar usuarios"
+                >
+                  <RefreshCw size={14} className={cargando ? 'animate-spin' : ''} />
+                </button>
+                <button
+                  onClick={async () => {
+                    await supabase.auth.signOut()
+                    onLogout()
+                  }}
+                  className="p-2 sm:p-2.5 rounded-xl transition-all"
+                  style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: 'rgba(239,68,68,0.7)' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.2)'; e.currentTarget.style.color = 'rgba(239,68,68,0.9)' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = 'rgba(239,68,68,0.7)' }}
+                  title="Cerrar sesión"
+                >
+                  <LogOut size={14} />
+                </button>
+              </div>
             </div>
 
             {/* Grid usuarios */}
@@ -699,5 +715,5 @@ export default function LoginPage() {
   }
 
   // Sesión activa → selección de operador + PIN
-  return <UserSelectStep />
+  return <UserSelectStep onLogout={() => setGatePassed(false)} />
 }
