@@ -286,7 +286,7 @@ function TransportistaCard({ transportista, esSupervisor, puedeEditar, onEditar,
 
 function SkeletonTransportistas() {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
       {Array.from({ length: 4 }).map((_, i) => (
         <div key={i} className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
           <div className="flex gap-2.5">
@@ -373,7 +373,7 @@ export default function TransportistasView() {
           onAction={puedeCrear ? abrirNuevo : undefined}
         />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
           {transportistas.map(t => (
             <TransportistaCard
               key={t.id}

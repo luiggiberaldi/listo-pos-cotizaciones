@@ -81,7 +81,7 @@ function Dropdown({ value, onChange, placeholder, options }) {
 // ─── Skeleton de carga ────────────────────────────────────────────────────────
 function SkeletonClientes() {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
       {Array.from({ length: 8 }).map((_, i) => (
         <div key={i} className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
           <Skeleton className="h-5 w-3/4 rounded-lg" />
@@ -375,7 +375,7 @@ export default function ClientesView() {
         />
       ) : (
         vistaMode === 'grid' ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
             {clientesPaginados.map(cliente => (
               <ClienteCard
                 key={cliente.id}
