@@ -147,6 +147,16 @@ export default function VentaRapidaView() {
 
   const idsAgregados = new Set(items.map(it => it.productoId))
   const clienteSeleccionado = clientes.find(c => c.id === clienteId)
+
+  const preciosMap = useMemo(() => {
+    const m = {}
+    for (const p of productos) {
+      if (p.precio_2 != null || p.precio_3 != null) {
+        m[p.id] = { p1: Number(p.precio_usd) || 0, p2: p.precio_2 != null ? Number(p.precio_2) : null, p3: p.precio_3 != null ? Number(p.precio_3) : null }
+      }
+    }
+    return m
+  }, [productos])
   const totalItems = items.reduce((s, it) => s + it.cantidad, 0)
   const transportistaSeleccionado = transportistas.find(t => t.id === transportistaId)
 
@@ -334,6 +344,7 @@ export default function VentaRapidaView() {
             setCantidadDirecta={setCantidadDirecta}
             cambiarPrecio={cambiarPrecio}
             quitarItem={quitarItem}
+            preciosMap={preciosMap}
             totalItems={totalItems}
             totalUsd={totalUsd}
             totalBs={totalBs}
@@ -496,6 +507,7 @@ function Step1Productos({
   totalItems, totalUsd, totalBs, tasa,
   mobileCartOpen, setMobileCartOpen,
   step1Valid, onSiguiente,
+  preciosMap = {},
 }) {
   // Scroll arrows for categories
   const scrollRef = useRef(null)
@@ -949,6 +961,24 @@ function Step1Productos({
                         <Trash2 size={12} className="text-red-400" />
                       </button>
                     </div>
+                    {preciosMap[it.productoId] && (
+                      <div className="flex gap-1 flex-wrap mt-1.5">
+                        {[{ label: 'Detal', value: preciosMap[it.productoId].p1 }, { label: 'Mayor', value: preciosMap[it.productoId].p2 }, { label: 'Especial', value: preciosMap[it.productoId].p3 }]
+                          .filter(n => n.value != null && Number(n.value) > 0)
+                          .map(n => {
+                            const active = Math.abs(Number(it.precioUnitUsd) - Number(n.value)) < 0.001
+                            return (
+                              <button key={n.label} type="button"
+                                onClick={() => cambiarPrecio(it.productoId, Number(n.value))}
+                                className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border transition-colors ${
+                                  active ? 'bg-primary text-white border-primary' : 'bg-white text-slate-500 border-slate-200 hover:border-primary/40'
+                                }`}>
+                                {n.label} {fmtUsd(n.value)}
+                              </button>
+                            )
+                          })}
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -1109,6 +1139,24 @@ function Step1Productos({
                         <Trash2 size={12} className="text-red-400" />
                       </button>
                     </div>
+                    {preciosMap[it.productoId] && (
+                      <div className="flex gap-1 flex-wrap mt-1.5">
+                        {[{ label: 'Detal', value: preciosMap[it.productoId].p1 }, { label: 'Mayor', value: preciosMap[it.productoId].p2 }, { label: 'Especial', value: preciosMap[it.productoId].p3 }]
+                          .filter(n => n.value != null && Number(n.value) > 0)
+                          .map(n => {
+                            const active = Math.abs(Number(it.precioUnitUsd) - Number(n.value)) < 0.001
+                            return (
+                              <button key={n.label} type="button"
+                                onClick={() => cambiarPrecio(it.productoId, Number(n.value))}
+                                className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border transition-colors ${
+                                  active ? 'bg-primary text-white border-primary' : 'bg-white text-slate-500 border-slate-200 hover:border-primary/40'
+                                }`}>
+                                {n.label} {fmtUsd(n.value)}
+                              </button>
+                            )
+                          })}
+                      </div>
+                    )}
                   </div>
                 )
               })}
