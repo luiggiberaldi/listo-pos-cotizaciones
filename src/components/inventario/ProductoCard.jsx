@@ -9,7 +9,6 @@ function fmtUsd(n) {
   return `$${Number(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-// Color determinista basado en la cadena de categoría
 const PALETA = [
   ['#1e40af','#dbeafe'], ['#065f46','#d1fae5'], ['#92400e','#fef3c7'],
   ['#7c3aed','#ede9fe'], ['#be185d','#fce7f3'], ['#0f766e','#ccfbf1'],
@@ -29,14 +28,12 @@ function StockBadge({ actual, minimo, comprometido = 0, productoId }) {
   const sobrecomprometido = comprometido > 0 && disponible < 0
 
   if (agotado) return (
-    <div className="text-right">
-      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-red-700 bg-red-100 border border-red-300 px-2 py-0.5 rounded-full">
-        Agotado
-      </span>
-    </div>
+    <span className="inline-flex items-center gap-1 text-xs font-bold text-red-700 bg-red-100 border border-red-300 px-2.5 py-1 rounded-lg">
+      Sin stock
+    </span>
   )
 
-  const badgeClass = sobrecomprometido
+  const cls = sobrecomprometido
     ? 'text-red-700 bg-red-100 border-red-300'
     : bajo
       ? 'text-amber-700 bg-amber-100 border-amber-300'
@@ -44,16 +41,16 @@ function StockBadge({ actual, minimo, comprometido = 0, productoId }) {
 
   return (
     <div className="text-right space-y-0.5">
-      <div className={`inline-flex items-center gap-1 text-[11px] font-bold border px-2 py-0.5 rounded-full ${badgeClass}`}>
+      <span className={`inline-flex items-center gap-1 text-xs font-bold border px-2.5 py-1 rounded-lg ${cls}`}>
         {(sobrecomprometido || bajo) && <AlertTriangle size={10} />}
         {Number(actual).toLocaleString('es-VE')}
-      </div>
+      </span>
       {comprometido > 0 && (
         <div>
           <StockComprometidoDetalle productoId={productoId} comprometido={comprometido} />
           {sobrecomprometido && (
-            <div className="text-[10px] text-red-600 font-semibold">
-              Disp: {Number(disponible).toLocaleString('es-VE')}
+            <div className="text-[10px] text-red-600 font-semibold mt-0.5">
+              Disponible: {Number(disponible).toLocaleString('es-VE')}
             </div>
           )}
         </div>
@@ -73,7 +70,6 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, onBorra
   const agotado = stockActual <= 0
   const stockBajo = !agotado && stockMinimo > 0 && stockActual <= stockMinimo
 
-  // Margen de ganancia
   const precio = Number(producto.precio_usd)
   const costo = Number(producto.costo_usd)
   const margen = esPrivilegiado && precio > 0 && costo > 0
@@ -89,7 +85,7 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, onBorra
           : 'bg-white border-slate-200 hover:border-sky-200 hover:shadow-sky-50'
     }`}>
 
-      {/* Imagen — más baja en móvil */}
+      {/* Imagen */}
       <div className={`relative w-full h-16 sm:h-20 flex items-center justify-center overflow-hidden shrink-0 ${agotado ? 'opacity-50 grayscale' : ''}`}
         style={{ background: producto.imagen_url ? '#f8fafc' : bg }}>
         {producto.imagen_url ? (
@@ -113,73 +109,71 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, onBorra
       </div>
 
       {/* Contenido */}
-      <div className={`px-2 sm:px-3 pt-2 pb-2.5 flex flex-col gap-1.5 sm:gap-2 flex-1 ${agotado ? 'opacity-70' : ''}`}>
+      <div className={`px-2.5 pt-2 pb-2.5 flex flex-col gap-2 flex-1 ${agotado ? 'opacity-70' : ''}`}>
 
-        {/* Código + unidad + nombre + categoría */}
+        {/* Encabezado: código, unidad, nombre, categoría */}
         <div>
-          <div className="flex items-center justify-between mb-0.5 gap-1">
+          <div className="flex items-center justify-between gap-1 mb-1">
             {producto.codigo && (
               <div className="flex items-center gap-0.5 min-w-0">
-                <Hash size={8} className="text-slate-400 shrink-0" />
+                <Hash size={8} className="text-slate-300 shrink-0" />
                 <span className="text-[9px] text-slate-400 font-mono truncate">{producto.codigo}</span>
               </div>
             )}
             {producto.unidad && (
-              <span className="inline-flex items-center gap-0.5 text-[9px] text-slate-500 bg-slate-100 px-1 py-0.5 rounded-full shrink-0 ml-auto">
-                <Layers size={7} className="text-slate-400" />{producto.unidad}
+              <span className="inline-flex items-center gap-0.5 text-[9px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full shrink-0 ml-auto">
+                <Layers size={7} />{producto.unidad}
               </span>
             )}
           </div>
           <h3 className="font-bold text-slate-800 text-[11px] sm:text-xs leading-snug line-clamp-2">{producto.nombre}</h3>
           {producto.categoria && (
-            <span className="inline-flex items-center gap-0.5 mt-0.5 text-[9px] font-semibold px-1.5 py-0.5 rounded-full max-w-full truncate"
+            <span className="inline-flex items-center gap-0.5 mt-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full max-w-full"
               style={{ background: bg, color: fg }}>
               <Tag size={7} /><span className="truncate">{producto.categoria}</span>
             </span>
           )}
         </div>
 
-        {/* Precios, margen y stock */}
-        <div className="pt-1.5 border-t border-slate-100 space-y-1 mt-auto">
+        {/* Bloque de precios y stock */}
+        <div className="mt-auto space-y-1.5 pt-2 border-t border-slate-100">
 
-          {/* Precio venta */}
-          <div className="flex items-start justify-between gap-1">
-            <span className="text-[10px] text-slate-500 shrink-0 pt-px">Precio</span>
-            <div className="text-right min-w-0">
-              <span className="font-bold text-slate-800 text-xs sm:text-sm">{fmtUsd(producto.precio_usd)}</span>
-              {tasa > 0 && producto.precio_usd != null && (
-                <div className="text-[9px] text-slate-400 leading-none">{fmtBs(usdToBs(producto.precio_usd, tasa))}</div>
+          {/* Precio venta — bloque destacado */}
+          <div className="rounded-xl bg-slate-50 px-2.5 py-2">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">Precio venta</span>
+              {margen !== null && (
+                <span className={`inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                  margen >= 30 ? 'text-emerald-700 bg-emerald-100' :
+                  margen >= 15 ? 'text-amber-700 bg-amber-100' :
+                  'text-red-700 bg-red-100'
+                }`}>
+                  <TrendingUp size={8} />+{margen}%
+                </span>
               )}
             </div>
+            <p className="font-black text-slate-800 text-base sm:text-lg leading-none">{fmtUsd(producto.precio_usd)}</p>
+            {tasa > 0 && producto.precio_usd != null && (
+              <p className="text-[10px] text-slate-400 mt-0.5">{fmtBs(usdToBs(producto.precio_usd, tasa))}</p>
+            )}
           </div>
 
-          {/* Costo + margen (solo privilegiados) */}
+          {/* Costo — fila secundaria */}
           {esPrivilegiado && producto.costo_usd != null && (
-            <div className="flex items-start justify-between gap-1">
-              <span className="text-[10px] text-slate-400 shrink-0 pt-px">Costo</span>
-              <div className="flex items-start gap-1 min-w-0">
-                {margen !== null && (
-                  <span className={`inline-flex items-center gap-0.5 text-[9px] font-bold px-1 py-0.5 rounded-full shrink-0 ${
-                    margen >= 30 ? 'text-emerald-700 bg-emerald-100' :
-                    margen >= 15 ? 'text-amber-700 bg-amber-100' :
-                    'text-red-700 bg-red-100'
-                  }`}>
-                    <TrendingUp size={7} />+{margen}%
-                  </span>
+            <div className="flex items-center justify-between px-0.5">
+              <span className="text-[10px] text-slate-400">Costo</span>
+              <div className="text-right">
+                <p className="text-xs font-semibold text-slate-600">{fmtUsd(producto.costo_usd)}</p>
+                {tasa > 0 && (
+                  <p className="text-[10px] text-slate-400">{fmtBs(usdToBs(producto.costo_usd, tasa))}</p>
                 )}
-                <div className="text-right min-w-0">
-                  <span className="text-[10px] text-slate-500">{fmtUsd(producto.costo_usd)}</span>
-                  {tasa > 0 && (
-                    <div className="text-[9px] text-slate-400 leading-none">{fmtBs(usdToBs(producto.costo_usd, tasa))}</div>
-                  )}
-                </div>
               </div>
             </div>
           )}
 
           {/* Stock */}
-          <div className="flex items-center justify-between gap-1">
-            <span className="text-[10px] text-slate-400 shrink-0">Stock</span>
+          <div className="flex items-center justify-between px-0.5">
+            <span className="text-[10px] text-slate-400">Stock</span>
             <StockBadge
               actual={producto.stock_actual}
               minimo={producto.stock_minimo}
@@ -187,10 +181,11 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, onBorra
               productoId={producto.id}
             />
           </div>
+
         </div>
       </div>
 
-      {/* Acciones — iconos en móvil, texto en sm+ */}
+      {/* Acciones */}
       {esPrivilegiado && (
         <div className="border-t border-slate-100 px-1 py-1 flex items-center justify-between gap-0.5">
           <button onClick={() => onKardex(producto)} title="Kardex"
