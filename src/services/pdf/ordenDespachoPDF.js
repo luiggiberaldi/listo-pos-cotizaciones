@@ -152,7 +152,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   doc.rect(MARGIN + clienteLblW + clienteValW + rifLblW, f4Y, rifValW, rowH, 'S')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(10)
-  doc.text(cliente.rif_cedula || '—', MARGIN + clienteLblW + clienteValW + rifLblW + 2, f4Y + rowH / 2 + 1)
+  doc.text(cliente.rif_cedula || '—', MARGIN + clienteLblW + clienteValW + rifLblW + rifValW / 2, f4Y + rowH / 2 + 1, { align: 'center' })
 
   // ── Fila 5: DIRECCIÓN ──
   const f5Y = f4Y + rowH
