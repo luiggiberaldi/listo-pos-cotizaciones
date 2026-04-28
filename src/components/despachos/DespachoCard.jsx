@@ -306,9 +306,13 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             )}
           </div>
         )}
+        {despacho.transportista?.nombre && (
+          <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+            <Truck size={11} className="shrink-0" />
+            <span className="truncate">{despacho.transportista.nombre}</span>
+          </div>
+        )}
       </div>
-
-      {/* ── Referencia de pago del cliente ── */}
       {(despacho.forma_pago_cliente || despacho.referencia_pago) && (
         <div className="mx-3 mb-1 flex items-center gap-2 text-[11px] text-slate-400 flex-wrap">
           {despacho.forma_pago_cliente && (() => {

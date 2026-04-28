@@ -197,7 +197,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     while (cNombre.length > 1 && doc.getTextWidth(cNombre + '…') > maxClienteW) cNombre = cNombre.slice(0, -1)
     cNombre += '…'
   }
-  doc.text(cNombre, MARGIN + clienteLblW + clienteValW / 2, f4Y + rowH / 2 + 1, { align: 'center' })
+  doc.text(cNombre, MARGIN + clienteLblW + 2, f4Y + rowH / 2 + 1)
 
   doc.rect(MARGIN + clienteLblW + clienteValW, f4Y, rifLblW, rowH, 'S')
   doc.setFont('helvetica', 'bold')
@@ -207,7 +207,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.rect(MARGIN + clienteLblW + clienteValW + rifLblW, f4Y, rifValW, rowH, 'S')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(10)
-  doc.text(cliente.rif_cedula || '—', MARGIN + clienteLblW + clienteValW + rifLblW + rifValW / 2, f4Y + rowH / 2 + 1, { align: 'center' })
+  doc.text(cliente.rif_cedula || '—', MARGIN + clienteLblW + clienteValW + rifLblW + 2, f4Y + rowH / 2 + 1)
 
   // ── Fila 5: DIRECCIÓN (ancho completo) ──
   const f5Y = f4Y + rowH
@@ -227,7 +227,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     while (dStr.length > 1 && doc.getTextWidth(dStr + '…') > maxDirW) dStr = dStr.slice(0, -1)
     dStr += '…'
   }
-  doc.text(dStr, MARGIN + dirLblW + (CONTENT_W - dirLblW) / 2, f5Y + rowH / 2 + 1, { align: 'center' })
+  doc.text(dStr, MARGIN + dirLblW + 2, f5Y + rowH / 2 + 1)
 
   // ── Fila 6: TELÉFONO + VENDEDOR ──
   const f6Y = f5Y + rowH
@@ -244,7 +244,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.rect(MARGIN + tlfLblW, f6Y, tlfValW, rowH, 'S')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(10)
-  doc.text(cliente.telefono || '—', MARGIN + tlfLblW + tlfValW / 2, f6Y + rowH / 2 + 1, { align: 'center' })
+  doc.text(cliente.telefono || '—', MARGIN + tlfLblW + 2, f6Y + rowH / 2 + 1)
 
   doc.rect(MARGIN + tlfLblW + tlfValW, f6Y, vendLblW, rowH, 'S')
   doc.setFont('helvetica', 'bold')
@@ -262,7 +262,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     while (vStr.length > 1 && doc.getTextWidth(vStr + '…') > maxVendW) vStr = vStr.slice(0, -1)
     vStr += '…'
   }
-  doc.text(vStr, MARGIN + tlfLblW + tlfValW + vendLblW + vendValW / 2, f6Y + rowH / 2 + 1, { align: 'center' })
+  doc.text(vStr, MARGIN + tlfLblW + tlfValW + vendLblW + 2, f6Y + rowH / 2 + 1)
 
   y = f6Y + rowH + 2
 
@@ -592,8 +592,9 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     doc.setTextColor(...C_DARK)
     doc.text('DATOS DEL CHOFER Y DEL VEHÍCULO', MARGIN + 2, ty + 4)
 
-    // Grid 2×3
-    const colW = CONTENT_W / 3
+    // Grid: fila 1 = 3 cols, fila 2 = 4 cols
+    const col3W = CONTENT_W / 3
+    const col4W = CONTENT_W / 4
     const row1Y = ty + 6
     const row2Y = row1Y + ROW_H
     const row1Fields = [
@@ -603,10 +604,11 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     ]
     const row2Fields = [
       { label: 'VEHÍCULO', val: transportista?.vehiculo || '' },
+      { label: 'PLACA', val: transportista?.zona_cobertura || '' },
       { label: 'PLACA CHUTO', val: transportista?.placa_chuto || '' },
       { label: 'PLACA BATEA', val: transportista?.placa_batea || '' },
     ]
-    function drawRow(fields, ry) {
+    function drawRow(fields, ry, colW) {
       fields.forEach((f, i) => {
         const fx = MARGIN + i * colW
         doc.setDrawColor(120, 120, 120)
@@ -622,8 +624,8 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
         if (f.val) doc.text(f.val, fx + 2, ry + 10)
       })
     }
-    drawRow(row1Fields, row1Y)
-    drawRow(row2Fields, row2Y)
+    drawRow(row1Fields, row1Y, col3W)
+    drawRow(row2Fields, row2Y, col4W)
   }
 
   if (y < sloganY) {

@@ -40,12 +40,13 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
   const { prefijo: rifPrefijoInit, numero: rifNumeroInit } = parsearRifTransp(inicial.rif)
   const [rifPrefijo, setRifPrefijo] = useState(rifPrefijoInit)
   const [campos, setCampos] = useState({
-    nombre:         inicial.nombre         ?? '',
-    rif:            rifNumeroInit,
-    color:          inicial.color          ?? '',
-    vehiculo:       inicial.vehiculo       ?? '',
-    placa_chuto:    inicial.placa_chuto    ?? '',
-    placa_batea:    inicial.placa_batea    ?? '',
+    nombre:          inicial.nombre          ?? '',
+    rif:             rifNumeroInit,
+    color:           inicial.color           ?? '',
+    vehiculo:        inicial.vehiculo        ?? '',
+    zona_cobertura:  inicial.zona_cobertura  ?? '',
+    placa_chuto:     inicial.placa_chuto     ?? '',
+    placa_batea:     inicial.placa_batea     ?? '',
   })
   const [error, setError] = useState('')
 

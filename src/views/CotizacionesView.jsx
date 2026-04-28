@@ -21,7 +21,7 @@ import { Modal }         from '../components/ui/Modal'
 import EmptyState        from '../components/ui/EmptyState'
 import Skeleton          from '../components/ui/Skeleton'
 import { useVendedores } from '../hooks/useClientes'
-import { useTransportistas } from '../hooks/useTransportistas'
+import { useTransportistas, useCrearTransportista } from '../hooks/useTransportistas'
 import VendedorFilterPill from '../components/ui/VendedorFilterPill'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../utils/format'
 import { showToast } from '../components/ui/Toast'
@@ -76,7 +76,18 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
   const [referenciaPago, setReferenciaPago] = useState('')
   const [showTransportistaMenu, setShowTransportistaMenu] = useState(false)
   const [stockMap, setStockMap] = useState({})
+  const [notas, setNotas] = useState('')
   const { data: transportistas = [] } = useTransportistas()
+  const crearTransp = useCrearTransportista()
+  const [showNuevoTransp, setShowNuevoTransp] = useState(false)
+  const [nuevoNombre, setNuevoNombre] = useState('')
+  const [nuevoRif, setNuevoRif] = useState('')
+  const [nuevoVehiculo, setNuevoVehiculo] = useState('')
+  const [nuevoColor, setNuevoColor] = useState('')
+  const [nuevoPlaca, setNuevoPlaca] = useState('')
+  const [nuevoPlacaChuto, setNuevoPlacaChuto] = useState('')
+  const [nuevoPlacaBatea, setNuevoPlacaBatea] = useState('')
+  const [nuevoError, setNuevoError] = useState('')
 
   const items = detalle?.items ?? []
 
@@ -331,59 +342,132 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
           <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
             Transportista
           </p>
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setShowTransportistaMenu(v => !v)}
-              onBlur={() => setTimeout(() => setShowTransportistaMenu(false), 200)}
-              className="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-slate-200 bg-slate-50 hover:border-indigo-300 transition-colors text-left min-h-[44px]"
-            >
-              <span className="flex items-center gap-2 truncate">
-                <Truck size={15} className="text-slate-400 shrink-0" />
-                {transportistaId
-                  ? <span className="text-slate-700">{transportistas.find(t => t.id === transportistaId)?.nombre || 'Seleccionado'}</span>
-                  : <span className="text-slate-400">Sin transportista (opcional)</span>
-                }
-              </span>
-              <ChevronDown size={14} className={`text-slate-400 shrink-0 transition-transform ${showTransportistaMenu ? 'rotate-180' : ''}`} />
-            </button>
-            {showTransportistaMenu && (
-              <div className="absolute left-0 right-0 bottom-full mb-1 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20 max-h-48 overflow-y-auto"
-                onMouseDown={e => e.preventDefault()}>
-                <button
-                  onClick={() => { setTransportistaId(''); setFleteUsd(''); setShowTransportistaMenu(false) }}
-                  className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left transition-colors ${
-                    !transportistaId ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-500 hover:bg-slate-50'
-                  }`}
-                >
-                  Sin transportista
-                </button>
-                {transportistas.map(t => (
-                  <button key={t.id}
-                    onClick={() => { setTransportistaId(t.id); setShowTransportistaMenu(false) }}
-                    className={`w-full flex items-center justify-between gap-2 px-4 py-2.5 text-sm text-left transition-colors ${
-                      transportistaId === t.id ? 'bg-indigo-50 font-semibold text-indigo-700' : 'text-slate-700 hover:bg-slate-50'
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <button
+                type="button"
+                onClick={() => setShowTransportistaMenu(v => !v)}
+                onBlur={() => setTimeout(() => setShowTransportistaMenu(false), 200)}
+                className="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-slate-200 bg-slate-50 hover:border-indigo-300 transition-colors text-left min-h-[44px]"
+              >
+                <span className="flex items-center gap-2 truncate">
+                  <Truck size={15} className="text-slate-400 shrink-0" />
+                  {transportistaId
+                    ? <span className="text-slate-700">{transportistas.find(t => t.id === transportistaId)?.nombre || 'Seleccionado'}</span>
+                    : <span className="text-slate-400">Sin transportista (opcional)</span>
+                  }
+                </span>
+                <ChevronDown size={14} className={`text-slate-400 shrink-0 transition-transform ${showTransportistaMenu ? 'rotate-180' : ''}`} />
+              </button>
+              {showTransportistaMenu && (
+                <div className="absolute left-0 right-0 bottom-full mb-1 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20 max-h-48 overflow-y-auto"
+                  onMouseDown={e => e.preventDefault()}>
+                  <button
+                    onClick={() => { setTransportistaId(''); setFleteUsd(''); setShowTransportistaMenu(false) }}
+                    className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left transition-colors ${
+                      !transportistaId ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-500 hover:bg-slate-50'
                     }`}
                   >
-                    <div className="min-w-0">
-                      <p className="font-medium truncate">{t.nombre}</p>
-                      {(t.vehiculo || t.placa_chuto) && (
-                        <p className="text-xs text-slate-400 truncate">
-                          {[t.vehiculo, t.placa_chuto].filter(Boolean).join(' · ')}
-                        </p>
-                      )}
-                    </div>
-                    {transportistaId === t.id && (
-                      <span className="text-indigo-500 shrink-0">✓</span>
-                    )}
+                    Sin transportista
                   </button>
-                ))}
-                {transportistas.length === 0 && (
-                  <p className="px-4 py-2.5 text-sm text-slate-400">No hay transportistas registrados</p>
-                )}
-              </div>
-            )}
+                  {transportistas.map(t => (
+                    <button key={t.id}
+                      onClick={() => { setTransportistaId(t.id); setShowTransportistaMenu(false) }}
+                      className={`w-full flex items-center justify-between gap-2 px-4 py-2.5 text-sm text-left transition-colors ${
+                        transportistaId === t.id ? 'bg-indigo-50 font-semibold text-indigo-700' : 'text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium truncate">{t.nombre}</p>
+                        {(t.vehiculo || t.placa_chuto) && (
+                          <p className="text-xs text-slate-400 truncate">
+                            {[t.vehiculo, t.placa_chuto].filter(Boolean).join(' · ')}
+                          </p>
+                        )}
+                      </div>
+                      {transportistaId === t.id && (
+                        <span className="text-indigo-500 shrink-0">✓</span>
+                      )}
+                    </button>
+                  ))}
+                  {transportistas.length === 0 && (
+                    <p className="px-4 py-2.5 text-sm text-slate-400">No hay transportistas registrados</p>
+                  )}
+                </div>
+              )}
+            </div>
+            <button type="button"
+              onClick={() => setShowNuevoTransp(v => !v)}
+              disabled={cargando}
+              className="shrink-0 w-10 h-10 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 flex items-center justify-center transition-colors active:scale-95 disabled:opacity-50"
+              title="Crear nuevo transportista">
+              <Plus size={16} className="text-emerald-600" />
+            </button>
           </div>
+
+          {/* Formulario crear nuevo transportista */}
+          {showNuevoTransp && (
+            <div className="bg-white rounded-2xl border-2 border-emerald-200 shadow-lg p-3 sm:p-4 space-y-3">
+              <p className="text-sm font-bold text-emerald-700">Nuevo transportista</p>
+              {nuevoError && <p className="text-xs text-red-500 font-medium">{nuevoError}</p>}
+              <input type="text" value={nuevoNombre} onChange={e => setNuevoNombre(e.target.value)}
+                placeholder="Nombre del chofer *"
+                className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-300 focus:bg-white transition-colors" />
+              <input type="text" value={nuevoRif} onChange={e => setNuevoRif(e.target.value)}
+                placeholder="C.I. / RIF *"
+                className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-300 focus:bg-white transition-colors" />
+              <div className="grid grid-cols-2 gap-2">
+                <input type="text" value={nuevoVehiculo} onChange={e => setNuevoVehiculo(e.target.value)}
+                  placeholder="Vehículo *"
+                  className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-300 focus:bg-white transition-colors" />
+                <input type="text" value={nuevoColor} onChange={e => setNuevoColor(e.target.value)}
+                  placeholder="Color *"
+                  className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-300 focus:bg-white transition-colors" />
+              </div>
+              <input type="text" value={nuevoPlaca} onChange={e => setNuevoPlaca(e.target.value.toUpperCase())}
+                placeholder="Placa *"
+                className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-300 focus:bg-white transition-colors" />
+              <div className="grid grid-cols-2 gap-2">
+                <input type="text" value={nuevoPlacaChuto} onChange={e => setNuevoPlacaChuto(e.target.value.toUpperCase())}
+                  placeholder="Placa chuto"
+                  className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-300 focus:bg-white transition-colors" />
+                <input type="text" value={nuevoPlacaBatea} onChange={e => setNuevoPlacaBatea(e.target.value.toUpperCase())}
+                  placeholder="Placa batea"
+                  className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-300 focus:bg-white transition-colors" />
+              </div>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => { setShowNuevoTransp(false); setNuevoError('') }}
+                  className="flex-1 px-3 py-2 rounded-lg text-sm font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
+                  Cancelar
+                </button>
+                <button type="button" disabled={crearTransp.isPending}
+                  onClick={async () => {
+                    if (!nuevoNombre.trim() || !nuevoRif.trim() || !nuevoVehiculo.trim() || !nuevoColor.trim() || !nuevoPlaca.trim()) {
+                      setNuevoError('Nombre, C.I./RIF, vehículo, color y placa son obligatorios'); return
+                    }
+                    setNuevoError('')
+                    try {
+                      const nuevo = await crearTransp.mutateAsync({
+                        nombre: nuevoNombre.trim(),
+                        rif: nuevoRif.trim() || null,
+                        vehiculo: nuevoVehiculo.trim() || null,
+                        color: nuevoColor.trim() || null,
+                        zona_cobertura: nuevoPlaca.trim() || null,
+                        placa_chuto: nuevoPlacaChuto.trim() || null,
+                        placa_batea: nuevoPlacaBatea.trim() || null,
+                      })
+                      setTransportistaId(nuevo.id)
+                      setShowNuevoTransp(false)
+                      setNuevoNombre(''); setNuevoRif(''); setNuevoVehiculo(''); setNuevoColor(''); setNuevoPlaca(''); setNuevoPlacaChuto(''); setNuevoPlacaBatea('')
+                    } catch (e) { setNuevoError(e.message || 'Error al crear') }
+                  }}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-50">
+                  {crearTransp.isPending ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                  Crear
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Monto del flete (solo si hay transportista) */}
@@ -410,6 +494,21 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
           </div>
         )}
 
+        {/* Notas (opcional) */}
+        <div className="space-y-2">
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+            Notas (opcional)
+          </p>
+          <textarea
+            value={notas}
+            onChange={e => setNotas(e.target.value)}
+            placeholder="Observaciones internas..."
+            className="w-full px-4 py-2.5 rounded-xl text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 focus:bg-white transition-colors resize-y"
+            style={{ minHeight: 80 }}
+            disabled={cargando}
+          />
+        </div>
+
         </div>{/* fin scrollable */}
 
         {/* Botones — despachar */}
@@ -420,7 +519,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
           </button>
           <button onClick={() => {
               const fpJson = JSON.stringify(formasPago)
-              onConfirm(fpJson, transportistaId || null, Number(fleteUsd) || 0, referenciaPago, fpJson)
+              onConfirm(fpJson, transportistaId || null, Number(fleteUsd) || 0, referenciaPago, fpJson, notas)
             }} disabled={cargando || items.length === 0 || !pagoCuadrado}
             title={formasPago.length === 0 ? 'Selecciona forma de pago' : !pagoCuadrado ? 'Los montos no cuadran con el total' : undefined}
             className="flex-1 py-3 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-semibold text-base transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20">
@@ -492,7 +591,7 @@ function ListaCotizaciones({ onNueva, onEditar }) {
     setCotizacionAAnular(null)
   }
 
-  async function confirmarDespachar(formaPago = '', transportistaId = null, fleteUsd = 0, referenciaPago = '', formaPagoCliente = '') {
+  async function confirmarDespachar(formaPago = '', transportistaId = null, fleteUsd = 0, referenciaPago = '', formaPagoCliente = '', notas = '') {
     if (!cotizacionADespachar) return
     try {
       await crearDespacho.mutateAsync({
@@ -502,6 +601,7 @@ function ListaCotizaciones({ onNueva, onEditar }) {
         fleteUsd: fleteUsd || 0,
         referenciaPago: referenciaPago || null,
         formaPagoCliente: formaPagoCliente || null,
+        notas: notas || null,
       })
       setCotizacionADespachar(null)
     } catch (err) {
