@@ -17,6 +17,7 @@ import PageHeader  from '../components/ui/PageHeader'
 
 // ─── Tabs ───────────────────────────────────────────────────────────────────
 const TABS = [
+  { id: 'negocio',    label: 'Negocio',    icon: Building2   },
   { id: 'comisiones', label: 'Comisiones', icon: DollarSign },
   { id: 'usuarios',   label: 'Usuarios',   icon: Users     },
   { id: 'datos',      label: 'Datos',      icon: Database  },
@@ -373,7 +374,7 @@ export default function ConfiguracionView() {
 
   const inputCls = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400'
   const cargando = actualizar.isPending
-  const esTabForm = tab === 'comisiones'
+  const esTabForm = tab === 'comisiones' || tab === 'negocio'
 
   return (
     <div className="p-3 sm:p-4 md:p-5 lg:p-6 max-w-4xl space-y-4">
@@ -416,6 +417,44 @@ export default function ConfiguracionView() {
       {/* Tabs de formulario — Negocio, Fiscal, Sistema */}
       {esTabForm && (
         <form onSubmit={handleGuardar} className="space-y-5">
+
+          {/* ── Negocio ─────────────────────────────────────────────────── */}
+          {tab === 'negocio' && (
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-5">
+              <SectionHeader icon={Building2}>Datos de contacto</SectionHeader>
+              <p className="text-xs text-slate-500 -mt-2">
+                Teléfono y correo que aparecen en los PDFs de cotizaciones y notas de entrega.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">
+                    <Phone size={12} className="inline mr-1" />Teléfono
+                  </label>
+                  <input
+                    type="text"
+                    value={campos.telefono_negocio}
+                    onChange={e => cambiar('telefono_negocio', e.target.value)}
+                    placeholder="0424-4556736 / 0412-4416005"
+                    disabled={isLoading || cargando}
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1B365D]/20 focus:border-[#1B365D]/40 transition-all disabled:opacity-50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">
+                    <Mail size={12} className="inline mr-1" />Correo electrónico
+                  </label>
+                  <input
+                    type="email"
+                    value={campos.email_negocio}
+                    onChange={e => cambiar('email_negocio', e.target.value)}
+                    placeholder="j501159130@gmail.com"
+                    disabled={isLoading || cargando}
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1B365D]/20 focus:border-[#1B365D]/40 transition-all disabled:opacity-50"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* ── Comisiones ────────────────────────────────────────────────── */}
           {tab === 'comisiones' && <ComisionesTab campos={campos} cambiar={cambiar} isLoading={isLoading} cargando={cargando} />}

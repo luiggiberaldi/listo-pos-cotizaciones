@@ -370,7 +370,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
 
   // ── Layout fijo: posiciones calculadas desde el fondo ──
   const sloganY = PAGE_H - 33
-  const TRANS_H = 18
+  const TRANS_H = 30
 
   // ── Recuadro unificado: FORMA DE PAGO + DESGLOSE + TOTAL ──
   const total = Number(despacho.total_usd || 0)
@@ -411,31 +411,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.setFontSize(9)
   doc.setTextColor(...C_DARK)
 
-  if (formasPagoArr.length > 0) {
-    doc.text('FORMA DE PAGO:', MARGIN + 3, fpY + 6)
-    const checkSize = 3.5
-    let cx = MARGIN + 38
-    formasPagoArr.forEach(fp => {
-      const nombre = (fp.metodo || '').toUpperCase()
-      if (!nombre) return
-      const boxY = fpY + 2.5
-      doc.setDrawColor(80, 80, 80)
-      doc.setLineWidth(0.3)
-      doc.rect(cx, boxY, checkSize, checkSize, 'S')
-      doc.setLineWidth(0.5)
-      doc.line(cx + 0.7, boxY + 2, cx + 1.4, boxY + 3)
-      doc.line(cx + 1.4, boxY + 3, cx + 2.8, boxY + 0.8)
-      const monto = fp.monto != null && fp.monto !== '' ? ` $${Number(fp.monto).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''
-      const txt = nombre + monto
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(8)
-      doc.setTextColor(...C_DARK)
-      doc.text(txt, cx + checkSize + 1.2, fpY + 6)
-      cx += checkSize + 1.2 + doc.getTextWidth(txt) + 4
-    })
-  } else {
-    doc.text('8 DÍAS DE CRÉDITO CONTINUO', MARGIN + 3, fpY + 6)
-  }
+  doc.text('8 DÍAS DE CRÉDITO CONTINUO', MARGIN + 3, fpY + 6)
 
   // ── Referencia de pago (si existe) ──
   const refPago = despacho.referencia_pago || ''
