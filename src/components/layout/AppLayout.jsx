@@ -198,7 +198,7 @@ export default function AppLayout() {
   const collapsed = sidebarCollapsed && !menuOpen
 
   return (
-    <div className="flex min-h-screen pt-12 md:pt-14" style={{ background: '#f1f5f9' }}>
+    <div className="flex h-screen overflow-hidden pt-12 md:pt-14" style={{ background: '#f1f5f9' }}>
 
       {/* ── Barra superior (móvil + desktop) ────────────────────────────── */}
       <div className="fixed top-0 left-0 right-0 z-40 px-3 md:px-4 h-12 md:h-14 flex items-center justify-between gap-2 md:gap-4"
@@ -483,8 +483,8 @@ export default function AppLayout() {
       </aside>
 
       {/* ── Área de contenido ───────────────────────────────────────────── */}
-      <main ref={mainRef} className="flex-1 overflow-y-auto min-w-0 pb-20 md:pb-0">
-        <div className="mx-auto max-w-screen-2xl">
+      <main ref={mainRef} className="flex-1 overflow-y-auto min-w-0 pb-20 md:pb-0 flex flex-col">
+        <div className="mx-auto max-w-screen-2xl w-full flex flex-col flex-1 min-h-0">
           <div className="px-4 pt-1 md:px-6">
             <Breadcrumbs />
           </div>
