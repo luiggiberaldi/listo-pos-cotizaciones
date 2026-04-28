@@ -1872,43 +1872,62 @@ async function handleReciclarCotizacion(request, env) {
 
 // ── Reabrir cotización para edición (cambiar estado a borrador, sin crear versión) ──
 async function handleReabrirCotizacion(request, env) {
-  const user = await verifyAuth(request, env);
-  if (!user?.id) return jsonError('No autenticado', 401, request);
-  if (!user.operator_id) return jsonError('No hay operador seleccionado', 400, request);
+  try {
+    const user = await verifyAuth(request, env);
+    if (!user?.id) return jsonError('No autenticado', 401, request);
+    if (!user.operator_id) return jsonError('No hay operador seleccionado', 400, request);
 
-  let body;
-  try { body = await request.json() } catch { return jsonError('JSON inválido', 400, request) }
-  const { cotizacionId } = body || {};
-  if (!cotizacionId) return jsonError('cotizacionId requerido', 400, request);
+    let body;
+    try { body = await request.json() } catch { return jsonError('JSON inválido', 400, request) }
+    const { cotizacionId } = body || {};
+    if (!cotizacionId) return jsonError('cotizacionId requerido', 400, request);
 
-  const SB = env.SUPABASE_URL;
-  const SK = env.SUPABASE_SERVICE_KEY;
-  const hdrs = { apikey: SK, Authorization: `Bearer ${SK}`, 'Content-Type': 'application/json' };
+    const SB = env.SUPABASE_URL;
+    const SK = env.SUPABASE_SERVICE_KEY;
+    const hdrs = { apikey: SK, Authorization: `Bearer ${SK}`, 'Content-Type': 'application/json' };
 
-  // Verificar que la cotización existe y no tiene despacho
-  const cotRes = await fetch(`${SB}/rest/v1/cotizaciones?id=eq.${cotizacionId}&select=id,estado,vendedor_id`, { headers: hdrs });
-  const cots = await cotRes.json();
-  if (!cots?.length) return jsonError('Cotización no encontrada', 404, request);
-  const cot = cots[0];
+    // Verificar que la cotización existe y no tiene despacho
+    const cotRes = await fetch(`${SB}/rest/v1/cotizaciones?id=eq.${cotizacionId}&select=id,estado,vendedor_id`, { headers: hdrs });
+    if (!cotRes.ok) {
+      const errText = await cotRes.text();
+      console.error('[reabrir] Error fetching cotización:', cotRes.status, errText);
+      return jsonError('Error al consultar cotización', 500, request);
+    }
+    const cots = await cotRes.json();
+    if (!cots?.length) return jsonError('Cotización no encontrada', 404, request);
+    const cot = cots[0];
 
-  if (cot.estado === 'borrador') return json({ ok: true, message: 'Ya es borrador' }, request);
-  if (cot.estado === 'anulada') return jsonError('No se puede reabrir una cotización anulada', 400, request);
-  if (cot.estado === 'vencida') return jsonError('No se puede reabrir una cotización vencida', 400, request);
+    if (cot.estado === 'borrador') return json({ ok: true, message: 'Ya es borrador' }, 200, request);
+    if (cot.estado === 'anulada') return jsonError('No se puede reabrir una cotización anulada', 400, request);
+    if (cot.estado === 'vencida') return jsonError('No se puede reabrir una cotización vencida', 400, request);
 
-  // Verificar que no tiene despacho asociado
-  const desRes = await fetch(`${SB}/rest/v1/notas_despacho?cotizacion_id=eq.${cotizacionId}&select=id`, { headers: hdrs });
-  const despachos = await desRes.json();
-  if (despachos?.length > 0) return jsonError('No se puede editar: ya tiene despacho asociado', 400, request);
+    // Verificar que no tiene despacho asociado
+    const desRes = await fetch(`${SB}/rest/v1/notas_despacho?cotizacion_id=eq.${cotizacionId}&select=id`, { headers: hdrs });
+    if (!desRes.ok) {
+      const errText = await desRes.text();
+      console.error('[reabrir] Error fetching despachos:', desRes.status, errText);
+      return jsonError('Error al consultar despachos', 500, request);
+    }
+    const despachos = await desRes.json();
+    if (despachos?.length > 0) return jsonError('No se puede editar: ya tiene despacho asociado', 400, request);
 
-  // Cambiar estado a borrador
-  const patchRes = await fetch(`${SB}/rest/v1/cotizaciones?id=eq.${cotizacionId}`, {
-    method: 'PATCH',
-    headers: { ...hdrs, Prefer: 'return=minimal' },
-    body: JSON.stringify({ estado: 'borrador' }),
-  });
-  if (!patchRes.ok) return jsonError('Error al reabrir cotización', 500, request);
+    // Cambiar estado a borrador
+    const patchRes = await fetch(`${SB}/rest/v1/cotizaciones?id=eq.${cotizacionId}`, {
+      method: 'PATCH',
+      headers: { ...hdrs, Prefer: 'return=minimal' },
+      body: JSON.stringify({ estado: 'borrador' }),
+    });
+    if (!patchRes.ok) {
+      const errText = await patchRes.text();
+      console.error('[reabrir] Error PATCH cotización:', patchRes.status, errText);
+      return jsonError('Error al reabrir cotización: ' + (errText || patchRes.status), 500, request);
+    }
 
-  return json({ ok: true }, request);
+    return json({ ok: true }, 200, request);
+  } catch (err) {
+    console.error('[reabrir] Unhandled error:', err.message, err.stack);
+    return jsonError('Error interno al reabrir: ' + err.message, 500, request);
+  }
 }
 
 // ── Crear versión de cotización enviada/rechazada (bypass RLS) ──────────────
