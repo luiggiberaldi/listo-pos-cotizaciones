@@ -91,7 +91,7 @@ const NavItem = memo(function NavItem({ path, label, Icono, onClick, collapsed }
       onClick={onClick}
       title={collapsed ? label : undefined}
       className={({ isActive }) => `
-        flex items-center ${collapsed ? 'justify-center' : 'gap-3'} ${collapsed ? 'px-2' : 'px-3'} py-1.5 md:py-1.5 xl:py-2 rounded-xl
+        flex items-center ${collapsed ? 'justify-center' : 'gap-3'} ${collapsed ? 'px-2' : 'px-3'} py-1.5 rounded-xl
         text-sm font-bold transition-colors duration-150
         ${isActive
           ? 'text-white shadow-lg'
@@ -396,11 +396,11 @@ export default function AppLayout() {
         </div>
 
         {/* Logo + botón colapsar */}
-        <div className="relative z-10 px-4 py-2 md:py-2 xl:py-3 flex flex-col items-center shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="relative z-10 px-4 py-2 flex flex-col items-center shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
 
           <img src="/logo.png" alt="Construacero Carabobo"
             className={`object-contain transition-all duration-300 select-none pointer-events-none ${
-              collapsed ? 'h-[36px] w-[36px]' : 'h-[60px] md:h-[72px] xl:h-[95px]'
+              collapsed ? 'h-[36px] w-[36px]' : 'h-[60px] md:h-[72px]'
             }`}
             style={{ filter: 'brightness(1.05) drop-shadow(0 0 12px rgba(184,134,11,0.2))' }}
             draggable={false}
@@ -419,7 +419,7 @@ export default function AppLayout() {
         </div>
 
         {/* Navegación */}
-        <nav className="relative z-10 flex-1 min-h-0 overflow-y-auto sidebar-scrollbar p-3 space-y-0.5">
+        <nav className="relative z-10 flex-1 min-h-0 p-2 space-y-0.5">
           {NAV_TODOS
             .filter(item => esDesarrollador || ((!item.excludeRoles || !item.excludeRoles.includes(perfil?.rol)) && (!item.onlyRoles || item.onlyRoles.includes(perfil?.rol))))
             .map(({ path, label, labelByRole, icono: Icono }) => (
@@ -428,7 +428,7 @@ export default function AppLayout() {
           {esPrivilegiado && (
             <>
               {!collapsed && (
-                <div className="pt-4 pb-1.5 px-3">
+                <div className="pt-2 pb-1 px-3">
                   <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'rgba(184,134,11,0.7)' }}>
                     Administración
                   </p>
