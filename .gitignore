@@ -36,3 +36,4 @@ frames/
 scripts/
 .env.production
 .env.bak
+.env.secrets

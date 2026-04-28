@@ -211,10 +211,9 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
     return { key: 'ver', label: 'Ver detalle', icon: Eye, action: () => setShowDetalle(true) }
   }
 
-  const moreActions = getMoreActions()
-
   const primaryAction = getPrimaryAction()
   const pColors = PRIMARY_ACTION_COLORS[primaryAction.key] || PRIMARY_ACTION_COLORS.ver
+  const moreActions = getMoreActions()
 
   // ── Acciones para Más (móvil bottom sheet + desktop dropdown) ──
   function getMoreActions() {
@@ -445,7 +444,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
           {moreActions.length === 1 ? (
             <button onClick={moreActions[0].onClick}
               className="ml-auto flex items-center gap-1 px-2.5 py-2 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 active:bg-slate-100 transition-colors">
-              {moreActions[0].icon && <moreActions[0].icon size={13} />} {moreActions[0].label}
+              {moreActions[0].icon && (() => { const Icon = moreActions[0].icon; return <Icon size={13} />; })()} {moreActions[0].label}
             </button>
           ) : (
             <button onClick={() => setShowSheet(true)}
@@ -548,7 +547,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         {moreActions.length === 1 ? (
           <button onClick={moreActions[0].onClick}
             className="ml-auto flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 transition-colors whitespace-nowrap">
-            {moreActions[0].icon && <moreActions[0].icon size={12} />} {moreActions[0].label}
+            {moreActions[0].icon && (() => { const Icon = moreActions[0].icon; return <Icon size={12} />; })()} {moreActions[0].label}
           </button>
         ) : (
           <div className="relative ml-auto">
