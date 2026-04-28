@@ -274,10 +274,10 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const COLS = [
     { label: 'CANT.',       x: MARGIN,        w: 11,  align: 'center' },
     { label: 'CÓD.',        x: MARGIN + 11,   w: 20,  align: 'center' },
-    { label: 'DESCRIPCIÓN', x: MARGIN + 31,   w: 75,  align: 'center' },
-    { label: 'UNID.',       x: MARGIN + 106,  w: 11,  align: 'center' },
-    { label: precioLabel,    x: MARGIN + 117,  w: 32,  align: 'center' },
-    { label: totalLabel,     x: MARGIN + 149,  w: 33,  align: 'right'  },
+    { label: 'DESCRIPCIÓN', x: MARGIN + 31,   w: 91,  align: 'center' },
+    { label: 'UNID.',       x: MARGIN + 122,  w: 11,  align: 'center' },
+    { label: precioLabel,    x: MARGIN + 133,  w: 27,  align: 'center' },
+    { label: totalLabel,     x: MARGIN + 160,  w: 28,  align: 'right'  },
   ]
   const ROW_H_BASE = 6.5
 

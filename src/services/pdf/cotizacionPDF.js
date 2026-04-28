@@ -158,12 +158,12 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   const totalLabel  = monedaPDF === 'bs' ? 'TOTAL Bs'  : monedaPDF === 'bcv' ? 'TOTAL BCV'  : monedaPDF === 'mixto_bcv' ? 'TOTAL BCV' : 'TOTAL'
   // Anchos fijos que funcionan para cualquier moneda
   const COLS = [
-    { label: 'CANT.',       x: MARGIN,        w: 14,  align: 'center' },
-    { label: 'CÓD.',        x: MARGIN + 14,   w: 22,  align: 'center' },
-    { label: 'DESCRIPCIÓN', x: MARGIN + 36,   w: 58,  align: 'center' },
-    { label: 'UNID.',       x: MARGIN + 94,   w: 12,  align: 'center' },
-    { label: precioLabel,    x: MARGIN + 106,  w: 36,  align: 'center' },
-    { label: totalLabel,     x: MARGIN + 142,  w: 40,  align: 'right'  },
+    { label: 'CANT.',       x: MARGIN,        w: 12,  align: 'center' },
+    { label: 'CÓD.',        x: MARGIN + 12,   w: 20,  align: 'center' },
+    { label: 'DESCRIPCIÓN', x: MARGIN + 32,   w: 90,  align: 'center' },
+    { label: 'UNID.',       x: MARGIN + 122,  w: 11,  align: 'center' },
+    { label: precioLabel,    x: MARGIN + 133,  w: 27,  align: 'center' },
+    { label: totalLabel,     x: MARGIN + 160,  w: 28,  align: 'right'  },
   ]
   const ROW_H = 9
 
