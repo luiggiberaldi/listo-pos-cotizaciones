@@ -325,9 +325,10 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   const total = Number(despacho.total_usd || 0)
   const flete = Number(despacho.flete_usd || 0)
   const descuentoTotal = Number(despacho.descuento_total_usd || 0)
+  // En orden de despacho NO se muestra el flete — se resta del total
   const subtotal = flete > 0 ? total - flete : total
-  const totalFinal = total - descuentoTotal
-  const hasFlete = flete > 0
+  const totalFinal = subtotal - descuentoTotal
+  const hasFlete = false // Flete desactivado en orden de despacho
   const hasDescuento = descuentoTotal > 0
 
   // Posicionar recuadro unificado fijo sobre el chofer

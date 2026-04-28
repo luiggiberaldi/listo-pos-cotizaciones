@@ -1,5 +1,5 @@
 // src/components/despachos/DespachoCard.jsx
-import { useState, memo } from 'react'
+import { useState, memo, Fragment } from 'react'
 import { FileText, Calendar, Truck, CheckCircle, Ban, RefreshCcw, Download, Loader2, Eye, MoreHorizontal, ChevronDown, Printer, Tag, Pencil } from 'lucide-react'
 import EstadoBadge from '../cotizaciones/EstadoBadge'
 import MobileActionSheet from '../cotizaciones/MobileActionSheet'
@@ -51,7 +51,10 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const canDescuento = (perfil?.rol === 'logistica' || esSupervisor || esDesarrollador) && ['pendiente', 'despachada'].includes(despacho.estado)
   const canEditar = despacho.estado === 'pendiente' && (esPrivilegiado || despacho.vendedor_id === perfil?.id)
   const descuentoTotal = Number(despacho.descuento_total_usd || 0)
-  const totalConDescuento = Number(despacho.total_usd || 0) - descuentoTotal
+  const fleteUsd = Number(despacho.flete_usd || 0)
+  const totalBruto = Number(despacho.total_usd || 0) // ya incluye flete
+  const subtotalProductos = totalBruto - fleteUsd // solo productos
+  const totalFinal = totalBruto - descuentoTotal // total con flete, menos descuento
 
   async function descargarPDF() {
     setPdfLoading(true)
@@ -237,8 +240,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const primaryAction = getPrimaryAction()
   const pColors = PRIMARY_ACTION_COLORS[primaryAction.key] || PRIMARY_ACTION_COLORS.ver
 
-  // ── Acciones para el bottom sheet móvil (Más) ──
-  function getMobileSheetActions() {
+  // ── Acciones para Más (bottom sheet móvil + dropdown desktop) ──
+  function getMoreActions() {
     const actions = []
     actions.push({ label: 'Ver detalle', icon: Eye, onClick: () => setShowDetalle(true) })
     if (canDescuento)
@@ -259,6 +262,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     }
     return actions
   }
+
+  const moreActions = getMoreActions()
 
   // Resolver config del confirm modal
   const confirmConfig = accionPendiente?.actionConfig || {}
@@ -319,28 +324,34 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
 
       {/* ── Total + Flete ── */}
       <div className="mx-3 mb-2 bg-slate-50 rounded-xl px-3 py-2 space-y-1">
-        {Number(despacho.flete_usd || 0) > 0 && (
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-medium text-slate-400">Flete</span>
-            <span className="text-xs font-semibold text-slate-500">{fmtUsd(despacho.flete_usd)}</span>
-          </div>
+        {fleteUsd > 0 && (
+          <>
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-medium text-slate-400">Subtotal</span>
+              <span className="text-xs font-semibold text-slate-500">{fmtUsd(subtotalProductos)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-medium text-slate-400">Flete</span>
+              <span className="text-xs font-semibold text-emerald-600">+{fmtUsd(fleteUsd)}</span>
+            </div>
+          </>
         )}
         <div className="flex items-center justify-between">
           <span className="text-xs font-medium text-slate-400">Total</span>
           <div className="text-right">
             {descuentoTotal > 0 ? (
               <>
-                <span className="text-xs text-slate-400 line-through mr-1.5">{fmtUsd(despacho.total_usd)}</span>
-                <span className="text-lg font-bold text-amber-700">{fmtUsd(totalConDescuento)}</span>
-                {tasa > 0 && totalConDescuento > 0 && (
-                  <div className="text-[11px] text-slate-400">{fmtBs(usdToBs(totalConDescuento, tasa))}</div>
+                <span className="text-xs text-slate-400 line-through mr-1.5">{fmtUsd(totalBruto)}</span>
+                <span className="text-lg font-bold text-amber-700">{fmtUsd(totalFinal)}</span>
+                {tasa > 0 && totalFinal > 0 && (
+                  <div className="text-[11px] text-slate-400">{fmtBs(usdToBs(totalFinal, tasa))}</div>
                 )}
               </>
             ) : (
               <>
-                <span className="text-lg font-bold text-slate-800">{fmtUsd(despacho.total_usd)}</span>
-                {tasa > 0 && despacho.total_usd > 0 && (
-                  <div className="text-[11px] text-slate-400">{fmtBs(usdToBs(despacho.total_usd, tasa))}</div>
+                <span className="text-lg font-bold text-slate-800">{fmtUsd(totalBruto)}</span>
+                {tasa > 0 && totalBruto > 0 && (
+                  <div className="text-[11px] text-slate-400">{fmtBs(usdToBs(totalBruto, tasa))}</div>
                 )}
               </>
             )}
@@ -424,17 +435,26 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             </button>
           )}
 
-          <button onClick={() => setShowSheet(true)}
-            className="ml-auto flex items-center gap-1 px-2.5 py-2 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 active:bg-slate-100 transition-colors">
-            <MoreHorizontal size={13} /> Más
-          </button>
+          {moreActions.length === 1 ? (
+            <button onClick={moreActions[0].onClick}
+              className="ml-auto flex items-center gap-1 px-2.5 py-2 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 active:bg-slate-100 transition-colors">
+              {moreActions[0].icon && (() => { const Icon = moreActions[0].icon; return <Icon size={13} />; })()} {moreActions[0].label}
+            </button>
+          ) : (
+            <button onClick={() => setShowSheet(true)}
+              className="ml-auto flex items-center gap-1 px-2.5 py-2 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 active:bg-slate-100 transition-colors">
+              <MoreHorizontal size={13} /> Más
+            </button>
+          )}
         </div>
 
+        {moreActions.length > 1 && (
         <MobileActionSheet
           isOpen={showSheet}
           onClose={() => setShowSheet(false)}
-          actions={getMobileSheetActions()}
+          actions={moreActions}
         />
+        )}
       </div>
 
       {/* ══════════ DESKTOP ACTIONS (md+) ══════════ */}
@@ -508,56 +528,35 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           </button>
         )}
 
-        {/* Más (···) dropdown desktop */}
-        <div className="relative ml-auto">
-          <button onClick={() => setShowMoreMenu(v => !v)}
-            onBlur={() => setTimeout(() => setShowMoreMenu(false), 200)}
-            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 transition-colors whitespace-nowrap">
-            <MoreHorizontal size={12} /> Más
+        {/* Más (···) dropdown desktop — o botón directo si solo hay 1 acción */}
+        {moreActions.length === 1 ? (
+          <button onClick={moreActions[0].onClick}
+            className="ml-auto flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 transition-colors whitespace-nowrap">
+            {moreActions[0].icon && (() => { const Icon = moreActions[0].icon; return <Icon size={12} />; })()} {moreActions[0].label}
           </button>
-          {showMoreMenu && (
-            <div className="absolute right-0 bottom-full mb-1 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
-              onMouseDown={e => e.preventDefault()}>
-              <button onClick={() => { setShowDetalle(true); setShowMoreMenu(false) }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
-                <Eye size={14} /> Ver detalle
-              </button>
-              {canDescuento && (
-                <button onClick={() => { setShowDescuento(true); setShowMoreMenu(false) }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-amber-600 hover:bg-amber-50 text-left">
-                  <Tag size={14} /> Descuento {descuentoTotal > 0 && '✓'}
-                </button>
-              )}
-              {canDespachar && primaryAction.key !== 'despachar' && (
-                <button onClick={() => { const cfg = getDespachoAction('despachar', rol); setAccionPendiente({ id: despacho.id, estado: 'despachada', actionConfig: cfg }); setShowMoreMenu(false) }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 text-left">
-                  <Truck size={14} /> {getDespachoAction('despachar', rol).label || 'Despachar'}
-                </button>
-              )}
-              {canEntregar && primaryAction.key !== 'entregar' && (
-                <button onClick={() => { const cfg = getDespachoAction('entregar', rol) || { label: 'Marcar entregada', confirm: '¿Confirmar entrega realizada?', color: 'emerald' }; setAccionPendiente({ id: despacho.id, estado: 'entregada', actionConfig: cfg }); setShowMoreMenu(false) }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-emerald-600 hover:bg-emerald-50 text-left">
-                  <CheckCircle size={14} /> Marcar entregada
-                </button>
-              )}
-              {canReciclar && primaryAction.key !== 'reciclar' && (
-                <button onClick={() => { onReciclar(despacho); setShowMoreMenu(false) }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-teal-600 hover:bg-teal-50 text-left">
-                  <RefreshCcw size={14} /> Reutilizar
-                </button>
-              )}
-              {canAnular && (
-                <>
-                  <div className="border-t border-slate-100 my-1" />
-                  <button onClick={() => { onAnular(despacho); setShowMoreMenu(false) }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-500 hover:bg-red-50 text-left">
-                    <Ban size={14} /> Anular despacho
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-        </div>
+        ) : (
+          <div className="relative ml-auto">
+            <button onClick={() => setShowMoreMenu(v => !v)}
+              onBlur={() => setTimeout(() => setShowMoreMenu(false), 200)}
+              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 transition-colors whitespace-nowrap">
+              <MoreHorizontal size={12} /> Más
+            </button>
+            {showMoreMenu && (
+              <div className="absolute right-0 bottom-full mb-1 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
+                onMouseDown={e => e.preventDefault()}>
+                {moreActions.map((act, i) => (
+                  <Fragment key={i}>
+                    {act.danger && <div className="border-t border-slate-100 my-1" />}
+                    <button onClick={() => { act.onClick(); setShowMoreMenu(false) }}
+                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left ${act.danger ? 'text-red-500 hover:bg-red-50' : act.textColor ? `${act.textColor} hover:bg-slate-50` : 'text-slate-700 hover:bg-slate-50'}`}>
+                      {act.icon && <act.icon size={14} />} {act.label}
+                    </button>
+                  </Fragment>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Confirm despachar / entregada — con detalles de consecuencias */}

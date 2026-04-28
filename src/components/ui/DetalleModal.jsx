@@ -1,12 +1,11 @@
 // src/components/ui/DetalleModal.jsx
 // Modal genérico de detalle para cotizaciones y despachos
 import { useEffect, useState } from 'react'
-import { X, Package, Loader2, Calendar, User, FileText, CreditCard, Hash, Pencil, Check } from 'lucide-react'
+import { X, Package, Loader2, Calendar, User, FileText, CreditCard, Hash, Truck, DollarSign } from 'lucide-react'
 import supabase from '../../services/supabase/client'
 import { apiUrl } from '../../services/apiBase'
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs } from '../../utils/format'
 import useAuthStore from '../../store/useAuthStore'
-import { showToast } from './Toast'
 
 function calcDescMonto(desc, totalLinea, cantidad) {
   if (!desc) return 0
@@ -93,19 +92,11 @@ function ItemCard({ item, descuento }) {
   )
 }
 
-export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', registro, tasa = 0, onPagoEditado }) {
+export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', registro, tasa = 0 }) {
   const [items, setItems]       = useState([])
   const [cargando, setCargando] = useState(false)
   const [descuentos, setDescuentos] = useState({}) // { cotizacion_item_id: { tipo, valor } }
   const { perfil } = useAuthStore()
-  const esSupervisor = perfil?.rol === 'supervisor'
-  const esPrivilegiado = ['supervisor', 'administracion', 'desarrollador'].includes(perfil?.rol)
-
-  // Edit forma de pago state
-  const [editandoPago, setEditandoPago] = useState(false)
-  const [editFormasPago, setEditFormasPago] = useState([]) // [{metodo, monto}]
-  const [editRefPago, setEditRefPago] = useState('')
-  const [guardandoPago, setGuardandoPago] = useState(false)
 
   useEffect(() => {
     if (!isOpen || !registro) return
@@ -153,6 +144,18 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
   const total     = Number(registro.total_usd     || 0)
   const notas     = registro.notas_cliente || registro.observaciones || ''
 
+  // Parse formas de pago para despachos
+  let formasDisplay = []
+  if (!esCot && registro.forma_pago) {
+    try {
+      const parsed = JSON.parse(registro.forma_pago)
+      if (Array.isArray(parsed)) formasDisplay = parsed
+    } catch { formasDisplay = [{ metodo: registro.forma_pago, monto: null }] }
+  }
+
+  const tieneTransporte = !esCot && (registro.transportista?.nombre || Number(registro.flete_usd || 0) > 0)
+  const tienePago = !esCot && (formasDisplay.length > 0 || registro.referencia_pago)
+
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
       onClick={e => e.target === e.currentTarget && onClose()}>
@@ -173,145 +176,71 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
           </button>
         </div>
 
-        {/* Meta info */}
+        {/* ── Info general ── */}
         <div className="px-5 py-3 border-b border-slate-100 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500">
-          <span className="inline-flex items-center gap-1"><Calendar size={12} className="text-slate-400" /> Creada: <strong className="text-slate-700">{fmtFecha(registro.creado_en)}</strong></span>
+          <span className="inline-flex items-center gap-1"><Calendar size={12} className="text-slate-400" /> {fmtFecha(registro.creado_en)}</span>
           {registro.vendedor?.nombre && (
-            <span className="inline-flex items-center gap-1"><User size={12} className="text-slate-400" /> Vendedor: <strong style={{ color: vendedorColor }}>{registro.vendedor.nombre}</strong></span>
+            <span className="inline-flex items-center gap-1"><User size={12} className="text-slate-400" /> <strong style={{ color: vendedorColor }}>{registro.vendedor.nombre}</strong></span>
           )}
           {!esCot && registro.cotizacion && (
-            <span className="inline-flex items-center gap-1"><FileText size={12} className="text-slate-400" /> Ref: <strong className="font-mono text-slate-700">
+            <span className="inline-flex items-center gap-1"><FileText size={12} className="text-slate-400" /> <strong className="font-mono text-slate-700">
               COT-{String(registro.cotizacion.numero).padStart(5, '0')}
             </strong></span>
           )}
-          {!esCot && registro.forma_pago && (() => {
-            let formasDisplay = []
-            try {
-              const parsed = JSON.parse(registro.forma_pago)
-              if (Array.isArray(parsed)) formasDisplay = parsed
-            } catch { formasDisplay = [{ metodo: registro.forma_pago, monto: null }] }
-            return formasDisplay.map((fp, i) => (
-              <span key={i} className="inline-flex items-center gap-1">
-                <CreditCard size={12} className="text-slate-400" />
-                <strong className="text-slate-700">{fp.metodo}{fp.monto != null ? ` $${Number(fp.monto).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}</strong>
-              </span>
-            ))
-          })()}
-          {!esCot && registro.referencia_pago && (
-            <span className="inline-flex items-center gap-1"><Hash size={12} className="text-slate-400" /> Ref. pago: <strong className="font-mono text-slate-700">{registro.referencia_pago}</strong></span>
-          )}
-          {!esCot && esPrivilegiado && registro.estado !== 'anulada' && (
-            <button onClick={() => {
-              let fps = []
-              try {
-                const parsed = JSON.parse(registro.forma_pago || '[]')
-                if (Array.isArray(parsed)) fps = parsed
-              } catch { if (registro.forma_pago) fps = [{ metodo: registro.forma_pago, monto: '' }] }
-              setEditFormasPago(fps)
-              setEditRefPago(registro.referencia_pago || '')
-              setEditandoPago(true)
-            }} className="inline-flex items-center gap-1 text-sky-500 hover:text-sky-700 transition-colors">
-              <Pencil size={11} /> <span className="text-[11px] font-medium">Editar pago</span>
-            </button>
-          )}
         </div>
 
-        {/* Editar forma de pago (inline) */}
-        {editandoPago && !esCot && (
-          <div className="px-5 py-3 border-b border-sky-200 bg-sky-50/50 space-y-3">
-            <div className="flex items-center gap-2 mb-1">
-              <CreditCard size={14} className="text-sky-500" />
-              <span className="text-sm font-bold text-slate-700">Editar formas de pago</span>
+        {/* ── Bloque Pago (solo despachos) ── */}
+        {tienePago && (
+          <div className="mx-5 mt-3 rounded-xl bg-slate-50 border border-slate-200 p-3 space-y-2">
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <CreditCard size={11} /> Pago
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {formasDisplay.map((fp, i) => (
+                <span key={i} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-700">
+                  {fp.metodo}
+                  {fp.monto != null && <span className="text-emerald-600 font-bold">${Number(fp.monto).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
+                </span>
+              ))}
             </div>
-            <div className="flex flex-wrap gap-2">
-              {['Efectivo', 'Zelle', 'Pago Móvil', 'USDT', 'Transferencia', 'Cta por cobrar'].map(fp => {
-                const activo = editFormasPago.some(f => f.metodo === fp)
-                return (
-                  <button key={fp} type="button"
-                    onClick={() => {
-                      setEditFormasPago(prev => {
-                        if (activo) return prev.filter(f => f.metodo !== fp)
-                        return [...prev, { metodo: fp, monto: '' }]
-                      })
-                    }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                      activo
-                        ? 'bg-sky-500 text-white border-sky-500'
-                        : 'bg-white text-slate-600 border-slate-200 hover:border-sky-300'
-                    }`}>
-                    {fp}
-                  </button>
-                )
-              })}
-            </div>
-            {editFormasPago.length > 0 && (
-              <div className="space-y-2">
-                {editFormasPago.map(fp => (
-                  <div key={fp.metodo} className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-slate-600 w-24 truncate">{fp.metodo}</span>
-                    <div className="relative flex-1">
-                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
-                      <input type="number" min="0" step="0.01" value={fp.monto}
-                        onChange={e => setEditFormasPago(prev => prev.map(f => f.metodo === fp.metodo ? { ...f, monto: e.target.value } : f))}
-                        placeholder="0.00"
-                        className="w-full pl-6 pr-2 py-1.5 rounded-lg text-xs border border-slate-200 bg-white focus:ring-2 focus:ring-sky-200 outline-none" />
-                    </div>
-                  </div>
-                ))}
-              </div>
+            {registro.referencia_pago && (
+              <p className="text-[11px] text-slate-500 flex items-center gap-1">
+                <Hash size={10} className="text-slate-400" /> Ref: <span className="font-mono font-medium text-slate-700">{registro.referencia_pago}</span>
+              </p>
             )}
-            <div className="space-y-1">
-              <label className="text-[11px] font-medium text-slate-500">Referencia de pago</label>
-              <input type="text" value={editRefPago} onChange={e => setEditRefPago(e.target.value)}
-                placeholder="Ej: REF-12345"
-                className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:ring-2 focus:ring-sky-200 outline-none" />
-            </div>
-            <div className="flex justify-end gap-2 pt-1">
-              <button onClick={() => setEditandoPago(false)} disabled={guardandoPago}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50">
-                Cancelar
-              </button>
-              <button disabled={guardandoPago} onClick={async () => {
-                setGuardandoPago(true)
-                try {
-                  const fpJson = editFormasPago.length > 0 ? JSON.stringify(editFormasPago) : null
-                  const { data: { session } } = await supabase.auth.getSession()
-                  const res = await fetch(apiUrl('/api/despachos/editar-pago'), {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-                    body: JSON.stringify({
-                      despachoId: registro.id,
-                      formaPago: fpJson,
-                      formaPagoCliente: fpJson,
-                      referenciaPago: editRefPago || null,
-                    }),
-                  })
-                  if (!res.ok) {
-                    const err = await res.json().catch(() => ({}))
-                    throw new Error(err.error || 'Error al guardar')
-                  }
-                  registro.forma_pago = fpJson
-                  registro.forma_pago_cliente = fpJson
-                  registro.referencia_pago = editRefPago || null
-                  setEditandoPago(false)
-                  showToast('Forma de pago actualizada', 'success')
-                  if (onPagoEditado) onPagoEditado()
-                } catch (e) {
-                  showToast(e.message || 'Error al guardar', 'error')
-                } finally {
-                  setGuardandoPago(false)
-                }
-              }}
-                className="px-3 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-600 text-white text-xs font-medium transition-colors disabled:opacity-50">
-                {guardandoPago ? 'Guardando...' : 'Guardar'}
-              </button>
+          </div>
+        )}
+
+        {/* ── Bloque Transporte (solo despachos, si hay transportista o flete) ── */}
+        {tieneTransporte && (
+          <div className="mx-5 mt-2 rounded-xl bg-blue-50/60 border border-blue-200 p-3">
+            <p className="text-[11px] font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
+              <Truck size={11} /> Transporte
+            </p>
+            <div className="flex items-center justify-between gap-3">
+              {registro.transportista?.nombre && (
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-800">{registro.transportista.nombre}</p>
+                  {(registro.transportista.vehiculo || registro.transportista.placa_chuto) && (
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      {[registro.transportista.vehiculo, registro.transportista.placa_chuto, registro.transportista.placa_batea].filter(Boolean).join(' · ')}
+                    </p>
+                  )}
+                </div>
+              )}
+              {Number(registro.flete_usd || 0) > 0 && (
+                <div className="shrink-0 text-right">
+                  <p className="text-[10px] font-medium text-slate-400 uppercase">Flete</p>
+                  <p className="text-sm font-bold text-emerald-700">{fmtUsd(registro.flete_usd)}</p>
+                </div>
+              )}
             </div>
           </div>
         )}
 
-        {/* Cliente */}
+        {/* ── Cliente ── */}
         {registro.cliente?.nombre && (
-          <div className="px-5 py-2.5 border-b border-slate-100 flex items-center justify-between">
+          <div className="px-5 py-2.5 mt-1 border-b border-slate-100 flex items-center justify-between">
             <span className="text-xs text-slate-400">Cliente</span>
             <span className="text-xs font-semibold truncate max-w-[300px]"
               style={{ color: registro.cliente?.vendedor?.color || vendedorColor }}>
@@ -384,28 +313,42 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
             )}
           </div>
         )}
-        {!esCot && (
+        {!esCot && (() => {
+          const flete = Number(registro.flete_usd || 0)
+          const descuento = Number(registro.descuento_total_usd || 0)
+          const totalConFlete = total // total_usd ya incluye el flete
+          const subtotal = total - flete // total de productos sin flete
+          const totalFinal = totalConFlete - descuento
+          const hayDesglose = descuento > 0 || flete > 0
+
+          return (
           <div className="border-t border-slate-100 px-5 py-3 bg-slate-50 shrink-0 space-y-1.5">
-            {Number(registro.descuento_total_usd || 0) > 0 && (
-              <>
-                <div className="flex justify-between text-xs text-slate-500">
-                  <span>Subtotal</span><span>{fmtUsd(total)}</span>
-                </div>
-                <div className="flex justify-between text-xs text-amber-600">
-                  <span>Descuento</span><span>-{fmtUsd(registro.descuento_total_usd)}</span>
-                </div>
-              </>
+            {hayDesglose && (
+              <div className="flex justify-between text-xs text-slate-500">
+                <span>Subtotal</span><span>{fmtUsd(subtotal)}</span>
+              </div>
             )}
-            <div className={`flex justify-between font-black text-slate-800 text-base ${Number(registro.descuento_total_usd || 0) > 0 ? 'pt-1 border-t border-slate-200' : ''}`}>
-              <span>Total</span><span>{fmtUsd(total - Number(registro.descuento_total_usd || 0))}</span>
+            {descuento > 0 && (
+              <div className="flex justify-between text-xs text-amber-600">
+                <span>Descuento</span><span>-{fmtUsd(descuento)}</span>
+              </div>
+            )}
+            {flete > 0 && (
+              <div className="flex justify-between text-xs text-emerald-600">
+                <span>Flete</span><span>+{fmtUsd(flete)}</span>
+              </div>
+            )}
+            <div className={`flex justify-between font-black text-slate-800 text-base ${hayDesglose ? 'pt-1 border-t border-slate-200' : ''}`}>
+              <span>Total</span><span>{fmtUsd(totalFinal)}</span>
             </div>
             {tasa > 0 && (
               <div className="flex justify-end text-xs text-slate-400">
-                <span>{fmtBs(usdToBs(total - Number(registro.descuento_total_usd || 0), tasa))}</span>
+                <span>{fmtBs(usdToBs(totalFinal, tasa))}</span>
               </div>
             )}
           </div>
-        )}
+          )
+        })()}
       </div>
     </div>
   )
