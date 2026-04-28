@@ -1,8 +1,7 @@
 // src/components/cotizaciones/CotizacionCard.jsx
 import { useState, memo } from 'react'
-import { FileText, User, Calendar, Pencil, Ban, XCircle, FileDown, MessageCircle, Loader2, Truck, ChevronDown, DollarSign, RefreshCw, Eye, Clock, PackageCheck, MoreHorizontal, AlertTriangle, Printer, Check } from 'lucide-react'
+import { FileText, User, Calendar, Pencil, Ban, XCircle, FileDown, MessageCircle, Loader2, Truck, ChevronDown, DollarSign, RefreshCw, Eye, Clock, PackageCheck, MoreHorizontal, AlertTriangle, Printer, Check, Download } from 'lucide-react'
 import EstadoBadge from './EstadoBadge'
-import QuoteFlowIndicator from './QuoteFlowIndicator'
 import MobileActionSheet from './MobileActionSheet'
 import useAuthStore from '../../store/useAuthStore'
 import supabase from '../../services/supabase/client'
@@ -41,10 +40,11 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
   const [pdfLoading, setPdfLoading]   = useState(false)
   const [printLoading, setPrintLoading] = useState(false)
   const [waLoading, setWaLoading]     = useState(false)
-  const [showActions, setShowActions] = useState(false)
   const [showDetalle, setShowDetalle] = useState(false)
   const [showSheet, setShowSheet]     = useState(false)
-  const [showMonedaMenu, setShowMonedaMenu] = useState(false)
+  const [showPrintMenu, setShowPrintMenu] = useState(false)
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false)
+  const [showMoreMenu, setShowMoreMenu] = useState(false)
   const [monedaPdf, setMonedaPdf] = useState(() => localStorage.getItem('construacero_moneda_pdf') || '$')
   const { data: config = {} } = useConfigNegocio()
   const { tasaBcv, tasaUsdt } = useTasaCambio()
@@ -54,7 +54,6 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
   function seleccionarMoneda(moneda) {
     setMonedaPdf(moneda)
     localStorage.setItem('construacero_moneda_pdf', moneda)
-    setShowMonedaMenu(false)
   }
 
   const MONEDA_OPTIONS = [
@@ -90,15 +89,12 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
     }
   }
 
-  // Helper: imprimir PDF blob (abre diálogo de impresión en PC y móvil)
   function printOrDownloadPdf(blob, filename) {
     const url = URL.createObjectURL(blob)
     const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
     if (isMobile) {
-      // Abrir PDF en nueva pestaña — el visor nativo permite imprimir/compartir
       const w = window.open(url, '_blank')
       if (!w) {
-        // Si el popup fue bloqueado, descargar como fallback
         const a = document.createElement('a')
         a.href = url
         a.download = filename
@@ -202,9 +198,8 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
   const canDespachar = (esSupervisor || esPropietario) && ['enviada', 'aceptada'].includes(cotizacion.estado) && onDespachar && !despacho
   const canAnular = !despachoAnulado && cotizacion.estado !== 'anulada' && cotizacion.estado !== 'vencida' && cotizacion.estado !== 'rechazada' && (esBorrador || ((esSupervisor || esPropietario) && (esEnviada || (cotizacion.estado === 'aceptada' && !despacho))))
   const canReciclar = esSupervisor && (despachoAnulado || ['rechazada', 'anulada', 'vencida'].includes(cotizacion.estado))
-  const hasSecondaryActions = canAnular
 
-  // ── Acción primaria para móvil ──
+  // ── Acción primaria ──
   function getPrimaryAction() {
     if (esBorrador && canEdit)
       return { key: 'editar', label: getAction('editar', rol).label || 'Editar', icon: Pencil, action: () => onEditar(cotizacion) }
@@ -220,28 +215,43 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
   const primaryAction = getPrimaryAction()
   const pColors = PRIMARY_ACTION_COLORS[primaryAction.key] || PRIMARY_ACTION_COLORS.ver
 
-  // ── Acciones para el bottom sheet móvil (solo las que NO están ya visibles) ──
-  function getMobileSheetActions() {
+  // ── Acciones para Más (móvil bottom sheet + desktop dropdown) ──
+  function getMoreActions() {
     const actions = []
-    // Ver detalle, PDF, Imprimir ya están en la fila secundaria — no repetir
+    actions.push({ label: 'Ver detalle', icon: Eye, onClick: () => setShowDetalle(true) })
     if (canEdit && primaryAction.key !== 'editar')
       actions.push({ label: getAction('editar', rol).label || 'Editar', icon: Pencil, onClick: () => onEditar(cotizacion), textColor: 'text-sky-600' })
     if (canWhatsApp && primaryAction.key !== 'whatsapp')
-      actions.push({ label: 'Compartir por WhatsApp', icon: MessageCircle, onClick: handleWhatsApp, disabled: waLoading, textColor: 'text-emerald-600' })
+      actions.push({ label: 'WhatsApp', icon: MessageCircle, onClick: handleWhatsApp, disabled: waLoading, textColor: 'text-emerald-600' })
     if (canDespachar && primaryAction.key !== 'despachar')
       actions.push({ label: getAction('despachar', rol).label || 'Despachar', icon: Truck, onClick: () => onDespachar(cotizacion), textColor: 'text-indigo-600' })
     if (canReciclar && primaryAction.key !== 'reciclar')
       actions.push({ label: getAction('reciclar', rol).label || 'Reutilizar', icon: RefreshCw, onClick: () => onReciclar(cotizacion), textColor: 'text-teal-600' })
     if (canAnular)
-      actions.push({ label: getAction('anular', rol).label || 'Cancelar', icon: Ban, onClick: () => onAnular(cotizacion), danger: true })
+      actions.push({ label: getAction('anular', rol).label || 'Anular', icon: Ban, onClick: () => onAnular(cotizacion), danger: true })
     return actions
+  }
+
+  // Moneda selector dropdown content (shared between print & download)
+  function MonedaSelector({ onSelect, onClose }) {
+    return (
+      <div className="border-b border-slate-100 pb-1 mb-1">
+        {MONEDA_OPTIONS.map(opt => (
+          <button key={opt.key} onClick={() => { seleccionarMoneda(opt.key); onSelect(opt.key) }}
+            className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left whitespace-nowrap ${monedaPdf === opt.key ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-700 hover:bg-slate-50'}`}>
+            {opt.icon} {opt.label}
+            {monedaPdf === opt.key && <Check size={14} className="ml-auto text-emerald-500" />}
+          </button>
+        ))}
+      </div>
+    )
   }
 
   return (
     <div className="group bg-white rounded-2xl border border-slate-200 hover:shadow-lg transition-all duration-200 overflow-hidden flex flex-col">
 
       {/* ── Header strip con color del vendedor ── */}
-      <div className="relative h-16 shrink-0 flex items-end justify-between px-4 pb-2"
+      <div className="relative h-14 shrink-0 flex items-end justify-between px-3 pb-1.5"
         title={cotizacion.vendedor?.nombre ? `Vendedor: ${cotizacion.vendedor.nombre}` : undefined}
         style={{ background: `linear-gradient(135deg, ${vendedorColor}ee 0%, ${vendedorColor}99 100%)` }}>
         <div className="absolute inset-0 opacity-10"
@@ -250,7 +260,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
             backgroundSize: '12px 12px',
           }} />
         <div className="relative z-10 min-w-0">
-          <p className="font-black text-white font-mono leading-tight drop-shadow" style={{fontSize:'20px'}}>{numDisplay}</p>
+          <p className="font-black text-white font-mono leading-tight drop-shadow text-base">{numDisplay}</p>
         </div>
         <div className="relative z-10 shrink-0 flex flex-col items-end gap-1">
           <EstadoBadge estado={cotizacion.estado} />
@@ -270,60 +280,42 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         </div>
       </div>
 
-      {/* ── Fechas ── */}
-      <div className="px-4 pt-3 pb-2">
-        <div className="flex items-center gap-3 text-xs text-slate-400">
-          <span className="flex items-center gap-1">
-            <Calendar size={11} />
-            {fmtFecha(cotizacion.creado_en)}
-          </span>
+      {/* ── Fecha + Cliente + Vendedor ── */}
+      <div className="px-3 pt-2 pb-1.5 space-y-1">
+        <div className="flex items-center gap-1.5 text-xs text-slate-400">
+          <Calendar size={11} />
+          {fmtFecha(cotizacion.creado_en)}
         </div>
+        {cotizacion.cliente?.nombre && (
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold text-slate-700 truncate">{cotizacion.cliente.nombre}</span>
+            {(esSupervisor || esAdministracion) && cotizacion.vendedor && (
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0 ml-2"
+                style={{ backgroundColor: vendedorColor + '18', color: vendedorColor, border: `1px solid ${vendedorColor}40` }}>
+                {cotizacion.vendedor.nombre}
+              </span>
+            )}
+          </div>
+        )}
       </div>
-
-      {/* ── Flow indicator ── */}
-      <div className="px-4 pb-2">
-        <QuoteFlowIndicator estado={cotizacion.estado} despacho={despacho} compact />
-      </div>
-
-      {/* ── Cliente ── */}
-      {cotizacion.cliente?.nombre && (
-        <div className="px-4 pb-2 flex items-center justify-between">
-          <span className="text-xs text-slate-400">Cliente</span>
-          <span className="text-xs font-semibold truncate max-w-[200px]"
-            style={{ color: cotizacion.cliente?.vendedor?.color || vendedorColor }}>
-            {cotizacion.cliente.nombre}
-          </span>
-        </div>
-      )}
 
       {clienteAjeno && (
-        <div className="mx-4 mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+        <div className="mx-3 mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
           <AlertTriangle size={12} className="shrink-0" />
           Cliente de otro vendedor
         </div>
       )}
 
       {/* ── Total ── */}
-      <div className="mx-4 mb-3 bg-slate-50 rounded-xl px-3.5 py-2.5 flex items-center justify-between">
-        <span className="text-xs font-medium text-slate-500">Total</span>
+      <div className="mx-3 mb-2 bg-slate-50 rounded-xl px-3 py-2 flex items-center justify-between">
+        <span className="text-xs font-medium text-slate-400">Total</span>
         <div className="text-right">
-          <span className="text-base font-bold text-slate-800">{fmtUsd(cotizacion.total_usd)}</span>
+          <span className="text-lg font-bold text-slate-800">{fmtUsd(cotizacion.total_usd)}</span>
           {tasa > 0 && cotizacion.total_usd > 0 && (
             <div className="text-[11px] text-slate-400">{fmtBs(usdToBs(cotizacion.total_usd, tasa))}</div>
           )}
         </div>
       </div>
-
-      {/* ── Vendedor (supervisor y admin) ── */}
-      {(esSupervisor || esAdministracion) && cotizacion.vendedor && (
-        <div className="px-4 pb-3 flex items-center justify-between">
-          <span className="text-xs text-slate-400">Vendedor</span>
-          <span className="text-xs font-semibold px-2.5 py-1 rounded-full"
-            style={{ backgroundColor: vendedorColor + '18', color: vendedorColor, border: `1px solid ${vendedorColor}40` }}>
-            {cotizacion.vendedor.nombre}
-          </span>
-        </div>
-      )}
 
       {/* ══════════ ADMIN DESPACHO ACTIONS ══════════ */}
       {esAdministracion && despacho && onCambiarEstadoDespacho && (
@@ -356,7 +348,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
       {/* ══════════ MOBILE ACTIONS (< md) ══════════ */}
       {!esAdministracion && (
       <div className="md:hidden mt-auto border-t border-slate-100 p-2.5">
-        {/* Botón primario — full width, thumb-friendly */}
+        {/* Botón primario */}
         <button
           onClick={primaryAction.action}
           disabled={primaryAction.loading}
@@ -369,156 +361,177 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
           {primaryAction.label}
         </button>
 
-        {/* Fila secundaria: Ver + PDF + más */}
-        <div className="flex items-center gap-1 mt-2 flex-wrap">
-          {primaryAction.key !== 'ver' && (
-            <button onClick={() => setShowDetalle(true)}
-              className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 active:bg-slate-100 transition-colors">
-              <Eye size={14} /> Ver
-            </button>
-          )}
+        {/* Fila: Imprimir + Descargar + Más */}
+        <div className="flex items-center gap-1 mt-2">
           {canPdf && (
             <>
+              {/* Imprimir dropdown con moneda */}
               <div className="relative">
-                <button onClick={() => setShowMonedaMenu(v => !v)}
-                  onBlur={() => setTimeout(() => setShowMonedaMenu(false), 200)}
-                  className="flex items-center gap-1 px-2 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors whitespace-nowrap">
-                  <DollarSign size={14} />
-                  {monedaLabel} <ChevronDown size={10} />
+                <button onClick={() => setShowPrintMenu(v => !v)}
+                  onBlur={() => setTimeout(() => setShowPrintMenu(false), 200)}
+                  disabled={printLoading}
+                  className="flex items-center gap-1 px-2.5 py-2 rounded-lg text-[11px] font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40">
+                  {printLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Printer size={13} />}
+                  Imprimir <ChevronDown size={9} />
                 </button>
-                {showMonedaMenu && (
-                  <div className="absolute left-0 right-auto sm:left-0 bottom-full mb-1 w-44 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20 max-w-[calc(100vw-2rem)]"
+                {showPrintMenu && (
+                  <div className="absolute left-0 bottom-full mb-1 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
                     onMouseDown={e => e.preventDefault()}>
-                    {MONEDA_OPTIONS.map(opt => (
-                      <button key={opt.key} onClick={() => seleccionarMoneda(opt.key)}
-                        className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left whitespace-nowrap ${monedaPdf === opt.key ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-700 hover:bg-slate-50'}`}>
-                        {opt.icon} {opt.label}
-                        {monedaPdf === opt.key && <Check size={14} className="ml-auto text-emerald-500" />}
-                      </button>
-                    ))}
+                    <MonedaSelector onSelect={() => {}} onClose={() => setShowPrintMenu(false)} />
+                    <button onClick={() => { imprimirCotizacion(); setShowPrintMenu(false) }}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 text-left font-medium">
+                      <Printer size={14} /> Imprimir cotización
+                    </button>
                   </div>
                 )}
               </div>
-              <button onClick={descargarPDF} disabled={pdfLoading}
-                className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40">
-                {pdfLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <FileDown size={14} />}
-                PDF
-              </button>
-              <button onClick={imprimirCotizacion} disabled={printLoading}
-                className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40">
-                {printLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Printer size={14} />}
-                Imprimir
-              </button>
+
+              {/* Descargar dropdown con moneda */}
+              <div className="relative">
+                <button onClick={() => setShowDownloadMenu(v => !v)}
+                  onBlur={() => setTimeout(() => setShowDownloadMenu(false), 200)}
+                  disabled={pdfLoading}
+                  className="flex items-center gap-1 px-2.5 py-2 rounded-lg text-[11px] font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40">
+                  {pdfLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Download size={13} />}
+                  Descargar <ChevronDown size={9} />
+                </button>
+                {showDownloadMenu && (
+                  <div className="absolute left-0 bottom-full mb-1 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
+                    onMouseDown={e => e.preventDefault()}>
+                    <MonedaSelector onSelect={() => {}} onClose={() => setShowDownloadMenu(false)} />
+                    <button onClick={() => { descargarPDF(); setShowDownloadMenu(false) }}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 text-left font-medium">
+                      <Download size={14} /> Descargar PDF
+                    </button>
+                  </div>
+                )}
+              </div>
             </>
           )}
-          {getMobileSheetActions().length > 0 && (
-            <button onClick={() => setShowSheet(true)}
-              className="ml-auto flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:bg-slate-50 active:bg-slate-100 transition-colors">
-              <MoreHorizontal size={14} /> Más
-            </button>
-          )}
+
+          <button onClick={() => setShowSheet(true)}
+            className="ml-auto flex items-center gap-1 px-2.5 py-2 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 active:bg-slate-100 transition-colors">
+            <MoreHorizontal size={13} /> Más
+          </button>
         </div>
 
         <MobileActionSheet
           isOpen={showSheet}
           onClose={() => setShowSheet(false)}
-          actions={getMobileSheetActions()}
+          actions={getMoreActions()}
         />
       </div>
       )}
 
       {/* ══════════ DESKTOP ACTIONS (md+) ══════════ */}
       {!esAdministracion && (
-      <div className="hidden md:flex mt-auto border-t border-slate-100 px-3 py-2 items-center gap-1.5 flex-wrap">
-        {/* Ver detalle */}
-        <button onClick={() => setShowDetalle(true)}
-          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-primary hover:bg-primary-light transition-colors">
-          <Eye size={13} /> Ver
-        </button>
-        {canEdit && (
-          <button onClick={() => onEditar(cotizacion)}
-            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
-            <Pencil size={13} /> {getAction('editar', rol).label}
-          </button>
-        )}
-        {canPdf && (
-          <>
-            <div className="relative">
-              <button onClick={() => setShowMonedaMenu(v => !v)}
-                onBlur={() => setTimeout(() => setShowMonedaMenu(false), 200)}
-                className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">
-                <DollarSign size={13} />
-                {monedaLabel} <ChevronDown size={10} />
-              </button>
-              {showMonedaMenu && (
-                <div className="absolute left-0 bottom-full mb-1 w-40 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
-                  onMouseDown={e => e.preventDefault()}>
-                  {MONEDA_OPTIONS.map(opt => (
-                    <button key={opt.key} onClick={() => seleccionarMoneda(opt.key)}
-                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left ${monedaPdf === opt.key ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-700 hover:bg-slate-50'}`}>
-                      {opt.icon} {opt.label}
-                      {monedaPdf === opt.key && <Check size={14} className="ml-auto text-emerald-500" />}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <button onClick={descargarPDF} disabled={pdfLoading}
-              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-40">
-              {pdfLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <FileDown size={13} />}
-              PDF
-            </button>
-            <button onClick={imprimirCotizacion} disabled={printLoading}
-              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-40">
-              {printLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Printer size={13} />}
-              Imprimir
-            </button>
-          </>
-        )}
-        {canWhatsApp && (
-          <button onClick={handleWhatsApp} disabled={waLoading}
-            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-40">
-            {waLoading ? <div className="w-3 h-3 border-[1.5px] border-emerald-400 border-t-transparent rounded-full animate-spin" /> : <MessageCircle size={13} />}
-            WhatsApp
-          </button>
-        )}
-        {canReciclar && (
-          <button onClick={() => onReciclar(cotizacion)}
-            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-teal-600 hover:bg-teal-50 transition-colors">
-            <RefreshCw size={13} /> {getAction('reciclar', rol).label}
-          </button>
-        )}
-        {canDespachar && (
-          <button onClick={() => onDespachar(cotizacion)}
-            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-indigo-600 hover:bg-indigo-50 transition-colors">
-            <Truck size={13} /> {getAction('despachar', rol).label || 'Despachar'}
+      <div className="hidden md:flex mt-auto border-t border-slate-100 px-3 py-2 items-center gap-1 flex-wrap">
+        {/* Botón primario */}
+        {primaryAction.key !== 'ver' && (
+          <button onClick={primaryAction.action}
+            disabled={primaryAction.loading}
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all disabled:opacity-50 whitespace-nowrap ${pColors.bg} ${pColors.text} ${pColors.active}`}>
+            {primaryAction.loading ? <Loader2 size={12} className="animate-spin" /> : <primaryAction.icon size={12} />}
+            {primaryAction.label}
           </button>
         )}
 
-        {/* Desktop secondary dropdown */}
-        {hasSecondaryActions && (
-          <div className="relative ml-auto">
-            <button
-              onClick={() => setShowActions(!showActions)}
-              onBlur={() => setTimeout(() => setShowActions(false), 200)}
-              className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                showActions ? 'bg-slate-200 text-slate-700' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'
-              }`}>
-              <ChevronDown size={14} className={`transition-transform ${showActions ? 'rotate-180' : ''}`} />
-            </button>
-            {showActions && (
-              <div className="absolute right-0 bottom-full mb-1 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
-                onMouseDown={e => e.preventDefault()}>
-                {canAnular && (
-                    <button onClick={() => { onAnular(cotizacion); setShowActions(false) }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-500 hover:bg-red-50 transition-colors text-left">
-                      <Ban size={14} />{getAction('anular', rol).label || 'Anular'}
-                    </button>
-                )}
-              </div>
-            )}
-          </div>
+        {canPdf && (
+          <>
+            {/* Imprimir dropdown con moneda */}
+            <div className="relative">
+              <button onClick={() => setShowPrintMenu(v => !v)}
+                onBlur={() => setTimeout(() => setShowPrintMenu(false), 200)}
+                disabled={printLoading}
+                className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-50 whitespace-nowrap">
+                {printLoading ? <Loader2 size={12} className="animate-spin" /> : <Printer size={12} />}
+                Imprimir <ChevronDown size={9} />
+              </button>
+              {showPrintMenu && (
+                <div className="absolute left-0 bottom-full mb-1 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
+                  onMouseDown={e => e.preventDefault()}>
+                  <MonedaSelector onSelect={() => {}} onClose={() => setShowPrintMenu(false)} />
+                  <button onClick={() => { imprimirCotizacion(); setShowPrintMenu(false) }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left font-medium">
+                    <Printer size={14} /> Imprimir cotización
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Descargar dropdown con moneda */}
+            <div className="relative">
+              <button onClick={() => setShowDownloadMenu(v => !v)}
+                onBlur={() => setTimeout(() => setShowDownloadMenu(false), 200)}
+                disabled={pdfLoading}
+                className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-50 whitespace-nowrap">
+                {pdfLoading ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+                Descargar <ChevronDown size={9} />
+              </button>
+              {showDownloadMenu && (
+                <div className="absolute left-0 bottom-full mb-1 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
+                  onMouseDown={e => e.preventDefault()}>
+                  <MonedaSelector onSelect={() => {}} onClose={() => setShowDownloadMenu(false)} />
+                  <button onClick={() => { descargarPDF(); setShowDownloadMenu(false) }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left font-medium">
+                    <Download size={14} /> Descargar PDF
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
         )}
+
+        {/* Más (···) dropdown desktop */}
+        <div className="relative ml-auto">
+          <button onClick={() => setShowMoreMenu(v => !v)}
+            onBlur={() => setTimeout(() => setShowMoreMenu(false), 200)}
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 transition-colors whitespace-nowrap">
+            <MoreHorizontal size={12} /> Más
+          </button>
+          {showMoreMenu && (
+            <div className="absolute right-0 bottom-full mb-1 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
+              onMouseDown={e => e.preventDefault()}>
+              <button onClick={() => { setShowDetalle(true); setShowMoreMenu(false) }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
+                <Eye size={14} /> Ver detalle
+              </button>
+              {canEdit && primaryAction.key !== 'editar' && (
+                <button onClick={() => { onEditar(cotizacion); setShowMoreMenu(false) }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-sky-600 hover:bg-sky-50 text-left">
+                  <Pencil size={14} /> {getAction('editar', rol).label || 'Editar'}
+                </button>
+              )}
+              {canWhatsApp && primaryAction.key !== 'whatsapp' && (
+                <button onClick={() => { handleWhatsApp(); setShowMoreMenu(false) }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-emerald-600 hover:bg-emerald-50 text-left">
+                  <MessageCircle size={14} /> WhatsApp
+                </button>
+              )}
+              {canDespachar && primaryAction.key !== 'despachar' && (
+                <button onClick={() => { onDespachar(cotizacion); setShowMoreMenu(false) }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-indigo-600 hover:bg-indigo-50 text-left">
+                  <Truck size={14} /> {getAction('despachar', rol).label || 'Despachar'}
+                </button>
+              )}
+              {canReciclar && primaryAction.key !== 'reciclar' && (
+                <button onClick={() => { onReciclar(cotizacion); setShowMoreMenu(false) }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-teal-600 hover:bg-teal-50 text-left">
+                  <RefreshCw size={14} /> {getAction('reciclar', rol).label || 'Reutilizar'}
+                </button>
+              )}
+              {canAnular && (
+                <>
+                  <div className="border-t border-slate-100 my-1" />
+                  <button onClick={() => { onAnular(cotizacion); setShowMoreMenu(false) }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-500 hover:bg-red-50 text-left">
+                    <Ban size={14} /> {getAction('anular', rol).label || 'Anular'}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
       )}
 
