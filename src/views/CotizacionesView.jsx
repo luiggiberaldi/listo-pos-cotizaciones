@@ -534,7 +534,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
 }
 
 // ─── Vista lista ──────────────────────────────────────────────────────────────
-function ListaCotizaciones({ onNueva, onEditar }) {
+function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const esAdministracion = perfil?.rol === 'administracion'
@@ -546,18 +546,16 @@ function ListaCotizaciones({ onNueva, onEditar }) {
   const [vistaMode, setVistaMode] = useState(() => localStorage.getItem('cotizaciones_vista') || (window.innerWidth < 768 ? 'list' : 'grid'))
   const [cotizacionAAnular, setCotizacionAAnular] = useState(null)
   const [cotizacionADespachar, setCotizacionADespachar] = useState(null)
-  const [pendienteDespachar, setPendienteDespachar] = useState(null)
-
-  // Abrir modal de despacho después de volver del builder
-  useEffect(() => {
-    if (pendienteDespachar && modo === 'lista') {
-      setCotizacionADespachar(pendienteDespachar)
-      setPendienteDespachar(null)
-    }
-  }, [pendienteDespachar, modo])
   const [cotizacionAReciclar, setCotizacionAReciclar] = useState(null)
   const [vendedorReciclar, setVendedorReciclar] = useState('')
   const [cotizacionDetalle, setCotizacionDetalle] = useState(null)
+
+  // Abrir modal de despacho cuando viene del builder
+  useEffect(() => {
+    if (despacharCotizacion) {
+      setCotizacionADespachar(despacharCotizacion)
+    }
+  }, [despacharCotizacion])
 
   const { data: cotizaciones = [], isLoading, isError, refetch } = useCotizaciones({ estado: estadoFiltro })
   const { data: vendedores = [] } = useVendedores()
@@ -812,6 +810,7 @@ export default function CotizacionesView() {
   const [modo,      setModo]      = useState('lista')           // 'lista' | 'builder'
   const [editandoId, setEditandoId] = useState(null)            // ID del borrador a editar
   const [clientePreseleccionado, setClientePreseleccionado] = useState(null) // cliente_id desde URL
+  const [pendienteDespachar, setPendienteDespachar] = useState(null)
 
   // Si viene ?nueva=1 del dashboard o clientes, abrir wizard directamente
   useEffect(() => {
@@ -876,6 +875,7 @@ export default function CotizacionesView() {
     <ListaCotizaciones
       onNueva={abrirNueva}
       onEditar={abrirEditar}
+      despacharCotizacion={pendienteDespachar}
     />
   )
 }
