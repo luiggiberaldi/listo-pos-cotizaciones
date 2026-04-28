@@ -1,7 +1,6 @@
 // src/hooks/useRecordatoriosCotizaciones.js
 // Recordatorios proactivos de cotizaciones:
 //   1. Cotización enviada hace ≥ 1 hora sin respuesta → alerta al supervisor
-//   2. Cotización próxima a vencer (≤ 2 días) → alerta
 //
 // Corre una vez al montar el layout y luego cada CHECK_INTERVAL_MS.
 // Usa cooldowns en localStorage para no repetir la misma alerta.
@@ -11,11 +10,9 @@ import supabase from '../services/supabase/client'
 import useAuthStore from '../store/useAuthStore'
 import {
   notifyCotizacionSinRespuesta,
-  notifyCotizacionPorVencer,
 } from '../services/notificationService'
 
 const HORAS_SIN_RESPUESTA     = 1    // horas sin respuesta para alertar
-const DIAS_AVISO_VENCIMIENTO  = 2    // días restantes para alertar
 const CHECK_INTERVAL_MS       = 15 * 60 * 1000 // cada 15 minutos
 
 export function useRecordatoriosCotizaciones() {
@@ -65,40 +62,6 @@ export function useRecordatoriosCotizaciones() {
             c.cliente?.nombre ?? '—',
             tiempoTexto,
             esSupervisor ? c.vendedor?.nombre : null,
-          )
-        }
-      }
-
-      // ── 2. Cotizaciones por vencer ──────────────────────────────────────
-      const limiteVencimiento = new Date(hoy)
-      limiteVencimiento.setDate(limiteVencimiento.getDate() + DIAS_AVISO_VENCIMIENTO)
-
-      let porVencerQuery = supabase
-        .from('cotizaciones')
-        .select(`
-          numero, valida_hasta,
-          cliente:clientes!cotizaciones_cliente_id_fkey(nombre)
-        `)
-        .in('estado', ['enviada', 'borrador'])
-        .gte('valida_hasta', hoy.toISOString().slice(0, 10))
-        .lte('valida_hasta', limiteVencimiento.toISOString().slice(0, 10))
-        .order('valida_hasta', { ascending: true })
-        .limit(50)
-
-      if (!esSupervisor) {
-        porVencerQuery = porVencerQuery.eq('vendedor_id', perfil.id)
-      }
-
-      const { data: porVencer } = await porVencerQuery
-      if (porVencer?.length) {
-        for (const c of porVencer) {
-          const vence = new Date(c.valida_hasta)
-          vence.setHours(0, 0, 0, 0)
-          const diasRestantes = Math.round((vence - hoy) / (1000 * 60 * 60 * 24))
-          notifyCotizacionPorVencer(
-            c.numero,
-            c.cliente?.nombre ?? '—',
-            diasRestantes,
           )
         }
       }

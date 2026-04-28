@@ -446,7 +446,6 @@ export default function TesterFlowView() {
       headerData: {
         cliente_id: dataRef.current.clienteId,
         vendedor_id: perfil.id,
-        valida_hasta: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
         notas_cliente: 'Test determinista',
         notas_internas: 'Generado por tester',
         descuento_global_pct: T.descuento_global_pct,
@@ -995,7 +994,6 @@ export default function TesterFlowView() {
       headerData: {
         cliente_id: d.clienteId,
         vendedor_id: perfil.id,
-        valida_hasta: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
         descuento_global_pct: 0,
         costo_envio_usd: 0,
         subtotal_usd: 125.00,

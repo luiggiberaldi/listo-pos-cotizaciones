@@ -28,8 +28,8 @@ export function useCotizaciones({ estado = '', clienteId = '' } = {}) {
       // Privilegiado (supervisor/admin): tabla directa; Vendedor: vista (sin notas_internas)
       const tabla = esPrivilegiado ? 'cotizaciones' : 'v_cotizaciones_vendedor'
       const selectCols = esPrivilegiado
-        ? 'id, numero, version, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, creado_en, enviada_en, notas_cliente, cliente_id, vendedor_id, despacho:notas_despacho!notas_despacho_cotizacion_id_fkey(id, estado)'
-        : 'id, numero, version, cliente_id, vendedor_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, notas_cliente, creado_en, enviada_en, despacho:notas_despacho!notas_despacho_cotizacion_id_fkey(id, estado)'
+        ? 'id, numero, version, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, creado_en, enviada_en, notas_cliente, cliente_id, vendedor_id, despacho:notas_despacho!notas_despacho_cotizacion_id_fkey(id, estado)'
+        : 'id, numero, version, cliente_id, vendedor_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, notas_cliente, creado_en, enviada_en, despacho:notas_despacho!notas_despacho_cotizacion_id_fkey(id, estado)'
 
       let query = supabase
         .from(tabla)
@@ -91,7 +91,7 @@ export function useCotizacion(id) {
       const tabla = esSupervisor ? 'cotizaciones' : 'v_cotizaciones_vendedor'
 
       // Columnas planas (sin FK joins — cliente y vendedor se buscan por separado)
-      const selectFields = 'id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en'
+      const selectFields = 'id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en'
 
       const [cotRes, itemsRes] = await Promise.all([
         supabase
@@ -153,7 +153,6 @@ export function useGuardarBorrador() {
         cliente_id:           campos.clienteId,
         transportista_id:     campos.transportistaId || null,
         vendedor_id:          campos.vendedorId || perfil.id,
-        valida_hasta:         campos.validaHasta    || null,
         notas_cliente:        campos.notasCliente?.trim()  || null,
         notas_internas:       campos.notasInternas?.trim() || null,
         descuento_global_pct: 0,

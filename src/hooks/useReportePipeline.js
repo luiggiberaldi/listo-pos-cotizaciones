@@ -23,7 +23,7 @@ export function useReportePipeline({ from, to }) {
         .from('cotizaciones')
         .select(`
           id, numero, version, estado, total_usd, subtotal_usd,
-          creado_en, enviada_en, valida_hasta,
+          creado_en, enviada_en,
           vendedor:usuarios!cotizaciones_vendedor_id_fkey(id, nombre, color),
           cliente:clientes!cotizaciones_cliente_id_fkey(id, nombre)
         `)

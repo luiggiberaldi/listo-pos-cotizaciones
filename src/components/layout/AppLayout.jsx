@@ -9,7 +9,7 @@ import {
   Menu, X, DollarSign, RefreshCw, PackageCheck, Bell, BellOff,
   AlertTriangle, Send, CheckCircle, Ban,
   PanelLeftClose, PanelLeftOpen, BarChart3,
-  Clock, CalendarClock, AlertCircle, ScrollText, FlaskConical,
+  Clock, AlertCircle, ScrollText, FlaskConical,
 } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import LoginAvatar from '../auth/LoginAvatar'
@@ -33,7 +33,6 @@ const NOTIF_ICON_MAP = {
   [NOTIF_TYPES.DESPACHO_CREADO]:            { icon: Truck,         color: 'text-indigo-500',  bg: 'bg-indigo-50' },
   [NOTIF_TYPES.COTIZACION_ANULADA]:         { icon: Ban,           color: 'text-red-500',     bg: 'bg-red-50' },
   [NOTIF_TYPES.COTIZACION_SIN_RESPUESTA]:   { icon: Clock,         color: 'text-orange-500',  bg: 'bg-orange-50' },
-  [NOTIF_TYPES.COTIZACION_POR_VENCER]:      { icon: CalendarClock, color: 'text-rose-500',    bg: 'bg-rose-50' },
 }
 const DEFAULT_NOTIF_ICON = { icon: Bell, color: 'text-slate-400', bg: 'bg-slate-50' }
 

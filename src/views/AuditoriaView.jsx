@@ -216,7 +216,7 @@ function DetalleEntidad({ tipo, id, tasa = 0 }) {
         if (tipo === 'cotizacion') {
           const { data: cot, error: e } = await supabase
             .from('cotizaciones')
-            .select('id, numero, version, estado, total_usd, creado_en, valida_hasta, cliente_id, notas_cliente')
+            .select('id, numero, version, estado, total_usd, creado_en, cliente_id, notas_cliente')
             .eq('id', id)
             .single()
           if (e) throw e

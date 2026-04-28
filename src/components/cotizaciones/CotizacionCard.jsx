@@ -1,5 +1,5 @@
 // src/components/cotizaciones/CotizacionCard.jsx
-import { useState, memo } from 'react'
+import { useState, memo, Fragment } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FileText, User, Calendar, Pencil, Ban, XCircle, FileDown, MessageCircle, Loader2, Truck, ChevronDown, DollarSign, RefreshCw, Eye, Clock, PackageCheck, MoreHorizontal, AlertTriangle, Printer, Check, Download } from 'lucide-react'
 import EstadoBadge from './EstadoBadge'
@@ -163,7 +163,6 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         nombreVendedor: vendedor?.nombre,
         numDisplay,
         totalUsd: cotizacion.total_usd,
-        validaHasta: cotizacion.valida_hasta,
         items: itemsRes.data ?? [],
       }
       const mensaje = generarMensaje(mensajeParams)
@@ -180,7 +179,6 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         nombreCliente: cotizacion.cliente?.nombre,
         numDisplay,
         totalUsd: cotizacion.total_usd,
-        validaHasta: cotizacion.valida_hasta,
       })
       window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank', 'noopener')
     } finally {
@@ -212,6 +210,8 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
       return { key: 'reciclar', label: getAction('reciclar', rol).label || 'Reutilizar', icon: RefreshCw, action: () => onReciclar(cotizacion) }
     return { key: 'ver', label: 'Ver detalle', icon: Eye, action: () => setShowDetalle(true) }
   }
+
+  const moreActions = getMoreActions()
 
   const primaryAction = getPrimaryAction()
   const pColors = PRIMARY_ACTION_COLORS[primaryAction.key] || PRIMARY_ACTION_COLORS.ver
@@ -442,17 +442,26 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
             </>
           )}
 
-          <button onClick={() => setShowSheet(true)}
-            className="ml-auto flex items-center gap-1 px-2.5 py-2 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 active:bg-slate-100 transition-colors">
-            <MoreHorizontal size={13} /> Más
-          </button>
+          {moreActions.length === 1 ? (
+            <button onClick={moreActions[0].onClick}
+              className="ml-auto flex items-center gap-1 px-2.5 py-2 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 active:bg-slate-100 transition-colors">
+              {moreActions[0].icon && <moreActions[0].icon size={13} />} {moreActions[0].label}
+            </button>
+          ) : (
+            <button onClick={() => setShowSheet(true)}
+              className="ml-auto flex items-center gap-1 px-2.5 py-2 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 active:bg-slate-100 transition-colors">
+              <MoreHorizontal size={13} /> Más
+            </button>
+          )}
         </div>
 
-        <MobileActionSheet
-          isOpen={showSheet}
-          onClose={() => setShowSheet(false)}
-          actions={getMoreActions()}
-        />
+        {moreActions.length > 1 && (
+          <MobileActionSheet
+            isOpen={showSheet}
+            onClose={() => setShowSheet(false)}
+            actions={moreActions}
+          />
+        )}
       </div>
       )}
 
@@ -535,56 +544,35 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
           </>
         )}
 
-        {/* Más (···) dropdown desktop */}
-        <div className="relative ml-auto">
-          <button onClick={() => setShowMoreMenu(v => !v)}
-            onBlur={() => setTimeout(() => setShowMoreMenu(false), 200)}
-            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 transition-colors whitespace-nowrap">
-            <MoreHorizontal size={12} /> Más
+        {/* Más (···) dropdown desktop — o botón directo si solo hay 1 acción */}
+        {moreActions.length === 1 ? (
+          <button onClick={moreActions[0].onClick}
+            className="ml-auto flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 transition-colors whitespace-nowrap">
+            {moreActions[0].icon && <moreActions[0].icon size={12} />} {moreActions[0].label}
           </button>
-          {showMoreMenu && (
-            <div className="absolute right-0 bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
-              onMouseDown={e => e.preventDefault()}>
-              <button onClick={() => { setShowDetalle(true); setShowMoreMenu(false) }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
-                <Eye size={14} /> Ver detalle
-              </button>
-              {canEdit && primaryAction.key !== 'editar' && (
-                <button onClick={() => { onEditar(cotizacion); setShowMoreMenu(false) }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-sky-600 hover:bg-sky-50 text-left">
-                  <Pencil size={14} /> {getAction('editar', rol).label || 'Editar'}
-                </button>
-              )}
-              {canWhatsApp && primaryAction.key !== 'whatsapp' && (
-                <button onClick={() => { handleWhatsApp(); setShowMoreMenu(false) }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-emerald-600 hover:bg-emerald-50 text-left">
-                  <MessageCircle size={14} /> WhatsApp
-                </button>
-              )}
-              {canDespachar && primaryAction.key !== 'despachar' && (
-                <button onClick={() => { onDespachar(cotizacion); setShowMoreMenu(false) }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-indigo-600 hover:bg-indigo-50 text-left">
-                  <Truck size={14} /> {getAction('despachar', rol).label || 'Despachar'}
-                </button>
-              )}
-              {canReciclar && primaryAction.key !== 'reciclar' && (
-                <button onClick={() => { onReciclar(cotizacion); setShowMoreMenu(false) }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-teal-600 hover:bg-teal-50 text-left">
-                  <RefreshCw size={14} /> {getAction('reciclar', rol).label || 'Reutilizar'}
-                </button>
-              )}
-              {canAnular && (
-                <>
-                  <div className="border-t border-slate-100 my-1" />
-                  <button onClick={() => { onAnular(cotizacion); setShowMoreMenu(false) }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-500 hover:bg-red-50 text-left">
-                    <Ban size={14} /> {getAction('anular', rol).label || 'Anular'}
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-        </div>
+        ) : (
+          <div className="relative ml-auto">
+            <button onClick={() => setShowMoreMenu(v => !v)}
+              onBlur={() => setTimeout(() => setShowMoreMenu(false), 200)}
+              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 transition-colors whitespace-nowrap">
+              <MoreHorizontal size={12} /> Más
+            </button>
+            {showMoreMenu && (
+              <div className="absolute right-0 bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
+                onMouseDown={e => e.preventDefault()}>
+                {moreActions.map((act, i) => (
+                  <Fragment key={i}>
+                    {act.danger && <div className="border-t border-slate-100 my-1" />}
+                    <button onClick={() => { act.onClick(); setShowMoreMenu(false) }}
+                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left ${act.danger ? 'text-red-500 hover:bg-red-50' : act.textColor ? `${act.textColor} hover:bg-slate-50` : 'text-slate-700 hover:bg-slate-50'}`}>
+                      {act.icon && <act.icon size={14} />} {act.label}
+                    </button>
+                  </Fragment>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
       )}
 

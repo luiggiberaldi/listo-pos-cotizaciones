@@ -25,22 +25,6 @@ export const ACCIONES = {
     },
   },
   entregar: {
-    supervisor: {
-      label: 'Marcar entregada',
-      confirmTitle: '¿Marcar como entregada?',
-      confirmMessage: 'Se confirmará la entrega del material al cliente.',
-      confirmDetails: 'Esta acción no se puede deshacer.',
-      confirmText: 'Sí, entregada',
-      variant: 'success',
-    },
-    administracion: {
-      label: 'Marcar entregada',
-      confirmTitle: '¿Marcar como entregada?',
-      confirmMessage: 'Se confirmará la entrega del material al cliente.',
-      confirmDetails: 'Esta acción no se puede deshacer.',
-      confirmText: 'Sí, entregada',
-      variant: 'success',
-    },
     logistica: {
       label: 'Confirmar entrega',
       confirmTitle: '¿Confirmar entrega realizada?',

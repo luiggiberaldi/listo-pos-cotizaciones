@@ -1997,7 +1997,6 @@ async function handleCrearVersion(request, env) {
         vendedor_id: cotOrig.vendedor_id,
         transportista_id: cotOrig.transportista_id,
         estado: 'borrador',
-        valida_hasta: cotOrig.valida_hasta,
         notas_cliente: cotOrig.notas_cliente,
         notas_internas: notasCambio || cotOrig.notas_internas,
       }),
@@ -2704,6 +2703,13 @@ async function handleActualizarEstadoDespacho(request, env) {
     if (desp.estado === 'pendiente' && nuevoEstado === 'despachada') {
       if (rolOp !== 'administracion' && rolOp !== 'desarrollador') {
         return jsonError('Solo administración puede aprobar despachos', 403, request);
+      }
+    }
+
+    // 2c. Confirmar entrega: solo logística y desarrollador
+    if (nuevoEstado === 'entregada') {
+      if (rolOp !== 'logistica' && rolOp !== 'desarrollador') {
+        return jsonError('Solo logística puede confirmar entregas', 403, request);
       }
     }
 
@@ -3595,7 +3601,7 @@ async function handleGetConfig(request, env) {
   const user = await verifyAuth(request, env);
   if (!user?.id) return jsonError('No autenticado', 401, request);
 
-  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/configuracion_negocio?id=eq.1&select=id,nombre_negocio,rif_negocio,telefono_negocio,direccion_negocio,email_negocio,logo_url,moneda_principal,validez_cotizacion_dias,pie_pagina_pdf,tasa_bcv_manual,iva_pct,gate_email,comision_pct_cabilla,comision_pct_otros,comision_categoria_cabilla,creado_en,actualizado_en`, {
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/configuracion_negocio?id=eq.1&select=id,nombre_negocio,rif_negocio,telefono_negocio,direccion_negocio,email_negocio,logo_url,moneda_principal,pie_pagina_pdf,tasa_bcv_manual,iva_pct,gate_email,comision_pct_cabilla,comision_pct_otros,comision_categoria_cabilla,creado_en,actualizado_en`, {
     headers: {
       apikey: env.SUPABASE_SERVICE_KEY,
       Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
@@ -3721,8 +3727,7 @@ async function handleTesterSeedDemo(request, env) {
         telefono_negocio: '0241-8675432',
         direccion_negocio: 'Av. Bolívar Norte, C.C. La Granja, Local 12, Valencia, Carabobo',
         email_negocio: 'ventas@construacero.com.ve',
-        pie_pagina_pdf: 'Precios en USD. Sujetos a cambio sin previo aviso. Válidos según fecha indicada.',
-        validez_cotizacion_dias: 7,
+        pie_pagina_pdf: 'Precios en USD. Sujetos a cambio sin previo aviso.',
       }),
     });
     logStep(`  PATCH configuracion_negocio: HTTP ${cfgRes.status} (${Date.now() - t0Cfg}ms)`);
@@ -3806,12 +3811,12 @@ async function handleTesterSeedDemo(request, env) {
     const en15d = new Date(ahora + 15 * 86400000).toISOString().split('T')[0];
 
     const cotizaciones = [
-      { cliente_id: clientesCreados[1].id, vendedor_id: supervisor.id, transportista_id: transCreados[3].id, estado: 'borrador', subtotal_usd: 777.50, descuento_global_pct: 3, descuento_usd: 23.33, costo_envio_usd: 15, total_usd: 769.17, valida_hasta: en15d, notas_cliente: 'Precios especiales por volumen.', notas_internas: 'Pendiente aprobación.', creado_en: hace3d },
-      { cliente_id: clientesCreados[0].id, vendedor_id: supervisor.id, estado: 'enviada', subtotal_usd: 438.48, descuento_global_pct: 0, descuento_usd: 0, costo_envio_usd: 0, total_usd: 438.48, tasa_bcv_snapshot: 95.50, total_bs_snapshot: 41874.84, valida_hasta: en7d, notas_cliente: 'Retiro en tienda.', enviada_en: hace5d, creado_en: hace5d },
-      { cliente_id: clientesCreados[12].id, vendedor_id: vendedorId, transportista_id: transCreados[0].id, estado: 'enviada', subtotal_usd: 121.50, descuento_global_pct: 0, descuento_usd: 0, costo_envio_usd: 8, total_usd: 129.50, tasa_bcv_snapshot: 94.80, total_bs_snapshot: 12276.60, valida_hasta: en7d, notas_cliente: 'Plomería residencial.', enviada_en: hace3d, creado_en: hace5d },
-      { cliente_id: clientesCreados[11].id, vendedor_id: vendedorId, estado: 'aceptada', subtotal_usd: 441.25, descuento_global_pct: 2, descuento_usd: 8.83, costo_envio_usd: 0, total_usd: 432.42, tasa_bcv_snapshot: 93.20, total_bs_snapshot: 40321.54, valida_hasta: en15d, notas_cliente: 'Material eléctrico.', enviada_en: hace7d, creado_en: hace10d },
+      { cliente_id: clientesCreados[1].id, vendedor_id: supervisor.id, transportista_id: transCreados[3].id, estado: 'borrador', subtotal_usd: 777.50, descuento_global_pct: 3, descuento_usd: 23.33, costo_envio_usd: 15, total_usd: 769.17, notas_cliente: 'Precios especiales por volumen.', notas_internas: 'Pendiente aprobación.', creado_en: hace3d },
+      { cliente_id: clientesCreados[0].id, vendedor_id: supervisor.id, estado: 'enviada', subtotal_usd: 438.48, descuento_global_pct: 0, descuento_usd: 0, costo_envio_usd: 0, total_usd: 438.48, tasa_bcv_snapshot: 95.50, total_bs_snapshot: 41874.84, notas_cliente: 'Retiro en tienda.', enviada_en: hace5d, creado_en: hace5d },
+      { cliente_id: clientesCreados[12].id, vendedor_id: vendedorId, transportista_id: transCreados[0].id, estado: 'enviada', subtotal_usd: 121.50, descuento_global_pct: 0, descuento_usd: 0, costo_envio_usd: 8, total_usd: 129.50, tasa_bcv_snapshot: 94.80, total_bs_snapshot: 12276.60, notas_cliente: 'Plomería residencial.', enviada_en: hace3d, creado_en: hace5d },
+      { cliente_id: clientesCreados[11].id, vendedor_id: vendedorId, estado: 'aceptada', subtotal_usd: 441.25, descuento_global_pct: 2, descuento_usd: 8.83, costo_envio_usd: 0, total_usd: 432.42, tasa_bcv_snapshot: 93.20, total_bs_snapshot: 40321.54, notas_cliente: 'Material eléctrico.', enviada_en: hace7d, creado_en: hace10d },
       { cliente_id: clientesCreados[3].id, vendedor_id: supervisor.id, estado: 'borrador', subtotal_usd: 29.00, descuento_global_pct: 0, descuento_usd: 0, costo_envio_usd: 0, total_usd: 29.00, notas_internas: 'Preguntó por descuento efectivo.', creado_en: new Date().toISOString() },
-      { cliente_id: clientesCreados[8].id, vendedor_id: vendedorId, transportista_id: transCreados[3].id, estado: 'enviada', subtotal_usd: 1627.50, descuento_global_pct: 5, descuento_usd: 81.38, costo_envio_usd: 15, total_usd: 1561.12, tasa_bcv_snapshot: 95.10, total_bs_snapshot: 148462.51, valida_hasta: en7d, notas_cliente: 'Entrega en obra: Parque del Este.', notas_internas: 'Descuento autorizado.', enviada_en: hace3d, creado_en: hace5d },
+      { cliente_id: clientesCreados[8].id, vendedor_id: vendedorId, transportista_id: transCreados[3].id, estado: 'enviada', subtotal_usd: 1627.50, descuento_global_pct: 5, descuento_usd: 81.38, costo_envio_usd: 15, total_usd: 1561.12, tasa_bcv_snapshot: 95.10, total_bs_snapshot: 148462.51, notas_cliente: 'Entrega en obra: Parque del Este.', notas_internas: 'Descuento autorizado.', enviada_en: hace3d, creado_en: hace5d },
     ];
     const cotsCreadas = await supaBatch(env, 'cotizaciones', cotizaciones, 500, logStep);
     logStep(`✓ ${cotsCreadas.length} cotizaciones creadas`);
@@ -3998,7 +4003,6 @@ async function handleTesterStressSeed(request, env) {
         estado,
         subtotal_usd: 0, descuento_global_pct: descG, descuento_usd: 0, costo_envio_usd: envio, total_usd: 0,
         tasa_bcv_snapshot: estado !== 'borrador' ? randF(90, 100) : null,
-        valida_hasta: estado !== 'borrador' ? new Date(ahora + rand(1, 30) * 86400000).toISOString().split('T')[0] : null,
         notas_cliente: i % 3 === 0 ? `Stress test cotización #${i + 1}` : null,
         creado_en: creado,
         enviada_en: estado !== 'borrador' ? creado : null,

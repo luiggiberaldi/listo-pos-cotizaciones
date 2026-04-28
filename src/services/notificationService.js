@@ -38,7 +38,6 @@ export const NOTIF_TYPES = {
   COTIZACION_ANULADA:        'cotizacion_anulada',
   CLIENTE_AJENO:             'cliente_ajeno',
   COTIZACION_SIN_RESPUESTA:  'cotizacion_sin_respuesta',
-  COTIZACION_POR_VENCER:     'cotizacion_por_vencer',
 }
 
 // Qué rol ve cada tipo de notificación en la campanita local
@@ -53,7 +52,6 @@ const NOTIF_TARGET_ROLE = {
   [NOTIF_TYPES.COTIZACION_ANULADA]:        null,
   [NOTIF_TYPES.CLIENTE_AJENO]:             'supervisor',  // vendedor ya sabe que usó cliente ajeno
   [NOTIF_TYPES.COTIZACION_SIN_RESPUESTA]:  null,
-  [NOTIF_TYPES.COTIZACION_POR_VENCER]:     null,
 }
 
 function readNotifs() {
@@ -302,26 +300,5 @@ export function notifyCotizacionSinRespuesta(numero, clienteNombre, tiempoTexto,
     `COT-${numero} sin respuesta (${tiempoTexto})`,
     `${clienteNombre}${de} — Enviada hace ${tiempoTexto} sin confirmar`,
     { numero, clienteNombre, tiempoTexto },
-  )
-}
-
-/**
- * Llamar cuando una cotización está próxima a vencer.
- * Genera una notificación máximo una vez cada 24 h por cotización.
- */
-export function notifyCotizacionPorVencer(numero, clienteNombre, diasRestantes) {
-  const key = `por_vencer_${numero}`
-  if (hasCooldown(key)) return
-  setCooldown(key)
-  const label = diasRestantes === 0
-    ? 'vence hoy'
-    : diasRestantes === 1
-      ? 'vence mañana'
-      : `vence en ${diasRestantes} días`
-  createNotification(
-    NOTIF_TYPES.COTIZACION_POR_VENCER,
-    `COT-${numero} ${label}`,
-    `${clienteNombre} — Cotización próxima a vencer`,
-    { numero, clienteNombre, diasRestantes },
   )
 }

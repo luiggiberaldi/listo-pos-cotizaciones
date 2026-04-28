@@ -18,7 +18,7 @@ import PageHeader  from '../components/ui/PageHeader'
 // ─── Tabs ───────────────────────────────────────────────────────────────────
 const TABS = [
   { id: 'negocio',    label: 'Negocio',    icon: Building2   },
-  { id: 'comisiones', label: 'Comisiones', icon: DollarSign },
+  { id: 'comisiones', label: 'Administración', icon: DollarSign, roles: ['administracion', 'desarrollador'] },
   { id: 'usuarios',   label: 'Usuarios',   icon: Users     },
   { id: 'datos',      label: 'Datos',      icon: Database  },
 ]
@@ -208,6 +208,23 @@ function ComisionesTab({ campos, cambiar, isLoading, cargando }) {
           </button>
         )}
       </div>
+
+    {/* ── IVA simbólico ──────────────────────────────────────────────── */}
+    <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+      <SectionHeader icon={Percent}>IVA simbólico</SectionHeader>
+      <p className="text-xs text-slate-500 -mt-2">
+        Porcentaje de IVA que aparece como desglose simbólico en las notas de entrega. No afecta el cálculo de precios.
+      </p>
+      <div className="flex items-baseline gap-3">
+        <input type="number" min="0" max="100" step="0.01"
+          value={campos.iva_pct}
+          onFocus={e => e.target.select()}
+          onChange={e => cambiar('iva_pct', Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
+          className="w-24 px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 text-right font-bold"
+          disabled={disabled} />
+        <span className="text-lg font-bold text-blue-500">%</span>
+      </div>
+    </div>
     </div>
   )
 }
@@ -216,8 +233,9 @@ export default function ConfiguracionView() {
   const { data: config = {}, isLoading } = useConfigNegocio()
   const actualizar = useActualizarConfig()
   const { perfil } = useAuthStore()
+  const esAdmin = perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador'
   const esDesarrollador = perfil?.rol === 'desarrollador'
-  const [tab, setTab]         = useState('comisiones')
+  const [tab, setTab]         = useState(esAdmin ? 'comisiones' : 'negocio')
   const [guardado, setGuardado] = useState(false)
   const [error,    setError]    = useState('')
   const [showGatePass, setShowGatePass] = useState(false)
@@ -256,7 +274,6 @@ export default function ConfiguracionView() {
     email_negocio:           '',
     direccion_negocio:       '',
     pie_pagina_pdf:          '',
-    validez_cotizacion_dias: 15,
     iva_pct:                 0,
     gate_email:              '',
     comision_pct_cabilla:         2,
@@ -274,7 +291,6 @@ export default function ConfiguracionView() {
         email_negocio:           config.email_negocio           ?? '',
         direccion_negocio:       config.direccion_negocio       ?? '',
         pie_pagina_pdf:          config.pie_pagina_pdf          ?? '',
-        validez_cotizacion_dias: config.validez_cotizacion_dias ?? 15,
         iva_pct:                 config.iva_pct                 ?? 0,
         gate_email:              config.gate_email              ?? '',
         comision_pct_cabilla:       config.comision_pct_cabilla       ?? 2,
@@ -388,7 +404,7 @@ export default function ConfiguracionView() {
 
       {/* Tabs */}
       <div className="flex overflow-x-auto gap-1 bg-slate-100 p-1 rounded-2xl scrollbar-hide">
-        {TABS.map(t => {
+        {TABS.filter(t => !t.roles || t.roles.includes(perfil?.rol)).map(t => {
           const Icon = t.icon
           const active = tab === t.id
           return (

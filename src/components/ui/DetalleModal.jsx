@@ -1,7 +1,7 @@
 // src/components/ui/DetalleModal.jsx
 // Modal genérico de detalle para cotizaciones y despachos
 import { useEffect, useState } from 'react'
-import { X, Package, Loader2, Calendar, Clock, User, FileText, CreditCard, Hash, Pencil, Check } from 'lucide-react'
+import { X, Package, Loader2, Calendar, User, FileText, CreditCard, Hash, Pencil, Check } from 'lucide-react'
 import supabase from '../../services/supabase/client'
 import { apiUrl } from '../../services/apiBase'
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs } from '../../utils/format'
@@ -176,9 +176,6 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
         {/* Meta info */}
         <div className="px-5 py-3 border-b border-slate-100 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500">
           <span className="inline-flex items-center gap-1"><Calendar size={12} className="text-slate-400" /> Creada: <strong className="text-slate-700">{fmtFecha(registro.creado_en)}</strong></span>
-          {registro.valida_hasta && (
-            <span className="inline-flex items-center gap-1"><Clock size={12} className="text-slate-400" /> Válida hasta: <strong className={new Date(registro.valida_hasta) < new Date() ? 'text-red-500' : 'text-slate-700'}>{fmtFecha(registro.valida_hasta)}</strong></span>
-          )}
           {registro.vendedor?.nombre && (
             <span className="inline-flex items-center gap-1"><User size={12} className="text-slate-400" /> Vendedor: <strong style={{ color: vendedorColor }}>{registro.vendedor.nombre}</strong></span>
           )}

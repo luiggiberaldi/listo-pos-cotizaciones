@@ -1,16 +1,29 @@
-// src/services/pdf/plantillaNotaEntregaPDF.js
-// Plantilla VACÍA de Nota de Entrega — para llenado a mano
-// Basada en despachoPDF.js pero sin datos (solo estructura)
+// src/services/pdf/plantillaOrdenDespachoPDF.js
+// Plantilla VACÍA de Orden de Despacho — para llenado a mano
+// Basada en ordenDespachoPDF.js pero sin datos
+// Sin footer, cuentas, slogan ni condiciones (igual que la orden de despacho)
 import { jsPDF } from 'jspdf'
 import { LOGO_DESPACHO } from './logoDespachoBase64'
-import {
-  PAGE_W, PAGE_H, MARGIN, CONTENT_W,
-  C_DARK, C_WHITE,
-  CUENTAS_BANCARIAS,
-  drawCheck, drawWatermark,
-} from './pdfShared'
+import { WATERMARK_LOGO } from './watermarkBase64'
 
-export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
+const MARGIN    = 14
+const PAGE_W    = 216
+const PAGE_H    = 279
+const CONTENT_W = PAGE_W - MARGIN * 2
+const C_DARK    = [5, 8, 52]
+const C_WHITE   = [255, 255, 255]
+
+function drawCheck(doc, label, x, y) {
+  doc.setLineWidth(0.3)
+  doc.setDrawColor(...C_DARK)
+  doc.rect(x, y - 2.5, 3, 3, 'S')
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8)
+  doc.setTextColor(...C_DARK)
+  doc.text(label, x + 4.5, y)
+}
+
+export async function generarPlantillaOrdenDespachoPDF({ config = {} } = {}) {
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
 
   let y = 0
@@ -39,7 +52,13 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   y = HDR_H + 17
 
   // Marca de agua
-  drawWatermark(doc)
+  try {
+    const gState = new doc.GState({ opacity: 0.06 })
+    doc.setGState(gState)
+    const wmSize = 140
+    doc.addImage(WATERMARK_LOGO, 'PNG', (PAGE_W - wmSize) / 2, (PAGE_H - wmSize) / 2, wmSize, wmSize)
+    doc.setGState(new doc.GState({ opacity: 1 }))
+  } catch (_) {}
 
   // ══════════════════════════════════════════════════════════════════════════
   // 2. DATOS DEL CLIENTE — cuadrícula vacía
@@ -64,11 +83,11 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   doc.text('DEPARTAMENTO', MARGIN + leftColW / 2, gY + tripleH / 2 - 2, { align: 'center' })
   doc.text('DE VENTAS', MARGIN + leftColW / 2, gY + tripleH / 2 + 3, { align: 'center' })
 
-  // Celda central: NOTA DE ENTREGA
+  // Celda central: ORDEN DE DESPACHO
   doc.rect(MARGIN + leftColW, gY, centerW, tripleH, 'S')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(14)
-  doc.text('NOTA DE ENTREGA', MARGIN + leftColW + centerW / 2, gY + tripleH / 2 + 1.5, { align: 'center' })
+  doc.text('ORDEN DE DESPACHO', MARGIN + leftColW + centerW / 2, gY + tripleH / 2 + 1.5, { align: 'center' })
 
   const rLblX = MARGIN + leftColW + centerW
   const rValX = rLblX + rightLblW
@@ -146,15 +165,15 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   y = f6Y + rowH + 4
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 3. TABLA DE PRODUCTOS — cabecera + espacio en blanco
+  // 3. TABLA DE PRODUCTOS — cabecera + filas vacías
   // ══════════════════════════════════════════════════════════════════════════
   const COLS = [
     { label: 'CANT.',       x: MARGIN,        w: 11,  align: 'center' },
     { label: 'CÓD.',        x: MARGIN + 11,   w: 20,  align: 'center' },
     { label: 'DESCRIPCIÓN', x: MARGIN + 31,   w: 97,  align: 'center' },
     { label: 'UNID.',       x: MARGIN + 128,  w: 11,  align: 'center' },
-    { label: 'PRECIO Bs',   x: MARGIN + 139,  w: 22,  align: 'center' },
-    { label: 'TOTAL Bs',    x: MARGIN + 161,  w: 21,  align: 'right'  },
+    { label: 'PRECIO',      x: MARGIN + 139,  w: 22,  align: 'center' },
+    { label: 'TOTAL',       x: MARGIN + 161,  w: 21,  align: 'right'  },
   ]
 
   // Cabecera oscura
@@ -171,9 +190,14 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   })
   y += 9
 
-  // Espacio en blanco con filas para llenar a mano
-  const BLANK_ROWS = 12
+  // Filas vacías para llenar a mano — calcular cuántas caben
   const BLANK_ROW_H = 7
+  const CHOFER_H = 22
+  const choferY = PAGE_H - MARGIN - CHOFER_H
+  const fpY = choferY - 24
+  const notasH = 20  // espacio para notas (3 + 6 + 2*5.5)
+  const availableH = fpY - y - notasH - 3
+  const BLANK_ROWS = Math.max(1, Math.floor(availableH / BLANK_ROW_H))
   doc.setLineWidth(0.2)
   doc.setDrawColor(200, 200, 200)
   for (let i = 0; i < BLANK_ROWS; i++) {
@@ -197,15 +221,10 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 4. Layout fijo desde el fondo (igual que nota de entrega)
+  // 4. Layout fijo desde el fondo: Chofer en footer, Totales encima
   // ══════════════════════════════════════════════════════════════════════════
-  const sloganY = PAGE_H - 33
-  const TRANS_H = 18
 
-  const choferStartY = sloganY - 9 - TRANS_H
-  const fpY = choferStartY - 3 - 33  // 9 (crédito) + 7 (base) + 7 (iva) + 10 (total)
-
-  // ── Condiciones de pago ──
+  // Forma de pago (sin marcar)
   doc.setDrawColor(120, 120, 120)
   doc.setLineWidth(0.3)
   doc.rect(MARGIN, fpY, CONTENT_W, 9, 'S')
@@ -213,121 +232,42 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7.5)
   doc.setTextColor(...C_DARK)
-  doc.text('8 días de crédito continuo', MARGIN + 3, fpY + 6)
-
-  // Filas Base + IVA (para llenar a mano)
-  const ivaPct = Number(config.iva_pct) || 16
-  const ivaStartY = fpY + 9
-  doc.setDrawColor(120, 120, 120)
-  doc.setLineWidth(0.2)
-
-  // Fila Base
-  doc.rect(MARGIN, ivaStartY, CONTENT_W, 7, 'S')
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
-  doc.setTextColor(...C_DARK)
-  doc.text('Base', MARGIN + 4, ivaStartY + 5)
-  doc.setLineWidth(0.4)
-  doc.setDrawColor(150, 150, 150)
-  doc.line(MARGIN + 20, ivaStartY + 5.5, MARGIN + CONTENT_W - 4, ivaStartY + 5.5)
-
-  // Fila IVA 16%
-  doc.setDrawColor(120, 120, 120)
-  doc.setLineWidth(0.2)
-  doc.rect(MARGIN, ivaStartY + 7, CONTENT_W, 7, 'S')
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
-  doc.setTextColor(...C_DARK)
-  doc.text(`IVA ${ivaPct}%`, MARGIN + 4, ivaStartY + 12)
-  doc.setLineWidth(0.4)
-  doc.setDrawColor(150, 150, 150)
-  doc.line(MARGIN + 24, ivaStartY + 12.5, MARGIN + CONTENT_W - 4, ivaStartY + 12.5)
+  doc.text('FORMA DE PAGO:', MARGIN + 3, fpY + 6)
+  drawCheck(doc, 'EFECTIVO',   MARGIN + 38, fpY + 6)
+  drawCheck(doc, 'ZELLE',      MARGIN + 60, fpY + 6)
+  drawCheck(doc, 'P. MÓVIL',   MARGIN + 78, fpY + 6)
+  drawCheck(doc, 'USDT',       MARGIN + 98, fpY + 6)
+  drawCheck(doc, 'TRANSF.',    MARGIN + 114, fpY + 6)
+  drawCheck(doc, 'CTA X COB.', MARGIN + 134, fpY + 6)
 
   // Barra TOTAL — fondo blanco, texto negro (para llenar a mano)
-  const totTopY = ivaStartY + 14
+  const totTopY = fpY + 9
   doc.setDrawColor(120, 120, 120)
   doc.setLineWidth(0.3)
   doc.rect(MARGIN, totTopY, CONTENT_W, 10, 'S')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(11)
   doc.setTextColor(...C_DARK)
-  doc.text('TOTAL Bs', MARGIN + 4, totTopY + 7)
+  doc.text('TOTAL', MARGIN + 4, totTopY + 7)
   // Línea para monto
   doc.setLineWidth(0.4)
   doc.setDrawColor(150, 150, 150)
   doc.line(MARGIN + 30, totTopY + 7.5, MARGIN + CONTENT_W - 4, totTopY + 7.5)
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 5. CONDICIONES (izq) + CUENTAS BANCARIAS (der) — 5mm encima del pago
-  // ══════════════════════════════════════════════════════════════════════════
-  const condiciones = [
-    'Precios Sujetos a cambios sin previo aviso.',
-    'El cliente se encarga de descargar la mercancía.',
-  ]
-  const condPadding = 2
-  const condLineH = 4.5
-  const condBoxH = 6 + condiciones.length * condLineH + condPadding * 2
-  const halfW = CONTENT_W / 2 - 2
-  const ty = fpY - 5 - condBoxH
-
-  // Condiciones (izquierda)
-  doc.setFillColor(245, 245, 245)
-  doc.setDrawColor(100, 100, 100)
-  doc.setLineWidth(0.4)
-  doc.roundedRect(MARGIN, ty, halfW, condBoxH, 1, 1, 'FD')
-
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
-  doc.setTextColor(...C_DARK)
-  doc.text('CONDICIONES GENERALES:', MARGIN + condPadding, ty + condPadding + 3.5)
-
-
-
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9.5)
-  let condY = ty + condPadding + 9.5
-  condiciones.forEach(c => {
-    doc.text(`• ${c}`, MARGIN + condPadding, condY)
-    condY += condLineH
-  })
-
-  // Cuentas bancarias (derecha)
-  const rightX = MARGIN + halfW + 4
-
-  doc.setFillColor(245, 245, 245)
-  doc.setDrawColor(100, 100, 100)
-  doc.setLineWidth(0.4)
-  doc.roundedRect(rightX, ty, halfW, condBoxH, 1, 1, 'FD')
-
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8)
-  doc.setTextColor(...C_DARK)
-  doc.text('Transferencias a nombre de ' + (config.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.').toUpperCase(), rightX + condPadding, ty + condPadding + 3.5)
-
-
-
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8)
-  let cuentaY = ty + condPadding + 9.5
-  CUENTAS_BANCARIAS.forEach(cuenta => {
-    doc.text(cuenta, rightX + condPadding, cuentaY)
-    cuentaY += condLineH
-  })
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // 6. DATOS DEL CHOFER Y VEHÍCULO — vacíos con celdas
+  // 5. DATOS DEL CHOFER Y VEHÍCULO — vacíos con celdas (footer)
   // ══════════════════════════════════════════════════════════════════════════
   doc.setFillColor(240, 240, 240)
-  doc.rect(MARGIN, choferStartY, CONTENT_W, 6, 'F')
+  doc.rect(MARGIN, choferY, CONTENT_W, 6, 'F')
   doc.setDrawColor(120, 120, 120)
   doc.setLineWidth(0.3)
-  doc.rect(MARGIN, choferStartY, CONTENT_W, 6, 'S')
+  doc.rect(MARGIN, choferY, CONTENT_W, 6, 'S')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8)
   doc.setTextColor(...C_DARK)
-  doc.text('DATOS DEL CHOFER Y DEL VEHÍCULO', MARGIN + 2, choferStartY + 4)
+  doc.text('DATOS DEL CHOFER Y DEL VEHÍCULO', MARGIN + 2, choferY + 4)
 
-  const cellY2 = choferStartY + 6
+  const cellY2 = choferY + 6
   const cellH = 12
   const choferLabels = ['CHOFER', 'C.I.', 'COLOR', 'VEHÍCULO', 'PLACA CHUTO', 'PLACA BATEA']
   const colW = CONTENT_W / choferLabels.length
@@ -342,36 +282,7 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
     doc.text(label + ':', fx + 2, cellY2 + 4)
   })
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // 7. SLOGAN
-  // ══════════════════════════════════════════════════════════════════════════
-  doc.setFont('helvetica', 'bolditalic')
-  doc.setFontSize(16)
-  doc.setTextColor(...C_DARK)
-  doc.text('"Todo lo puedo en Cristo que me fortalece" — Filipenses 4:13', PAGE_W / 2, sloganY, { align: 'center' })
+  // Sin footer, sin cuentas, sin slogan, sin condiciones
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // 8. FOOTER
-  // ══════════════════════════════════════════════════════════════════════════
-  const footerY = PAGE_H - 28
-  doc.setLineWidth(0.8)
-  doc.setDrawColor(...C_DARK)
-  doc.line(MARGIN, footerY, PAGE_W - MARGIN, footerY)
-
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7.5)
-  doc.setTextColor(...C_DARK)
-  doc.text('Av. 76, (Calle S-3) Nro. 70-C-766, Local Galpón Nro. 3 Edificio Centro Industrial Massico II', PAGE_W / 2, footerY + 5, { align: 'center' })
-  doc.setFont('helvetica', 'normal')
-  doc.text('Parcela MB-6 y Mb7, Urb. Industrial Aeropuerto Vía Flor Amarillo, Valencia, Edo. Carabobo, Zona Postal 2003', PAGE_W / 2, footerY + 9, { align: 'center' })
-
-  const tel = config.telefono_negocio || ''
-  const email = config.email_negocio || ''
-  const contactLine = [tel, email].filter(Boolean).join('     |     ')
-  if (contactLine) {
-    doc.setFontSize(8)
-    doc.text(contactLine, PAGE_W / 2, footerY + 15, { align: 'center' })
-  }
-
-  doc.save('plantilla_nota_entrega.pdf')
+  doc.save('plantilla_orden_despacho.pdf')
 }

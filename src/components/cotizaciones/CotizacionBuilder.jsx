@@ -409,19 +409,6 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
   const [vendedorId,         setVendedorId]         = useState(cotizacionExistente?.vendedor_id ?? '')
   const [clienteId,          setClienteId]          = useState(cotizacionExistente?.cliente_id ?? clientePreseleccionado ?? '')
   const [transportistaId,    setTransportistaId]    = useState(cotizacionExistente?.transportista_id ?? '')
-  // Calcular días de validez desde la fecha existente o usar 7 por defecto
-  const [diasValidez, setDiasValidez] = useState(() => {
-    if (cotizacionExistente?.valida_hasta) {
-      const diff = Math.round((new Date(cotizacionExistente.valida_hasta) - new Date()) / (1000 * 60 * 60 * 24))
-      return diff > 0 ? diff : 7
-    }
-    return 7
-  })
-  const validaHasta = (() => {
-    const d = new Date()
-    d.setDate(d.getDate() + diasValidez)
-    return d.toISOString().split('T')[0]
-  })()
   const [notasCliente,       setNotasCliente]       = useState(cotizacionExistente?.notas_cliente ?? '')
   const [notasInternas,      setNotasInternas]      = useState(cotizacionExistente?.notas_internas ?? '')
   const [monedaPDF,          setMonedaPDF]          = useState('$')
@@ -639,7 +626,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
     try {
       const id = await guardarBorrador.mutateAsync({
         cotizacionId,
-        campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, validaHasta, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd, ivaPct: config.iva_pct ?? 0 },
+        campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd, ivaPct: config.iva_pct ?? 0 },
         items,
       })
       setCotizacionId(id)
@@ -661,7 +648,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
       if (!id) {
         id = await guardarBorrador.mutateAsync({
           cotizacionId,
-          campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, validaHasta, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd, ivaPct: config.iva_pct ?? 0 },
+          campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd, ivaPct: config.iva_pct ?? 0 },
           items,
         })
         setCotizacionId(id)
@@ -669,7 +656,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
         // Actualizar borrador con datos actuales antes de enviar
         await guardarBorrador.mutateAsync({
           cotizacionId: id,
-          campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, validaHasta, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd, ivaPct: config.iva_pct ?? 0 },
+          campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd, ivaPct: config.iva_pct ?? 0 },
           items,
         })
       }
@@ -721,7 +708,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
       const [{ generarPDF }, itemsRes, cotRes] = await Promise.all([
         import('../../services/pdf/cotizacionPDF'),
         supabase.from('cotizacion_items').select('cantidad, codigo_snap, nombre_snap, unidad_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacionId).order('orden'),
-        supabase.from('cotizaciones').select('id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en').eq('id', cotizacionId).single(),
+        supabase.from('cotizaciones').select('id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en').eq('id', cotizacionId).single(),
       ])
       if (itemsRes.error) throw itemsRes.error
       if (cotRes.error) throw cotRes.error
@@ -773,7 +760,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
       const [{ generarPDF }, itemsRes, cotRes] = await Promise.all([
         import('../../services/pdf/cotizacionPDF'),
         supabase.from('cotizacion_items').select('cantidad, codigo_snap, nombre_snap, unidad_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacionId).order('orden'),
-        supabase.from('cotizaciones').select('id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en').eq('id', cotizacionId).single(),
+        supabase.from('cotizaciones').select('id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en').eq('id', cotizacionId).single(),
       ])
       if (itemsRes.error) throw itemsRes.error
       if (cotRes.error) throw cotRes.error
@@ -804,7 +791,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
       const [{ generarPDF }, itemsRes, cotRes] = await Promise.all([
         import('../../services/pdf/cotizacionPDF'),
         supabase.from('cotizacion_items').select('cantidad, codigo_snap, nombre_snap, unidad_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacionId).order('orden'),
-        supabase.from('cotizaciones').select('id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en').eq('id', cotizacionId).single(),
+        supabase.from('cotizaciones').select('id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en').eq('id', cotizacionId).single(),
       ])
       if (itemsRes.error) throw itemsRes.error
       if (cotRes.error) throw cotRes.error
@@ -828,7 +815,6 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
         nombreCliente: clienteSeleccionado?.nombre,
         numDisplay,
         totalUsd,
-        validaHasta,
         nombreVendedor: vendedor?.nombre || perfil?.nombre,
         items: itemsRes.data ?? [],
       }
@@ -847,7 +833,6 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
         nombreCliente: clienteSeleccionado?.nombre,
         numDisplay,
         totalUsd,
-        validaHasta,
         nombreVendedor: perfil?.nombre,
       })
       window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank', 'noopener')

@@ -9,7 +9,7 @@ import { apiUrl } from '../services/apiBase'
 const KEY = ['config_negocio']
 
 // Columnas seguras (excluye gate_password_hash)
-const CONFIG_COLUMNS = 'id, nombre_negocio, rif_negocio, telefono_negocio, direccion_negocio, email_negocio, logo_url, moneda_principal, validez_cotizacion_dias, pie_pagina_pdf, tasa_bcv_manual, iva_pct, gate_email, comision_pct_cabilla, comision_pct_otros, comision_categoria_cabilla, creado_en, actualizado_en'
+const CONFIG_COLUMNS = 'id, nombre_negocio, rif_negocio, telefono_negocio, direccion_negocio, email_negocio, logo_url, moneda_principal, pie_pagina_pdf, tasa_bcv_manual, iva_pct, gate_email, comision_pct_cabilla, comision_pct_otros, comision_categoria_cabilla, creado_en, actualizado_en'
 
 export function useConfigNegocio() {
   return useQuery({

@@ -370,93 +370,112 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
 
   // ── Layout fijo: posiciones calculadas desde el fondo ──
   const sloganY = PAGE_H - 33
+  const TRANS_H = 30
 
+  // ── Recuadro unificado: FORMA DE PAGO + DESGLOSE + TOTAL ──
   const total = Number(despacho.total_usd || 0)
   const flete = Number(despacho.flete_usd || 0)
   const descuentoTotal = Number(despacho.descuento_total_usd || 0)
+  const subtotal = flete > 0 || descuentoTotal > 0 ? total : total
   const totalFinal = total - descuentoTotal
   const hasFlete = flete > 0
   const hasDescuento = descuentoTotal > 0
+
+  // Parsear formas de pago (JSON array o string legacy)
+  let formasPagoArr = []
+  const fpRaw = formaPago || despacho.forma_pago || ''
+  try {
+    const parsed = JSON.parse(fpRaw)
+    if (Array.isArray(parsed)) formasPagoArr = parsed
+  } catch {
+    if (fpRaw) formasPagoArr = [{ metodo: fpRaw, monto: null }]
+  }
+
+  // Si hay una sola forma de pago sin monto, asignar el total
+  if (formasPagoArr.length === 1 && (formasPagoArr[0].monto == null || formasPagoArr[0].monto === '')) {
+    formasPagoArr[0].monto = totalFinal
+  }
+
+  const choferStartY = sloganY - 9 - TRANS_H
+  // Desglose: Base + IVA (siempre 14mm) + Flete (7mm si aplica) + Descuento (7mm si aplica)
+  const desgloseH = 14 + (hasFlete ? 7 : 0) + (hasDescuento ? 7 : 0)
+  const hasRefPago = !!(despacho.referencia_pago)
+  const refPagoH = hasRefPago ? 7 : 0
+  const fpY = choferStartY - 3 - 9 - desgloseH - 10 - refPagoH  // 9 (crédito) + desglose + 10 (total), 3mm gap
+
+  // Fila FORMA DE PAGO con checkboxes marcados
+  doc.setDrawColor(120, 120, 120)
+  doc.setLineWidth(0.3)
+  doc.rect(MARGIN, fpY, CONTENT_W, 9, 'S')
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9)
+  doc.setTextColor(...C_DARK)
+
+  doc.text('8 DÍAS DE CRÉDITO CONTINUO', MARGIN + 3, fpY + 6)
+
+  // ── Referencia de pago (si existe) ──
+  const refPago = despacho.referencia_pago || ''
+  if (refPago) {
+    const refY = fpY + 9
+    doc.setDrawColor(120, 120, 120)
+    doc.setLineWidth(0.3)
+    doc.rect(MARGIN, refY, CONTENT_W, 7, 'S')
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7.5)
+    doc.setTextColor(...C_DARK)
+    doc.text(`REF: ${refPago}`, MARGIN + 3, refY + 5)
+  }
+
+  const refRowH = refPago ? 7 : 0
+
+  // ── Desglose: Base + IVA + Flete + Descuento ──
   const ivaPct = Number(config.iva_pct) || 16
   const baseImponible = totalFinal / (1 + ivaPct / 100)
   const ivaAmount = totalFinal - baseImponible
-  const transportista = despacho.transportista_id ? (despacho.transportista || null) : null
-  const refPago = despacho.referencia_pago || ''
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // 4. BLOQUE COMBINADO: Crédito + Transporte (izq) | Desglose (der) + TOTAL
-  // ══════════════════════════════════════════════════════════════════════════
-  const comboLeftW = Math.round(CONTENT_W * 0.62)
-  const comboRightW = CONTENT_W - comboLeftW
-  const dataRowH = 7
+  let desY = fpY + 9 + refRowH
+  doc.setDrawColor(120, 120, 120)
+  doc.setLineWidth(0.2)
 
-  // Columna derecha: desglose
-  const rightItems = [
-    { label: 'Base', value: fmtTotal(baseImponible, monedaPDF, tasa, factorBcv) },
-    { label: `IVA ${ivaPct}%`, value: fmtTotal(ivaAmount, monedaPDF, tasa, factorBcv) },
-  ]
-  if (hasFlete) rightItems.push({ label: 'Flete', value: fmtTotal(flete, monedaPDF, tasa, factorBcv) })
-  if (hasDescuento) rightItems.push({ label: 'Descuento', value: '-' + fmtTotal(descuentoTotal, monedaPDF, tasa, factorBcv), color: [180, 100, 0] })
-  if (refPago) rightItems.push({ label: 'Ref:', value: refPago })
+  // Fila Base
+  doc.rect(MARGIN, desY, CONTENT_W, 7, 'S')
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.setTextColor(...C_DARK)
+  doc.text('Base', MARGIN + 4, desY + 5)
+  doc.text(fmtTotal(baseImponible, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, desY + 5, { align: 'right' })
+  desY += 7
 
-  // Columna izquierda: crédito + datos transporte
-  const leftLines = [{ text: '8 DÍAS DE CRÉDITO CONTINUO', bold: true, size: 9 }]
-  if (transportista) {
-    const tNom = transportista.nombre || ''
-    const tCI = transportista.rif || ''
-    const tColor = transportista.color || ''
-    leftLines.push({ text: `Chofer: ${tNom}  —  CI: ${tCI}  —  Color: ${tColor}`, bold: false, size: 7.5 })
-    const tVeh = transportista.vehiculo || ''
-    const tPlaca = transportista.zona_cobertura || ''
-    const tChuto = transportista.placa_chuto || ''
-    const tBatea = transportista.placa_batea || ''
-    leftLines.push({ text: `Vehículo: ${tVeh}  —  Placa: ${tPlaca}  —  Chuto: ${tChuto}  —  Batea: ${tBatea}`, bold: false, size: 7.5 })
+  // Fila IVA
+  doc.rect(MARGIN, desY, CONTENT_W, 7, 'S')
+  doc.text(`IVA ${ivaPct}%`, MARGIN + 4, desY + 5)
+  doc.text(fmtTotal(ivaAmount, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, desY + 5, { align: 'right' })
+  desY += 7
+
+  // Fila Flete (si aplica)
+  if (hasFlete) {
+    doc.rect(MARGIN, desY, CONTENT_W, 7, 'S')
+    doc.text('Flete', MARGIN + 4, desY + 5)
+    doc.text(fmtTotal(flete, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, desY + 5, { align: 'right' })
+    desY += 7
   }
 
-  const numComboRows = Math.max(leftLines.length, rightItems.length)
-  const totalBarH = 10
-  const comboBottom = sloganY - 9
-  const comboTop = comboBottom - totalBarH - numComboRows * dataRowH
-
-  // Dibujar filas de datos
-  for (let r = 0; r < numComboRows; r++) {
-    const ry = comboTop + r * dataRowH
-
-    // Celda izquierda
-    doc.setDrawColor(120, 120, 120)
-    doc.setLineWidth(0.2)
-    doc.rect(MARGIN, ry, comboLeftW, dataRowH, 'S')
-    if (r < leftLines.length) {
-      const line = leftLines[r]
-      doc.setFont('helvetica', line.bold ? 'bold' : 'normal')
-      doc.setFontSize(line.size)
-      doc.setTextColor(...C_DARK)
-      const maxTW = comboLeftW - 6
-      let txt = line.text
-      if (doc.getTextWidth(txt) > maxTW) {
-        while (txt.length > 1 && doc.getTextWidth(txt + '…') > maxTW) txt = txt.slice(0, -1)
-        txt += '…'
-      }
-      doc.text(txt, MARGIN + 3, ry + dataRowH / 2 + 1)
-    }
-
-    // Celda derecha
-    doc.rect(MARGIN + comboLeftW, ry, comboRightW, dataRowH, 'S')
-    if (r < rightItems.length) {
-      const item = rightItems[r]
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(9)
-      if (item.color) doc.setTextColor(...item.color)
-      else doc.setTextColor(...C_DARK)
-      doc.text(item.label, MARGIN + comboLeftW + 3, ry + dataRowH / 2 + 1)
-      doc.text(item.value, MARGIN + CONTENT_W - 3, ry + dataRowH / 2 + 1, { align: 'right' })
-    }
+  // Fila Descuento (si aplica)
+  if (hasDescuento) {
+    doc.rect(MARGIN, desY, CONTENT_W, 7, 'S')
+    doc.setTextColor(180, 100, 0)
+    doc.text('Descuento', MARGIN + 4, desY + 5)
+    doc.text('-' + fmtTotal(descuentoTotal, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, desY + 5, { align: 'right' })
+    doc.setTextColor(...C_DARK)
   }
 
-  // Barra TOTAL (ancho completo)
-  const totTopY = comboTop + numComboRows * dataRowH
+  // Barra oscura TOTAL abajo (ancho completo)
+  const totTopY = desY
   doc.setFillColor(60, 60, 60)
-  doc.rect(MARGIN, totTopY, CONTENT_W, totalBarH, 'F')
+  doc.rect(MARGIN, totTopY, CONTENT_W, 10, 'F')
+
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(13)
   doc.setTextColor(...C_WHITE)
@@ -464,7 +483,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.text(fmtTotal(totalFinal, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, totTopY + 7, { align: 'right' })
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 5. CONDICIONES (izq) + CUENTAS BANCARIAS (der) — encima del bloque combinado
+  // 4. CONDICIONES (izq) + CUENTAS BANCARIAS (der) — 5mm encima del recuadro pago
   // ══════════════════════════════════════════════════════════════════════════
   const condiciones = [
     'Precios Sujetos a cambios sin previo aviso.',
@@ -474,26 +493,26 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const condLineH = 4.5
   const condBoxH = 6 + condiciones.length * condLineH + condPadding * 2
   const halfW = CONTENT_W / 2 - 2
-  const condTopY = comboTop - 5 - condBoxH
+  const ty = fpY - 5 - condBoxH
 
   // ── Condiciones (izquierda) ──
   doc.setFillColor(245, 245, 245)
   doc.setDrawColor(100, 100, 100)
   doc.setLineWidth(0.4)
-  doc.roundedRect(MARGIN, condTopY, halfW, condBoxH, 1, 1, 'FD')
+  doc.roundedRect(MARGIN, ty, halfW, condBoxH, 1, 1, 'FD')
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(10)
   doc.setTextColor(...C_DARK)
-  doc.text('CONDICIONES GENERALES:', MARGIN + condPadding, condTopY + condPadding + 3.5)
+  doc.text('CONDICIONES GENERALES:', MARGIN + condPadding, ty + condPadding + 3.5)
 
   doc.setDrawColor(100, 100, 100)
   doc.setLineWidth(0.2)
-  doc.line(MARGIN + condPadding, condTopY + condPadding + 5.5, MARGIN + halfW - condPadding, condTopY + condPadding + 5.5)
+  doc.line(MARGIN + condPadding, ty + condPadding + 5.5, MARGIN + halfW - condPadding, ty + condPadding + 5.5)
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(9.5)
-  let condY = condTopY + condPadding + 9.5
+  let condY = ty + condPadding + 9.5
   condiciones.forEach(c => {
     doc.text(`• ${c}`, MARGIN + condPadding, condY)
     condY += condLineH
@@ -505,26 +524,82 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.setFillColor(245, 245, 245)
   doc.setDrawColor(100, 100, 100)
   doc.setLineWidth(0.4)
-  doc.roundedRect(rightX, condTopY, halfW, condBoxH, 1, 1, 'FD')
+  doc.roundedRect(rightX, ty, halfW, condBoxH, 1, 1, 'FD')
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8)
   doc.setTextColor(...C_DARK)
-  doc.text('Transferencias a nombre de ' + (config.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.').toUpperCase(), rightX + condPadding, condTopY + condPadding + 3.5)
+  doc.text('Transferencias a nombre de ' + (config.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.').toUpperCase(), rightX + condPadding, ty + condPadding + 3.5)
 
   doc.setDrawColor(100, 100, 100)
   doc.setLineWidth(0.2)
-  doc.line(rightX + condPadding, condTopY + condPadding + 5.5, rightX + halfW - condPadding, condTopY + condPadding + 5.5)
+  doc.line(rightX + condPadding, ty + condPadding + 5.5, rightX + halfW - condPadding, ty + condPadding + 5.5)
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
-  let cuentaY = condTopY + condPadding + 9.5
+  let cuentaY = ty + condPadding + 9.5
   CUENTAS_BANCARIAS.forEach(cuenta => {
     doc.text(cuenta, rightX + condPadding, cuentaY)
     cuentaY += condLineH
   })
 
-  // ── Slogan ──
+  // ══════════════════════════════════════════════════════════════════════════
+  // 5. DATOS DEL CHOFER Y VEHÍCULO — fijo 5mm sobre el slogan
+  // ══════════════════════════════════════════════════════════════════════════
+  const transportista = despacho.transportista_id ? (despacho.transportista || null) : null
+
+  if (transportista) {
+    const ROW_H = 12
+    const TRANS_H = 6 + ROW_H * 2 // header + 2 rows
+    const ty = sloganY - 9 - TRANS_H
+
+    // Cabecera gris compacta
+    doc.setFillColor(240, 240, 240)
+    doc.rect(MARGIN, ty, CONTENT_W, 6, 'F')
+    doc.setDrawColor(120, 120, 120)
+    doc.setLineWidth(0.3)
+    doc.rect(MARGIN, ty, CONTENT_W, 6, 'S')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8)
+    doc.setTextColor(...C_DARK)
+    doc.text('DATOS DEL CHOFER Y DEL VEHÍCULO', MARGIN + 2, ty + 4)
+
+    // Grid: fila 1 = 3 cols, fila 2 = 4 cols
+    const col3W = CONTENT_W / 3
+    const col4W = CONTENT_W / 4
+    const row1Y = ty + 6
+    const row2Y = row1Y + ROW_H
+    const row1Fields = [
+      { label: 'CHOFER', val: transportista?.nombre || '' },
+      { label: 'C.I.', val: transportista?.rif || '' },
+      { label: 'COLOR', val: transportista?.color || '' },
+    ]
+    const row2Fields = [
+      { label: 'VEHÍCULO', val: transportista?.vehiculo || '' },
+      { label: 'PLACA', val: transportista?.zona_cobertura || '' },
+      { label: 'PLACA CHUTO', val: transportista?.placa_chuto || '' },
+      { label: 'PLACA BATEA', val: transportista?.placa_batea || '' },
+    ]
+    function drawRow(fields, ry, colW) {
+      fields.forEach((f, i) => {
+        const fx = MARGIN + i * colW
+        doc.setDrawColor(120, 120, 120)
+        doc.setLineWidth(0.3)
+        doc.rect(fx, ry, colW, ROW_H, 'S')
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(6.5)
+        doc.setTextColor(100, 100, 100)
+        doc.text(f.label, fx + 2, ry + 3.5)
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(8.5)
+        doc.setTextColor(0, 0, 0)
+        if (f.val) doc.text(f.val, fx + 2, ry + 10)
+      })
+    }
+    drawRow(row1Fields, row1Y, col3W)
+    drawRow(row2Fields, row2Y, col4W)
+  }
+
   if (y < sloganY) {
     doc.setFont('helvetica', 'bolditalic')
     doc.setFontSize(16)

@@ -317,26 +317,34 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         )}
       </div>
 
-      {/* ── Total ── */}
-      <div className="mx-3 mb-2 bg-slate-50 rounded-xl px-3 py-2 flex items-center justify-between">
-        <span className="text-xs font-medium text-slate-400">Total</span>
-        <div className="text-right">
-          {descuentoTotal > 0 ? (
-            <>
-              <span className="text-xs text-slate-400 line-through mr-1.5">{fmtUsd(despacho.total_usd)}</span>
-              <span className="text-lg font-bold text-amber-700">{fmtUsd(totalConDescuento)}</span>
-              {tasa > 0 && totalConDescuento > 0 && (
-                <div className="text-[11px] text-slate-400">{fmtBs(usdToBs(totalConDescuento, tasa))}</div>
-              )}
-            </>
-          ) : (
-            <>
-              <span className="text-lg font-bold text-slate-800">{fmtUsd(despacho.total_usd)}</span>
-              {tasa > 0 && despacho.total_usd > 0 && (
-                <div className="text-[11px] text-slate-400">{fmtBs(usdToBs(despacho.total_usd, tasa))}</div>
-              )}
-            </>
-          )}
+      {/* ── Total + Flete ── */}
+      <div className="mx-3 mb-2 bg-slate-50 rounded-xl px-3 py-2 space-y-1">
+        {Number(despacho.flete_usd || 0) > 0 && (
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-medium text-slate-400">Flete</span>
+            <span className="text-xs font-semibold text-slate-500">{fmtUsd(despacho.flete_usd)}</span>
+          </div>
+        )}
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium text-slate-400">Total</span>
+          <div className="text-right">
+            {descuentoTotal > 0 ? (
+              <>
+                <span className="text-xs text-slate-400 line-through mr-1.5">{fmtUsd(despacho.total_usd)}</span>
+                <span className="text-lg font-bold text-amber-700">{fmtUsd(totalConDescuento)}</span>
+                {tasa > 0 && totalConDescuento > 0 && (
+                  <div className="text-[11px] text-slate-400">{fmtBs(usdToBs(totalConDescuento, tasa))}</div>
+                )}
+              </>
+            ) : (
+              <>
+                <span className="text-lg font-bold text-slate-800">{fmtUsd(despacho.total_usd)}</span>
+                {tasa > 0 && despacho.total_usd > 0 && (
+                  <div className="text-[11px] text-slate-400">{fmtBs(usdToBs(despacho.total_usd, tasa))}</div>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
 
