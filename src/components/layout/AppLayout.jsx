@@ -418,7 +418,7 @@ export default function AppLayout() {
         </div>
 
         {/* Navegación */}
-        <nav className="relative z-10 flex-1 min-h-0 p-2 space-y-0.5">
+        <nav className="relative z-10 flex-1 min-h-0 overflow-y-auto p-2 space-y-0.5">
           {NAV_TODOS
             .filter(item => esDesarrollador || ((!item.excludeRoles || !item.excludeRoles.includes(perfil?.rol)) && (!item.onlyRoles || item.onlyRoles.includes(perfil?.rol))))
             .map(({ path, label, labelByRole, icono: Icono }) => (
