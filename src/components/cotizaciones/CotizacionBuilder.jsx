@@ -9,7 +9,7 @@ import {
   User, Truck, Plus, Trash2, UserPlus, ChevronDown, X,
   Save, Send, ArrowLeft, ArrowRight, Loader2, AlertCircle, DollarSign, RefreshCw,
   CheckCircle, MessageCircle, StickyNote, Tag, Hash, Phone, Mail, MapPin,
-  Eye, Package,
+  Eye, Package, Printer,
 } from 'lucide-react'
 import { useClientes, useVendedores } from '../../hooks/useClientes'
 import { useInventario } from '../../hooks/useInventario'
@@ -448,6 +448,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
   const [enviada, setEnviada] = useState(false)
   const [numDisplay, setNumDisplay] = useState('')
   const [pdfLoading, setPdfLoading] = useState(false)
+  const [printLoading, setPrintLoading] = useState(false)
   const [waLoading, setWaLoading]   = useState(false)
   const [showResumen, setShowResumen] = useState(false)
 
@@ -739,6 +740,61 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
     } catch {
     } finally {
       setPdfLoading(false)
+    }
+  }
+
+  function printOrDownloadPdf(blob, filename) {
+    const url = URL.createObjectURL(blob)
+    const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
+    if (isMobile) {
+      const w = window.open(url, '_blank')
+      if (!w) {
+        const a = document.createElement('a')
+        a.href = url
+        a.download = filename
+        a.click()
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 60000)
+    } else {
+      const iframe = document.createElement('iframe')
+      iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:none'
+      iframe.src = url
+      document.body.appendChild(iframe)
+      iframe.onload = () => {
+        try { iframe.contentWindow.print() } catch { window.open(url) }
+        setTimeout(() => { document.body.removeChild(iframe); URL.revokeObjectURL(url) }, 60000)
+      }
+    }
+  }
+
+  async function imprimirCotizacion() {
+    setPrintLoading(true)
+    try {
+      const [{ generarPDF }, itemsRes, cotRes] = await Promise.all([
+        import('../../services/pdf/cotizacionPDF'),
+        supabase.from('cotizacion_items').select('cantidad, codigo_snap, nombre_snap, unidad_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacionId).order('orden'),
+        supabase.from('cotizaciones').select('id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, valida_hasta, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en').eq('id', cotizacionId).single(),
+      ])
+      if (itemsRes.error) throw itemsRes.error
+      if (cotRes.error) throw cotRes.error
+      const vendedor = esSupervisor
+        ? vendedores.find(v => v.id === vendedorId) || perfil
+        : perfil
+      const blob = await generarPDF({
+        cotizacion: { ...cotRes.data, cliente: clienteSeleccionado, vendedor },
+        items: itemsRes.data ?? [],
+        config,
+        returnBlob: true,
+        monedaPDF,
+        tasa: tasaHook.tasaEfectiva,
+        tasaUsdt: tasaHook.tasaUsdt?.precio || 0,
+        tasaBcv: tasaHook.tasaBcv?.precio || 0,
+      })
+      printOrDownloadPdf(blob, `${numDisplay.replace(/\s+/g, '_')}.pdf`)
+    } catch (err) {
+      showToast('Error al imprimir: ' + (err.message || 'Error desconocido'), 'error')
+    } finally {
+      setPrintLoading(false)
     }
   }
 
@@ -1328,6 +1384,13 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                         ? <div className="w-3.5 h-3.5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
                         : <MessageCircle size={14} />}
                       WhatsApp
+                    </button>
+                    <button onClick={imprimirCotizacion} disabled={printLoading}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-xs rounded-xl transition-all active:scale-[0.98] disabled:opacity-50">
+                      {printLoading
+                        ? <div className="w-3.5 h-3.5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                        : <Printer size={14} />}
+                      Imprimir
                     </button>
                     {onDespachar && (
                       <button onClick={() => onDespachar({ id: cotizacionId, numero: numDisplay.replace('COT-', '').replace(/^0+/, ''), total_usd: totalUsd })}

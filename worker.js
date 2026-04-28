@@ -2252,72 +2252,7 @@ async function handleCrearDespacho(request, env) {
       });
     }
 
-    // 4. Obtener items con producto
-    const ciRes = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/cotizacion_items?cotizacion_id=eq.${cotizacionId}&producto_id=not.is.null&select=producto_id,cantidad,nombre_snap`,
-      { headers }
-    );
-    const cotItems = await ciRes.json();
-
-    // 5. Verificar stock
-    if (cotItems.length > 0) {
-      const prodIds = cotItems.map(i => i.producto_id);
-      const prodRes = await fetch(
-        `${env.SUPABASE_URL}/rest/v1/productos?id=in.(${prodIds.join(',')})&activo=eq.true&select=id,stock_actual,nombre`,
-        { headers }
-      );
-      const productos = await prodRes.json();
-      const stockMap = Object.fromEntries(productos.map(p => [p.id, p]));
-
-      for (const item of cotItems) {
-        const prod = stockMap[item.producto_id];
-        if (!prod) return jsonError(`Producto "${item.nombre_snap}" no encontrado o inactivo`, 400, request);
-        if (Number(prod.stock_actual) < Number(item.cantidad)) {
-          return jsonError(`Stock insuficiente: "${item.nombre_snap}" requiere ${item.cantidad} pero solo hay ${prod.stock_actual}`, 400, request);
-        }
-      }
-
-      // 6. Descontar stock y registrar kardex
-      const loteId = crypto.randomUUID();
-      const movimientos = [];
-      for (const item of cotItems) {
-        const prod = stockMap[item.producto_id];
-        const stockAnterior = Number(prod.stock_actual);
-        const nuevoStock = stockAnterior - Number(item.cantidad);
-        await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${item.producto_id}`, {
-          method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
-          body: JSON.stringify({ stock_actual: nuevoStock }),
-        });
-        movimientos.push({
-          lote_id: loteId,
-          tipo: 'egreso',
-          motivo: `Venta — Nota de despacho #${cot.numero}`,
-          motivo_tipo: 'otro',
-          producto_id: item.producto_id,
-          producto_nombre: item.nombre_snap || prod.nombre,
-          cantidad: Number(item.cantidad),
-          stock_anterior: stockAnterior,
-          stock_nuevo: nuevoStock,
-          usuario_id: user.operator_id,
-          usuario_nombre: operador.nombre,
-          usuario_color: operador.color || null,
-        });
-      }
-
-      // Insertar movimientos de kardex
-      if (movimientos.length > 0) {
-        const kardexRes = await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos`, {
-          method: 'POST', headers,
-          body: JSON.stringify(movimientos),
-        });
-        if (!kardexRes.ok) {
-          const kardexErr = await kardexRes.text();
-          return jsonError(`Error al registrar kardex: ${kardexErr}`, 500, request);
-        }
-      }
-    }
-
-    // 7. Crear nota de despacho
+    // 4. Crear nota de despacho (stock se descuenta al confirmar entrega por logística)
     const totalConFlete = Number(cot.total_usd) + flete;
     const despRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?select=id,numero`, {
       method: 'POST',
@@ -2439,13 +2374,10 @@ async function handleVentaRapida(request, env) {
     const productos = await prodRes.json();
     const stockMap = Object.fromEntries(productos.map(p => [p.id, p]));
 
-    // Verify stock
+    // Verify products exist (stock se verifica al confirmar entrega)
     for (const item of items) {
       const prod = stockMap[item.productoId];
       if (!prod) return jsonError(`Producto no encontrado o inactivo`, 400, request);
-      if (Number(prod.stock_actual) < item.cantidad) {
-        return jsonError(`Stock insuficiente: "${prod.nombre}" requiere ${item.cantidad} pero solo hay ${prod.stock_actual}`, 400, request);
-      }
     }
 
     // 2. Calculate totals
@@ -2515,38 +2447,7 @@ async function handleVentaRapida(request, env) {
       return jsonError(`Error al insertar items: ${err}`, 500, request);
     }
 
-    // 5. Deduct stock and register kardex
-    const loteId = crypto.randomUUID();
-    const movimientos = [];
-    for (const item of items) {
-      const prod = stockMap[item.productoId];
-      const stockAnterior = Number(prod.stock_actual);
-      const nuevoStock = stockAnterior - item.cantidad;
-      await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${item.productoId}`, {
-        method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
-        body: JSON.stringify({ stock_actual: nuevoStock }),
-      });
-      movimientos.push({
-        lote_id: loteId,
-        tipo: 'egreso',
-        motivo: `Venta rápida — Despacho #${cot.numero}`,
-        motivo_tipo: 'otro',
-        producto_id: item.productoId,
-        producto_nombre: prod.nombre,
-        cantidad: item.cantidad,
-        stock_anterior: stockAnterior,
-        stock_nuevo: nuevoStock,
-        usuario_id: user.operator_id,
-        usuario_nombre: operador.nombre,
-        usuario_color: operador.color || null,
-      });
-    }
-    if (movimientos.length > 0) {
-      await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos`, {
-        method: 'POST', headers,
-        body: JSON.stringify(movimientos),
-      });
-    }
+    // 5. Stock se descuenta al confirmar entrega por logística
 
     // 6. Create nota de despacho
     const totalConFlete = totalUsd + flete;
@@ -2614,13 +2515,7 @@ async function handleVentaRapida(request, env) {
       });
     }
 
-    // 8. Calcular comisión
-    try {
-      await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcular_comision_despacho`, {
-        method: 'POST', headers,
-        body: JSON.stringify({ p_despacho_id: despacho.id }),
-      });
-    } catch { /* no crítico */ }
+    // 8. Comisión se calcula al confirmar entrega por logística
 
     // 9. Auditoría
     try {
@@ -2825,7 +2720,8 @@ async function handleActualizarEstadoDespacho(request, env) {
         return jsonError('No tiene permiso para anular despachos', 403, request);
       }
     }
-    if (nuevoEstado === 'anulada') {
+    // Solo restaurar stock si ya había sido entregada (stock ya descontado)
+    if (nuevoEstado === 'anulada' && desp.entregada_en) {
       const ciRes = await fetch(
         `${env.SUPABASE_URL}/rest/v1/cotizacion_items?cotizacion_id=eq.${desp.cotizacion_id}&producto_id=not.is.null&select=producto_id,cantidad,nombre_snap`,
         { headers }
@@ -2867,6 +2763,71 @@ async function handleActualizarEstadoDespacho(request, env) {
       }
     }
 
+    // 3b. Al confirmar entrega: descontar stock + registrar kardex
+    if (nuevoEstado === 'entregada') {
+      const ciResEnt = await fetch(
+        `${env.SUPABASE_URL}/rest/v1/cotizacion_items?cotizacion_id=eq.${desp.cotizacion_id}&producto_id=not.is.null&select=producto_id,cantidad,nombre_snap`,
+        { headers }
+      );
+      const itemsEnt = await ciResEnt.json();
+
+      if (itemsEnt.length > 0) {
+        const prodIdsEnt = itemsEnt.map(i => i.producto_id);
+        const prodResEnt = await fetch(
+          `${env.SUPABASE_URL}/rest/v1/productos?id=in.(${prodIdsEnt.join(',')})&activo=eq.true&select=id,stock_actual,stock_minimo,nombre,unidad`,
+          { headers }
+        );
+        const productosEnt = await prodResEnt.json();
+        const stockMapEnt = Object.fromEntries(productosEnt.map(p => [p.id, p]));
+
+        // Verificar stock
+        for (const item of itemsEnt) {
+          const prod = stockMapEnt[item.producto_id];
+          if (!prod) return jsonError(`Producto "${item.nombre_snap}" no encontrado o inactivo`, 400, request);
+          if (Number(prod.stock_actual) < Number(item.cantidad)) {
+            return jsonError(`Stock insuficiente para entrega: "${item.nombre_snap}" requiere ${item.cantidad} pero solo hay ${prod.stock_actual}`, 400, request);
+          }
+        }
+
+        // Descontar stock y registrar kardex
+        const loteIdEnt = crypto.randomUUID();
+        const movimientosEnt = [];
+        for (const item of itemsEnt) {
+          const prod = stockMapEnt[item.producto_id];
+          const stockAnterior = Number(prod.stock_actual);
+          const nuevoStock = stockAnterior - Number(item.cantidad);
+          await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${item.producto_id}`, {
+            method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
+            body: JSON.stringify({ stock_actual: nuevoStock }),
+          });
+          movimientosEnt.push({
+            lote_id: loteIdEnt,
+            tipo: 'egreso',
+            motivo: `Entrega confirmada — Despacho #${desp.numero}`,
+            motivo_tipo: 'venta',
+            producto_id: item.producto_id,
+            producto_nombre: item.nombre_snap || prod.nombre,
+            cantidad: Number(item.cantidad),
+            stock_anterior: stockAnterior,
+            stock_nuevo: nuevoStock,
+            usuario_id: user.operator_id,
+            usuario_nombre: operador.nombre,
+            usuario_color: operador.color || null,
+          });
+        }
+        if (movimientosEnt.length > 0) {
+          const kardexRes = await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos`, {
+            method: 'POST', headers,
+            body: JSON.stringify(movimientosEnt),
+          });
+          if (!kardexRes.ok) {
+            const kardexErr = await kardexRes.text();
+            return jsonError(`Error al registrar kardex de entrega: ${kardexErr}`, 500, request);
+          }
+        }
+      }
+    }
+
     // 4. Actualizar estado
     const updateData = { estado: nuevoEstado };
     const ahora = new Date().toISOString();
@@ -2881,8 +2842,8 @@ async function handleActualizarEstadoDespacho(request, env) {
       body: JSON.stringify(updateData),
     });
 
-    // 5. Si despachada o entregada, calcular comisión
-    if (nuevoEstado === 'despachada' || nuevoEstado === 'entregada') {
+    // 5. Calcular comisión solo al confirmar entrega
+    if (nuevoEstado === 'entregada') {
       try {
         await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcular_comision_despacho`, {
           method: 'POST', headers,
