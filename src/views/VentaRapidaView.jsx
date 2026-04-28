@@ -1231,57 +1231,57 @@ function Step2Pago({
     <div className="p-4 space-y-5">
       {/* Forma de pago del cliente */}
       <div>
-        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 block">
+        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 block">
           Formas de pago <span className="text-red-400">*</span>
         </label>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {FORMAS_PAGO.map(fp => {
-            const activo = formasPago.some(f => f.metodo === fp)
-            return (
-              <button key={fp} onClick={() => toggleForma(fp)}
-                className={`px-3 py-2.5 rounded-xl text-sm font-medium border transition-all ${
-                  activo
-                    ? 'bg-sky-50 border-sky-300 text-sky-700 ring-1 ring-sky-200'
-                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                }`}>
-                {fp}
+
+        {/* Métodos activos — fila con monto inline */}
+        <div className="space-y-2 mb-3">
+          {formasPago.map(fp => (
+            <div key={fp.metodo} className="flex items-center gap-2 bg-sky-50 border border-sky-300 rounded-xl px-3 py-2">
+              <span className="text-sm font-bold text-sky-700 w-24 shrink-0 truncate">{fp.metodo}</span>
+              <div className="relative flex-1">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">$</span>
+                <input
+                  type="number" min="0" step="0.01"
+                  value={fp.monto}
+                  onChange={e => setMontoForma(fp.metodo, e.target.value)}
+                  onFocus={e => e.target.select()}
+                  placeholder="0.00"
+                  className="w-full pl-6 pr-2 py-1.5 rounded-lg text-sm font-semibold border border-sky-200 bg-white focus:outline-none focus:ring-2 focus:ring-sky-300 text-slate-800"
+                />
+              </div>
+              <button onClick={() => toggleForma(fp.metodo)}
+                className="p-1 rounded-lg hover:bg-sky-100 text-sky-400 hover:text-sky-600 transition-colors shrink-0">
+                <X size={14} />
               </button>
-            )
-          })}
+            </div>
+          ))}
         </div>
 
-        {/* Montos por forma seleccionada */}
-        {formasPago.length > 0 && (
-          <div className="space-y-2 mt-3">
-            {formasPago.map(fp => (
-              <div key={fp.metodo} className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-slate-600 w-28 truncate">{fp.metodo}</span>
-                <div className="relative flex-1">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={fp.monto}
-                    onChange={e => setMontoForma(fp.metodo, e.target.value)}
-                    placeholder="0.00"
-                    className="w-full pl-7 pr-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-sky-200 focus:bg-white"
-                  />
-                </div>
-              </div>
+        {/* Métodos inactivos — chips para agregar */}
+        {FORMAS_PAGO.some(m => !formasPago.find(f => f.metodo === m)) && (
+          <div className="flex flex-wrap gap-1.5">
+            {FORMAS_PAGO.filter(m => !formasPago.find(f => f.metodo === m)).map(m => (
+              <button key={m} onClick={() => toggleForma(m)}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all active:scale-95">
+                <Plus size={11} strokeWidth={2.5} />{m}
+              </button>
             ))}
-            <div className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm font-semibold ${
-              pagoCuadrado
-                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                : 'bg-red-50 text-red-600 border border-red-200'
-            }`}>
-              <span>Asignado: ${montoAsignado.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-              <span>Total: ${totalConFlete.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-              {pagoCuadrado
-                ? <span className="text-emerald-500">✓</span>
-                : <span className="text-red-400">Faltan ${(totalConFlete - montoAsignado).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-              }
-            </div>
+          </div>
+        )}
+
+        {/* Barra de totales */}
+        {formasPago.length > 0 && (
+          <div className={`flex items-center justify-between mt-3 px-3 py-2 rounded-xl text-sm font-semibold ${
+            pagoCuadrado ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+          }`}>
+            <span>Asignado: ${montoAsignado.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            <span>Total: ${totalConFlete.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            {pagoCuadrado
+              ? <CheckCircle size={16} className="text-emerald-500" />
+              : <span className="text-xs font-bold text-amber-600">Faltan ${(totalConFlete - montoAsignado).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            }
           </div>
         )}
       </div>
