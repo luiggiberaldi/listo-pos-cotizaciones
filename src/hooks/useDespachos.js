@@ -37,7 +37,7 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false } = {}
           total_usd, flete_usd, descuento_total_usd, notas, forma_pago,
           referencia_pago, forma_pago_cliente,
           creado_en, despachada_en, entregada_en,
-          cliente_id, vendedor_id, transportista_id,
+          cliente_id, cliente_factura_id, vendedor_id, transportista_id,
           transportista:transportistas!notas_despacho_transportista_id_fkey(id, nombre, rif, telefono, color, zona_cobertura, vehiculo, placa_chuto, placa_batea),
           cotizacion:cotizaciones!notas_despacho_cotizacion_id_fkey(id, numero, version)
         `)
@@ -57,7 +57,10 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false } = {}
       if (!data?.length) return []
 
       // Fetch clientes via Worker API (service key, bypasses RLS)
-      const clienteIds = [...new Set(data.map(r => r.cliente_id).filter(Boolean))]
+      const clienteIds = [...new Set([
+        ...data.map(r => r.cliente_id),
+        ...data.map(r => r.cliente_factura_id),
+      ].filter(Boolean))]
       // Siempre cargar vendedores por separado (el join puede fallar por RLS)
       const vendedorIds = [...new Set(data.map(r => r.vendedor_id).filter(Boolean))]
 
@@ -82,6 +85,7 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false } = {}
       return data.map(r => ({
         ...r,
         cliente: clientesMap[r.cliente_id] ?? null,
+        cliente_factura: clientesMap[r.cliente_factura_id] ?? null,
         vendedor: vendedoresMap[r.vendedor_id] ?? r.vendedor ?? null,
       }))
     },

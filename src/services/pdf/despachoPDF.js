@@ -54,7 +54,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   // ══════════════════════════════════════════════════════════════════════════
   // 2. DATOS DEL CLIENTE — cuadrícula profesional
   // ══════════════════════════════════════════════════════════════════════════
-  const cliente = despacho.cliente || {}
+  const cliente = despacho.cliente_factura || despacho.cliente || {}
   const vendedorTlf = despacho.vendedor?.telefono ? ` — ${despacho.vendedor.telefono}` : ''
 
   // Nombre del día
@@ -274,9 +274,9 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const COLS = [
     { label: 'CANT.',       x: MARGIN,        w: 11,  align: 'center' },
     { label: 'CÓD.',        x: MARGIN + 11,   w: 20,  align: 'center' },
-    { label: 'DESCRIPCIÓN', x: MARGIN + 31,   w: 91,  align: 'center' },
-    { label: 'UNID.',       x: MARGIN + 122,  w: 11,  align: 'center' },
-    { label: precioLabel,    x: MARGIN + 133,  w: 23,  align: 'center' },
+    { label: 'DESCRIPCIÓN', x: MARGIN + 31,   w: 87,  align: 'center' },
+    { label: 'UNID.',       x: MARGIN + 118,  w: 11,  align: 'center' },
+    { label: precioLabel,    x: MARGIN + 129,  w: 27,  align: 'center' },
     { label: totalLabel,     x: MARGIN + 156,  w: 32,  align: 'right'  },
   ]
   const ROW_H_BASE = 6.5

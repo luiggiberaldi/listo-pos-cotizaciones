@@ -182,19 +182,6 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
     y += BLANK_ROW_H
   }
 
-  // Notas — líneas vacías
-  y += 3
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9.5)
-  doc.setTextColor(...C_DARK)
-  doc.text('NOTAS:', MARGIN, y + 4)
-  y += 6
-  for (let i = 0; i < 2; i++) {
-    doc.setLineWidth(0.3)
-    doc.setDrawColor(150, 150, 150)
-    doc.line(MARGIN, y + 1.5, PAGE_W - MARGIN, y + 1.5)
-    y += 5.5
-  }
 
   // ══════════════════════════════════════════════════════════════════════════
   // 4. Layout fijo desde el fondo (igual que nota de entrega)
