@@ -716,7 +716,7 @@ function Step1Productos({
       <div className="flex-1 min-h-0 flex flex-col lg:flex-row lg:gap-3">
       {/* ── Columna izquierda: Productos ── */}
       <div className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
-      <div className="flex-1 min-h-0 overflow-y-auto lg:pr-1 pb-16 lg:pb-0">
+      <div className="flex-1 min-h-0 overflow-y-auto lg:pr-1">
 
         {/* ── Barra de búsqueda (estilo Fase 2) ── */}
         <div className="relative mb-1.5">
