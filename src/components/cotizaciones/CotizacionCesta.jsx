@@ -304,9 +304,9 @@ export default function CestaPanel({ items, onCambiar, onEliminar, subtotal, tas
       </div>
 
       {/* ── Desktop: panel lateral completo ── */}
-      <div className="hidden lg:flex bg-white rounded-2xl border border-slate-200 flex-col overflow-hidden">
+      <div className="hidden lg:flex bg-white rounded-2xl border border-slate-200 flex-col overflow-hidden max-h-[calc(100vh-90px)]">
         {/* Header */}
-        <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50 rounded-t-2xl">
+        <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50 rounded-t-2xl shrink-0">
           <span className="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-2">
             <ShoppingCart size={14} className="text-primary" /> Cesta
           </span>
@@ -316,12 +316,14 @@ export default function CestaPanel({ items, onCambiar, onEliminar, subtotal, tas
         </div>
 
         {/* Lista de items */}
-        <div className="flex-1 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 360px)', minHeight: '120px' }}>
+        <div className="flex-1 overflow-y-auto min-h-0">
           {listaItems}
         </div>
 
         {/* Footer */}
-        {footerContent}
+        <div className="shrink-0">
+          {footerContent}
+        </div>
       </div>
     </>
   )

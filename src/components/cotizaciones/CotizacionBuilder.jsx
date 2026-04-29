@@ -861,6 +861,9 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
               {paso === 4 ? 'Cotización enviada' :
                esEdicion ? 'Editar' : 'Nueva cotización'}
             </h2>
+            {paso === 2 && clienteSeleccionado && (
+              <span className="hidden sm:inline text-xs text-slate-400 truncate">· {clienteSeleccionado.nombre}</span>
+            )}
             {esEdicion && cotizacionExistente.numero && (
               <span className="hidden sm:inline text-[10px] font-mono font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full shrink-0">
                 COT-{String(cotizacionExistente.numero).padStart(5, '0')}
@@ -1027,23 +1030,12 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
         {/* ═══════════════════════════════════════════════════════════════ */}
         {paso === 2 && (
           <div className="flex-1 min-h-0 flex flex-col">
-            {/* Mini resumen del cliente */}
-            <div className="shrink-0 bg-white rounded-xl border border-slate-200 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center gap-2 text-sm mb-3 sm:mb-4">
-              <User size={14} className="text-primary shrink-0" />
-              <span className="font-medium text-slate-700 truncate">{clienteSeleccionado?.nombre ?? 'Sin cliente'}</span>
-              {clienteSeleccionado?.tipo_cliente && (
-                <span className="text-xs text-slate-400 capitalize hidden xs:inline">· {clienteSeleccionado.tipo_cliente}</span>
-              )}
-            </div>
 
             {/* Split: catálogo izquierda + cesta derecha */}
             <div className="flex-1 min-h-0 flex flex-col lg:flex-row lg:gap-3">
 
               {/* ── Catálogo de productos ── */}
-              <div className="flex-1 min-h-0 min-w-0 flex flex-col bg-white rounded-2xl border border-slate-200 p-3 sm:p-5 overflow-hidden">
-                <div className="shrink-0 mb-3 sm:mb-4">
-                  <SectionH3 icon={Package}>Agregar productos</SectionH3>
-                </div>
+              <div className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
                 <div className="flex-1 min-h-0 overflow-y-auto pb-20 lg:pb-0">
                   <BuscadorProductos onAgregar={agregarProducto} onScanClick={() => setShowScanModal(true)} itemsAgregados={items} tasa={tasaHook.tasaEfectiva} onCambiarCantidad={cambiarItem} onEliminarItem={eliminarItem} />
                   <ScanMaterialListModal
