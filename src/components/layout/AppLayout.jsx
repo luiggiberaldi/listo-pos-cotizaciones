@@ -482,7 +482,7 @@ export default function AppLayout() {
 
       {/* ── Área de contenido ───────────────────────────────────────────── */}
       <main ref={mainRef} className="flex-1 overflow-y-auto min-w-0 pb-20 md:pb-0 flex flex-col">
-        <div className="mx-auto max-w-screen-2xl w-full flex flex-col flex-1 min-h-0">
+        <div className="w-full flex flex-col flex-1 min-h-0">
           <div className="px-4 pt-1 md:px-6">
             <Breadcrumbs />
           </div>

@@ -1056,7 +1056,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
               </div>
 
               {/* ── Cesta flotante ── */}
-              <div className="w-full lg:w-64 shrink-0 lg:sticky lg:top-[73px]">
+              <div className="w-full lg:w-72 xl:w-80 shrink-0 lg:sticky lg:top-[73px]">
                 <CestaPanel
                   items={items}
                   onCambiar={cambiarItem}
