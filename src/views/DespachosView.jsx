@@ -114,9 +114,13 @@ export default function DespachosView() {
 
   // Filtrar por vendedor (solo supervisor)
   const despachosFiltrados = useMemo(() => {
-    if (!vendedorFiltro) return despachos
-    return despachos.filter(d => d.vendedor_id === vendedorFiltro)
-  }, [despachos, vendedorFiltro])
+    let lista = vendedorFiltro ? despachos.filter(d => d.vendedor_id === vendedorFiltro) : despachos
+    if (esAdministracion && !estadoFiltro) {
+      const orden = { pendiente: 0, despachada: 1, entregada: 2, anulada: 3 }
+      lista = [...lista].sort((a, b) => (orden[a.estado] ?? 9) - (orden[b.estado] ?? 9))
+    }
+    return lista
+  }, [despachos, vendedorFiltro, esAdministracion, estadoFiltro])
 
   const ITEMS_POR_PAGINA = 12
   const totalPaginas = Math.max(1, Math.ceil(despachosFiltrados.length / ITEMS_POR_PAGINA))
