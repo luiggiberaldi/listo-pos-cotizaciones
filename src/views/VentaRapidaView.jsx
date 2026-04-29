@@ -634,8 +634,8 @@ function Step1Productos({
     <div className="flex-1 min-h-0 flex flex-col p-2 pb-0 lg:p-3 lg:pb-0">
       {/* Nuevo cliente modal */}
       {showNuevoCliente && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[85vh] sm:max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 z-[100] bg-black/40 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[80vh] sm:max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between p-4 border-b shrink-0">
               <h3 className="font-semibold text-slate-800">Nuevo cliente</h3>
               <button onClick={() => setShowNuevoCliente(false)} className="p-1.5 rounded-lg hover:bg-slate-100">
