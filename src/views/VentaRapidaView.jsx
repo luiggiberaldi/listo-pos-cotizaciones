@@ -310,7 +310,7 @@ export default function VentaRapidaView() {
       </div>
 
       {/* Step content */}
-      <div className="flex-1 overflow-auto flex flex-col">
+      <div className="flex-1 min-h-0 flex flex-col">
         {step === 0 && (
           <Step1Productos
             clienteRef={clienteRef}
@@ -621,7 +621,7 @@ function Step1Productos({
   const productosVisibles = productosOrdenados.slice(0, 30)
 
   return (
-    <div className="p-3 space-y-3 pb-24 lg:pb-3">
+    <div className="flex-1 min-h-0 flex flex-col p-3 pb-24 lg:pb-3">
       {/* Nuevo cliente modal */}
       {showNuevoCliente && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -659,30 +659,27 @@ function Step1Productos({
         </div>
       )}
 
-      {/* Cliente selector */}
-      <div ref={clienteRef} className="relative bg-white rounded-2xl border border-slate-200 p-3 shadow-sm">
-        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">Cliente</label>
+      {/* Cliente selector — compact inline */}
+      <div ref={clienteRef} className="relative shrink-0 mb-2">
         {clienteSeleccionado ? (
-          <div className="flex items-center gap-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
-            <User size={18} className="text-emerald-600 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="font-medium text-sm text-slate-800 truncate">{clienteSeleccionado.nombre}</p>
-              {clienteSeleccionado.rif_cedula && <p className="text-xs text-slate-500">{clienteSeleccionado.rif_cedula}</p>}
-            </div>
-            <button onClick={() => setClienteId('')} className="p-1 rounded-lg hover:bg-emerald-100">
-              <X size={16} className="text-slate-400" />
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-xl">
+            <User size={14} className="text-emerald-600 shrink-0" />
+            <p className="font-medium text-sm text-slate-800 truncate">{clienteSeleccionado.nombre}</p>
+            {clienteSeleccionado.rif_cedula && <span className="text-xs text-slate-400">{clienteSeleccionado.rif_cedula}</span>}
+            <button onClick={() => setClienteId('')} className="ml-auto p-1 rounded-lg hover:bg-emerald-100">
+              <X size={14} className="text-slate-400" />
             </button>
           </div>
         ) : (
           <div className="flex gap-2">
             <div className="relative flex-1">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text" placeholder="Buscar cliente..."
                 value={clienteBusqueda}
                 onChange={e => { setClienteBusqueda(e.target.value); setClienteOpen(true) }}
                 onFocus={() => setClienteOpen(true)}
-                className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-sky-200 focus:border-sky-400 outline-none"
+                className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-sky-200 focus:border-sky-400 outline-none"
               />
               {clienteOpen && clientesFiltrados.length > 0 && (
                 <div className="absolute z-30 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-auto">
@@ -698,20 +695,18 @@ function Step1Productos({
               )}
             </div>
             <button onClick={() => setShowNuevoCliente(true)}
-              className="px-3 py-2.5 rounded-xl bg-sky-50 text-sky-600 hover:bg-sky-100 border border-sky-200">
-              <UserPlus size={18} />
+              className="px-3 py-2 rounded-xl bg-sky-50 text-sky-600 hover:bg-sky-100 border border-sky-200">
+              <UserPlus size={16} />
             </button>
           </div>
         )}
       </div>
 
       {/* ── Split: catálogo izquierda + carrito derecha (desktop) ── */}
-      <div className="flex flex-col lg:flex-row lg:gap-3">
+      <div className="flex-1 min-h-0 flex flex-col lg:flex-row lg:gap-3">
       {/* ── Columna izquierda: Productos ── */}
-      <div className="flex-1 min-w-0">
-      {/* Productos */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-3 shadow-sm">
-        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">Productos</label>
+      <div className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-y-auto lg:pr-1">
 
         {/* ── Barra de búsqueda (estilo Fase 2) ── */}
         <div className="relative mb-2">
@@ -901,12 +896,12 @@ function Step1Productos({
             <p className="text-xs text-slate-300 mt-1">Prueba con otro término o categoría</p>
           </div>
         )}
-      </div>
+      </div>{/* ── Fin scroll area ── */}
       </div>{/* ── Fin columna izquierda ── */}
 
-      {/* ── Columna derecha: Carrito sticky (desktop) ── */}
-      <div className="hidden lg:flex w-64 shrink-0 lg:sticky lg:top-[73px] self-start bg-white rounded-2xl border border-slate-200 flex-col overflow-hidden shadow-sm" style={{ maxHeight: 'calc(100vh - 90px)' }}>
-        <div className="px-3 py-2.5 border-b border-slate-200 flex items-center gap-2">
+      {/* ── Columna derecha: Carrito (desktop) ── */}
+      <div className="hidden lg:flex w-72 xl:w-80 shrink-0 bg-white rounded-2xl border border-slate-200 flex-col overflow-hidden shadow-sm h-[calc(100vh-140px)]">
+        <div className="px-3 py-2.5 border-b border-slate-200 flex items-center gap-2 shrink-0">
           <ShoppingCart size={18} style={{ color: '#1B365D' }} />
           <h3 className="font-black text-slate-800 text-base">Carrito</h3>
           <span className="ml-auto text-xs font-bold text-slate-400">{totalItems} item{totalItems !== 1 ? 's' : ''}</span>
@@ -918,7 +913,7 @@ function Step1Productos({
           </div>
         ) : (
           <>
-            <div className="flex-1 overflow-y-auto px-3 py-2 divide-y divide-slate-50" style={{ maxHeight: 'calc(100vh - 360px)' }}>
+            <div className="flex-1 overflow-y-auto min-h-0 px-3 py-2 divide-y divide-slate-50">
               {items.map(it => {
                 const linea = round2(it.precioUnitUsd * it.cantidad)
                 return (
@@ -982,7 +977,7 @@ function Step1Productos({
                 )
               })}
             </div>
-            <div className="border-t border-slate-200 p-3 space-y-2 bg-white">
+            <div className="shrink-0 border-t border-slate-200 p-3 space-y-2 bg-white">
               <div className="flex justify-between items-end px-1">
                 <div>
                   <span className="text-[12px] font-black text-slate-400 uppercase tracking-wider">Subtotal</span>
