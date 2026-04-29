@@ -1512,9 +1512,9 @@ function Step3Confirmar({
   totalBs, tasa, formasPago, referenciaPago, transportistaSeleccionado, notas,
 }) {
   return (
-    <div className="flex-1 min-h-0 flex flex-col lg:flex-row lg:gap-4 p-4">
+    <div className="flex-1 min-h-0 flex flex-col lg:flex-row lg:gap-4 p-4 overflow-y-auto">
       {/* ── Columna izquierda: Cliente + Productos ── */}
-      <div className="flex-1 min-h-0 min-w-0 flex flex-col gap-3">
+      <div className="min-w-0 flex flex-col gap-3 lg:flex-1">
         {/* Cliente */}
         <div className="bg-white border border-slate-200 rounded-xl p-3 shrink-0">
           <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Cliente</h3>
@@ -1527,12 +1527,12 @@ function Step3Confirmar({
           )}
         </div>
 
-        {/* Items con scroll */}
-        <div className="flex-1 min-h-0 bg-white border border-slate-200 rounded-xl p-3 flex flex-col overflow-hidden">
-          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 shrink-0">
+        {/* Items */}
+        <div className="bg-white border border-slate-200 rounded-xl p-3">
+          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
             Productos ({items.length})
           </h3>
-          <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5">
+          <div className="space-y-1.5 max-h-60 lg:max-h-none overflow-y-auto">
             {items.map(it => (
               <div key={it.productoId} className="flex items-center justify-between text-sm py-1">
                 <div className="flex-1 min-w-0">
