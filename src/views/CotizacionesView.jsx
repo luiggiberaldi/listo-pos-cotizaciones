@@ -83,7 +83,6 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
   const [notas, setNotas] = useState('')
   const [showNotas, setShowNotas] = useState(false)
   const [clienteFacturaId, setClienteFacturaId] = useState('')
-  const [showFacturacion, setShowFacturacion] = useState(false)
   const { data: transportistas = [] } = useTransportistas()
   const crearTransp = useCrearTransportista()
   const [showNuevoTransp, setShowNuevoTransp] = useState(false)
@@ -369,29 +368,12 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
               )}
             </div>
 
-            {/* Facturar a otro cliente — compacto */}
-            <div className="space-y-1.5">
-              <button type="button"
-                onClick={() => { setShowFacturacion(v => !v); if (showFacturacion) setClienteFacturaId('') }}
-                className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
-                  showFacturacion ? 'border-violet-300 bg-violet-50 text-violet-700' : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300 hover:text-slate-700'
-                }`}>
-                <Receipt size={12} className={showFacturacion ? 'text-violet-500' : 'text-slate-400'} />
-                <span className="flex-1 text-left">¿Facturar a otro cliente?</span>
-                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${showFacturacion ? 'bg-violet-200 text-violet-700' : 'bg-slate-200 text-slate-500'}`}>
-                  {showFacturacion ? 'Activo' : 'Opcional'}
-                </span>
-              </button>
-              {showFacturacion && (
-                <div className="pl-1">
-                  <ClienteFacturaBuscador
-                    clientes={clientes.filter(c => c.id !== cotizacion?.cliente_id)}
-                    clienteId={clienteFacturaId}
-                    onSelect={setClienteFacturaId}
-                  />
-                </div>
-              )}
-            </div>
+            {/* Facturar a otro cliente — campo inline directo */}
+            <ClienteFacturaBuscador
+              clientes={clientes.filter(c => c.id !== cotizacion?.cliente_id)}
+              clienteId={clienteFacturaId}
+              onSelect={setClienteFacturaId}
+            />
 
           </div>{/* fin col derecha */}
         </div>{/* fin body */}
