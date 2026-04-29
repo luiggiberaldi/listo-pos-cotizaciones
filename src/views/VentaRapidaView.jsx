@@ -77,7 +77,17 @@ export default function VentaRapidaView() {
   const [clienteOpen, setClienteOpen] = useState(false)
   const [productoBusqueda, setProductoBusqueda] = useState('')
   const [catActiva, setCatActiva] = useState('')
-  const { items, setItems, agregarItem: _agregarItem, eliminarPorId: quitarItem, cambiarCantidad, setCantidadDirecta, cambiarPrecio } = useLineItems()
+  const { items, setItems, agregarItem: _agregarItem, eliminarPorId: quitarItem, cambiarCantidad, setCantidadDirecta, cambiarPrecio, setStockMap } = useLineItems({ checkStock: true })
+
+  // Mantener stock map actualizado para validación de cantidades
+  useEffect(() => {
+    if (productos.length > 0) {
+      const map = {}
+      productos.forEach(p => { map[p.id] = Number(p.stock_actual) || 0 })
+      setStockMap(map)
+    }
+  }, [productos, setStockMap])
+
   const [showNuevoCliente, setShowNuevoCliente] = useState(false)
   const [mobileCartOpen, setMobileCartOpen] = useState(false)
   const [confirmAjeno, setConfirmAjeno] = useState(null)

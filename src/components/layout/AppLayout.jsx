@@ -366,7 +366,7 @@ export default function AppLayout() {
       <div className={`relative shrink-0 transition-all duration-300 ease-out ${sidebarCollapsed ? 'md:w-[72px]' : 'md:w-64'}`}>
       <aside
         className={`
-          fixed inset-y-0 left-0 z-50 flex flex-col shrink-0
+          fixed inset-y-0 left-0 z-[200] flex flex-col shrink-0
           transition-all duration-300 ease-out
           ${menuOpen ? 'translate-x-0' : '-translate-x-full'}
           ${sidebarCollapsed ? 'md:w-[72px]' : 'md:w-64'}

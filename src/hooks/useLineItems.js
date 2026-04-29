@@ -1,6 +1,6 @@
 // src/hooks/useLineItems.js
 // Hook compartido para gestión de líneas de carrito (items de cotización/venta)
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { showToast } from '../components/ui/Toast'
 
 let _itemCounter = 0
@@ -11,11 +11,21 @@ let _itemCounter = 0
  *
  * @param {Object} options
  * @param {boolean} options.withDescuento - incluir descuentoPct en items (default false)
- * @param {boolean} options.checkStock - validar stock al agregar (default false)
- * @returns {Object} { items, setItems, agregarItem, editarItem, eliminarItem, cambiarCantidad, cambiarPrecio, limpiar }
+ * @param {boolean} options.checkStock - validar stock al agregar/cambiar cantidad (default false)
+ * @returns {Object} { items, setItems, agregarItem, editarItem, eliminarItem, cambiarCantidad, cambiarPrecio, limpiar, setStockMap }
  */
 export function useLineItems({ withDescuento = false, checkStock = false } = {}) {
   const [items, setItems] = useState([])
+  const stockMapRef = useRef({})
+
+  const setStockMap = useCallback((map) => {
+    stockMapRef.current = map
+  }, [])
+
+  const getStock = (productoId) => {
+    const s = stockMapRef.current[productoId]
+    return s != null ? Number(s) : Infinity
+  }
 
   const agregarItem = useCallback((producto) => {
     const stock = Number(producto.stock_actual) || 0
@@ -60,16 +70,31 @@ export function useLineItems({ withDescuento = false, checkStock = false } = {})
   const cambiarCantidad = useCallback((productoId, delta) => {
     setItems(prev => prev.map(it => {
       if (it.productoId !== productoId) return it
-      return { ...it, cantidad: Math.max(1, it.cantidad + delta) }
+      const nueva = Math.max(1, it.cantidad + delta)
+      if (checkStock) {
+        const stock = getStock(productoId)
+        if (nueva > stock) {
+          showToast(`Stock máximo: ${stock}`, 'error')
+          return it
+        }
+      }
+      return { ...it, cantidad: nueva }
     }))
-  }, [])
+  }, [checkStock])
 
   const setCantidadDirecta = useCallback((productoId, cantidad) => {
-    const n = Math.max(1, Math.floor(Number(cantidad) || 1))
+    let n = Math.max(1, Math.floor(Number(cantidad) || 1))
+    if (checkStock) {
+      const stock = getStock(productoId)
+      if (n > stock) {
+        showToast(`Stock máximo: ${stock}`, 'error')
+        n = Math.max(1, Math.floor(stock))
+      }
+    }
     setItems(prev => prev.map(it =>
       it.productoId === productoId ? { ...it, cantidad: n } : it
     ))
-  }, [])
+  }, [checkStock])
 
   const cambiarPrecio = useCallback((productoId, precio) => {
     setItems(prev => prev.map(it =>
@@ -90,5 +115,6 @@ export function useLineItems({ withDescuento = false, checkStock = false } = {})
     setCantidadDirecta,
     cambiarPrecio,
     limpiar,
+    setStockMap,
   }
 }
