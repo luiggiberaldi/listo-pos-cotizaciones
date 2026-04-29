@@ -2704,11 +2704,13 @@ async function handleActualizarEstadoDespacho(request, env) {
 
     // 3b. Al confirmar entrega: descontar stock + registrar kardex
     if (nuevoEstado === 'entregada') {
+      console.log('[ENTREGA] Iniciando descuento de stock para despacho', desp.numero, 'cotizacion_id:', desp.cotizacion_id);
       const ciResEnt = await fetch(
         `${env.SUPABASE_URL}/rest/v1/cotizacion_items?cotizacion_id=eq.${desp.cotizacion_id}&producto_id=not.is.null&select=producto_id,cantidad,nombre_snap`,
         { headers }
       );
       const itemsEnt = await ciResEnt.json();
+      console.log('[ENTREGA] Items encontrados:', itemsEnt.length, JSON.stringify(itemsEnt.map(i => ({ producto_id: i.producto_id, cantidad: i.cantidad }))));
 
       if (itemsEnt.length > 0) {
         const prodIdsEnt = itemsEnt.map(i => i.producto_id);
@@ -2735,10 +2737,12 @@ async function handleActualizarEstadoDespacho(request, env) {
           const prod = stockMapEnt[item.producto_id];
           const stockAnterior = Number(prod.stock_actual);
           const nuevoStock = stockAnterior - Number(item.cantidad);
-          await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${item.producto_id}`, {
+          console.log('[ENTREGA] Descontando', item.nombre_snap, ':', stockAnterior, '->', nuevoStock);
+          const patchRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${item.producto_id}`, {
             method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
             body: JSON.stringify({ stock_actual: nuevoStock }),
           });
+          console.log('[ENTREGA] Stock PATCH status:', patchRes.status);
           movimientosEnt.push({
             lote_id: loteIdEnt,
             tipo: 'egreso',
@@ -2755,12 +2759,15 @@ async function handleActualizarEstadoDespacho(request, env) {
           });
         }
         if (movimientosEnt.length > 0) {
+          console.log('[ENTREGA] Insertando', movimientosEnt.length, 'movimientos kardex, lote:', loteIdEnt);
           const kardexRes = await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos`, {
             method: 'POST', headers,
             body: JSON.stringify(movimientosEnt),
           });
+          console.log('[ENTREGA] Kardex insert status:', kardexRes.status);
           if (!kardexRes.ok) {
             const kardexErr = await kardexRes.text();
+            console.log('[ENTREGA] Kardex insert error:', kardexErr);
             return jsonError(`Error al registrar kardex de entrega: ${kardexErr}`, 500, request);
           }
         }

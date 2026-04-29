@@ -38,7 +38,7 @@ export function useMovimientosInventario({
       if (error) throw error
       return { movimientos: data ?? [], total: count ?? 0 }
     },
-    enabled: perfil?.rol === 'supervisor',
+    enabled: ['supervisor', 'administracion', 'desarrollador'].includes(perfil?.rol),
     staleTime: 1000 * 60 * 2,
     gcTime: 1000 * 60 * 5,
   })
@@ -59,7 +59,7 @@ export function useKardex(productoId) {
       if (error) throw error
       return data ?? []
     },
-    enabled: !!productoId && perfil?.rol === 'supervisor',
+    enabled: !!productoId && ['supervisor', 'administracion', 'desarrollador'].includes(perfil?.rol),
     staleTime: 1000 * 60 * 2,
   })
 }
