@@ -153,8 +153,8 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
     { label: 'CÓD.',        x: MARGIN + 11,   w: 20,  align: 'center' },
     { label: 'DESCRIPCIÓN', x: MARGIN + 31,   w: 97,  align: 'center' },
     { label: 'UNID.',       x: MARGIN + 128,  w: 11,  align: 'center' },
-    { label: 'PRECIO Bs',   x: MARGIN + 139,  w: 22,  align: 'center' },
-    { label: 'TOTAL Bs',    x: MARGIN + 161,  w: 21,  align: 'right'  },
+    { label: 'PRECIO Bs',   x: MARGIN + 139,  w: 19,  align: 'center' },
+    { label: 'TOTAL Bs',    x: MARGIN + 158,  w: 24,  align: 'right'  },
   ]
 
   // Cabecera oscura
