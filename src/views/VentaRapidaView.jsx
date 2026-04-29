@@ -1226,7 +1226,7 @@ function Step2Pago({
       {/* ── Columna izquierda: Formas de pago ── */}
       <div className="flex-1 min-w-0">
       {/* Forma de pago del cliente */}
-      <div>
+      <div className="mb-2">
         <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 block">
           Formas de pago <span className="text-red-400">*</span>
         </label>
