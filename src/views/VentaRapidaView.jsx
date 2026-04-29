@@ -161,7 +161,7 @@ export default function VentaRapidaView() {
   const transportistaSeleccionado = transportistas.find(t => t.id === transportistaId)
 
   const montoAsignadoVR = formasPago.reduce((s, fp) => s + (Number(fp.monto) || 0), 0)
-  const pagoCuadradoVR = formasPago.length > 0 && Math.abs(montoAsignadoVR - totalConFlete) < 0.02
+  const pagoCuadradoVR = formasPago.length > 0 && Math.abs(montoAsignadoVR - totalUsd) < 0.02
 
   // Validaciones
   const step1Valid = !!clienteId && items.length > 0
@@ -360,7 +360,7 @@ export default function VentaRapidaView() {
           <Step2Pago
             formasPago={formasPago}
             setFormasPago={setFormasPago}
-            totalConFlete={totalConFlete}
+            totalConFlete={totalUsd}
             referenciaPago={referenciaPago}
             setReferenciaPago={setReferenciaPago}
             transportistas={transportistas}
