@@ -160,8 +160,8 @@ export default function ScanMaterialListModal({ open, onClose, onBulkAdd, tasa =
   const checkedCount = items.filter(it => it.checked && it.selectedMatch).length
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[95vh] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4">
+      <div className="bg-white sm:rounded-2xl rounded-t-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] sm:max-h-[95vh] flex flex-col overflow-hidden pb-[env(safe-area-inset-bottom)]">
 
         {/* Header */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-slate-200 shrink-0">
