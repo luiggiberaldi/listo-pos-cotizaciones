@@ -49,6 +49,9 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
   const totalConFlete = totalBase + (Number(fleteUsd) || 0)
   const montoAsignado = formasPago.reduce((s, fp) => s + (Number(fp.monto) || 0), 0)
   const pagoCuadrado = formasPago.length > 0 && Math.abs(montoAsignado - totalBase) < 0.02
+  const diferencia = montoAsignado - totalBase
+  const hayVuelto = formasPago.length > 0 && diferencia > 0.02
+  const faltante = formasPago.length > 0 && diferencia < -0.02
 
   const numDisplay = despacho.cotizacion
     ? `DES-${String(despacho.cotizacion.numero).padStart(5, '0')}`
@@ -153,13 +156,17 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
                 <div className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm font-semibold ${
                   pagoCuadrado
                     ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                    : 'bg-red-50 text-red-600 border border-red-200'
+                    : hayVuelto
+                      ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                      : 'bg-red-50 text-red-600 border border-red-200'
                 }`}>
                   <span>Asignado: ${montoAsignado.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   <span>Total: ${totalBase.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   {pagoCuadrado
                     ? <span className="text-emerald-500">✓</span>
-                    : <span className="text-red-400">Faltan ${(totalBase - montoAsignado).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    : hayVuelto
+                      ? <span className="text-amber-600">Sobran ${diferencia.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      : <span className="text-red-400">Faltan ${Math.abs(diferencia).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   }
                 </div>
               </div>

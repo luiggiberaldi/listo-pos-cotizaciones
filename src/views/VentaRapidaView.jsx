@@ -621,7 +621,7 @@ function Step1Productos({
   const productosVisibles = productosOrdenados.slice(0, 60)
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col p-3 pb-24 lg:pb-0">
+    <div className="flex-1 min-h-0 flex flex-col p-2 pb-20 lg:p-3 lg:pb-0">
       {/* Nuevo cliente modal */}
       {showNuevoCliente && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -660,7 +660,7 @@ function Step1Productos({
       )}
 
       {/* Cliente selector — compact inline */}
-      <div ref={clienteRef} className="relative shrink-0 mb-2">
+      <div ref={clienteRef} className="relative shrink-0 mb-1.5">
         {clienteSeleccionado ? (
           <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-xl">
             <User size={14} className="text-emerald-600 shrink-0" />
@@ -709,13 +709,13 @@ function Step1Productos({
       <div className="flex-1 min-h-0 overflow-y-auto lg:pr-1">
 
         {/* ── Barra de búsqueda (estilo Fase 2) ── */}
-        <div className="relative mb-2">
+        <div className="relative mb-1.5">
           <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           <input ref={productoInputRef}
             type="text" placeholder="Buscar por nombre o código..."
             value={productoBusqueda}
             onChange={e => setProductoBusqueda(e.target.value)}
-            className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-slate-200 bg-slate-50 shadow-inner text-sm focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400 transition-all"
+            className="w-full pl-10 pr-10 py-2 rounded-xl border border-slate-200 bg-slate-50 shadow-inner text-sm focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400 transition-all"
           />
           {productoBusqueda && (
             <button type="button" onClick={() => setProductoBusqueda('')}
@@ -727,7 +727,7 @@ function Step1Productos({
 
         {/* ── Categorías en pills scrollables con flechas ── */}
         {categorias.length > 0 && (
-          <div className="relative flex items-center gap-1 mb-2">
+          <div className="relative flex items-center gap-1 mb-1.5">
             <button type="button" onClick={() => scrollCats(-1)}
               className={`shrink-0 p-1 rounded-full border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 transition-all ${canScrollLeft ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
               <ChevronLeft size={14} />
@@ -759,7 +759,7 @@ function Step1Productos({
 
         {/* ── Tarjetas de productos ── */}
         {/* Vista grid compacta (móvil < md) */}
-        <div className="grid grid-cols-3 gap-1.5 md:hidden">
+        <div className="grid grid-cols-3 gap-1 md:hidden">
           {productosVisibles.map(p => {
             const added = idsAgregados.has(p.id)
             const itemInCart = added ? items.find(it => it.productoId === p.id) : null
@@ -768,7 +768,7 @@ function Step1Productos({
             const tieneMultiprecios = p.precio_2 != null || p.precio_3 != null
             return (
               <div key={p.id}
-                className={`relative bg-white rounded-xl border p-2 flex flex-col items-center text-center transition-all active:scale-95 ${
+                className={`relative bg-white rounded-xl border px-1.5 py-1.5 flex flex-col items-center text-center transition-all active:scale-95 ${
                   sinStock
                     ? 'opacity-40 cursor-not-allowed border-slate-100'
                     : added
@@ -1183,6 +1183,9 @@ function Step2Pago({
 
   const montoAsignado = formasPago.reduce((s, fp) => s + (Number(fp.monto) || 0), 0)
   const pagoCuadrado = formasPago.length > 0 && Math.abs(montoAsignado - totalConFlete) < 0.02
+  const diferencia = montoAsignado - totalConFlete
+  const hayVuelto = formasPago.length > 0 && diferencia > 0.02
+  const faltante = formasPago.length > 0 && diferencia < -0.02
 
   const toggleForma = (metodo) => {
     setFormasPago(prev => {
@@ -1259,13 +1262,17 @@ function Step2Pago({
         {/* Barra de totales */}
         {formasPago.length > 0 && (
           <div className={`flex items-center justify-between mt-3 px-3 py-2 rounded-xl text-sm font-semibold ${
-            pagoCuadrado ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+            pagoCuadrado ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+            : hayVuelto ? 'bg-amber-50 text-amber-700 border border-amber-200'
+            : 'bg-red-50 text-red-700 border border-red-200'
           }`}>
             <span>Asignado: ${montoAsignado.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             <span>Total: ${totalConFlete.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             {pagoCuadrado
               ? <CheckCircle size={16} className="text-emerald-500" />
-              : <span className="text-xs font-bold text-amber-600">Faltan ${(totalConFlete - montoAsignado).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              : hayVuelto
+                ? <span className="text-xs font-bold text-amber-600">Sobran ${diferencia.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                : <span className="text-xs font-bold text-red-600">Faltan ${Math.abs(diferencia).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             }
           </div>
         )}

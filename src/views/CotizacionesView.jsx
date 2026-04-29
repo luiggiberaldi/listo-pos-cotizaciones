@@ -117,6 +117,9 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
   const totalConFlete = totalSinFlete + Number(fleteUsd || 0)
   const montoAsignado = formasPago.reduce((s, fp) => s + (Number(fp.monto) || 0), 0)
   const pagoCuadrado = formasPago.length > 0 && Math.abs(montoAsignado - totalSinFlete) < 0.02
+  const diferencia = montoAsignado - totalSinFlete
+  const hayVuelto = formasPago.length > 0 && diferencia > 0.02
+  const faltante = formasPago.length > 0 && diferencia < -0.02
 
   const toggleForma = (metodo) => {
     setFormasPago(prev => {
@@ -376,11 +379,13 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
         <div className="border-t border-slate-100 shrink-0">
           {formasPago.length > 0 && (
             <div className={`flex items-center justify-between px-5 py-1.5 text-xs font-semibold ${
-              pagoCuadrado ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
+              pagoCuadrado ? 'bg-emerald-50 text-emerald-700'
+              : hayVuelto ? 'bg-amber-50 text-amber-700'
+              : 'bg-red-50 text-red-600'
             }`}>
               <span>Asignado: {fmtUsd(montoAsignado)}</span>
               <span>Total: {fmtUsd(totalSinFlete)}</span>
-              {pagoCuadrado ? <span>✓</span> : <span>Faltan {fmtUsd(totalSinFlete - montoAsignado)}</span>}
+              {pagoCuadrado ? <span>✓</span> : hayVuelto ? <span>Sobran {fmtUsd(diferencia)}</span> : <span>Faltan {fmtUsd(Math.abs(diferencia))}</span>}
             </div>
           )}
           <div className="flex gap-3 px-5 py-3">
