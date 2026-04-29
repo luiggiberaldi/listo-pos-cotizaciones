@@ -621,7 +621,7 @@ function Step1Productos({
   const productosVisibles = productosOrdenados.slice(0, 60)
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col p-2 pb-20 lg:p-3 lg:pb-0">
+    <div className="flex-1 min-h-0 flex flex-col p-2 pb-0 lg:p-3 lg:pb-0">
       {/* Nuevo cliente modal */}
       {showNuevoCliente && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -706,7 +706,7 @@ function Step1Productos({
       <div className="flex-1 min-h-0 flex flex-col lg:flex-row lg:gap-3">
       {/* ── Columna izquierda: Productos ── */}
       <div className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
-      <div className="flex-1 min-h-0 overflow-y-auto lg:pr-1">
+      <div className="flex-1 min-h-0 overflow-y-auto lg:pr-1 pb-16 lg:pb-0">
 
         {/* ── Barra de búsqueda (estilo Fase 2) ── */}
         <div className="relative mb-1.5">
