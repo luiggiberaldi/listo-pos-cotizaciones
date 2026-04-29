@@ -1427,7 +1427,7 @@ function TransportistaFormCompact({ onGuardar, onCancelar, cargando }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
           <label className="text-xs font-medium text-slate-600">Nombre *</label>
-          <input value={nombre} onChange={e => { setNombre(e.target.value.replace(/\b\w/g, c => c.toUpperCase())); setError('') }}
+          <input value={nombre} onChange={e => { setNombre(e.target.value.replace(/(^|\s)\S/g, c => c.toUpperCase())); setError('') }}
             placeholder="Nombre del transportista" className={inputCls} disabled={cargando} />
         </div>
         <div className="space-y-1">
