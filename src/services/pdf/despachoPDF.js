@@ -378,8 +378,9 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const hasFlete = flete > 0
   const hasDescuento = descuentoTotal > 0
   const ivaPct = Number(config.iva_pct) || 16
-  const baseImponible = totalFinal / (1 + ivaPct / 100)
-  const ivaAmount = totalFinal - baseImponible
+  const montoGravado = totalFinal - flete  // IVA solo sobre productos, no flete
+  const baseImponible = montoGravado / (1 + ivaPct / 100)
+  const ivaAmount = montoGravado - baseImponible
   const transportista = despacho.transportista_id ? (despacho.transportista || null) : null
   const refPago = despacho.referencia_pago || ''
 
