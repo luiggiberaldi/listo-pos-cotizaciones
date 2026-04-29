@@ -263,7 +263,7 @@ export default function VentaRapidaView() {
   ]
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       <PageHeader
         title="Venta rápida"
         subtitle="Cotización + despacho en un solo paso"
@@ -621,7 +621,7 @@ function Step1Productos({
   const productosVisibles = productosOrdenados.slice(0, 30)
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col p-3 pb-24 lg:pb-3">
+    <div className="flex-1 min-h-0 flex flex-col p-3 pb-24 lg:pb-0">
       {/* Nuevo cliente modal */}
       {showNuevoCliente && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -900,7 +900,7 @@ function Step1Productos({
       </div>{/* ── Fin columna izquierda ── */}
 
       {/* ── Columna derecha: Carrito (desktop) ── */}
-      <div className="hidden lg:flex w-72 xl:w-80 shrink-0 bg-white rounded-2xl border border-slate-200 flex-col overflow-hidden shadow-sm h-[calc(100vh-140px)]">
+      <div className="hidden lg:flex w-72 xl:w-80 shrink-0 bg-white rounded-2xl border border-slate-200 flex-col overflow-hidden shadow-sm">
         <div className="px-3 py-2.5 border-b border-slate-200 flex items-center gap-2 shrink-0">
           <ShoppingCart size={18} style={{ color: '#1B365D' }} />
           <h3 className="font-black text-slate-800 text-base">Carrito</h3>
