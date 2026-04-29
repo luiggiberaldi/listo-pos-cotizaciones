@@ -1,7 +1,7 @@
 // src/components/layout/BottomNav.jsx
 // Barra de navegación inferior para móvil (thumb-friendly)
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, FileText, Users, Package, MoreHorizontal, Zap } from 'lucide-react'
+import { LayoutDashboard, FileText, Users, Package, MoreHorizontal, Zap, ShoppingBag } from 'lucide-react'
 import { useState } from 'react'
 import { PackageCheck, Truck, DollarSign, BarChart3, Settings, AlertCircle, FlaskConical } from 'lucide-react'
 
@@ -15,7 +15,7 @@ const BOTTOM_ITEMS = [
 ]
 
 const MORE_ITEMS = [
-  { path: '/venta-rapida', label: 'Venta rápida', icon: Zap, onlyRoles: ['vendedor', 'supervisor'] },
+  { path: '/venta-rapida', label: 'Venta rápida', icon: ShoppingBag, onlyRoles: ['vendedor', 'supervisor'] },
   { path: '/inventario', label: 'Inventario', icon: Package, excludeRoles: ['logistica'] },
   { path: '/transportistas', label: 'Transportistas', icon: Truck, excludeRoles: ['administracion', 'logistica'] },
   { path: '/comisiones', label: 'Comisiones', icon: DollarSign, excludeRoles: ['logistica'] },
