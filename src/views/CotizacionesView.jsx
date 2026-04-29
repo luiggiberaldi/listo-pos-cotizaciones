@@ -508,8 +508,8 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
   const reciclar      = useReciclarCotizacion()
   const cambiarEstadoDespacho = useActualizarEstadoDespacho()
 
-  function handleCambiarEstadoDespacho(despachoId, nuevoEstado) {
-    cambiarEstadoDespacho.mutate({ despachoId, nuevoEstado })
+  function handleCambiarEstadoDespacho(despachoId, nuevoEstado, numeroCotizacion, clienteNombre) {
+    cambiarEstadoDespacho.mutate({ despachoId, nuevoEstado, numeroCotizacion, clienteNombre })
   }
 
   async function confirmarAnular() {

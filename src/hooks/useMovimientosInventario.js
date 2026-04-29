@@ -6,7 +6,7 @@ import { apiUrl } from '../services/apiBase'
 import useAuthStore from '../store/useAuthStore'
 import { INVENTARIO_KEY } from './useInventario'
 import { showToast } from '../components/ui/Toast'
-import { notifyStockBajo } from '../services/notificationService'
+import { notifyStockBajo, notifyStockCritico, notifyStockReabastecido } from '../services/notificationService'
 import { formatCorrelativo } from '../utils/motivosTipo'
 
 export const MOVIMIENTOS_KEY = ['inventario_movimientos']
@@ -93,7 +93,7 @@ export function useAplicarMovimientoLote() {
       const corr = data?.numero ? formatCorrelativo(data.numero) : ''
       showToast(`${corr ? corr + ' — ' : ''}${n} producto${n > 1 ? 's' : ''} ${label} exitosamente`, 'success')
 
-      // Verificar stock bajo después del movimiento
+      // Verificar estado de stock después del movimiento
       try {
         const ids = variables.items.map(i => i.producto_id)
         const { data: productos } = await supabase
@@ -101,10 +101,32 @@ export function useAplicarMovimientoLote() {
           .select('id, nombre, stock_actual, stock_minimo, unidad')
           .in('id', ids)
         if (productos) {
+          // Stock crítico (agotado)
+          const criticos = productos.filter(p => p.stock_actual <= 0)
+          if (criticos.length > 0) notifyStockCritico(criticos, 'supervisor')
+
+          // Stock bajo (> 0 pero <= mínimo)
           const bajos = productos.filter(p =>
-            p.stock_actual <= 0 || (p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo)
+            p.stock_minimo > 0 && p.stock_actual > 0 && p.stock_actual <= p.stock_minimo
           )
           if (bajos.length > 0) notifyStockBajo(bajos, 'supervisor')
+
+          // Stock reabastecido (solo en ingresos): producto ahora está por encima del mínimo
+          if (variables.tipo === 'ingreso') {
+            const reabastecidos = productos.filter(p =>
+              p.stock_minimo > 0 && p.stock_actual > p.stock_minimo
+            )
+            // Solo notificar los que probablemente estaban bajos antes (heurística: el ingreso los subió por encima)
+            for (const p of reabastecidos) {
+              const item = variables.items.find(i => i.producto_id === p.id)
+              if (item) {
+                const stockAntes = p.stock_actual - item.cantidad
+                if (stockAntes <= p.stock_minimo) {
+                  notifyStockReabastecido(p, 'supervisor')
+                }
+              }
+            }
+          }
         }
       } catch (_) {}
     },

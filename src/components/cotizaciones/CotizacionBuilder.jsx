@@ -18,8 +18,6 @@ import { useGuardarBorrador, useEnviarCotizacion } from '../../hooks/useCotizaci
 import { useTasaCambio }       from '../../hooks/useTasaCambio'
 import { useConfigNegocio }    from '../../hooks/useConfigNegocio'
 import useAuthStore            from '../../store/useAuthStore'
-import { notifyClienteAjeno }  from '../../services/notificationService'
-import { sendPushNotification } from '../../hooks/usePushNotifications'
 import { compartirPorWhatsApp, generarMensaje } from '../../utils/whatsapp'
 import { round2, mulR } from '../../utils/dinero'
 import { calcTotales } from '../../utils/calcTotales'
@@ -688,25 +686,6 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
       clearDraft(perfil?.id)
       setPaso(4)
 
-      // Notificar al supervisor si el vendedor usó un cliente ajeno
-      const clienteUsado = clientes.find(c => c.id === clienteId)
-      if (clienteUsado && perfil?.rol !== 'supervisor' && clienteUsado.vendedor_id && clienteUsado.vendedor_id !== perfil?.id) {
-        const numCot = cotEnviada ? String(cotEnviada.numero).padStart(5, '0') : '—'
-        notifyClienteAjeno(
-          perfil?.nombre || 'Vendedor',
-          clienteUsado.nombre,
-          clienteUsado.vendedor?.nombre || 'otro vendedor',
-          numCot,
-          perfil?.rol
-        )
-        sendPushNotification({
-          title: 'Cliente Ajeno Usado',
-          message: `${perfil?.nombre} creó cotización #${numCot} con ${clienteUsado.nombre} (cliente de ${clienteUsado.vendedor?.nombre || 'otro vendedor'})`,
-          tag: `cliente-ajeno-${numCot}`,
-          url: '/cotizaciones',
-          targetRole: 'supervisor',
-        })
-      }
     } catch (e) {
       setErrorGeneral(e.message ?? 'Error al enviar')
       setModalEnvio(false)

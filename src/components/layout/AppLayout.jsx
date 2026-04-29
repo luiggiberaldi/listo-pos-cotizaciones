@@ -26,13 +26,20 @@ import { NOTIF_TYPES, setNotificationUserId, startRealtimeNotifications, stopRea
 
 // ─── Iconos por tipo de notificación ────────────────────────────────────────
 const NOTIF_ICON_MAP = {
-  [NOTIF_TYPES.STOCK_BAJO]:                 { icon: AlertTriangle, color: 'text-amber-500',   bg: 'bg-amber-50' },
-  [NOTIF_TYPES.COTIZACION_ENVIADA]:         { icon: Send,          color: 'text-sky-500',     bg: 'bg-sky-50' },
-  [NOTIF_TYPES.COTIZACION_ACEPTADA]:        { icon: CheckCircle,   color: 'text-emerald-500', bg: 'bg-emerald-50' },
-  [NOTIF_TYPES.COTIZACION_CREADA]:          { icon: FileText,      color: 'text-indigo-500',  bg: 'bg-indigo-50' },
-  [NOTIF_TYPES.DESPACHO_CREADO]:            { icon: Truck,         color: 'text-indigo-500',  bg: 'bg-indigo-50' },
-  [NOTIF_TYPES.COTIZACION_ANULADA]:         { icon: Ban,           color: 'text-red-500',     bg: 'bg-red-50' },
-  [NOTIF_TYPES.COTIZACION_SIN_RESPUESTA]:   { icon: Clock,         color: 'text-orange-500',  bg: 'bg-orange-50' },
+  [NOTIF_TYPES.STOCK_BAJO]:                    { icon: AlertTriangle, color: 'text-amber-500',    bg: 'bg-amber-50' },
+  [NOTIF_TYPES.STOCK_CRITICO]:                 { icon: AlertCircle,   color: 'text-red-600',     bg: 'bg-red-50' },
+  [NOTIF_TYPES.STOCK_REABASTECIDO]:            { icon: PackageCheck,  color: 'text-green-500',   bg: 'bg-green-50' },
+  [NOTIF_TYPES.COTIZACION_ENVIADA]:            { icon: Send,          color: 'text-sky-500',     bg: 'bg-sky-50' },
+  [NOTIF_TYPES.COTIZACION_ACEPTADA]:           { icon: CheckCircle,   color: 'text-emerald-500', bg: 'bg-emerald-50' },
+  [NOTIF_TYPES.COTIZACION_ACEPTADA_DESPACHO]:  { icon: CheckCircle,   color: 'text-emerald-600', bg: 'bg-emerald-50' },
+  [NOTIF_TYPES.DESPACHO_CREADO]:               { icon: Truck,         color: 'text-indigo-500',  bg: 'bg-indigo-50' },
+  [NOTIF_TYPES.DESPACHO_EN_RUTA]:              { icon: Truck,         color: 'text-blue-500',    bg: 'bg-blue-50' },
+  [NOTIF_TYPES.DESPACHO_ENTREGADO]:            { icon: PackageCheck,  color: 'text-green-600',   bg: 'bg-green-50' },
+  [NOTIF_TYPES.DESPACHO_CANCELADO]:            { icon: Ban,           color: 'text-red-500',     bg: 'bg-red-50' },
+  [NOTIF_TYPES.DESPACHO_PENDIENTE_MUCHO]:      { icon: Clock,         color: 'text-amber-600',   bg: 'bg-amber-50' },
+  [NOTIF_TYPES.COTIZACION_ANULADA]:            { icon: Ban,           color: 'text-red-500',     bg: 'bg-red-50' },
+  [NOTIF_TYPES.COTIZACION_SIN_RESPUESTA]:      { icon: Clock,         color: 'text-orange-500',  bg: 'bg-orange-50' },
+  [NOTIF_TYPES.COMPROMISO_ALTO]:               { icon: AlertTriangle, color: 'text-orange-500',  bg: 'bg-orange-50' },
 }
 const DEFAULT_NOTIF_ICON = { icon: Bell, color: 'text-slate-400', bg: 'bg-slate-50' }
 

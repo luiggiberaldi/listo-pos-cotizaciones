@@ -9,6 +9,7 @@ import { round2 } from '../utils/dinero'
 import {
   notifyCotizacionEnviada,
   notifyCotizacionAnulada,
+  notifyCotizacionAceptadaDespacho,
 } from '../services/notificationService'
 import { showToast } from '../components/ui/Toast'
 import { sendPushNotification } from './usePushNotifications'
@@ -304,10 +305,21 @@ export function useActualizarEstado() {
       if (error) throw error
       return { estado, numero, clienteNombre, totalUsd, vendedorId }
     },
-    onSuccess: ({ estado, numero }) => {
+    onSuccess: ({ estado, numero, clienteNombre }) => {
       qc.invalidateQueries({ queryKey: COTIZACIONES_KEY })
       qc.invalidateQueries({ queryKey: STOCK_COMPROMETIDO_KEY })
       showToast(`Cotización #${numero} → ${estado}`, 'success')
+
+      if (estado === 'aceptada' && clienteNombre) {
+        notifyCotizacionAceptadaDespacho(numero, clienteNombre, 'supervisor')
+        sendPushNotification({
+          title: '✅ Cotización Aceptada — Lista para Despacho',
+          message: `COT-${numero} — ${clienteNombre} lista para crear nota de despacho`,
+          tag: `cot-aceptada-despacho-${numero}`,
+          url: '/cotizaciones',
+          targetRole: 'supervisor',
+        })
+      }
     },
   })
 }

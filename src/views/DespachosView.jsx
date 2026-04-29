@@ -142,7 +142,12 @@ export default function DespachosView() {
 
   async function confirmarAnular() {
     if (!despachoAAnular) return
-    await cambiarEstado.mutateAsync({ despachoId: despachoAAnular.id, nuevoEstado: 'anulada' })
+    await cambiarEstado.mutateAsync({
+      despachoId: despachoAAnular.id,
+      nuevoEstado: 'anulada',
+      numeroCotizacion: despachoAAnular.cotizacion?.numero || despachoAAnular.numero,
+      clienteNombre: despachoAAnular.cliente?.nombre,
+    })
     setDespachoAAnular(null)
   }
 
@@ -240,7 +245,7 @@ export default function DespachosView() {
               <DespachoCard
                 key={d.id}
                 despacho={d}
-                onCambiarEstado={(id, estado) => cambiarEstado.mutateAsync({ despachoId: id, nuevoEstado: estado })}
+                onCambiarEstado={(id, estado) => cambiarEstado.mutateAsync({ despachoId: id, nuevoEstado: estado, numeroCotizacion: d.cotizacion?.numero || d.numero, clienteNombre: d.cliente?.nombre })}
                 onAnular={setDespachoAAnular}
                 onReciclar={setDespachoAReciclar}
                 tasa={tasaEfectiva}

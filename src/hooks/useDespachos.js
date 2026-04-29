@@ -11,7 +11,7 @@ import { COMISIONES_KEY } from './useComisiones'
 import { STOCK_COMPROMETIDO_KEY } from './useStockComprometido'
 import { REPORTE_KEY } from './useReporteVentas'
 import { CXC_KEY } from './useCuentasCobrar'
-import { notifyDespachoCreado, notifyStockBajo } from '../services/notificationService'
+import { notifyDespachoCreado, notifyStockBajo, notifyDespachoEnRuta, notifyDespachoEntregado, notifyDespachoCancelado } from '../services/notificationService'
 import { showToast } from '../components/ui/Toast'
 import { sendPushNotification } from './usePushNotifications'
 
@@ -145,9 +145,10 @@ const ESTADO_LABELS = { pendiente: 'Pendiente', despachada: 'Despachada', entreg
 
 export function useActualizarEstadoDespacho() {
   const qc = useQueryClient()
+  const rol = useAuthStore.getState().perfil?.rol
 
   return useMutation({
-    mutationFn: async ({ despachoId, nuevoEstado }) => {
+    mutationFn: async ({ despachoId, nuevoEstado, numeroCotizacion, clienteNombre }) => {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session?.access_token) throw new Error('No autenticado')
 
@@ -161,7 +162,7 @@ export function useActualizarEstadoDespacho() {
       })
       const result = await res.json()
       if (!res.ok) throw new Error(result.error || 'Error al cambiar estado del despacho')
-      return { nuevoEstado }
+      return { nuevoEstado, numeroCotizacion, clienteNombre }
     },
     // Optimistic update: reflect state change immediately in UI
     onMutate: async ({ despachoId, nuevoEstado }) => {
@@ -185,8 +186,39 @@ export function useActualizarEstadoDespacho() {
       }
       showToast(error.message || 'Error al cambiar estado del despacho', 'error')
     },
-    onSuccess: ({ nuevoEstado }) => {
+    onSuccess: ({ nuevoEstado, numeroCotizacion, clienteNombre }) => {
       showToast(`Despacho marcado como ${ESTADO_LABELS[nuevoEstado] || nuevoEstado}`, 'success')
+
+      const num = numeroCotizacion ?? '—'
+      const cliente = clienteNombre ?? 'cliente'
+
+      if (nuevoEstado === 'despachada') {
+        notifyDespachoEnRuta(num, cliente, rol)
+        sendPushNotification({
+          title: '🚚 Despacho en Ruta',
+          message: `Despacho #${num} — ${cliente} en camino`,
+          tag: `despacho-ruta-${num}`,
+          url: '/despachos',
+          targetRole: 'vendedor',
+        })
+      } else if (nuevoEstado === 'entregada') {
+        notifyDespachoEntregado(num, cliente, rol)
+        sendPushNotification({
+          title: '✅ Despacho Entregado',
+          message: `Despacho #${num} — ${cliente} entregado`,
+          tag: `despacho-entregado-${num}`,
+          url: '/despachos',
+          targetRole: 'vendedor',
+        })
+      } else if (nuevoEstado === 'anulada') {
+        notifyDespachoCancelado(num, cliente, rol)
+        sendPushNotification({
+          title: '❌ Despacho Cancelado',
+          message: `Despacho #${num} — ${cliente} cancelado, stock restaurado`,
+          tag: `despacho-cancelado-${num}`,
+          url: '/despachos',
+        })
+      }
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: DESPACHOS_KEY })

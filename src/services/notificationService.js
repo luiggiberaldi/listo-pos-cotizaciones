@@ -30,28 +30,40 @@ function getKey() {
 }
 
 export const NOTIF_TYPES = {
-  STOCK_BAJO:                'stock_bajo',
-  COTIZACION_ENVIADA:        'cotizacion_enviada',
-  COTIZACION_ACEPTADA:       'cotizacion_aceptada',
-  COTIZACION_CREADA:         'cotizacion_creada',
-  DESPACHO_CREADO:           'despacho_creado',
-  COTIZACION_ANULADA:        'cotizacion_anulada',
-  CLIENTE_AJENO:             'cliente_ajeno',
-  COTIZACION_SIN_RESPUESTA:  'cotizacion_sin_respuesta',
+  STOCK_BAJO:                    'stock_bajo',
+  STOCK_CRITICO:                 'stock_critico',
+  STOCK_REABASTECIDO:            'stock_reabastecido',
+  COTIZACION_ENVIADA:            'cotizacion_enviada',
+  COTIZACION_ACEPTADA:           'cotizacion_aceptada',
+  COTIZACION_ACEPTADA_DESPACHO:  'cotizacion_aceptada_despacho',
+  DESPACHO_CREADO:               'despacho_creado',
+  DESPACHO_EN_RUTA:              'despacho_en_ruta',
+  DESPACHO_ENTREGADO:            'despacho_entregado',
+  DESPACHO_CANCELADO:            'despacho_cancelado',
+  DESPACHO_PENDIENTE_MUCHO:      'despacho_pendiente_mucho',
+  COTIZACION_ANULADA:            'cotizacion_anulada',
+  COTIZACION_SIN_RESPUESTA:      'cotizacion_sin_respuesta',
+  COMPROMISO_ALTO:               'compromiso_alto',
 }
 
 // Qué rol ve cada tipo de notificación en la campanita local
 // null = ambos roles ven la notificación local
 // 'supervisor'/'vendedor' = solo ese rol la ve localmente
 const NOTIF_TARGET_ROLE = {
-  [NOTIF_TYPES.STOCK_BAJO]:                'supervisor',
-  [NOTIF_TYPES.COTIZACION_ENVIADA]:        'supervisor',  // vendedor ya sabe que envió
-  [NOTIF_TYPES.COTIZACION_ACEPTADA]:       'vendedor',    // supervisor ya sabe que aceptó
-  [NOTIF_TYPES.COTIZACION_CREADA]:         null,
-  [NOTIF_TYPES.DESPACHO_CREADO]:           null,
-  [NOTIF_TYPES.COTIZACION_ANULADA]:        null,
-  [NOTIF_TYPES.CLIENTE_AJENO]:             'supervisor',  // vendedor ya sabe que usó cliente ajeno
-  [NOTIF_TYPES.COTIZACION_SIN_RESPUESTA]:  null,
+  [NOTIF_TYPES.STOCK_BAJO]:                   'supervisor',
+  [NOTIF_TYPES.STOCK_CRITICO]:                null,           // urgente, ambos
+  [NOTIF_TYPES.STOCK_REABASTECIDO]:           'supervisor',
+  [NOTIF_TYPES.COTIZACION_ENVIADA]:           'supervisor',   // vendedor ya sabe que envió
+  [NOTIF_TYPES.COTIZACION_ACEPTADA]:          'vendedor',     // supervisor ya sabe que aceptó
+  [NOTIF_TYPES.COTIZACION_ACEPTADA_DESPACHO]: 'supervisor',   // lista para despacho
+  [NOTIF_TYPES.DESPACHO_CREADO]:              null,
+  [NOTIF_TYPES.DESPACHO_EN_RUTA]:             'vendedor',     // vendedor se entera
+  [NOTIF_TYPES.DESPACHO_ENTREGADO]:           'vendedor',     // vendedor se entera
+  [NOTIF_TYPES.DESPACHO_CANCELADO]:           null,           // ambos
+  [NOTIF_TYPES.DESPACHO_PENDIENTE_MUCHO]:     'supervisor',
+  [NOTIF_TYPES.COTIZACION_ANULADA]:           null,
+  [NOTIF_TYPES.COTIZACION_SIN_RESPUESTA]:     null,
+  [NOTIF_TYPES.COMPROMISO_ALTO]:              'supervisor',
 }
 
 function readNotifs() {
@@ -179,8 +191,12 @@ export function clearNotifications() {
 
 const STOCK_BAJO_COOLDOWN_MS = 6 * 60 * 60 * 1000 // 6 horas
 
+/**
+ * Alerta de stock bajo (0 < stock <= stock_minimo). Cooldown 6h.
+ */
 export function notifyStockBajo(productos, currentRole = null) {
-  const bajos = productos.filter(p => p.stock_actual <= 0 || (p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo))
+  // Solo productos con stock bajo (NO crítico, es decir stock > 0)
+  const bajos = productos.filter(p => p.stock_minimo > 0 && p.stock_actual > 0 && p.stock_actual <= p.stock_minimo)
   if (!bajos.length) return
 
   // No crear nueva notificación si la última tiene menos de 6 horas y la cantidad no cambió
@@ -208,6 +224,46 @@ export function notifyStockBajo(productos, currentRole = null) {
       })),
       total: bajos.length,
     },
+    currentRole,
+  )
+}
+
+/**
+ * Alerta de stock CRÍTICO (stock = 0). Sin cooldown — siempre urgente.
+ */
+export function notifyStockCritico(productos, currentRole = null) {
+  const criticos = productos.filter(p => p.stock_actual <= 0)
+  if (!criticos.length) return
+
+  createNotification(
+    NOTIF_TYPES.STOCK_CRITICO,
+    criticos.length === 1
+      ? `⚠️ Stock Agotado: ${criticos[0].nombre}`
+      : `⚠️ ${criticos.length} productos SIN STOCK`,
+    criticos.length === 1
+      ? `${criticos[0].nombre} tiene 0 ${criticos[0].unidad || 'und'} disponibles`
+      : criticos.slice(0, 5).map(p => p.nombre).join(', '),
+    {
+      productos: criticos.slice(0, 10).map(p => ({
+        nombre: p.nombre,
+        stock: p.stock_actual,
+        unidad: p.unidad || 'und',
+      })),
+      total: criticos.length,
+    },
+    currentRole,
+  )
+}
+
+/**
+ * Notifica que un producto volvió a nivel normal después de un reabastecimiento.
+ */
+export function notifyStockReabastecido(producto, currentRole = null) {
+  createNotification(
+    NOTIF_TYPES.STOCK_REABASTECIDO,
+    `Stock Reabastecido: ${producto.nombre}`,
+    `Ahora tiene ${producto.stock_actual} ${producto.unidad || 'und'} (mín: ${producto.stock_minimo})`,
+    { producto_id: producto.id, nombre: producto.nombre, stock: producto.stock_actual },
     currentRole,
   )
 }
@@ -244,20 +300,107 @@ export function notifyCotizacionAnulada(numero, currentRole = null) {
   )
 }
 
-export function notifyClienteAjeno(vendedorNombre, clienteNombre, clienteVendedorNombre, numero, currentRole = null) {
+/**
+ * Cotización aceptada y lista para crear despacho.
+ */
+export function notifyCotizacionAceptadaDespacho(numero, clienteNombre, currentRole = null) {
   createNotification(
-    NOTIF_TYPES.CLIENTE_AJENO,
-    'Cotización con Cliente Ajeno',
-    `${vendedorNombre} creó cotización #${numero} con el cliente ${clienteNombre} (asignado a ${clienteVendedorNombre})`,
-    null,
+    NOTIF_TYPES.COTIZACION_ACEPTADA_DESPACHO,
+    `COT-${numero} aceptada — lista para despacho`,
+    `${clienteNombre} — Crear nota de despacho`,
+    { numero, clienteNombre },
     currentRole,
   )
 }
 
-// ─── Recordatorios proactivos (estilo Buildertrend) ──────────────────────────
+/**
+ * Despacho marcado como "despachada" (en ruta al cliente).
+ */
+export function notifyDespachoEnRuta(numero, clienteNombre, currentRole = null) {
+  createNotification(
+    NOTIF_TYPES.DESPACHO_EN_RUTA,
+    `Despacho #${numero} en ruta`,
+    `Pedido de ${clienteNombre} en camino al cliente`,
+    { numero, clienteNombre },
+    currentRole,
+  )
+}
+
+/**
+ * Despacho marcado como "entregada".
+ */
+export function notifyDespachoEntregado(numero, clienteNombre, currentRole = null) {
+  createNotification(
+    NOTIF_TYPES.DESPACHO_ENTREGADO,
+    `Despacho #${numero} entregado`,
+    `Pedido de ${clienteNombre} entregado exitosamente`,
+    { numero, clienteNombre },
+    currentRole,
+  )
+}
+
+/**
+ * Despacho cancelado — stock restaurado.
+ */
+export function notifyDespachoCancelado(numero, clienteNombre, currentRole = null) {
+  createNotification(
+    NOTIF_TYPES.DESPACHO_CANCELADO,
+    `Despacho #${numero} cancelado`,
+    `${clienteNombre} — Stock restaurado al inventario`,
+    { numero, clienteNombre },
+    currentRole,
+  )
+}
+
+/**
+ * Despacho pendiente demasiado tiempo sin ser despachado.
+ */
+export function notifyDespachoPendienteMucho(numero, clienteNombre, horas) {
+  const key = `despacho_pendiente_${numero}`
+  if (hasCooldown(key)) return
+  setCooldown(key)
+  createNotification(
+    NOTIF_TYPES.DESPACHO_PENDIENTE_MUCHO,
+    `Despacho #${numero} pendiente hace ${horas}h`,
+    `${clienteNombre} — Aún no ha sido despachado`,
+    { numero, clienteNombre, horas },
+  )
+}
+
+/**
+ * Stock comprometido supera el 70% del stock real.
+ */
+export function notifyCompromisoAlto(productos) {
+  const key = 'compromiso_alto'
+  if (hasCooldown(key)) return
+  setCooldown(key)
+  createNotification(
+    NOTIF_TYPES.COMPROMISO_ALTO,
+    productos.length === 1
+      ? `Compromiso alto: ${productos[0].nombre}`
+      : `${productos.length} productos con compromiso alto`,
+    productos.length === 1
+      ? `${productos[0].comprometido} de ${productos[0].stock_actual} ${productos[0].unidad || 'und'} comprometidos (${productos[0].porcentaje}%)`
+      : productos.slice(0, 5).map(p => `${p.nombre} (${p.porcentaje}%)`).join(', '),
+    {
+      productos: productos.slice(0, 10).map(p => ({
+        nombre: p.nombre,
+        stock_actual: p.stock_actual,
+        comprometido: p.comprometido,
+        porcentaje: p.porcentaje,
+        unidad: p.unidad || 'und',
+      })),
+      total: productos.length,
+    },
+  )
+}
+
+// ─── Recordatorios proactivos (cooldown system) ──────────────────────────────
 
 const RECORDATORIO_COOLDOWN_KEY = 'construacero_recordatorios_v1'
 const RECORDATORIO_COOLDOWN_MS  = 1 * 60 * 60 * 1000 // 1 hora por cotización
+const DESPACHO_PENDIENTE_COOLDOWN_MS = 4 * 60 * 60 * 1000 // 4 horas por despacho
+const COMPROMISO_ALTO_COOLDOWN_MS = 6 * 60 * 60 * 1000 // 6 horas
 
 function readCooldowns() {
   try { return JSON.parse(localStorage.getItem(RECORDATORIO_COOLDOWN_KEY) || '{}') }
@@ -269,13 +412,18 @@ function saveCooldowns(map) {
   catch { /* silencioso */ }
 }
 
-function hasCooldown(key) {
+export function hasCooldown(key) {
   const map = readCooldowns()
   const ts  = map[key]
-  return ts && (Date.now() - ts < RECORDATORIO_COOLDOWN_MS)
+  if (!ts) return false
+  // Usar cooldown apropiado según el tipo de key
+  let cooldownMs = RECORDATORIO_COOLDOWN_MS
+  if (key.startsWith('despacho_pendiente_')) cooldownMs = DESPACHO_PENDIENTE_COOLDOWN_MS
+  if (key === 'compromiso_alto') cooldownMs = COMPROMISO_ALTO_COOLDOWN_MS
+  return (Date.now() - ts < cooldownMs)
 }
 
-function setCooldown(key) {
+export function setCooldown(key) {
   const map = readCooldowns()
   map[key] = Date.now()
   // Limpiar entradas viejas (> 7 días) para no inflar localStorage

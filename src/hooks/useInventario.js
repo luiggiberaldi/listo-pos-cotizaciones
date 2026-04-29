@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
 import useAuthStore from '../store/useAuthStore'
 import { buildSmartFilter, parseSearchTerms } from '../utils/smartSearch'
-import { notifyStockBajo } from '../services/notificationService'
+import { notifyStockBajo, notifyStockCritico } from '../services/notificationService'
 import { showToast } from '../components/ui/Toast'
 import { MOVIMIENTOS_KEY } from './useMovimientosInventario'
 
@@ -49,9 +49,11 @@ export function useInventario({ busqueda = '', categoria = '', page = 0, pageSiz
         if (error) throw error
         const productos = data ?? []
 
-        // Stock bajo (solo supervisor, sin filtros, primera página)
+        // Stock bajo y crítico (solo supervisor, sin filtros, primera página)
         if (esPrivilegiado && !busqueda && !categoria && page === 0) {
-          const bajos = productos.filter(p => p.stock_actual <= 0 || (p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo))
+          const criticos = productos.filter(p => p.stock_actual <= 0)
+          const bajos = productos.filter(p => p.stock_minimo > 0 && p.stock_actual > 0 && p.stock_actual <= p.stock_minimo)
+          if (criticos.length > 0) notifyStockCritico(criticos, perfil?.rol ?? 'supervisor')
           if (bajos.length > 0) notifyStockBajo(bajos, perfil?.rol ?? 'supervisor')
         }
 
@@ -210,7 +212,9 @@ export function useActualizarProducto() {
       qc.invalidateQueries({ queryKey: INVENTARIO_KEY })
       qc.invalidateQueries({ queryKey: MOVIMIENTOS_KEY })
       showToast('Producto actualizado', 'success')
-      if (data?.stock_actual <= 0 || (data?.stock_minimo > 0 && data?.stock_actual <= data?.stock_minimo)) {
+      if (data?.stock_actual <= 0) {
+        notifyStockCritico([data], 'supervisor')
+      } else if (data?.stock_minimo > 0 && data?.stock_actual <= data?.stock_minimo) {
         notifyStockBajo([data], 'supervisor')
       }
     },
