@@ -618,6 +618,9 @@ export default function DashboardView() {
           </div>
         </div>
       )}
+
+      {/* Spacer para BottomNav en móvil */}
+      <div className="h-16 md:hidden shrink-0" />
     </div>
   )
 }
