@@ -849,7 +849,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
 
       {/* ── Header ────────────────────────────────────────────────────────── */}
       <div className="bg-white border-b border-slate-200 px-3 sm:px-4 md:px-6 py-2 sm:py-2.5 md:py-3 sticky top-0 z-10 shrink-0">
-        <div className="flex items-center justify-between gap-2 max-w-6xl mx-auto">
+        <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             {paso < 4 && (
               <button onClick={paso === 1 ? onVolver : anterior}
@@ -873,7 +873,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
       </div>
 
       {/* ── Contenido por paso ─────────────────────────────────────────── */}
-      <div className={`p-3 sm:p-4 md:p-5 lg:p-6 max-w-6xl mx-auto w-full ${paso === 2 ? 'flex-1 min-h-0 flex flex-col' : 'space-y-3 sm:space-y-4 md:space-y-5'}`}>
+      <div className={`p-3 sm:p-4 md:p-5 lg:p-6 w-full ${paso === 2 ? 'flex-1 min-h-0 flex flex-col' : 'space-y-3 sm:space-y-4 md:space-y-5'}`}>
 
         {/* Error general */}
         {errorGeneral && (
