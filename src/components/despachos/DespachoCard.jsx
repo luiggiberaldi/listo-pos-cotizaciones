@@ -67,7 +67,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           ? fetch(apiUrl('/api/clientes/lookup'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-              body: JSON.stringify({ ids: [despacho.cliente_id] }),
+              body: JSON.stringify({ ids: [despacho.cliente_id, despacho.cliente_factura_id].filter(Boolean) }),
             }).then(r => r.ok ? r.json() : [])
           : Promise.resolve([]),
         despacho.vendedor_id ? supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', despacho.vendedor_id).single() : Promise.resolve({ data: null }),
@@ -76,7 +76,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       if (itemsRes.error) throw itemsRes.error
       const desConDatos = {
         ...despacho,
-        cliente: clienteData?.[0] || despacho.cliente,
+        cliente: clienteData?.find(c => c.id === despacho.cliente_id) || despacho.cliente,
+        cliente_factura: clienteData?.find(c => c.id === despacho.cliente_factura_id) || despacho.cliente_factura,
         vendedor: vendedorRes.data || despacho.vendedor,
         transportista: transportistaRes.data || despacho.transportista,
       }
@@ -99,7 +100,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           ? fetch(apiUrl('/api/clientes/lookup'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-              body: JSON.stringify({ ids: [despacho.cliente_id] }),
+              body: JSON.stringify({ ids: [despacho.cliente_id, despacho.cliente_factura_id].filter(Boolean) }),
             }).then(r => r.ok ? r.json() : [])
           : Promise.resolve([]),
         despacho.vendedor_id ? supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', despacho.vendedor_id).single() : Promise.resolve({ data: null }),
@@ -108,7 +109,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       if (itemsRes.error) throw itemsRes.error
       const desConDatos = {
         ...despacho,
-        cliente: clienteData?.[0] || despacho.cliente,
+        cliente: clienteData?.find(c => c.id === despacho.cliente_id) || despacho.cliente,
+        cliente_factura: clienteData?.find(c => c.id === despacho.cliente_factura_id) || despacho.cliente_factura,
         vendedor: vendedorRes.data || despacho.vendedor,
         transportista: transportistaRes.data || despacho.transportista,
       }
@@ -164,7 +166,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           ? fetch(apiUrl('/api/clientes/lookup'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-              body: JSON.stringify({ ids: [despacho.cliente_id] }),
+              body: JSON.stringify({ ids: [despacho.cliente_id, despacho.cliente_factura_id].filter(Boolean) }),
             }).then(r => r.ok ? r.json() : [])
           : Promise.resolve([]),
         despacho.vendedor_id ? supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', despacho.vendedor_id).single() : Promise.resolve({ data: null }),
@@ -173,7 +175,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       if (itemsRes.error) throw itemsRes.error
       const desConDatos = {
         ...despacho,
-        cliente: clienteData?.[0] || despacho.cliente,
+        cliente: clienteData?.find(c => c.id === despacho.cliente_id) || despacho.cliente,
+        cliente_factura: clienteData?.find(c => c.id === despacho.cliente_factura_id) || despacho.cliente_factura,
         vendedor: vendedorRes.data || despacho.vendedor,
         transportista: transportistaRes.data || despacho.transportista,
       }
@@ -198,7 +201,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           ? fetch(apiUrl('/api/clientes/lookup'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-              body: JSON.stringify({ ids: [despacho.cliente_id] }),
+              body: JSON.stringify({ ids: [despacho.cliente_id, despacho.cliente_factura_id].filter(Boolean) }),
             }).then(r => r.ok ? r.json() : [])
           : Promise.resolve([]),
         despacho.vendedor_id ? supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', despacho.vendedor_id).single() : Promise.resolve({ data: null }),
@@ -207,7 +210,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       if (itemsRes.error) throw itemsRes.error
       const desConDatos = {
         ...despacho,
-        cliente: clienteData?.[0] || despacho.cliente,
+        cliente: clienteData?.find(c => c.id === despacho.cliente_id) || despacho.cliente,
+        cliente_factura: clienteData?.find(c => c.id === despacho.cliente_factura_id) || despacho.cliente_factura,
         vendedor: vendedorRes.data || despacho.vendedor,
         transportista: transportistaRes.data || despacho.transportista,
       }
@@ -300,11 +304,11 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
               : <span>{fmtFecha(despacho.creado_en)}</span>
           }
         </div>
-        {despacho.cliente?.nombre && (
+        {(despacho.cliente_factura || despacho.cliente)?.nombre && (
           <div className="space-y-1">
             <p className="text-sm font-bold leading-snug"
-              style={{ color: despacho.cliente.vendedor?.color || '#334155' }}>
-              {despacho.cliente.nombre}
+              style={{ color: (despacho.cliente_factura || despacho.cliente).vendedor?.color || '#334155' }}>
+              {(despacho.cliente_factura || despacho.cliente).nombre}
             </p>
             {esPrivilegiado && despacho.vendedor && (
               <span className="inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full"
