@@ -73,10 +73,21 @@ export function useReporteDespachos({ from, to }) {
       // Por forma de pago
       const fpMap = {}
       lista.filter(d => d.estado !== 'anulada').forEach(d => {
-        const fp = d.forma_pago || 'Sin especificar'
-        if (!fpMap[fp]) fpMap[fp] = { formaPago: fp, count: 0, totalUsd: 0 }
-        fpMap[fp].count++
-        fpMap[fp].totalUsd += Number(d.total_usd || 0)
+        let formas = []
+        try {
+          const parsed = typeof d.forma_pago === 'string' ? JSON.parse(d.forma_pago) : d.forma_pago
+          if (Array.isArray(parsed)) formas = parsed
+          else formas = [{ metodo: d.forma_pago || 'Sin especificar', monto: d.total_usd }]
+        } catch {
+          formas = [{ metodo: d.forma_pago || 'Sin especificar', monto: d.total_usd }]
+        }
+        formas.forEach(f => {
+          const nombre = f.metodo || 'Sin especificar'
+          const monto = Number(f.monto) || 0
+          if (!fpMap[nombre]) fpMap[nombre] = { formaPago: nombre, count: 0, totalUsd: 0 }
+          fpMap[nombre].count++
+          fpMap[nombre].totalUsd += monto
+        })
       })
       const porFormaPago = Object.values(fpMap).sort((a, b) => b.totalUsd - a.totalUsd)
 

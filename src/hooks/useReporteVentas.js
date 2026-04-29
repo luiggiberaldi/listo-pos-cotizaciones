@@ -192,10 +192,21 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
       // Forma de pago
       const formaPagoMap = {}
       despachos.forEach(d => {
-        const fp = d.forma_pago || 'Sin especificar'
-        if (!formaPagoMap[fp]) formaPagoMap[fp] = { formaPago: fp, count: 0, totalUsd: 0 }
-        formaPagoMap[fp].count++
-        formaPagoMap[fp].totalUsd += ventaNeta(d)
+        let formas = []
+        try {
+          const parsed = typeof d.forma_pago === 'string' ? JSON.parse(d.forma_pago) : d.forma_pago
+          if (Array.isArray(parsed)) formas = parsed
+          else formas = [{ metodo: d.forma_pago || 'Sin especificar', monto: ventaNeta(d) }]
+        } catch {
+          formas = [{ metodo: d.forma_pago || 'Sin especificar', monto: ventaNeta(d) }]
+        }
+        formas.forEach(f => {
+          const nombre = f.metodo || 'Sin especificar'
+          const monto = Number(f.monto) || 0
+          if (!formaPagoMap[nombre]) formaPagoMap[nombre] = { formaPago: nombre, count: 0, totalUsd: 0 }
+          formaPagoMap[nombre].count++
+          formaPagoMap[nombre].totalUsd += monto
+        })
       })
       const porFormaPago = Object.values(formaPagoMap).sort((a, b) => b.totalUsd - a.totalUsd)
 
