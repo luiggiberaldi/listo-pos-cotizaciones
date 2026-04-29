@@ -33,6 +33,7 @@ import ScanMaterialListModal from './ScanMaterialListModal'
 import BuscadorProductos from './CotizacionBuscador'
 import ClienteSelector from './CotizacionClienteSelector'
 import CestaPanel, { SectionH3 } from './CotizacionCesta'
+import DetalleModal from '../ui/DetalleModal'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 let _itemCounter = 0
@@ -1357,33 +1358,13 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
 
                 {/* Acciones */}
                 <div className="space-y-2">
-                  {/* Resumen detallado expandible */}
-                  <button onClick={() => setShowResumen(v => !v)}
+                  {/* Ver resumen completo en modal */}
+                  <button onClick={() => setShowResumen(true)}
                     className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-xs transition-all active:scale-[0.98]"
                     style={{ backgroundColor: '#1B365D10', color: '#1B365D' }}>
                     <Eye size={14} />
-                    {showResumen ? 'Ocultar resumen' : 'Ver resumen'}
+                    Ver resumen
                   </button>
-                  {showResumen && (
-                    <div className="bg-slate-50 rounded-xl p-2.5 space-y-1.5 max-h-60 overflow-y-auto text-left">
-                      {items.map((item, i) => (
-                        <div key={i} className="flex items-start justify-between gap-2 py-1.5 border-b border-slate-100 last:border-0">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[11px] font-semibold text-slate-700 leading-snug">{item.nombre}</p>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              {item.codigoSnap && (
-                                <span className="text-[9px] font-mono text-slate-400 bg-slate-100 px-1 py-0.5 rounded">{item.codigoSnap}</span>
-                              )}
-                              <span className="text-[10px] text-slate-400">
-                                {item.cantidad} {item.unidadSnap || 'Und'} × {fmtUsd(item.precioUnitUsd)}
-                              </span>
-                            </div>
-                          </div>
-                          <p className="text-[11px] font-bold text-slate-800 shrink-0 pt-0.5">{fmtUsd(item.cantidad * item.precioUnitUsd)}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
 
                   <div className="flex gap-2">
                     <button onClick={handleWhatsApp} disabled={waLoading}
@@ -1423,6 +1404,23 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
             </div>
           </div>
         )}
+
+        <DetalleModal
+          isOpen={showResumen}
+          onClose={() => setShowResumen(false)}
+          tipo="cotizacion"
+          registro={{
+            id: cotizacionId,
+            numero: numDisplay ? Number(numDisplay.replace('COT-', '')) : 0,
+            vendedor: { nombre: perfil?.nombre, color: perfil?.color },
+            cliente: clienteSeleccionado,
+            total_usd: totalUsd,
+            costo_envio_usd: costoEnvioUsd,
+            notas_cliente: notasCliente,
+            creado_en: new Date().toISOString(),
+          }}
+          tasa={tasaHook.tasaEfectiva}
+        />
 
       </div>
 
