@@ -238,6 +238,8 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                 {FORMAS_PAGO.map(fp => {
                   const fpData = formasPago.find(f => f.metodo === fp)
                   if (fpData) {
+                    const restante = totalSinFlete - formasPago.reduce((s, f) => s + (Number(f.monto) || 0), 0)
+                    const mostrarResto = formasPago.length > 1 && (!fpData.monto || Number(fpData.monto) === 0) && restante > 0.01
                     // Chip activo con input integrado
                     return (
                       <div key={fp} className="flex items-center gap-0 rounded-lg border border-indigo-300 bg-indigo-50 overflow-hidden">
@@ -245,14 +247,22 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                           className="flex items-center gap-0.5 px-2 py-1.5 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100 transition-colors shrink-0 border-r border-indigo-200">
                           {fp} <X size={9} className="ml-0.5" />
                         </button>
-                        <div className="relative">
+                        <div className="relative flex items-center">
                           <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-indigo-400 text-[10px]">$</span>
                           <input type="number" min="0" step="0.01" value={fpData.monto}
                             onChange={e => setMontoForma(fp, e.target.value)}
                             onFocus={e => e.target.select()}
                             placeholder="0"
-                            className="w-16 pl-4 pr-1.5 py-1.5 text-xs font-semibold text-indigo-800 bg-transparent focus:outline-none focus:bg-white/60"
+                            className="w-16 pl-4 pr-1 py-1.5 text-xs font-semibold text-indigo-800 bg-transparent focus:outline-none focus:bg-white/60"
                             disabled={cargando} />
+                          {mostrarResto && (
+                            <button type="button"
+                              onClick={() => setMontoForma(fp, Number(restante.toFixed(2)))}
+                              className="mr-1 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded transition-colors shrink-0"
+                              title={`Asignar $${restante.toFixed(2)} restante`}>
+                              Resto
+                            </button>
+                          )}
                         </div>
                       </div>
                     )
