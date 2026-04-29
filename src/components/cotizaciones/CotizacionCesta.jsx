@@ -304,7 +304,7 @@ export default function CestaPanel({ items, onCambiar, onEliminar, subtotal, tas
       </div>
 
       {/* ── Desktop: panel lateral completo ── */}
-      <div className="hidden lg:flex bg-white rounded-2xl border border-slate-200 flex-col overflow-hidden max-h-[calc(100vh-90px)]">
+      <div className="hidden lg:flex bg-white rounded-2xl border border-slate-200 flex-col overflow-hidden h-[calc(100vh-90px)]">
         {/* Header */}
         <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50 rounded-t-2xl shrink-0">
           <span className="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-2">
