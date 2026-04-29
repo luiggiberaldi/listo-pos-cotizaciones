@@ -72,8 +72,8 @@ const MetricCard = memo(function MetricCard({ icon: Icon, label, value, sub, col
         <p className="text-xs font-medium leading-tight" style={{ color: t.label }}>{label}</p>
       </div>
       <div className="relative z-10">
-        <p className="text-2xl font-black leading-tight" style={{ color: t.value }}>{value}</p>
-        {sub && <p className="text-xs mt-0.5" style={{ color: t.sub }}>{sub}</p>}
+        <p className="text-lg sm:text-2xl font-black leading-tight truncate" style={{ color: t.value }}>{value}</p>
+        {sub && <p className="text-[10px] sm:text-xs mt-0.5 truncate" style={{ color: t.sub }}>{sub}</p>}
       </div>
     </div>
   )

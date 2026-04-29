@@ -542,7 +542,7 @@ export default function DashboardView() {
             style={{ background: 'linear-gradient(135deg, #1B365D 0%, #0d1f3c 100%)', border: '1px solid rgba(255,255,255,0.07)' }}>
             <div className="absolute -bottom-4 -right-4 w-24 h-24 rounded-full" style={{ background: 'rgba(255,255,255,0.04)' }} />
             <p className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: 'rgba(255,255,255,0.5)' }}>Este mes</p>
-            <p className="text-3xl sm:text-4xl font-black text-white leading-none">{m.delMesCount}</p>
+            <p className="text-2xl sm:text-3xl md:text-4xl font-black text-white leading-none">{m.delMesCount}</p>
             <p className="text-sm mt-1" style={{ color: 'rgba(255,255,255,0.55)' }}>cotizaciones generadas</p>
             {variacionMes !== null && (
               <div className="mt-3 inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full"
@@ -600,20 +600,20 @@ export default function DashboardView() {
               Ver todas <ArrowRight size={12} />
             </button>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <div className="bg-slate-50 rounded-xl p-3">
-              <p className="text-xs text-slate-400 font-medium">Acumulado</p>
-              <p className="text-lg font-black text-slate-800">{fmtUsd(comResumen.total)}</p>
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+            <div className="bg-slate-50 rounded-xl p-2.5 sm:p-3">
+              <p className="text-[10px] sm:text-xs text-slate-400 font-medium">Acumulado</p>
+              <p className="text-base sm:text-lg font-black text-slate-800">{fmtUsd(comResumen.total)}</p>
             </div>
-            <div className="bg-amber-50 rounded-xl p-3">
-              <p className="text-xs text-amber-600 font-medium">Pendiente</p>
-              <p className="text-lg font-black text-amber-700">{fmtUsd(comResumen.pendiente)}</p>
-              <p className="text-xs text-amber-500">{comResumen.countPendiente} por pagar</p>
+            <div className="bg-amber-50 rounded-xl p-2.5 sm:p-3">
+              <p className="text-[10px] sm:text-xs text-amber-600 font-medium">Pendiente</p>
+              <p className="text-base sm:text-lg font-black text-amber-700">{fmtUsd(comResumen.pendiente)}</p>
+              <p className="text-[10px] sm:text-xs text-amber-500">{comResumen.countPendiente} por pagar</p>
             </div>
-            <div className="bg-emerald-50 rounded-xl p-3">
-              <p className="text-xs text-emerald-600 font-medium">Pagado</p>
-              <p className="text-lg font-black text-emerald-700">{fmtUsd(comResumen.pagado)}</p>
-              <p className="text-xs text-emerald-500">{comResumen.countPagado} pagadas</p>
+            <div className="bg-emerald-50 rounded-xl p-2.5 sm:p-3">
+              <p className="text-[10px] sm:text-xs text-emerald-600 font-medium">Pagado</p>
+              <p className="text-base sm:text-lg font-black text-emerald-700">{fmtUsd(comResumen.pagado)}</p>
+              <p className="text-[10px] sm:text-xs text-emerald-500">{comResumen.countPagado} pagadas</p>
             </div>
           </div>
         </div>
