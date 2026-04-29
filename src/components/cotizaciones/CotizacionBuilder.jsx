@@ -1234,7 +1234,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                     <span className="text-sm font-bold text-slate-500 uppercase tracking-wide">Total</span>
                     <span className="text-2xl font-black text-slate-900">{fmtMoneda(totalUsd)}</span>
                   </div>
-                  {monedaPDF === '$' && tasaHook.tasaEfectiva > 0 && totalUsd > 0 && (
+                  {monedaPDF !== 'bs' && tasaHook.tasaEfectiva > 0 && totalUsd > 0 && (
                     <p className="text-right text-xs text-slate-400 mt-0.5 font-mono">
                       Bs {new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(totalBs)}
                     </p>
