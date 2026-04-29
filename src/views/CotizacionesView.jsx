@@ -165,39 +165,32 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
           {/* ── Columna izquierda: resumen del pedido ── */}
           <div className="lg:flex-1 min-h-0 overflow-y-auto p-4 lg:p-5 space-y-3 border-b lg:border-b-0 lg:border-r border-slate-100">
 
-            {/* Tabla compacta de items */}
+            {/* Lista tipo recibo compacta */}
             {items.length === 0 ? (
               <div className="flex items-center justify-center py-10">
                 <div className="w-5 h-5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
               </div>
             ) : (
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-slate-100">
-                    <th className="text-left pb-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Producto</th>
-                    <th className="text-center pb-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wide w-14">Cant.</th>
-                    {items.length < 5 && <th className="text-right pb-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wide w-20 hidden sm:table-cell">P. Unit.</th>}
-                    <th className="text-right pb-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wide w-20">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item, i) => (
-                    <tr key={item.id || i} className="border-b border-slate-50">
-                      <td className={`${items.length >= 5 ? 'py-1' : 'py-1.5'} pr-2`}>
-                        <span className={`font-medium text-slate-700 ${items.length >= 5 ? 'text-xs' : 'text-sm'}`}>{item.nombre_snap}</span>
-                        {item.codigo_snap && (
-                          <span className="text-[10px] text-slate-400 font-mono ml-1">· {item.codigo_snap}</span>
-                        )}
-                      </td>
-                      <td className={`${items.length >= 5 ? 'py-1 text-xs' : 'py-1.5 text-sm'} text-center text-slate-600 whitespace-nowrap`}>
-                        {Number(item.cantidad).toLocaleString('es-VE')} <span className="text-[10px] text-slate-400">{item.unidad_snap}</span>
-                      </td>
-                      {items.length < 5 && <td className="py-1.5 text-right text-slate-500 text-sm hidden sm:table-cell">{fmtUsd(item.precio_unit_usd)}</td>}
-                      <td className={`${items.length >= 5 ? 'py-1 text-xs' : 'py-1.5 text-sm'} text-right font-bold text-slate-700`}>{fmtUsd(item.total_linea_usd)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="space-y-0">
+                {/* Header resumen */}
+                <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
+                  <span className="text-[11px] font-semibold text-slate-400">{items.length} producto{items.length > 1 ? 's' : ''}</span>
+                  <span className="text-[11px] font-bold text-slate-500">{fmtUsd(totalSinFlete)}</span>
+                </div>
+                {/* Items */}
+                {items.map((item, i) => {
+                  const cant = Number(item.cantidad)
+                  return (
+                    <div key={item.id || i} className="flex items-baseline gap-2 py-1 border-b border-slate-50">
+                      <span className="flex-1 min-w-0 text-xs text-slate-700 font-medium truncate">{item.nombre_snap}</span>
+                      {cant > 1 && (
+                        <span className="text-[10px] text-slate-400 whitespace-nowrap shrink-0">{cant.toLocaleString('es-VE')} × {fmtUsd(item.precio_unit_usd)}</span>
+                      )}
+                      <span className="text-xs font-bold text-slate-700 shrink-0">{fmtUsd(item.total_linea_usd)}</span>
+                    </div>
+                  )
+                })}
+              </div>
             )}
 
             {/* Stock warnings */}
