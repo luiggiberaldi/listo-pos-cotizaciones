@@ -1310,19 +1310,49 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                 </div>
 
                 {/* Resumen compacto */}
-                <div className="bg-slate-50 rounded-xl p-3 divide-y divide-slate-100">
+                <div className="bg-slate-50 rounded-xl p-3 divide-y divide-slate-100 text-left">
                   <div className="flex justify-between py-1.5 first:pt-0">
                     <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Cliente</span>
-                    <span className="font-semibold text-slate-800 text-xs">{clienteSeleccionado?.nombre}</span>
+                    <span className="font-semibold text-slate-800 text-xs text-right max-w-[200px] truncate">{clienteSeleccionado?.nombre}</span>
                   </div>
                   <div className="flex justify-between py-1.5">
-                    <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Total</span>
-                    <span className="font-bold text-slate-900 text-sm">{fmtUsd(totalUsd)}</span>
+                    <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Vendedor</span>
+                    <span className="font-medium text-slate-700 text-xs">{perfil?.nombre}</span>
                   </div>
-                  <div className="flex justify-between py-1.5 last:pb-0">
+                  <div className="flex justify-between py-1.5">
                     <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Items</span>
                     <span className="font-medium text-slate-700 text-xs">{items.length} producto{items.length !== 1 ? 's' : ''}</span>
                   </div>
+                  {subtotal !== totalUsd && (
+                    <>
+                      <div className="flex justify-between py-1.5">
+                        <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Subtotal</span>
+                        <span className="font-medium text-slate-600 text-xs">{fmtUsd(subtotal)}</span>
+                      </div>
+                      {descuentoUsd > 0 && (
+                        <div className="flex justify-between py-1.5">
+                          <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Descuento</span>
+                          <span className="font-medium text-red-500 text-xs">-{fmtUsd(descuentoUsd)}</span>
+                        </div>
+                      )}
+                      {costoEnvioUsd > 0 && (
+                        <div className="flex justify-between py-1.5">
+                          <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Envío</span>
+                          <span className="font-medium text-emerald-600 text-xs">+{fmtUsd(costoEnvioUsd)}</span>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  <div className="flex justify-between py-1.5 last:pb-0">
+                    <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Total</span>
+                    <span className="font-bold text-slate-900 text-sm">{fmtUsd(totalUsd)}</span>
+                  </div>
+                  {notasCliente && (
+                    <div className="py-1.5 last:pb-0">
+                      <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide block mb-0.5">Notas</span>
+                      <p className="text-[11px] text-slate-600 leading-snug">{notasCliente}</p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Acciones */}
@@ -1335,14 +1365,21 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                     {showResumen ? 'Ocultar resumen' : 'Ver resumen'}
                   </button>
                   {showResumen && (
-                    <div className="bg-slate-50 rounded-xl p-2.5 space-y-1.5 max-h-48 overflow-y-auto text-left">
+                    <div className="bg-slate-50 rounded-xl p-2.5 space-y-1.5 max-h-60 overflow-y-auto text-left">
                       {items.map((item, i) => (
-                        <div key={i} className="flex items-start justify-between gap-2 py-1 border-b border-slate-100 last:border-0">
+                        <div key={i} className="flex items-start justify-between gap-2 py-1.5 border-b border-slate-100 last:border-0">
                           <div className="flex-1 min-w-0">
-                            <p className="text-[11px] font-semibold text-slate-700 truncate">{item.nombre}</p>
-                            <p className="text-[10px] text-slate-400">{item.cantidad} × {fmtUsd(item.precioUnitUsd)}</p>
+                            <p className="text-[11px] font-semibold text-slate-700 leading-snug">{item.nombre}</p>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              {item.codigoSnap && (
+                                <span className="text-[9px] font-mono text-slate-400 bg-slate-100 px-1 py-0.5 rounded">{item.codigoSnap}</span>
+                              )}
+                              <span className="text-[10px] text-slate-400">
+                                {item.cantidad} {item.unidadSnap || 'Und'} × {fmtUsd(item.precioUnitUsd)}
+                              </span>
+                            </div>
                           </div>
-                          <p className="text-[11px] font-bold text-slate-800 shrink-0">{fmtUsd(item.cantidad * item.precioUnitUsd)}</p>
+                          <p className="text-[11px] font-bold text-slate-800 shrink-0 pt-0.5">{fmtUsd(item.cantidad * item.precioUnitUsd)}</p>
                         </div>
                       ))}
                     </div>
