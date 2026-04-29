@@ -97,8 +97,8 @@ export default function ReciclarCotizacionModal({
 
             {cotizacion.cliente?.nombre && (
               <div className="flex items-center gap-2">
-                <User size={14} className="text-slate-400" />
-                <span className="text-sm text-slate-700">{cotizacion.cliente.nombre}</span>
+                <User size={14} style={{ color: cotizacion.cliente.vendedor?.color || '#94a3b8' }} />
+                <span className="text-sm font-medium" style={{ color: cotizacion.cliente.vendedor?.color || '#334155' }}>{cotizacion.cliente.nombre}</span>
               </div>
             )}
 

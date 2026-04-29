@@ -223,7 +223,7 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
                 <User size={14} className="text-primary" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs sm:text-sm font-bold text-slate-800 truncate">{clienteSeleccionado.nombre}</p>
+                <p className="text-xs sm:text-sm font-bold truncate" style={{ color: clienteSeleccionado.vendedor?.color || '#1e293b' }}>{clienteSeleccionado.nombre}</p>
                 <p className="text-[10px] sm:text-xs text-slate-400 truncate">
                   {[clienteSeleccionado.rif_cedula, clienteSeleccionado.telefono].filter(Boolean).join(' · ')}
                 </p>
@@ -280,7 +280,7 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <p className="text-sm font-semibold text-slate-700 truncate">{c.nombre}</p>
+                  <p className="text-sm font-semibold truncate" style={{ color: c.vendedor?.color || '#334155' }}>{c.nombre}</p>
                   {!esSupervisor && c.vendedor_id && c.vendedor_id !== perfil?.id && c.vendedor && (
                     <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200 shrink-0 whitespace-nowrap">
                       {c.vendedor.nombre}

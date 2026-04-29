@@ -53,7 +53,7 @@ export default function ReasignacionModal({ cliente, isOpen, onClose }) {
 
       {/* Info del cliente */}
       <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-5">
-        <p className="text-sm font-semibold text-amber-800">{cliente.nombre}</p>
+        <p className="text-sm font-semibold" style={{ color: cliente.vendedor?.color || '#92400e' }}>{cliente.nombre}</p>
         {cliente.rif_cedula && (
           <p className="text-xs text-amber-600 mt-0.5">{cliente.rif_cedula}</p>
         )}

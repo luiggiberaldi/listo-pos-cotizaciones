@@ -863,7 +863,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                esEdicion ? 'Editar' : 'Nueva cotización'}
             </h2>
             {paso === 2 && clienteSeleccionado && (
-              <span className="hidden sm:inline text-xs text-slate-400 truncate">· {clienteSeleccionado.nombre}</span>
+              <span className="hidden sm:inline text-xs truncate" style={{ color: clienteSeleccionado.vendedor?.color || '#94a3b8' }}>· {clienteSeleccionado.nombre}</span>
             )}
             {esEdicion && cotizacionExistente.numero && (
               <span className="hidden sm:inline text-[10px] font-mono font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full shrink-0">
@@ -1169,7 +1169,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                     <User size={16} className="text-primary" />
                   </div>
                   <div className="min-w-0">
-                    <p className="font-bold text-slate-800 text-sm truncate">{clienteSeleccionado?.nombre}</p>
+                    <p className="font-bold text-sm truncate" style={{ color: clienteSeleccionado?.vendedor?.color || '#1e293b' }}>{clienteSeleccionado?.nombre}</p>
                     {clienteSeleccionado?.tipo_cliente && (
                       <p className="text-xs text-slate-400 capitalize">{clienteSeleccionado.tipo_cliente}</p>
                     )}
@@ -1314,7 +1314,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                 <div className="bg-slate-50 rounded-xl p-3 divide-y divide-slate-100 text-left">
                   <div className="flex justify-between py-1.5 first:pt-0">
                     <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Cliente</span>
-                    <span className="font-semibold text-slate-800 text-xs text-right max-w-[200px] truncate">{clienteSeleccionado?.nombre}</span>
+                    <span className="font-semibold text-xs text-right max-w-[200px] truncate" style={{ color: clienteSeleccionado?.vendedor?.color || '#1e293b' }}>{clienteSeleccionado?.nombre}</span>
                   </div>
                   <div className="flex justify-between py-1.5">
                     <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Vendedor</span>

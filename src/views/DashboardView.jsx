@@ -388,7 +388,7 @@ export default function DashboardView() {
                       <span className="text-[11px] text-slate-400">{fmtRelativo(d.creado_en)}</span>
                     </div>
                     {d.cliente && (
-                      <p className="text-xs text-slate-500 truncate mt-0.5">
+                      <p className="text-xs truncate mt-0.5" style={{ color: d.cliente.vendedor?.color || '#64748b' }}>
                         {d.cliente.nombre}
                         {(d.cliente.ciudad || d.cliente.estado) && (
                           <span className="text-slate-400"> · {[d.cliente.ciudad, d.cliente.estado].filter(Boolean).join(', ')}</span>

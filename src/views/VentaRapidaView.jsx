@@ -672,11 +672,11 @@ function Step1Productos({
       {/* Cliente selector — compact inline */}
       <div ref={clienteRef} className="relative shrink-0 mb-1.5">
         {clienteSeleccionado ? (
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-xl">
-            <User size={14} className="text-emerald-600 shrink-0" />
-            <p className="font-medium text-sm text-slate-800 truncate">{clienteSeleccionado.nombre}</p>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border" style={{ backgroundColor: (clienteSeleccionado.vendedor?.color || '#10b981') + '12', borderColor: (clienteSeleccionado.vendedor?.color || '#10b981') + '40' }}>
+            <User size={14} className="shrink-0" style={{ color: clienteSeleccionado.vendedor?.color || '#10b981' }} />
+            <p className="font-medium text-sm truncate" style={{ color: clienteSeleccionado.vendedor?.color || '#1e293b' }}>{clienteSeleccionado.nombre}</p>
             {clienteSeleccionado.rif_cedula && <span className="text-xs text-slate-400">{clienteSeleccionado.rif_cedula}</span>}
-            <button onClick={() => setClienteId('')} className="ml-auto p-1 rounded-lg hover:bg-emerald-100">
+            <button onClick={() => setClienteId('')} className="ml-auto p-1 rounded-lg hover:bg-slate-100">
               <X size={14} className="text-slate-400" />
             </button>
           </div>
@@ -696,8 +696,8 @@ function Step1Productos({
                   {clientesFiltrados.map(c => (
                     <button key={c.id} onClick={() => elegirCliente(c)}
                       className="w-full text-left px-3 py-2 hover:bg-sky-50 text-sm flex items-center gap-2 border-b border-slate-50 last:border-0">
-                      <User size={14} className="text-slate-400 shrink-0" />
-                      <span className="truncate">{c.nombre}</span>
+                      <User size={14} className="shrink-0" style={{ color: c.vendedor?.color || '#94a3b8' }} />
+                      <span className="truncate font-medium" style={{ color: c.vendedor?.color || '#334155' }}>{c.nombre}</span>
                       {c.rif_cedula && <span className="text-xs text-slate-400 shrink-0">{c.rif_cedula}</span>}
                     </button>
                   ))}

@@ -245,7 +245,7 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] text-slate-400 uppercase tracking-wide">Cotizó</span>
-                  <span className="text-xs font-medium text-slate-600 truncate max-w-[250px]">{registro.cliente.nombre}</span>
+                  <span className="text-xs font-medium truncate max-w-[250px]" style={{ color: registro.cliente.vendedor?.color || '#475569' }}>{registro.cliente.nombre}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] text-amber-500 uppercase tracking-wide font-semibold">Facturó</span>
