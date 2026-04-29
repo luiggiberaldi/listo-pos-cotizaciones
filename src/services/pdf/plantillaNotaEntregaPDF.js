@@ -7,7 +7,7 @@ import {
   PAGE_W, PAGE_H, MARGIN, CONTENT_W,
   C_DARK, C_WHITE,
   CUENTAS_BANCARIAS,
-  drawCheck, drawWatermark,
+  drawWatermark,
 } from './pdfShared'
 
 export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
@@ -111,7 +111,7 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   doc.rect(MARGIN + clienteLblW + clienteValW, f4Y, rifLblW, rowH, 'S')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7.5)
-  doc.text('R.I.F.,C.I.', MARGIN + clienteLblW + clienteValW + 2, f4Y + rowH / 2 + 1)
+  doc.text('R.I.F.,C.I.', MARGIN + clienteLblW + clienteValW + rifLblW / 2, f4Y + rowH / 2 + 1, { align: 'center' })
   doc.rect(MARGIN + clienteLblW + clienteValW + rifLblW, f4Y, rifValW, rowH, 'S')
 
   // Fila 5: DIRECCIÓN
@@ -139,22 +139,21 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8)
   doc.text('VENDEDOR:', MARGIN + tlfLblW + tlfValW + 2, f6Y + rowH / 2 + 1)
-  // Vendedor con fondo gris
   doc.setFillColor(235, 235, 240)
   doc.rect(MARGIN + tlfLblW + tlfValW + vendLblW, f6Y, vendValW, rowH, 'FD')
 
-  y = f6Y + rowH + 4
+  y = f6Y + rowH + 2
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 3. TABLA DE PRODUCTOS — cabecera + espacio en blanco
+  // 3. TABLA DE PRODUCTOS — cabecera + filas vacías
   // ══════════════════════════════════════════════════════════════════════════
   const COLS = [
     { label: 'CANT.',       x: MARGIN,        w: 11,  align: 'center' },
     { label: 'CÓD.',        x: MARGIN + 11,   w: 20,  align: 'center' },
-    { label: 'DESCRIPCIÓN', x: MARGIN + 31,   w: 97,  align: 'center' },
-    { label: 'UNID.',       x: MARGIN + 128,  w: 11,  align: 'center' },
-    { label: 'PRECIO Bs',   x: MARGIN + 139,  w: 19,  align: 'center' },
-    { label: 'TOTAL Bs',    x: MARGIN + 158,  w: 24,  align: 'right'  },
+    { label: 'DESCRIPCIÓN', x: MARGIN + 31,   w: 87,  align: 'center' },
+    { label: 'UNID.',       x: MARGIN + 118,  w: 11,  align: 'center' },
+    { label: 'PRECIO',      x: MARGIN + 129,  w: 27,  align: 'center' },
+    { label: 'TOTAL',       x: MARGIN + 156,  w: 32,  align: 'right'  },
   ]
 
   // Cabecera oscura
@@ -171,9 +170,9 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   })
   y += 9
 
-  // Espacio en blanco con filas para llenar a mano
+  // Filas vacías para llenar a mano
+  const BLANK_ROW_H = 6.5
   const BLANK_ROWS = 12
-  const BLANK_ROW_H = 7
   doc.setLineWidth(0.2)
   doc.setDrawColor(200, 200, 200)
   for (let i = 0; i < BLANK_ROWS; i++) {
@@ -182,71 +181,11 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
     y += BLANK_ROW_H
   }
 
-
   // ══════════════════════════════════════════════════════════════════════════
-  // 4. Layout fijo desde el fondo (igual que nota de entrega)
+  // 4. CONDICIONES (izq) + CUENTAS BANCARIAS (der)
   // ══════════════════════════════════════════════════════════════════════════
   const sloganY = PAGE_H - 33
-  const TRANS_H = 18
 
-  const choferStartY = sloganY - 9 - TRANS_H
-  const fpY = choferStartY - 3 - 33  // 9 (crédito) + 7 (base) + 7 (iva) + 10 (total)
-
-  // ── Condiciones de pago ──
-  doc.setDrawColor(120, 120, 120)
-  doc.setLineWidth(0.3)
-  doc.rect(MARGIN, fpY, CONTENT_W, 9, 'S')
-
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7.5)
-  doc.setTextColor(...C_DARK)
-  doc.text('8 días de crédito continuo', MARGIN + 3, fpY + 6)
-
-  // Filas Base + IVA (para llenar a mano)
-  const ivaPct = Number(config.iva_pct) || 16
-  const ivaStartY = fpY + 9
-  doc.setDrawColor(120, 120, 120)
-  doc.setLineWidth(0.2)
-
-  // Fila Base
-  doc.rect(MARGIN, ivaStartY, CONTENT_W, 7, 'S')
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
-  doc.setTextColor(...C_DARK)
-  doc.text('Base', MARGIN + 4, ivaStartY + 5)
-  doc.setLineWidth(0.4)
-  doc.setDrawColor(150, 150, 150)
-  doc.line(MARGIN + 20, ivaStartY + 5.5, MARGIN + CONTENT_W - 4, ivaStartY + 5.5)
-
-  // Fila IVA 16%
-  doc.setDrawColor(120, 120, 120)
-  doc.setLineWidth(0.2)
-  doc.rect(MARGIN, ivaStartY + 7, CONTENT_W, 7, 'S')
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
-  doc.setTextColor(...C_DARK)
-  doc.text(`IVA ${ivaPct}%`, MARGIN + 4, ivaStartY + 12)
-  doc.setLineWidth(0.4)
-  doc.setDrawColor(150, 150, 150)
-  doc.line(MARGIN + 24, ivaStartY + 12.5, MARGIN + CONTENT_W - 4, ivaStartY + 12.5)
-
-  // Barra TOTAL — fondo blanco, texto negro (para llenar a mano)
-  const totTopY = ivaStartY + 14
-  doc.setDrawColor(120, 120, 120)
-  doc.setLineWidth(0.3)
-  doc.rect(MARGIN, totTopY, CONTENT_W, 10, 'S')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
-  doc.setTextColor(...C_DARK)
-  doc.text('TOTAL Bs', MARGIN + 4, totTopY + 7)
-  // Línea para monto
-  doc.setLineWidth(0.4)
-  doc.setDrawColor(150, 150, 150)
-  doc.line(MARGIN + 30, totTopY + 7.5, MARGIN + CONTENT_W - 4, totTopY + 7.5)
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // 5. CONDICIONES (izq) + CUENTAS BANCARIAS (der) — 5mm encima del pago
-  // ══════════════════════════════════════════════════════════════════════════
   const condiciones = [
     'Precios Sujetos a cambios sin previo aviso.',
     'El cliente se encarga de descargar la mercancía.',
@@ -255,24 +194,34 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   const condLineH = 4.5
   const condBoxH = 6 + condiciones.length * condLineH + condPadding * 2
   const halfW = CONTENT_W / 2 - 2
-  const ty = fpY - 5 - condBoxH
+
+  // Calcular posiciones desde abajo
+  const TRANS_H = 18
+  const choferStartY = sloganY - 9 - TRANS_H
+  const comboRows = 3 // crédito + base + IVA
+  const dataRowH = 7
+  const totalBarH = 10
+  const comboTop = choferStartY - 3 - totalBarH - comboRows * dataRowH
+  const condTopY = comboTop - 5 - condBoxH
 
   // Condiciones (izquierda)
   doc.setFillColor(245, 245, 245)
   doc.setDrawColor(100, 100, 100)
   doc.setLineWidth(0.4)
-  doc.roundedRect(MARGIN, ty, halfW, condBoxH, 1, 1, 'FD')
+  doc.roundedRect(MARGIN, condTopY, halfW, condBoxH, 1, 1, 'FD')
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(10)
   doc.setTextColor(...C_DARK)
-  doc.text('CONDICIONES GENERALES:', MARGIN + condPadding, ty + condPadding + 3.5)
+  doc.text('CONDICIONES GENERALES:', MARGIN + condPadding, condTopY + condPadding + 3.5)
 
-
+  doc.setDrawColor(100, 100, 100)
+  doc.setLineWidth(0.2)
+  doc.line(MARGIN + condPadding, condTopY + condPadding + 5.5, MARGIN + halfW - condPadding, condTopY + condPadding + 5.5)
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(9.5)
-  let condY = ty + condPadding + 9.5
+  let condY = condTopY + condPadding + 9.5
   condiciones.forEach(c => {
     doc.text(`• ${c}`, MARGIN + condPadding, condY)
     condY += condLineH
@@ -284,25 +233,74 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   doc.setFillColor(245, 245, 245)
   doc.setDrawColor(100, 100, 100)
   doc.setLineWidth(0.4)
-  doc.roundedRect(rightX, ty, halfW, condBoxH, 1, 1, 'FD')
+  doc.roundedRect(rightX, condTopY, halfW, condBoxH, 1, 1, 'FD')
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8)
   doc.setTextColor(...C_DARK)
-  doc.text('Transferencias a nombre de ' + (config.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.').toUpperCase(), rightX + condPadding, ty + condPadding + 3.5)
+  doc.text('Transferencias a nombre de ' + (config.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.').toUpperCase(), rightX + condPadding, condTopY + condPadding + 3.5)
 
-
+  doc.setDrawColor(100, 100, 100)
+  doc.setLineWidth(0.2)
+  doc.line(rightX + condPadding, condTopY + condPadding + 5.5, rightX + halfW - condPadding, condTopY + condPadding + 5.5)
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
-  let cuentaY = ty + condPadding + 9.5
+  let cuentaY = condTopY + condPadding + 9.5
   CUENTAS_BANCARIAS.forEach(cuenta => {
     doc.text(cuenta, rightX + condPadding, cuentaY)
     cuentaY += condLineH
   })
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 6. DATOS DEL CHOFER Y VEHÍCULO — vacíos con celdas
+  // 5. BLOQUE COMBINADO: Crédito + Transporte (izq) | Base/IVA (der) + TOTAL
+  // ══════════════════════════════════════════════════════════════════════════
+  const comboLeftW = Math.round(CONTENT_W * 0.62)
+  const comboRightW = CONTENT_W - comboLeftW
+  const ivaPct = Number(config.iva_pct) || 16
+
+  const leftLabels = ['8 DÍAS DE CRÉDITO CONTINUO', 'Chofer:', 'Vehículo:']
+  const rightLabels = ['Base', `IVA ${ivaPct}%`, 'Flete']
+
+  for (let r = 0; r < comboRows; r++) {
+    const ry = comboTop + r * dataRowH
+
+    // Celda izquierda
+    doc.setDrawColor(120, 120, 120)
+    doc.setLineWidth(0.2)
+    doc.rect(MARGIN, ry, comboLeftW, dataRowH, 'S')
+    doc.setFont('helvetica', r === 0 ? 'bold' : 'normal')
+    doc.setFontSize(r === 0 ? 9 : 7.5)
+    doc.setTextColor(...C_DARK)
+    doc.text(leftLabels[r], MARGIN + 3, ry + dataRowH / 2 + 1)
+
+    // Celda derecha
+    doc.rect(MARGIN + comboLeftW, ry, comboRightW, dataRowH, 'S')
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(...C_DARK)
+    doc.text(rightLabels[r], MARGIN + comboLeftW + 3, ry + dataRowH / 2 + 1)
+    // Línea para monto
+    doc.setLineWidth(0.3)
+    doc.setDrawColor(150, 150, 150)
+    doc.line(MARGIN + comboLeftW + 30, ry + dataRowH / 2 + 1.5, MARGIN + CONTENT_W - 3, ry + dataRowH / 2 + 1.5)
+  }
+
+  // Barra TOTAL
+  const totTopY = comboTop + comboRows * dataRowH
+  doc.setDrawColor(120, 120, 120)
+  doc.setLineWidth(0.3)
+  doc.rect(MARGIN, totTopY, CONTENT_W, totalBarH, 'S')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.setTextColor(...C_DARK)
+  doc.text('TOTAL', MARGIN + 4, totTopY + 7)
+  doc.setLineWidth(0.4)
+  doc.setDrawColor(150, 150, 150)
+  doc.line(MARGIN + 30, totTopY + 7.5, MARGIN + CONTENT_W - 4, totTopY + 7.5)
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 6. DATOS DEL CHOFER Y VEHÍCULO — vacíos (2 filas: 3+4 cols)
   // ══════════════════════════════════════════════════════════════════════════
   doc.setFillColor(240, 240, 240)
   doc.rect(MARGIN, choferStartY, CONTENT_W, 6, 'F')
@@ -314,19 +312,36 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   doc.setTextColor(...C_DARK)
   doc.text('DATOS DEL CHOFER Y DEL VEHÍCULO', MARGIN + 2, choferStartY + 4)
 
-  const cellY2 = choferStartY + 6
-  const cellH = 12
-  const choferLabels = ['CHOFER', 'C.I.', 'COLOR', 'VEHÍCULO', 'PLACA CHUTO', 'PLACA BATEA']
-  const colW = CONTENT_W / choferLabels.length
-  choferLabels.forEach((label, i) => {
-    const fx = MARGIN + i * colW
+  const ROW_H2 = 12
+  const row1Y = choferStartY + 6
+  const row2Y = row1Y + ROW_H2
+  const col3W = CONTENT_W / 3
+  const col4W = CONTENT_W / 4
+
+  // Fila 1: CHOFER, C.I., COLOR
+  const row1Labels = ['CHOFER', 'C.I.', 'COLOR']
+  row1Labels.forEach((label, i) => {
+    const fx = MARGIN + i * col3W
     doc.setDrawColor(120, 120, 120)
     doc.setLineWidth(0.3)
-    doc.rect(fx, cellY2, colW, cellH, 'S')
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(7)
+    doc.rect(fx, row1Y, col3W, ROW_H2, 'S')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(6.5)
     doc.setTextColor(100, 100, 100)
-    doc.text(label + ':', fx + 2, cellY2 + 4)
+    doc.text(label, fx + 2, row1Y + 3.5)
+  })
+
+  // Fila 2: VEHÍCULO, PLACA, PLACA CHUTO, PLACA BATEA
+  const row2Labels = ['VEHÍCULO', 'PLACA', 'PLACA CHUTO', 'PLACA BATEA']
+  row2Labels.forEach((label, i) => {
+    const fx = MARGIN + i * col4W
+    doc.setDrawColor(120, 120, 120)
+    doc.setLineWidth(0.3)
+    doc.rect(fx, row2Y, col4W, ROW_H2, 'S')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(6.5)
+    doc.setTextColor(100, 100, 100)
+    doc.text(label, fx + 2, row2Y + 3.5)
   })
 
   // ══════════════════════════════════════════════════════════════════════════

@@ -4,14 +4,11 @@
 // Sin footer, cuentas, slogan ni condiciones (igual que la orden de despacho)
 import { jsPDF } from 'jspdf'
 import { LOGO_DESPACHO } from './logoDespachoBase64'
-import { WATERMARK_LOGO } from './watermarkBase64'
-
-const MARGIN    = 14
-const PAGE_W    = 216
-const PAGE_H    = 279
-const CONTENT_W = PAGE_W - MARGIN * 2
-const C_DARK    = [5, 8, 52]
-const C_WHITE   = [255, 255, 255]
+import {
+  PAGE_W, PAGE_H, MARGIN, CONTENT_W,
+  C_DARK, C_WHITE,
+  drawWatermark,
+} from './pdfShared'
 
 function drawCheck(doc, label, x, y) {
   doc.setLineWidth(0.3)
@@ -52,13 +49,7 @@ export async function generarPlantillaOrdenDespachoPDF({ config = {} } = {}) {
   y = HDR_H + 17
 
   // Marca de agua
-  try {
-    const gState = new doc.GState({ opacity: 0.06 })
-    doc.setGState(gState)
-    const wmSize = 140
-    doc.addImage(WATERMARK_LOGO, 'PNG', (PAGE_W - wmSize) / 2, (PAGE_H - wmSize) / 2, wmSize, wmSize)
-    doc.setGState(new doc.GState({ opacity: 1 }))
-  } catch (_) {}
+  drawWatermark(doc)
 
   // ══════════════════════════════════════════════════════════════════════════
   // 2. DATOS DEL CLIENTE — cuadrícula vacía
@@ -130,7 +121,7 @@ export async function generarPlantillaOrdenDespachoPDF({ config = {} } = {}) {
   doc.rect(MARGIN + clienteLblW + clienteValW, f4Y, rifLblW, rowH, 'S')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7.5)
-  doc.text('R.I.F.,C.I.', MARGIN + clienteLblW + clienteValW + 2, f4Y + rowH / 2 + 1)
+  doc.text('R.I.F.,C.I.', MARGIN + clienteLblW + clienteValW + rifLblW / 2, f4Y + rowH / 2 + 1, { align: 'center' })
   doc.rect(MARGIN + clienteLblW + clienteValW + rifLblW, f4Y, rifValW, rowH, 'S')
 
   // Fila 5: DIRECCIÓN
@@ -158,11 +149,10 @@ export async function generarPlantillaOrdenDespachoPDF({ config = {} } = {}) {
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8)
   doc.text('VENDEDOR:', MARGIN + tlfLblW + tlfValW + 2, f6Y + rowH / 2 + 1)
-  // Vendedor con fondo gris
   doc.setFillColor(235, 235, 240)
   doc.rect(MARGIN + tlfLblW + tlfValW + vendLblW, f6Y, vendValW, rowH, 'FD')
 
-  y = f6Y + rowH + 4
+  y = f6Y + rowH + 2
 
   // ══════════════════════════════════════════════════════════════════════════
   // 3. TABLA DE PRODUCTOS — cabecera + filas vacías
@@ -170,10 +160,10 @@ export async function generarPlantillaOrdenDespachoPDF({ config = {} } = {}) {
   const COLS = [
     { label: 'CANT.',       x: MARGIN,        w: 11,  align: 'center' },
     { label: 'CÓD.',        x: MARGIN + 11,   w: 20,  align: 'center' },
-    { label: 'DESCRIPCIÓN', x: MARGIN + 31,   w: 97,  align: 'center' },
-    { label: 'UNID.',       x: MARGIN + 128,  w: 11,  align: 'center' },
-    { label: 'PRECIO',      x: MARGIN + 139,  w: 22,  align: 'center' },
-    { label: 'TOTAL',       x: MARGIN + 161,  w: 21,  align: 'right'  },
+    { label: 'DESCRIPCIÓN', x: MARGIN + 31,   w: 91,  align: 'center' },
+    { label: 'UNID.',       x: MARGIN + 122,  w: 11,  align: 'center' },
+    { label: 'PRECIO',      x: MARGIN + 133,  w: 27,  align: 'center' },
+    { label: 'TOTAL',       x: MARGIN + 160,  w: 28,  align: 'right'  },
   ]
 
   // Cabecera oscura
@@ -190,12 +180,12 @@ export async function generarPlantillaOrdenDespachoPDF({ config = {} } = {}) {
   })
   y += 9
 
-  // Filas vacías para llenar a mano — calcular cuántas caben
-  const BLANK_ROW_H = 7
-  const CHOFER_H = 22
+  // Filas vacías para llenar a mano
+  const BLANK_ROW_H = 6.5
+  const CHOFER_H = 30
   const choferY = PAGE_H - MARGIN - CHOFER_H
   const fpY = choferY - 24
-  const notasH = 20  // espacio para notas (3 + 6 + 2*5.5)
+  const notasH = 20
   const availableH = fpY - y - notasH - 3
   const BLANK_ROWS = Math.max(1, Math.floor(availableH / BLANK_ROW_H))
   doc.setLineWidth(0.2)
@@ -230,7 +220,7 @@ export async function generarPlantillaOrdenDespachoPDF({ config = {} } = {}) {
   doc.rect(MARGIN, fpY, CONTENT_W, 9, 'S')
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7.5)
+  doc.setFontSize(9)
   doc.setTextColor(...C_DARK)
   doc.text('FORMA DE PAGO:', MARGIN + 3, fpY + 6)
   drawCheck(doc, 'EFECTIVO',   MARGIN + 38, fpY + 6)
@@ -249,13 +239,12 @@ export async function generarPlantillaOrdenDespachoPDF({ config = {} } = {}) {
   doc.setFontSize(11)
   doc.setTextColor(...C_DARK)
   doc.text('TOTAL', MARGIN + 4, totTopY + 7)
-  // Línea para monto
   doc.setLineWidth(0.4)
   doc.setDrawColor(150, 150, 150)
   doc.line(MARGIN + 30, totTopY + 7.5, MARGIN + CONTENT_W - 4, totTopY + 7.5)
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 5. DATOS DEL CHOFER Y VEHÍCULO — vacíos con celdas (footer)
+  // 5. DATOS DEL CHOFER Y VEHÍCULO — vacíos (2 filas: 3+4 cols como en la llena)
   // ══════════════════════════════════════════════════════════════════════════
   doc.setFillColor(240, 240, 240)
   doc.rect(MARGIN, choferY, CONTENT_W, 6, 'F')
@@ -267,19 +256,36 @@ export async function generarPlantillaOrdenDespachoPDF({ config = {} } = {}) {
   doc.setTextColor(...C_DARK)
   doc.text('DATOS DEL CHOFER Y DEL VEHÍCULO', MARGIN + 2, choferY + 4)
 
-  const cellY2 = choferY + 6
-  const cellH = 12
-  const choferLabels = ['CHOFER', 'C.I.', 'COLOR', 'VEHÍCULO', 'PLACA CHUTO', 'PLACA BATEA']
-  const colW = CONTENT_W / choferLabels.length
-  choferLabels.forEach((label, i) => {
-    const fx = MARGIN + i * colW
+  const ROW_H2 = 12
+  const row1Y = choferY + 6
+  const row2Y = row1Y + ROW_H2
+  const col3W = CONTENT_W / 3
+  const col4W = CONTENT_W / 4
+
+  // Fila 1: CHOFER, C.I., COLOR
+  const row1Labels = ['CHOFER', 'C.I.', 'COLOR']
+  row1Labels.forEach((label, i) => {
+    const fx = MARGIN + i * col3W
     doc.setDrawColor(120, 120, 120)
     doc.setLineWidth(0.3)
-    doc.rect(fx, cellY2, colW, cellH, 'S')
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(7)
+    doc.rect(fx, row1Y, col3W, ROW_H2, 'S')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(6.5)
     doc.setTextColor(100, 100, 100)
-    doc.text(label + ':', fx + 2, cellY2 + 4)
+    doc.text(label, fx + 2, row1Y + 3.5)
+  })
+
+  // Fila 2: VEHÍCULO, PLACA, PLACA CHUTO, PLACA BATEA
+  const row2Labels = ['VEHÍCULO', 'PLACA', 'PLACA CHUTO', 'PLACA BATEA']
+  row2Labels.forEach((label, i) => {
+    const fx = MARGIN + i * col4W
+    doc.setDrawColor(120, 120, 120)
+    doc.setLineWidth(0.3)
+    doc.rect(fx, row2Y, col4W, ROW_H2, 'S')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(6.5)
+    doc.setTextColor(100, 100, 100)
+    doc.text(label, fx + 2, row2Y + 3.5)
   })
 
   // Sin footer, sin cuentas, sin slogan, sin condiciones
