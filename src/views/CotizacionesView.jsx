@@ -3,7 +3,7 @@
 // El builder reemplaza la lista in-page (sin navegación adicional)
 import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { FileText, Plus, RefreshCw, AlertTriangle, PackageCheck, Loader2, X, AlertCircle, LayoutGrid, List, ChevronDown, Truck, Receipt } from 'lucide-react'
+import { FileText, Plus, RefreshCw, AlertTriangle, PackageCheck, Loader2, X, AlertCircle, LayoutGrid, List, ChevronDown, Truck, Receipt, MessageSquare } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import supabase from '../services/supabase/client'
 import { useTasaCambio } from '../hooks/useTasaCambio'
@@ -81,6 +81,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
   const [showTransportistaMenu, setShowTransportistaMenu] = useState(false)
   const [stockMap, setStockMap] = useState({})
   const [notas, setNotas] = useState('')
+  const [showNotas, setShowNotas] = useState(false)
   const [clienteFacturaId, setClienteFacturaId] = useState('')
   const [showFacturacion, setShowFacturacion] = useState(false)
   const { data: transportistas = [] } = useTransportistas()
@@ -143,14 +144,14 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-3xl max-h-[92vh] flex flex-col">
 
         {/* ── Header ─────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 shrink-0">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
             <div className="w-9 h-9 bg-indigo-50 rounded-xl flex items-center justify-center shrink-0">
               <PackageCheck size={18} className="text-indigo-500" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h3 className="font-black text-slate-800 text-base leading-tight">Crear orden de despacho</h3>
-              <p className="text-xs text-slate-400 font-mono">{numDisplay} · <span className="font-sans font-semibold text-slate-600">{cotizacion.cliente?.nombre ?? '—'}</span></p>
+              <p className="text-xs text-slate-400 font-mono truncate">{numDisplay} · <span className="font-sans font-semibold text-slate-600">{cotizacion.cliente?.nombre ?? '—'}</span> · <span className="font-sans font-black text-indigo-600">{fmtUsd(cotizacion.total_usd)}</span>{tasa > 0 && <span className="font-sans text-slate-400 ml-1">{fmtBs(usdToBs(cotizacion.total_usd, tasa))}</span>}</p>
             </div>
           </div>
           <button onClick={onCancel} disabled={cargando}
@@ -174,26 +175,26 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-100">
-                    <th className="text-left pb-2 text-xs font-semibold text-slate-400 uppercase tracking-wide">Producto</th>
-                    <th className="text-center pb-2 text-xs font-semibold text-slate-400 uppercase tracking-wide w-14">Cant.</th>
-                    <th className="text-right pb-2 text-xs font-semibold text-slate-400 uppercase tracking-wide w-20 hidden sm:table-cell">P. Unit.</th>
-                    <th className="text-right pb-2 text-xs font-semibold text-slate-400 uppercase tracking-wide w-20">Total</th>
+                    <th className="text-left pb-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Producto</th>
+                    <th className="text-center pb-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wide w-14">Cant.</th>
+                    {items.length < 5 && <th className="text-right pb-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wide w-20 hidden sm:table-cell">P. Unit.</th>}
+                    <th className="text-right pb-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wide w-20">Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((item, i) => (
-                    <tr key={item.id || i} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                      <td className="py-1.5 pr-2">
-                        <span className="font-medium text-slate-700 text-sm">{item.nombre_snap}</span>
+                    <tr key={item.id || i} className="border-b border-slate-50">
+                      <td className={`${items.length >= 5 ? 'py-1' : 'py-1.5'} pr-2`}>
+                        <span className={`font-medium text-slate-700 ${items.length >= 5 ? 'text-xs' : 'text-sm'}`}>{item.nombre_snap}</span>
                         {item.codigo_snap && (
-                          <span className="text-[11px] text-slate-400 font-mono ml-1.5">· {item.codigo_snap}</span>
+                          <span className="text-[10px] text-slate-400 font-mono ml-1">· {item.codigo_snap}</span>
                         )}
                       </td>
-                      <td className="py-1.5 text-center text-slate-600 text-sm whitespace-nowrap">
-                        {Number(item.cantidad).toLocaleString('es-VE')} <span className="text-xs text-slate-400">{item.unidad_snap}</span>
+                      <td className={`${items.length >= 5 ? 'py-1 text-xs' : 'py-1.5 text-sm'} text-center text-slate-600 whitespace-nowrap`}>
+                        {Number(item.cantidad).toLocaleString('es-VE')} <span className="text-[10px] text-slate-400">{item.unidad_snap}</span>
                       </td>
-                      <td className="py-1.5 text-right text-slate-500 text-sm hidden sm:table-cell">{fmtUsd(item.precio_unit_usd)}</td>
-                      <td className="py-1.5 text-right font-bold text-slate-700 text-sm">{fmtUsd(item.total_linea_usd)}</td>
+                      {items.length < 5 && <td className="py-1.5 text-right text-slate-500 text-sm hidden sm:table-cell">{fmtUsd(item.precio_unit_usd)}</td>}
+                      <td className={`${items.length >= 5 ? 'py-1 text-xs' : 'py-1.5 text-sm'} text-right font-bold text-slate-700`}>{fmtUsd(item.total_linea_usd)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -215,7 +216,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
             )}
 
             {/* Totales */}
-            <div className="border-t border-slate-100 pt-3 space-y-1">
+            <div className="border-t border-slate-100 pt-2 space-y-0.5">
               {cotizacion.descuento_usd > 0 && (<>
                 <div className="flex justify-between text-xs text-slate-400">
                   <span>Subtotal</span><span>{fmtUsd(cotizacion.subtotal_usd)}</span>
@@ -230,16 +231,9 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                   <span>Envío</span><span>{fmtUsd(cotizacion.costo_envio_usd)}</span>
                 </div>
               )}
-              <div className="flex justify-between items-baseline pt-0.5">
-                <span className="font-bold text-slate-700 text-sm">Total</span>
-                <div className="text-right">
-                  <span className="font-black text-slate-800 text-lg">{fmtUsd(cotizacion.total_usd)}</span>
-                  {tasa > 0 && <div className="text-xs text-slate-400">{fmtBs(usdToBs(cotizacion.total_usd, tasa))}</div>}
-                </div>
-              </div>
               {Number(fleteUsd) > 0 && (
                 <div className="flex justify-between text-xs text-indigo-500 font-medium">
-                  <span>Con flete</span>
+                  <span>+ Flete</span>
                   <span>{fmtUsd(totalConFlete)}</span>
                 </div>
               )}
@@ -247,7 +241,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
           </div>
 
           {/* ── Columna derecha: configuración del despacho ── */}
-          <div className="lg:w-80 xl:w-96 min-h-0 overflow-y-auto p-4 lg:p-5 space-y-4">
+          <div className="lg:w-80 xl:w-96 min-h-0 overflow-y-auto p-4 lg:p-5 space-y-3">
 
             {/* Formas de pago */}
             <div className="space-y-2">
@@ -270,49 +264,45 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                 })}
               </div>
               {formasPago.length > 0 && (
-                <div className="space-y-1.5 mt-1">
+                <div className="space-y-1">
                   {formasPago.map(fp => (
-                    <div key={fp.metodo} className="flex items-center gap-2">
-                      <span className="text-xs font-semibold text-slate-500 w-24 truncate shrink-0">{fp.metodo}</span>
+                    <div key={fp.metodo} className="flex items-center gap-1.5">
+                      <button type="button" onClick={() => toggleForma(fp.metodo)}
+                        className="text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-200 rounded px-1.5 py-0.5 shrink-0 hover:bg-indigo-100 transition-colors flex items-center gap-0.5">
+                        {fp.metodo} <X size={9} />
+                      </button>
                       <div className="relative flex-1">
-                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
                         <input type="number" min="0" step="0.01" value={fp.monto}
                           onChange={e => setMontoForma(fp.metodo, e.target.value)}
                           placeholder="0.00"
-                          className="w-full pl-6 pr-2 py-1.5 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:bg-white"
+                          className="w-full pl-5 pr-2 py-1 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:bg-white"
                           disabled={cargando} />
                       </div>
                     </div>
                   ))}
-                  <div className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-semibold ${
-                    pagoCuadrado ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-600 border border-red-200'
-                  }`}>
-                    <span>Asignado: {fmtUsd(montoAsignado)}</span>
-                    <span>Total: {fmtUsd(totalSinFlete)}</span>
-                    {pagoCuadrado ? <span>✓</span> : <span>Faltan {fmtUsd(totalSinFlete - montoAsignado)}</span>}
-                  </div>
                 </div>
               )}
               {formasPago.length === 0 && <p className="text-xs text-slate-400">Selecciona al menos una forma de pago</p>}
             </div>
 
-            {/* Transportista */}
+            {/* Transportista + Flete en una fila */}
             <div className="space-y-1.5">
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Transportista</p>
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1">
+              <div className="flex items-center gap-1.5">
+                <div className="relative flex-1 min-w-0">
                   <button type="button"
                     onClick={() => setShowTransportistaMenu(v => !v)}
                     onBlur={() => setTimeout(() => setShowTransportistaMenu(false), 200)}
-                    className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-sm font-medium border border-slate-200 bg-slate-50 hover:border-indigo-300 transition-colors text-left"
+                    className="w-full flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium border border-slate-200 bg-slate-50 hover:border-indigo-300 transition-colors text-left"
                   >
-                    <span className="flex items-center gap-2 truncate min-w-0">
-                      <Truck size={13} className="text-slate-400 shrink-0" />
+                    <span className="flex items-center gap-1.5 truncate min-w-0">
+                      <Truck size={12} className="text-slate-400 shrink-0" />
                       {transportistaId
-                        ? <span className="text-slate-700 truncate">{transportistas.find(t => t.id === transportistaId)?.nombre || 'Seleccionado'}</span>
-                        : <span className="text-slate-400 text-sm">Sin transportista</span>}
+                        ? <span className="text-slate-700 truncate text-xs">{transportistas.find(t => t.id === transportistaId)?.nombre || 'Seleccionado'}</span>
+                        : <span className="text-slate-400 text-xs">Sin transportista</span>}
                     </span>
-                    <ChevronDown size={13} className={`text-slate-400 shrink-0 transition-transform ${showTransportistaMenu ? 'rotate-180' : ''}`} />
+                    <ChevronDown size={12} className={`text-slate-400 shrink-0 transition-transform ${showTransportistaMenu ? 'rotate-180' : ''}`} />
                   </button>
                   {showTransportistaMenu && (
                     <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20 max-h-44 overflow-y-auto"
@@ -337,51 +327,63 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                     </div>
                   )}
                 </div>
-                <button type="button" onClick={() => setShowNuevoTransp(true)} disabled={cargando}
-                  className="shrink-0 w-9 h-9 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 flex items-center justify-center transition-colors active:scale-95 disabled:opacity-50"
-                  title="Nuevo transportista">
-                  <Plus size={14} className="text-emerald-600" />
-                </button>
-              </div>
-              {transportistaId && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-500 shrink-0">Flete USD</span>
-                  <div className="relative flex-1">
-                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
+                {transportistaId && (
+                  <div className="relative w-24 shrink-0">
+                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-[10px]">Flete $</span>
                     <input type="number" min="0" step="0.01" value={fleteUsd}
                       onChange={e => setFleteUsd(e.target.value)} placeholder="0.00"
-                      className="w-full pl-6 pr-2 py-1.5 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:bg-white"
+                      className="w-full pl-12 pr-2 py-1.5 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:bg-white"
                       disabled={cargando} />
                   </div>
+                )}
+                <button type="button" onClick={() => setShowNuevoTransp(true)} disabled={cargando}
+                  className="shrink-0 w-8 h-8 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 flex items-center justify-center transition-colors active:scale-95 disabled:opacity-50"
+                  title="Nuevo transportista">
+                  <Plus size={13} className="text-emerald-600" />
+                </button>
+              </div>
+            </div>
+
+            {/* Notas — colapsable */}
+            <div>
+              {!showNotas ? (
+                <button type="button"
+                  onClick={() => setShowNotas(true)}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg border border-dashed border-slate-200 text-xs text-slate-400 hover:border-slate-300 hover:text-slate-500 transition-colors">
+                  <MessageSquare size={12} />
+                  <span>{notas ? `Nota: ${notas.slice(0, 40)}${notas.length > 40 ? '...' : ''}` : 'Agregar nota (opcional)'}</span>
+                </button>
+              ) : (
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Notas</p>
+                    <button type="button" onClick={() => setShowNotas(false)} className="text-slate-400 hover:text-slate-600 p-0.5">
+                      <X size={12} />
+                    </button>
+                  </div>
+                  <textarea value={notas} onChange={e => setNotas(e.target.value)}
+                    placeholder="Observaciones internas..."
+                    className="w-full px-3 py-1.5 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:bg-white transition-colors resize-none"
+                    rows={2} disabled={cargando} autoFocus />
                 </div>
               )}
             </div>
 
-            {/* Notas */}
+            {/* Facturar a otro cliente — compacto */}
             <div className="space-y-1.5">
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Notas <span className="font-normal normal-case text-slate-400">(opcional)</span></p>
-              <textarea value={notas} onChange={e => setNotas(e.target.value)}
-                placeholder="Observaciones internas..."
-                className="w-full px-3 py-2 rounded-xl text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:bg-white transition-colors resize-none"
-                rows={2} disabled={cargando} />
-            </div>
-
-            {/* Facturar a otro cliente */}
-            <div className="space-y-2">
               <button type="button"
                 onClick={() => { setShowFacturacion(v => !v); if (showFacturacion) setClienteFacturaId('') }}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-all ${
+                className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
                   showFacturacion ? 'border-violet-300 bg-violet-50 text-violet-700' : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300 hover:text-slate-700'
                 }`}>
-                <Receipt size={13} className={showFacturacion ? 'text-violet-500' : 'text-slate-400'} />
+                <Receipt size={12} className={showFacturacion ? 'text-violet-500' : 'text-slate-400'} />
                 <span className="flex-1 text-left">¿Facturar a otro cliente?</span>
                 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${showFacturacion ? 'bg-violet-200 text-violet-700' : 'bg-slate-200 text-slate-500'}`}>
                   {showFacturacion ? 'Activo' : 'Opcional'}
                 </span>
               </button>
               {showFacturacion && (
-                <div className="rounded-xl border border-violet-200 bg-violet-50/30 p-2.5 space-y-2">
-                  <p className="text-xs text-violet-600">CxC y PDF se emitirán a nombre de este cliente.</p>
+                <div className="pl-1">
                   <ClienteFacturaBuscador
                     clientes={clientes.filter(c => c.id !== cotizacion?.cliente_id)}
                     clienteId={clienteFacturaId}
@@ -394,22 +396,33 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
           </div>{/* fin col derecha */}
         </div>{/* fin body */}
 
-        {/* ── Footer — botones ───────────────────────────────────── */}
-        <div className="flex gap-3 px-5 py-3.5 border-t border-slate-100 shrink-0">
-          <button onClick={onCancel} disabled={cargando}
-            className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-semibold text-sm hover:bg-slate-50 transition-colors disabled:opacity-50">
-            Cancelar
-          </button>
-          <button onClick={() => {
-              const fpJson = JSON.stringify(formasPago)
-              onConfirm(fpJson, transportistaId || null, Number(fleteUsd) || 0, referenciaPago, fpJson, notas, clienteFacturaId || null)
-            }} disabled={cargando || items.length === 0 || !pagoCuadrado}
-            title={formasPago.length === 0 ? 'Selecciona forma de pago' : !pagoCuadrado ? 'Los montos no cuadran con el total' : undefined}
-            className="flex-1 py-3 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-semibold text-base transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20">
-            {cargando
-              ? <><Loader2 size={16} className="animate-spin" />Procesando...</>
-              : <><PackageCheck size={16} />Confirmar despacho</>}
-          </button>
+        {/* ── Footer — validación + botones ─────────────────────── */}
+        <div className="border-t border-slate-100 shrink-0">
+          {formasPago.length > 0 && (
+            <div className={`flex items-center justify-between px-5 py-1.5 text-xs font-semibold ${
+              pagoCuadrado ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
+            }`}>
+              <span>Asignado: {fmtUsd(montoAsignado)}</span>
+              <span>Total: {fmtUsd(totalSinFlete)}</span>
+              {pagoCuadrado ? <span>✓</span> : <span>Faltan {fmtUsd(totalSinFlete - montoAsignado)}</span>}
+            </div>
+          )}
+          <div className="flex gap-3 px-5 py-3">
+            <button onClick={onCancel} disabled={cargando}
+              className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-semibold text-sm hover:bg-slate-50 transition-colors disabled:opacity-50">
+              Cancelar
+            </button>
+            <button onClick={() => {
+                const fpJson = JSON.stringify(formasPago)
+                onConfirm(fpJson, transportistaId || null, Number(fleteUsd) || 0, referenciaPago, fpJson, notas, clienteFacturaId || null)
+              }} disabled={cargando || items.length === 0 || !pagoCuadrado}
+              title={formasPago.length === 0 ? 'Selecciona forma de pago' : !pagoCuadrado ? 'Los montos no cuadran con el total' : undefined}
+              className="flex-1 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-semibold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20">
+              {cargando
+                ? <><Loader2 size={15} className="animate-spin" />Procesando...</>
+                : <><PackageCheck size={15} />Confirmar despacho</>}
+            </button>
+          </div>
         </div>
       </div>
 
