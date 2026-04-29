@@ -12,6 +12,14 @@ const STORAGE_KEY_MODO = 'construacero_tasa_modo_v2'
 const UPDATE_INTERVAL = 5 * 60 * 1000 // 5 minutos
 const MIN_REFRESH_INTERVAL = 60 * 1000 // no refrescar más de 1x/min al volver al foco
 
+// ─── Singleton: deduplicar fetches entre múltiples instancias del hook ──────
+// Evita ERR_INSUFFICIENT_RESOURCES cuando varios componentes llaman useTasaCambio()
+let _inflightBcv = null   // Promise en curso para BCV
+let _inflightUsdt = null  // Promise en curso para USDT
+let _lastFetchTs = 0      // Timestamp del último fetch completado
+let _subscribers = new Set() // Callbacks para notificar a todas las instancias
+const MIN_DEDUP_INTERVAL = 5000 // No refetchar si se hizo hace menos de 5s
+
 // Modos válidos: 'bcv' | 'usdt' | 'manual'
 const MODOS_VALIDOS = ['bcv', 'usdt', 'manual']
 
@@ -35,6 +43,99 @@ function parseSafeFloat(val) {
     return parseFloat(`${integer}.${decimals}`) || 0
   }
   return 0
+}
+
+// ─── Funciones de fetch a nivel de módulo (compartidas entre instancias) ─────
+
+async function fetchConTimeout(url, timeout = 8000) {
+  const controller = new AbortController()
+  const id = setTimeout(() => controller.abort(), timeout)
+  try {
+    const res = await fetch(url, { signal: controller.signal })
+    clearTimeout(id)
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    clearTimeout(id)
+    return null
+  }
+}
+
+async function _fetchBcvRaw() {
+  try {
+    const data = await fetchConTimeout('https://script.google.com/macros/s/AKfycbxT9sKz_XWRWuQx_XP-BJ33T0hoAgJsLwhZA00v6nPt4Ij4jRjq-90mDGLVCsS6FXwW9Q/exec?token=Lvbp1994', 8000)
+    const precio = parseSafeFloat(data?.bcv?.price)
+    if (precio > 0) return { precio, fuente: 'BCV Oficial' }
+  } catch { /* intenta siguiente fuente */ }
+
+  try {
+    const data = await fetchConTimeout('https://ve.dolarapi.com/v1/dolares', 8000)
+    if (data && Array.isArray(data)) {
+      const oficial = data.find(d =>
+        d.fuente === 'oficial' || d.nombre === 'Oficial' || d.casa === 'oficial'
+      )
+      const precio = parseSafeFloat(oficial?.promedio)
+      if (precio > 0) return { precio, fuente: 'BCV Oficial' }
+    }
+  } catch { /* intenta siguiente fuente */ }
+
+  try {
+    const data = await fetchConTimeout('https://pydolarve.org/api/v1/dollar?monitor=bcv', 8000)
+    const precio = parseSafeFloat(data?.price)
+    if (precio > 0) return { precio, fuente: 'BCV Oficial' }
+  } catch { /* intenta siguiente fuente */ }
+
+  try {
+    const data = await fetchConTimeout('https://api.exchangedynamics.com/rates/VES', 8000)
+    const precio = parseSafeFloat(data?.USD)
+    if (precio > 0) return { precio, fuente: 'BCV Oficial' }
+  } catch { /* sin más fuentes */ }
+
+  return null
+}
+
+async function _fetchUsdtRaw() {
+  const result = await fetchConTimeout('https://criptoya.com/api/binancep2p/USDT/VES/1', 10000)
+  if (!result) return null
+
+  const avgAsk = typeof result.ask === 'number' ? result.ask
+    : (Array.isArray(result.ask) && result.ask.length > 0
+      ? result.ask.slice(0, 3).reduce((s, i) => s + (i.price ?? i), 0) / Math.min(3, result.ask.length)
+      : 0)
+  const avgBid = typeof result.bid === 'number' ? result.bid
+    : (Array.isArray(result.bid) && result.bid.length > 0
+      ? result.bid.slice(0, 3).reduce((s, i) => s + (i.price ?? i), 0) / Math.min(3, result.bid.length)
+      : 0)
+
+  if (avgAsk <= 0 && avgBid <= 0) return null
+  const precio = (avgAsk > 0 && avgBid > 0) ? (avgAsk + avgBid) / 2 : (avgAsk || avgBid)
+  return { precio, fuente: 'Binance P2P' }
+}
+
+// Fetch deduplicado: reutiliza promesas en curso
+function fetchBcvDedup() {
+  if (_inflightBcv) return _inflightBcv
+  _inflightBcv = _fetchBcvRaw().finally(() => { _inflightBcv = null })
+  return _inflightBcv
+}
+
+function fetchUsdtDedup() {
+  if (_inflightUsdt) return _inflightUsdt
+  _inflightUsdt = _fetchUsdtRaw().finally(() => { _inflightUsdt = null })
+  return _inflightUsdt
+}
+
+// Fetch combinado deduplicado — notifica a todos los suscriptores
+async function fetchTasaGlobal(esAutoUpdate = false) {
+  // Si ya se hizo un fetch hace poco, no repetir
+  if (Date.now() - _lastFetchTs < MIN_DEDUP_INTERVAL) return null
+
+  const [bcvData, usdtData] = await Promise.all([fetchBcvDedup(), fetchUsdtDedup()])
+  _lastFetchTs = Date.now()
+
+  // Notificar a todos los suscriptores
+  _subscribers.forEach(cb => cb({ bcvData, usdtData, esAutoUpdate }))
+  return { bcvData, usdtData }
 }
 
 export function useTasaCambio() {
@@ -139,108 +240,49 @@ export function useTasaCambio() {
   // Backward compat: modoAuto = true cuando NO es manual
   const modoAuto = modoTasa !== 'manual'
 
-  // Helper: fetch con timeout
-  const fetchConTimeout = useCallback(async (url, timeout = 8000) => {
-    const controller = new AbortController()
-    const id = setTimeout(() => controller.abort(), timeout)
-    try {
-      const res = await fetch(url, { signal: controller.signal })
-      clearTimeout(id)
-      if (!res.ok) return null
-      return await res.json()
-    } catch {
-      clearTimeout(id)
-      return null
+  // Helper: procesar resultado de fetch global
+  const handleFetchResult = useCallback(({ bcvData, usdtData, esAutoUpdate }) => {
+    if (bcvData && bcvData.precio > 0) {
+      setTasaBcv({
+        precio: bcvData.precio,
+        fuente: bcvData.fuente,
+        ultimaActualizacion: new Date().toISOString(),
+      })
+    } else if (!esAutoUpdate && tasaRef.current?.precio <= 0) {
+      setError('No se pudo obtener la tasa BCV')
+    }
+
+    if (usdtData && usdtData.precio > 0) {
+      setTasaUsdt({
+        precio: Math.ceil(usdtData.precio) + 2,
+        fuente: usdtData.fuente,
+        ultimaActualizacion: new Date().toISOString(),
+      })
     }
   }, [])
 
-  // Fetch USDT — Binance P2P via CriptoYa
-  const fetchUsdt = useCallback(async () => {
-    const result = await fetchConTimeout('https://criptoya.com/api/binancep2p/USDT/VES/1', 10000)
-    if (!result) return null
-
-    const avgAsk = typeof result.ask === 'number' ? result.ask
-      : (Array.isArray(result.ask) && result.ask.length > 0
-        ? result.ask.slice(0, 3).reduce((s, i) => s + (i.price ?? i), 0) / Math.min(3, result.ask.length)
-        : 0)
-    const avgBid = typeof result.bid === 'number' ? result.bid
-      : (Array.isArray(result.bid) && result.bid.length > 0
-        ? result.bid.slice(0, 3).reduce((s, i) => s + (i.price ?? i), 0) / Math.min(3, result.bid.length)
-        : 0)
-
-    if (avgAsk <= 0 && avgBid <= 0) return null
-    const precio = (avgAsk > 0 && avgBid > 0) ? (avgAsk + avgBid) / 2 : (avgAsk || avgBid)
-    return { precio, fuente: 'Binance P2P' }
-  }, [fetchConTimeout])
-
-  // Fetch tasa BCV — múltiples fuentes con fallback
-  const fetchBcv = useCallback(async () => {
-    try {
-      const data = await fetchConTimeout('https://script.google.com/macros/s/AKfycbxT9sKz_XWRWuQx_XP-BJ33T0hoAgJsLwhZA00v6nPt4Ij4jRjq-90mDGLVCsS6FXwW9Q/exec?token=Lvbp1994', 8000)
-      const precio = parseSafeFloat(data?.bcv?.price)
-      if (precio > 0) return { precio, fuente: 'BCV Oficial' }
-    } catch { /* intenta siguiente fuente */ }
-
-    try {
-      const data = await fetchConTimeout('https://ve.dolarapi.com/v1/dolares', 8000)
-      if (data && Array.isArray(data)) {
-        const oficial = data.find(d =>
-          d.fuente === 'oficial' || d.nombre === 'Oficial' || d.casa === 'oficial'
-        )
-        const precio = parseSafeFloat(oficial?.promedio)
-        if (precio > 0) return { precio, fuente: 'BCV Oficial' }
-      }
-    } catch { /* intenta siguiente fuente */ }
-
-    try {
-      const data = await fetchConTimeout('https://pydolarve.org/api/v1/dollar?monitor=bcv', 8000)
-      const precio = parseSafeFloat(data?.price)
-      if (precio > 0) return { precio, fuente: 'BCV Oficial' }
-    } catch { /* intenta siguiente fuente */ }
-
-    try {
-      const data = await fetchConTimeout('https://api.exchangedynamics.com/rates/VES', 8000)
-      const precio = parseSafeFloat(data?.USD)
-      if (precio > 0) return { precio, fuente: 'BCV Oficial' }
-    } catch { /* sin más fuentes */ }
-
-    return null
-  }, [fetchConTimeout])
-
-  // Fetch tasa BCV + USDT en paralelo
+  // Fetch wrapper que usa el singleton global
   const fetchTasa = useCallback(async (esAutoUpdate = false) => {
     if (!esAutoUpdate) setCargando(true)
     setError('')
 
     try {
-      const [bcvData, usdtData] = await Promise.all([fetchBcv(), fetchUsdt()])
-
-      if (bcvData && bcvData.precio > 0) {
-        setTasaBcv({
-          precio: bcvData.precio,
-          fuente: bcvData.fuente,
-          ultimaActualizacion: new Date().toISOString(),
-        })
-      } else if (!esAutoUpdate && tasaRef.current?.precio <= 0) {
-        setError('No se pudo obtener la tasa BCV')
-      }
-
-      if (usdtData && usdtData.precio > 0) {
-        setTasaUsdt({
-          precio: Math.ceil(usdtData.precio) + 2,
-          fuente: usdtData.fuente,
-          ultimaActualizacion: new Date().toISOString(),
-        })
-      }
+      const result = await fetchTasaGlobal(esAutoUpdate)
+      // Si fetchTasaGlobal fue deduplicado (retornó null), los datos
+      // llegarán vía el suscriptor; no hacer nada aquí
+      if (result) handleFetchResult({ ...result, esAutoUpdate })
     } catch {
       if (!esAutoUpdate) setError('Error de conexión')
     } finally {
       if (!esAutoUpdate) setCargando(false)
     }
-  }, [fetchBcv, fetchUsdt])
+  }, [handleFetchResult])
 
   // Auto-fetch al montar + intervalo de 5 min + refresco al volver al foco
   useEffect(() => {
+    // Registrar suscriptor para recibir resultados de otras instancias
+    _subscribers.add(handleFetchResult)
+
     const lastFetchRef = { ts: 0 }
 
     const hasCachedRate = tasaRef.current?.precio > 0
@@ -269,11 +311,12 @@ export function useTasaCambio() {
     window.addEventListener('focus', onFocus)
 
     return () => {
+      _subscribers.delete(handleFetchResult)
       clearInterval(intervalId)
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('focus', onFocus)
     }
-  }, [fetchTasa])
+  }, [fetchTasa, handleFetchResult])
 
   // ─── Realtime sync: broadcast + persistencia en BD ────────────────────────────
   const _ignoreNextBroadcast = useRef(false)
