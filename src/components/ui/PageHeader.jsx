@@ -2,7 +2,7 @@
 // Header slim accent — línea gold + fondo blanco, fluye con el contenido
 export default function PageHeader({ icon: Icon, title, subtitle, action }) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pb-3"
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pt-4 pb-3"
       style={{ borderBottom: '1px solid #e2e8f0' }}
     >
       {/* Izquierda: barra accent + icono + título */}
