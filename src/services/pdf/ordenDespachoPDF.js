@@ -47,7 +47,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   // ══════════════════════════════════════════════════════════════════════════
   // 2. DATOS DEL CLIENTE
   // ══════════════════════════════════════════════════════════════════════════
-  const cliente = despacho.cliente || {}
+  const cliente = despacho.cliente_factura || despacho.cliente || {}
   const vendedorTlf = despacho.vendedor?.telefono ? ` — ${despacho.vendedor.telefono}` : ''
 
   const diasSemana = ['DOMINGO', 'LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO']
