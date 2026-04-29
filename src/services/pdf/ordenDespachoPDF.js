@@ -367,14 +367,10 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
     const nombre = (fp.metodo || '').toUpperCase()
     if (!nombre) return
     const boxY = fpY + 2.5
-    // Checkbox
+    // Checkbox (sin palomita)
     doc.setDrawColor(80, 80, 80)
     doc.setLineWidth(0.3)
     doc.rect(cx, boxY, checkSize, checkSize, 'S')
-    // Checkmark
-    doc.setLineWidth(0.5)
-    doc.line(cx + 0.7, boxY + 2, cx + 1.4, boxY + 3)
-    doc.line(cx + 1.4, boxY + 3, cx + 2.8, boxY + 0.8)
     const monto = fp.monto != null && fp.monto !== '' ? ` $${Number(fp.monto).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''
     const txt = nombre + monto
     // Label
