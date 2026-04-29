@@ -484,8 +484,8 @@ export default function AppLayout() {
       <main ref={mainRef} className="flex-1 overflow-y-auto min-w-0 flex flex-col">
         <div className="w-full flex flex-col flex-1 min-h-0">
           <Outlet />
+          <div className="h-20 shrink-0 md:hidden" />
         </div>
-        <div className="h-20 shrink-0 md:hidden" />
       </main>
 
       {/* ── Bottom Navigation — solo móvil ──────────────────────────────── */}
