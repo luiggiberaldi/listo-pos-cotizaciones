@@ -239,12 +239,12 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
         )}
 
         {/* ── Cliente ── */}
-        {registro.cliente?.nombre && (
+        {(registro.cliente_factura || registro.cliente)?.nombre && (
           <div className="px-5 py-2.5 mt-1 border-b border-slate-100 flex items-center justify-between">
             <span className="text-xs text-slate-400">Cliente</span>
             <span className="text-xs font-semibold truncate max-w-[300px]"
-              style={{ color: registro.cliente?.vendedor?.color || vendedorColor }}>
-              {registro.cliente.nombre}
+              style={{ color: (registro.cliente_factura || registro.cliente)?.vendedor?.color || vendedorColor }}>
+              {(registro.cliente_factura || registro.cliente).nombre}
             </span>
           </div>
         )}
