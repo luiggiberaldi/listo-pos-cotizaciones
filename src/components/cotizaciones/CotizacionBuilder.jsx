@@ -412,7 +412,8 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
   const [transportistaId,    setTransportistaId]    = useState(cotizacionExistente?.transportista_id ?? '')
   const [notasCliente,       setNotasCliente]       = useState(cotizacionExistente?.notas_cliente ?? '')
   const [notasInternas,      setNotasInternas]      = useState(cotizacionExistente?.notas_internas ?? '')
-  const [monedaPDF,          setMonedaPDF]          = useState('$')
+  const [monedaPDF,          setMonedaPDFRaw]       = useState(() => localStorage.getItem('construacero_moneda_pdf') || '$')
+  const setMonedaPDF = (v) => { setMonedaPDFRaw(v); localStorage.setItem('construacero_moneda_pdf', v) }
   const descuentoGlobalPct = 0 // Discount disabled — always 0
   const [costoEnvioUsd,      setCostoEnvioUsd]      = useState(cotizacionExistente?.costo_envio_usd ?? 0)
   const [items,              setItems]              = useState(
@@ -497,6 +498,16 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
 
   const { subtotal, descuentoUsd, totalUsd } = calcTotales(items, descuentoGlobalPct, costoEnvioUsd)
   const totalBs = tasaHook.tasaEfectiva > 0 ? mulR(totalUsd, tasaHook.tasaEfectiva) : 0
+
+  // Conversión visual según moneda seleccionada
+  const factorBcv = tasaHook.tasaBcv?.precio > 0 && tasaHook.tasaUsdt?.precio > 0
+    ? tasaHook.tasaUsdt.precio / tasaHook.tasaBcv.precio
+    : 0
+  const fmtMoneda = monedaPDF === 'bcv' && factorBcv > 0
+    ? (n) => `$${(Number(n || 0) * factorBcv).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    : monedaPDF === 'bs' && tasaHook.tasaEfectiva > 0
+      ? (n) => fmtBs(Number(n || 0) * tasaHook.tasaEfectiva)
+      : fmtUsd
 
   // Mapa de precios por producto (para selector P1/P2/P3 en la cesta)
   const preciosMap = useMemo(() => {
@@ -1198,7 +1209,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                             {it.cantidad} {it.unidadSnap}
                           </p>
                         </div>
-                        <span className="text-xs font-bold text-slate-700 shrink-0">{fmtUsd(lineTotal)}</span>
+                        <span className="text-xs font-bold text-slate-700 shrink-0">{fmtMoneda(lineTotal)}</span>
                       </div>
                     )
                   })}
@@ -1209,21 +1220,21 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
               <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-2">
                 <div className="flex justify-between text-sm text-slate-500">
                   <span>Subtotal</span>
-                  <span className="font-medium text-slate-700">{fmtUsd(subtotal)}</span>
+                  <span className="font-medium text-slate-700">{fmtMoneda(subtotal)}</span>
                 </div>
                 {costoEnvioUsd > 0 && (
                   <div className="flex justify-between text-sm text-slate-500">
                     <span>Envío</span>
-                    <span className="font-medium text-slate-700">+{fmtUsd(costoEnvioUsd)}</span>
+                    <span className="font-medium text-slate-700">+{fmtMoneda(costoEnvioUsd)}</span>
                   </div>
                 )}
 
                 <div className="border-t border-slate-100 pt-3 mt-1">
                   <div className="flex justify-between items-baseline">
                     <span className="text-sm font-bold text-slate-500 uppercase tracking-wide">Total</span>
-                    <span className="text-2xl font-black text-slate-900">{fmtUsd(totalUsd)}</span>
+                    <span className="text-2xl font-black text-slate-900">{fmtMoneda(totalUsd)}</span>
                   </div>
-                  {monedaPDF !== '$' && tasaHook.tasaEfectiva > 0 && totalUsd > 0 && (
+                  {monedaPDF === '$' && tasaHook.tasaEfectiva > 0 && totalUsd > 0 && (
                     <p className="text-right text-xs text-slate-400 mt-0.5 font-mono">
                       Bs {new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(totalBs)}
                     </p>
@@ -1328,25 +1339,25 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                     <>
                       <div className="flex justify-between py-1.5">
                         <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Subtotal</span>
-                        <span className="font-medium text-slate-600 text-xs">{fmtUsd(subtotal)}</span>
+                        <span className="font-medium text-slate-600 text-xs">{fmtMoneda(subtotal)}</span>
                       </div>
                       {descuentoUsd > 0 && (
                         <div className="flex justify-between py-1.5">
                           <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Descuento</span>
-                          <span className="font-medium text-red-500 text-xs">-{fmtUsd(descuentoUsd)}</span>
+                          <span className="font-medium text-red-500 text-xs">-{fmtMoneda(descuentoUsd)}</span>
                         </div>
                       )}
                       {costoEnvioUsd > 0 && (
                         <div className="flex justify-between py-1.5">
                           <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Envío</span>
-                          <span className="font-medium text-emerald-600 text-xs">+{fmtUsd(costoEnvioUsd)}</span>
+                          <span className="font-medium text-emerald-600 text-xs">+{fmtMoneda(costoEnvioUsd)}</span>
                         </div>
                       )}
                     </>
                   )}
                   <div className="flex justify-between py-1.5 last:pb-0">
                     <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Total</span>
-                    <span className="font-bold text-slate-900 text-sm">{fmtUsd(totalUsd)}</span>
+                    <span className="font-bold text-slate-900 text-sm">{fmtMoneda(totalUsd)}</span>
                   </div>
                   {notasCliente && (
                     <div className="py-1.5 last:pb-0">
