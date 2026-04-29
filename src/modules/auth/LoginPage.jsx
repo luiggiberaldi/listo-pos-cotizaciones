@@ -493,10 +493,10 @@ function UserSelectStep({ onLogout }) {
 
         {/* ── LOGO + BRANDING ── */}
         <div
-          className="flex flex-col items-center lg:items-start gap-3 sm:gap-4 select-none lg:w-[220px] xl:w-[300px] shrink-0"
+          className="flex flex-col items-center gap-3 sm:gap-4 select-none lg:w-[220px] xl:w-[300px] shrink-0"
           style={{ animation: 'logoReveal 0.8s ease forwards' }}
         >
-          <div className="relative flex items-center justify-center lg:justify-start">
+          <div className="relative flex items-center justify-center">
             <div className="absolute rounded-full opacity-25 blur-3xl"
               style={{ width: 'clamp(120px, 25vw, 280px)', height: 'clamp(120px, 25vw, 280px)', background: 'radial-gradient(circle, #B8860B 0%, transparent 70%)' }} />
             <img
@@ -512,7 +512,7 @@ function UserSelectStep({ onLogout }) {
             />
           </div>
 
-          <div className="flex items-center justify-center lg:justify-start gap-2 sm:gap-3 w-full">
+          <div className="flex items-center justify-center gap-2 sm:gap-3 w-full">
             <div className="h-px flex-1 max-w-[36px] sm:max-w-[48px] opacity-40" style={{ background: 'linear-gradient(to right, transparent, #B8860B)' }} />
             <span className="text-[9px] sm:text-xs font-bold tracking-[0.25em] sm:tracking-[0.3em] uppercase whitespace-nowrap" style={{ color: '#B8860B' }}>
               Sistema de Gestión
@@ -520,7 +520,7 @@ function UserSelectStep({ onLogout }) {
             <div className="h-px flex-1 max-w-[36px] sm:max-w-[48px] opacity-40" style={{ background: 'linear-gradient(to left, transparent, #B8860B)' }} />
           </div>
 
-          <p className="hidden lg:block text-sm leading-relaxed max-w-[280px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
+          <p className="hidden lg:block text-sm leading-relaxed max-w-[280px] text-center" style={{ color: 'rgba(255,255,255,0.3)' }}>
             Gestión de cotizaciones, inventario y clientes para Construacero Carabobo C.A.
           </p>
         </div>
