@@ -827,11 +827,11 @@ function Step1Productos({
                       onClick={e => e.target.select()}
                       onFocus={e => e.target.select()}
                       onBlur={e => {
-                        const num = Math.min(Math.max(1, parseInt(e.target.value, 10) || 1), stock || 99999);
+                        const num = Math.max(1, parseInt(e.target.value, 10) || 1);
                         setCantidadDirecta(p.id, num);
                       }}
                       onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }}
-                      className="w-8 h-6 rounded-md bg-white border border-slate-200 text-center text-[10px] font-black text-slate-700 focus:border-sky-400 focus:ring-1 focus:ring-sky-200 outline-none"
+                      className="w-9 h-6 rounded-md bg-white border border-slate-200 text-center text-[10px] font-black text-slate-700 focus:border-sky-400 focus:ring-1 focus:ring-sky-200 outline-none"
                     />
                     <button type="button"
                       onClick={() => cambiarCantidad(p.id, 1)}
