@@ -2282,44 +2282,6 @@ async function handleCrearDespacho(request, env) {
     }
     const [despacho] = await despRes.json();
 
-    // 8. Si incluye Cta por cobrar, registrar cargo CxC (parcial o total)
-    let montoCxC = 0;
-    try {
-      const fps = JSON.parse(formaPago);
-      if (Array.isArray(fps)) {
-        const cxc = fps.find(f => f.metodo === 'Cta por cobrar');
-        if (cxc) montoCxC = Number(cxc.monto) || 0;
-      }
-    } catch { if (formaPago === 'Cta por cobrar') montoCxC = totalConFlete; }
-
-    if (montoCxC > 0 && despacho) {
-      const saldoRes = await fetch(
-        `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${cot.cliente_id}&select=saldo_pendiente`,
-        { headers }
-      );
-      const [clienteSaldo] = await saldoRes.json();
-      const saldoActual = Number(clienteSaldo?.saldo_pendiente || 0);
-      const nuevoSaldo = saldoActual + montoCxC;
-
-      await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
-        method: 'POST', headers,
-        body: JSON.stringify({
-          cliente_id: cot.cliente_id,
-          despacho_id: despacho.id,
-          tipo: 'cargo',
-          monto_usd: montoCxC,
-          saldo_usd: nuevoSaldo,
-          descripcion: `Orden de despacho #${cot.numero}`,
-          registrado_por: user.operator_id,
-        }),
-      });
-
-      await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${cot.cliente_id}`, {
-        method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
-        body: JSON.stringify({ saldo_pendiente: nuevoSaldo }),
-      });
-    }
-
     // 10. Auditoría
     await registrarAuditoria(env, headers, {
       usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: 'supervisor',
@@ -2482,43 +2444,7 @@ async function handleVentaRapida(request, env) {
     const [despacho] = await despRes.json();
     console.log('[VR] Despacho created:', despacho?.id, despacho?.numero);
 
-    // 7. Si incluye Cta por cobrar, registrar cargo CxC (parcial o total)
-    let montoCxCVR = 0;
-    try {
-      const fps = JSON.parse(formaPago);
-      if (Array.isArray(fps)) {
-        const cxc = fps.find(f => f.metodo === 'Cta por cobrar');
-        if (cxc) montoCxCVR = Number(cxc.monto) || 0;
-      }
-    } catch { if (formaPago === 'Cta por cobrar') montoCxCVR = totalConFlete; }
-
-    if (montoCxCVR > 0 && despacho) {
-      const saldoRes = await fetch(
-        `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteId}&select=saldo_pendiente`,
-        { headers }
-      );
-      const [clienteSaldo] = await saldoRes.json();
-      const saldoActual = Number(clienteSaldo?.saldo_pendiente || 0);
-      const nuevoSaldo = saldoActual + montoCxCVR;
-
-      await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
-        method: 'POST', headers,
-        body: JSON.stringify({
-          cliente_id: clienteId,
-          despacho_id: despacho.id,
-          tipo: 'cargo',
-          monto_usd: montoCxCVR,
-          saldo_usd: nuevoSaldo,
-          descripcion: `Venta rápida — Despacho #${despacho.numero}`,
-          registrado_por: user.operator_id,
-        }),
-      });
-
-      await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteId}`, {
-        method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
-        body: JSON.stringify({ saldo_pendiente: nuevoSaldo }),
-      });
-    }
+    // 7. CxC se registra al confirmar entrega (handleActualizarEstadoDespacho)
 
     // 8. Comisión se calcula al confirmar entrega por logística
 
@@ -2862,6 +2788,54 @@ async function handleActualizarEstadoDespacho(request, env) {
           body: JSON.stringify({ p_despacho_id: despachoId }),
         });
       } catch { /* no crítico */ }
+
+      // Registrar cargo CxC al confirmar entrega
+      try {
+        const fpRaw = desp.forma_pago_cliente || desp.forma_pago || '[]';
+        let montoCxC = 0;
+        try {
+          const fps = JSON.parse(fpRaw);
+          if (Array.isArray(fps)) {
+            const cxc = fps.find(f => f.metodo === 'Cta por cobrar');
+            if (cxc) montoCxC = Number(cxc.monto) || 0;
+          }
+        } catch { if (fpRaw === 'Cta por cobrar') montoCxC = Number(desp.total_usd) || 0; }
+
+        if (montoCxC > 0) {
+          const cotRes = await fetch(
+            `${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${desp.cotizacion_id}&select=cliente_id,numero`,
+            { headers }
+          );
+          const [cot] = await cotRes.json();
+          if (cot) {
+            const saldoRes = await fetch(
+              `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${cot.cliente_id}&select=saldo_pendiente`,
+              { headers }
+            );
+            const [clienteSaldo] = await saldoRes.json();
+            const saldoActual = Number(clienteSaldo?.saldo_pendiente || 0);
+            const nuevoSaldo = saldoActual + montoCxC;
+
+            await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
+              method: 'POST', headers,
+              body: JSON.stringify({
+                cliente_id: cot.cliente_id,
+                despacho_id: despachoId,
+                tipo: 'cargo',
+                monto_usd: montoCxC,
+                saldo_usd: nuevoSaldo,
+                descripcion: `Orden de despacho #${cot.numero}`,
+                registrado_por: user.operator_id,
+              }),
+            });
+
+            await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${cot.cliente_id}`, {
+              method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
+              body: JSON.stringify({ saldo_pendiente: nuevoSaldo }),
+            });
+          }
+        }
+      } catch { /* no crítico — no bloquear entrega por error CxC */ }
     }
 
     // 6. Auditoría
