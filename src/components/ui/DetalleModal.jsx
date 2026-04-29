@@ -6,6 +6,7 @@ import supabase from '../../services/supabase/client'
 import { apiUrl } from '../../services/apiBase'
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs } from '../../utils/format'
 import useAuthStore from '../../store/useAuthStore'
+import { useTasaCambio } from '../../hooks/useTasaCambio'
 
 function calcDescMonto(desc, totalLinea, cantidad) {
   if (!desc) return 0
@@ -15,7 +16,7 @@ function calcDescMonto(desc, totalLinea, cantidad) {
   return Math.round(Math.min(v * Number(cantidad), totalLinea) * 10000) / 10000
 }
 
-function ItemRow({ item, descuento }) {
+function ItemRow({ item, descuento, fmt }) {
   const cant     = Number(item.cantidad || 1)
   const precio   = Number(item.precio_unit_usd || 0)
   const total    = Number(item.total_linea_usd || cant * precio)
@@ -29,7 +30,7 @@ function ItemRow({ item, descuento }) {
         {item.codigo_snap && <p className="text-[11px] text-slate-400 font-mono mt-0.5">{item.codigo_snap}</p>}
         {descMonto > 0 && (
           <p className="text-[11px] text-amber-600 mt-0.5 font-medium">
-            Desc: {descuento.tipo === 'porcentaje' ? `${descuento.valor}%` : `${fmtUsd(descuento.valor)}/u`} = -{fmtUsd(descMonto)}
+            Desc: {descuento.tipo === 'porcentaje' ? `${descuento.valor}%` : `${fmt(descuento.valor)}/u`} = -{fmt(descMonto)}
           </p>
         )}
       </td>
@@ -39,24 +40,24 @@ function ItemRow({ item, descuento }) {
       <td className="py-3 px-3 text-right text-sm text-slate-600 whitespace-nowrap">
         {descMonto > 0 ? (
           <span>
-            <span className="line-through text-slate-400">{fmtUsd(precio)}</span>
-            <br /><span className="text-amber-700 font-medium">{fmtUsd(cant > 0 ? totalFinal / cant : 0)}</span>
+            <span className="line-through text-slate-400">{fmt(precio)}</span>
+            <br /><span className="text-amber-700 font-medium">{fmt(cant > 0 ? totalFinal / cant : 0)}</span>
           </span>
-        ) : fmtUsd(precio)}
+        ) : fmt(precio)}
       </td>
       <td className="py-3 pl-3 text-right text-sm font-bold whitespace-nowrap">
         {descMonto > 0 ? (
           <span>
-            <span className="line-through text-slate-400 font-normal text-xs">{fmtUsd(total)}</span>
-            <br /><span className="text-amber-700">{fmtUsd(totalFinal)}</span>
+            <span className="line-through text-slate-400 font-normal text-xs">{fmt(total)}</span>
+            <br /><span className="text-amber-700">{fmt(totalFinal)}</span>
           </span>
-        ) : <span className="text-slate-800">{fmtUsd(total)}</span>}
+        ) : <span className="text-slate-800">{fmt(total)}</span>}
       </td>
     </tr>
   )
 }
 
-function ItemCard({ item, descuento }) {
+function ItemCard({ item, descuento, fmt }) {
   const cant     = Number(item.cantidad || 1)
   const precio   = Number(item.precio_unit_usd || 0)
   const total    = Number(item.total_linea_usd || cant * precio)
@@ -72,20 +73,20 @@ function ItemCard({ item, descuento }) {
         </div>
         {descMonto > 0 ? (
           <div className="text-right shrink-0">
-            <span className="text-xs text-slate-400 line-through">{fmtUsd(total)}</span>
-            <p className="text-sm font-bold text-amber-700">{fmtUsd(totalFinal)}</p>
+            <span className="text-xs text-slate-400 line-through">{fmt(total)}</span>
+            <p className="text-sm font-bold text-amber-700">{fmt(totalFinal)}</p>
           </div>
         ) : (
-          <span className="text-sm font-bold text-slate-800 shrink-0">{fmtUsd(total)}</span>
+          <span className="text-sm font-bold text-slate-800 shrink-0">{fmt(total)}</span>
         )}
       </div>
       <div className="flex gap-3 mt-1 text-xs text-slate-500">
         <span>{cant} {item.unidad_snap || 'und'}</span>
-        <span>× {fmtUsd(precio)}</span>
+        <span>× {fmt(precio)}</span>
       </div>
       {descMonto > 0 && (
         <p className="text-[11px] text-amber-600 mt-1 font-medium">
-          Desc: {descuento.tipo === 'porcentaje' ? `${descuento.valor}%` : `${fmtUsd(descuento.valor)}/u`} = -{fmtUsd(descMonto)}
+          Desc: {descuento.tipo === 'porcentaje' ? `${descuento.valor}%` : `${fmt(descuento.valor)}/u`} = -{fmt(descMonto)}
         </p>
       )}
     </div>
@@ -97,6 +98,24 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
   const [cargando, setCargando] = useState(false)
   const [descuentos, setDescuentos] = useState({}) // { cotizacion_item_id: { tipo, valor } }
   const { perfil } = useAuthStore()
+  const { tasaBcv, tasaUsdt } = useTasaCambio()
+
+  // Leer moneda seleccionada del PDF (compartida via localStorage)
+  const monedaPdf = typeof window !== 'undefined'
+    ? (localStorage.getItem('construacero_moneda_pdf') || '$')
+    : '$'
+
+  // Función de formato según moneda seleccionada (solo para cotizaciones)
+  const esCot = tipo === 'cotizacion'
+  const factorBcv = tasaBcv.precio > 0 && tasaUsdt.precio > 0
+    ? tasaUsdt.precio / tasaBcv.precio
+    : 0
+  const fmt = esCot && monedaPdf === 'bcv' && factorBcv > 0
+    ? (n) => `$${(Number(n || 0) * factorBcv).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    : esCot && monedaPdf === 'bs' && tasa > 0
+      ? (n) => fmtBs(Number(n || 0) * tasa)
+      : fmtUsd
+  const monedaTag = esCot && monedaPdf === 'bcv' ? 'BCV' : esCot && monedaPdf === 'bs' ? 'Bs' : null
 
   useEffect(() => {
     if (!isOpen || !registro) return
@@ -134,7 +153,6 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
 
   if (!isOpen || !registro) return null
 
-  const esCot = tipo === 'cotizacion'
   const numDisplay = esCot
     ? `COT-${String(registro.numero).padStart(5, '0')}`
     : `DES-${String(registro.numero).padStart(5, '0')}`
@@ -293,13 +311,13 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
                     </tr>
                   </thead>
                   <tbody>
-                    {items.map(it => <ItemRow key={it.id} item={it} descuento={descuentos[it.id]} />)}
+                    {items.map(it => <ItemRow key={it.id} item={it} descuento={descuentos[it.id]} fmt={fmt} />)}
                   </tbody>
                 </table>
               </div>
               {/* Mobile card layout */}
               <div className="sm:hidden">
-                {items.map(it => <ItemCard key={it.id} item={it} descuento={descuentos[it.id]} />)}
+                {items.map(it => <ItemCard key={it.id} item={it} descuento={descuentos[it.id]} fmt={fmt} />)}
               </div>
             </>
           )}
@@ -316,15 +334,25 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
         {/* Totales */}
         {esCot && (
           <div className="border-t border-slate-100 px-5 py-3 bg-slate-50 space-y-1.5 shrink-0">
+            {monedaTag && (
+              <div className="flex items-center gap-1.5 mb-1">
+                <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${monedaPdf === 'bcv' ? 'bg-teal-100 text-teal-700' : 'bg-blue-100 text-blue-700'}`}>
+                  {monedaTag}
+                </span>
+                <span className="text-[10px] text-slate-400">
+                  {monedaPdf === 'bcv' ? `Factor: ${factorBcv.toFixed(2)}` : `Tasa: ${tasa.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs/$`}
+                </span>
+              </div>
+            )}
             {envio > 0 && (
               <div className="flex justify-between text-xs text-slate-500">
-                <span>Costo de envío</span><span>{fmtUsd(envio)}</span>
+                <span>Costo de envío</span><span>{fmt(envio)}</span>
               </div>
             )}
             <div className="flex justify-between font-black text-slate-800 text-base pt-1 border-t border-slate-200">
-              <span>Total</span><span>{fmtUsd(total)}</span>
+              <span>Total</span><span>{fmt(total)}</span>
             </div>
-            {tasa > 0 && (
+            {monedaPdf === '$' && tasa > 0 && (
               <div className="flex justify-end text-xs text-slate-400">
                 <span>{fmtBs(usdToBs(total, tasa))}</span>
               </div>
