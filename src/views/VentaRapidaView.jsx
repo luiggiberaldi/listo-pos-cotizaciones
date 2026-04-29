@@ -139,7 +139,7 @@ export default function VentaRapidaView() {
   }
 
   const costoEnvioUsd = 0
-  const { subtotal, ivaUsd, totalUsd } = calcTotales(items, 0, costoEnvioUsd, config.iva_pct ?? 0)
+  const { subtotal, totalUsd } = calcTotales(items, 0, costoEnvioUsd)
   const tasa = tasaHook.tasaEfectiva || 0
   const totalBs = tasa > 0 ? mulR(totalUsd, tasa) : 0
   const flete = Math.max(0, Number(fleteUsd) || 0)
@@ -378,7 +378,6 @@ export default function VentaRapidaView() {
             clienteSeleccionado={clienteSeleccionado}
             items={items}
             subtotal={subtotal}
-            ivaUsd={ivaUsd}
             totalUsd={totalUsd}
             flete={flete}
             totalConFlete={totalConFlete}
@@ -1493,7 +1492,7 @@ function TransportistaFormCompact({ onGuardar, onCancelar, cargando }) {
 // Step 3: Confirmar
 // ─────────────────────────────────────────────────────────────────────────────
 function Step3Confirmar({
-  clienteSeleccionado, items, subtotal, ivaUsd, totalUsd, flete, totalConFlete,
+  clienteSeleccionado, items, subtotal, totalUsd, flete, totalConFlete,
   totalBs, tasa, formasPago, referenciaPago, transportistaSeleccionado, notas,
 }) {
   return (
@@ -1535,12 +1534,6 @@ function Step3Confirmar({
           <span className="text-slate-500">Subtotal</span>
           <span className="text-slate-700">{fmtUsd(subtotal)}</span>
         </div>
-        {ivaUsd > 0 && (
-          <div className="flex justify-between text-sm">
-            <span className="text-slate-500">IVA</span>
-            <span className="text-slate-700">{fmtUsd(ivaUsd)}</span>
-          </div>
-        )}
         {flete > 0 && (
           <div className="flex justify-between text-sm">
             <span className="text-slate-500">Flete</span>

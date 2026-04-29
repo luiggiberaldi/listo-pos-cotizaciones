@@ -53,7 +53,7 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
   const clienteRef = useRef(null)
   const productoInputRef = useRef(null)
 
-  const { subtotal, descuentoUsd: _descuentoUsd, ivaUsd, totalUsd } = calcTotales(items, descuentoGlobalPct, 0, config.iva_pct ?? 0)
+  const { subtotal, descuentoUsd: _descuentoUsd, totalUsd } = calcTotales(items, descuentoGlobalPct, 0)
   const tasa = tasaHook.tasaEfectiva || 0
   const totalBs = tasa > 0 ? mulR(totalUsd, tasa) : 0
 
@@ -134,7 +134,7 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
       await Promise.race([
         guardarBorrador.mutateAsync({
           cotizacionId: null,
-          campos: { clienteId, descuentoGlobalPct, costoEnvioUsd: 0, ivaPct: config.iva_pct ?? 0 },
+          campos: { clienteId, descuentoGlobalPct, costoEnvioUsd: 0 },
           items,
         }),
         timeout,
@@ -157,7 +157,7 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
       const id = await Promise.race([
         guardarBorrador.mutateAsync({
           cotizacionId: null,
-          campos: { clienteId, descuentoGlobalPct, costoEnvioUsd: 0, ivaPct: config.iva_pct ?? 0 },
+          campos: { clienteId, descuentoGlobalPct, costoEnvioUsd: 0 },
           items,
         }),
         timeout,
@@ -540,12 +540,6 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
           <div className="flex justify-between text-[11px] sm:text-xs">
             <span className="text-slate-400">Subtotal ({items.length} prod.)</span>
             <span className="font-semibold text-slate-600">{fmtUsd(subtotal)}</span>
-          </div>
-        )}
-        {ivaUsd > 0 && (
-          <div className="flex justify-between text-[11px] sm:text-xs">
-            <span className="text-slate-400">IVA ({config.iva_pct}%)</span>
-            <span className="font-semibold text-slate-600">+{fmtUsd(ivaUsd)}</span>
           </div>
         )}
 

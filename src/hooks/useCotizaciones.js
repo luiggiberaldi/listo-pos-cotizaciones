@@ -149,8 +149,8 @@ export function useGuardarBorrador() {
   return useMutation({
     mutationFn: async ({ cotizacionId = null, campos, items }) => {
       // Calcular totales
-      const { subtotal, descuentoUsd, ivaUsd, totalUsd } = calcTotales(
-        items, campos.descuentoGlobalPct, campos.costoEnvioUsd, campos.ivaPct
+      const { subtotal, descuentoUsd, totalUsd } = calcTotales(
+        items, campos.descuentoGlobalPct, campos.costoEnvioUsd
       )
 
       const headerData = {

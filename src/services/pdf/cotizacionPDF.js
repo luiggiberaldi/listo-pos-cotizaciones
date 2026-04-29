@@ -313,15 +313,11 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   const total = Number(cotizacion.total_usd || 0)
   const tasaEfectivaTot = tasa > 0 ? tasa : Number(cotizacion.tasa_bcv_snapshot || 0)
   const totalBs = Number(cotizacion.total_bs_snapshot || 0) || (tasaEfectivaTot > 0 ? total * tasaEfectivaTot : 0)
-  const ivaPct = Number(config.iva_pct || 0)
-  // Base imponible = subtotal (descuento deshabilitado)
+  const ivaPct = 0
   const baseImponible = subtotal
-  const ivaUsd = ivaPct > 0 ? baseImponible * (ivaPct / 100) : 0
+  const ivaUsd = 0
 
   const totLines = []
-  if (ivaPct > 0) {
-    totLines.push({ label: `IVA (${ivaPct}%):`, val: fmtTotal(ivaUsd, monedaPDF, tasaEfectivaTot, factorBcv), bold: false })
-  }
 
   // Borde del cuadro de totales
   const totStartY = y

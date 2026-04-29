@@ -494,7 +494,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
   const tasaHook         = useTasaCambio()
   const { data: inventarioParaPrecios } = useInventario({ pageSize: 1000 })
 
-  const { subtotal, descuentoUsd, ivaUsd, totalUsd } = calcTotales(items, descuentoGlobalPct, costoEnvioUsd, config.iva_pct ?? 0)
+  const { subtotal, descuentoUsd, totalUsd } = calcTotales(items, descuentoGlobalPct, costoEnvioUsd)
   const totalBs = tasaHook.tasaEfectiva > 0 ? mulR(totalUsd, tasaHook.tasaEfectiva) : 0
 
   // Mapa de precios por producto (para selector P1/P2/P3 en la cesta)
@@ -626,7 +626,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
     try {
       const id = await guardarBorrador.mutateAsync({
         cotizacionId,
-        campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd, ivaPct: config.iva_pct ?? 0 },
+        campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd },
         items,
       })
       setCotizacionId(id)
@@ -648,7 +648,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
       if (!id) {
         id = await guardarBorrador.mutateAsync({
           cotizacionId,
-          campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd, ivaPct: config.iva_pct ?? 0 },
+          campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd },
           items,
         })
         setCotizacionId(id)
@@ -656,7 +656,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
         // Actualizar borrador con datos actuales antes de enviar
         await guardarBorrador.mutateAsync({
           cotizacionId: id,
-          campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd, ivaPct: config.iva_pct ?? 0 },
+          campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd },
           items,
         })
       }
@@ -1218,12 +1218,6 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                   <span>Subtotal</span>
                   <span className="font-medium text-slate-700">{fmtUsd(subtotal)}</span>
                 </div>
-                {ivaUsd > 0 && (
-                  <div className="flex justify-between text-sm text-blue-600">
-                    <span>IVA ({config.iva_pct}%)</span>
-                    <span className="font-medium">+{fmtUsd(ivaUsd)}</span>
-                  </div>
-                )}
                 {costoEnvioUsd > 0 && (
                   <div className="flex justify-between text-sm text-slate-500">
                     <span>Envío</span>
