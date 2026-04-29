@@ -1509,94 +1509,99 @@ function Step3Confirmar({
   totalBs, tasa, formasPago, referenciaPago, transportistaSeleccionado, notas,
 }) {
   return (
-    <div className="p-4 space-y-4">
-
-      {/* Cliente */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4">
-        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Cliente</h3>
-        <div className="flex items-center gap-2">
-          <User size={16} className="text-slate-400" />
-          <span className="font-medium text-slate-800">{clienteSeleccionado?.nombre}</span>
+    <div className="flex-1 min-h-0 flex flex-col lg:flex-row lg:gap-4 p-4">
+      {/* ── Columna izquierda: Cliente + Productos ── */}
+      <div className="flex-1 min-h-0 min-w-0 flex flex-col gap-3">
+        {/* Cliente */}
+        <div className="bg-white border border-slate-200 rounded-xl p-3 shrink-0">
+          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Cliente</h3>
+          <div className="flex items-center gap-2">
+            <User size={14} className="text-slate-400" />
+            <span className="font-medium text-sm text-slate-800">{clienteSeleccionado?.nombre}</span>
+          </div>
+          {clienteSeleccionado?.direccion && (
+            <p className="text-xs text-slate-400 mt-0.5 ml-5">{clienteSeleccionado.direccion}</p>
+          )}
         </div>
-        {clienteSeleccionado?.direccion && (
-          <p className="text-xs text-slate-400 mt-1 ml-6">{clienteSeleccionado.direccion}</p>
-        )}
+
+        {/* Items con scroll */}
+        <div className="flex-1 min-h-0 bg-white border border-slate-200 rounded-xl p-3 flex flex-col overflow-hidden">
+          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 shrink-0">
+            Productos ({items.length})
+          </h3>
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5">
+            {items.map(it => (
+              <div key={it.productoId} className="flex items-center justify-between text-sm py-1">
+                <div className="flex-1 min-w-0">
+                  <span className="text-slate-700 truncate block text-sm">{it.nombreSnap}</span>
+                  <span className="text-xs text-slate-400">{it.cantidad} × {fmtUsd(it.precioUnitUsd)}</span>
+                </div>
+                <span className="font-semibold text-slate-800 shrink-0 ml-2">{fmtUsd(round2(it.cantidad * it.precioUnitUsd))}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
-      {/* Items */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4">
-        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-          Productos ({items.length})
-        </h3>
-        <div className="space-y-2">
-          {items.map(it => (
-            <div key={it.productoId} className="flex items-center justify-between text-sm">
-              <div className="flex-1 min-w-0">
-                <span className="text-slate-700 truncate block">{it.nombreSnap}</span>
-                <span className="text-xs text-slate-400">{it.cantidad} × {fmtUsd(it.precioUnitUsd)}</span>
+      {/* ── Columna derecha: Totales + Pago + Transporte + Notas ── */}
+      <div className="lg:w-72 xl:w-80 shrink-0 flex flex-col gap-3 mt-3 lg:mt-0">
+        {/* Totales */}
+        <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-1.5">
+          <div className="flex justify-between text-sm">
+            <span className="text-slate-500">Subtotal</span>
+            <span className="text-slate-700">{fmtUsd(subtotal)}</span>
+          </div>
+          {flete > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-500">Flete</span>
+              <span className="text-slate-700">{fmtUsd(flete)}</span>
+            </div>
+          )}
+          <div className="border-t border-slate-100 pt-1.5 flex justify-between items-end">
+            <span className="font-semibold text-slate-800">Total</span>
+            <div className="text-right">
+              <p className="font-bold text-lg text-slate-800">{fmtUsd(totalConFlete)}</p>
+              {tasa > 0 && <p className="text-xs text-slate-400">≈ {fmtBs(totalBs)}</p>}
+            </div>
+          </div>
+        </div>
+
+        {/* Pago */}
+        <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-1.5">
+          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Pago</h3>
+          {formasPago.map(fp => (
+            <div key={fp.metodo} className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2">
+                <CreditCard size={12} className="text-slate-400" />
+                <span className="text-slate-700">{fp.metodo}</span>
               </div>
-              <span className="font-semibold text-slate-800 shrink-0 ml-2">{fmtUsd(round2(it.cantidad * it.precioUnitUsd))}</span>
+              <span className="font-semibold text-slate-800">{fmtUsd(Number(fp.monto) || 0)}</span>
             </div>
           ))}
         </div>
-      </div>
 
-      {/* Totales */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
-        <div className="flex justify-between text-sm">
-          <span className="text-slate-500">Subtotal</span>
-          <span className="text-slate-700">{fmtUsd(subtotal)}</span>
-        </div>
-        {flete > 0 && (
-          <div className="flex justify-between text-sm">
-            <span className="text-slate-500">Flete</span>
-            <span className="text-slate-700">{fmtUsd(flete)}</span>
+        {/* Transportista */}
+        {transportistaSeleccionado && (
+          <div className="bg-white border border-slate-200 rounded-xl p-3">
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Transporte</h3>
+            <div className="flex items-center gap-2 text-sm">
+              <Truck size={12} className="text-slate-400" />
+              <span className="text-slate-700">{transportistaSeleccionado.nombre}</span>
+              {transportistaSeleccionado.vehiculo && (
+                <span className="text-xs text-slate-400">— {transportistaSeleccionado.vehiculo}</span>
+              )}
+            </div>
           </div>
         )}
-        <div className="border-t border-slate-100 pt-2 flex justify-between">
-          <span className="font-semibold text-slate-800">Total</span>
-          <div className="text-right">
-            <p className="font-bold text-lg text-slate-800">{fmtUsd(totalConFlete)}</p>
-            {tasa > 0 && <p className="text-xs text-slate-400">≈ {fmtBs(totalBs)}</p>}
+
+        {/* Notas */}
+        {notas && (
+          <div className="bg-white border border-slate-200 rounded-xl p-3">
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Notas</h3>
+            <p className="text-sm text-slate-600">{notas}</p>
           </div>
-        </div>
+        )}
       </div>
-
-      {/* Pago */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
-        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Pago</h3>
-        {formasPago.map(fp => (
-          <div key={fp.metodo} className="flex items-center justify-between text-sm">
-            <div className="flex items-center gap-2">
-              <CreditCard size={14} className="text-slate-400" />
-              <span className="text-slate-700">{fp.metodo}</span>
-            </div>
-            <span className="font-semibold text-slate-800">{fmtUsd(Number(fp.monto) || 0)}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* Transportista */}
-      {transportistaSeleccionado && (
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
-          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Transporte</h3>
-          <div className="flex items-center gap-2 text-sm">
-            <Truck size={14} className="text-slate-400" />
-            <span className="text-slate-700">{transportistaSeleccionado.nombre}</span>
-            {transportistaSeleccionado.vehiculo && (
-              <span className="text-xs text-slate-400">— {transportistaSeleccionado.vehiculo}</span>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Notas */}
-      {notas && (
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
-          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Notas</h3>
-          <p className="text-sm text-slate-600">{notas}</p>
-        </div>
-      )}
     </div>
   )
 }
