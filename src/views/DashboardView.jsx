@@ -98,6 +98,7 @@ function useMetricas() {
       }
     },
     enabled: !!perfil && (perfil.rol === 'vendedor' || perfil.rol === 'supervisor' || perfil.rol === 'desarrollador'),
+    retry: 1,
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 15,
   })
