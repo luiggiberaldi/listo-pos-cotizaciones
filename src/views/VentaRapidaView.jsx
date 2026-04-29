@@ -788,9 +788,7 @@ function Step1Productos({
                 onClick={() => !added && !sinStock && agregarProducto(p)}
               >
                 {added && (
-                  <div className="absolute top-1 right-1">
-                    <CheckCircle size={12} className="text-emerald-500" />
-                  </div>
+                  <div className="absolute top-0 left-0 right-0 h-1 rounded-t-xl bg-emerald-400" />
                 )}
                 <p className={`text-[10px] font-bold leading-tight line-clamp-2 mb-0.5 w-full ${
                   added ? 'text-emerald-700' : 'text-slate-700'
