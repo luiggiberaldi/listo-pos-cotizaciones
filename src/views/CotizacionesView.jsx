@@ -139,415 +139,265 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-lg p-4 sm:p-6 max-h-[90vh] flex flex-col gap-4">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 lg:p-6 bg-slate-900/60 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-3xl max-h-[92vh] flex flex-col">
 
-        {/* Header */}
-        <div className="flex items-center justify-between">
+        {/* ── Header ─────────────────────────────────────────────── */}
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center">
-              <PackageCheck size={20} className="text-indigo-500" />
+            <div className="w-9 h-9 bg-indigo-50 rounded-xl flex items-center justify-center shrink-0">
+              <PackageCheck size={18} className="text-indigo-500" />
             </div>
             <div>
-              <h3 className="font-black text-slate-800 text-lg">Crear orden de despacho</h3>
-              <p className="text-sm text-slate-500 font-mono">{numDisplay}</p>
+              <h3 className="font-black text-slate-800 text-base leading-tight">Crear orden de despacho</h3>
+              <p className="text-xs text-slate-400 font-mono">{numDisplay} · <span className="font-sans font-semibold text-slate-600">{cotizacion.cliente?.nombre ?? '—'}</span></p>
             </div>
           </div>
           <button onClick={onCancel} disabled={cargando}
-            className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors">
+            className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors shrink-0">
             <X size={16} />
           </button>
         </div>
 
-        {/* Aviso */}
-        <div className="flex-1 min-h-0 overflow-y-auto space-y-4">
+        {/* ── Body — 2 columnas en desktop ───────────────────────── */}
+        <div className="flex-1 min-h-0 flex flex-col lg:flex-row">
 
-        {/* Cliente */}
-        <div className="bg-slate-50 rounded-xl px-4 py-2.5 flex items-center justify-between">
-          <span className="text-sm text-slate-500 font-semibold uppercase">Cliente</span>
-          <span className="text-base font-bold text-slate-700 truncate ml-3">{cotizacion.cliente?.nombre ?? '—'}</span>
-        </div>
+          {/* ── Columna izquierda: resumen del pedido ── */}
+          <div className="lg:flex-1 min-h-0 overflow-y-auto p-4 lg:p-5 space-y-3 border-b lg:border-b-0 lg:border-r border-slate-100">
 
-        {/* Tabla de items */}
-        <div>
-          {items.length === 0 ? (
-            <div className="flex items-center justify-center py-6">
-              <div className="w-5 h-5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : (
-            <>
-              {/* Desktop table */}
-              <table className="w-full text-sm hidden sm:table">
+            {/* Tabla compacta de items */}
+            {items.length === 0 ? (
+              <div className="flex items-center justify-center py-10">
+                <div className="w-5 h-5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : (
+              <table className="w-full">
                 <thead>
-                  <tr className="text-sm text-slate-500 uppercase border-b border-slate-100">
-                    <th className="text-left py-2 font-semibold">Producto</th>
-                    <th className="text-center py-2 font-semibold w-16">Cant.</th>
-                    <th className="text-right py-2 font-semibold w-24">P. Unit.</th>
-                    <th className="text-right py-2 font-semibold w-24">Total</th>
+                  <tr className="border-b border-slate-100">
+                    <th className="text-left pb-2 text-xs font-semibold text-slate-400 uppercase tracking-wide">Producto</th>
+                    <th className="text-center pb-2 text-xs font-semibold text-slate-400 uppercase tracking-wide w-14">Cant.</th>
+                    <th className="text-right pb-2 text-xs font-semibold text-slate-400 uppercase tracking-wide w-20 hidden sm:table-cell">P. Unit.</th>
+                    <th className="text-right pb-2 text-xs font-semibold text-slate-400 uppercase tracking-wide w-20">Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((item, i) => (
-                    <tr key={item.id || i} className="border-b border-slate-50">
-                      <td className="py-2 pr-2">
-                        <p className="font-medium text-slate-700 truncate max-w-[120px] sm:max-w-[200px]">{item.nombre_snap}</p>
+                    <tr key={item.id || i} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                      <td className="py-1.5 pr-2">
+                        <span className="font-medium text-slate-700 text-sm">{item.nombre_snap}</span>
                         {item.codigo_snap && (
-                          <p className="text-xs text-slate-500 font-mono">{item.codigo_snap}</p>
+                          <span className="text-[11px] text-slate-400 font-mono ml-1.5">· {item.codigo_snap}</span>
                         )}
                       </td>
-                      <td className="py-2 text-center text-slate-600">
-                        {Number(item.cantidad).toLocaleString('es-VE')} {item.unidad_snap}
+                      <td className="py-1.5 text-center text-slate-600 text-sm whitespace-nowrap">
+                        {Number(item.cantidad).toLocaleString('es-VE')} <span className="text-xs text-slate-400">{item.unidad_snap}</span>
                       </td>
-                      <td className="py-2 text-right text-slate-600">{fmtUsd(item.precio_unit_usd)}</td>
-                      <td className="py-2 text-right font-bold text-slate-700">{fmtUsd(item.total_linea_usd)}</td>
+                      <td className="py-1.5 text-right text-slate-500 text-sm hidden sm:table-cell">{fmtUsd(item.precio_unit_usd)}</td>
+                      <td className="py-1.5 text-right font-bold text-slate-700 text-sm">{fmtUsd(item.total_linea_usd)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              {/* Mobile cards */}
-              <div className="sm:hidden divide-y divide-slate-100">
-                {items.map((item, i) => (
-                  <div key={item.id || i} className="py-2.5 px-1">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-slate-700 text-sm truncate">{item.nombre_snap}</p>
-                        {item.codigo_snap && (
-                          <p className="text-xs text-slate-500 font-mono">{item.codigo_snap}</p>
-                        )}
-                      </div>
-                      <span className="text-sm font-bold text-slate-700 shrink-0">{fmtUsd(item.total_linea_usd)}</span>
-                    </div>
-                    <div className="flex gap-3 mt-1 text-xs text-slate-500">
-                      <span>{Number(item.cantidad).toLocaleString('es-VE')} {item.unidad_snap}</span>
-                      <span>× {fmtUsd(item.precio_unit_usd)}</span>
-                    </div>
-                  </div>
+            )}
+
+            {/* Stock warnings */}
+            {stockIssues.length > 0 && (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-3 space-y-1">
+                <div className="flex items-center gap-2 text-red-700 font-semibold text-sm">
+                  <AlertCircle size={14} className="shrink-0" /> Stock insuficiente
+                </div>
+                {stockIssues.map(item => (
+                  <p key={item.id} className="text-xs text-red-600 ml-5">
+                    <span className="font-medium">{item.nombre_snap}</span>: necesita {Number(item.cantidad)} — disponible {stockMap[item.producto_id] ?? 0}
+                  </p>
                 ))}
               </div>
-            </>
-          )}
-        </div>
+            )}
 
-        {/* Stock warnings */}
-        {stockIssues.length > 0 && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-3 space-y-1">
-            <div className="flex items-center gap-2 text-red-700 font-semibold text-sm">
-              <AlertCircle size={15} className="shrink-0" />
-              Stock insuficiente
-            </div>
-            {stockIssues.map(item => (
-              <p key={item.id} className="text-xs text-red-600 ml-5">
-                <span className="font-medium">{item.nombre_snap}</span>: necesita {Number(item.cantidad)} — disponible {stockMap[item.producto_id] ?? 0}
-              </p>
-            ))}
-          </div>
-        )}
-
-        {/* Totales */}
-        <div className="border-t border-slate-200 pt-3 space-y-1">
-          {cotizacion.descuento_usd > 0 && (
-            <div className="flex justify-between text-sm">
-              <span className="text-slate-400">Subtotal</span>
-              <span className="text-slate-600">{fmtUsd(cotizacion.subtotal_usd)}</span>
-            </div>
-          )}
-          {cotizacion.descuento_usd > 0 && (
-            <div className="flex justify-between text-sm">
-              <span className="text-slate-400">Descuento ({cotizacion.descuento_global_pct}%)</span>
-              <span className="text-red-500">-{fmtUsd(cotizacion.descuento_usd)}</span>
-            </div>
-          )}
-          {cotizacion.costo_envio_usd > 0 && (
-            <div className="flex justify-between text-sm">
-              <span className="text-slate-400">Envío</span>
-              <span className="text-slate-600">{fmtUsd(cotizacion.costo_envio_usd)}</span>
-            </div>
-          )}
-          <div className="flex justify-between text-base pt-1">
-            <span className="font-bold text-slate-700">Total</span>
-            <div className="text-right">
-              <span className="font-black text-slate-800">{fmtUsd(cotizacion.total_usd)}</span>
-              {tasa > 0 && (
-                <div className="text-sm text-slate-500">{fmtBs(usdToBs(cotizacion.total_usd, tasa))}</div>
+            {/* Totales */}
+            <div className="border-t border-slate-100 pt-3 space-y-1">
+              {cotizacion.descuento_usd > 0 && (<>
+                <div className="flex justify-between text-xs text-slate-400">
+                  <span>Subtotal</span><span>{fmtUsd(cotizacion.subtotal_usd)}</span>
+                </div>
+                <div className="flex justify-between text-xs text-slate-400">
+                  <span>Descuento ({cotizacion.descuento_global_pct}%)</span>
+                  <span className="text-red-400">-{fmtUsd(cotizacion.descuento_usd)}</span>
+                </div>
+              </>)}
+              {cotizacion.costo_envio_usd > 0 && (
+                <div className="flex justify-between text-xs text-slate-400">
+                  <span>Envío</span><span>{fmtUsd(cotizacion.costo_envio_usd)}</span>
+                </div>
+              )}
+              <div className="flex justify-between items-baseline pt-0.5">
+                <span className="font-bold text-slate-700 text-sm">Total</span>
+                <div className="text-right">
+                  <span className="font-black text-slate-800 text-lg">{fmtUsd(cotizacion.total_usd)}</span>
+                  {tasa > 0 && <div className="text-xs text-slate-400">{fmtBs(usdToBs(cotizacion.total_usd, tasa))}</div>}
+                </div>
+              </div>
+              {Number(fleteUsd) > 0 && (
+                <div className="flex justify-between text-xs text-indigo-500 font-medium">
+                  <span>Con flete</span>
+                  <span>{fmtUsd(totalConFlete)}</span>
+                </div>
               )}
             </div>
           </div>
-        </div>
 
-        {/* Forma de pago — multi-select con montos */}
-        <div className="space-y-2">
-          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-            Formas de pago <span className="text-red-500">*</span>
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {FORMAS_PAGO.map(fp => {
-              const activo = formasPago.some(f => f.metodo === fp)
-              return (
-                <button key={fp} type="button"
-                  onClick={() => toggleForma(fp)}
-                  className={`px-4 py-2.5 rounded-lg text-sm font-semibold border transition-all min-h-[44px] ${
-                    activo
-                      ? 'bg-indigo-500 text-white border-indigo-500 shadow-sm'
-                      : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600'
+          {/* ── Columna derecha: configuración del despacho ── */}
+          <div className="lg:w-80 xl:w-96 min-h-0 overflow-y-auto p-4 lg:p-5 space-y-4">
+
+            {/* Formas de pago */}
+            <div className="space-y-2">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                Formas de pago <span className="text-red-500">*</span>
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {FORMAS_PAGO.map(fp => {
+                  const activo = formasPago.some(f => f.metodo === fp)
+                  return (
+                    <button key={fp} type="button" onClick={() => toggleForma(fp)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                        activo
+                          ? 'bg-indigo-500 text-white border-indigo-500 shadow-sm'
+                          : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600'
+                      }`}>
+                      {fp}
+                    </button>
+                  )
+                })}
+              </div>
+              {formasPago.length > 0 && (
+                <div className="space-y-1.5 mt-1">
+                  {formasPago.map(fp => (
+                    <div key={fp.metodo} className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-slate-500 w-24 truncate shrink-0">{fp.metodo}</span>
+                      <div className="relative flex-1">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
+                        <input type="number" min="0" step="0.01" value={fp.monto}
+                          onChange={e => setMontoForma(fp.metodo, e.target.value)}
+                          placeholder="0.00"
+                          className="w-full pl-6 pr-2 py-1.5 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:bg-white"
+                          disabled={cargando} />
+                      </div>
+                    </div>
+                  ))}
+                  <div className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-semibold ${
+                    pagoCuadrado ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-600 border border-red-200'
                   }`}>
-                  {fp}
-                </button>
-              )
-            })}
-          </div>
-
-          {/* Montos por forma seleccionada */}
-          {formasPago.length > 0 && (
-            <div className="space-y-2 mt-2">
-              {formasPago.map(fp => (
-                <div key={fp.metodo} className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-slate-600 w-28 truncate">{fp.metodo}</span>
-                  <div className="relative flex-1">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={fp.monto}
-                      onChange={e => setMontoForma(fp.metodo, e.target.value)}
-                      placeholder="0.00"
-                      className="w-full pl-7 pr-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:bg-white"
-                      disabled={cargando}
-                    />
+                    <span>Asignado: {fmtUsd(montoAsignado)}</span>
+                    <span>Total: {fmtUsd(totalSinFlete)}</span>
+                    {pagoCuadrado ? <span>✓</span> : <span>Faltan {fmtUsd(totalSinFlete - montoAsignado)}</span>}
                   </div>
                 </div>
-              ))}
-              {/* Barra de validación */}
-              <div className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm font-semibold ${
-                pagoCuadrado
-                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                  : 'bg-red-50 text-red-600 border border-red-200'
-              }`}>
-                <span>Asignado: ${montoAsignado.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                <span>Total: ${totalSinFlete.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                {pagoCuadrado
-                  ? <span className="text-emerald-500">✓</span>
-                  : <span className="text-red-400">Faltan ${(totalSinFlete - montoAsignado).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                }
-              </div>
+              )}
+              {formasPago.length === 0 && <p className="text-xs text-slate-400">Selecciona al menos una forma de pago</p>}
             </div>
-          )}
-          {formasPago.length === 0 && (
-            <p className="text-xs text-slate-400">Selecciona al menos una forma de pago</p>
-          )}
-        </div>
 
-        {/* Transportista */}
-        <div className="space-y-2">
-          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-            Transportista
-          </p>
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <button
-                type="button"
-                onClick={() => setShowTransportistaMenu(v => !v)}
-                onBlur={() => setTimeout(() => setShowTransportistaMenu(false), 200)}
-                className="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-slate-200 bg-slate-50 hover:border-indigo-300 transition-colors text-left min-h-[44px]"
-              >
-                <span className="flex items-center gap-2 truncate">
-                  <Truck size={15} className="text-slate-400 shrink-0" />
-                  {transportistaId
-                    ? <span className="text-slate-700">{transportistas.find(t => t.id === transportistaId)?.nombre || 'Seleccionado'}</span>
-                    : <span className="text-slate-400">Sin transportista (opcional)</span>
-                  }
-                </span>
-                <ChevronDown size={14} className={`text-slate-400 shrink-0 transition-transform ${showTransportistaMenu ? 'rotate-180' : ''}`} />
-              </button>
-              {showTransportistaMenu && (
-                <div className="absolute left-0 right-0 bottom-full mb-1 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20 max-h-48 overflow-y-auto"
-                  onMouseDown={e => e.preventDefault()}>
-                  <button
-                    onClick={() => { setTransportistaId(''); setFleteUsd(''); setShowTransportistaMenu(false) }}
-                    className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left transition-colors ${
-                      !transportistaId ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-500 hover:bg-slate-50'
-                    }`}
+            {/* Transportista */}
+            <div className="space-y-1.5">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Transportista</p>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <button type="button"
+                    onClick={() => setShowTransportistaMenu(v => !v)}
+                    onBlur={() => setTimeout(() => setShowTransportistaMenu(false), 200)}
+                    className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-sm font-medium border border-slate-200 bg-slate-50 hover:border-indigo-300 transition-colors text-left"
                   >
-                    Sin transportista
+                    <span className="flex items-center gap-2 truncate min-w-0">
+                      <Truck size={13} className="text-slate-400 shrink-0" />
+                      {transportistaId
+                        ? <span className="text-slate-700 truncate">{transportistas.find(t => t.id === transportistaId)?.nombre || 'Seleccionado'}</span>
+                        : <span className="text-slate-400 text-sm">Sin transportista</span>}
+                    </span>
+                    <ChevronDown size={13} className={`text-slate-400 shrink-0 transition-transform ${showTransportistaMenu ? 'rotate-180' : ''}`} />
                   </button>
-                  {transportistas.map(t => (
-                    <button key={t.id}
-                      onClick={() => { setTransportistaId(t.id); setShowTransportistaMenu(false) }}
-                      className={`w-full flex items-center justify-between gap-2 px-4 py-2.5 text-sm text-left transition-colors ${
-                        transportistaId === t.id ? 'bg-indigo-50 font-semibold text-indigo-700' : 'text-slate-700 hover:bg-slate-50'
-                      }`}
-                    >
-                      <div className="min-w-0">
-                        <p className="font-medium truncate">{t.nombre}</p>
-                        {(t.vehiculo || t.placa_chuto) && (
-                          <p className="text-xs text-slate-400 truncate">
-                            {[t.vehiculo, t.placa_chuto].filter(Boolean).join(' · ')}
-                          </p>
-                        )}
-                      </div>
-                      {transportistaId === t.id && (
-                        <span className="text-indigo-500 shrink-0">✓</span>
-                      )}
-                    </button>
-                  ))}
-                  {transportistas.length === 0 && (
-                    <p className="px-4 py-2.5 text-sm text-slate-400">No hay transportistas registrados</p>
+                  {showTransportistaMenu && (
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20 max-h-44 overflow-y-auto"
+                      onMouseDown={e => e.preventDefault()}>
+                      <button onClick={() => { setTransportistaId(''); setFleteUsd(''); setShowTransportistaMenu(false) }}
+                        className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors ${!transportistaId ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-500 hover:bg-slate-50'}`}>
+                        Sin transportista
+                      </button>
+                      {transportistas.map(t => (
+                        <button key={t.id} onClick={() => { setTransportistaId(t.id); setShowTransportistaMenu(false) }}
+                          className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-left transition-colors ${transportistaId === t.id ? 'bg-indigo-50 font-semibold text-indigo-700' : 'text-slate-700 hover:bg-slate-50'}`}>
+                          <div className="min-w-0">
+                            <p className="font-medium truncate">{t.nombre}</p>
+                            {(t.vehiculo || t.placa_chuto) && (
+                              <p className="text-xs text-slate-400 truncate">{[t.vehiculo, t.placa_chuto].filter(Boolean).join(' · ')}</p>
+                            )}
+                          </div>
+                          {transportistaId === t.id && <span className="text-indigo-500 shrink-0">✓</span>}
+                        </button>
+                      ))}
+                      {transportistas.length === 0 && <p className="px-3 py-2 text-sm text-slate-400">Sin registros</p>}
+                    </div>
                   )}
+                </div>
+                <button type="button" onClick={() => setShowNuevoTransp(true)} disabled={cargando}
+                  className="shrink-0 w-9 h-9 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 flex items-center justify-center transition-colors active:scale-95 disabled:opacity-50"
+                  title="Nuevo transportista">
+                  <Plus size={14} className="text-emerald-600" />
+                </button>
+              </div>
+              {transportistaId && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500 shrink-0">Flete USD</span>
+                  <div className="relative flex-1">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
+                    <input type="number" min="0" step="0.01" value={fleteUsd}
+                      onChange={e => setFleteUsd(e.target.value)} placeholder="0.00"
+                      className="w-full pl-6 pr-2 py-1.5 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:bg-white"
+                      disabled={cargando} />
+                  </div>
                 </div>
               )}
             </div>
-            <button type="button"
-              onClick={() => setShowNuevoTransp(v => !v)}
-              disabled={cargando}
-              className="shrink-0 w-10 h-10 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 flex items-center justify-center transition-colors active:scale-95 disabled:opacity-50"
-              title="Crear nuevo transportista">
-              <Plus size={16} className="text-emerald-600" />
-            </button>
-          </div>
 
-          {/* Formulario crear nuevo transportista */}
-          {showNuevoTransp && (
-            <div className="bg-white rounded-2xl border-2 border-emerald-200 shadow-lg p-3 sm:p-4 space-y-3">
-              <p className="text-sm font-bold text-emerald-700">Nuevo transportista</p>
-              {nuevoError && <p className="text-xs text-red-500 font-medium">{nuevoError}</p>}
-              <input type="text" value={nuevoNombre} onChange={e => setNuevoNombre(e.target.value)}
-                placeholder="Nombre del chofer *"
-                className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-300 focus:bg-white transition-colors" />
-              <input type="text" value={nuevoRif} onChange={e => setNuevoRif(e.target.value)}
-                placeholder="C.I. / RIF *"
-                className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-300 focus:bg-white transition-colors" />
-              <div className="grid grid-cols-2 gap-2">
-                <input type="text" value={nuevoVehiculo} onChange={e => setNuevoVehiculo(e.target.value)}
-                  placeholder="Vehículo *"
-                  className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-300 focus:bg-white transition-colors" />
-                <input type="text" value={nuevoColor} onChange={e => setNuevoColor(e.target.value)}
-                  placeholder="Color *"
-                  className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-300 focus:bg-white transition-colors" />
-              </div>
-              <input type="text" value={nuevoPlaca} onChange={e => setNuevoPlaca(e.target.value.toUpperCase())}
-                placeholder="Placa *"
-                className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-300 focus:bg-white transition-colors" />
-              <div className="grid grid-cols-2 gap-2">
-                <input type="text" value={nuevoPlacaChuto} onChange={e => setNuevoPlacaChuto(e.target.value.toUpperCase())}
-                  placeholder="Placa chuto"
-                  className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-300 focus:bg-white transition-colors" />
-                <input type="text" value={nuevoPlacaBatea} onChange={e => setNuevoPlacaBatea(e.target.value.toUpperCase())}
-                  placeholder="Placa batea"
-                  className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-300 focus:bg-white transition-colors" />
-              </div>
-              <div className="flex gap-2">
-                <button type="button" onClick={() => { setShowNuevoTransp(false); setNuevoError('') }}
-                  className="flex-1 px-3 py-2 rounded-lg text-sm font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
-                  Cancelar
-                </button>
-                <button type="button" disabled={crearTransp.isPending}
-                  onClick={async () => {
-                    if (!nuevoNombre.trim() || !nuevoRif.trim() || !nuevoVehiculo.trim() || !nuevoColor.trim() || !nuevoPlaca.trim()) {
-                      setNuevoError('Nombre, C.I./RIF, vehículo, color y placa son obligatorios'); return
-                    }
-                    setNuevoError('')
-                    try {
-                      const nuevo = await crearTransp.mutateAsync({
-                        nombre: nuevoNombre.trim(),
-                        rif: nuevoRif.trim() || null,
-                        vehiculo: nuevoVehiculo.trim() || null,
-                        color: nuevoColor.trim() || null,
-                        zona_cobertura: nuevoPlaca.trim() || null,
-                        placa_chuto: nuevoPlacaChuto.trim() || null,
-                        placa_batea: nuevoPlacaBatea.trim() || null,
-                      })
-                      setTransportistaId(nuevo.id)
-                      setShowNuevoTransp(false)
-                      setNuevoNombre(''); setNuevoRif(''); setNuevoVehiculo(''); setNuevoColor(''); setNuevoPlaca(''); setNuevoPlacaChuto(''); setNuevoPlacaBatea('')
-                    } catch (e) { setNuevoError(e.message || 'Error al crear') }
-                  }}
-                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-50">
-                  {crearTransp.isPending ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                  Crear
-                </button>
-              </div>
+            {/* Notas */}
+            <div className="space-y-1.5">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Notas <span className="font-normal normal-case text-slate-400">(opcional)</span></p>
+              <textarea value={notas} onChange={e => setNotas(e.target.value)}
+                placeholder="Observaciones internas..."
+                className="w-full px-3 py-2 rounded-xl text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:bg-white transition-colors resize-none"
+                rows={2} disabled={cargando} />
             </div>
-          )}
-        </div>
 
-        {/* Monto del flete (solo si hay transportista) */}
-        {transportistaId && (
-          <div className="space-y-2">
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              Monto del flete (USD)
-            </p>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={fleteUsd}
-              onChange={e => setFleteUsd(e.target.value)}
-              placeholder="0.00"
-              className="w-full px-4 py-2.5 rounded-xl text-sm font-medium border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 focus:bg-white transition-colors min-h-[44px]"
-              disabled={cargando}
-            />
-            {Number(fleteUsd) > 0 && (
-              <p className="text-xs text-indigo-500 font-medium">
-                Total con flete: ${(Number(cotizacion?.total_usd || 0) + Number(fleteUsd)).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Notas (opcional) */}
-        <div className="space-y-2">
-          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-            Notas (opcional)
-          </p>
-          <textarea
-            value={notas}
-            onChange={e => setNotas(e.target.value)}
-            placeholder="Observaciones internas..."
-            className="w-full px-4 py-2.5 rounded-xl text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 focus:bg-white transition-colors resize-y"
-            style={{ minHeight: 80 }}
-            disabled={cargando}
-          />
-        </div>
-
-        {/* Facturar a otro cliente */}
-        <div className="space-y-2">
-          <button
-            type="button"
-            onClick={() => { setShowFacturacion(v => !v); if (showFacturacion) setClienteFacturaId('') }}
-            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl border text-sm font-semibold transition-all ${
-              showFacturacion
-                ? 'border-violet-300 bg-violet-50 text-violet-700'
-                : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300 hover:text-slate-700'
-            }`}
-          >
-            <Receipt size={15} className={showFacturacion ? 'text-violet-500' : 'text-slate-400'} />
-            <span className="flex-1 text-left">¿Facturar a otro cliente?</span>
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full transition-colors ${
-              showFacturacion ? 'bg-violet-200 text-violet-700' : 'bg-slate-200 text-slate-500'
-            }`}>
-              {showFacturacion ? 'Activo' : 'Opcional'}
-            </span>
-          </button>
-          {showFacturacion && (
-            <div className="rounded-xl border border-violet-200 bg-violet-50/30 p-3 space-y-2">
-              <p className="text-xs text-violet-600 font-medium">
-                La CxC y el PDF se emitirán a nombre de este cliente, no al de la cotización.
-              </p>
-              <ClienteFacturaBuscador
-                clientes={clientes.filter(c => c.id !== cotizacion?.cliente_id)}
-                clienteId={clienteFacturaId}
-                onSelect={setClienteFacturaId}
-              />
+            {/* Facturar a otro cliente */}
+            <div className="space-y-2">
+              <button type="button"
+                onClick={() => { setShowFacturacion(v => !v); if (showFacturacion) setClienteFacturaId('') }}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-all ${
+                  showFacturacion ? 'border-violet-300 bg-violet-50 text-violet-700' : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300 hover:text-slate-700'
+                }`}>
+                <Receipt size={13} className={showFacturacion ? 'text-violet-500' : 'text-slate-400'} />
+                <span className="flex-1 text-left">¿Facturar a otro cliente?</span>
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${showFacturacion ? 'bg-violet-200 text-violet-700' : 'bg-slate-200 text-slate-500'}`}>
+                  {showFacturacion ? 'Activo' : 'Opcional'}
+                </span>
+              </button>
+              {showFacturacion && (
+                <div className="rounded-xl border border-violet-200 bg-violet-50/30 p-2.5 space-y-2">
+                  <p className="text-xs text-violet-600">CxC y PDF se emitirán a nombre de este cliente.</p>
+                  <ClienteFacturaBuscador
+                    clientes={clientes.filter(c => c.id !== cotizacion?.cliente_id)}
+                    clienteId={clienteFacturaId}
+                    onSelect={setClienteFacturaId}
+                  />
+                </div>
+              )}
             </div>
-          )}
-        </div>
 
-        </div>{/* fin scrollable */}
+          </div>{/* fin col derecha */}
+        </div>{/* fin body */}
 
-        {/* Botones — despachar */}
-        <div className="flex flex-col-reverse sm:flex-row gap-3 pt-1">
+        {/* ── Footer — botones ───────────────────────────────────── */}
+        <div className="flex gap-3 px-5 py-3.5 border-t border-slate-100 shrink-0">
           <button onClick={onCancel} disabled={cargando}
-            className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-700 font-semibold text-base hover:bg-slate-50 transition-colors disabled:opacity-50">
+            className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-semibold text-sm hover:bg-slate-50 transition-colors disabled:opacity-50">
             Cancelar
           </button>
           <button onClick={() => {
@@ -562,6 +412,102 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
           </button>
         </div>
       </div>
+
+      {/* ── Modal overlay: nuevo transportista ── */}
+      {showNuevoTransp && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          onClick={() => setShowNuevoTransp(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-slate-100"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 bg-emerald-50 rounded-xl flex items-center justify-center">
+                  <Truck size={15} className="text-emerald-600" />
+                </div>
+                <h4 className="font-bold text-slate-800 text-sm">Nuevo transportista</h4>
+              </div>
+              <button onClick={() => setShowNuevoTransp(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors">
+                <X size={15} />
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              {nuevoError && (
+                <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">{nuevoError}</div>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2 space-y-1">
+                  <label className="text-xs font-semibold text-slate-500">Nombre <span className="text-red-500">*</span></label>
+                  <input value={nuevoNombre} onChange={e => setNuevoNombre(e.target.value)}
+                    placeholder="Nombre del transportista"
+                    className="w-full px-3 py-2 rounded-xl text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:bg-white transition-colors" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-500">RIF / Cédula</label>
+                  <input value={nuevoRif} onChange={e => setNuevoRif(e.target.value)}
+                    placeholder="J-12345678-9"
+                    className="w-full px-3 py-2 rounded-xl text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:bg-white transition-colors" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-500">Vehículo</label>
+                  <input value={nuevoVehiculo} onChange={e => setNuevoVehiculo(e.target.value)}
+                    placeholder="Gandola, camión..."
+                    className="w-full px-3 py-2 rounded-xl text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:bg-white transition-colors" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-500">Placa chuto</label>
+                  <input value={nuevoPlacaChuto} onChange={e => setNuevoPlacaChuto(e.target.value)}
+                    placeholder="ABC-123"
+                    className="w-full px-3 py-2 rounded-xl text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:bg-white transition-colors" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-500">Placa batea</label>
+                  <input value={nuevoPlacaBatea} onChange={e => setNuevoPlacaBatea(e.target.value)}
+                    placeholder="XYZ-456"
+                    className="w-full px-3 py-2 rounded-xl text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:bg-white transition-colors" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-500">Color de etiqueta</label>
+                  <input type="color" value={nuevoColor || '#6366f1'} onChange={e => setNuevoColor(e.target.value)}
+                    className="w-full h-9 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer px-1 py-1" />
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3 px-5 py-3.5 border-t border-slate-100">
+              <button onClick={() => { setShowNuevoTransp(false); setNuevoError('') }}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 font-semibold text-sm hover:bg-slate-50 transition-colors">
+                Cancelar
+              </button>
+              <button
+                onClick={async () => {
+                  if (!nuevoNombre.trim()) { setNuevoError('El nombre es obligatorio'); return }
+                  setNuevoError('')
+                  try {
+                    const result = await crearTransp.mutateAsync({
+                      nombre: nuevoNombre.trim(),
+                      rif: nuevoRif.trim() || null,
+                      vehiculo: nuevoVehiculo.trim() || null,
+                      color: nuevoColor || null,
+                      placa_chuto: nuevoPlacaChuto.trim() || null,
+                      placa_batea: nuevoPlacaBatea.trim() || null,
+                    })
+                    if (result?.id) setTransportistaId(result.id)
+                    setShowNuevoTransp(false)
+                    setNuevoNombre(''); setNuevoRif(''); setNuevoVehiculo('')
+                    setNuevoColor(''); setNuevoPlacaChuto(''); setNuevoPlacaBatea('')
+                    showToast('Transportista creado', 'success')
+                  } catch (e) {
+                    setNuevoError(e.message || 'Error al crear transportista')
+                  }
+                }}
+                disabled={crearTransp.isPending}
+                className="flex-1 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                {crearTransp.isPending ? <><Loader2 size={14} className="animate-spin" />Guardando...</> : 'Guardar transportista'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
