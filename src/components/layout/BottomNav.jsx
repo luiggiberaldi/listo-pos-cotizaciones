@@ -9,7 +9,7 @@ import { PackageCheck, Truck, DollarSign, BarChart3, Settings, AlertCircle, Flas
 // Otros roles ajustan según permisos
 const BOTTOM_ITEMS = [
   { path: '/', label: 'Inicio', icon: LayoutDashboard },
-  { path: '/cotizaciones', label: 'Cotizar', icon: FileText, labelByRole: { administracion: 'Despachos' }, excludeRoles: ['logistica'] },
+  { path: '/cotizaciones', label: 'Cotizar', icon: FileText, excludeRoles: ['logistica', 'administracion'] },
   { path: '/despachos', label: 'Despacho', icon: PackageCheck, labelByRole: { logistica: 'Entregas' } },
   { path: '/clientes', label: 'Clientes', icon: Users, excludeRoles: ['logistica'] },
 ]

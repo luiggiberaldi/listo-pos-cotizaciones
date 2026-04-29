@@ -49,7 +49,7 @@ function NotifIcon({ type }) {
 const NAV_TODOS = [
   { path: '/',               label: 'Inicio',         icono: LayoutDashboard },
   { path: '/venta-rapida',   label: 'Venta rápida',   icono: Zap,            onlyRoles: ['vendedor', 'supervisor'] },
-  { path: '/cotizaciones',   label: 'Cotizaciones',   icono: FileText,       labelByRole: { administracion: 'Despachos' }, excludeRoles: ['logistica'] },
+  { path: '/cotizaciones',   label: 'Cotizaciones',   icono: FileText,       excludeRoles: ['logistica', 'administracion'] },
   { path: '/despachos',      label: 'Despachos',      icono: PackageCheck,   labelByRole: { logistica: 'Entregas' } },
   { path: '/clientes',       label: 'Clientes',       icono: Users,          excludeRoles: ['logistica'] },
   { path: '/inventario',     label: 'Inventario',     icono: Package,        excludeRoles: ['logistica'] },
