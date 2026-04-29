@@ -618,7 +618,7 @@ function Step1Productos({
     })
   }, [productosFiltrados])
 
-  const productosVisibles = productosOrdenados.slice(0, 30)
+  const productosVisibles = productosOrdenados.slice(0, 60)
 
   return (
     <div className="flex-1 min-h-0 flex flex-col p-3 pb-24 lg:pb-0">
@@ -758,8 +758,8 @@ function Step1Productos({
         )}
 
         {/* ── Tarjetas de productos ── */}
-        {/* Vista lista compacta (móvil < md) */}
-        <div className="flex flex-col gap-1.5 md:hidden">
+        {/* Vista grid compacta (móvil < md) */}
+        <div className="grid grid-cols-3 gap-1.5 md:hidden">
           {productosVisibles.map(p => {
             const added = idsAgregados.has(p.id)
             const itemInCart = added ? items.find(it => it.productoId === p.id) : null
@@ -767,82 +767,70 @@ function Step1Productos({
             const sinStock = stock <= 0
             const tieneMultiprecios = p.precio_2 != null || p.precio_3 != null
             return (
-              <SwipeToDelete key={p.id} enabled={added} onDelete={() => quitarItem(p.id)}>
-                <div
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-all min-h-[48px] ${
-                    sinStock
-                      ? 'opacity-40 cursor-not-allowed border-slate-100 bg-white'
-                      : added
-                        ? 'border-emerald-300 bg-emerald-50/50 shadow-sm shadow-emerald-100/80'
-                        : 'border-slate-200 bg-white hover:border-primary/50 active:scale-[0.98]'
-                  }`}
-                  onClick={() => !added && !sinStock && agregarProducto(p)}
-                >
-                  {/* Indicador izquierdo */}
-                  <div className={`w-7 h-7 rounded-lg shrink-0 flex items-center justify-center ${
-                    added ? 'bg-emerald-100' : 'bg-slate-100'
-                  }`}>
-                    {added
-                      ? <CheckCircle size={14} className="text-emerald-500" />
-                      : <Package size={14} className="text-slate-400" />
-                    }
+              <div key={p.id}
+                className={`relative bg-white rounded-xl border p-2 flex flex-col items-center text-center transition-all active:scale-95 ${
+                  sinStock
+                    ? 'opacity-40 cursor-not-allowed border-slate-100'
+                    : added
+                      ? 'border-emerald-300 bg-emerald-50/50 shadow-sm shadow-emerald-100/80'
+                      : 'border-slate-200 hover:border-primary/50'
+                }`}
+                onClick={() => !added && !sinStock && agregarProducto(p)}
+              >
+                {added && (
+                  <div className="absolute top-1 right-1">
+                    <CheckCircle size={12} className="text-emerald-500" />
                   </div>
-                  {/* Nombre */}
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-xs font-bold leading-tight truncate ${
-                      added ? 'text-emerald-700' : 'text-slate-700'
-                    }`}>
-                      {p.nombre}
-                    </p>
-                    {tieneMultiprecios && (
-                      <p className="text-[9px] font-bold text-primary/60">{[p.precio_2 != null && 'P2', p.precio_3 != null && 'P3'].filter(Boolean).length + 1} precios</p>
-                    )}
+                )}
+                <p className={`text-[10px] font-bold leading-tight line-clamp-2 mb-0.5 w-full ${
+                  added ? 'text-emerald-700' : 'text-slate-700'
+                }`}>
+                  {p.nombre}
+                </p>
+                <p className={`text-[11px] font-black ${added ? 'text-emerald-600' : 'text-slate-800'}`}>
+                  {fmtUsd(p.precio_usd)}
+                </p>
+                {tieneMultiprecios && (
+                  <p className="text-[8px] font-bold text-primary/60">{[p.precio_2 != null && 'P2', p.precio_3 != null && 'P3'].filter(Boolean).length + 1} precios</p>
+                )}
+                {tasa > 0 && (
+                  <p className="text-[8px] text-slate-400 leading-tight">{fmtBs(usdToBs(p.precio_usd, tasa))}</p>
+                )}
+                <p className={`text-[8px] font-medium mt-0.5 ${
+                  sinStock ? 'text-red-500' : stock <= 5 ? 'text-amber-500' : 'text-emerald-500'
+                }`}>
+                  {sinStock ? 'Agotado' : `${stock} disp.`}
+                </p>
+                {/* Stepper para productos agregados */}
+                {added && itemInCart && (
+                  <div className="flex items-center gap-0.5 mt-1" onClick={e => e.stopPropagation()}>
+                    <button type="button"
+                      onClick={() => itemInCart.cantidad <= 1 ? quitarItem(p.id) : cambiarCantidad(p.id, -1)}
+                      className="w-6 h-6 rounded-md bg-slate-100 flex items-center justify-center text-slate-500 active:bg-red-100 active:text-red-500 transition-colors">
+                      {itemInCart.cantidad <= 1 ? <Trash2 size={10} strokeWidth={2.5} /> : <Minus size={11} strokeWidth={3} />}
+                    </button>
+                    <input
+                      key={`grid-qty-${p.id}-${itemInCart.cantidad}`}
+                      type="text"
+                      inputMode="numeric"
+                      defaultValue={itemInCart.cantidad}
+                      onClick={e => e.target.select()}
+                      onFocus={e => e.target.select()}
+                      onBlur={e => {
+                        const num = Math.min(Math.max(1, parseInt(e.target.value, 10) || 1), stock || 99999);
+                        setCantidadDirecta(p.id, num);
+                      }}
+                      onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }}
+                      className="w-8 h-6 rounded-md bg-white border border-slate-200 text-center text-[10px] font-black text-slate-700 focus:border-sky-400 focus:ring-1 focus:ring-sky-200 outline-none"
+                    />
+                    <button type="button"
+                      onClick={() => cambiarCantidad(p.id, 1)}
+                      className="w-6 h-6 rounded-md bg-emerald-50 flex items-center justify-center text-emerald-600 active:bg-emerald-100 transition-colors">
+                      <Plus size={11} strokeWidth={3} />
+                    </button>
                   </div>
-                  {/* Stepper inline OR Precio+stock */}
-                  {added && itemInCart ? (
-                    <div className="shrink-0 flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
-                      <button type="button"
-                        onClick={() => itemInCart.cantidad <= 1 ? quitarItem(p.id) : cambiarCantidad(p.id, -1)}
-                        className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 active:bg-red-100 active:text-red-500 transition-colors">
-                        {itemInCart.cantidad <= 1 ? <Trash2 size={11} strokeWidth={2.5} /> : <Minus size={12} strokeWidth={3} />}
-                      </button>
-                      <input
-                        key={`grid-qty-${p.id}-${itemInCart.cantidad}`}
-                        type="text"
-                        inputMode="numeric"
-                        defaultValue={itemInCart.cantidad}
-                        onClick={e => e.target.select()}
-                        onFocus={e => e.target.select()}
-                        onBlur={e => {
-                          const num = Math.min(Math.max(1, parseInt(e.target.value, 10) || 1), stock || 99999);
-                          setCantidadDirecta(p.id, num);
-                        }}
-                        onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }}
-                        className="w-9 h-7 rounded-lg bg-white border border-slate-200 text-center text-xs font-black text-slate-700 focus:border-sky-400 focus:ring-1 focus:ring-sky-200 outline-none"
-                      />
-                      <button type="button"
-                        onClick={() => cambiarCantidad(p.id, 1)}
-                        className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 active:bg-emerald-100 transition-colors">
-                        <Plus size={12} strokeWidth={3} />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="shrink-0 text-right">
-                      <p className={`text-xs font-black ${added ? 'text-emerald-600' : 'text-slate-800'}`}>
-                        {fmtUsd(p.precio_usd)}
-                      </p>
-                      {tasa > 0 && (
-                        <p className="text-[9px] text-slate-400">{fmtBs(usdToBs(p.precio_usd, tasa))}</p>
-                      )}
-                      <p className={`text-[9px] font-medium ${
-                        sinStock ? 'text-red-500' : stock <= 5 ? 'text-amber-500' : 'text-emerald-500'
-                      }`}>
-                        {sinStock ? 'Agotado' : `${stock} disp.`}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </SwipeToDelete>
+                )}
+              </div>
             )
           })}
         </div>
