@@ -15,7 +15,7 @@ const BOTTOM_ITEMS = [
 ]
 
 const MORE_ITEMS = [
-  { path: '/venta-rapida', label: 'Venta rápida', icon: ShoppingBag, onlyRoles: ['vendedor', 'supervisor'] },
+  { path: '/venta-rapida', label: 'Venta rápida', icon: Zap, onlyRoles: ['vendedor', 'supervisor'] },
   { path: '/inventario', label: 'Inventario', icon: Package, excludeRoles: ['logistica'] },
   { path: '/transportistas', label: 'Transportistas', icon: Truck, excludeRoles: ['administracion', 'logistica'] },
   { path: '/comisiones', label: 'Comisiones', icon: DollarSign, excludeRoles: ['logistica'] },
@@ -59,12 +59,12 @@ export default function BottomNav({ esSupervisor, esAdministracion = false, rol:
                 onClick={() => setShowMore(false)}
                 style={{ touchAction: 'manipulation' }}
                 className={({ isActive }) => `
-                  flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl transition-all
+                  flex flex-col items-center justify-start gap-1.5 py-3 px-2 rounded-xl transition-all h-[72px]
                   ${isActive ? 'bg-white/10 text-amber-400' : 'text-white/60 hover:text-white hover:bg-white/5'}
                 `}
               >
-                <Icon size={20} />
-                <span className="text-xs font-bold">{label}</span>
+                <Icon size={20} className="shrink-0" />
+                <span className="text-xs font-bold text-center leading-tight">{label}</span>
               </NavLink>
             ))}
           </div>
