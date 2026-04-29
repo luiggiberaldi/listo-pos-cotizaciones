@@ -352,7 +352,7 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
             <div className="flex justify-between font-black text-slate-800 text-base pt-1 border-t border-slate-200">
               <span>Total</span><span>{fmt(total)}</span>
             </div>
-            {monedaPdf === '$' && tasa > 0 && (
+            {monedaPdf !== 'bs' && tasa > 0 && (
               <div className="flex justify-end text-xs text-slate-400">
                 <span>{fmtBs(usdToBs(total, tasa))}</span>
               </div>

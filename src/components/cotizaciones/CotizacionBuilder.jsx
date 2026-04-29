@@ -1357,7 +1357,14 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                   )}
                   <div className="flex justify-between py-1.5 last:pb-0">
                     <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Total</span>
-                    <span className="font-bold text-slate-900 text-sm">{fmtMoneda(totalUsd)}</span>
+                    <div className="text-right">
+                      <span className="font-bold text-slate-900 text-sm">{fmtMoneda(totalUsd)}</span>
+                      {monedaPDF !== 'bs' && tasaHook.tasaEfectiva > 0 && totalUsd > 0 && (
+                        <p className="text-[10px] text-slate-400 font-mono">
+                          Bs {new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(totalBs)}
+                        </p>
+                      )}
+                    </div>
                   </div>
                   {notasCliente && (
                     <div className="py-1.5 last:pb-0">
