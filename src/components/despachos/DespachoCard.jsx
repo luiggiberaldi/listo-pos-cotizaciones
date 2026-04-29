@@ -276,7 +276,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     <div className="group bg-white rounded-2xl border border-slate-200 hover:shadow-lg transition-all duration-200 flex flex-col" onClick={(e) => { if (e.target.closest('button') || e.target.closest('[data-no-click]') || showEdit || showDetalle || showDescuento) return; setShowDetalle(true) }}>
 
       {/* ── Header strip con color del vendedor ── */}
-      <div className="relative h-14 shrink-0 flex items-end justify-between px-3 pb-1.5 rounded-t-2xl overflow-hidden"
+      <div className="relative h-12 shrink-0 flex items-center justify-between px-3 rounded-t-2xl overflow-hidden"
         title={despacho.vendedor?.nombre ? `Vendedor: ${despacho.vendedor.nombre}` : undefined}
         style={{ background: `linear-gradient(135deg, ${vendedorColor}ee 0%, ${vendedorColor}99 100%)` }}>
         <div className="absolute inset-0 opacity-10"
@@ -286,7 +286,6 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           }} />
         <div className="relative z-10 min-w-0">
           <p className="font-black text-white font-mono leading-tight drop-shadow text-base">{numDisplay}</p>
-          <span className="text-[9px] sm:text-[10px] font-mono text-white/60 bg-white/15 px-1 py-0.5 rounded whitespace-nowrap">{cotNum}</span>
         </div>
         <div className="relative z-10 shrink-0 ml-1">
           <EstadoBadge estado={despacho.estado} rol={rol} />
