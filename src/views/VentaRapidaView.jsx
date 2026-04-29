@@ -403,7 +403,7 @@ export default function VentaRapidaView() {
 
       {/* Bottom bar with nav buttons — hidden on step 0 (use cart FAB instead) */}
       {step > 0 && (
-      <div className="sticky bottom-0 bg-white border-t border-slate-200 px-4 py-3 flex items-center justify-between gap-3 z-20">
+      <div className="fixed bottom-16 left-0 right-0 md:sticky md:bottom-0 bg-white border-t border-slate-200 px-4 py-3 flex items-center justify-between gap-3 z-[96]" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))' }}>
         <button onClick={() => setStep(step - 1)}
           className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors">
           <ArrowLeft size={16} /> Atrás
