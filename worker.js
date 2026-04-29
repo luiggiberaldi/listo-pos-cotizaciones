@@ -2218,7 +2218,7 @@ async function handleCrearDespacho(request, env) {
 
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
-  const { cotizacionId, notas, formaPago, transportistaId, fleteUsd } = body;
+  const { cotizacionId, notas, formaPago, transportistaId, fleteUsd, clienteFacturaId } = body;
   const flete = Math.max(0, Number(fleteUsd) || 0);
   if (!cotizacionId) return jsonError('Falta cotizacionId', 400, request);
   if (!isValidUuid(cotizacionId)) return jsonError('cotizacionId inválido', 400, request);
@@ -2265,6 +2265,7 @@ async function handleCrearDespacho(request, env) {
       body: JSON.stringify({
         cotizacion_id: cotizacionId,
         cliente_id: cot.cliente_id,
+        cliente_factura_id: (clienteFacturaId && isValidUuid(clienteFacturaId)) ? clienteFacturaId : null,
         vendedor_id: cot.vendedor_id,
         transportista_id: transportistaId || cot.transportista_id,
         estado: 'pendiente',
@@ -2808,8 +2809,10 @@ async function handleActualizarEstadoDespacho(request, env) {
           );
           const [cot] = await cotRes.json();
           if (cot) {
+            // Usar cliente_factura_id si existe, si no el cliente de la cotización
+            const clienteCxCId = desp.cliente_factura_id || cot.cliente_id;
             const saldoRes = await fetch(
-              `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${cot.cliente_id}&select=saldo_pendiente`,
+              `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteCxCId}&select=saldo_pendiente`,
               { headers }
             );
             const [clienteSaldo] = await saldoRes.json();
@@ -2819,7 +2822,7 @@ async function handleActualizarEstadoDespacho(request, env) {
             await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
               method: 'POST', headers,
               body: JSON.stringify({
-                cliente_id: cot.cliente_id,
+                cliente_id: clienteCxCId,
                 despacho_id: despachoId,
                 tipo: 'cargo',
                 monto_usd: montoCxC,
@@ -2829,7 +2832,7 @@ async function handleActualizarEstadoDespacho(request, env) {
               }),
             });
 
-            await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${cot.cliente_id}`, {
+            await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteCxCId}`, {
               method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
               body: JSON.stringify({ saldo_pendiente: nuevoSaldo }),
             });

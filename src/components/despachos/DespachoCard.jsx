@@ -45,7 +45,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     : '—'
 
   const canDespachar = (esAdministracion || esDesarrollador) && despacho.estado === 'pendiente'
-  const canEntregar = (esPrivilegiado || perfil?.rol === 'logistica') && despacho.estado === 'despachada'
+  const canEntregar = (perfil?.rol === 'logistica' || esDesarrollador) && despacho.estado === 'despachada'
   const canAnular = esPrivilegiado && (despacho.estado === 'pendiente' || despacho.estado === 'despachada')
   const canReciclar = (esSupervisor || esDesarrollador) && despacho.estado === 'anulada' && onReciclar
   const canDescuento = (perfil?.rol === 'logistica' || esSupervisor || esDesarrollador) && ['pendiente', 'despachada'].includes(despacho.estado)

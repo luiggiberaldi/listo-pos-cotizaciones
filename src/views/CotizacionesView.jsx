@@ -3,13 +3,14 @@
 // El builder reemplaza la lista in-page (sin navegación adicional)
 import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { FileText, Plus, RefreshCw, AlertTriangle, PackageCheck, Loader2, X, AlertCircle, LayoutGrid, List, ChevronDown, Truck } from 'lucide-react'
+import { FileText, Plus, RefreshCw, AlertTriangle, PackageCheck, Loader2, X, AlertCircle, LayoutGrid, List, ChevronDown, Truck, Receipt } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import supabase from '../services/supabase/client'
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import { useCotizaciones, useAnularCotizacion, useActualizarEstado, useReabrirCotizacion, useReciclarCotizacion } from '../hooks/useCotizaciones'
 import { useCrearDespacho, useActualizarEstadoDespacho } from '../hooks/useDespachos'
 import { useCotizacion } from '../hooks/useCotizaciones'
+import { useClientes } from '../hooks/useClientes'
 import CotizacionCard    from '../components/cotizaciones/CotizacionCard'
 import CotizacionRow     from '../components/cotizaciones/CotizacionRow'
 import DetalleModal      from '../components/ui/DetalleModal'
@@ -31,6 +32,7 @@ import Pagination from '../components/ui/Pagination'
 import { OnboardingSequence } from '../components/ui/OnboardingTooltip'
 import { getAction } from '../utils/cotizacionActions'
 import ReciclarCotizacionModal from '../components/cotizaciones/ReciclarCotizacionModal'
+import ClienteFacturaBuscador from '../components/clientes/ClienteFacturaBuscador'
 
 // ─── Filtros de estado ────────────────────────────────────────────────────────
 const ESTADOS_FILTRO = [
@@ -71,6 +73,7 @@ const FORMAS_PAGO = ['Efectivo', 'Zelle', 'Pago Móvil', 'USDT', 'Transferencia'
 
 function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 }) {
   const { data: detalle } = useCotizacion(cotizacion?.id)
+  const { data: clientes = [] } = useClientes()
   const [formasPago, setFormasPago] = useState([]) // [{metodo, monto}]
   const [transportistaId, setTransportistaId] = useState('')
   const [fleteUsd, setFleteUsd] = useState('')
@@ -78,6 +81,8 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
   const [showTransportistaMenu, setShowTransportistaMenu] = useState(false)
   const [stockMap, setStockMap] = useState({})
   const [notas, setNotas] = useState('')
+  const [clienteFacturaId, setClienteFacturaId] = useState('')
+  const [showFacturacion, setShowFacturacion] = useState(false)
   const { data: transportistas = [] } = useTransportistas()
   const crearTransp = useCrearTransportista()
   const [showNuevoTransp, setShowNuevoTransp] = useState(false)
@@ -504,6 +509,39 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
           />
         </div>
 
+        {/* Facturar a otro cliente */}
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => { setShowFacturacion(v => !v); if (showFacturacion) setClienteFacturaId('') }}
+            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl border text-sm font-semibold transition-all ${
+              showFacturacion
+                ? 'border-violet-300 bg-violet-50 text-violet-700'
+                : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300 hover:text-slate-700'
+            }`}
+          >
+            <Receipt size={15} className={showFacturacion ? 'text-violet-500' : 'text-slate-400'} />
+            <span className="flex-1 text-left">¿Facturar a otro cliente?</span>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full transition-colors ${
+              showFacturacion ? 'bg-violet-200 text-violet-700' : 'bg-slate-200 text-slate-500'
+            }`}>
+              {showFacturacion ? 'Activo' : 'Opcional'}
+            </span>
+          </button>
+          {showFacturacion && (
+            <div className="rounded-xl border border-violet-200 bg-violet-50/30 p-3 space-y-2">
+              <p className="text-xs text-violet-600 font-medium">
+                La CxC y el PDF se emitirán a nombre de este cliente, no al de la cotización.
+              </p>
+              <ClienteFacturaBuscador
+                clientes={clientes.filter(c => c.id !== cotizacion?.cliente_id)}
+                clienteId={clienteFacturaId}
+                onSelect={setClienteFacturaId}
+              />
+            </div>
+          )}
+        </div>
+
         </div>{/* fin scrollable */}
 
         {/* Botones — despachar */}
@@ -514,7 +552,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
           </button>
           <button onClick={() => {
               const fpJson = JSON.stringify(formasPago)
-              onConfirm(fpJson, transportistaId || null, Number(fleteUsd) || 0, referenciaPago, fpJson, notas)
+              onConfirm(fpJson, transportistaId || null, Number(fleteUsd) || 0, referenciaPago, fpJson, notas, clienteFacturaId || null)
             }} disabled={cargando || items.length === 0 || !pagoCuadrado}
             title={formasPago.length === 0 ? 'Selecciona forma de pago' : !pagoCuadrado ? 'Los montos no cuadran con el total' : undefined}
             className="flex-1 py-3 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-semibold text-base transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20">
@@ -595,7 +633,7 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
     setCotizacionAAnular(null)
   }
 
-  async function confirmarDespachar(formaPago = '', transportistaId = null, fleteUsd = 0, referenciaPago = '', formaPagoCliente = '', notas = '') {
+  async function confirmarDespachar(formaPago = '', transportistaId = null, fleteUsd = 0, referenciaPago = '', formaPagoCliente = '', notas = '', clienteFacturaId = null) {
     if (!cotizacionADespachar) return
     try {
       await crearDespacho.mutateAsync({
@@ -606,6 +644,7 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
         referenciaPago: referenciaPago || null,
         formaPagoCliente: formaPagoCliente || null,
         notas: notas || null,
+        clienteFacturaId: clienteFacturaId || null,
       })
       setCotizacionADespachar(null)
       navigate('/despachos')

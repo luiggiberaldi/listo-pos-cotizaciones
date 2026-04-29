@@ -335,7 +335,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
               <Check size={13} /> Aprobar despacho
             </button>
           )}
-          {despacho.estado === 'despachada' && (
+          {despacho.estado === 'despachada' && (perfil?.rol === 'logistica' || perfil?.rol === 'desarrollador') && (
             <button onClick={() => onCambiarEstadoDespacho(despacho.id, 'entregada')}
               className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 transition-colors ml-auto">
               <PackageCheck size={13} /> Marcar entregada

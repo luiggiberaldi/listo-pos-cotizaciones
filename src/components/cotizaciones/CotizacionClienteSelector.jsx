@@ -1,8 +1,9 @@
 // src/components/cotizaciones/CotizacionClienteSelector.jsx
-// Selector de cliente personalizado con búsqueda y confirmación de cliente ajeno
+// Selector de cliente personalizado con búsqueda inteligente y confirmación de cliente ajeno
 import { useState, useRef, useEffect } from 'react'
 import { User, Search, X, Hash, Phone, MapPin, AlertCircle, ChevronDown, CheckCircle } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
+import { buscarClientes } from '../../utils/clienteSearch'
 
 const TIPO_COLORS = {
   natural:  'bg-slate-100 text-slate-600',
@@ -31,11 +32,7 @@ export default function ClienteSelector({ clientes, clienteId, onSelect }) {
 
   const seleccionado = clientes.find(c => c.id === clienteId)
   const filtrados = busqueda.trim()
-    ? clientes.filter(c =>
-        c.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-        (c.rif_cedula ?? '').toLowerCase().includes(busqueda.toLowerCase()) ||
-        (c.telefono ?? '').includes(busqueda)
-      )
+    ? buscarClientes(clientes, busqueda)
     : clientes
 
   function elegir(c) {
