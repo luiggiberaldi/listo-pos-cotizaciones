@@ -1281,7 +1281,7 @@ function Step2Pago({
 
         {/* Barra de totales */}
         {formasPago.length > 0 && (
-          <div className={`flex items-center justify-between mt-3 px-3 py-2 rounded-xl text-sm font-semibold ${
+          <div className={`flex items-center justify-between mt-3 mb-2 px-3 py-2 rounded-xl text-sm font-semibold ${
             pagoCuadrado ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
             : hayVuelto ? 'bg-amber-50 text-amber-700 border border-amber-200'
             : 'bg-red-50 text-red-700 border border-red-200'
