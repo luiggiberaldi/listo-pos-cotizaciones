@@ -33,6 +33,7 @@ import { OnboardingSequence } from '../components/ui/OnboardingTooltip'
 import { getAction } from '../utils/cotizacionActions'
 import ReciclarCotizacionModal from '../components/cotizaciones/ReciclarCotizacionModal'
 import ClienteFacturaBuscador from '../components/clientes/ClienteFacturaBuscador'
+import TransportistaFormCompact from '../components/transportistas/TransportistaFormCompact'
 
 // ─── Filtros de estado ────────────────────────────────────────────────────────
 const ESTADOS_FILTRO = [
@@ -86,14 +87,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
   const { data: transportistas = [] } = useTransportistas()
   const crearTransp = useCrearTransportista()
   const [showNuevoTransp, setShowNuevoTransp] = useState(false)
-  const [nuevoNombre, setNuevoNombre] = useState('')
-  const [nuevoRif, setNuevoRif] = useState('')
-  const [nuevoVehiculo, setNuevoVehiculo] = useState('')
-  const [nuevoColor, setNuevoColor] = useState('')
-  const [nuevoPlaca, setNuevoPlaca] = useState('')
-  const [nuevoPlacaChuto, setNuevoPlacaChuto] = useState('')
-  const [nuevoPlacaBatea, setNuevoPlacaBatea] = useState('')
-  const [nuevoError, setNuevoError] = useState('')
+  const [transpError, setTranspError] = useState('')
 
   const items = detalle?.items ?? []
 
@@ -235,46 +229,43 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
           {/* ── Columna derecha: configuración del despacho ── */}
           <div className="lg:w-80 xl:w-96 min-h-0 overflow-y-auto p-4 lg:p-5 space-y-3">
 
-            {/* Formas de pago */}
+            {/* Formas de pago — chips con input integrado */}
             <div className="space-y-2">
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
                 Formas de pago <span className="text-red-500">*</span>
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {FORMAS_PAGO.map(fp => {
-                  const activo = formasPago.some(f => f.metodo === fp)
+                  const fpData = formasPago.find(f => f.metodo === fp)
+                  if (fpData) {
+                    // Chip activo con input integrado
+                    return (
+                      <div key={fp} className="flex items-center gap-0 rounded-lg border border-indigo-300 bg-indigo-50 overflow-hidden">
+                        <button type="button" onClick={() => toggleForma(fp)}
+                          className="flex items-center gap-0.5 px-2 py-1.5 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100 transition-colors shrink-0 border-r border-indigo-200">
+                          {fp} <X size={9} className="ml-0.5" />
+                        </button>
+                        <div className="relative">
+                          <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-indigo-400 text-[10px]">$</span>
+                          <input type="number" min="0" step="0.01" value={fpData.monto}
+                            onChange={e => setMontoForma(fp, e.target.value)}
+                            onFocus={e => e.target.select()}
+                            placeholder="0"
+                            className="w-16 pl-4 pr-1.5 py-1.5 text-xs font-semibold text-indigo-800 bg-transparent focus:outline-none focus:bg-white/60"
+                            disabled={cargando} />
+                        </div>
+                      </div>
+                    )
+                  }
+                  // Chip inactivo
                   return (
                     <button key={fp} type="button" onClick={() => toggleForma(fp)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                        activo
-                          ? 'bg-indigo-500 text-white border-indigo-500 shadow-sm'
-                          : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600'
-                      }`}>
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:text-indigo-600 transition-all">
                       {fp}
                     </button>
                   )
                 })}
               </div>
-              {formasPago.length > 0 && (
-                <div className="space-y-1">
-                  {formasPago.map(fp => (
-                    <div key={fp.metodo} className="flex items-center gap-1.5">
-                      <button type="button" onClick={() => toggleForma(fp.metodo)}
-                        className="text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-200 rounded px-1.5 py-0.5 shrink-0 hover:bg-indigo-100 transition-colors flex items-center gap-0.5">
-                        {fp.metodo} <X size={9} />
-                      </button>
-                      <div className="relative flex-1">
-                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
-                        <input type="number" min="0" step="0.01" value={fp.monto}
-                          onChange={e => setMontoForma(fp.metodo, e.target.value)}
-                          placeholder="0.00"
-                          className="w-full pl-5 pr-2 py-1 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:bg-white"
-                          disabled={cargando} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
               {formasPago.length === 0 && <p className="text-xs text-slate-400">Selecciona al menos una forma de pago</p>}
             </div>
 
@@ -403,95 +394,40 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
 
       {/* ── Modal overlay: nuevo transportista ── */}
       {showNuevoTransp && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
-          onClick={() => setShowNuevoTransp(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-slate-100"
+        <div className="fixed inset-0 z-[110] bg-black/40 flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={() => { setShowNuevoTransp(false); setTranspError('') }}>
+          <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[90vh] overflow-auto"
             onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 bg-emerald-50 rounded-xl flex items-center justify-center">
-                  <Truck size={15} className="text-emerald-600" />
-                </div>
-                <h4 className="font-bold text-slate-800 text-sm">Nuevo transportista</h4>
-              </div>
-              <button onClick={() => setShowNuevoTransp(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors">
-                <X size={15} />
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+                <Truck size={16} className="text-sky-500" />
+                Nuevo transportista
+              </h3>
+              <button onClick={() => { setShowNuevoTransp(false); setTranspError('') }} className="p-1.5 rounded-lg hover:bg-slate-100">
+                <X size={18} />
               </button>
             </div>
-            <div className="p-5 space-y-3">
-              {nuevoError && (
-                <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">{nuevoError}</div>
+            <div className="p-4">
+              {transpError && (
+                <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-sm text-red-700 mb-3">
+                  {transpError}
+                </div>
               )}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2 space-y-1">
-                  <label className="text-xs font-semibold text-slate-500">Nombre <span className="text-red-500">*</span></label>
-                  <input value={nuevoNombre} onChange={e => setNuevoNombre(e.target.value)}
-                    placeholder="Nombre del transportista"
-                    className="w-full px-3 py-2 rounded-xl text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:bg-white transition-colors" />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-500">RIF / Cédula</label>
-                  <input value={nuevoRif} onChange={e => setNuevoRif(e.target.value)}
-                    placeholder="J-12345678-9"
-                    className="w-full px-3 py-2 rounded-xl text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:bg-white transition-colors" />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-500">Vehículo</label>
-                  <input value={nuevoVehiculo} onChange={e => setNuevoVehiculo(e.target.value)}
-                    placeholder="Gandola, camión..."
-                    className="w-full px-3 py-2 rounded-xl text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:bg-white transition-colors" />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-500">Placa chuto</label>
-                  <input value={nuevoPlacaChuto} onChange={e => setNuevoPlacaChuto(e.target.value)}
-                    placeholder="ABC-123"
-                    className="w-full px-3 py-2 rounded-xl text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:bg-white transition-colors" />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-500">Placa batea</label>
-                  <input value={nuevoPlacaBatea} onChange={e => setNuevoPlacaBatea(e.target.value)}
-                    placeholder="XYZ-456"
-                    className="w-full px-3 py-2 rounded-xl text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:bg-white transition-colors" />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-500">Color de etiqueta</label>
-                  <input type="color" value={nuevoColor || '#6366f1'} onChange={e => setNuevoColor(e.target.value)}
-                    className="w-full h-9 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer px-1 py-1" />
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-3 px-5 py-3.5 border-t border-slate-100">
-              <button onClick={() => { setShowNuevoTransp(false); setNuevoError('') }}
-                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 font-semibold text-sm hover:bg-slate-50 transition-colors">
-                Cancelar
-              </button>
-              <button
-                onClick={async () => {
-                  if (!nuevoNombre.trim()) { setNuevoError('El nombre es obligatorio'); return }
-                  setNuevoError('')
+              <TransportistaFormCompact
+                onGuardar={async (campos) => {
+                  setTranspError('')
                   try {
-                    const result = await crearTransp.mutateAsync({
-                      nombre: nuevoNombre.trim(),
-                      rif: nuevoRif.trim() || null,
-                      vehiculo: nuevoVehiculo.trim() || null,
-                      color: nuevoColor || null,
-                      placa_chuto: nuevoPlacaChuto.trim() || null,
-                      placa_batea: nuevoPlacaBatea.trim() || null,
-                    })
+                    const result = await crearTransp.mutateAsync(campos)
                     if (result?.id) setTransportistaId(result.id)
                     setShowNuevoTransp(false)
-                    setNuevoNombre(''); setNuevoRif(''); setNuevoVehiculo('')
-                    setNuevoColor(''); setNuevoPlacaChuto(''); setNuevoPlacaBatea('')
-                    showToast('Transportista creado', 'success')
+                    showToast('Transportista creado y seleccionado', 'success')
                   } catch (e) {
-                    setNuevoError(e.message || 'Error al crear transportista')
+                    setTranspError(e.message || 'Error al crear transportista')
                   }
                 }}
-                disabled={crearTransp.isPending}
-                className="flex-1 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-                {crearTransp.isPending ? <><Loader2 size={14} className="animate-spin" />Guardando...</> : 'Guardar transportista'}
-              </button>
+                onCancelar={() => { setShowNuevoTransp(false); setTranspError('') }}
+                cargando={crearTransp.isPending}
+              />
             </div>
           </div>
         </div>
