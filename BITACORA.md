@@ -1501,6 +1501,86 @@ Se implementó persistencia de borradores en venta rápida, idéntico al patrón
 
 ---
 
+## SESIÓN 29/04/2026 — Optimización UI Desktop (Venta Rápida)
+
+### Objetivo
+Rediseñar VentaRapidaView para aprovechar todo el ancho de pantalla en PC, eliminar scrolls innecesarios y mantener botones de acción siempre visibles.
+
+### Cambios realizados
+
+#### 1. Paso 1 (Productos) — Layout viewport-filling
+- Cliente selector compacto inline (sin card wrapper, sin label "CLIENTE")
+- Productos sin card wrapper, scroll interno que llena el viewport
+- Carrito desktop con patrón 3 zonas: header (`shrink-0`), items (`flex-1 overflow-y-auto min-h-0`), footer (`shrink-0`)
+- Carrito hereda altura del flex parent (sin `h-[calc(...)]` fijo)
+- Botón "Siguiente" siempre visible sin scroll
+- Layout flex con `min-h-0` en toda la cadena desde el contenedor principal
+
+**Archivos:** `src/views/VentaRapidaView.jsx`
+
+#### 2. Nuevo Transportista — Modal en vez de inline
+- El formulario se renderizaba inline empujando todo el layout hacia abajo
+- Ahora usa modal centrado con overlay oscuro (`fixed inset-0 z-50 bg-black/40`)
+- Consistente con el patrón de "Nuevo cliente"
+
+**Archivos:** `src/views/VentaRapidaView.jsx`
+
+#### 3. PageHeader — Separación del borde superior
+- Agregado `pt-4` para que el título no choque con el borde superior de la pantalla
+- Aplica a todas las vistas que usan PageHeader
+
+**Archivos:** `src/components/ui/PageHeader.jsx`
+
+#### 4. Paso 2 (Pago) — Dos columnas en desktop
+- **Columna izquierda** (`flex-1`): Formas de pago con montos + barra asignado/total
+- **Columna derecha** (`lg:w-80 xl:w-96`): Transportista, monto del flete, notas
+- En móvil se mantiene layout de una columna
+
+**Archivos:** `src/views/VentaRapidaView.jsx`
+
+#### 5. Flete no se suma al total de formas de pago
+- El "Total" en la barra de formas de pago es solo subtotal de productos (sin flete)
+- El flete se guarda aparte, solo aparece visualmente en nota de entrega y ficha de despachos
+- La validación `pagoCuadrado` compara montos asignados vs `totalUsd` (sin flete)
+- `totalConFlete` solo se usa en el paso Confirmar como resumen visual
+
+**Archivos:** `src/views/VentaRapidaView.jsx`
+
+#### 6. Paso 3 (Confirmar) — Dos columnas en desktop
+- **Columna izquierda** (`flex-1`): Cliente + lista de productos con scroll interno
+- **Columna derecha** (`lg:w-72 xl:w-80`): Totales, pago, transporte, notas
+- Todo visible sin scroll externo
+- Botones "Atrás" y "Crear venta rápida" siempre fijos en footer sticky
+
+**Archivos:** `src/views/VentaRapidaView.jsx`
+
+### Reglas de negocio confirmadas
+
+| Concepto | Regla |
+|----------|-------|
+| IVA | No se calcula ni se suma en ningún lado. Solo simbólico en PDF de nota de entrega |
+| Flete | No se suma al total de formas de pago. Solo visual en nota de entrega + ficha despachos |
+| Orden de despacho PDF | No incluye IVA ni flete |
+| Formas de pago | Se validan contra subtotal de productos únicamente |
+
+### Patrones de layout aplicados
+
+```
+Viewport-filling chain:
+AppLayout content → flex-1 min-h-0
+  └── VentaRapidaView → flex flex-col h-full min-h-0
+       └── Step content → flex-1 min-h-0 flex flex-col
+            └── Step1 outer → flex-1 min-h-0 flex flex-col
+                 └── Split row → flex-1 min-h-0 lg:flex-row
+                      ├── Products → flex-1 min-h-0 overflow-y-auto
+                      └── Cart → shrink-0 flex flex-col (3 zones)
+```
+
+### Issues pendientes
+- `SUPABASE_SERVICE_KEY` inválida en Cloudflare Worker (401). Funciona en Vercel. Necesita actualizar via `wrangler secret put SUPABASE_SERVICE_KEY`.
+
+---
+
 ## GLOSARIO
 
 | Término | Significado |
