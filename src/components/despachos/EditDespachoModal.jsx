@@ -135,10 +135,13 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
 
             {formasPago.length > 0 && (
               <div className="space-y-2 mt-2">
-                {formasPago.map(fp => (
+                {formasPago.map(fp => {
+                  const restante = totalBase - formasPago.reduce((s, f) => s + (Number(f.monto) || 0), 0)
+                  const mostrarResto = formasPago.length > 1 && (!fp.monto || Number(fp.monto) === 0) && restante > 0.01
+                  return (
                   <div key={fp.metodo} className="flex items-center gap-2">
                     <span className="text-sm font-semibold text-slate-600 w-28 truncate">{fp.metodo}</span>
-                    <div className="relative flex-1">
+                    <div className="relative flex-1 flex items-center">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
                       <input
                         type="number"
@@ -146,13 +149,23 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
                         step="0.01"
                         value={fp.monto}
                         onChange={e => setMontoForma(fp.metodo, e.target.value)}
+                        onFocus={e => e.target.select()}
                         placeholder="0.00"
                         className="w-full pl-7 pr-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:bg-white"
                         disabled={cargando}
                       />
+                      {mostrarResto && (
+                        <button type="button"
+                          onClick={() => setMontoForma(fp.metodo, Number(restante.toFixed(2)))}
+                          className="ml-1 px-2 py-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition-colors shrink-0"
+                          title={`Asignar $${restante.toFixed(2)} restante`}>
+                          Resto
+                        </button>
+                      )}
                     </div>
                   </div>
-                ))}
+                  )
+                })}
                 <div className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm font-semibold ${
                   pagoCuadrado
                     ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'

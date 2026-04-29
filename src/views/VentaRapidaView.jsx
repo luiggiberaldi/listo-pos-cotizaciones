@@ -1233,10 +1233,13 @@ function Step2Pago({
 
         {/* Métodos activos — fila con monto inline */}
         <div className="space-y-2 mb-3">
-          {formasPago.map(fp => (
+          {formasPago.map(fp => {
+            const restante = totalConFlete - formasPago.reduce((s, f) => s + (Number(f.monto) || 0), 0)
+            const mostrarResto = formasPago.length > 1 && (!fp.monto || Number(fp.monto) === 0) && restante > 0.01
+            return (
             <div key={fp.metodo} className="flex items-center gap-2 bg-sky-50 border border-sky-300 rounded-xl px-3 py-2">
               <span className="text-sm font-bold text-sky-700 w-24 shrink-0 truncate">{fp.metodo}</span>
-              <div className="relative flex-1">
+              <div className="relative flex-1 flex items-center">
                 <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">$</span>
                 <input
                   type="number" min="0" step="0.01"
@@ -1246,13 +1249,22 @@ function Step2Pago({
                   placeholder="0.00"
                   className="w-full pl-6 pr-2 py-1.5 rounded-lg text-sm font-semibold border border-sky-200 bg-white focus:outline-none focus:ring-2 focus:ring-sky-300 text-slate-800"
                 />
+                {mostrarResto && (
+                  <button type="button"
+                    onClick={() => setMontoForma(fp.metodo, Number(restante.toFixed(2)))}
+                    className="ml-1 px-2 py-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition-colors shrink-0"
+                    title={`Asignar $${restante.toFixed(2)} restante`}>
+                    Resto
+                  </button>
+                )}
               </div>
               <button onClick={() => toggleForma(fp.metodo)}
                 className="p-1 rounded-lg hover:bg-sky-100 text-sky-400 hover:text-sky-600 transition-colors shrink-0">
                 <X size={14} />
               </button>
             </div>
-          ))}
+            )
+          })}
         </div>
 
         {/* Métodos inactivos — chips para agregar */}
