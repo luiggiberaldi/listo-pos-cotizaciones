@@ -358,7 +358,6 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
           <div className="relative">
             <button
               onClick={() => setShowWhatsAppMenu(v => !v)}
-              onBlur={() => setTimeout(() => setShowWhatsAppMenu(false), 200)}
               disabled={waLoading}
               className={`w-full flex items-center justify-center gap-2 min-h-[44px] rounded-xl text-sm font-bold transition-all active:scale-[0.98] disabled:opacity-50 ${pColors.bg} ${pColors.text} ${pColors.active}`}
             >
@@ -369,13 +368,21 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
               WhatsApp <ChevronDown size={11} />
             </button>
             {showWhatsAppMenu && (
-              <div className="absolute right-0 xs:left-0 xs:right-auto bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
-                onMouseDown={e => e.preventDefault()}>
-                <MonedaSelector onSelect={() => {}} onClose={() => setShowWhatsAppMenu(false)} />
-                <button onClick={() => { handleWhatsApp(); setShowWhatsAppMenu(false) }}
-                  className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-emerald-700 hover:bg-emerald-50 text-left font-medium">
-                  <MessageCircle size={14} /> Enviar por WhatsApp
-                </button>
+              <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30"
+                onClick={() => setShowWhatsAppMenu(false)}>
+                <div className="w-full max-w-sm bg-white rounded-t-2xl shadow-xl py-3 px-1 mb-0 animate-in slide-in-from-bottom"
+                  onClick={e => e.stopPropagation()}>
+                  <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto mb-3" />
+                  <MonedaSelector onSelect={() => {}} onClose={() => setShowWhatsAppMenu(false)} />
+                  <button onClick={() => { handleWhatsApp(); setShowWhatsAppMenu(false) }}
+                    className="w-full flex items-center gap-2 px-4 py-3 text-sm text-emerald-700 hover:bg-emerald-50 text-left font-medium">
+                    <MessageCircle size={16} /> Enviar por WhatsApp
+                  </button>
+                  <button onClick={() => setShowWhatsAppMenu(false)}
+                    className="w-full mt-1 py-3 text-sm font-semibold text-slate-400 text-center">
+                    Cancelar
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -407,13 +414,21 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
                   Imprimir <ChevronDown size={9} />
                 </button>
                 {showPrintMenu && (
-                  <div className="absolute right-0 xs:left-0 xs:right-auto bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
-                    onMouseDown={e => e.preventDefault()}>
-                    <MonedaSelector onSelect={() => {}} onClose={() => setShowPrintMenu(false)} />
-                    <button onClick={() => { imprimirCotizacion(); setShowPrintMenu(false) }}
-                      className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 text-left font-medium">
-                      <Printer size={14} /> Imprimir cotización
-                    </button>
+                  <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30"
+                    onClick={() => setShowPrintMenu(false)}>
+                    <div className="w-full max-w-sm bg-white rounded-t-2xl shadow-xl py-3 px-1 mb-0 animate-in slide-in-from-bottom"
+                      onClick={e => e.stopPropagation()}>
+                      <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto mb-3" />
+                      <MonedaSelector onSelect={() => {}} onClose={() => setShowPrintMenu(false)} />
+                      <button onClick={() => { imprimirCotizacion(); setShowPrintMenu(false) }}
+                        className="w-full flex items-center gap-2 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 text-left font-medium">
+                        <Printer size={16} /> Imprimir cotización
+                      </button>
+                      <button onClick={() => setShowPrintMenu(false)}
+                        className="w-full mt-1 py-3 text-sm font-semibold text-slate-400 text-center">
+                        Cancelar
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -428,13 +443,21 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
                   Descargar <ChevronDown size={9} />
                 </button>
                 {showDownloadMenu && (
-                  <div className="absolute right-0 xs:left-0 xs:right-auto bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
-                    onMouseDown={e => e.preventDefault()}>
-                    <MonedaSelector onSelect={() => {}} onClose={() => setShowDownloadMenu(false)} />
-                    <button onClick={() => { descargarPDF(); setShowDownloadMenu(false) }}
-                      className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 text-left font-medium">
-                      <Download size={14} /> Descargar PDF
-                    </button>
+                  <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30"
+                    onClick={() => setShowDownloadMenu(false)}>
+                    <div className="w-full max-w-sm bg-white rounded-t-2xl shadow-xl py-3 px-1 mb-0 animate-in slide-in-from-bottom"
+                      onClick={e => e.stopPropagation()}>
+                      <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto mb-3" />
+                      <MonedaSelector onSelect={() => {}} onClose={() => setShowDownloadMenu(false)} />
+                      <button onClick={() => { descargarPDF(); setShowDownloadMenu(false) }}
+                        className="w-full flex items-center gap-2 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 text-left font-medium">
+                        <Download size={16} /> Descargar PDF
+                      </button>
+                      <button onClick={() => setShowDownloadMenu(false)}
+                        className="w-full mt-1 py-3 text-sm font-semibold text-slate-400 text-center">
+                        Cancelar
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
