@@ -1,5 +1,5 @@
 // src/components/despachos/DespachoCard.jsx
-import { useState, useRef, memo, Fragment } from 'react'
+import { useState, useRef, useEffect, memo, Fragment } from 'react'
 import { FileText, Calendar, Truck, CheckCircle, Ban, RefreshCcw, Download, Loader2, Eye, MoreHorizontal, ChevronDown, Printer, Tag, Pencil } from 'lucide-react'
 import EstadoBadge from '../cotizaciones/EstadoBadge'
 import MobileActionSheet from '../cotizaciones/MobileActionSheet'
@@ -36,6 +36,13 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const printBtnRef = useRef(null)
   const downloadBtnRef = useRef(null)
   const { tasaBcv, tasaUsdt } = useTasaCambio()
+
+  // Cerrar modal de confirmación si el despacho cambió de estado (ej: anulado por otro usuario)
+  useEffect(() => {
+    if (accionPendiente && despacho.estado !== 'pendiente' && accionPendiente.estado === 'despachada') {
+      setAccionPendiente(null)
+    }
+  }, [despacho.estado, accionPendiente])
 
   const numDisplay = despacho.cotizacion
     ? `DES-${String(despacho.cotizacion.numero).padStart(5, '0')}`
