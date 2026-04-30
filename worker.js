@@ -24,7 +24,7 @@ function corsHeaders(request) {
   return {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Operator-Id',
     'Access-Control-Max-Age': '86400',
     'Vary': 'Origin',
   }
@@ -1674,36 +1674,34 @@ async function handleGuardarCotizacion(request, env) {
       const [row] = await res.json();
       id = row.id;
     } else {
-      // Verify ownership: cotización must belong to the authenticated user
-      const checkRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${id}&select=vendedor_id,estado`, {
-        headers: { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}` },
-      });
+      // Verify ownership + supervisor check in parallel
+      const [checkRes, isSupervisor] = await Promise.all([
+        fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${id}&select=vendedor_id,estado`, {
+          headers: { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}` },
+        }),
+        verifySupervisor(user.operator_id, env),
+      ]);
       if (!checkRes.ok) return jsonError('Error al verificar cotización', 500, request);
       const [existing] = await checkRes.json();
       if (!existing) return jsonError('Cotización no encontrada', 404, request);
-      if (existing.vendedor_id !== user.operator_id) {
-        // Check if user is supervisor (supervisors can edit any cotización)
-        const isSupervisor = await verifySupervisor(user.operator_id, env);
-        if (!isSupervisor) return jsonError('No tienes permiso para editar esta cotización', 403, request);
+      if (existing.vendedor_id !== user.operator_id && !isSupervisor) {
+        return jsonError('No tienes permiso para editar esta cotización', 403, request);
       }
       if (existing.estado !== 'borrador') return jsonError('Solo se pueden editar cotizaciones en borrador', 400, request);
 
-      // Update existing
-      const res = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${id}`, {
-        method: 'PATCH',
-        headers: supaHeaders,
-        body: JSON.stringify(headerData),
-      });
-      if (!res.ok) {
-        const err = await res.text();
+      // Update header + delete old items in parallel
+      const [updateRes] = await Promise.all([
+        fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${id}`, {
+          method: 'PATCH', headers: supaHeaders, body: JSON.stringify(headerData),
+        }),
+        fetch(`${env.SUPABASE_URL}/rest/v1/cotizacion_items?cotizacion_id=eq.${id}`, {
+          method: 'DELETE', headers: supaHeaders,
+        }),
+      ]);
+      if (!updateRes.ok) {
+        const err = await updateRes.text();
         return jsonError(`Error al actualizar: ${err}`, 500, request);
       }
-
-      // Delete old items
-      await fetch(`${env.SUPABASE_URL}/rest/v1/cotizacion_items?cotizacion_id=eq.${id}`, {
-        method: 'DELETE',
-        headers: supaHeaders,
-      });
     }
 
     // Insert items
@@ -1720,16 +1718,14 @@ async function handleGuardarCotizacion(request, env) {
       }
     }
 
-    // Auditoría
-    try {
-      await registrarAuditoria(env, supaHeaders, {
-        usuarioId: user.operator_id, usuarioNombre: user.operator_nombre || 'Operador', usuarioRol: user.operator_rol || 'vendedor',
-        categoria: 'COTIZACION', accion: cotizacionId ? 'EDITAR_COTIZACION' : 'CREAR_COTIZACION',
-        descripcion: cotizacionId ? `Cotización ${id} editada` : `Cotización ${id} creada`,
-        entidadTipo: 'cotizacion', entidadId: id, meta: { items_count: items.length, cliente_id: headerData.cliente_id },
-        ip: request.headers.get('CF-Connecting-IP') || null,
-      });
-    } catch {}
+    // Auditoría (fire-and-forget — no bloquear respuesta)
+    registrarAuditoria(env, supaHeaders, {
+      usuarioId: user.operator_id, usuarioNombre: user.operator_nombre || 'Operador', usuarioRol: user.operator_rol || 'vendedor',
+      categoria: 'COTIZACION', accion: cotizacionId ? 'EDITAR_COTIZACION' : 'CREAR_COTIZACION',
+      descripcion: cotizacionId ? `Cotización ${id} editada` : `Cotización ${id} creada`,
+      entidadTipo: 'cotizacion', entidadId: id, meta: { items_count: items.length, cliente_id: headerData.cliente_id },
+      ip: request.headers.get('CF-Connecting-IP') || null,
+    }).catch(() => {});
 
     return new Response(JSON.stringify({ id }), {
       headers: { 'Content-Type': 'application/json', ...corsHeaders(request) },
@@ -2229,29 +2225,27 @@ async function handleCrearDespacho(request, env) {
   if (!isValidUuid(cotizacionId)) return jsonError('cotizacionId inválido', 400, request);
 
   try {
-    // 1. Obtener cotización
-    const cotRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${cotizacionId}&select=*`, { headers });
+    // 1+2. Fetch cotización + check existing despacho in parallel
+    const [cotRes, existRes] = await Promise.all([
+      fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${cotizacionId}&select=*`, { headers }),
+      fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?cotizacion_id=eq.${cotizacionId}&select=id&limit=1`, { headers }),
+    ]);
     const [cot] = await cotRes.json();
     if (!cot) return jsonError('Cotización no encontrada', 404, request);
+
+    const existing = await existRes.json();
+    if (existing && existing.length > 0) {
+      return jsonError('Ya existe una nota de despacho para esta cotización', 400, request);
+    }
 
     const esSupervisorOp = operador.rol === 'supervisor';
     const esPropietario = cot.vendedor_id === operador.id;
 
-    console.log(`[DESPACHO] operador.id=${operador.id}, user.operator_id=${user.operator_id}, cot.vendedor_id=${cot.vendedor_id}, esPropietario=${esPropietario}, esSupervisor=${esSupervisorOp}, cot.estado=${cot.estado}`);
-
-    // Todos pueden despachar cotizaciones enviadas o aceptadas propias
     if (!['enviada', 'aceptada'].includes(cot.estado)) {
       return jsonError('La cotización debe estar enviada o aceptada para despachar', 400, request);
     }
     if (!esSupervisorOp && !esPropietario) {
       return jsonError(`Solo puedes despachar tus propias cotizaciones (op:${operador.id} vs vend:${cot.vendedor_id})`, 400, request);
-    }
-
-    // 2. Verificar que no exista despacho
-    const existRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?cotizacion_id=eq.${cotizacionId}&select=id&limit=1`, { headers });
-    const existing = await existRes.json();
-    if (existing && existing.length > 0) {
-      return jsonError('Ya existe una nota de despacho para esta cotización', 400, request);
     }
 
     // 3. Si está enviada, aceptarla automáticamente
@@ -2288,13 +2282,13 @@ async function handleCrearDespacho(request, env) {
     }
     const [despacho] = await despRes.json();
 
-    // 10. Auditoría
-    await registrarAuditoria(env, headers, {
+    // Auditoría (fire-and-forget)
+    registrarAuditoria(env, headers, {
       usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: 'supervisor',
       categoria: 'COTIZACION', accion: 'CREAR_DESPACHO',
       entidadTipo: 'nota_despacho', entidadId: despacho.id,
       meta: { cotizacion_id: cotizacionId, total_usd: cot.total_usd }, ip,
-    });
+    }).catch(() => {});
 
     return json({ id: despacho.id, numero: despacho.numero }, 200, request);
   } catch (e) {
