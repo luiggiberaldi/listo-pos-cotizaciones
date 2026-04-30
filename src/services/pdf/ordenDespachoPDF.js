@@ -482,7 +482,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
     })
   }
   drawRow(row1Fields, row1Y, col3W)
-  drawRow(row2Fields, row2Y, col4W)
+  drawRow(row2Fields, row2Y, col3W)
 
   // ── NO cuentas, NO slogan, NO condiciones ──
 
