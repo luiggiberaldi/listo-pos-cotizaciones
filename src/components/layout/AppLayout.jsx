@@ -24,6 +24,19 @@ import { usePushNotifications } from '../../hooks/usePushNotifications'
 import { showToast } from '../ui/Toast'
 import { NOTIF_TYPES, setNotificationUserId, startRealtimeNotifications, stopRealtimeNotifications } from '../../services/notificationService'
 
+// ─── Formato de tiempo relativo para notificaciones ─────────────────────────
+function formatNotifTime(ts) {
+  const diff = Date.now() - ts
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'Ahora'
+  if (mins < 60) return `Hace ${mins}min`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `Hace ${hours}h`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `Hace ${days}d`
+  return new Date(ts).toLocaleString('es-VE', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })
+}
+
 // ─── Iconos por tipo de notificación ────────────────────────────────────────
 const NOTIF_ICON_MAP = {
   [NOTIF_TYPES.STOCK_BAJO]:                    { icon: AlertTriangle, color: 'text-amber-500',    bg: 'bg-amber-50' },
@@ -242,7 +255,7 @@ export default function AppLayout() {
         {/* Campana con dropdown — siempre visible */}
         <div className="relative" ref={notifsRef}>
           <button
-            onClick={() => { setShowNotifs(v => !v); if (unreadCount > 0) markAllRead() }}
+            onClick={() => { setShowNotifs(v => { if (!v && unreadCount > 0) setTimeout(markAllRead, 2000); return !v }) }}
             className="relative p-3 rounded-xl transition-all"
             style={{
               color:      unreadCount > 0 ? '#fbbf24' : 'rgba(255,255,255,0.55)',
@@ -287,7 +300,7 @@ export default function AppLayout() {
               </div>
 
               {/* Lista de notificaciones */}
-              <div className="max-h-72 overflow-y-auto">
+              <div className="max-h-80 overflow-y-auto">
                 {notifications.length === 0 ? (
                   <div className="text-center py-10 px-4">
                     <div className="w-12 h-12 rounded-full mx-auto mb-3 flex items-center justify-center"
@@ -298,25 +311,45 @@ export default function AppLayout() {
                     <p className="text-xs text-white/20 mt-1">Las notificaciones aparecerán aquí</p>
                   </div>
                 ) : (
-                  notifications.slice(0, 20).map((n, idx) => {
-                    const isStockBajo = n.type === NOTIF_TYPES.STOCK_BAJO
+                  notifications.slice(0, 25).map((n, idx) => {
+                    // Determinar navegación según tipo
+                    const navTarget = {
+                      [NOTIF_TYPES.STOCK_BAJO]: '/inventario?filtro=stock_bajo',
+                      [NOTIF_TYPES.STOCK_CRITICO]: '/inventario?filtro=stock_bajo',
+                      [NOTIF_TYPES.STOCK_REABASTECIDO]: '/inventario',
+                      [NOTIF_TYPES.COTIZACION_ENVIADA]: '/cotizaciones',
+                      [NOTIF_TYPES.COTIZACION_ACEPTADA]: '/cotizaciones',
+                      [NOTIF_TYPES.COTIZACION_ACEPTADA_DESPACHO]: '/cotizaciones',
+                      [NOTIF_TYPES.DESPACHO_CREADO]: '/despachos',
+                      [NOTIF_TYPES.DESPACHO_EN_RUTA]: '/despachos',
+                      [NOTIF_TYPES.DESPACHO_ENTREGADO]: '/despachos',
+                      [NOTIF_TYPES.DESPACHO_CANCELADO]: '/despachos',
+                      [NOTIF_TYPES.DESPACHO_PENDIENTE_MUCHO]: '/despachos',
+                      [NOTIF_TYPES.COTIZACION_ANULADA]: '/cotizaciones',
+                      [NOTIF_TYPES.COTIZACION_SIN_RESPUESTA]: '/cotizaciones',
+                      [NOTIF_TYPES.COMPROMISO_ALTO]: '/inventario',
+                    }[n.type]
+                    const isClickable = !!navTarget
+                    const iconData = NOTIF_ICON_MAP[n.type] || DEFAULT_NOTIF_ICON
+
                     return (
                       <div key={n.id}
-                        onClick={isStockBajo ? () => { navigate('/inventario?filtro=stock_bajo'); setShowNotifs(false) } : undefined}
-                        className={`px-4 py-3 transition-colors ${isStockBajo ? 'cursor-pointer hover:bg-amber-500/5' : ''}`}
-                        style={{ borderBottom: idx < notifications.slice(0,20).length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}
+                        onClick={isClickable ? () => { navigate(navTarget); setShowNotifs(false) } : undefined}
+                        className={`px-4 py-3 transition-colors ${isClickable ? 'cursor-pointer hover:bg-white/[0.03]' : ''} ${!n.read ? 'bg-white/[0.02]' : ''}`}
+                        style={{ borderBottom: idx < notifications.slice(0,25).length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}
                       >
                         <div className="flex gap-3 items-start">
                           <NotifIcon type={n.type} />
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold text-white/80 leading-tight">{n.title}</p>
-                            {n.body && !isStockBajo && (
-                              <p className="text-xs text-white/40 mt-0.5 leading-snug">{n.body}</p>
+                            <p className={`text-xs font-bold leading-tight ${!n.read ? 'text-white/90' : 'text-white/70'}`}>{n.title}</p>
+                            {n.body && (
+                              <p className="text-[11px] text-white/40 mt-0.5 leading-snug line-clamp-2">{n.body}</p>
                             )}
                             <p className="text-[10px] text-white/25 mt-1">
-                              {new Date(n.ts).toLocaleString('es-VE', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })}
+                              {formatNotifTime(n.ts)}
                             </p>
                           </div>
+                          {!n.read && <span className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ background: iconData.color.replace('text-', '').includes('red') ? '#ef4444' : iconData.color.includes('amber') ? '#f59e0b' : '#3b82f6' }} />}
                         </div>
                       </div>
                     )
