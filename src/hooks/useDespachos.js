@@ -3,7 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useCallback } from 'react'
 import supabase from '../services/supabase/client'
-import { apiUrl } from '../services/apiBase'
+import { apiUrl, getAuthHeaders } from '../services/apiBase'
 import useAuthStore from '../store/useAuthStore'
 import { INVENTARIO_KEY } from './useInventario'
 import { COTIZACIONES_KEY } from './useCotizaciones'
@@ -237,15 +237,12 @@ export function useEditarDespacho() {
 
   return useMutation({
     mutationFn: async ({ despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, notas }) => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.access_token) throw new Error('No autenticado')
+      const headers = await getAuthHeaders()
+      if (!headers.Authorization || headers.Authorization === 'Bearer undefined') throw new Error('No autenticado')
 
       const res = await fetch(apiUrl('/api/despachos/editar-pago'), {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({ despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, notas }),
       })
       const result = await res.json()
