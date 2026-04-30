@@ -27,6 +27,7 @@ import VendedorFilterPill from '../components/ui/VendedorFilterPill'
 import ToggleVistaPersonal from '../components/ui/ToggleVistaPersonal'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../utils/format'
 import { showToast } from '../components/ui/Toast'
+import { notifyFacturacionClienteAjeno } from '../services/notificationService'
 import PageHeader from '../components/ui/PageHeader'
 import Pagination from '../components/ui/Pagination'
 import { OnboardingSequence } from '../components/ui/OnboardingTooltip'
@@ -515,6 +516,7 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
 
   const { data: cotizaciones = [], isLoading, isError, refetch } = useCotizaciones({ estado: estadoFiltro, veTodos: verTodos })
   const { data: vendedores = [] } = useVendedores()
+  const { data: clientes = [] } = useClientes()
 
   // Filtrar por vendedor (solo supervisor) y adaptar para admin
   const cotizacionesFiltradas = useMemo(() => {
@@ -567,6 +569,17 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
         notas: notas || null,
         clienteFacturaId: clienteFacturaId || null,
       })
+      // Notificar si se asignó un cliente de facturación diferente al de la cotización
+      if (clienteFacturaId && clienteFacturaId !== cotizacionADespachar.cliente_id) {
+        const clienteFacturaNombre = clientes.find(c => c.id === clienteFacturaId)?.nombre || 'otro cliente'
+        const clienteCotizacionNombre = cotizacionADespachar.cliente?.nombre || 'cliente original'
+        notifyFacturacionClienteAjeno({
+          numero: cotizacionADespachar.numero,
+          clienteCotizacion: clienteCotizacionNombre,
+          clienteFactura: clienteFacturaNombre,
+          currentRole: perfil?.rol,
+        })
+      }
       setCotizacionADespachar(null)
       navigate('/despachos')
     } catch (err) {

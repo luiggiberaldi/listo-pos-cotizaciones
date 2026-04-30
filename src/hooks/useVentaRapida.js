@@ -12,7 +12,7 @@ import { STOCK_COMPROMETIDO_KEY } from './useStockComprometido'
 import { CXC_KEY } from './useCuentasCobrar'
 import { showToast } from '../components/ui/Toast'
 import { sendPushNotification } from './usePushNotifications'
-import { notifyClienteAjeno } from '../services/notificationService'
+import { notifyClienteAjeno, notifyDespachoClienteAjeno } from '../services/notificationService'
 
 export function useVentaRapida() {
   const qc = useQueryClient()
@@ -85,6 +85,7 @@ export function useVentaRapida() {
       if (esClienteAjeno) {
         const vendedorNombre = perfil?.nombre || 'vendedor'
         notifyClienteAjeno({ tipo: 'venta_rapida', numero: String(numero).padStart(5, '0'), vendedorNombre, clienteNombre, vendedorDueño: clienteVendedorNombre || 'otro vendedor', currentRole: rol })
+        notifyDespachoClienteAjeno({ numero: String(numero).padStart(5, '0'), vendedorNombre, clienteNombre, vendedorDueño: clienteVendedorNombre || 'otro vendedor', currentRole: rol })
         sendPushNotification({
           title: 'Venta rápida con cliente ajeno',
           message: `${vendedorNombre} vendió a "${clienteNombre}" (de ${clienteVendedorNombre || 'otro vendedor'}) — VR-${numero}`,

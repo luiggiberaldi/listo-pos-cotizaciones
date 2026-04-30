@@ -1,9 +1,8 @@
 // src/components/cotizaciones/CotizacionBuscador.jsx
 // Buscador de productos con selector de precios, tarjetas e ítems de línea
-import { useState, useRef, useEffect } from 'react'
+import { useState } from 'react'
 import {
-  Search, X, Plus, Minus, Package, ChevronLeft, ChevronRight,
-  CheckCircle, Camera, Trash2, Eye, ChevronDown,
+  Search, X, Plus, Minus, Package, Camera, Trash2, ChevronDown,
 } from 'lucide-react'
 import { useProductSearch } from '../../hooks/useProductSearch'
 import { useInventario, useCategorias } from '../../hooks/useInventario'
@@ -12,6 +11,8 @@ import useAuthStore from '../../store/useAuthStore'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../../utils/format'
 import { round2 } from '../../utils/dinero'
 import { guardarProductoReciente } from './ProductosRecientes'
+import ProductCard from '../shared/ProductCard'
+import CategoryPills from '../shared/CategoryPills'
 
 // ─── Selector de nivel de precio (desktop: compacto / mobile: full-width) ──
 export function PrecioSelector({ precios, currentPrice, onSelect, tasa = 0, mobile = false }) {
@@ -183,65 +184,6 @@ export function ItemCard({ item, idx, onChange, onDelete, tasa = 0, precios }) {
   )
 }
 
-// ─── Swipe-left para eliminar producto ──────────────────────────────────────
-function SwipeToDelete({ children, enabled, onDelete }) {
-  const ref = useRef(null)
-  const startX = useRef(0)
-  const currentX = useRef(0)
-  const swiping = useRef(false)
-
-  if (!enabled) return children
-
-  function handleTouchStart(e) {
-    startX.current = e.touches[0].clientX
-    currentX.current = 0
-    swiping.current = false
-    if (ref.current) ref.current.style.transition = 'none'
-  }
-
-  function handleTouchMove(e) {
-    const dx = e.touches[0].clientX - startX.current
-    const offset = Math.min(0, Math.max(-80, dx))
-    currentX.current = offset
-    if (offset < -10) swiping.current = true
-    if (ref.current) ref.current.style.transform = `translateX(${offset}px)`
-  }
-
-  function handleTouchEnd() {
-    if (!ref.current) return
-    ref.current.style.transition = 'transform 0.25s ease'
-    if (currentX.current < -50) {
-      ref.current.style.transform = 'translateX(-72px)'
-    } else {
-      ref.current.style.transform = 'translateX(0)'
-    }
-  }
-
-  function handleClick(e) {
-    if (swiping.current) { e.stopPropagation(); e.preventDefault() }
-  }
-
-  return (
-    <div className="relative overflow-hidden rounded-xl">
-      <button type="button" onClick={(e) => { e.stopPropagation(); onDelete() }}
-        className="absolute right-0 top-0 bottom-0 w-[72px] flex items-center justify-center bg-red-500 text-white rounded-r-xl active:bg-red-600 transition-colors">
-        <div className="flex flex-col items-center gap-0.5">
-          <Trash2 size={16} />
-          <span className="text-[9px] font-bold">Quitar</span>
-        </div>
-      </button>
-      <div ref={ref}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onClickCapture={handleClick}
-        className="relative z-[1] bg-white rounded-xl">
-        {children}
-      </div>
-    </div>
-  )
-}
-
 // ─── Buscador de productos ────────────────────────────────────────────────────
 const PRODUCTOS_POR_PAGINA = 30
 
@@ -250,36 +192,11 @@ export default function BuscadorProductos({ onAgregar, onScanClick, itemsAgregad
   const [catActiva, setCatActiva] = useState('')
   const { perfil } = useAuthStore()
   const [visibleCount, setVisibleCount] = useState(PRODUCTOS_POR_PAGINA)
-  const [canScrollLeft, setCanScrollLeft]   = useState(false)
-  const [canScrollRight, setCanScrollRight] = useState(false)
   const [editQty, setEditQty] = useState(null) // { productoId, nombre, cantidad, stock }
-  const scrollRef = useRef(null)
   const { data: inventarioData, isLoading } = useInventario({ pageSize: 1000 })
   const todosProductos = inventarioData?.productos ?? inventarioData ?? []
   const { data: categorias = [] } = useCategorias()
   const { data: stockComprometido = {} } = useStockComprometido()
-
-  // Detectar si hay scroll disponible
-  function checkScroll() {
-    const el = scrollRef.current
-    if (!el) return
-    setCanScrollLeft(el.scrollLeft > 4)
-    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4)
-  }
-
-  useEffect(() => {
-    checkScroll()
-    const el = scrollRef.current
-    if (!el) return
-    el.addEventListener('scroll', checkScroll, { passive: true })
-    const ro = new ResizeObserver(checkScroll)
-    ro.observe(el)
-    return () => { el.removeEventListener('scroll', checkScroll); ro.disconnect() }
-  }, [categorias])
-
-  function scrollBy(dir) {
-    scrollRef.current?.scrollBy({ left: dir * 200, behavior: 'smooth' })
-  }
 
   const filtrados = useProductSearch(todosProductos, texto, catActiva)
 
@@ -327,42 +244,8 @@ export default function BuscadorProductos({ onAgregar, onScanClick, itemsAgregad
         </button>
       </div>
 
-      {/* Chips de categoría — scroll horizontal con flechas */}
-      {categorias.length > 0 && (
-        <div className="relative flex items-center gap-1">
-          {/* Flecha izquierda */}
-          <button type="button" onClick={() => scrollBy(-1)}
-            className={`shrink-0 p-1 rounded-full border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 transition-all ${canScrollLeft ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-            <ChevronLeft size={14} />
-          </button>
-
-          {/* Contenedor scrollable */}
-          <div ref={scrollRef} className="flex-1 overflow-x-auto scrollbar-hide">
-            <div className="flex gap-1.5 py-0.5 w-max">
-              <button type="button" onClick={() => cambiarCat('')}
-                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap ${
-                  !catActiva ? 'bg-primary text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                }`}>
-                Todos
-              </button>
-              {categorias.map(cat => (
-                <button key={cat} type="button" onClick={() => cambiarCat(catActiva === cat ? '' : cat)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap ${
-                    catActiva === cat ? 'bg-primary text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                  }`}>
-                  {cat}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Flecha derecha */}
-          <button type="button" onClick={() => scrollBy(1)}
-            className={`shrink-0 p-1 rounded-full border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 transition-all ${canScrollRight ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-            <ChevronRight size={14} />
-          </button>
-        </div>
-      )}
+      {/* Chips de categoría — colapsables en móvil, scroll en desktop */}
+      <CategoryPills categorias={categorias} activa={catActiva} onChange={cambiarCat} />
 
       {/* Cargando */}
       {isLoading && (
@@ -379,149 +262,26 @@ export default function BuscadorProductos({ onAgregar, onScanClick, itemsAgregad
         </div>
       )}
 
-      {/* Productos: lista compacta en móvil, grid con fotos en desktop */}
+      {/* Productos: grid unificado (mismo estilo que VentaRapida) */}
       {!isLoading && visibles.length > 0 && (
         <>
-          {/* ── Vista lista compacta (móvil < md) ── */}
-          <div className="flex flex-col gap-1.5 md:hidden">
+          <div className="grid grid-cols-3 gap-1 md:grid-cols-5 lg:grid-cols-6 md:gap-1.5">
             {visibles.map(p => {
-              const yaAgregado = idsAgregados.has(p.id)
-              const sinStock   = p.stock_actual != null && p.stock_actual <= 0
-              const sinPrecio  = !p.precio_usd || Number(p.precio_usd) <= 0
-              const bloqueado  = sinStock || sinPrecio
-              const comprometido = stockComprometido[p.id] || 0
-              const disponibleReal = (p.stock_actual ?? 0) - comprometido
               const itemInCart = itemsMap[p.id]
-              const stock = Number(p.stock_actual) || 0
-              return (
-                <SwipeToDelete key={p.id} enabled={yaAgregado && !!itemInCart} onDelete={() => onEliminarItem(itemInCart?._idx)}>
-                <div
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-all min-h-[48px] ${
-                    bloqueado
-                      ? 'opacity-40 cursor-not-allowed border-slate-100 bg-white'
-                      : yaAgregado
-                        ? 'border-emerald-300 bg-emerald-50/50 shadow-sm shadow-emerald-100/80'
-                        : disponibleReal <= 0 && comprometido > 0
-                          ? 'border-amber-300 bg-amber-50/30 shadow-sm shadow-amber-100/80'
-                          : 'border-slate-200 bg-white hover:border-primary/50'
-                  }`}
-                  onClick={() => !yaAgregado && !bloqueado && agregarConReciente(p)}
-                >
-                  {/* Indicador izquierdo */}
-                  <div className={`w-7 h-7 rounded-lg shrink-0 flex items-center justify-center ${
-                    yaAgregado ? 'bg-emerald-100' : 'bg-slate-100'
-                  }`}>
-                    {yaAgregado
-                      ? <CheckCircle size={14} className="text-emerald-500" />
-                      : <Package size={14} className="text-slate-400" />
-                    }
-                  </div>
-                  {/* Nombre + precio cuando hay stepper */}
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-xs font-bold leading-tight truncate ${
-                      yaAgregado ? 'text-emerald-700' : 'text-slate-700'
-                    }`}>
-                      {p.nombre}
-                    </p>
-                    {yaAgregado && itemInCart ? (
-                      <p className="text-[10px] text-slate-400">{fmtUsd(p.precio_usd)} c/u</p>
-                    ) : (p.precio_2 != null || p.precio_3 != null) ? (
-                      <p className="text-[9px] font-bold text-primary/60">{[p.precio_2 != null && 'P2', p.precio_3 != null && 'P3'].filter(Boolean).length + 1} precios</p>
-                    ) : null}
-                  </div>
-                  {/* Stepper inline OR Precio+stock */}
-                  {yaAgregado && itemInCart ? (
-                    <div className="shrink-0 flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
-                      <button type="button"
-                        onClick={() => itemInCart.cantidad <= 1 ? onEliminarItem(itemInCart._idx) : onCambiarCantidad(itemInCart._idx, 'cantidad', itemInCart.cantidad - 1)}
-                        className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 active:bg-red-100 active:text-red-500 transition-colors">
-                        {itemInCart.cantidad <= 1 ? <Trash2 size={11} strokeWidth={2.5} /> : <Minus size={12} strokeWidth={3} />}
-                      </button>
-                      <button type="button"
-                        onClick={() => setEditQty({ productoId: p.id, nombre: p.nombre, cantidad: itemInCart.cantidad, stock, idx: itemInCart._idx })}
-                        className="w-9 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-xs font-black text-slate-700 active:bg-sky-50 active:border-sky-300">
-                        {itemInCart.cantidad}
-                      </button>
-                      <button type="button"
-                        onClick={() => onCambiarCantidad(itemInCart._idx, 'cantidad', itemInCart.cantidad + 1)}
-                        className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 active:bg-emerald-100 transition-colors">
-                        <Plus size={12} strokeWidth={3} />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="shrink-0 text-right">
-                      <p className={`text-xs font-black ${yaAgregado ? 'text-emerald-600' : 'text-slate-800'}`}>
-                        {fmtUsd(p.precio_usd)}
-                      </p>
-                      {tasa > 0 && (
-                        <p className="text-[9px] text-slate-400">{fmtBs(usdToBs(p.precio_usd, tasa))}</p>
-                      )}
-                      <p className={`text-[9px] font-medium ${
-                        sinStock ? 'text-red-500' :
-                        disponibleReal <= 0 && comprometido > 0 ? 'text-amber-600' :
-                        (p.stock_actual <= (p.stock_minimo || 5)) ? 'text-amber-500' : 'text-emerald-500'
-                      }`}>
-                        {sinStock ? 'Agotado' : comprometido > 0 ? `${p.stock_actual ?? 0} (${comprometido} comp.)` : `${p.stock_actual ?? 0} disp.`}
-                      </p>
-                    </div>
-                  )}
-                </div>
-                </SwipeToDelete>
-              )
-            })}
-          </div>
-
-          {/* ── Vista grid con fotos (desktop md+) ── */}
-          <div className="hidden md:grid md:grid-cols-5 lg:grid-cols-6 gap-1.5">
-            {visibles.map(p => {
-              const yaAgregado = idsAgregados.has(p.id)
-              const sinStock   = p.stock_actual != null && p.stock_actual <= 0
-              const sinPrecio  = !p.precio_usd || Number(p.precio_usd) <= 0
-              const bloqueado  = sinStock || sinPrecio
               const comprometido = stockComprometido[p.id] || 0
-              const disponibleReal = (p.stock_actual ?? 0) - comprometido
               return (
-                <button key={p.id} type="button"
-                  onClick={() => !bloqueado && agregarConReciente(p)}
-                  disabled={bloqueado}
-                  title={sinPrecio ? 'Sin precio — no se puede cotizar' : sinStock ? 'Sin stock' : comprometido > 0 ? `${comprometido} comprometidas en cotizaciones activas` : undefined}
-                  className={`relative bg-white rounded-xl border p-1.5 flex flex-col items-center text-center transition-all active:scale-95 hover:shadow-sm ${
-                    bloqueado
-                      ? 'opacity-40 cursor-not-allowed border-slate-100'
-                      : yaAgregado
-                        ? 'border-emerald-300 shadow-sm shadow-emerald-100/80'
-                        : disponibleReal <= 0 && comprometido > 0
-                          ? 'border-amber-300 shadow-sm shadow-amber-100/80'
-                          : 'border-slate-200 hover:border-primary/50'
-                  }`}>
-
-                  {/* Nombre */}
-                  <p className={`text-[10px] font-bold leading-tight line-clamp-2 mb-0.5 ${
-                    yaAgregado ? 'text-emerald-700' : 'text-slate-700'
-                  }`}>
-                    {p.nombre}
-                  </p>
-
-                  {/* Precio */}
-                  <p className={`text-[11px] font-black ${yaAgregado ? 'text-emerald-600' : 'text-slate-800'}`}>
-                    {fmtUsd(p.precio_usd)}
-                  </p>
-                  {(p.precio_2 != null || p.precio_3 != null) && (
-                    <p className="text-[8px] font-bold text-primary/60">{[p.precio_2 != null && 'P2', p.precio_3 != null && 'P3'].filter(Boolean).length + 1} precios</p>
-                  )}
-                  {tasa > 0 && (
-                    <p className="text-[9px] text-slate-400 leading-tight">{fmtBs(usdToBs(p.precio_usd, tasa))}</p>
-                  )}
-
-                  {/* Stock badge — color-coded */}
-                  <p className={`text-[9px] font-medium mt-0.5 ${
-                    sinStock ? 'text-red-500' :
-                    disponibleReal <= 0 && comprometido > 0 ? 'text-amber-600' :
-                    (p.stock_actual <= (p.stock_minimo || 5)) ? 'text-amber-500' : 'text-emerald-500'
-                  }`}>
-                    {sinStock ? 'Agotado' : comprometido > 0 ? `${p.stock_actual ?? 0} (${comprometido} comp.)` : `${p.stock_actual ?? 0} disp.`}
-                  </p>
-                </button>
+                <ProductCard
+                  key={p.id}
+                  producto={p}
+                  agregado={idsAgregados.has(p.id)}
+                  cantidad={itemInCart?.cantidad ?? null}
+                  tasa={tasa}
+                  comprometido={comprometido}
+                  onAgregar={agregarConReciente}
+                  onMas={() => onCambiarCantidad(itemInCart._idx, 'cantidad', itemInCart.cantidad + 1)}
+                  onMenos={() => itemInCart.cantidad <= 1 ? onEliminarItem(itemInCart._idx) : onCambiarCantidad(itemInCart._idx, 'cantidad', itemInCart.cantidad - 1)}
+                  onCantidadDirecta={(val) => onCambiarCantidad(itemInCart._idx, 'cantidad', val)}
+                />
               )
             })}
           </div>

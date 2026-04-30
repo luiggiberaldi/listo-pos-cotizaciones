@@ -27,6 +27,8 @@ import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../utils/format'
 import { guardarProductoReciente, getProductosRecientes } from '../components/cotizaciones/ProductosRecientes'
 import { showToast } from '../components/ui/Toast'
 import PageHeader from '../components/ui/PageHeader'
+import ProductCard from '../components/shared/ProductCard'
+import CategoryPills from '../components/shared/CategoryPills'
 
 const FORMAS_PAGO = ['Efectivo', 'Zelle', 'Pago Móvil', 'USDT', 'Transferencia', 'Cta por cobrar']
 
@@ -756,10 +758,6 @@ function Step1Productos({
   step1Valid, onSiguiente,
   preciosMap = {},
 }) {
-  // Scroll arrows for categories
-  const scrollRef = useRef(null)
-  const [canScrollLeft, setCanScrollLeft] = useState(false)
-  const [canScrollRight, setCanScrollRight] = useState(false)
   const [sheetState, setSheetState] = useState('closed')
   const sheetOpen = sheetState !== 'closed'
   const setSheetOpen = (v) => setSheetState(v ? 'normal' : 'closed')
@@ -769,27 +767,6 @@ function Step1Productos({
   sheetStateRef.current = sheetState
   const [editQty, setEditQty] = useState(null) // { productoId, nombre, cantidad }
   const editQtyRef = useRef(null)
-
-  function checkScroll() {
-    const el = scrollRef.current
-    if (!el) return
-    setCanScrollLeft(el.scrollLeft > 4)
-    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4)
-  }
-
-  useEffect(() => {
-    checkScroll()
-    const el = scrollRef.current
-    if (!el) return
-    el.addEventListener('scroll', checkScroll, { passive: true })
-    const ro = new ResizeObserver(checkScroll)
-    ro.observe(el)
-    return () => { el.removeEventListener('scroll', checkScroll); ro.disconnect() }
-  }, [categorias])
-
-  function scrollCats(dir) {
-    scrollRef.current?.scrollBy({ left: dir * 200, behavior: 'smooth' })
-  }
 
   // Block scroll when sheet is open
   useEffect(() => {
@@ -973,154 +950,27 @@ function Step1Productos({
           )}
         </div>
 
-        {/* ── Categorías en pills scrollables con flechas ── */}
-        {categorias.length > 0 && (
-          <div className="relative flex items-center gap-1 mb-1.5">
-            <button type="button" onClick={() => scrollCats(-1)}
-              className={`shrink-0 p-1 rounded-full border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 transition-all ${canScrollLeft ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-              <ChevronLeft size={14} />
-            </button>
-            <div ref={scrollRef} className="flex-1 overflow-x-auto scrollbar-hide">
-              <div className="flex gap-1.5 py-0.5 w-max">
-                <button onClick={() => setCatActiva('')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap ${
-                    !catActiva ? 'bg-primary text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                  }`}>
-                  Todos
-                </button>
-                {categorias.map(cat => (
-                  <button key={cat} onClick={() => setCatActiva(cat === catActiva ? '' : cat)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap ${
-                      cat === catActiva ? 'bg-primary text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                    }`}>
-                    {cat}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <button type="button" onClick={() => scrollCats(1)}
-              className={`shrink-0 p-1 rounded-full border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 transition-all ${canScrollRight ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-              <ChevronRight size={14} />
-            </button>
-          </div>
-        )}
+        {/* ── Categorías en pills (colapsables en móvil, scroll en desktop) ── */}
+        <CategoryPills categorias={categorias} activa={catActiva} onChange={(cat) => setCatActiva(cat)} />
 
-        {/* ── Tarjetas de productos ── */}
-        {/* Vista grid compacta (móvil < md) */}
-        <div className="grid grid-cols-3 gap-1 md:hidden">
+        {/* ── Tarjetas de productos (grid unificado con ProductCard compartido) ── */}
+        <div className="grid grid-cols-3 gap-1 md:grid-cols-5 lg:grid-cols-6 md:gap-1.5">
           {productosVisibles.map(p => {
             const added = idsAgregados.has(p.id)
             const itemInCart = added ? items.find(it => it.productoId === p.id) : null
-            const stock = Number(p.stock_actual) || 0
-            const sinStock = stock <= 0
-            const sinPrecio = Number(p.precio_usd) <= 0
-            const tieneMultiprecios = p.precio_2 != null || p.precio_3 != null
             return (
-              <div key={p.id}
-                className={`relative bg-white rounded-xl border px-1.5 py-1.5 flex flex-col items-center text-center transition-all active:scale-95 ${
-                  sinStock || sinPrecio
-                    ? 'opacity-40 cursor-not-allowed border-slate-100'
-                    : added
-                      ? 'border-emerald-300 bg-emerald-50/50 shadow-sm shadow-emerald-100/80'
-                      : 'border-slate-200 hover:border-primary/50'
-                }`}
-                onClick={() => !added && !sinStock && !sinPrecio && agregarProducto(p)}
-              >
-                {added && (
-                  <div className="absolute top-0 left-0 right-0 h-1 rounded-t-xl bg-emerald-400" />
-                )}
-                <p className={`text-[10px] font-bold leading-tight line-clamp-2 mb-0.5 w-full ${
-                  added ? 'text-emerald-700' : 'text-slate-700'
-                }`}>
-                  {p.nombre}
-                </p>
-                <p className={`text-[11px] font-black ${added ? 'text-emerald-600' : 'text-slate-800'}`}>
-                  {fmtUsd(p.precio_usd)}
-                </p>
-                {tieneMultiprecios && (
-                  <p className="text-[8px] font-bold text-primary/60">{[p.precio_2 != null && 'P2', p.precio_3 != null && 'P3'].filter(Boolean).length + 1} precios</p>
-                )}
-                {tasa > 0 && (
-                  <p className="text-[8px] text-slate-400 leading-tight">{fmtBs(usdToBs(p.precio_usd, tasa))}</p>
-                )}
-                <p className={`text-[8px] font-medium mt-0.5 ${
-                  sinPrecio ? 'text-orange-500' : sinStock ? 'text-red-500' : stock <= 5 ? 'text-amber-500' : 'text-emerald-500'
-                }`}>
-                  {sinPrecio ? 'Sin precio' : sinStock ? 'Agotado' : `${stock} disp.`}
-                </p>
-                {/* Stepper para productos agregados */}
-                {added && itemInCart && (
-                  <div className="flex items-center gap-0.5 mt-1" onClick={e => e.stopPropagation()}>
-                    <button type="button"
-                      onClick={() => itemInCart.cantidad <= 1 ? quitarItem(p.id) : cambiarCantidad(p.id, -1)}
-                      className="w-6 h-6 rounded-md bg-slate-100 flex items-center justify-center text-slate-500 active:bg-red-100 active:text-red-500 transition-colors">
-                      {itemInCart.cantidad <= 1 ? <Trash2 size={10} strokeWidth={2.5} /> : <Minus size={11} strokeWidth={3} />}
-                    </button>
-                    <input
-                      key={`grid-qty-${p.id}-${itemInCart.cantidad}`}
-                      type="text"
-                      inputMode="numeric"
-                      defaultValue={itemInCart.cantidad}
-                      onClick={e => e.target.select()}
-                      onFocus={e => e.target.select()}
-                      onBlur={e => {
-                        const num = Math.max(1, parseInt(e.target.value, 10) || 1);
-                        setCantidadDirecta(p.id, num);
-                      }}
-                      onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }}
-                      className="w-9 h-6 rounded-md bg-white border border-slate-200 text-center text-[10px] font-black text-slate-700 focus:border-sky-400 focus:ring-1 focus:ring-sky-200 outline-none"
-                    />
-                    <button type="button"
-                      onClick={() => cambiarCantidad(p.id, 1)}
-                      className="w-6 h-6 rounded-md bg-emerald-50 flex items-center justify-center text-emerald-600 active:bg-emerald-100 transition-colors">
-                      <Plus size={11} strokeWidth={3} />
-                    </button>
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-
-        {/* Vista grid (desktop md+) */}
-        <div className="hidden md:grid md:grid-cols-5 lg:grid-cols-6 gap-1.5">
-          {productosVisibles.map(p => {
-            const added = idsAgregados.has(p.id)
-            const stock = Number(p.stock_actual) || 0
-            const sinStock = stock <= 0
-            const sinPrecio = Number(p.precio_usd) <= 0
-            const tieneMultiprecios = p.precio_2 != null || p.precio_3 != null
-            return (
-              <button key={p.id} type="button"
-                onClick={() => !added && !sinStock && !sinPrecio && agregarProducto(p)}
-                disabled={sinStock || sinPrecio}
-                className={`relative bg-white rounded-xl border p-1.5 flex flex-col items-center text-center transition-all active:scale-95 hover:shadow-sm ${
-                  sinStock || sinPrecio
-                    ? 'opacity-40 cursor-not-allowed border-slate-100'
-                    : added
-                      ? 'border-emerald-300 shadow-sm shadow-emerald-100/80'
-                      : 'border-slate-200 hover:border-primary/50'
-                }`}>
-                <p className={`text-[10px] font-bold leading-tight line-clamp-2 mb-0.5 ${
-                  added ? 'text-emerald-700' : 'text-slate-700'
-                }`}>
-                  {p.nombre}
-                </p>
-                <p className={`text-[11px] font-black ${added ? 'text-emerald-600' : 'text-slate-800'}`}>
-                  {fmtUsd(p.precio_usd)}
-                </p>
-                {tieneMultiprecios && (
-                  <p className="text-[8px] font-bold text-primary/60">{[p.precio_2 != null && 'P2', p.precio_3 != null && 'P3'].filter(Boolean).length + 1} precios</p>
-                )}
-                {tasa > 0 && (
-                  <p className="text-[9px] text-slate-400 leading-tight">{fmtBs(usdToBs(p.precio_usd, tasa))}</p>
-                )}
-                <p className={`text-[9px] font-medium mt-0.5 ${
-                  sinPrecio ? 'text-orange-500' : sinStock ? 'text-red-500' : stock <= 5 ? 'text-amber-500' : 'text-emerald-500'
-                }`}>
-                  {sinPrecio ? 'Sin precio' : sinStock ? 'Agotado' : `${stock} disp.`}
-                </p>
-              </button>
+              <ProductCard
+                key={p.id}
+                producto={p}
+                agregado={added}
+                cantidad={itemInCart?.cantidad ?? null}
+                tasa={tasa}
+                comprometido={0}
+                onAgregar={agregarProducto}
+                onMas={() => cambiarCantidad(p.id, 1)}
+                onMenos={() => itemInCart.cantidad <= 1 ? quitarItem(p.id) : cambiarCantidad(p.id, -1)}
+                onCantidadDirecta={(val) => setCantidadDirecta(p.id, val)}
+              />
             )
           })}
         </div>

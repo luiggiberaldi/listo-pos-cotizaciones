@@ -9,7 +9,7 @@ import {
   Menu, X, DollarSign, RefreshCw, PackageCheck, Bell, BellOff,
   AlertTriangle, Send, CheckCircle, Ban,
   PanelLeftClose, PanelLeftOpen, BarChart3,
-  Clock, AlertCircle, ScrollText, FlaskConical,
+  Clock, AlertCircle, ScrollText, FlaskConical, UserX,
 } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import LoginAvatar from '../auth/LoginAvatar'
@@ -53,6 +53,8 @@ const NOTIF_ICON_MAP = {
   [NOTIF_TYPES.COTIZACION_ANULADA]:            { icon: Ban,           color: 'text-red-500',     bg: 'bg-red-50' },
   [NOTIF_TYPES.COTIZACION_SIN_RESPUESTA]:      { icon: Clock,         color: 'text-orange-500',  bg: 'bg-orange-50' },
   [NOTIF_TYPES.COMPROMISO_ALTO]:               { icon: AlertTriangle, color: 'text-orange-500',  bg: 'bg-orange-50' },
+  [NOTIF_TYPES.DESPACHO_CLIENTE_AJENO]:         { icon: UserX,         color: 'text-red-500',     bg: 'bg-red-50' },
+  [NOTIF_TYPES.FACTURACION_CLIENTE_AJENO]:      { icon: UserX,         color: 'text-amber-600',   bg: 'bg-amber-50' },
 }
 const DEFAULT_NOTIF_ICON = { icon: Bell, color: 'text-slate-400', bg: 'bg-slate-50' }
 
@@ -328,6 +330,8 @@ export default function AppLayout() {
                       [NOTIF_TYPES.COTIZACION_ANULADA]: '/cotizaciones',
                       [NOTIF_TYPES.COTIZACION_SIN_RESPUESTA]: '/cotizaciones',
                       [NOTIF_TYPES.COMPROMISO_ALTO]: '/inventario',
+                      [NOTIF_TYPES.DESPACHO_CLIENTE_AJENO]: '/despachos',
+                      [NOTIF_TYPES.FACTURACION_CLIENTE_AJENO]: '/despachos',
                     }[n.type]
                     const isClickable = !!navTarget
                     const iconData = NOTIF_ICON_MAP[n.type] || DEFAULT_NOTIF_ICON

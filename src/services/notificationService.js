@@ -63,7 +63,21 @@ export const NOTIF_TYPES = {
   COTIZACION_SIN_RESPUESTA:      'cotizacion_sin_respuesta',
   COMPROMISO_ALTO:               'compromiso_alto',
   CLIENTE_AJENO:                 'cliente_ajeno',
+  DESPACHO_CLIENTE_AJENO:        'despacho_cliente_ajeno',
+  FACTURACION_CLIENTE_AJENO:     'facturacion_cliente_ajeno',
 }
+
+// ─── Clasificación STATE vs EVENT para deduplicación inteligente ──────────────
+// STATE: solo 1 activa por tipo (REPLACE — la nueva reemplaza la anterior)
+// EVENT: pueden ser múltiples, pero no en ráfaga (debounce 30s)
+const STATE_TYPES = new Set([
+  'stock_bajo',
+  'stock_critico',
+  'compromiso_alto',
+  'stock_reabastecido',
+])
+
+const EVENT_DEBOUNCE_MS = 30_000 // 30 segundos
 
 // Qué rol ve cada tipo de notificación en la campanita local
 // null = ambos roles ven la notificación local
@@ -84,6 +98,8 @@ const NOTIF_TARGET_ROLE = {
   [NOTIF_TYPES.COTIZACION_SIN_RESPUESTA]:     null,
   [NOTIF_TYPES.COMPROMISO_ALTO]:              'supervisor',
   [NOTIF_TYPES.CLIENTE_AJENO]:                'supervisor',
+  [NOTIF_TYPES.DESPACHO_CLIENTE_AJENO]:       'supervisor',
+  [NOTIF_TYPES.FACTURACION_CLIENTE_AJENO]:    'supervisor',
 }
 
 function readNotifs() {
@@ -125,7 +141,19 @@ export function createNotification(type, title, body, meta = null, currentRole =
 }
 
 // Crea la notificación localmente (localStorage + evento + sonido)
+// Aplica deduplicación inteligente: REPLACE para STATE, debounce para EVENT
 function _insertLocalNotification(type, title, body, meta) {
+  let notifs = readNotifs()
+
+  if (STATE_TYPES.has(type)) {
+    // STATE: eliminar todas las previas del mismo tipo (solo queda la nueva)
+    notifs = notifs.filter(n => n.type !== type)
+  } else {
+    // EVENT: ignorar si ya existe una del mismo tipo en los últimos 30s
+    const reciente = notifs.find(n => n.type === type && (Date.now() - n.ts) < EVENT_DEBOUNCE_MS)
+    if (reciente) return null
+  }
+
   const notif = {
     id: crypto.randomUUID(),
     ts: Date.now(),
@@ -136,7 +164,7 @@ function _insertLocalNotification(type, title, body, meta) {
     meta,
   }
 
-  const notifs = [notif, ...readNotifs()]
+  notifs = [notif, ...notifs]
   if (notifs.length > MAX_NOTIFS) notifs.length = MAX_NOTIFS
   saveNotifs(notifs)
 
@@ -213,13 +241,14 @@ const STOCK_BAJO_COOLDOWN_MS = 6 * 60 * 60 * 1000 // 6 horas
 
 /**
  * Alerta de stock bajo (0 < stock <= stock_minimo). Cooldown 6h.
+ * La deduplicación de almacenamiento la maneja _insertLocalNotification (REPLACE por STATE_TYPE).
  */
 export function notifyStockBajo(productos, currentRole = null) {
   // Solo productos con stock bajo (NO crítico, es decir stock > 0)
   const bajos = productos.filter(p => p.stock_minimo > 0 && p.stock_actual > 0 && p.stock_actual <= p.stock_minimo)
   if (!bajos.length) return
 
-  // No crear nueva notificación si la última tiene menos de 6 horas y la cantidad no cambió
+  // Cooldown de 6h si misma cantidad (evita re-procesar innecesariamente)
   const existing = readNotifs().find(n => n.type === NOTIF_TYPES.STOCK_BAJO)
   if (existing) {
     const mismaCantidad = existing.meta?.total === bajos.length
@@ -478,6 +507,32 @@ export function notifyClienteAjeno({ tipo, numero, vendedorNombre, clienteNombre
     `${tipoLabel} con cliente ajeno`,
     `${vendedorNombre} usó el cliente "${clienteNombre}" (de ${vendedorDueño}) en ${tipoLabel} #${numero}`,
     { tipo, numero, vendedorNombre, clienteNombre, vendedorDueño },
+    currentRole,
+  )
+}
+
+/**
+ * Alerta cuando se crea un despacho desde venta rápida con un cliente ajeno.
+ */
+export function notifyDespachoClienteAjeno({ numero, vendedorNombre, clienteNombre, vendedorDueño, currentRole = null }) {
+  createNotification(
+    NOTIF_TYPES.DESPACHO_CLIENTE_AJENO,
+    'Despacho con cliente ajeno',
+    `${vendedorNombre} creó despacho VR-${numero} con "${clienteNombre}" (de ${vendedorDueño})`,
+    { numero, vendedorNombre, clienteNombre, vendedorDueño },
+    currentRole,
+  )
+}
+
+/**
+ * Alerta cuando se asigna un cliente de facturación diferente al de la cotización.
+ */
+export function notifyFacturacionClienteAjeno({ numero, clienteCotizacion, clienteFactura, currentRole = null }) {
+  createNotification(
+    NOTIF_TYPES.FACTURACION_CLIENTE_AJENO,
+    'Facturación a cliente diferente',
+    `Despacho COT-${numero}: factura a "${clienteFactura}" en lugar de "${clienteCotizacion}"`,
+    { numero, clienteCotizacion, clienteFactura },
     currentRole,
   )
 }
