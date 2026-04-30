@@ -369,6 +369,8 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
           placeholder="Ej: Av. Principal, Edif. Torre, Piso 3, Local 2"
           className={inputClass}
           disabled={cargando}
+          autoComplete="off"
+          autoCorrect="off"
         />
       </Campo>
 

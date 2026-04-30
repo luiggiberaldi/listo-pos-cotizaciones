@@ -87,8 +87,9 @@ export default function CustomSelect({
 
   function elegir(val) {
     onChange(val)
-    setAbierto(false)
     setBusqueda('')
+    // Delay para evitar touch pass-through en Android (el tap "atraviesa" al elemento de abajo)
+    requestAnimationFrame(() => setAbierto(false))
   }
 
   function limpiar(e) {
@@ -180,6 +181,7 @@ export default function CustomSelect({
                       key={opt.value}
                       type="button"
                       onClick={() => elegir(opt.value)}
+                      onTouchEnd={e => e.preventDefault()}
                       className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left text-sm transition-colors ${
                         isSelected
                           ? 'bg-primary-light/40 text-primary font-medium'
@@ -197,6 +199,7 @@ export default function CustomSelect({
                   <button
                     type="button"
                     onClick={() => elegir(busqueda.trim())}
+                    onTouchEnd={e => e.preventDefault()}
                     className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left text-sm transition-colors hover:bg-emerald-50 text-emerald-700 border-t border-slate-100"
                   >
                     <Plus size={14} className="text-emerald-500 shrink-0" />
