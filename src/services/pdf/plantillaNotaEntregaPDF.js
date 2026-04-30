@@ -280,10 +280,6 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
     doc.setFontSize(9)
     doc.setTextColor(...C_DARK)
     doc.text(rightLabels[r], MARGIN + comboLeftW + 3, ry + dataRowH / 2 + 1)
-    // Línea para monto
-    doc.setLineWidth(0.3)
-    doc.setDrawColor(150, 150, 150)
-    doc.line(MARGIN + comboLeftW + 30, ry + dataRowH / 2 + 1.5, MARGIN + CONTENT_W - 3, ry + dataRowH / 2 + 1.5)
   }
 
   // Barra TOTAL (fondo negro, alineada con cuadrícula derecha)
@@ -294,10 +290,6 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   doc.setFontSize(13)
   doc.setTextColor(...C_WHITE)
   doc.text('Total:', MARGIN + comboLeftW + 3, totTopY + 7)
-  // Línea punteada para llenar monto a mano
-  doc.setLineWidth(0.4)
-  doc.setDrawColor(200, 200, 200)
-  doc.line(MARGIN + comboLeftW + 22, totTopY + 7.5, MARGIN + CONTENT_W - 4, totTopY + 7.5)
 
   // ══════════════════════════════════════════════════════════════════════════
   // 6. DATOS DEL CHOFER Y VEHÍCULO — vacíos (2 filas: 3+4 cols)

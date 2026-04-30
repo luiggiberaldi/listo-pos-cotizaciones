@@ -238,10 +238,6 @@ export async function generarPlantillaOrdenDespachoPDF({ config = {}, incluirTra
   doc.setFontSize(13)
   doc.setTextColor(...C_WHITE)
   doc.text('Total:', MARGIN + 4, totTopY + 7)
-  // Línea para llenar monto a mano
-  doc.setLineWidth(0.4)
-  doc.setDrawColor(200, 200, 200)
-  doc.line(MARGIN + 28, totTopY + 7.5, MARGIN + CONTENT_W - 4, totTopY + 7.5)
 
   // ══════════════════════════════════════════════════════════════════════════
   // 5. DATOS DEL CHOFER Y VEHÍCULO — vacíos (2 filas: 3+4 cols como en la llena)
