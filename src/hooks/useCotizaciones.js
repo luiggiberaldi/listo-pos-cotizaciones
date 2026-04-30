@@ -34,13 +34,13 @@ export function useCotizaciones({ estado = '', clienteId = '', veTodos = false }
       // Privilegiado (supervisor/admin): tabla directa; Vendedor: vista (sin notas_internas)
       const tabla = esPrivilegiado ? 'cotizaciones' : 'v_cotizaciones_vendedor'
       const selectCols = esPrivilegiado
-        ? 'id, numero, version, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, creado_en, enviada_en, notas_cliente, cliente_id, vendedor_id, despacho:notas_despacho!notas_despacho_cotizacion_id_fkey(id, estado)'
-        : 'id, numero, version, cliente_id, vendedor_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, notas_cliente, creado_en, enviada_en, despacho:notas_despacho!notas_despacho_cotizacion_id_fkey(id, estado)'
+        ? 'id, numero, version, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, creado_en, actualizado_en, enviada_en, notas_cliente, cliente_id, vendedor_id, despacho:notas_despacho!notas_despacho_cotizacion_id_fkey(id, estado)'
+        : 'id, numero, version, cliente_id, vendedor_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, notas_cliente, creado_en, actualizado_en, enviada_en, despacho:notas_despacho!notas_despacho_cotizacion_id_fkey(id, estado)'
 
       let query = supabase
         .from(tabla)
         .select(selectCols)
-        .order('creado_en', { ascending: false })
+        .order('actualizado_en', { ascending: false })
         .limit(200)
 
       if (!verTodosEfectivo) query = query.eq('vendedor_id', perfil.id)

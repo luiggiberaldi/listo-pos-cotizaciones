@@ -41,7 +41,7 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false } = {}
           transportista:transportistas!notas_despacho_transportista_id_fkey(id, nombre, rif, telefono, color, zona_cobertura, vehiculo, placa_chuto, placa_batea),
           cotizacion:cotizaciones!notas_despacho_cotizacion_id_fkey(id, numero, version)
         `)
-        .order('creado_en', { ascending: false })
+        .order('numero', { ascending: false })
         .limit(200)
 
       if (estado) query = query.eq('estado', estado)
