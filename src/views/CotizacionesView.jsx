@@ -644,14 +644,17 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
         </div>
       </div>
 
-      {/* Filtros: fila 2 — toggle vista personal + vendedor + controles de vista */}
+      {/* Filtros: fila 2 — toggle vista personal + controles de vista */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           {(esSupervisor || esDesarrollador) && (
             <ToggleVistaPersonal value={verTodos} onChange={v => { setVerTodos(v); setVendedorFiltro(''); setPagina(1) }} />
           )}
+          {/* Vendedor en desktop inline */}
           {(esSupervisor || esDesarrollador) && verTodos && vendedores.length > 1 && (
-            <VendedorFilterPill vendedores={vendedores} value={vendedorFiltro} onChange={setVendedorFiltro} />
+            <div className="hidden md:block">
+              <VendedorFilterPill vendedores={vendedores} value={vendedorFiltro} onChange={setVendedorFiltro} />
+            </div>
           )}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
@@ -670,6 +673,13 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
           </button>
         </div>
       </div>
+
+      {/* Filtro vendedor en móvil — fila separada */}
+      {(esSupervisor || esDesarrollador) && verTodos && vendedores.length > 1 && (
+        <div className="md:hidden">
+          <VendedorFilterPill vendedores={vendedores} value={vendedorFiltro} onChange={setVendedorFiltro} />
+        </div>
+      )}
 
       {/* Contenido */}
       {isLoading ? (
