@@ -250,7 +250,6 @@ function TransportistaSelector({ transportistas, transportistaId, setTransportis
   const [nombre, setNombre] = useState('')
   const [color, setColor] = useState('')
   const [vehiculo, setVehiculo] = useState('')
-  const [placa, setPlaca] = useState('')
   const [placaChuto, setPlacaChuto] = useState('')
   const [placaBatea, setPlacaBatea] = useState('')
 
@@ -264,14 +263,13 @@ function TransportistaSelector({ transportistas, transportistaId, setTransportis
         rif: formatearRifCB(rifPrefijo, rifNumero),
         color,
         vehiculo,
-        zona_cobertura: placa,
         placa_chuto: placaChuto,
         placa_batea: placaBatea,
       })
       setTransportistaId(nuevo.id)
       setShowForm(false)
       setRifPrefijo('V'); setRifNumero(''); setNombre(''); setColor('')
-      setVehiculo(''); setPlaca(''); setPlacaChuto(''); setPlacaBatea('')
+      setVehiculo(''); setPlacaChuto(''); setPlacaBatea('')
       showToast('Transportista creado y seleccionado', 'success')
     } catch (e) {
       setFormError(e.message ?? 'Error al crear')
@@ -359,11 +357,6 @@ function TransportistaSelector({ transportistas, transportistaId, setTransportis
                 <label className="text-xs font-medium text-slate-600">Vehículo</label>
                 <input value={vehiculo} onChange={e => setVehiculo(e.target.value)}
                   placeholder="Ej: Mack Granite 2020" className={inputCls} disabled={crearTransp.isPending} />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-slate-600">Placa</label>
-                <input value={placa} onChange={e => setPlaca(e.target.value.toUpperCase())}
-                  placeholder="Ej: AB123CD" className={inputCls} disabled={crearTransp.isPending} />
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-medium text-slate-600">Placa chuto</label>

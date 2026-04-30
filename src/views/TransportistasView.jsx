@@ -44,7 +44,6 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
     rif:             rifNumeroInit,
     color:           inicial.color           ?? '',
     vehiculo:        inicial.vehiculo        ?? '',
-    zona_cobertura:  inicial.zona_cobertura  ?? '',
     placa_chuto:     inicial.placa_chuto     ?? '',
     placa_batea:     inicial.placa_batea     ?? '',
   })
@@ -113,11 +112,6 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
           <label className="text-sm font-medium text-slate-700">Vehículo *</label>
           <input value={campos.vehiculo} onChange={e => cambiar('vehiculo', e.target.value)}
             placeholder="Ej: Mack Granite 2020" className={inputCls} disabled={cargando} />
-        </div>
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Placa *</label>
-          <input value={campos.zona_cobertura} onChange={e => cambiar('zona_cobertura', e.target.value)}
-            placeholder="Ej: AB123CD" className={inputCls} disabled={cargando} />
         </div>
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-slate-700">Placa chuto</label>
@@ -252,9 +246,8 @@ function TransportistaCard({ transportista, esSupervisor, puedeEditar, onEditar,
             <span>{transportista.vehiculo}</span>
           </div>
         )}
-        {(transportista.zona_cobertura || transportista.placa_chuto || transportista.placa_batea) && (
+        {(transportista.placa_chuto || transportista.placa_batea) && (
           <div className="flex items-center gap-1.5 text-xs text-slate-500 flex-wrap">
-            {transportista.zona_cobertura && <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded">{transportista.zona_cobertura}</span>}
             {transportista.placa_chuto && <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded">Chuto: {transportista.placa_chuto}</span>}
             {transportista.placa_batea && <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded">Batea: {transportista.placa_batea}</span>}
           </div>

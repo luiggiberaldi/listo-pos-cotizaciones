@@ -25,7 +25,6 @@ export default function TransportistaFormCompact({ onGuardar, onCancelar, cargan
   const [nombre, setNombre] = useState('')
   const [color, setColor] = useState('')
   const [vehiculo, setVehiculo] = useState('')
-  const [placa, setPlaca] = useState('')
   const [placaChuto, setPlacaChuto] = useState('')
   const [placaBatea, setPlacaBatea] = useState('')
   const [error, setError] = useState('')
@@ -38,7 +37,6 @@ export default function TransportistaFormCompact({ onGuardar, onCancelar, cargan
       rif: formatearRif(rifPrefijo, rifNumero),
       color,
       vehiculo,
-      zona_cobertura: placa,
       placa_chuto: placaChuto,
       placa_batea: placaBatea,
     })
@@ -93,11 +91,6 @@ export default function TransportistaFormCompact({ onGuardar, onCancelar, cargan
           <label className="text-xs font-medium text-slate-600">Vehículo</label>
           <input value={vehiculo} onChange={e => setVehiculo(e.target.value)}
             placeholder="Ej: Mack Granite 2020" className={inputCls} disabled={cargando} />
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-slate-600">Placa</label>
-          <input value={placa} onChange={e => setPlaca(e.target.value.toUpperCase())}
-            placeholder="Ej: AB123CD" className={inputCls} disabled={cargando} />
         </div>
         <div className="space-y-1">
           <label className="text-xs font-medium text-slate-600">Placa chuto</label>

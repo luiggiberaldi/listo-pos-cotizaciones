@@ -462,7 +462,6 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   ]
   const row2Fields = [
     { label: 'VEHÍCULO', val: (transportista?.vehiculo || '').toUpperCase() },
-    { label: 'PLACA', val: (transportista?.zona_cobertura || '').toUpperCase() },
   ]
   if (transportista?.placa_chuto) row2Fields.push({ label: 'PLACA CHUTO', val: transportista.placa_chuto.toUpperCase() })
   if (transportista?.placa_batea) row2Fields.push({ label: 'PLACA BATEA', val: transportista.placa_batea.toUpperCase() })

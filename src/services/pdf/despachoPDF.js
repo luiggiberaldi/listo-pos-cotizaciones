@@ -440,12 +440,10 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
       leftLines.push({ segments: segs, size: 8 })
     }
     const tVeh = (transportista.vehiculo || '').toUpperCase()
-    const tPlaca = (transportista.zona_cobertura || '').toUpperCase()
     const tChuto = (transportista.placa_chuto || '').toUpperCase()
     const tBatea = (transportista.placa_batea || '').toUpperCase()
     const vehSegs = [
       { text: 'Vehículo: ', bold: false }, { text: tVeh, bold: true },
-      { text: '  —  Placa: ', bold: false }, { text: tPlaca, bold: true },
     ]
     if (tChuto) vehSegs.push({ text: '  —  Chuto: ', bold: false }, { text: tChuto, bold: true })
     if (tBatea) vehSegs.push({ text: '  —  Batea: ', bold: false }, { text: tBatea, bold: true })

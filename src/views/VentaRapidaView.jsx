@@ -77,7 +77,7 @@ function ModalVentaExitosa({ data, onClose, config }) {
         body: JSON.stringify({ ids: [data.clienteId].filter(Boolean) }),
       }).then(r => r.ok ? r.json() : []),
       supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', data.vendedorId).single(),
-      data.transportistaId ? supabase.from('transportistas').select('id, nombre, rif, telefono, zona_cobertura, vehiculo, placa_chuto, placa_batea, color').eq('id', data.transportistaId).single() : Promise.resolve({ data: null }),
+      data.transportistaId ? supabase.from('transportistas').select('id, nombre, rif, telefono, vehiculo, placa_chuto, placa_batea, color').eq('id', data.transportistaId).single() : Promise.resolve({ data: null }),
     ])
     if (itemsRes.error) throw itemsRes.error
     const despachoObj = {
@@ -1506,7 +1506,6 @@ function TransportistaFormCompact({ onGuardar, onCancelar, cargando }) {
   const [nombre, setNombre] = useState('')
   const [color, setColor] = useState('')
   const [vehiculo, setVehiculo] = useState('')
-  const [placa, setPlaca] = useState('')
   const [placaChuto, setPlacaChuto] = useState('')
   const [placaBatea, setPlacaBatea] = useState('')
   const [error, setError] = useState('')
@@ -1519,7 +1518,6 @@ function TransportistaFormCompact({ onGuardar, onCancelar, cargando }) {
       rif: formatearRifVR(rifPrefijo, rifNumero),
       color,
       vehiculo,
-      zona_cobertura: placa,
       placa_chuto: placaChuto,
       placa_batea: placaBatea,
     })
@@ -1574,11 +1572,6 @@ function TransportistaFormCompact({ onGuardar, onCancelar, cargando }) {
           <label className="text-xs font-medium text-slate-600">Vehículo</label>
           <input value={vehiculo} onChange={e => setVehiculo(e.target.value)}
             placeholder="Ej: Mack Granite 2020" className={inputCls} disabled={cargando} />
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-slate-600">Placa</label>
-          <input value={placa} onChange={e => setPlaca(e.target.value.toUpperCase())}
-            placeholder="Ej: AB123CD" className={inputCls} disabled={cargando} />
         </div>
         <div className="space-y-1">
           <label className="text-xs font-medium text-slate-600">Placa chuto</label>
