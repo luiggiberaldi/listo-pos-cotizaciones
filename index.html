@@ -32,11 +32,46 @@
     <div id="splash" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#f0f9ff 0%,#ecfdf5 100%)">
       <div style="display:flex;flex-direction:column;align-items:center;gap:1rem">
         <img src="/logo-dark.png" alt="Construacero" style="height:96px;width:auto;opacity:.9" />
-        <div style="width:32px;height:32px;border:3px solid #7dd3fc;border-top-color:#0ea5e9;border-radius:50%;animation:sp .7s linear infinite"></div>
+        <div id="splash-spinner" style="width:32px;height:32px;border:3px solid #7dd3fc;border-top-color:#0ea5e9;border-radius:50%;animation:sp .7s linear infinite"></div>
+        <div id="chunk-error" style="display:none;text-align:center;margin-top:1rem">
+          <p style="font-family:Inter,sans-serif;font-size:14px;color:#64748b;margin-bottom:12px">Nueva versión disponible</p>
+          <button onclick="clearAndReload()" style="font-family:Inter,sans-serif;font-size:14px;font-weight:700;padding:10px 24px;background:#0ea5e9;color:#fff;border:none;border-radius:12px;cursor:pointer">Actualizar ahora</button>
+        </div>
       </div>
     </div>
     <style>#splash{transition:opacity .2s}@keyframes sp{to{transform:rotate(360deg)}}</style>
   </div>
+  <script>
+    // Detectar errores de carga de módulos (chunks con hash viejo después de un deploy)
+    window.addEventListener('error', function(e) {
+      if (e.target && (e.target.tagName === 'SCRIPT' || e.target.tagName === 'LINK')) {
+        showChunkError();
+      }
+    }, true);
+    window.__viteChunkError = false;
+    window.addEventListener('vite:preloadError', function() { showChunkError(); });
+    function showChunkError() {
+      if (window.__viteChunkError) return;
+      window.__viteChunkError = true;
+      var el = document.getElementById('chunk-error');
+      var sp = document.getElementById('splash-spinner');
+      if (el) el.style.display = 'block';
+      if (sp) sp.style.display = 'none';
+    }
+    function clearAndReload() {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(regs) {
+          regs.forEach(function(r) { r.unregister(); });
+        });
+      }
+      if (window.caches) {
+        caches.keys().then(function(names) {
+          names.forEach(function(n) { caches.delete(n); });
+        });
+      }
+      setTimeout(function() { location.reload(true); }, 300);
+    }
+  </script>
   <script type="module" src="/src/main.jsx"></script>
 </body>
 

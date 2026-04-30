@@ -867,7 +867,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
       </div>
 
       {/* ── Contenido por paso ─────────────────────────────────────────── */}
-      <div className={`p-3 sm:p-4 md:p-5 lg:p-6 w-full ${paso === 2 ? 'flex-1 min-h-0 flex flex-col' : 'space-y-3 sm:space-y-4 md:space-y-5'}`}>
+      <div className={`p-3 sm:p-4 md:p-5 lg:p-6 w-full ${paso === 2 ? 'flex-1 min-h-0 flex flex-col' : 'space-y-3 sm:space-y-4 md:space-y-5 pb-24 lg:pb-6'}`}>
 
         {/* Error general */}
         {errorGeneral && (
