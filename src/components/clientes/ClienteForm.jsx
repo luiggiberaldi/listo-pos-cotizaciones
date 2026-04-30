@@ -27,7 +27,7 @@ const inputClass = `
   bg-slate-50 border-slate-200
   focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary
   placeholder:text-slate-400
-  transition-colors
+  transition-colors relative
 `
 
 // ─── Valores iniciales vacíos ─────────────────────────────────────────────────

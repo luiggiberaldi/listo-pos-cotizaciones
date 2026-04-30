@@ -946,7 +946,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
 
               {/* Crear cliente completo (formulario inline) */}
               {showCrearCliente && (
-                <div className="bg-emerald-50/50 border border-emerald-200 rounded-2xl p-4">
+                <div className="bg-emerald-50/50 border border-emerald-200 rounded-2xl p-4 relative z-[1]">
                   <h4 className="font-bold text-emerald-800 text-sm flex items-center gap-1.5 mb-3">
                     <UserPlus size={14} /> Registrar nuevo cliente
                   </h4>

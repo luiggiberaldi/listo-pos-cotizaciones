@@ -51,7 +51,7 @@ export default function CustomSelect({
     }
   }, [abierto])
 
-  // Calcular dirección del dropdown y hacer scroll + focus
+  // Calcular dirección del dropdown
   useEffect(() => {
     if (!abierto || !ref.current) return
 
@@ -61,14 +61,10 @@ export default function CustomSelect({
     // Si hay poco espacio abajo (menos de 220px), abrir arriba
     setOpenUp(spaceBelow < 220)
 
-    // Scroll el trigger a la vista en móvil
-    requestAnimationFrame(() => {
-      ref.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-      // Focus search input manualmente (autoFocus no siempre funciona en móvil)
-      if (showSearch && searchRef.current) {
-        setTimeout(() => searchRef.current?.focus(), 50)
-      }
-    })
+    // Focus search input (sin scrollIntoView para evitar bugs de touch en Android)
+    if (showSearch && searchRef.current) {
+      requestAnimationFrame(() => searchRef.current?.focus())
+    }
   }, [abierto, showSearch])
 
   const seleccionada = options.find(o => o.value === value)
@@ -88,8 +84,7 @@ export default function CustomSelect({
   function elegir(val) {
     onChange(val)
     setBusqueda('')
-    // Delay para evitar touch pass-through en Android (el tap "atraviesa" al elemento de abajo)
-    requestAnimationFrame(() => setAbierto(false))
+    setAbierto(false)
   }
 
   function limpiar(e) {
