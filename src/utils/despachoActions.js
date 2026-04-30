@@ -51,6 +51,14 @@ export const ACCIONES = {
       confirmText: 'Sí, anular',
       variant: 'danger',
     },
+    vendedor: {
+      label: 'Cancelar despacho',
+      confirmTitle: '¿Cancelar este despacho?',
+      confirmMessage: 'Se cancelará tu solicitud de despacho y se restaurará el stock.',
+      confirmDetails: 'Solo puedes cancelar despachos que aún estén pendientes de aprobación.',
+      confirmText: 'Sí, cancelar',
+      variant: 'danger',
+    },
   },
   reciclar: {
     supervisor: {
