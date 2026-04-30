@@ -493,6 +493,17 @@ export default function AppLayout() {
           )}
         </nav>
 
+        {/* Cambiar usuario — solo móvil, anclado al fondo */}
+        <div className="md:hidden relative z-10 mt-auto shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+          <button
+            onClick={() => { cerrarMenu(); handleSwitchOut() }}
+            className="w-full flex items-center gap-3 px-4 py-3.5 text-white/50 hover:text-white/80 hover:bg-white/5 transition-colors active:scale-[0.98]"
+          >
+            <ArrowRightLeft size={18} />
+            <span className="text-sm font-semibold">Cambiar usuario</span>
+          </button>
+        </div>
+
         {/* Usuario — toca para cambiar operador (solo desktop) */}
         <div className="relative z-10 p-2 pb-2 shrink-0 hidden md:block" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           <button
