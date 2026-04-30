@@ -2,7 +2,7 @@
 // Buscador de productos con selector de precios, tarjetas e ítems de línea
 import { useState } from 'react'
 import {
-  Search, X, Plus, Minus, Package, Camera, Trash2, ChevronDown,
+  Search, X, Plus, Minus, Package, Camera, Trash2,
 } from 'lucide-react'
 import { useProductSearch } from '../../hooks/useProductSearch'
 import { useInventario, useCategorias } from '../../hooks/useInventario'
@@ -185,13 +185,10 @@ export function ItemCard({ item, idx, onChange, onDelete, tasa = 0, precios }) {
 }
 
 // ─── Buscador de productos ────────────────────────────────────────────────────
-const PRODUCTOS_POR_PAGINA = 30
-
 export default function BuscadorProductos({ onAgregar, onScanClick, itemsAgregados = [], tasa = 0, onCambiarCantidad, onEliminarItem }) {
   const [texto, setTexto] = useState('')
   const [catActiva, setCatActiva] = useState('')
   const { perfil } = useAuthStore()
-  const [visibleCount, setVisibleCount] = useState(PRODUCTOS_POR_PAGINA)
   const [editQty, setEditQty] = useState(null) // { productoId, nombre, cantidad, stock }
   const { data: inventarioData, isLoading } = useInventario({ pageSize: 1000 })
   const todosProductos = inventarioData?.productos ?? inventarioData ?? []
@@ -209,11 +206,8 @@ export default function BuscadorProductos({ onAgregar, onScanClick, itemsAgregad
     onAgregar(p)
   }
 
-  const visibles = filtrados.slice(0, visibleCount)
-  const hasMore = filtrados.length > visibleCount
-
-  function cambiarTexto(val) { setTexto(val); setVisibleCount(PRODUCTOS_POR_PAGINA) }
-  function cambiarCat(val)   { setCatActiva(val); setVisibleCount(PRODUCTOS_POR_PAGINA) }
+  function cambiarTexto(val) { setTexto(val) }
+  function cambiarCat(val)   { setCatActiva(val) }
 
   return (
     <div className="space-y-3">
@@ -263,10 +257,10 @@ export default function BuscadorProductos({ onAgregar, onScanClick, itemsAgregad
       )}
 
       {/* Productos: grid unificado (mismo estilo que VentaRapida) */}
-      {!isLoading && visibles.length > 0 && (
+      {!isLoading && filtrados.length > 0 && (
         <>
           <div className="grid grid-cols-3 gap-1 md:grid-cols-5 lg:grid-cols-6 md:gap-1.5">
-            {visibles.map(p => {
+            {filtrados.map(p => {
               const itemInCart = itemsMap[p.id]
               const comprometido = stockComprometido[p.id] || 0
               return (
@@ -291,16 +285,6 @@ export default function BuscadorProductos({ onAgregar, onScanClick, itemsAgregad
             <p className="text-[11px] text-slate-400 text-center">
               {filtrados.length} producto{filtrados.length !== 1 ? 's' : ''}
             </p>
-            {hasMore && (
-              <div className="flex justify-center">
-                <button type="button"
-                  onClick={() => setVisibleCount(prev => prev + PRODUCTOS_POR_PAGINA)}
-                  className="flex items-center gap-1.5 px-5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-500 hover:border-primary hover:text-primary transition-all active:scale-95 shadow-sm">
-                  <ChevronDown size={14} />
-                  Cargar más ({filtrados.length - visibleCount} restantes)
-                </button>
-              </div>
-            )}
           </div>
         </>
       )}
