@@ -1,9 +1,9 @@
 // src/views/CotizacionesView.jsx
 // Vista principal: lista de cotizaciones + builder integrado
 // El builder reemplaza la lista in-page (sin navegación adicional)
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { FileText, Plus, RefreshCw, AlertTriangle, PackageCheck, Loader2, X, AlertCircle, LayoutGrid, List, ChevronDown, Truck, Receipt, MessageSquare } from 'lucide-react'
+import { FileText, Plus, RefreshCw, AlertTriangle, PackageCheck, Loader2, X, AlertCircle, LayoutGrid, List, ChevronDown, Truck, Receipt, MessageSquare, Filter } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import supabase from '../services/supabase/client'
 import { useTasaCambio } from '../hooks/useTasaCambio'
@@ -51,6 +51,42 @@ const ESTADOS_FILTRO_ADMIN = [
   { valor: 'entregada', label: 'Entregados' },
   { valor: 'anulada',   label: 'Anulados' },
 ]
+
+function EstadoDropdownCot({ filtros, value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  const activeLabel = filtros.find(f => f.valor === value)?.label || 'Todas'
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  return (
+    <div ref={ref} className="relative">
+      <button onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors bg-primary text-white border-primary">
+        <Filter size={12} />
+        {activeLabel}
+        <ChevronDown size={12} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute left-0 mt-1 w-44 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-50">
+          {filtros.map(({ valor, label }) => (
+            <button key={valor} onClick={() => { onChange(valor); setOpen(false) }}
+              className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                value === valor ? 'bg-primary/10 text-primary font-semibold' : 'text-slate-700 hover:bg-slate-50'
+              }`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function SkeletonCotizaciones() {
   return (
@@ -590,7 +626,10 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
       <OnboardingSequence rol={perfil?.rol} page="/cotizaciones" />
 
       {/* Filtros: fila 1 — tabs de estado (scroll horizontal) */}
-      <div className="overflow-x-auto scrollbar-hide -mx-1 px-1">
+      <div className="md:hidden">
+        <EstadoDropdownCot filtros={esAdministracion ? ESTADOS_FILTRO_ADMIN : ESTADOS_FILTRO} value={estadoFiltro} onChange={setEstadoFiltro} />
+      </div>
+      <div className="hidden md:block overflow-x-auto scrollbar-hide -mx-1 px-1">
         <div className="flex items-center gap-1.5 w-max pb-0.5">
           {(esAdministracion ? ESTADOS_FILTRO_ADMIN : ESTADOS_FILTRO).map(({ valor, label }) => (
             <button key={valor} onClick={() => setEstadoFiltro(valor)}
