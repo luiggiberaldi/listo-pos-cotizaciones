@@ -406,12 +406,21 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     const tNom = transportista.nombre || ''
     const tCI = transportista.rif || ''
     const tColor = transportista.color || ''
-    leftLines.push({ text: `Chofer: ${tNom}  —  CI: ${tCI}  —  Color: ${tColor}`, bold: false, size: 7.5 })
+    leftLines.push({ segments: [
+      { text: 'Chofer: ', bold: false }, { text: tNom, bold: true },
+      { text: '  —  CI: ', bold: false }, { text: tCI, bold: true },
+      { text: '  —  Color: ', bold: false }, { text: tColor, bold: true },
+    ], size: 8 })
     const tVeh = transportista.vehiculo || ''
     const tPlaca = transportista.zona_cobertura || ''
     const tChuto = transportista.placa_chuto || ''
     const tBatea = transportista.placa_batea || ''
-    leftLines.push({ text: `Vehículo: ${tVeh}  —  Placa: ${tPlaca}  —  Chuto: ${tChuto}  —  Batea: ${tBatea}`, bold: false, size: 7.5 })
+    leftLines.push({ segments: [
+      { text: 'Vehículo: ', bold: false }, { text: tVeh, bold: true },
+      { text: '  —  Placa: ', bold: false }, { text: tPlaca, bold: true },
+      { text: '  —  Chuto: ', bold: false }, { text: tChuto, bold: true },
+      { text: '  —  Batea: ', bold: false }, { text: tBatea, bold: true },
+    ], size: 8 })
   }
 
   const numComboRows = Math.max(leftLines.length, rightItems.length)
@@ -429,16 +438,25 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     doc.rect(MARGIN, ry, comboLeftW, dataRowH, 'S')
     if (r < leftLines.length) {
       const line = leftLines[r]
-      doc.setFont('helvetica', line.bold ? 'bold' : 'normal')
       doc.setFontSize(line.size)
       doc.setTextColor(...C_DARK)
-      const maxTW = comboLeftW - 6
-      let txt = line.text
-      if (doc.getTextWidth(txt) > maxTW) {
-        while (txt.length > 1 && doc.getTextWidth(txt + '…') > maxTW) txt = txt.slice(0, -1)
-        txt += '…'
+      if (line.segments) {
+        let cx = MARGIN + 3
+        for (const seg of line.segments) {
+          doc.setFont('helvetica', seg.bold ? 'bold' : 'normal')
+          doc.text(seg.text, cx, ry + dataRowH / 2 + 1)
+          cx += doc.getTextWidth(seg.text)
+        }
+      } else {
+        doc.setFont('helvetica', line.bold ? 'bold' : 'normal')
+        const maxTW = comboLeftW - 6
+        let txt = line.text
+        if (doc.getTextWidth(txt) > maxTW) {
+          while (txt.length > 1 && doc.getTextWidth(txt + '…') > maxTW) txt = txt.slice(0, -1)
+          txt += '…'
+        }
+        doc.text(txt, MARGIN + 3, ry + dataRowH / 2 + 1)
       }
-      doc.text(txt, MARGIN + 3, ry + dataRowH / 2 + 1)
     }
 
     // Celda derecha
