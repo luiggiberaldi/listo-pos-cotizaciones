@@ -4559,7 +4559,7 @@ Responde en español, de forma clara y accionable. Usa formato markdown con head
 // POST /api/parse-material-text — Parsear texto WhatsApp → productos del inventario
 // ══════════════════════════════════════════════════════════════════════════════
 async function handleParseMaterialText(request, env) {
-  if (!env.GROQ_KEYS_A) return jsonError('Servicio AI no configurado', 503, request)
+  if (!env.AI) return jsonError('Servicio AI no configurado', 503, request)
   const user = await verifyAuth(request, env)
   if (!user?.id) return jsonError('No autenticado', 401, request)
 
@@ -4612,10 +4612,15 @@ RESPONDE ÚNICAMENTE en JSON válido con este formato (sin markdown, sin explica
 
   let rawAiText = ''
   try {
-    rawAiText = await groqFetch(env, 'A', [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: text.trim() },
-    ], { maxTokens: 4000, temperature: 0.1 })
+    const aiResponse = await env.AI.run('@cf/meta/llama-3.1-70b-instruct', {
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: text.trim() },
+      ],
+      max_tokens: 4000,
+      temperature: 0.1,
+    })
+    rawAiText = aiResponse?.response || ''
   } catch (e) {
     return jsonError(`Error AI: ${e.message}`, 500, request)
   }
