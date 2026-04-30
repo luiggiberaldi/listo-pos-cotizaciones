@@ -1013,17 +1013,18 @@ function Step1Productos({
             const itemInCart = added ? items.find(it => it.productoId === p.id) : null
             const stock = Number(p.stock_actual) || 0
             const sinStock = stock <= 0
+            const sinPrecio = Number(p.precio_usd) <= 0
             const tieneMultiprecios = p.precio_2 != null || p.precio_3 != null
             return (
               <div key={p.id}
                 className={`relative bg-white rounded-xl border px-1.5 py-1.5 flex flex-col items-center text-center transition-all active:scale-95 ${
-                  sinStock
+                  sinStock || sinPrecio
                     ? 'opacity-40 cursor-not-allowed border-slate-100'
                     : added
                       ? 'border-emerald-300 bg-emerald-50/50 shadow-sm shadow-emerald-100/80'
                       : 'border-slate-200 hover:border-primary/50'
                 }`}
-                onClick={() => !added && !sinStock && agregarProducto(p)}
+                onClick={() => !added && !sinStock && !sinPrecio && agregarProducto(p)}
               >
                 {added && (
                   <div className="absolute top-0 left-0 right-0 h-1 rounded-t-xl bg-emerald-400" />
@@ -1043,9 +1044,9 @@ function Step1Productos({
                   <p className="text-[8px] text-slate-400 leading-tight">{fmtBs(usdToBs(p.precio_usd, tasa))}</p>
                 )}
                 <p className={`text-[8px] font-medium mt-0.5 ${
-                  sinStock ? 'text-red-500' : stock <= 5 ? 'text-amber-500' : 'text-emerald-500'
+                  sinPrecio ? 'text-orange-500' : sinStock ? 'text-red-500' : stock <= 5 ? 'text-amber-500' : 'text-emerald-500'
                 }`}>
-                  {sinStock ? 'Agotado' : `${stock} disp.`}
+                  {sinPrecio ? 'Sin precio' : sinStock ? 'Agotado' : `${stock} disp.`}
                 </p>
                 {/* Stepper para productos agregados */}
                 {added && itemInCart && (
@@ -1087,13 +1088,14 @@ function Step1Productos({
             const added = idsAgregados.has(p.id)
             const stock = Number(p.stock_actual) || 0
             const sinStock = stock <= 0
+            const sinPrecio = Number(p.precio_usd) <= 0
             const tieneMultiprecios = p.precio_2 != null || p.precio_3 != null
             return (
               <button key={p.id} type="button"
-                onClick={() => !added && !sinStock && agregarProducto(p)}
-                disabled={sinStock}
+                onClick={() => !added && !sinStock && !sinPrecio && agregarProducto(p)}
+                disabled={sinStock || sinPrecio}
                 className={`relative bg-white rounded-xl border p-1.5 flex flex-col items-center text-center transition-all active:scale-95 hover:shadow-sm ${
-                  sinStock
+                  sinStock || sinPrecio
                     ? 'opacity-40 cursor-not-allowed border-slate-100'
                     : added
                       ? 'border-emerald-300 shadow-sm shadow-emerald-100/80'
@@ -1114,9 +1116,9 @@ function Step1Productos({
                   <p className="text-[9px] text-slate-400 leading-tight">{fmtBs(usdToBs(p.precio_usd, tasa))}</p>
                 )}
                 <p className={`text-[9px] font-medium mt-0.5 ${
-                  sinStock ? 'text-red-500' : stock <= 5 ? 'text-amber-500' : 'text-emerald-500'
+                  sinPrecio ? 'text-orange-500' : sinStock ? 'text-red-500' : stock <= 5 ? 'text-amber-500' : 'text-emerald-500'
                 }`}>
-                  {sinStock ? 'Agotado' : `${stock} disp.`}
+                  {sinPrecio ? 'Sin precio' : sinStock ? 'Agotado' : `${stock} disp.`}
                 </p>
               </button>
             )
