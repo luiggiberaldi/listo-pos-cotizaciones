@@ -432,15 +432,22 @@ export default function AppLayout() {
         <div className="absolute bottom-0 left-0 w-48 h-48 rounded-full pointer-events-none -mb-16 -ml-16 opacity-20"
           style={{ background: 'radial-gradient(circle, #B8860B 0%, transparent 70%)', filter: 'blur(30px)' }} />
 
-        {/* Botón cerrar — solo móvil */}
-        <div className="md:hidden flex justify-end p-3 pb-0 relative z-10">
-          <button onClick={cerrarMenu} className="p-2.5 rounded-xl bg-white/10 border border-white/20 text-white hover:bg-white/20 transition-colors">
-            <X size={22} />
+        {/* Header móvil: perfil + cerrar */}
+        <div className="md:hidden relative z-10 px-4 py-3 flex items-center gap-3 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+          <LoginAvatar user={perfil} size="sm" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-white truncate leading-tight">
+              {perfil?.nombre ?? 'Usuario'}
+            </p>
+            <BadgeRol rol={perfil?.rol} />
+          </div>
+          <button onClick={cerrarMenu} className="p-2 rounded-xl bg-white/10 border border-white/20 text-white hover:bg-white/20 transition-colors shrink-0">
+            <X size={20} />
           </button>
         </div>
 
-        {/* Logo + botón colapsar */}
-        <div className="relative z-10 px-4 py-2 flex flex-col items-center shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        {/* Logo + botón colapsar — solo desktop */}
+        <div className="relative z-10 px-4 py-2 hidden md:flex flex-col items-center shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
 
           <img src="/logo.png" alt="Construacero Carabobo"
             className={`object-contain transition-all duration-300 select-none pointer-events-none ${
@@ -450,7 +457,7 @@ export default function AppLayout() {
             draggable={false}
           />
           {!collapsed && (
-            <div className="mt-1.5 md:mt-2 hidden md:flex items-center gap-2 w-full justify-center">
+            <div className="mt-1.5 md:mt-2 flex items-center gap-2 w-full justify-center">
               <div className="h-px flex-1 opacity-20" style={{ background: 'linear-gradient(to right, transparent, #B8860B)' }} />
               <span className="text-[9px] font-bold tracking-[0.25em] uppercase whitespace-nowrap" style={{ color: 'rgba(184,134,11,0.7)' }}>
                 Sistema de Gestión
@@ -486,8 +493,8 @@ export default function AppLayout() {
           )}
         </nav>
 
-        {/* Usuario — toca para cambiar operador */}
-        <div className="relative z-10 p-2 pb-20 md:pb-2 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+        {/* Usuario — toca para cambiar operador (solo desktop) */}
+        <div className="relative z-10 p-2 pb-2 shrink-0 hidden md:block" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           <button
             onClick={handleSwitchOut}
             className={`flex items-center ${collapsed ? 'justify-center p-1.5 mx-auto' : 'w-full gap-3 p-3'} rounded-2xl transition-all active:scale-[0.98] group`}
