@@ -158,6 +158,11 @@ export default {
       return handleCrearDespacho(request, env);
     }
 
+    // ── API: parsear texto de WhatsApp → materiales ─────────────────────────
+    if (url.pathname === '/api/parse-material-text' && request.method === 'POST') {
+      return handleParseMaterialText(request, env);
+    }
+
     // ── API: venta rápida (cotización + despacho atómico) ──────────────────
     if (url.pathname === '/api/ventas-rapidas/crear' && request.method === 'POST') {
       return handleVentaRapida(request, env);
@@ -4547,4 +4552,109 @@ Responde en español, de forma clara y accionable. Usa formato markdown con head
   } catch (e) {
     return jsonError(`Error en análisis AI: ${e.message}`, 500, request)
   }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// POST /api/parse-material-text — Parsear texto WhatsApp → productos del inventario
+// ══════════════════════════════════════════════════════════════════════════════
+async function handleParseMaterialText(request, env) {
+  const user = await verifyAuth(request, env)
+  if (!user?.id) return jsonError('No autenticado', 401, request)
+
+  let body
+  try { body = await request.json() } catch { return jsonError('Body inválido', 400, request) }
+  const { text } = body
+  if (!text || typeof text !== 'string' || text.trim().length < 3) {
+    return jsonError('Texto vacío o muy corto', 400, request)
+  }
+
+  const h = {
+    apikey: env.SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    'Content-Type': 'application/json',
+  }
+
+  // 1. Obtener catálogo de productos (nombre, codigo) para que la AI haga matching directo
+  const prodRes = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/productos?activo=eq.true&select=id,nombre,codigo,unidad,precio_usd,precio_2,precio_3,stock_actual,stock_minimo,imagen_url&order=nombre.asc`,
+    { headers: h }
+  )
+  if (!prodRes.ok) return jsonError('Error obteniendo productos', 500, request)
+  const productos = await prodRes.json()
+
+  // 2. Construir catálogo compacto para el prompt (id|nombre|codigo)
+  const catalogo = productos.map(p => `${p.id}|${p.nombre}|${p.codigo || ''}`).join('\n')
+
+  // 3. Usar AI para parsear texto Y hacer matching contra catálogo
+  const systemPrompt = `Eres un asistente de ferretería/materiales de construcción. Tu trabajo es:
+1. Extraer materiales y cantidades de un texto (mensaje de WhatsApp, lista, nota).
+2. Hacer matching inteligente contra el catálogo del inventario.
+
+REGLAS DE MATCHING:
+- Usa conocimiento de ferretería: "cabilla 1/2" = "CABILLA 1/2 LISA" o "BARRA LISA 1/2"
+- Las medidas pueden estar en diferentes formatos: 1/2, 1/2", 1/2 pulgada, etc.
+- Sinónimos comunes: cemento=saco de cemento, pega=pegamento, tubo=tubería, codo=codo PVC, etc.
+- Si hay varias coincidencias posibles, devuelve hasta 3 ordenadas por relevancia.
+- La cantidad por defecto es 1 si no se especifica.
+- Ignora texto que claramente no son materiales (saludos, preguntas, emojis).
+
+CATÁLOGO DE PRODUCTOS (id|nombre|codigo):
+${catalogo}
+
+RESPONDE ÚNICAMENTE en JSON válido con este formato (sin markdown, sin explicaciones):
+{"items":[{"descripcionOriginal":"texto exacto del item","cantidad":N,"confianza":0.0-1.0,"matchIds":["id1","id2"]}]}
+
+- confianza: 1.0 = match exacto, 0.8 = muy probable, 0.5 = posible, 0.3 = poco probable
+- matchIds: array de IDs del catálogo (máx 3), ordenados por relevancia. Vacío si no hay match.
+- Si el texto no contiene materiales, devuelve {"items":[]}`
+
+  let rawAiText = ''
+  try {
+    rawAiText = await groqFetch(env, 'A', [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: text.trim() },
+    ], { maxTokens: 4000, temperature: 0.1 })
+  } catch (e) {
+    return jsonError(`Error AI: ${e.message}`, 500, request)
+  }
+
+  // 4. Parsear respuesta AI
+  let parsed
+  try {
+    // Limpiar posible markdown wrapping
+    let clean = rawAiText.trim()
+    if (clean.startsWith('```')) clean = clean.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
+    parsed = JSON.parse(clean)
+  } catch {
+    return json({ items: [], rawAiText, error: 'No se pudo parsear respuesta AI' }, 200, request)
+  }
+
+  if (!parsed?.items?.length) {
+    return json({ items: [], rawAiText }, 200, request)
+  }
+
+  // 5. Mapear matchIds a productos completos
+  const prodMap = new Map(productos.map(p => [p.id, p]))
+  const items = parsed.items.map(item => ({
+    descripcionOriginal: item.descripcionOriginal || '',
+    cantidad: Math.max(1, Number(item.cantidad) || 1),
+    confianza: Math.min(1, Math.max(0, Number(item.confianza) || 0.5)),
+    matches: (item.matchIds || [])
+      .map(id => prodMap.get(id))
+      .filter(Boolean)
+      .map(p => ({
+        id: p.id,
+        codigo: p.codigo,
+        nombre: p.nombre,
+        unidad: p.unidad,
+        precio_usd: Number(p.precio_usd),
+        precio_2: p.precio_2 ? Number(p.precio_2) : null,
+        precio_3: p.precio_3 ? Number(p.precio_3) : null,
+        stock_actual: Number(p.stock_actual),
+        stock_minimo: Number(p.stock_minimo),
+        imagen_url: p.imagen_url,
+      })),
+  }))
+
+  return json({ items, rawAiText }, 200, request)
 }

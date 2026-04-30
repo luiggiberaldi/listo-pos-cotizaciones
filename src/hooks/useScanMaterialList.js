@@ -1,22 +1,18 @@
 import { useState } from 'react'
 import supabase from '../services/supabase/client'
-
-const WORKER_BASE = 'https://listo-pos-cotizaciones-s8kixx.camelai.app'
+import { apiUrl } from '../services/apiBase'
+import useAuthStore from '../store/useAuthStore'
 
 export function useScanMaterialList() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [results, setResults] = useState(null)
 
-  async function getToken() {
+  async function fetchWithTimeout(url, body, timeoutMs = 90000) {
     const { data: { session } } = await supabase.auth.getSession()
     const token = session?.access_token
     if (!token) throw new Error('No hay sesión activa')
-    return token
-  }
-
-  async function fetchWithTimeout(url, body, timeoutMs = 90000) {
-    const token = await getToken()
+    const perfil = useAuthStore.getState().perfil
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), timeoutMs)
     const res = await fetch(url, {
@@ -24,6 +20,7 @@ export function useScanMaterialList() {
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
+        ...(perfil?.id ? { 'X-Operator-Id': perfil.id } : {}),
       },
       body: JSON.stringify(body),
       signal: controller.signal,
@@ -40,7 +37,7 @@ export function useScanMaterialList() {
     setResults(null)
     try {
       const data = await fetchWithTimeout(
-        `${WORKER_BASE}/api/scan-material-list`,
+        apiUrl('/api/scan-material-list'),
         { image: base64, mimeType }
       )
       setResults(data)
@@ -59,7 +56,7 @@ export function useScanMaterialList() {
     setResults(null)
     try {
       const data = await fetchWithTimeout(
-        `${WORKER_BASE}/api/parse-material-text`,
+        apiUrl('/api/parse-material-text'),
         { text }
       )
       setResults(data)
