@@ -345,7 +345,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(14)
   doc.setTextColor(...C_WHITE)
-  doc.text('Total', totX + 4, ty + 5)
+  doc.text('Total:', totX + 4, ty + 5)
   doc.text(fmtTotal(total, monedaPDF, tasaEfectivaTot, factorBcv), totX + totW - 4, ty + 5, { align: 'right' })
 
   // (Total en Bs omitido en modo USD — solo se muestra en mixto/bs)

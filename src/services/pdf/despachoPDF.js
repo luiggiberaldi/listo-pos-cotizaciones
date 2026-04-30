@@ -512,7 +512,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(13)
   doc.setTextColor(...C_WHITE)
-  doc.text('Total', MARGIN + comboLeftW + 3, totTopY + 7)
+  doc.text('Total:', MARGIN + comboLeftW + 3, totTopY + 7)
   doc.text(fmtTotal(totalFinal, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 3, totTopY + 7, { align: 'right' })
 
   // ══════════════════════════════════════════════════════════════════════════
