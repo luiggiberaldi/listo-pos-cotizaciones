@@ -51,20 +51,21 @@ export function useDashboardMetrics() {
             .select('total_usd')
             .in('estado', ['despachada', 'entregada'])
             .gte('creado_en', inicioSemana),
-          // Inventario bajo stock
+          // Inventario bajo stock (traemos los que tienen mínimo definido y filtramos en cliente)
           supabase
             .from('productos')
             .select('id, nombre, stock_actual, stock_minimo, unidad')
-            .filter('stock_actual', 'lt', 'stock_minimo')
+            .gt('stock_minimo', 0)
+            .eq('activo', true)
             .order('stock_actual', { ascending: true })
-            .limit(10),
+            .limit(50),
         ])
 
         result.despachosPendientes = pendientes.count ?? 0
         result.ventasDia = (ventasHoy.data ?? []).reduce((s, d) => s + Number(d.total_usd || 0), 0)
         result.ventasSemana = (ventasSemana.data ?? []).reduce((s, d) => s + Number(d.total_usd || 0), 0)
 
-        const itemsBajo = stockBajo.data ?? []
+        const itemsBajo = (stockBajo.data ?? []).filter(p => p.stock_actual <= p.stock_minimo)
         result.stockBajoCount = itemsBajo.length
         result.stockBajoItems = itemsBajo.slice(0, 5)
       }
