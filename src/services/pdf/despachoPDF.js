@@ -513,7 +513,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.setFontSize(13)
   doc.setTextColor(...C_WHITE)
   doc.text('TOTAL', MARGIN + 4, totTopY + 7)
-  doc.text(fmtTotal(totalFinal, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, totTopY + 7, { align: 'right' })
+  doc.text(`Total:  ${fmtTotal(totalFinal, monedaPDF, tasa, factorBcv)}`, MARGIN + CONTENT_W - 4, totTopY + 7, { align: 'right' })
 
   // ══════════════════════════════════════════════════════════════════════════
   // 5. CONDICIONES (izq) + CUENTAS BANCARIAS (der) — encima del bloque combinado

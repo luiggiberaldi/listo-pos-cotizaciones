@@ -433,7 +433,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   doc.setFontSize(13)
   doc.setTextColor(...C_WHITE)
   doc.text('TOTAL', MARGIN + 4, totTopY + 7)
-  doc.text(fmtTotal(totalFinal, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, totTopY + 7, { align: 'right' })
+  doc.text(`Total:  ${fmtTotal(totalFinal, monedaPDF, tasa, factorBcv)}`, MARGIN + CONTENT_W - 4, totTopY + 7, { align: 'right' })
 
   // ══════════════════════════════════════════════════════════════════════════
   // 5. DATOS DEL CHOFER Y VEHÍCULO — fijo al fondo (footer)
