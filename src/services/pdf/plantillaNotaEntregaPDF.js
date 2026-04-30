@@ -170,17 +170,6 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   })
   y += 9
 
-  // Filas vacías para llenar a mano
-  const BLANK_ROW_H = 6.5
-  const BLANK_ROWS = 11
-  doc.setLineWidth(0.2)
-  doc.setDrawColor(200, 200, 200)
-  for (let i = 0; i < BLANK_ROWS; i++) {
-    doc.rect(MARGIN, y, CONTENT_W, BLANK_ROW_H, 'S')
-    COLS.forEach(col => { doc.line(col.x, y, col.x, y + BLANK_ROW_H) })
-    y += BLANK_ROW_H
-  }
-
   // ══════════════════════════════════════════════════════════════════════════
   // 4. CONDICIONES (izq) + CUENTAS BANCARIAS (der)
   // ══════════════════════════════════════════════════════════════════════════
@@ -203,6 +192,18 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   const totalBarH = 10
   const comboTop = choferStartY - 3 - totalBarH - comboRows * dataRowH
   const condTopY = comboTop - 5 - condBoxH
+
+  // Filas vacías para llenar a mano (calculadas para no chocar con condiciones)
+  const BLANK_ROW_H = 6.5
+  const availableForRows = condTopY - y - 3
+  const BLANK_ROWS = Math.max(1, Math.floor(availableForRows / BLANK_ROW_H))
+  doc.setLineWidth(0.2)
+  doc.setDrawColor(200, 200, 200)
+  for (let i = 0; i < BLANK_ROWS; i++) {
+    doc.rect(MARGIN, y, CONTENT_W, BLANK_ROW_H, 'S')
+    COLS.forEach(col => { doc.line(col.x, y, col.x, y + BLANK_ROW_H) })
+    y += BLANK_ROW_H
+  }
 
   // Condiciones (izquierda)
   doc.setFillColor(245, 245, 245)
