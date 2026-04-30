@@ -60,9 +60,6 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
     e.preventDefault()
     if (!campos.nombre.trim()) { setError('El nombre es obligatorio'); return }
     if (!campos.rif.trim()) { setError('La cédula / RIF es obligatoria'); return }
-    if (!campos.color.trim()) { setError('El color es obligatorio'); return }
-    if (!campos.vehiculo.trim()) { setError('El vehículo es obligatorio'); return }
-    if (!campos.zona_cobertura.trim()) { setError('La placa es obligatoria'); return }
     onGuardar({ ...campos, rif: formatearRifTransp(rifPrefijo, campos.rif) })
   }
 
