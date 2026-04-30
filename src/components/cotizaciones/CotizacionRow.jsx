@@ -11,9 +11,9 @@ export default memo(function CotizacionRow({ cotizacion, onEditar, onVer, tasa =
   const esSupervisor = perfil?.rol === 'supervisor'
   const esBorrador = cotizacion.estado === 'borrador'
   const esPropietario = cotizacion.vendedor_id === perfil?.id
+  const despacho = cotizacion.despacho
   const canEdit = esBorrador && esPropietario && !despacho
   const vendedorColor = cotizacion.vendedor?.color || '#64748b'
-  const despacho = cotizacion.despacho
 
   const numDisplay = `COT-${String(cotizacion.numero).padStart(5, '0')}`
 
