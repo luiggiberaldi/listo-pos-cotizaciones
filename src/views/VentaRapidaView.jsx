@@ -6,6 +6,7 @@ import {
   Zap, User, X, Plus, Minus, Package, ArrowLeft, ArrowRight, Loader2,
   Search, CheckCircle, ShoppingCart, DollarSign, Truck, CreditCard,
   AlertCircle, ChevronRight, ChevronLeft, UserPlus, ChevronUp, Hash, FileText, Trash2, Save,
+  Download, Printer,
 } from 'lucide-react'
 import { useClientes } from '../hooks/useClientes'
 import ClienteForm from '../components/clientes/ClienteForm'
@@ -18,6 +19,8 @@ import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import { useTransportistas, useCrearTransportista } from '../hooks/useTransportistas'
 import CustomSelect from '../components/ui/CustomSelect'
 import useAuthStore from '../store/useAuthStore'
+import supabase from '../services/supabase/client'
+import { apiUrl } from '../services/apiBase'
 import { round2, mulR } from '../utils/dinero'
 import { calcTotales } from '../utils/calcTotales'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../utils/format'
@@ -26,6 +29,195 @@ import { showToast } from '../components/ui/Toast'
 import PageHeader from '../components/ui/PageHeader'
 
 const FORMAS_PAGO = ['Efectivo', 'Zelle', 'Pago Móvil', 'USDT', 'Transferencia', 'Cta por cobrar']
+
+// ─── Modal de venta exitosa ─────────────────────────────────────────────────
+function ModalVentaExitosa({ data, onClose, config }) {
+  const [pdfLoading, setPdfLoading] = useState(false)
+  const [printLoading, setPrintLoading] = useState(false)
+
+  if (!data) return null
+
+  const { numero, despachoId, cotizacionId, clienteNombre, items, subtotal, totalUsd, totalBs, tasa, formasPago, transportista, flete } = data
+  const numDisplay = `VR-${String(numero).padStart(5, '0')}`
+
+  function printOrDownloadPdf(blob, filename) {
+    const url = URL.createObjectURL(blob)
+    const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
+    if (isMobile) {
+      const w = window.open(url, '_blank')
+      if (!w) { const a = document.createElement('a'); a.href = url; a.download = filename; a.click() }
+      setTimeout(() => URL.revokeObjectURL(url), 60000)
+    } else {
+      const iframe = document.createElement('iframe')
+      iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:none'
+      iframe.src = url
+      document.body.appendChild(iframe)
+      iframe.onload = () => {
+        try { iframe.contentWindow.print() } catch { window.open(url) }
+        setTimeout(() => { document.body.removeChild(iframe); URL.revokeObjectURL(url) }, 60000)
+      }
+    }
+  }
+
+  async function fetchDespachoData() {
+    const session = (await supabase.auth.getSession()).data.session
+    const [{ generarDespachoPDF }, itemsRes, clienteData, vendedorRes, transportistaRes] = await Promise.all([
+      import('../services/pdf/despachoPDF'),
+      supabase.from('cotizacion_items').select('codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, total_linea_usd, orden').eq('cotizacion_id', cotizacionId).order('orden'),
+      fetch(apiUrl('/api/clientes/lookup'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ ids: [data.clienteId].filter(Boolean) }),
+      }).then(r => r.ok ? r.json() : []),
+      supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', data.vendedorId).single(),
+      data.transportistaId ? supabase.from('transportistas').select('id, nombre, rif, telefono, zona_cobertura, vehiculo, placa_chuto, placa_batea, color').eq('id', data.transportistaId).single() : Promise.resolve({ data: null }),
+    ])
+    if (itemsRes.error) throw itemsRes.error
+    const despachoObj = {
+      id: despachoId, numero, cotizacion_id: cotizacionId,
+      cliente_id: data.clienteId, vendedor_id: data.vendedorId, transportista_id: data.transportistaId,
+      forma_pago: JSON.stringify(formasPago), total_usd: totalUsd, tasa_bcv_snapshot: tasa,
+      estado: 'pendiente', costo_envio_usd: 0, flete_usd: flete,
+      cliente: clienteData?.[0] || null,
+      vendedor: vendedorRes.data || null,
+      transportista: transportistaRes.data || null,
+    }
+    return { generarDespachoPDF, despachoObj, items: itemsRes.data ?? [] }
+  }
+
+  async function handleDescargar() {
+    setPdfLoading(true)
+    try {
+      const { generarDespachoPDF, despachoObj, items: pdfItems } = await fetchDespachoData()
+      await generarDespachoPDF({ despacho: despachoObj, items: pdfItems, config, formaPago: despachoObj.forma_pago || '', monedaPDF: 'bs', tasa: data.tasa, tasaUsdt: data.tasaUsdt || 0, tasaBcv: data.tasaBcv || 0 })
+    } catch (err) {
+      showToast('Error al generar PDF: ' + (err.message || 'Error'), 'error')
+    } finally { setPdfLoading(false) }
+  }
+
+  async function handleImprimir() {
+    setPrintLoading(true)
+    try {
+      const { generarDespachoPDF, despachoObj, items: pdfItems } = await fetchDespachoData()
+      const blob = await generarDespachoPDF({ despacho: despachoObj, items: pdfItems, config, formaPago: despachoObj.forma_pago || '', monedaPDF: 'bs', tasa: data.tasa, tasaUsdt: data.tasaUsdt || 0, tasaBcv: data.tasaBcv || 0, returnBlob: true })
+      printOrDownloadPdf(blob, `${numDisplay}.pdf`)
+    } catch (err) {
+      showToast('Error al imprimir: ' + (err.message || 'Error'), 'error')
+    } finally { setPrintLoading(false) }
+  }
+
+  let formasPagoTexto = ''
+  try {
+    const fp = typeof formasPago === 'string' ? JSON.parse(formasPago) : formasPago
+    formasPagoTexto = Array.isArray(fp) ? fp.map(f => f.metodo).join(', ') : ''
+  } catch { formasPagoTexto = '' }
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+      <div className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl max-h-[90vh] overflow-auto animate-in slide-in-from-bottom duration-300"
+        onClick={e => e.stopPropagation()}>
+
+        {/* Header con icono de éxito */}
+        <div className="text-center pt-6 pb-3 px-4">
+          <div className="mx-auto w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center mb-3">
+            <CheckCircle size={32} className="text-emerald-600" />
+          </div>
+          <h2 className="text-lg font-bold text-slate-800">Venta Rápida Exitosa</h2>
+          <p className="text-sm text-slate-500 mt-0.5">Despacho <span className="font-semibold text-primary">{numDisplay}</span> creado</p>
+        </div>
+
+        {/* Resumen */}
+        <div className="px-4 pb-3 space-y-3">
+          {/* Cliente */}
+          <div className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2">
+            <User size={14} className="text-slate-400" />
+            <span className="text-sm font-medium text-slate-700">{clienteNombre || 'Sin cliente'}</span>
+          </div>
+
+          {/* Items */}
+          <div className="bg-slate-50 rounded-xl overflow-hidden">
+            <div className="px-3 py-2 border-b border-slate-200/60">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Productos ({items.length})</span>
+            </div>
+            <div className="max-h-40 overflow-auto">
+              {items.map((it, i) => (
+                <div key={i} className="flex items-center justify-between px-3 py-1.5 text-sm border-b border-slate-100 last:border-0">
+                  <div className="min-w-0 flex-1">
+                    <span className="text-slate-700 truncate block">{it.nombre || it.nombre_snap || '—'}</span>
+                    <span className="text-xs text-slate-400">{it.cantidad} × ${fmtUsd(it.precioUnitUsd || it.precio_unit_usd || 0)}</span>
+                  </div>
+                  <span className="text-sm font-semibold text-slate-800 ml-2">${fmtUsd(it.totalLinea || it.total_linea_usd || (it.cantidad * (it.precioUnitUsd || it.precio_unit_usd || 0)))}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Totales */}
+          <div className="bg-slate-50 rounded-xl px-3 py-2 space-y-1">
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-500">Subtotal</span>
+              <span className="text-slate-700">${fmtUsd(subtotal)}</span>
+            </div>
+            {flete > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-500">Flete</span>
+                <span className="text-slate-700">${fmtUsd(flete)}</span>
+              </div>
+            )}
+            <div className="flex justify-between text-sm font-bold border-t border-slate-200 pt-1 mt-1">
+              <span className="text-slate-800">Total USD</span>
+              <span className="text-emerald-700">${fmtUsd(totalUsd)}</span>
+            </div>
+            {totalBs > 0 && (
+              <div className="flex justify-between text-sm font-semibold">
+                <span className="text-slate-600">Total Bs</span>
+                <span className="text-slate-700">{fmtBs(totalBs)}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Forma de pago */}
+          {formasPagoTexto && (
+            <div className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2">
+              <CreditCard size={14} className="text-slate-400" />
+              <span className="text-sm text-slate-700">{formasPagoTexto}</span>
+            </div>
+          )}
+
+          {/* Transporte */}
+          {transportista && (
+            <div className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2">
+              <Truck size={14} className="text-slate-400" />
+              <span className="text-sm text-slate-700">{transportista}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Botones de acción */}
+        <div className="px-4 pb-4 pt-1 space-y-2">
+          <div className="flex gap-2">
+            <button onClick={handleDescargar} disabled={pdfLoading}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm rounded-xl transition-colors disabled:opacity-50">
+              {pdfLoading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+              Descargar PDF
+            </button>
+            <button onClick={handleImprimir} disabled={printLoading}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm rounded-xl transition-colors disabled:opacity-50">
+              {printLoading ? <Loader2 size={16} className="animate-spin" /> : <Printer size={16} />}
+              Imprimir
+            </button>
+          </div>
+          <button onClick={onClose}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 text-white font-bold text-sm rounded-xl transition-all shadow-lg active:scale-[0.98]"
+            style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
+            <ArrowRight size={16} />
+            Ir a Despachos
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // ─── Draft (retomar) helpers ──────────────────────────────────────────────────
 const VR_DRAFT_KEY = 'construacero_venta_rapida_draft'
@@ -91,6 +283,7 @@ export default function VentaRapidaView() {
   const [showNuevoCliente, setShowNuevoCliente] = useState(false)
   const [mobileCartOpen, setMobileCartOpen] = useState(false)
   const [confirmAjeno, setConfirmAjeno] = useState(null)
+  const [ventaExitosa, setVentaExitosa] = useState(null)
 
   // Step 2: Pago + Envío
   const [formasPago, setFormasPago] = useState([]) // [{metodo, monto}]
@@ -249,8 +442,28 @@ export default function VentaRapidaView() {
       costoEnvioUsd,
       tasaBcv: tasa,
     }, {
-      onSuccess: () => {
+      onSuccess: (result) => {
         clearDraft(perfil?.id)
+        // Guardar datos para el modal de éxito
+        setVentaExitosa({
+          numero: result.numero,
+          despachoId: result.id,
+          cotizacionId: result.cotizacionId,
+          clienteId,
+          clienteNombre: clienteSeleccionado?.nombre,
+          vendedorId: perfil?.id,
+          transportistaId: transportistaId || null,
+          transportista: transportistaSeleccionado?.nombre || null,
+          flete,
+          items: items.map(it => ({ ...it })),
+          subtotal,
+          totalUsd,
+          totalBs,
+          tasa,
+          tasaUsdt: tasaHook.tasaUsdt?.precio || 0,
+          tasaBcv: tasaHook.tasaBcv?.precio || 0,
+          formasPago,
+        })
         // Reset form
         setStep(0)
         setClienteId('')
@@ -260,7 +473,6 @@ export default function VentaRapidaView() {
         setTransportistaId('')
         setFleteUsd('')
         setNotas('')
-        navigate('/despachos')
       },
     })
   }
@@ -426,6 +638,15 @@ export default function VentaRapidaView() {
           </button>
         )}
       </div>
+      )}
+
+      {/* Modal de venta exitosa */}
+      {ventaExitosa && (
+        <ModalVentaExitosa
+          data={ventaExitosa}
+          config={config}
+          onClose={() => { setVentaExitosa(null); navigate('/despachos') }}
+        />
       )}
     </div>
   )
