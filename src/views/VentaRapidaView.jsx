@@ -124,7 +124,7 @@ function ModalVentaExitosa({ data, onClose, config }) {
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="bg-white w-full sm:max-w-sm sm:rounded-2xl rounded-t-2xl max-h-[90vh] overflow-auto"
+      <div className="bg-white w-full sm:max-w-sm md:max-w-md sm:rounded-2xl rounded-t-2xl max-h-[90vh] overflow-auto"
         onClick={e => e.stopPropagation()}>
 
         {/* Header gradient (estilo cotización) */}

@@ -54,22 +54,27 @@ export function useCrearTransportista() {
   })
 }
 
-// ─── Actualizar ───────────────────────────────────────────────────────────────
+// ─── Actualizar (via Worker API — bypass RLS) ───────────────────────────────
 export function useActualizarTransportista() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ id, campos }) => {
-      const { error } = await supabase.from('transportistas').update({
-        nombre:         campos.nombre.trim(),
-        rif:            campos.rif?.trim()           || null,
-        telefono:       campos.telefono?.trim()       || null,
-        color:          campos.color?.trim()           || null,
-        zona_cobertura: campos.zona_cobertura?.trim() || null,
-        vehiculo:       campos.vehiculo?.trim()       || null,
-        placa_chuto:    campos.placa_chuto?.trim()    || null,
-        placa_batea:    campos.placa_batea?.trim()    || null,
-      }).eq('id', id)
-      if (error) throw error
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('No autenticado')
+
+      const res = await fetch(apiUrl('/api/transportistas/actualizar'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ id, campos }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || `Error ${res.status}`)
+      }
+      return res.json()
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   })

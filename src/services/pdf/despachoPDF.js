@@ -446,9 +446,9 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     const vehSegs = [
       { text: 'Vehículo: ', bold: false }, { text: tVeh, bold: true },
       { text: '  —  Placa: ', bold: false }, { text: tPlaca, bold: true },
-      { text: '  —  Chuto: ', bold: false }, { text: tChuto, bold: true },
-      { text: '  —  Batea: ', bold: false }, { text: tBatea, bold: true },
     ]
+    if (tChuto) vehSegs.push({ text: '  —  Chuto: ', bold: false }, { text: tChuto, bold: true })
+    if (tBatea) vehSegs.push({ text: '  —  Batea: ', bold: false }, { text: tBatea, bold: true })
     for (const segs of splitSegmentsIntoLines(vehSegs, 8, comboLeftW)) {
       leftLines.push({ segments: segs, size: 8 })
     }

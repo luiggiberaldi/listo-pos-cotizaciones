@@ -202,6 +202,11 @@ export default {
       return handleCrearTransportista(request, env);
     }
 
+    // ── API: actualizar transportista (bypass RLS) ────────────────────────────
+    if (url.pathname === '/api/transportistas/actualizar' && request.method === 'POST') {
+      return handleActualizarTransportista(request, env);
+    }
+
     // ── API: marcar comisión pagada (bypass RLS) ────────────────────────────
     if (url.pathname === '/api/comisiones/pagar' && request.method === 'POST') {
       return handleMarcarComisionPagada(request, env);
@@ -2522,6 +2527,62 @@ async function handleCrearTransportista(request, env) {
   }
   const rows = await res.json();
   return json(rows[0] || {}, 201, request);
+}
+
+// ── Actualizar transportista (bypass RLS) ────────────────────────────────────
+async function handleActualizarTransportista(request, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return jsonError('Server misconfigured', 500, request);
+  const user = await verifyAuth(request, env);
+  if (!user?.id) return jsonError('No autenticado', 401, request);
+
+  // Validar rol: solo supervisor, vendedor y desarrollador pueden editar
+  const rolPermitido = ['supervisor', 'vendedor'];
+  if (user.operator_id !== SUPER_ADMIN_UUID) {
+    const hCheck = supaServiceHeaders(env);
+    const rolRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${user.operator_id}&activo=eq.true&select=rol`,
+      { headers: hCheck }
+    );
+    const [op] = await rolRes.json();
+    if (!op || !rolPermitido.includes(op.rol)) {
+      return jsonError('No tiene permiso para editar transportistas', 403, request);
+    }
+  }
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+
+  const { id, campos } = body;
+  if (!id) return jsonError('ID es obligatorio', 400, request);
+  if (!campos?.nombre?.trim()) return jsonError('El nombre es obligatorio', 400, request);
+
+  const h = {
+    apikey: env.SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    'Content-Type': 'application/json',
+    Prefer: 'return=representation',
+  };
+
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/transportistas?id=eq.${id}`, {
+    method: 'PATCH',
+    headers: h,
+    body: JSON.stringify({
+      nombre: campos.nombre.trim(),
+      rif: campos.rif?.trim() || null,
+      telefono: campos.telefono?.trim() || null,
+      color: campos.color?.trim() || null,
+      zona_cobertura: campos.zona_cobertura?.trim() || null,
+      vehiculo: campos.vehiculo?.trim() || null,
+      placa_chuto: campos.placa_chuto?.trim() || null,
+      placa_batea: campos.placa_batea?.trim() || null,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    return jsonError(text || 'Error al actualizar transportista', res.status, request);
+  }
+  const rows = await res.json();
+  return json(rows[0] || {}, 200, request);
 }
 
 async function handleEditarPagoDespacho(request, env) {
