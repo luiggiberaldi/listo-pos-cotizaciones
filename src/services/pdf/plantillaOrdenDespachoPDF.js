@@ -20,7 +20,7 @@ function drawCheck(doc, label, x, y) {
   doc.text(label, x + 4.5, y)
 }
 
-export async function generarPlantillaOrdenDespachoPDF({ config = {} } = {}) {
+export async function generarPlantillaOrdenDespachoPDF({ config = {}, incluirTransporte = true } = {}) {
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
 
   let y = 0
@@ -182,9 +182,9 @@ export async function generarPlantillaOrdenDespachoPDF({ config = {} } = {}) {
 
   // Filas vacías para llenar a mano
   const BLANK_ROW_H = 6.5
-  const CHOFER_H = 30
+  const CHOFER_H = incluirTransporte ? 30 : 0
   const choferY = PAGE_H - MARGIN - CHOFER_H
-  const fpY = choferY - 24
+  const fpY = incluirTransporte ? choferY - 24 : PAGE_H - MARGIN - 24
   const notasH = 20
   const availableH = fpY - y - notasH - 3
   const BLANK_ROWS = Math.max(1, Math.floor(availableH / BLANK_ROW_H))
@@ -246,6 +246,7 @@ export async function generarPlantillaOrdenDespachoPDF({ config = {} } = {}) {
   // ══════════════════════════════════════════════════════════════════════════
   // 5. DATOS DEL CHOFER Y VEHÍCULO — vacíos (2 filas: 3+4 cols como en la llena)
   // ══════════════════════════════════════════════════════════════════════════
+  if (incluirTransporte) {
   doc.setFillColor(240, 240, 240)
   doc.rect(MARGIN, choferY, CONTENT_W, 6, 'F')
   doc.setDrawColor(120, 120, 120)
@@ -287,6 +288,7 @@ export async function generarPlantillaOrdenDespachoPDF({ config = {} } = {}) {
     doc.setTextColor(100, 100, 100)
     doc.text(label, fx + 2, row2Y + 3.5)
   })
+  }
 
   // Sin footer, sin cuentas, sin slogan, sin condiciones
 
