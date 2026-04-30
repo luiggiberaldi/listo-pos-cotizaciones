@@ -196,7 +196,7 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   const halfW = CONTENT_W / 2 - 2
 
   // Calcular posiciones desde abajo
-  const TRANS_H = 18
+  const TRANS_H = 24
   const choferStartY = sloganY - 9 - TRANS_H
   const comboRows = 3 // crédito + base + IVA
   const dataRowH = 7
@@ -266,8 +266,8 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
     const ry = comboTop + r * dataRowH
 
     // Celda izquierda
-    doc.setDrawColor(120, 120, 120)
-    doc.setLineWidth(0.2)
+    doc.setDrawColor(160, 160, 160)
+    doc.setLineWidth(0.15)
     doc.rect(MARGIN, ry, comboLeftW, dataRowH, 'S')
     doc.setFont('helvetica', r === 0 ? 'bold' : 'normal')
     doc.setFontSize(r === 0 ? 9 : 7.5)
@@ -296,15 +296,15 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   // ══════════════════════════════════════════════════════════════════════════
   doc.setFillColor(240, 240, 240)
   doc.rect(MARGIN, choferStartY, CONTENT_W, 6, 'F')
-  doc.setDrawColor(120, 120, 120)
-  doc.setLineWidth(0.3)
+  doc.setDrawColor(160, 160, 160)
+  doc.setLineWidth(0.15)
   doc.rect(MARGIN, choferStartY, CONTENT_W, 6, 'S')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8)
   doc.setTextColor(...C_DARK)
   doc.text('DATOS DEL CHOFER Y DEL VEHÍCULO', MARGIN + 2, choferStartY + 4)
 
-  const ROW_H2 = 12
+  const ROW_H2 = 9
   const row1Y = choferStartY + 6
   const row2Y = row1Y + ROW_H2
   const col3W = CONTENT_W / 3
@@ -314,8 +314,8 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   const row1Labels = ['CHOFER', 'C.I.', 'COLOR']
   row1Labels.forEach((label, i) => {
     const fx = MARGIN + i * col3W
-    doc.setDrawColor(120, 120, 120)
-    doc.setLineWidth(0.3)
+    doc.setDrawColor(160, 160, 160)
+    doc.setLineWidth(0.15)
     doc.rect(fx, row1Y, col3W, ROW_H2, 'S')
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(6.5)
@@ -327,8 +327,8 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   const row2Labels = ['VEHÍCULO', 'PLACA', 'PLACA CHUTO', 'PLACA BATEA']
   row2Labels.forEach((label, i) => {
     const fx = MARGIN + i * col4W
-    doc.setDrawColor(120, 120, 120)
-    doc.setLineWidth(0.3)
+    doc.setDrawColor(160, 160, 160)
+    doc.setLineWidth(0.15)
     doc.rect(fx, row2Y, col4W, ROW_H2, 'S')
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(6.5)
