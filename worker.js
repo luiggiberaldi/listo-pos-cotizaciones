@@ -4613,7 +4613,8 @@ RESPONDE ÚNICAMENTE en JSON válido con este formato (sin markdown, sin explica
 
   let rawAiText = ''
   try {
-    const aiResponse = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+    console.log('[PARSE] Calling Workers AI, catalog size:', catalogo.length, 'chars, text:', text.trim().substring(0, 100))
+    const aiResponse = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: text.trim() },
@@ -4622,7 +4623,9 @@ RESPONDE ÚNICAMENTE en JSON válido con este formato (sin markdown, sin explica
       temperature: 0.1,
     })
     rawAiText = aiResponse?.response || ''
+    console.log('[PARSE] AI response length:', rawAiText.length)
   } catch (e) {
+    console.error('[PARSE] AI error:', e.message)
     return jsonError(`Error AI: ${e.message}`, 500, request)
   }
 
@@ -4632,7 +4635,13 @@ RESPONDE ÚNICAMENTE en JSON válido con este formato (sin markdown, sin explica
     // Limpiar posible markdown wrapping
     let clean = rawAiText.trim()
     if (clean.startsWith('```')) clean = clean.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
-    parsed = JSON.parse(clean)
+    const rawParsed = JSON.parse(clean)
+    // Normalizar: la AI puede devolver {items:[...]} o directamente [...]
+    if (Array.isArray(rawParsed)) {
+      parsed = { items: rawParsed }
+    } else {
+      parsed = rawParsed
+    }
   } catch {
     return json({ items: [], rawAiText, error: 'No se pudo parsear respuesta AI' }, 200, request)
   }
