@@ -4614,7 +4614,7 @@ RESPONDE ÚNICAMENTE en JSON válido con este formato (sin markdown, sin explica
   let rawAiText = ''
   try {
     console.log('[PARSE] Calling Workers AI, catalog size:', catalogo.length, 'chars, text:', text.trim().substring(0, 100))
-    const aiResponse = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
+    const aiResponse = await env.AI.run('@cf/meta/llama-3.1-70b-instruct', {
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: text.trim() },

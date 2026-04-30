@@ -62,7 +62,8 @@ export function useScanMaterialList() {
       setResults(data)
       return data
     } catch (e) {
-      setError(e.name === 'AbortError' ? 'Tiempo agotado. Intenta de nuevo.' : e.message)
+      const msg = e.name === 'AbortError' ? 'Tiempo agotado. Intenta de nuevo.' : (typeof e.message === 'string' ? e.message : 'Error procesando solicitud')
+      setError(msg)
       return null
     } finally {
       setLoading(false)
