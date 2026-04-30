@@ -275,7 +275,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const confirmConfig = accionPendiente?.actionConfig || {}
 
   return (
-    <div className="group bg-white rounded-2xl border border-slate-200 hover:shadow-lg transition-all duration-200 flex flex-col" onClick={(e) => { if (e.target.closest('button') || e.target.closest('[data-no-click]') || showEdit || showDetalle || showDescuento) return; setShowDetalle(true) }}>
+    <div className="group bg-white rounded-2xl border border-slate-200 hover:shadow-lg transition-all duration-200 flex flex-col">
 
       {/* ── Header strip con color del vendedor ── */}
       <div className="relative h-12 shrink-0 flex items-center justify-between px-3 rounded-t-2xl overflow-hidden"
