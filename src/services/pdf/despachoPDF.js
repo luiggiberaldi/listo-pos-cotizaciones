@@ -144,18 +144,20 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const rValX = rLblX + rightLblW
 
   // Fila 1: ODC / Correlativo
-  drawCell(rLblX, gY, rightLblW, rowH, 'ODC', undefined, { fontSize: 8, center: true })
   doc.rect(rLblX, gY, rightLblW, rowH, 'S')
-  drawCell(rValX, gY, rightValW, rowH, null, undefined)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8)
+  doc.setTextColor(...C_DARK)
+  doc.text('ODC', rLblX + rightLblW / 2, gY + rowH / 2 + 1, { align: 'center' })
+  doc.rect(rValX, gY, rightValW, rowH, 'S')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(10)
   doc.text(numDes, rValX + rightValW / 2, gY + rowH / 2 + 1, { align: 'center' })
-  doc.rect(rValX, gY, rightValW, rowH, 'S')
 
   // Fila 2: DIA
   const f2Y = gY + rowH
   doc.rect(rLblX, f2Y, rightLblW, rowH, 'S')
-  doc.setFont('helvetica', 'bold')
+  doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
   doc.text('DIA', rLblX + rightLblW / 2, f2Y + rowH / 2 + 1, { align: 'center' })
   doc.rect(rValX, f2Y, rightValW, rowH, 'S')
@@ -166,7 +168,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   // Fila 3: FECHA
   const f3Y = gY + rowH * 2
   doc.rect(rLblX, f3Y, rightLblW, rowH, 'S')
-  doc.setFont('helvetica', 'bold')
+  doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
   doc.text('FECHA:', rLblX + rightLblW / 2, f3Y + rowH / 2 + 1, { align: 'center' })
   doc.rect(rValX, f3Y, rightValW, rowH, 'S')
@@ -181,10 +183,11 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const rifValW = 38
   const clienteValW = CONTENT_W - clienteLblW - rifLblW - rifValW
 
-  drawCell(MARGIN, f4Y, clienteLblW, rowH, 'CLIENTE:', undefined, { fontSize: 8 })
-  doc.setFont('helvetica', 'bold')
+  doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
   doc.text('CLIENTE:', MARGIN + 2, f4Y + rowH / 2 + 1)
+  doc.setDrawColor(120, 120, 120)
+  doc.setLineWidth(0.2)
   doc.rect(MARGIN, f4Y, clienteLblW, rowH, 'S')
 
   doc.rect(MARGIN + clienteLblW, f4Y, clienteValW, rowH, 'S')
@@ -200,7 +203,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.text(cNombre, MARGIN + clienteLblW + 2, f4Y + rowH / 2 + 1)
 
   doc.rect(MARGIN + clienteLblW + clienteValW, f4Y, rifLblW, rowH, 'S')
-  doc.setFont('helvetica', 'bold')
+  doc.setFont('helvetica', 'normal')
   doc.setFontSize(7.5)
   doc.text('R.I.F.,C.I.', MARGIN + clienteLblW + clienteValW + rifLblW / 2, f4Y + rowH / 2 + 1, { align: 'center' })
 
@@ -213,7 +216,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const f5Y = f4Y + rowH
   const dirLblW = 25
   doc.rect(MARGIN, f5Y, dirLblW, rowH, 'S')
-  doc.setFont('helvetica', 'bold')
+  doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
   doc.text('DIRECCIÓN:', MARGIN + 2, f5Y + rowH / 2 + 1)
 
@@ -237,7 +240,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const vendValW = CONTENT_W - tlfLblW - tlfValW - vendLblW
 
   doc.rect(MARGIN, f6Y, tlfLblW, rowH, 'S')
-  doc.setFont('helvetica', 'bold')
+  doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
   doc.text('TELÉFONO:', MARGIN + 2, f6Y + rowH / 2 + 1)
 
@@ -247,7 +250,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.text(cliente.telefono || '—', MARGIN + tlfLblW + 2, f6Y + rowH / 2 + 1)
 
   doc.rect(MARGIN + tlfLblW + tlfValW, f6Y, vendLblW, rowH, 'S')
-  doc.setFont('helvetica', 'bold')
+  doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
   doc.text('VENDEDOR:', MARGIN + tlfLblW + tlfValW + 2, f6Y + rowH / 2 + 1)
 
@@ -401,26 +404,54 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   if (refPago) rightItems.push({ label: 'Ref:', value: refPago })
 
   // Columna izquierda: crédito + datos transporte
+  // Helper: divide segmentos en múltiples líneas si exceden el ancho disponible
+  function splitSegmentsIntoLines(segments, fontSize, maxW) {
+    const lines = []
+    let currentSegs = []
+    let currentW = 0
+    const pad = 6 // margen interno izq+der
+    for (const seg of segments) {
+      doc.setFont('helvetica', seg.bold ? 'bold' : 'normal')
+      doc.setFontSize(fontSize)
+      const segW = doc.getTextWidth(seg.text)
+      if (currentSegs.length > 0 && currentW + segW > maxW - pad) {
+        lines.push([...currentSegs])
+        currentSegs = []
+        currentW = 0
+      }
+      currentSegs.push(seg)
+      currentW += segW
+    }
+    if (currentSegs.length > 0) lines.push(currentSegs)
+    return lines
+  }
+
   const leftLines = [{ text: '8 DÍAS DE CRÉDITO CONTINUO', bold: true, size: 9 }]
   if (transportista) {
     const tNom = transportista.nombre || ''
     const tCI = transportista.rif || ''
     const tColor = transportista.color || ''
-    leftLines.push({ segments: [
+    const choferSegs = [
       { text: 'Chofer: ', bold: false }, { text: tNom, bold: true },
       { text: '  —  CI: ', bold: false }, { text: tCI, bold: true },
       { text: '  —  Color: ', bold: false }, { text: tColor, bold: true },
-    ], size: 8 })
+    ]
+    for (const segs of splitSegmentsIntoLines(choferSegs, 8, comboLeftW)) {
+      leftLines.push({ segments: segs, size: 8 })
+    }
     const tVeh = transportista.vehiculo || ''
     const tPlaca = transportista.zona_cobertura || ''
     const tChuto = transportista.placa_chuto || ''
     const tBatea = transportista.placa_batea || ''
-    leftLines.push({ segments: [
+    const vehSegs = [
       { text: 'Vehículo: ', bold: false }, { text: tVeh, bold: true },
       { text: '  —  Placa: ', bold: false }, { text: tPlaca, bold: true },
       { text: '  —  Chuto: ', bold: false }, { text: tChuto, bold: true },
       { text: '  —  Batea: ', bold: false }, { text: tBatea, bold: true },
-    ], size: 8 })
+    ]
+    for (const segs of splitSegmentsIntoLines(vehSegs, 8, comboLeftW)) {
+      leftLines.push({ segments: segs, size: 8 })
+    }
   }
 
   const numComboRows = Math.max(leftLines.length, rightItems.length)

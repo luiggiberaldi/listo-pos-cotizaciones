@@ -62,9 +62,9 @@ export default function CategoryPills({ categorias = [], activa = '', onChange }
         </button>
       </div>
 
-      {/* ── Mobile: pills colapsables ── */}
-      <div className="md:hidden">
-        <div className={`flex gap-1.5 py-0.5 ${expanded ? 'flex-wrap' : 'flex-nowrap overflow-hidden'}`}>
+      {/* ── Mobile: scroll horizontal + expandible ── */}
+      <div className="md:hidden relative">
+        <div className={`flex gap-1.5 py-0.5 ${expanded ? 'flex-wrap' : 'flex-nowrap overflow-x-auto scrollbar-hide'}`}>
           <Pill label="Todos" active={!activa} onClick={() => handleSelect('')} />
           {(expanded ? categorias : categorias.slice(0, VISIBLE_MOBILE)).map(cat => (
             <Pill key={cat} label={cat} active={activa === cat} onClick={() => handleSelect(cat)} />
@@ -81,6 +81,9 @@ export default function CategoryPills({ categorias = [], activa = '', onChange }
             </button>
           )}
         </div>
+        {!expanded && (
+          <div className="absolute right-0 top-0 bottom-0 w-6 pointer-events-none bg-gradient-to-l from-white to-transparent" />
+        )}
       </div>
     </>
   )

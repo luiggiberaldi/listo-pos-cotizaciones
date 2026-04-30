@@ -89,7 +89,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
 
   // Fila 1: ODC
   doc.rect(rLblX, gY, rightLblW, rowH, 'S')
-  doc.setFont('helvetica', 'bold')
+  doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
   doc.setTextColor(...C_DARK)
   doc.text('ODC', rLblX + rightLblW / 2, gY + rowH / 2 + 1, { align: 'center' })
@@ -101,7 +101,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   // Fila 2: DIA
   const f2Y = gY + rowH
   doc.rect(rLblX, f2Y, rightLblW, rowH, 'S')
-  doc.setFont('helvetica', 'bold')
+  doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
   doc.text('DIA', rLblX + rightLblW / 2, f2Y + rowH / 2 + 1, { align: 'center' })
   doc.rect(rValX, f2Y, rightValW, rowH, 'S')
@@ -112,7 +112,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   // Fila 3: FECHA
   const f3Y = gY + rowH * 2
   doc.rect(rLblX, f3Y, rightLblW, rowH, 'S')
-  doc.setFont('helvetica', 'bold')
+  doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
   doc.text('FECHA:', rLblX + rightLblW / 2, f3Y + rowH / 2 + 1, { align: 'center' })
   doc.rect(rValX, f3Y, rightValW, rowH, 'S')
@@ -128,7 +128,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   const clienteValW = CONTENT_W - clienteLblW - rifLblW - rifValW
 
   doc.rect(MARGIN, f4Y, clienteLblW, rowH, 'S')
-  doc.setFont('helvetica', 'bold')
+  doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
   doc.text('CLIENTE:', MARGIN + 2, f4Y + rowH / 2 + 1)
 
@@ -145,7 +145,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   doc.text(cNombre, MARGIN + clienteLblW + 2, f4Y + rowH / 2 + 1)
 
   doc.rect(MARGIN + clienteLblW + clienteValW, f4Y, rifLblW, rowH, 'S')
-  doc.setFont('helvetica', 'bold')
+  doc.setFont('helvetica', 'normal')
   doc.setFontSize(7.5)
   doc.text('R.I.F.,C.I.', MARGIN + clienteLblW + clienteValW + rifLblW / 2, f4Y + rowH / 2 + 1, { align: 'center' })
 
@@ -158,7 +158,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   const f5Y = f4Y + rowH
   const dirLblW = 25
   doc.rect(MARGIN, f5Y, dirLblW, rowH, 'S')
-  doc.setFont('helvetica', 'bold')
+  doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
   doc.text('DIRECCIÓN:', MARGIN + 2, f5Y + rowH / 2 + 1)
 
@@ -182,7 +182,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   const vendValW = CONTENT_W - tlfLblW - tlfValW - vendLblW
 
   doc.rect(MARGIN, f6Y, tlfLblW, rowH, 'S')
-  doc.setFont('helvetica', 'bold')
+  doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
   doc.text('TELÉFONO:', MARGIN + 2, f6Y + rowH / 2 + 1)
 
@@ -192,7 +192,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   doc.text(cliente.telefono || '—', MARGIN + tlfLblW + 2, f6Y + rowH / 2 + 1)
 
   doc.rect(MARGIN + tlfLblW + tlfValW, f6Y, vendLblW, rowH, 'S')
-  doc.setFont('helvetica', 'bold')
+  doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
   doc.text('VENDEDOR:', MARGIN + tlfLblW + tlfValW + 2, f6Y + rowH / 2 + 1)
 
