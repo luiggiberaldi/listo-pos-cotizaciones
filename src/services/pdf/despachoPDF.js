@@ -427,29 +427,27 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   }
 
   const leftLines = [{ text: '8 DÍAS DE CRÉDITO CONTINUO', bold: true, size: 9 }]
-  if (transportista) {
-    const tNom = (transportista.nombre || '').toUpperCase()
-    const tCI = (transportista.rif || '').toUpperCase()
-    const tColor = (transportista.color || '').toUpperCase()
-    const choferSegs = [
-      { text: 'Chofer: ', bold: false }, { text: tNom, bold: true },
-      { text: '  —  CI: ', bold: false }, { text: tCI, bold: true },
-      { text: '  —  Color: ', bold: false }, { text: tColor, bold: true },
-    ]
-    for (const segs of splitSegmentsIntoLines(choferSegs, 8, comboLeftW)) {
-      leftLines.push({ segments: segs, size: 8 })
-    }
-    const tVeh = (transportista.vehiculo || '').toUpperCase()
-    const tChuto = (transportista.placa_chuto || '').toUpperCase()
-    const tBatea = (transportista.placa_batea || '').toUpperCase()
-    const vehSegs = [
-      { text: 'Vehículo: ', bold: false }, { text: tVeh, bold: true },
-    ]
-    if (tChuto) vehSegs.push({ text: '  —  Chuto: ', bold: false }, { text: tChuto, bold: true })
-    if (tBatea) vehSegs.push({ text: '  —  Batea: ', bold: false }, { text: tBatea, bold: true })
-    for (const segs of splitSegmentsIntoLines(vehSegs, 8, comboLeftW)) {
-      leftLines.push({ segments: segs, size: 8 })
-    }
+  const tNom = (transportista?.nombre || '').toUpperCase()
+  const tCI = (transportista?.rif || '').toUpperCase()
+  const tColor = (transportista?.color || '').toUpperCase()
+  const choferSegs = [
+    { text: 'Chofer: ', bold: false }, { text: tNom, bold: true },
+    { text: '  —  CI: ', bold: false }, { text: tCI, bold: true },
+    { text: '  —  Color: ', bold: false }, { text: tColor, bold: true },
+  ]
+  for (const segs of splitSegmentsIntoLines(choferSegs, 8, comboLeftW)) {
+    leftLines.push({ segments: segs, size: 8 })
+  }
+  const tVeh = (transportista?.vehiculo || '').toUpperCase()
+  const tChuto = (transportista?.placa_chuto || '').toUpperCase()
+  const tBatea = (transportista?.placa_batea || '').toUpperCase()
+  const vehSegs = [
+    { text: 'Vehículo: ', bold: false }, { text: tVeh, bold: true },
+    { text: '  —  Chuto: ', bold: false }, { text: tChuto, bold: true },
+    { text: '  —  Batea: ', bold: false }, { text: tBatea, bold: true },
+  ]
+  for (const segs of splitSegmentsIntoLines(vehSegs, 8, comboLeftW)) {
+    leftLines.push({ segments: segs, size: 8 })
   }
 
   const numComboRows = Math.max(leftLines.length, rightItems.length)
