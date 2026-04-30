@@ -221,54 +221,63 @@ export default function DespachosView() {
       <OnboardingSequence rol={rol} page="/despachos" />
 
       {/* Filtros de estado + vendedor */}
-      <div className="flex items-center gap-2 pb-1">
-        {/* Dropdown en móvil */}
-        <div className="md:hidden shrink-0">
-          <EstadoDropdown filtros={getFiltrosDespacho(perfil?.rol)} value={estadoFiltro} onChange={setEstadoFiltro} />
-        </div>
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 pb-1">
+          {/* Dropdown en móvil */}
+          <div className="md:hidden shrink-0">
+            <EstadoDropdown filtros={getFiltrosDespacho(perfil?.rol)} value={estadoFiltro} onChange={setEstadoFiltro} />
+          </div>
 
-        {/* Chips en desktop */}
-        <div className="hidden md:flex items-center gap-2 overflow-x-auto scrollbar-none">
-          <Filter size={14} className="text-slate-400 shrink-0" />
-          {getFiltrosDespacho(perfil?.rol).map(({ valor, label }) => (
-            <button key={valor} onClick={() => setEstadoFiltro(valor)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border whitespace-nowrap shrink-0 ${
-                estadoFiltro === valor
-                  ? 'bg-indigo-500 text-white border-indigo-500'
-                  : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'
-              }`}>
-              {label}
-            </button>
-          ))}
-        </div>
+          {/* Chips en desktop */}
+          <div className="hidden md:flex items-center gap-2 overflow-x-auto scrollbar-none">
+            <Filter size={14} className="text-slate-400 shrink-0" />
+            {getFiltrosDespacho(perfil?.rol).map(({ valor, label }) => (
+              <button key={valor} onClick={() => setEstadoFiltro(valor)}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border whitespace-nowrap shrink-0 ${
+                  estadoFiltro === valor
+                    ? 'bg-indigo-500 text-white border-indigo-500'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'
+                }`}>
+                {label}
+              </button>
+            ))}
+          </div>
 
-        {/* Toggle Mis datos / Todos — supervisor/dev */}
-        {(esSupervisor || esDesarrollador) && (
-          <ToggleVistaPersonal value={verTodos} onChange={v => { setVerTodos(v); setVendedorFiltro(''); setPagina(1) }} />
-        )}
+          {/* Toggle Mis datos / Todos — supervisor/dev */}
+          {(esSupervisor || esDesarrollador) && (
+            <ToggleVistaPersonal value={verTodos} onChange={v => { setVerTodos(v); setVendedorFiltro(''); setPagina(1) }} />
+          )}
 
-        {/* Filtro por vendedor — admin siempre, supervisor/dev solo con "Todos" activo */}
-        {((esAdministracion || esLogistica) || (esPrivilegiado && verTodos)) && vendedores.length > 1 && (
-          <>
-            <div className="w-px h-5 bg-slate-200 mx-1 hidden sm:block" />
-            <VendedorFilterPill vendedores={vendedores} value={vendedorFiltro} onChange={setVendedorFiltro} />
-          </>
-        )}
-        <div className="flex items-center gap-1.5 ml-auto shrink-0">
-          <div className="flex bg-slate-100 rounded-xl p-0.5">
-            <button type="button" onClick={() => { setVistaMode('grid'); localStorage.setItem('despachos_vista', 'grid') }} title="Vista cuadrícula"
-              className={`p-2 rounded-lg transition-colors ${vistaMode === 'grid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
-              <LayoutGrid size={16} />
-            </button>
-            <button type="button" onClick={() => { setVistaMode('list'); localStorage.setItem('despachos_vista', 'list') }} title="Vista lista"
-              className={`p-2 rounded-lg transition-colors ${vistaMode === 'list' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
-              <List size={16} />
+          {/* Filtro por vendedor — desktop inline */}
+          {((esAdministracion || esLogistica) || (esPrivilegiado && verTodos)) && vendedores.length > 1 && (
+            <div className="hidden md:flex items-center gap-2">
+              <div className="w-px h-5 bg-slate-200 mx-1" />
+              <VendedorFilterPill vendedores={vendedores} value={vendedorFiltro} onChange={setVendedorFiltro} />
+            </div>
+          )}
+          <div className="flex items-center gap-1.5 ml-auto shrink-0">
+            <div className="flex bg-slate-100 rounded-xl p-0.5">
+              <button type="button" onClick={() => { setVistaMode('grid'); localStorage.setItem('despachos_vista', 'grid') }} title="Vista cuadrícula"
+                className={`p-2 rounded-lg transition-colors ${vistaMode === 'grid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                <LayoutGrid size={16} />
+              </button>
+              <button type="button" onClick={() => { setVistaMode('list'); localStorage.setItem('despachos_vista', 'list') }} title="Vista lista"
+                className={`p-2 rounded-lg transition-colors ${vistaMode === 'list' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                <List size={16} />
+              </button>
+            </div>
+            <button onClick={() => refetch()} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
+              <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
             </button>
           </div>
-          <button onClick={() => refetch()} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
-            <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
-          </button>
         </div>
+
+        {/* Filtro por vendedor — móvil segunda fila */}
+        {((esAdministracion || esLogistica) || (esPrivilegiado && verTodos)) && vendedores.length > 1 && (
+          <div className="md:hidden">
+            <VendedorFilterPill vendedores={vendedores} value={vendedorFiltro} onChange={setVendedorFiltro} />
+          </div>
+        )}
       </div>
 
       {/* Contenido */}
