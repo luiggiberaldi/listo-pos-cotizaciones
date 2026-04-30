@@ -7,6 +7,7 @@
 const ALLOWED_ORIGINS = new Set([
   'https://listo-pos-cotizaciones.camelai.app',
   'https://listo-pos-cotizaciones.apps.camelai.dev',
+  'https://listo-pos-cotizaciones-nqb5ge.apps.camelai.dev',
   'https://listo-pos-cotizaciones.vercel.app',
 ])
 
