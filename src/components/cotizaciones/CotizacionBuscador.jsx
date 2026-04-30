@@ -260,7 +260,7 @@ export default function BuscadorProductos({ onAgregar, onScanClick, itemsAgregad
       {!isLoading && filtrados.length > 0 && (
         <>
           <div className="grid grid-cols-3 gap-1 md:grid-cols-5 lg:grid-cols-6 md:gap-1.5">
-            {filtrados.map(p => {
+            {filtrados.slice(0, 60).map(p => {
               const itemInCart = itemsMap[p.id]
               const comprometido = stockComprometido[p.id] || 0
               return (
