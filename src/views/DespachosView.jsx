@@ -144,7 +144,7 @@ export default function DespachosView() {
   const [vendedorFiltro, setVendedorFiltro] = useState('')
   const [verTodos, setVerTodos] = useState(false)
   const [pagina, setPagina] = useState(1)
-  const [vistaMode, setVistaMode] = useState(() => localStorage.getItem('despachos_vista') || (window.innerWidth < 768 ? 'list' : 'grid'))
+  const [vistaMode, setVistaMode] = useState(() => localStorage.getItem('despachos_vista') || 'grid')
   const [despachoAAnular, setDespachoAAnular] = useState(null)
   const [despachoAReciclar, setDespachoAReciclar] = useState(null)
   const [despachoDetalle, setDespachoDetalle] = useState(null)
