@@ -1,16 +1,8 @@
 // src/components/auth/LoginPinModal.jsx
 // Modal de ingreso de PIN — Dark Premium (coherente con el login)
-import { useState, useRef, useEffect, useCallback } from 'react'
-import { X, Delete, Loader2, ShieldAlert, Clock } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { X, Delete, Loader2 } from 'lucide-react'
 import LoginAvatar from './LoginAvatar'
-
-const MAX_INTENTOS = 3
-const BLOQUEO_SEG  = 30
-const lockKey = (id) => `pin_lock_${id}`
-
-function getLock(id)       { try { return JSON.parse(sessionStorage.getItem(lockKey(id))) } catch { return null } }
-function setLock(id, data) { sessionStorage.setItem(lockKey(id), JSON.stringify(data)) }
-function clearLock(id)     { sessionStorage.removeItem(lockKey(id)) }
 
 export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
   const PIN_LEN = user?.rol === 'vendedor' ? 4 : 6
@@ -18,85 +10,39 @@ export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
   const [pin,       setPin]       = useState('')
   const [error,     setError]     = useState(false)
   const [working,   setWorking]   = useState(false)
-  const [intentos,  setIntentos]  = useState(0)
-  const [bloqueado, setBloqueado] = useState(null)
-  const [segsLeft,  setSegsLeft]  = useState(0)
 
   const inputRef = useRef(null)
-  const timerRef = useRef(null)
   const isTactil = () => window.matchMedia('(hover: none) and (pointer: coarse)').matches
-
-  const checkLock = useCallback(() => {
-    if (!user?.id) return
-    const d = getLock(user.id)
-    if (d?.until && Date.now() < d.until) {
-      setBloqueado(d.until)
-      setIntentos(d.intentos ?? MAX_INTENTOS)
-    } else {
-      if (d?.until) clearLock(user.id)
-      setBloqueado(null)
-      setIntentos(d?.until ? 0 : (d?.intentos ?? 0))
-    }
-  }, [user?.id])
 
   useEffect(() => {
     if (isOpen) {
-      setPin(''); setError(false); checkLock()
+      setPin(''); setError(false)
       if (!isTactil()) setTimeout(() => inputRef.current?.focus(), 100)
-    } else {
-      clearInterval(timerRef.current)
     }
-  }, [isOpen, checkLock])
+  }, [isOpen])
 
   useEffect(() => {
-    clearInterval(timerRef.current)
-    if (!bloqueado) { setSegsLeft(0); return }
-    const tick = () => {
-      const left = Math.ceil((bloqueado - Date.now()) / 1000)
-      if (left <= 0) {
-        clearInterval(timerRef.current)
-        clearLock(user?.id)
-        setBloqueado(null); setIntentos(0); setSegsLeft(0)
-        if (!isTactil()) setTimeout(() => inputRef.current?.focus(), 100)
-      } else { setSegsLeft(left) }
-    }
-    tick()
-    timerRef.current = setInterval(tick, 500)
-    return () => clearInterval(timerRef.current)
-  }, [bloqueado, user?.id])
-
-  useEffect(() => {
-    if (pin.length === PIN_LEN && !working && !bloqueado) submit()
+    if (pin.length === PIN_LEN && !working) submit()
   }, [pin]) // eslint-disable-line
 
   async function submit() {
-    if (pin.length !== PIN_LEN || working || bloqueado) return
+    if (pin.length !== PIN_LEN || working) return
     setWorking(true)
     const ok = await onSubmit(pin)
     if (!ok) {
-      const nuevos = intentos + 1
-      setIntentos(nuevos); setError(true); setPin(''); setWorking(false)
+      setError(true); setPin(''); setWorking(false)
       setTimeout(() => setError(false), 600)
-      if (nuevos >= MAX_INTENTOS) {
-        const hasta = Date.now() + BLOQUEO_SEG * 1000
-        setLock(user.id, { until: hasta, intentos: nuevos })
-        setBloqueado(hasta)
-      } else {
-        setLock(user.id, { until: null, intentos: nuevos })
-        if (!isTactil()) setTimeout(() => inputRef.current?.focus(), 100)
-      }
-    } else {
-      clearLock(user?.id)
+      if (!isTactil()) setTimeout(() => inputRef.current?.focus(), 100)
     }
   }
 
   function presionar(d) {
-    if (pin.length >= PIN_LEN || working || bloqueado) return
+    if (pin.length >= PIN_LEN || working) return
     setPin(p => p + d)
   }
 
   function borrar() {
-    if (working || bloqueado) return
+    if (working) return
     setPin(p => p.slice(0, -1))
   }
 
@@ -147,15 +93,13 @@ export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
         <div className="relative z-10 px-5 sm:px-7 pt-4 sm:pt-8 pb-5 sm:pb-7">
 
           {/* Botón cerrar */}
-          {!bloqueado && (
-            <button onClick={onClose}
-              className="absolute top-3 sm:top-5 right-4 sm:right-5 p-1.5 rounded-xl transition-colors"
-              style={{ color: 'rgba(255,255,255,0.35)', background: 'rgba(255,255,255,0.05)' }}
-              onMouseEnter={e => e.currentTarget.style.color = 'rgba(255,255,255,0.8)'}
-              onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.35)'}>
-              <X size={18} />
-            </button>
-          )}
+          <button onClick={onClose}
+            className="absolute top-3 sm:top-5 right-4 sm:right-5 p-1.5 rounded-xl transition-colors"
+            style={{ color: 'rgba(255,255,255,0.35)', background: 'rgba(255,255,255,0.05)' }}
+            onMouseEnter={e => e.currentTarget.style.color = 'rgba(255,255,255,0.8)'}
+            onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.35)'}>
+            <X size={18} />
+          </button>
 
           {/* Avatar + nombre */}
           <div className="flex flex-col items-center mb-5 sm:mb-7">
@@ -165,39 +109,6 @@ export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
               Ingresa tu PIN de {PIN_LEN} dígitos
             </p>
           </div>
-
-          {bloqueado ? (
-            /* ── Estado bloqueado ── */
-            <div className="flex flex-col items-center gap-3 sm:gap-4 py-2">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center"
-                style={{ background: 'rgba(239,68,68,0.15)', border: '2px solid rgba(239,68,68,0.3)' }}>
-                <ShieldAlert size={30} className="text-red-400 sm:hidden" />
-                <ShieldAlert size={36} className="text-red-400 hidden sm:block" />
-              </div>
-              <div className="text-center">
-                <p className="text-sm font-black text-white">Acceso bloqueado</p>
-                <p className="text-[11px] sm:text-xs mt-1" style={{ color: 'rgba(255,255,255,0.4)' }}>{MAX_INTENTOS} intentos fallidos consecutivos</p>
-              </div>
-              <div className="flex items-center gap-3 px-5 sm:px-6 py-2.5 sm:py-3 rounded-2xl"
-                style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)' }}>
-                <Clock size={16} className="text-red-400 shrink-0 sm:hidden" />
-                <Clock size={18} className="text-red-400 shrink-0 hidden sm:block" />
-                <span className="text-xl sm:text-2xl font-black text-red-400 tabular-nums w-8 text-center">{segsLeft}</span>
-                <span className="text-xs sm:text-sm font-semibold text-red-400/70">segundos</span>
-              </div>
-            </div>
-          ) : (
-            <>
-              {/* Aviso intentos fallidos */}
-              {intentos > 0 && (
-                <div className="mb-4 sm:mb-5 flex items-center gap-2 px-3 py-2 rounded-xl"
-                  style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.25)' }}>
-                  <ShieldAlert size={14} className="text-amber-400 shrink-0" />
-                  <p className="text-[11px] font-bold text-amber-400">
-                    {intentos}/{MAX_INTENTOS} intentos fallidos
-                  </p>
-                </div>
-              )}
 
               {/* Puntos indicadores */}
               <div className={`flex justify-center gap-3 sm:gap-3.5 mb-5 sm:mb-8 ${error ? 'animate-shake' : ''}`}>
@@ -281,8 +192,6 @@ export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
                   <Delete size={22} className="hidden sm:block" />
                 </button>
               </div>
-            </>
-          )}
         </div>
 
         {/* Overlay de carga */}
