@@ -230,18 +230,18 @@ export async function generarPlantillaOrdenDespachoPDF({ config = {}, incluirTra
   drawCheck(doc, 'TRANSF.',    MARGIN + 114, fpY + 6)
   drawCheck(doc, 'CTA X COB.', MARGIN + 134, fpY + 6)
 
-  // Barra TOTAL — fondo blanco, texto negro (para llenar a mano)
+  // Barra TOTAL — fondo negro, "Total:" alineado a la cuadrícula
   const totTopY = fpY + 9
-  doc.setDrawColor(120, 120, 120)
-  doc.setLineWidth(0.3)
-  doc.rect(MARGIN, totTopY, CONTENT_W, 10, 'S')
+  doc.setFillColor(60, 60, 60)
+  doc.rect(MARGIN, totTopY, CONTENT_W, 10, 'F')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
-  doc.setTextColor(...C_DARK)
-  doc.text('TOTAL', MARGIN + 4, totTopY + 7)
+  doc.setFontSize(13)
+  doc.setTextColor(...C_WHITE)
+  doc.text('Total:', MARGIN + 4, totTopY + 7)
+  // Línea para llenar monto a mano
   doc.setLineWidth(0.4)
-  doc.setDrawColor(150, 150, 150)
-  doc.line(MARGIN + 30, totTopY + 7.5, MARGIN + CONTENT_W - 4, totTopY + 7.5)
+  doc.setDrawColor(200, 200, 200)
+  doc.line(MARGIN + 28, totTopY + 7.5, MARGIN + CONTENT_W - 4, totTopY + 7.5)
 
   // ══════════════════════════════════════════════════════════════════════════
   // 5. DATOS DEL CHOFER Y VEHÍCULO — vacíos (2 filas: 3+4 cols como en la llena)

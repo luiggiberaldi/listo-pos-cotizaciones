@@ -286,18 +286,18 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
     doc.line(MARGIN + comboLeftW + 30, ry + dataRowH / 2 + 1.5, MARGIN + CONTENT_W - 3, ry + dataRowH / 2 + 1.5)
   }
 
-  // Barra TOTAL
+  // Barra TOTAL (fondo negro, alineada con cuadrícula derecha)
   const totTopY = comboTop + comboRows * dataRowH
-  doc.setDrawColor(120, 120, 120)
-  doc.setLineWidth(0.3)
-  doc.rect(MARGIN, totTopY, CONTENT_W, totalBarH, 'S')
+  doc.setFillColor(60, 60, 60)
+  doc.rect(MARGIN + comboLeftW, totTopY, comboRightW, totalBarH, 'F')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
-  doc.setTextColor(...C_DARK)
-  doc.text('TOTAL', MARGIN + 4, totTopY + 7)
+  doc.setFontSize(13)
+  doc.setTextColor(...C_WHITE)
+  doc.text('Total:', MARGIN + comboLeftW + 3, totTopY + 7)
+  // Línea punteada para llenar monto a mano
   doc.setLineWidth(0.4)
-  doc.setDrawColor(150, 150, 150)
-  doc.line(MARGIN + 30, totTopY + 7.5, MARGIN + CONTENT_W - 4, totTopY + 7.5)
+  doc.setDrawColor(200, 200, 200)
+  doc.line(MARGIN + comboLeftW + 22, totTopY + 7.5, MARGIN + CONTENT_W - 4, totTopY + 7.5)
 
   // ══════════════════════════════════════════════════════════════════════════
   // 6. DATOS DEL CHOFER Y VEHÍCULO — vacíos (2 filas: 3+4 cols)
