@@ -23,8 +23,8 @@ export function useStockComprometido() {
       return mapa
     },
     enabled: !!perfil,
-    staleTime: 1000 * 30,
-    gcTime: 1000 * 60 * 5,
+    staleTime: 1000 * 60 * 3,   // 3 min — era 30s, reducir llamadas innecesarias
+    gcTime: 1000 * 60 * 10,
   })
 }
 

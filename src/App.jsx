@@ -80,8 +80,6 @@ const persistOptions = {
   dehydrateOptions: {
     shouldDehydrateQuery: (query) => {
       const key = query.queryKey
-      // No persistir stock comprometido (30s staleTime = peligroso offline)
-      if (Array.isArray(key) && key[0] === 'stock_comprometido') return false
       // No persistir logs del sistema (grandes, no útiles offline)
       if (Array.isArray(key) && (key[0] === 'system-logs' || key[0] === 'system-logs-stats')) return false
       // Persistir solo queries exitosas

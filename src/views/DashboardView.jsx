@@ -47,22 +47,26 @@ function useMetricas() {
     queryKey: ['dashboard_metricas', perfil?.id, esPrivilegiado],
     queryFn: async () => {
       const tabla = esPrivilegiado ? 'cotizaciones' : 'v_cotizaciones_vendedor'
-      let q = supabase.from(tabla).select('id, estado, total_usd, creado_en').limit(1000)
-      if (!esPrivilegiado) q = q.eq('vendedor_id', perfil.id)
-      const { data: todas, error } = await q
-      if (error) throw error
-
       const ahora     = new Date()
       const inicioMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1).toISOString()
       const inicioMesAnt = new Date(ahora.getFullYear(), ahora.getMonth() - 1, 1).toISOString()
       const finMesAnt    = new Date(ahora.getFullYear(), ahora.getMonth(), 0, 23, 59, 59).toISOString()
+
+      let q = supabase.from(tabla).select('id, estado, total_usd, creado_en')
+        .gte('creado_en', inicioMesAnt).limit(500)
+      if (!esPrivilegiado) q = q.eq('vendedor_id', perfil.id)
 
       let dq = supabase.from('notas_despacho')
         .select('cotizacion_id, estado, entregada_en, total_usd')
         .eq('estado', 'entregada')
         .gte('entregada_en', inicioMesAnt)
         .limit(500)
-      const { data: despachos } = await dq
+
+      // Parallel fetch — both queries run at the same time
+      const [cotRes, despRes] = await Promise.all([q, dq])
+      if (cotRes.error) throw cotRes.error
+      const todas = cotRes.data ?? []
+      const despachos = despRes.data ?? []
 
       const entregadosMesIds = new Set(
         (despachos ?? []).filter(d => d.entregada_en >= inicioMes).map(d => d.cotizacion_id)
