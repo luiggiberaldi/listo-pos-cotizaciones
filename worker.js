@@ -2943,9 +2943,9 @@ async function handleGuardarDescuentos(request, env) {
   if (v.error) return v.error;
   const { user, operador, headers, ip } = v;
 
-  // Solo logística, supervisor o desarrollador
-  if (!['logistica', 'supervisor', 'desarrollador'].includes(operador.rol)) {
-    return jsonError('Solo logística o supervisor pueden aplicar descuentos', 403, request);
+  // Solo administración o desarrollador
+  if (!['administracion', 'desarrollador'].includes(operador.rol)) {
+    return jsonError('Solo administración puede aplicar descuentos', 403, request);
   }
 
   let body;
