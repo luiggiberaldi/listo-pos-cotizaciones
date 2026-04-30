@@ -505,14 +505,15 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     }
   }
 
-  // Barra TOTAL (ancho completo)
+  // Barra TOTAL (alineada con cuadrícula derecha)
   const totTopY = comboTop + numComboRows * dataRowH
   doc.setFillColor(60, 60, 60)
-  doc.rect(MARGIN, totTopY, CONTENT_W, totalBarH, 'F')
+  doc.rect(MARGIN + comboLeftW, totTopY, comboRightW, totalBarH, 'F')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(13)
   doc.setTextColor(...C_WHITE)
-  doc.text(`Total:  ${fmtTotal(totalFinal, monedaPDF, tasa, factorBcv)}`, MARGIN + CONTENT_W - 4, totTopY + 7, { align: 'right' })
+  doc.text('Total', MARGIN + comboLeftW + 3, totTopY + 7)
+  doc.text(fmtTotal(totalFinal, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 3, totTopY + 7, { align: 'right' })
 
   // ══════════════════════════════════════════════════════════════════════════
   // 5. CONDICIONES (izq) + CUENTAS BANCARIAS (der) — encima del bloque combinado
