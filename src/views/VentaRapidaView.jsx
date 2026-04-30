@@ -1762,7 +1762,7 @@ function Step3Confirmar({
   totalBs, tasa, formasPago, referenciaPago, transportistaSeleccionado, notas,
 }) {
   return (
-    <div className="flex-1 min-h-0 flex flex-col lg:flex-row lg:gap-4 p-4 overflow-y-auto">
+    <div className="flex-1 min-h-0 flex flex-col lg:flex-row lg:gap-4 p-4 pb-28 lg:pb-4 overflow-y-auto">
       {/* ── Columna izquierda: Cliente + Productos ── */}
       <div className="min-w-0 flex flex-col gap-3 lg:flex-1">
         {/* Cliente */}
