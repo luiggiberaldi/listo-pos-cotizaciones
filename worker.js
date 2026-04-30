@@ -2430,6 +2430,7 @@ async function handleVentaRapida(request, env) {
       headers: { ...headers, Prefer: 'return=representation' },
       body: JSON.stringify({
         cotizacion_id: cot.id,
+        numero: cot.numero,
         cliente_id: clienteId,
         vendedor_id: user.operator_id,
         transportista_id: transportistaId || null,
@@ -4584,8 +4585,8 @@ async function handleParseMaterialText(request, env) {
   if (!prodRes.ok) return jsonError('Error obteniendo productos', 500, request)
   const productos = await prodRes.json()
 
-  // 2. Construir catálogo compacto para el prompt (id|nombre|codigo)
-  const catalogo = productos.map(p => `${p.id}|${p.nombre}|${p.codigo || ''}`).join('\n')
+  // 2. Construir catálogo compacto para el prompt (codigo|nombre)
+  const catalogo = productos.map(p => `${p.codigo || p.id}|${p.nombre}`).join('\n')
 
   // 3. Usar AI para parsear texto Y hacer matching contra catálogo
   const systemPrompt = `Eres un asistente de ferretería/materiales de construcción. Tu trabajo es:
@@ -4600,19 +4601,19 @@ REGLAS DE MATCHING:
 - La cantidad por defecto es 1 si no se especifica.
 - Ignora texto que claramente no son materiales (saludos, preguntas, emojis).
 
-CATÁLOGO DE PRODUCTOS (id|nombre|codigo):
+CATÁLOGO DE PRODUCTOS (codigo|nombre):
 ${catalogo}
 
 RESPONDE ÚNICAMENTE en JSON válido con este formato (sin markdown, sin explicaciones):
-{"items":[{"descripcionOriginal":"texto exacto del item","cantidad":N,"confianza":0.0-1.0,"matchIds":["id1","id2"]}]}
+{"items":[{"descripcionOriginal":"texto exacto del item","cantidad":N,"confianza":0.0-1.0,"matchIds":["codigo1","codigo2"]}]}
 
 - confianza: 1.0 = match exacto, 0.8 = muy probable, 0.5 = posible, 0.3 = poco probable
-- matchIds: array de IDs del catálogo (máx 3), ordenados por relevancia. Vacío si no hay match.
+- matchIds: array de CÓDIGOS del catálogo (máx 3), ordenados por relevancia. Vacío si no hay match.
 - Si el texto no contiene materiales, devuelve {"items":[]}`
 
   let rawAiText = ''
   try {
-    const aiResponse = await env.AI.run('@cf/meta/llama-3.1-70b-instruct', {
+    const aiResponse = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: text.trim() },
@@ -4640,14 +4641,15 @@ RESPONDE ÚNICAMENTE en JSON válido con este formato (sin markdown, sin explica
     return json({ items: [], rawAiText }, 200, request)
   }
 
-  // 5. Mapear matchIds a productos completos
-  const prodMap = new Map(productos.map(p => [p.id, p]))
+  // 5. Mapear matchIds a productos completos (puede ser id o codigo)
+  const prodMapById = new Map(productos.map(p => [p.id, p]))
+  const prodMapByCodigo = new Map(productos.map(p => [p.codigo, p]).filter(([k]) => k))
   const items = parsed.items.map(item => ({
     descripcionOriginal: item.descripcionOriginal || '',
     cantidad: Math.max(1, Number(item.cantidad) || 1),
     confianza: Math.min(1, Math.max(0, Number(item.confianza) || 0.5)),
     matches: (item.matchIds || [])
-      .map(id => prodMap.get(id))
+      .map(id => prodMapById.get(id) || prodMapByCodigo.get(id))
       .filter(Boolean)
       .map(p => ({
         id: p.id,

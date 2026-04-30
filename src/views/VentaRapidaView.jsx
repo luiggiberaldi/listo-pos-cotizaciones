@@ -165,9 +165,9 @@ function ModalVentaExitosa({ data, onClose, config }) {
             <div className="flex justify-between py-1.5">
               <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Total</span>
               <div className="text-right">
-                <span className="font-bold text-slate-900 text-sm">${fmtUsd(totalUsd)}</span>
+                <span className="font-bold text-slate-900 text-sm">{fmtUsd(totalUsd)}</span>
                 {totalBs > 0 && (
-                  <p className="text-[10px] text-slate-400 font-mono">Bs {fmtBs(totalBs)}</p>
+                  <p className="text-[10px] text-slate-400 font-mono">{fmtBs(totalBs)}</p>
                 )}
               </div>
             </div>
