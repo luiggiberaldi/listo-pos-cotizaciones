@@ -317,7 +317,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   const tieneTransporte = !!transportista
 
   // Datos del chofer fijos al fondo de la página (footer)
-  const CHOFER_H = tieneTransporte ? 24 : 0
+  const CHOFER_H = 24
   const choferY = PAGE_H - MARGIN - CHOFER_H
 
   // Total 6mm más alto que antes (originalmente ~36mm offset, ahora 30mm)
@@ -438,7 +438,6 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   // ══════════════════════════════════════════════════════════════════════════
   // 5. DATOS DEL CHOFER Y VEHÍCULO — fijo al fondo (footer)
   // ══════════════════════════════════════════════════════════════════════════
-  if (tieneTransporte) {
   doc.setFillColor(240, 240, 240)
   doc.rect(MARGIN, choferY, CONTENT_W, 6, 'F')
   doc.setDrawColor(120, 120, 120)
@@ -484,7 +483,6 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   }
   drawRow(row1Fields, row1Y, col3W)
   drawRow(row2Fields, row2Y, col4W)
-  }
 
   // ── NO cuentas, NO slogan, NO condiciones ──
 
