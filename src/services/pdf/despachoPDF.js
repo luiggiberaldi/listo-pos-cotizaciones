@@ -427,6 +427,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   }
 
   const BLANK = '_______________'
+  const BLANK_VEH = '_______________________________'
   const leftLines = [{ text: '8 DÍAS DE CRÉDITO CONTINUO', bold: true, size: 9 }]
   const tNom = (transportista?.nombre || BLANK).toUpperCase()
   const tCI = (transportista?.rif || BLANK).toUpperCase()
@@ -439,15 +440,20 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   for (const segs of splitSegmentsIntoLines(choferSegs, 8, comboLeftW)) {
     leftLines.push({ segments: segs, size: 8 })
   }
-  const tVeh = (transportista?.vehiculo || BLANK).toUpperCase()
+  const tVeh = (transportista?.vehiculo || BLANK_VEH).toUpperCase()
   const tChuto = (transportista?.placa_chuto || BLANK).toUpperCase()
   const tBatea = (transportista?.placa_batea || BLANK).toUpperCase()
   const vehSegs = [
     { text: 'Vehículo: ', bold: false }, { text: tVeh, bold: true },
     { text: '  —  Chuto: ', bold: false }, { text: tChuto, bold: true },
-    { text: '  —  Batea: ', bold: false }, { text: tBatea, bold: true },
   ]
   for (const segs of splitSegmentsIntoLines(vehSegs, 8, comboLeftW)) {
+    leftLines.push({ segments: segs, size: 8 })
+  }
+  const bateaSegs = [
+    { text: 'Batea: ', bold: false }, { text: tBatea, bold: true },
+  ]
+  for (const segs of splitSegmentsIntoLines(bateaSegs, 8, comboLeftW)) {
     leftLines.push({ segments: segs, size: 8 })
   }
 
