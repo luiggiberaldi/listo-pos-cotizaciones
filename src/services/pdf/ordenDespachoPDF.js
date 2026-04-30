@@ -317,7 +317,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   const tieneTransporte = !!transportista
 
   // Datos del chofer fijos al fondo de la página (footer)
-  const CHOFER_H = tieneTransporte ? 30 : 0
+  const CHOFER_H = tieneTransporte ? 24 : 0
   const choferY = PAGE_H - MARGIN - CHOFER_H
 
   // Total 6mm más alto que antes (originalmente ~36mm offset, ahora 30mm)
@@ -450,7 +450,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   doc.text('DATOS DEL CHOFER Y DEL VEHÍCULO', MARGIN + 2, choferY + 4)
 
   // Grid: fila 1 = 3 cols, fila 2 = 4 cols
-  const ROW_H = 12
+  const ROW_H = 9
   const row1Y = choferY + 6
   const row2Y = row1Y + ROW_H
   const col3W = CONTENT_W / 3
@@ -479,7 +479,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(8.5)
       doc.setTextColor(0, 0, 0)
-      if (f.val) doc.text(f.val, fx + 2, ry + 10)
+      if (f.val) doc.text(f.val, fx + 2, ry + 7.5)
     })
   }
   drawRow(row1Fields, row1Y, col3W)
