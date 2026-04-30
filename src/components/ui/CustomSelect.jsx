@@ -1,7 +1,31 @@
 // src/components/ui/CustomSelect.jsx
 // Selector personalizado con búsqueda — reemplaza el <select> nativo
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Search, ChevronDown, X, Check, Plus } from 'lucide-react'
+
+/** Normaliza texto: quita acentos y pasa a minúsculas */
+function normalizar(str) {
+  return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+}
+
+/** Búsqueda inteligente: soporta acentos, inicio de palabra, y typos básicos */
+function matchScore(texto, query) {
+  const t = normalizar(texto)
+  const q = normalizar(query)
+
+  // Coincidencia exacta al inicio → máxima prioridad
+  if (t.startsWith(q)) return 3
+  // Coincidencia al inicio de alguna palabra
+  if (t.split(/\s+/).some(w => w.startsWith(q))) return 2
+  // Contiene la query
+  if (t.includes(q)) return 1
+  // Coincidencia por iniciales (ej: "dc" → "Distrito Capital")
+  if (q.length >= 2) {
+    const iniciales = t.split(/\s+/).map(w => w[0]).join('')
+    if (iniciales.includes(q)) return 1
+  }
+  return 0
+}
 
 /**
  * @param {object} props
@@ -70,16 +94,18 @@ export default function CustomSelect({
   const seleccionada = options.find(o => o.value === value)
   // Si el valor actual no está en options (fue creado), mostrarlo como seleccionado
   const seleccionadaLabel = seleccionada ? seleccionada.label : (creatable && value ? value : null)
-  const filtradas = busqueda.trim()
-    ? options.filter(o =>
-        o.label.toLowerCase().includes(busqueda.toLowerCase()) ||
-        (o.sub ?? '').toLowerCase().includes(busqueda.toLowerCase())
-      )
-    : options
+  const filtradas = useMemo(() => {
+    if (!busqueda.trim()) return options
+    const q = busqueda.trim()
+    return options
+      .map(o => ({ ...o, _score: Math.max(matchScore(o.label, q), matchScore(o.sub ?? '', q)) }))
+      .filter(o => o._score > 0)
+      .sort((a, b) => b._score - a._score)
+  }, [options, busqueda])
 
   // Mostrar opción "Crear" cuando hay texto que no coincide exactamente
   const puedeCrear = creatable && busqueda.trim() &&
-    !options.some(o => o.label.toLowerCase() === busqueda.trim().toLowerCase())
+    !options.some(o => normalizar(o.label) === normalizar(busqueda.trim()))
 
   function elegir(val) {
     onChange(val)
