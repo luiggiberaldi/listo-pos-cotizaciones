@@ -429,6 +429,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const comboTop = comboBottom - totalBarH - numComboRows * dataRowH
 
   // Dibujar filas de datos
+  const rightOffset = numComboRows - rightItems.length
   for (let r = 0; r < numComboRows; r++) {
     const ry = comboTop + r * dataRowH
 
@@ -461,8 +462,9 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
 
     // Celda derecha
     doc.rect(MARGIN + comboLeftW, ry, comboRightW, dataRowH, 'S')
-    if (r < rightItems.length) {
-      const item = rightItems[r]
+    const ri = r - rightOffset
+    if (ri >= 0 && ri < rightItems.length) {
+      const item = rightItems[ri]
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(9)
       if (item.color) doc.setTextColor(...item.color)
