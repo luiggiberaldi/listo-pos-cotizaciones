@@ -94,7 +94,7 @@ const useAuthStore = create((set, get) => ({
         console.log('[AUTH] forzando initialized=true por timeout')
         set({ initialized: true })
       }
-    }, haySession ? 8000 : 2000)
+    }, haySession ? 3000 : 1500)
 
     // Segundo timeout: si hay user pero no perfil después de 12s, limpiar para evitar loop
     const safetyTimeoutId = setTimeout(() => {
@@ -104,7 +104,7 @@ const useAuthStore = create((set, get) => ({
         console.log('[AUTH] safety: user sin perfil, forzando perfil=null')
         set({ initialized: true, perfil: null })
       }
-    }, 12000)
+    }, 6000)
 
     console.log('[AUTH] registrando onAuthStateChange...')
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -307,8 +307,13 @@ const useAuthStore = create((set, get) => ({
       // Setear perfil inmediatamente con datos del worker (sin esperar refresh)
       const op = result.operator
       if (op) {
-        // Limpiar cache de datos del operador anterior
-        queryClient.clear()
+        // Invalidar queries sensibles al operador (no borrar todo el cache)
+        queryClient.invalidateQueries({ queryKey: ['cotizaciones'] })
+        queryClient.invalidateQueries({ queryKey: ['despachos'] })
+        queryClient.invalidateQueries({ queryKey: ['comisiones'] })
+        queryClient.invalidateQueries({ queryKey: ['dashboard_metricas'] })
+        queryClient.invalidateQueries({ queryKey: ['dashboard_metrics'] })
+        queryClient.invalidateQueries({ queryKey: ['cuentas_por_cobrar'] })
 
         const perfilOp = {
           id: op.id,
@@ -322,12 +327,10 @@ const useAuthStore = create((set, get) => ({
         set({ perfil: perfilOp, loading: false, error: null })
       }
 
-      // Refrescar JWT para que RLS funcione con el nuevo operador
-      // IMPORTANTE: await para que el JWT tenga operator_id antes de que el usuario interactúe
-      try {
-        const { data: refreshData } = await supabase.auth.refreshSession()
-        if (refreshData?.user) set({ user: refreshData.user })
-      } catch { /* ignorar — perfil ya está seteado */ }
+      // Refrescar JWT en background — no bloquear al usuario
+      supabase.auth.refreshSession()
+        .then(({ data }) => { if (data?.user) set({ user: data.user }) })
+        .catch(() => { /* ignorar — perfil ya está seteado */ })
 
       return { ok: true }
     } catch (err) {
