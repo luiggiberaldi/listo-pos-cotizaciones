@@ -213,10 +213,10 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, onBorra
       </div>
 
       {/* Acciones */}
-      <div className="border-t border-slate-100 px-1 py-1 flex items-center justify-between gap-0.5">
+      <div className="border-t border-slate-100 px-2 py-1.5 flex items-center gap-1">
         <button onClick={() => onDetalle?.(producto)} title="Ver detalle"
-          className="flex items-center gap-0.5 px-1.5 sm:px-2 py-1 rounded-lg text-[10px] font-medium text-emerald-600 hover:bg-emerald-50 transition-colors">
-          <Eye size={11} /><span className="hidden sm:inline">Ver</span>
+          className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors border border-emerald-200">
+          <Eye size={14} /> Ver detalle
         </button>
         {esPrivilegiado && (
           <>
