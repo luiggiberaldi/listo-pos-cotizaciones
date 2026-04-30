@@ -410,11 +410,12 @@ export default function AppLayout() {
       <div className={`relative shrink-0 transition-all duration-300 ease-out ${sidebarCollapsed ? 'md:w-[72px]' : 'md:w-64'}`}>
       <aside
         className={`
-          fixed inset-y-0 left-0 z-[200] flex flex-col shrink-0
+          fixed left-0 z-[200] flex flex-col shrink-0
           transition-all duration-300 ease-out
           ${menuOpen ? 'translate-x-0' : '-translate-x-full'}
           ${sidebarCollapsed ? 'md:w-[72px]' : 'md:w-64'}
-          w-full md:w-64 md:translate-x-0 md:static md:z-auto md:h-[calc(100vh-3.5rem)] md:sticky md:top-14
+          w-[85%] max-w-xs top-0 rounded-br-2xl rounded-tr-2xl
+          md:w-64 md:inset-y-0 md:rounded-none md:translate-x-0 md:static md:z-auto md:h-[calc(100vh-3.5rem)] md:sticky md:top-14
           overflow-hidden
         `}
         style={{
@@ -423,7 +424,7 @@ export default function AppLayout() {
           boxShadow: '4px 0 24px rgba(0,0,0,0.3)',
         }}
       >
-        <div className="flex flex-col h-full min-h-0">
+        <div className="flex flex-col md:h-full min-h-0">
         {/* Malla de puntos decorativa */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-[0.03]">
           <svg width="100%" height="100%"><defs><pattern id="sdot" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="white"/></pattern></defs><rect width="100%" height="100%" fill="url(#sdot)"/></svg>
@@ -493,8 +494,8 @@ export default function AppLayout() {
           )}
         </nav>
 
-        {/* Cambiar usuario — solo móvil, anclado al fondo */}
-        <div className="md:hidden relative z-10 mt-auto shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+        {/* Cambiar usuario — solo móvil */}
+        <div className="md:hidden relative z-10 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
           <button
             onClick={() => { cerrarMenu(); handleSwitchOut() }}
             className="w-full flex items-center gap-3 px-4 py-3.5 text-white/50 hover:text-white/80 hover:bg-white/5 transition-colors active:scale-[0.98]"
