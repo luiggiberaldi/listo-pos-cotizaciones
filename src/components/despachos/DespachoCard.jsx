@@ -378,60 +378,22 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         </button>
 
         {/* Fila de acciones: Imprimir + Descargar + Editar + Más */}
-        <div className="flex items-center gap-0.5 mt-2 overflow-x-auto scrollbar-hide -mx-1 px-1">
-          {/* Imprimir dropdown */}
-          <div className="relative">
-            <button onClick={() => { setShowPrintMenu(v => !v); setShowDownloadMenu(false) }}
-              disabled={printLoading}
-              className="flex items-center gap-1 px-2 py-2 rounded-lg text-[11px] font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40 shrink-0">
-              {printLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Printer size={13} />}
-              Imprimir <ChevronDown size={9} />
-            </button>
-            {showPrintMenu && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setShowPrintMenu(false)} />
-                <div className="absolute left-0 bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20">
-                  <button onClick={imprimirDespacho}
-                    className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 active:bg-slate-100 text-left">
-                    <Printer size={14} /> Nota de Entrega
-                    <span className="ml-auto text-[9px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-1 py-0.5 rounded leading-none">Bs</span>
-                  </button>
-                  <button onClick={imprimirOrdenDespacho}
-                    className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 active:bg-slate-100 text-left">
-                    <Printer size={14} /> Orden de Despacho
-                    <span className="ml-auto text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-1 py-0.5 rounded leading-none">USD</span>
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+        <div className="flex items-center gap-0.5 mt-2 flex-wrap -mx-1 px-1">
+          {/* Imprimir */}
+          <button onClick={() => { setShowPrintMenu(v => !v); setShowDownloadMenu(false) }}
+            disabled={printLoading}
+            className="flex items-center gap-1 px-2 py-2 rounded-lg text-[11px] font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40 shrink-0">
+            {printLoading ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Printer size={13} />}
+            Imprimir <ChevronDown size={9} />
+          </button>
 
-          {/* Descargar dropdown */}
-          <div className="relative">
-            <button onClick={() => { setShowDownloadMenu(v => !v); setShowPrintMenu(false) }}
-              disabled={pdfLoading || ordenLoading}
-              className="flex items-center gap-1 px-2 py-2 rounded-lg text-[11px] font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40 shrink-0">
-              {(pdfLoading || ordenLoading) ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Download size={13} />}
-              Descargar <ChevronDown size={9} />
-            </button>
-            {showDownloadMenu && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setShowDownloadMenu(false)} />
-                <div className="absolute left-0 bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20">
-                  <button onClick={() => { descargarPDF(); setShowDownloadMenu(false) }}
-                    className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 active:bg-slate-100 text-left">
-                    <Download size={14} /> Nota de Entrega
-                    <span className="ml-auto text-[9px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-1 py-0.5 rounded leading-none">Bs</span>
-                  </button>
-                  <button onClick={() => { descargarOrdenDespacho(); setShowDownloadMenu(false) }}
-                    className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 active:bg-slate-100 text-left">
-                    <Download size={14} /> Orden de Despacho
-                    <span className="ml-auto text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-1 py-0.5 rounded leading-none">USD</span>
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+          {/* Descargar */}
+          <button onClick={() => { setShowDownloadMenu(v => !v); setShowPrintMenu(false) }}
+            disabled={pdfLoading || ordenLoading}
+            className="flex items-center gap-1 px-2 py-2 rounded-lg text-[11px] font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40 shrink-0">
+            {(pdfLoading || ordenLoading) ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Download size={13} />}
+            Descargar <ChevronDown size={9} />
+          </button>
 
           {canEditar && (
             <button onClick={() => setShowEdit(true)}
@@ -452,6 +414,48 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             </button>
           )}
         </div>
+
+        {/* Dropdown Imprimir — fixed bottom sheet en móvil */}
+        {showPrintMenu && (
+          <>
+            <div className="fixed inset-0 bg-black/20 z-40" onClick={() => setShowPrintMenu(false)} />
+            <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl z-50 p-4 pb-8 animate-slide-up">
+              <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto mb-3" />
+              <p className="text-sm font-semibold text-slate-700 mb-2 px-1">Imprimir</p>
+              <button onClick={imprimirDespacho}
+                className="w-full flex items-center gap-3 px-3 py-3.5 rounded-xl text-sm text-slate-700 active:bg-slate-100 text-left">
+                <Printer size={16} className="text-blue-600" /> Nota de Entrega
+                <span className="ml-auto text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">Bs</span>
+              </button>
+              <button onClick={imprimirOrdenDespacho}
+                className="w-full flex items-center gap-3 px-3 py-3.5 rounded-xl text-sm text-slate-700 active:bg-slate-100 text-left">
+                <Printer size={16} className="text-emerald-600" /> Orden de Despacho
+                <span className="ml-auto text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">USD</span>
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* Dropdown Descargar — fixed bottom sheet en móvil */}
+        {showDownloadMenu && (
+          <>
+            <div className="fixed inset-0 bg-black/20 z-40" onClick={() => setShowDownloadMenu(false)} />
+            <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl z-50 p-4 pb-8 animate-slide-up">
+              <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto mb-3" />
+              <p className="text-sm font-semibold text-slate-700 mb-2 px-1">Descargar PDF</p>
+              <button onClick={() => { descargarPDF(); setShowDownloadMenu(false) }}
+                className="w-full flex items-center gap-3 px-3 py-3.5 rounded-xl text-sm text-slate-700 active:bg-slate-100 text-left">
+                <Download size={16} className="text-blue-600" /> Nota de Entrega
+                <span className="ml-auto text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">Bs</span>
+              </button>
+              <button onClick={() => { descargarOrdenDespacho(); setShowDownloadMenu(false) }}
+                className="w-full flex items-center gap-3 px-3 py-3.5 rounded-xl text-sm text-slate-700 active:bg-slate-100 text-left">
+                <Download size={16} className="text-emerald-600" /> Orden de Despacho
+                <span className="ml-auto text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">USD</span>
+              </button>
+            </div>
+          </>
+        )}
 
         {moreActions.length > 1 && (
         <MobileActionSheet
