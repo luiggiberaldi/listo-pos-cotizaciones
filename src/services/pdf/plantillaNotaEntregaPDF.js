@@ -172,7 +172,7 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
 
   // Filas vacías para llenar a mano
   const BLANK_ROW_H = 6.5
-  const BLANK_ROWS = 12
+  const BLANK_ROWS = 11
   doc.setLineWidth(0.2)
   doc.setDrawColor(200, 200, 200)
   for (let i = 0; i < BLANK_ROWS; i++) {
