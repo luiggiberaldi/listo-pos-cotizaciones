@@ -457,6 +457,7 @@ async function groqFetch(env, grupo, messages, { maxTokens = 2048, temperature =
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${key}`,
+          'User-Agent': 'groq-python/0.13.0',
         },
         body: JSON.stringify({
           model: 'llama-3.3-70b-versatile',
