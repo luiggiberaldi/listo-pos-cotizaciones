@@ -18,6 +18,7 @@ import ProductoForm  from '../components/inventario/ProductoForm'
 import MovimientoLoteModal from '../components/inventario/MovimientoLoteModal'
 import MovimientosHistorial from '../components/inventario/MovimientosHistorial'
 import KardexModal from '../components/inventario/KardexModal'
+import ProductoDetalleModal from '../components/inventario/ProductoDetalleModal'
 import ListaPreciosModal from '../components/inventario/ListaPreciosModal'
 import { Modal }     from '../components/ui/Modal'
 import ConfirmModal  from '../components/ui/ConfirmModal'
@@ -87,6 +88,7 @@ export default function InventarioView() {
   const [confirmBorrarOpen,setConfirmBorrarOpen]= useState(false)
   const [modalLoteOpen,    setModalLoteOpen]    = useState(false)
   const [kardexProducto,   setKardexProducto]   = useState(null)
+  const [detalleProducto,  setDetalleProducto]  = useState(null)
   const [tabActivo,        setTabActivo]        = useState('productos') // 'productos' | 'movimientos'
   const [showListaPrecios, setShowListaPrecios] = useState(false)
 
@@ -371,6 +373,7 @@ export default function InventarioView() {
                 onDesactivar={abrirDesactivar}
                 onBorrar={abrirBorrar}
                 onKardex={setKardexProducto}
+                onDetalle={setDetalleProducto}
                 tasa={tasaEfectiva}
                 comprometido={stockComprometido[p.id] || 0}
               />
@@ -386,6 +389,7 @@ export default function InventarioView() {
                 onDesactivar={abrirDesactivar}
                 onBorrar={abrirBorrar}
                 onKardex={setKardexProducto}
+                onDetalle={setDetalleProducto}
                 tasa={tasaEfectiva}
                 comprometido={stockComprometido[p.id] || 0}
               />
@@ -467,6 +471,14 @@ export default function InventarioView() {
         categorias={categorias}
         tasa={tasaEfectiva}
         config={configNeg}
+      />
+
+      {/* ── Modal: Detalle de Producto (para screenshot/compartir) ─────── */}
+      <ProductoDetalleModal
+        isOpen={!!detalleProducto}
+        onClose={() => setDetalleProducto(null)}
+        producto={detalleProducto}
+        tasa={tasaEfectiva}
       />
     </div>
   )

@@ -1,5 +1,5 @@
 // src/components/inventario/ProductoCard.jsx
-import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle, Package, Trash2, ClipboardList, TrendingUp } from 'lucide-react'
+import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle, Package, Trash2, ClipboardList, TrendingUp, Eye } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtBs, usdToBs } from '../../utils/format'
 import StockComprometidoDetalle from './StockComprometidoDetalle'
@@ -59,7 +59,7 @@ function StockBadge({ actual, minimo, comprometido = 0, productoId }) {
   )
 }
 
-export default function ProductoCard({ producto, onEditar, onDesactivar, onBorrar, onKardex, tasa = 0, comprometido = 0 }) {
+export default function ProductoCard({ producto, onEditar, onDesactivar, onBorrar, onKardex, onDetalle, tasa = 0, comprometido = 0 }) {
   const { perfil } = useAuthStore()
   const esAdministracion = perfil?.rol === 'administracion'
   const esPrivilegiado = perfil?.rol === 'supervisor' || esAdministracion
@@ -213,30 +213,36 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, onBorra
       </div>
 
       {/* Acciones */}
-      {esPrivilegiado && (
-        <div className="border-t border-slate-100 px-1 py-1 flex items-center justify-between gap-0.5">
-          <button onClick={() => onKardex(producto)} title="Kardex"
-            className="flex items-center gap-0.5 px-1.5 sm:px-2 py-1 rounded-lg text-[10px] font-medium text-violet-600 hover:bg-violet-50 transition-colors">
-            <ClipboardList size={11} /><span className="hidden sm:inline">Kardex</span>
-          </button>
-          {esAdministracion && (
-            <>
-              <button onClick={() => onEditar(producto)} title="Editar"
-                className="flex items-center gap-0.5 px-1.5 sm:px-2 py-1 rounded-lg text-[10px] font-medium text-sky-600 hover:bg-sky-50 transition-colors">
-                <Pencil size={11} /><span className="hidden sm:inline">Editar</span>
-              </button>
-              <button onClick={() => onDesactivar(producto)} title="Desactivar"
-                className="flex items-center gap-0.5 px-1.5 sm:px-2 py-1 rounded-lg text-[10px] font-medium text-amber-500 hover:bg-amber-50 transition-colors">
-                <EyeOff size={11} /><span className="hidden sm:inline">Desact.</span>
-              </button>
-              <button onClick={() => onBorrar(producto)} title="Borrar"
-                className="flex items-center gap-0.5 px-1.5 sm:px-2 py-1 rounded-lg text-[10px] font-medium text-red-400 hover:bg-red-50 transition-colors">
-                <Trash2 size={11} />
-              </button>
-            </>
-          )}
-        </div>
-      )}
+      <div className="border-t border-slate-100 px-1 py-1 flex items-center justify-between gap-0.5">
+        <button onClick={() => onDetalle?.(producto)} title="Ver detalle"
+          className="flex items-center gap-0.5 px-1.5 sm:px-2 py-1 rounded-lg text-[10px] font-medium text-emerald-600 hover:bg-emerald-50 transition-colors">
+          <Eye size={11} /><span className="hidden sm:inline">Ver</span>
+        </button>
+        {esPrivilegiado && (
+          <>
+            <button onClick={() => onKardex(producto)} title="Kardex"
+              className="flex items-center gap-0.5 px-1.5 sm:px-2 py-1 rounded-lg text-[10px] font-medium text-violet-600 hover:bg-violet-50 transition-colors">
+              <ClipboardList size={11} /><span className="hidden sm:inline">Kardex</span>
+            </button>
+            {esAdministracion && (
+              <>
+                <button onClick={() => onEditar(producto)} title="Editar"
+                  className="flex items-center gap-0.5 px-1.5 sm:px-2 py-1 rounded-lg text-[10px] font-medium text-sky-600 hover:bg-sky-50 transition-colors">
+                  <Pencil size={11} /><span className="hidden sm:inline">Editar</span>
+                </button>
+                <button onClick={() => onDesactivar(producto)} title="Desactivar"
+                  className="flex items-center gap-0.5 px-1.5 sm:px-2 py-1 rounded-lg text-[10px] font-medium text-amber-500 hover:bg-amber-50 transition-colors">
+                  <EyeOff size={11} /><span className="hidden sm:inline">Desact.</span>
+                </button>
+                <button onClick={() => onBorrar(producto)} title="Borrar"
+                  className="flex items-center gap-0.5 px-1.5 sm:px-2 py-1 rounded-lg text-[10px] font-medium text-red-400 hover:bg-red-50 transition-colors">
+                  <Trash2 size={11} />
+                </button>
+              </>
+            )}
+          </>
+        )}
+      </div>
     </div>
   )
 }

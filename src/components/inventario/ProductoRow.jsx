@@ -1,6 +1,6 @@
 // src/components/inventario/ProductoRow.jsx
 // Fila compacta de producto para vista de lista
-import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle, Package, Trash2, ClipboardList } from 'lucide-react'
+import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle, Package, Trash2, ClipboardList, Eye } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtBs, usdToBs } from '../../utils/format'
 
@@ -22,7 +22,7 @@ function colorCategoria(str = '') {
   return fg
 }
 
-export default function ProductoRow({ producto, onEditar, onDesactivar, onBorrar, onKardex, tasa = 0, comprometido = 0 }) {
+export default function ProductoRow({ producto, onEditar, onDesactivar, onBorrar, onKardex, onDetalle, tasa = 0, comprometido = 0 }) {
   const { perfil } = useAuthStore()
   const esAdministracion = perfil?.rol === 'administracion'
   const esPrivilegiado = perfil?.rol === 'supervisor' || esAdministracion
@@ -114,30 +114,36 @@ export default function ProductoRow({ producto, onEditar, onDesactivar, onBorrar
       </div>
 
       {/* Acciones (kardex: supervisor y admin; CRUD: solo administracion) */}
-      {esPrivilegiado && (
-        <div className="flex items-center gap-1 px-2 shrink-0">
-          <button onClick={() => onKardex(producto)} title="Kardex"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors">
-            <ClipboardList size={15} />
-          </button>
-          {esAdministracion && (
-            <>
-              <button onClick={() => onEditar(producto)} title="Editar producto"
-                className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-light transition-colors">
-                <Pencil size={15} />
-              </button>
-              <button onClick={() => onDesactivar(producto)} title="Desactivar producto"
-                className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 transition-colors">
-                <EyeOff size={15} />
-              </button>
-              <button onClick={() => onBorrar(producto)} title="Borrar producto"
-                className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
-                <Trash2 size={15} />
-              </button>
-            </>
-          )}
-        </div>
-      )}
+      <div className="flex items-center gap-1 px-2 shrink-0">
+        <button onClick={() => onDetalle?.(producto)} title="Ver detalle"
+          className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors">
+          <Eye size={15} />
+        </button>
+        {esPrivilegiado && (
+          <>
+            <button onClick={() => onKardex(producto)} title="Kardex"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors">
+              <ClipboardList size={15} />
+            </button>
+            {esAdministracion && (
+              <>
+                <button onClick={() => onEditar(producto)} title="Editar producto"
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-light transition-colors">
+                  <Pencil size={15} />
+                </button>
+                <button onClick={() => onDesactivar(producto)} title="Desactivar producto"
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 transition-colors">
+                  <EyeOff size={15} />
+                </button>
+                <button onClick={() => onBorrar(producto)} title="Borrar producto"
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+                  <Trash2 size={15} />
+                </button>
+              </>
+            )}
+          </>
+        )}
+      </div>
     </div>
   )
 }
