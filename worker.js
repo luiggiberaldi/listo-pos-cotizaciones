@@ -2653,9 +2653,10 @@ async function handleActualizarEstadoDespacho(request, env) {
       }
     }
 
-    // 2d. Anular: solo administración, supervisor, desarrollador
+    // 2d. Anular: administración, supervisor, desarrollador, o vendedor dueño si está pendiente
     if (nuevoEstado === 'anulada') {
-      if (!['administracion', 'supervisor', 'desarrollador'].includes(rolOp)) {
+      const esVendedorPropio = rolOp === 'vendedor' && desp.vendedor_id === operador.id && desp.estado === 'pendiente';
+      if (!['administracion', 'supervisor', 'desarrollador'].includes(rolOp) && !esVendedorPropio) {
         return jsonError('No tiene permiso para anular despachos', 403, request);
       }
     }
