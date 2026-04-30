@@ -91,7 +91,7 @@ function EstadoDropdownCot({ filtros, value, onChange }) {
 
 function SkeletonCotizaciones() {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
+    <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
       {Array.from({ length: 6 }).map((_, i) => (
         <div key={i} className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
           <Skeleton className="h-4 w-1/2 rounded" />
@@ -713,7 +713,7 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
       ) : (
         <>
         {vistaMode === 'grid' ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
+          <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
             {cotizacionesPaginadas.map(c => (
               <CotizacionCard
                 key={c.id}

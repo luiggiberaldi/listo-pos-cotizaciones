@@ -127,7 +127,7 @@ function ModalEnvio({ isOpen, onConfirm, onCancel, cargando, tasaHook }) {
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-sm p-4 sm:p-6 space-y-4">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-[calc(100vw-1.5rem)] sm:max-w-sm p-4 sm:p-6 space-y-4">
         <h3 className="font-black text-slate-800 text-lg">Enviar cotización</h3>
         <p className="text-sm text-slate-500">
           Confirma la tasa de cambio para registrar el equivalente en bolívares.
@@ -1278,7 +1278,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
         {/* ═══════════════════════════════════════════════════════════════ */}
         {paso === 4 && (
           <div className="flex items-center justify-center min-h-[40vh] px-2">
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden max-w-sm w-full">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden max-w-[calc(100vw-1.5rem)] sm:max-w-sm w-full">
 
               {/* Header de éxito compacto */}
               <div className="relative h-20 flex flex-col items-center justify-center"

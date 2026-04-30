@@ -793,7 +793,7 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
       {/* Modal confirmación cliente de otro vendedor */}
       {confirmAjeno && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onClick={() => setConfirmAjeno(null)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 space-y-4" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-[calc(100vw-1.5rem)] sm:max-w-sm w-full p-6 space-y-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
                 <AlertCircle size={20} className="text-amber-600" />

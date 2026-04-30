@@ -369,7 +369,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
               WhatsApp <ChevronDown size={11} />
             </button>
             {showWhatsAppMenu && (
-              <div className="absolute left-0 right-0 bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
+              <div className="absolute right-0 xs:left-0 xs:right-auto bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
                 onMouseDown={e => e.preventDefault()}>
                 <MonedaSelector onSelect={() => {}} onClose={() => setShowWhatsAppMenu(false)} />
                 <button onClick={() => { handleWhatsApp(); setShowWhatsAppMenu(false) }}
@@ -407,7 +407,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
                   Imprimir <ChevronDown size={9} />
                 </button>
                 {showPrintMenu && (
-                  <div className="absolute left-0 bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
+                  <div className="absolute right-0 xs:left-0 xs:right-auto bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
                     onMouseDown={e => e.preventDefault()}>
                     <MonedaSelector onSelect={() => {}} onClose={() => setShowPrintMenu(false)} />
                     <button onClick={() => { imprimirCotizacion(); setShowPrintMenu(false) }}
@@ -428,7 +428,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
                   Descargar <ChevronDown size={9} />
                 </button>
                 {showDownloadMenu && (
-                  <div className="absolute left-0 bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
+                  <div className="absolute right-0 xs:left-0 xs:right-auto bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
                     onMouseDown={e => e.preventDefault()}>
                     <MonedaSelector onSelect={() => {}} onClose={() => setShowDownloadMenu(false)} />
                     <button onClick={() => { descargarPDF(); setShowDownloadMenu(false) }}
