@@ -4558,6 +4558,7 @@ Responde en español, de forma clara y accionable. Usa formato markdown con head
 // POST /api/parse-material-text — Parsear texto WhatsApp → productos del inventario
 // ══════════════════════════════════════════════════════════════════════════════
 async function handleParseMaterialText(request, env) {
+  if (!env.GROQ_KEYS_A) return jsonError('Servicio AI no configurado', 503, request)
   const user = await verifyAuth(request, env)
   if (!user?.id) return jsonError('No autenticado', 401, request)
 
