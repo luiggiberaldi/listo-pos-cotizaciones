@@ -7,17 +7,30 @@ import {
   markRead,
   clearNotifications,
 } from '../services/notificationService'
+import { updateNotificationBadge, initFaviconBadge, clearNotificationBadge } from '../services/faviconBadge'
+
+let _faviconInitialized = false
 
 export function useAdminAlerts() {
   const [unreadCount, setUnreadCount] = useState(() => getUnreadCount())
   const [notifications, setNotifications] = useState(() => getNotifications())
 
   const refresh = useCallback(() => {
-    setUnreadCount(getUnreadCount())
+    const count = getUnreadCount()
+    setUnreadCount(count)
     setNotifications(getNotifications())
+    updateNotificationBadge(count)
   }, [])
 
   useEffect(() => {
+    // Inicializar favicon badge una sola vez
+    if (!_faviconInitialized) {
+      initFaviconBadge()
+      _faviconInitialized = true
+    }
+    // Sincronizar badge al montar
+    updateNotificationBadge(getUnreadCount())
+
     window.addEventListener('construacero-notification', refresh)
     window.addEventListener('construacero-notification-read', refresh)
     return () => {
@@ -31,6 +44,6 @@ export function useAdminAlerts() {
     notifications,
     markAllRead: () => { markAllRead(); refresh() },
     markRead: (id) => { markRead(id); refresh() },
-    clearAll: () => { clearNotifications(); refresh() },
+    clearAll: () => { clearNotifications(); clearNotificationBadge(); refresh() },
   }
 }

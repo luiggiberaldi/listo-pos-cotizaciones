@@ -8,16 +8,34 @@ import supabase from './supabase/client'
 const NOTIF_KEY_BASE = 'construacero_notifications_v2'
 const MAX_NOTIFS = 100
 
-// ─── Sonido de notificación ─────────────────────────────────────────────────
+// ─── Sonido de notificación (dual: normal + urgente) ─────────────────────────
 let _notifAudio = null
-function playNotifSound() {
+let _notifUrgentAudio = null
+
+// Tipos que usan sonido urgente (triple beep agudo)
+const URGENT_TYPES = new Set([
+  'stock_critico',
+  'despacho_cancelado',
+  'compromiso_alto',
+])
+
+function playNotifSound(type) {
   try {
-    if (!_notifAudio) {
-      _notifAudio = new Audio('/notif-sound.wav')
-      _notifAudio.volume = 0.5
+    if (URGENT_TYPES.has(type)) {
+      if (!_notifUrgentAudio) {
+        _notifUrgentAudio = new Audio('/notif-urgent.wav')
+        _notifUrgentAudio.volume = 0.85
+      }
+      _notifUrgentAudio.currentTime = 0
+      _notifUrgentAudio.play().catch(() => {})
+    } else {
+      if (!_notifAudio) {
+        _notifAudio = new Audio('/notif-sound.wav')
+        _notifAudio.volume = 0.7
+      }
+      _notifAudio.currentTime = 0
+      _notifAudio.play().catch(() => {})
     }
-    _notifAudio.currentTime = 0
-    _notifAudio.play().catch(() => {}) // ignorar si el browser bloquea autoplay
   } catch { /* silencioso */ }
 }
 
@@ -121,7 +139,7 @@ function _insertLocalNotification(type, title, body, meta) {
   saveNotifs(notifs)
 
   window.dispatchEvent(new CustomEvent('construacero-notification', { detail: notif }))
-  playNotifSound()
+  playNotifSound(type)
   return notif
 }
 
