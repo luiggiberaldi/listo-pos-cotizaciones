@@ -190,6 +190,8 @@ export function useTasaCambio() {
   const tasaRef = useRef(tasaBcv)
   const tasaUsdtRef = useRef(tasaUsdt)
 
+  // ID único por pestaña/dispositivo para distinguir eco propio vs cambio ajeno
+  const deviceIdRef = useRef(Math.random().toString(36).slice(2, 10))
   // Timestamp del último cambio local (para evitar eco del realtime)
   const localChangeTsRef = useRef(0)
 
@@ -198,8 +200,8 @@ export function useTasaCambio() {
   // y este effect actualiza modo + tasa manual para TODOS los usuarios en tiempo real
   useEffect(() => {
     if (!config || config.tasa_bcv_manual === undefined) return
-    // Ignorar si nosotros mismos hicimos el cambio (evitar eco)
-    if (Date.now() - localChangeTsRef.current < 5000) return
+    // Ignorar si nosotros mismos hicimos el cambio (evitar eco) — solo 2s ventana
+    if (Date.now() - localChangeTsRef.current < 2000) return
 
     const dbManual = Number(config.tasa_bcv_manual) || 0
     if (dbManual > 0) {
@@ -319,7 +321,6 @@ export function useTasaCambio() {
   }, [fetchTasa, handleFetchResult])
 
   // ─── Realtime sync: broadcast + persistencia en BD ────────────────────────────
-  const _ignoreNextBroadcast = useRef(false)
   const channelRef = useRef(null)
 
   // Guardar modo + valor en BD (dispara realtime a todos los clientes)
@@ -337,12 +338,11 @@ export function useTasaCambio() {
     // Guardar en BD (esto dispara realtime para otros usuarios)
     guardarTasaEnBD(modo, modo === 'manual' ? tasaManual : '0')
     // Broadcast instantáneo como backup rápido
-    _ignoreNextBroadcast.current = true
     try {
       channelRef.current?.send({
         type: 'broadcast',
         event: 'tasa_change',
-        payload: { modoTasa: modo, tasaManual: modo === 'manual' ? tasaManual : null, ts: Date.now() },
+        payload: { modoTasa: modo, tasaManual: modo === 'manual' ? tasaManual : null, ts: Date.now(), deviceId: deviceIdRef.current },
       })
     } catch { /* silencioso */ }
   }, [tasaManual, guardarTasaEnBD])
@@ -352,12 +352,11 @@ export function useTasaCambio() {
     // Guardar en BD
     guardarTasaEnBD('manual', val)
     // Broadcast instantáneo como backup rápido
-    _ignoreNextBroadcast.current = true
     try {
       channelRef.current?.send({
         type: 'broadcast',
         event: 'tasa_change',
-        payload: { modoTasa: 'manual', tasaManual: val, ts: Date.now() },
+        payload: { modoTasa: 'manual', tasaManual: val, ts: Date.now(), deviceId: deviceIdRef.current },
       })
     } catch { /* silencioso */ }
   }, [guardarTasaEnBD])
@@ -367,15 +366,18 @@ export function useTasaCambio() {
     const channel = supabase
       .channel('tasa-sync')
       .on('broadcast', { event: 'tasa_change' }, ({ payload }) => {
-        if (!payload || _ignoreNextBroadcast.current) {
-          _ignoreNextBroadcast.current = false
-          return
-        }
+        if (!payload) return
+        // Ignorar si el broadcast viene de esta misma pestaña
+        if (payload.deviceId === deviceIdRef.current) return
         if (payload.modoTasa && MODOS_VALIDOS.includes(payload.modoTasa)) {
           setModoTasa(payload.modoTasa)
+          // Persistir en localStorage para que sobreviva recargas
+          localStorage.setItem(STORAGE_KEY_MODO, payload.modoTasa)
         }
         if (payload.tasaManual !== null && payload.tasaManual !== undefined) {
           setTasaManual(String(payload.tasaManual))
+          // Persistir en localStorage
+          localStorage.setItem('construacero_tasa_manual', String(payload.tasaManual))
         }
       })
       .subscribe()
