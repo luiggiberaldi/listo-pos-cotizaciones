@@ -41,7 +41,7 @@ function ModalVentaExitosa({ data, onClose, config }) {
 
   if (!data) return null
 
-  const { numero, despachoId, cotizacionId, clienteNombre, items, subtotal, totalUsd, totalBs, tasa, formasPago, transportista, flete } = data
+  const { numero, despachoId, cotizacionId, clienteNombre, items, subtotal, totalUsd, totalBs, tasa, formasPago, transportista, flete, notas } = data
   const numDisplay = `VR-${String(numero).padStart(5, '0')}`
 
   function printOrDownloadPdf(blob, filename) {
@@ -85,6 +85,7 @@ function ModalVentaExitosa({ data, onClose, config }) {
       cliente_id: data.clienteId, vendedor_id: data.vendedorId, transportista_id: data.transportistaId,
       forma_pago: JSON.stringify(formasPago), total_usd: totalUsd, tasa_bcv_snapshot: tasa,
       estado: 'pendiente', costo_envio_usd: 0, flete_usd: flete,
+      notas: notas || null,
       cliente: clienteData?.[0] || null,
       vendedor: vendedorRes.data || null,
       transportista: transportistaRes.data || null,
@@ -482,6 +483,7 @@ export default function VentaRapidaView() {
           tasaUsdt: tasaHook.tasaUsdt?.precio || 0,
           tasaBcv: tasaHook.tasaBcv?.precio || 0,
           formasPago,
+          notas,
         })
         // Reset form
         setStep(0)
