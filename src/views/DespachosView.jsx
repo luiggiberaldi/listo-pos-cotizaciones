@@ -44,6 +44,42 @@ function SkeletonDespachos() {
   )
 }
 
+function EstadoDropdown({ filtros, value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  const activeLabel = filtros.find(f => f.valor === value)?.label || 'Todos'
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  return (
+    <div ref={ref} className="relative">
+      <button onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors bg-indigo-500 text-white border-indigo-500">
+        <Filter size={12} />
+        {activeLabel}
+        <ChevronDown size={12} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute left-0 mt-1 w-44 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-50">
+          {filtros.map(({ valor, label }) => (
+            <button key={valor} onClick={() => { onChange(valor); setOpen(false) }}
+              className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                value === valor ? 'bg-indigo-50 text-indigo-600 font-semibold' : 'text-slate-700 hover:bg-slate-50'
+              }`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function PlantillaDropdown({ config }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
@@ -186,10 +222,16 @@ export default function DespachosView() {
 
       {/* Filtros de estado + vendedor */}
       <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-1">
-        <Filter size={14} className="text-slate-400 shrink-0" />
+        {/* Dropdown en móvil */}
+        <div className="md:hidden shrink-0">
+          <EstadoDropdown filtros={getFiltrosDespacho(perfil?.rol)} value={estadoFiltro} onChange={setEstadoFiltro} />
+        </div>
+
+        {/* Chips en desktop */}
+        <Filter size={14} className="text-slate-400 shrink-0 hidden md:block" />
         {getFiltrosDespacho(perfil?.rol).map(({ valor, label }) => (
           <button key={valor} onClick={() => setEstadoFiltro(valor)}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border whitespace-nowrap shrink-0 ${
+            className={`hidden md:block px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border whitespace-nowrap shrink-0 ${
               estadoFiltro === valor
                 ? 'bg-indigo-500 text-white border-indigo-500'
                 : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'
