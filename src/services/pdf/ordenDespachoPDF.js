@@ -456,16 +456,16 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   const col3W = CONTENT_W / 3
   const col4W = CONTENT_W / 4
   const row1Fields = [
-    { label: 'CHOFER', val: transportista?.nombre || '' },
-    { label: 'C.I.', val: transportista?.rif || '' },
-    { label: 'COLOR', val: transportista?.color || '' },
+    { label: 'CHOFER', val: (transportista?.nombre || '').toUpperCase() },
+    { label: 'C.I.', val: (transportista?.rif || '').toUpperCase() },
+    { label: 'COLOR', val: (transportista?.color || '').toUpperCase() },
   ]
   const row2Fields = [
-    { label: 'VEHÍCULO', val: transportista?.vehiculo || '' },
-    { label: 'PLACA', val: transportista?.zona_cobertura || '' },
+    { label: 'VEHÍCULO', val: (transportista?.vehiculo || '').toUpperCase() },
+    { label: 'PLACA', val: (transportista?.zona_cobertura || '').toUpperCase() },
   ]
-  if (transportista?.placa_chuto) row2Fields.push({ label: 'PLACA CHUTO', val: transportista.placa_chuto })
-  if (transportista?.placa_batea) row2Fields.push({ label: 'PLACA BATEA', val: transportista.placa_batea })
+  if (transportista?.placa_chuto) row2Fields.push({ label: 'PLACA CHUTO', val: transportista.placa_chuto.toUpperCase() })
+  if (transportista?.placa_batea) row2Fields.push({ label: 'PLACA BATEA', val: transportista.placa_batea.toUpperCase() })
   function drawRow(fields, ry, colW) {
     fields.forEach((f, i) => {
       const fx = MARGIN + i * colW

@@ -428,9 +428,9 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
 
   const leftLines = [{ text: '8 DÍAS DE CRÉDITO CONTINUO', bold: true, size: 9 }]
   if (transportista) {
-    const tNom = transportista.nombre || ''
-    const tCI = transportista.rif || ''
-    const tColor = transportista.color || ''
+    const tNom = (transportista.nombre || '').toUpperCase()
+    const tCI = (transportista.rif || '').toUpperCase()
+    const tColor = (transportista.color || '').toUpperCase()
     const choferSegs = [
       { text: 'Chofer: ', bold: false }, { text: tNom, bold: true },
       { text: '  —  CI: ', bold: false }, { text: tCI, bold: true },
@@ -439,10 +439,10 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     for (const segs of splitSegmentsIntoLines(choferSegs, 8, comboLeftW)) {
       leftLines.push({ segments: segs, size: 8 })
     }
-    const tVeh = transportista.vehiculo || ''
-    const tPlaca = transportista.zona_cobertura || ''
-    const tChuto = transportista.placa_chuto || ''
-    const tBatea = transportista.placa_batea || ''
+    const tVeh = (transportista.vehiculo || '').toUpperCase()
+    const tPlaca = (transportista.zona_cobertura || '').toUpperCase()
+    const tChuto = (transportista.placa_chuto || '').toUpperCase()
+    const tBatea = (transportista.placa_batea || '').toUpperCase()
     const vehSegs = [
       { text: 'Vehículo: ', bold: false }, { text: tVeh, bold: true },
       { text: '  —  Placa: ', bold: false }, { text: tPlaca, bold: true },
