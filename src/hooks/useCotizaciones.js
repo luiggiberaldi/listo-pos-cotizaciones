@@ -10,6 +10,7 @@ import {
   notifyCotizacionEnviada,
   notifyCotizacionAnulada,
   notifyCotizacionAceptadaDespacho,
+  notifyClienteAjeno,
 } from '../services/notificationService'
 import { showToast } from '../components/ui/Toast'
 import { sendPushNotification } from './usePushNotifications'
@@ -219,12 +220,14 @@ export function useEnviarCotizacion() {
       // Obtener número, vendedor y total para notificación
       const { data: cot } = await supabase
         .from('cotizaciones')
-        .select('numero, version, total_usd, cliente_id, vendedor:usuarios!cotizaciones_vendedor_id_fkey(nombre)')
+        .select('numero, version, total_usd, cliente_id, vendedor_id, vendedor:usuarios!cotizaciones_vendedor_id_fkey(nombre)')
         .eq('id', cotizacionId)
         .single()
 
       // Cliente via Worker API (bypasses RLS)
       let clienteNombre = 'cliente'
+      let clienteVendedorId = null
+      let clienteVendedorNombre = null
       if (cot?.cliente_id) {
         const session2 = (await supabase.auth.getSession()).data.session
         try {
@@ -236,6 +239,8 @@ export function useEnviarCotizacion() {
           if (cRes.ok) {
             const cData = await cRes.json()
             clienteNombre = cData?.[0]?.nombre ?? 'cliente'
+            clienteVendedorId = cData?.[0]?.vendedor_id ?? null
+            clienteVendedorNombre = cData?.[0]?.vendedor?.nombre ?? null
           }
         } catch { /* fallback */ }
       }
@@ -243,20 +248,23 @@ export function useEnviarCotizacion() {
       const numero        = cot?.numero ? String(cot.numero).padStart(5, '0') : '—'
       const vendedorNombre = cot?.vendedor?.nombre ?? 'vendedor'
       const totalUsd      = Number(cot?.total_usd || 0).toFixed(2)
-      return { numero, clienteNombre, vendedorNombre, totalUsd }
+      const esClienteAjeno = clienteVendedorId && cot?.vendedor_id && clienteVendedorId !== cot.vendedor_id
+      return { numero, clienteNombre, vendedorNombre, totalUsd, esClienteAjeno, clienteVendedorNombre }
     },
-    onSuccess: ({ numero, clienteNombre, vendedorNombre, totalUsd }) => {
+    onSuccess: ({ numero, clienteNombre, vendedorNombre, totalUsd, esClienteAjeno, clienteVendedorNombre }) => {
       qc.invalidateQueries({ queryKey: COTIZACIONES_KEY })
       qc.invalidateQueries({ queryKey: STOCK_COMPROMETIDO_KEY })
       showToast(`Cotización #${numero} enviada`, 'success')
-      notifyCotizacionEnviada(numero, clienteNombre, vendedorNombre, totalUsd, rol)
-      sendPushNotification({
-        title: '🔔 Cotización pendiente de aprobación',
-        message: `${vendedorNombre} envió COT-${numero} para ${clienteNombre} — $${totalUsd}. Requiere tu revisión.`,
-        tag: `cotizacion-enviada-${numero}`,
-        url: '/cotizaciones?estado=enviada',
-        targetRole: 'supervisor',
-      })
+      if (esClienteAjeno) {
+        notifyClienteAjeno({ tipo: 'cotizacion', numero, vendedorNombre, clienteNombre, vendedorDueño: clienteVendedorNombre || 'otro vendedor', currentRole: rol })
+        sendPushNotification({
+          title: 'Cotización con cliente ajeno',
+          message: `${vendedorNombre} cotizó con "${clienteNombre}" (de ${clienteVendedorNombre || 'otro vendedor'}) — COT-${numero}`,
+          tag: `cliente-ajeno-cot-${numero}`,
+          url: '/cotizaciones',
+          targetRole: 'supervisor',
+        })
+      }
     },
   })
 }

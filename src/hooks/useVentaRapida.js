@@ -12,10 +12,12 @@ import { STOCK_COMPROMETIDO_KEY } from './useStockComprometido'
 import { CXC_KEY } from './useCuentasCobrar'
 import { showToast } from '../components/ui/Toast'
 import { sendPushNotification } from './usePushNotifications'
+import { notifyClienteAjeno } from '../services/notificationService'
 
 export function useVentaRapida() {
   const qc = useQueryClient()
-  const rol = useAuthStore.getState().perfil?.rol
+  const perfil = useAuthStore.getState().perfil
+  const rol = perfil?.rol
 
   return useMutation({
     mutationFn: async ({
@@ -42,9 +44,30 @@ export function useVentaRapida() {
 
       const result = await res.json()
       if (!res.ok) throw new Error(result.error || 'Error al crear venta rápida')
-      return { ...result, clienteNombre }
+
+      // Verificar si el cliente es ajeno
+      let esClienteAjeno = false
+      let clienteVendedorNombre = null
+      if (clienteId) {
+        try {
+          const session = (await supabase.auth.getSession()).data.session
+          const cRes = await fetch(apiUrl('/api/clientes/lookup'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+            body: JSON.stringify({ ids: [clienteId] }),
+          })
+          if (cRes.ok) {
+            const cData = await cRes.json()
+            const clienteVendedorId = cData?.[0]?.vendedor_id
+            clienteVendedorNombre = cData?.[0]?.vendedor?.nombre || null
+            esClienteAjeno = clienteVendedorId && perfil?.id && clienteVendedorId !== perfil.id
+          }
+        } catch { /* ignore */ }
+      }
+
+      return { ...result, clienteNombre, esClienteAjeno, clienteVendedorNombre }
     },
-    onSuccess: ({ numero, clienteNombre }) => {
+    onSuccess: ({ numero, clienteNombre, esClienteAjeno, clienteVendedorNombre }) => {
       qc.invalidateQueries({ queryKey: DESPACHOS_KEY })
       qc.invalidateQueries({ queryKey: INVENTARIO_KEY })
       qc.invalidateQueries({ queryKey: COMISIONES_KEY })
@@ -59,6 +82,17 @@ export function useVentaRapida() {
         url: '/despachos',
         targetRole: 'supervisor',
       })
+      if (esClienteAjeno) {
+        const vendedorNombre = perfil?.nombre || 'vendedor'
+        notifyClienteAjeno({ tipo: 'venta_rapida', numero: String(numero).padStart(5, '0'), vendedorNombre, clienteNombre, vendedorDueño: clienteVendedorNombre || 'otro vendedor', currentRole: rol })
+        sendPushNotification({
+          title: 'Venta rápida con cliente ajeno',
+          message: `${vendedorNombre} vendió a "${clienteNombre}" (de ${clienteVendedorNombre || 'otro vendedor'}) — VR-${numero}`,
+          tag: `cliente-ajeno-vr-${numero}`,
+          url: '/despachos',
+          targetRole: 'supervisor',
+        })
+      }
     },
     onError: (err) => {
       showToast(err.message || 'Error al crear venta rápida', 'error')

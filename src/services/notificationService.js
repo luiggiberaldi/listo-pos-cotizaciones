@@ -62,6 +62,7 @@ export const NOTIF_TYPES = {
   COTIZACION_ANULADA:            'cotizacion_anulada',
   COTIZACION_SIN_RESPUESTA:      'cotizacion_sin_respuesta',
   COMPROMISO_ALTO:               'compromiso_alto',
+  CLIENTE_AJENO:                 'cliente_ajeno',
 }
 
 // Qué rol ve cada tipo de notificación en la campanita local
@@ -82,6 +83,7 @@ const NOTIF_TARGET_ROLE = {
   [NOTIF_TYPES.COTIZACION_ANULADA]:           null,
   [NOTIF_TYPES.COTIZACION_SIN_RESPUESTA]:     null,
   [NOTIF_TYPES.COMPROMISO_ALTO]:              'supervisor',
+  [NOTIF_TYPES.CLIENTE_AJENO]:                'supervisor',
 }
 
 function readNotifs() {
@@ -466,5 +468,16 @@ export function notifyCotizacionSinRespuesta(numero, clienteNombre, tiempoTexto,
     `COT-${numero} sin respuesta (${tiempoTexto})`,
     `${clienteNombre}${de} — Enviada hace ${tiempoTexto} sin confirmar`,
     { numero, clienteNombre, tiempoTexto },
+  )
+}
+
+export function notifyClienteAjeno({ tipo, numero, vendedorNombre, clienteNombre, vendedorDueño, currentRole = null }) {
+  const tipoLabel = tipo === 'venta_rapida' ? 'Venta rápida' : 'Cotización'
+  createNotification(
+    NOTIF_TYPES.CLIENTE_AJENO,
+    `${tipoLabel} con cliente ajeno`,
+    `${vendedorNombre} usó el cliente "${clienteNombre}" (de ${vendedorDueño}) en ${tipoLabel} #${numero}`,
+    { tipo, numero, vendedorNombre, clienteNombre, vendedorDueño },
+    currentRole,
   )
 }

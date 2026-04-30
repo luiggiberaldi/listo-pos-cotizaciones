@@ -221,24 +221,26 @@ export default function DespachosView() {
       <OnboardingSequence rol={rol} page="/despachos" />
 
       {/* Filtros de estado + vendedor */}
-      <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-1">
+      <div className="flex items-center gap-2 pb-1">
         {/* Dropdown en móvil */}
         <div className="md:hidden shrink-0">
           <EstadoDropdown filtros={getFiltrosDespacho(perfil?.rol)} value={estadoFiltro} onChange={setEstadoFiltro} />
         </div>
 
         {/* Chips en desktop */}
-        <Filter size={14} className="text-slate-400 shrink-0 hidden md:block" />
-        {getFiltrosDespacho(perfil?.rol).map(({ valor, label }) => (
-          <button key={valor} onClick={() => setEstadoFiltro(valor)}
-            className={`hidden md:block px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border whitespace-nowrap shrink-0 ${
-              estadoFiltro === valor
-                ? 'bg-indigo-500 text-white border-indigo-500'
-                : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'
-            }`}>
-            {label}
-          </button>
-        ))}
+        <div className="hidden md:flex items-center gap-2 overflow-x-auto scrollbar-none">
+          <Filter size={14} className="text-slate-400 shrink-0" />
+          {getFiltrosDespacho(perfil?.rol).map(({ valor, label }) => (
+            <button key={valor} onClick={() => setEstadoFiltro(valor)}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border whitespace-nowrap shrink-0 ${
+                estadoFiltro === valor
+                  ? 'bg-indigo-500 text-white border-indigo-500'
+                  : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'
+              }`}>
+              {label}
+            </button>
+          ))}
+        </div>
 
         {/* Toggle Mis datos / Todos — supervisor/dev */}
         {(esSupervisor || esDesarrollador) && (
