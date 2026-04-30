@@ -84,7 +84,7 @@ const EVENT_DEBOUNCE_MS = 30_000 // 30 segundos
 // 'supervisor'/'vendedor' = solo ese rol la ve localmente
 const NOTIF_TARGET_ROLE = {
   [NOTIF_TYPES.STOCK_BAJO]:                   'supervisor',
-  [NOTIF_TYPES.STOCK_CRITICO]:                null,           // urgente, ambos
+  [NOTIF_TYPES.STOCK_CRITICO]:                'supervisor',   // solo admin/supervisor
   [NOTIF_TYPES.STOCK_REABASTECIDO]:           'supervisor',
   [NOTIF_TYPES.COTIZACION_ENVIADA]:           'supervisor',   // vendedor ya sabe que envió
   [NOTIF_TYPES.COTIZACION_ACEPTADA]:          'vendedor',     // supervisor ya sabe que aceptó
