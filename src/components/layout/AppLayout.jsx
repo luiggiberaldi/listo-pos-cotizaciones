@@ -430,8 +430,8 @@ export default function AppLayout() {
 
         {/* Botón cerrar — solo móvil */}
         <div className="md:hidden flex justify-end p-3 pb-0 relative z-10">
-          <button onClick={cerrarMenu} className="p-2 rounded-xl text-white/40 hover:text-white hover:bg-white/10 transition-colors">
-            <X size={20} />
+          <button onClick={cerrarMenu} className="p-2.5 rounded-xl bg-white/10 border border-white/20 text-white hover:bg-white/20 transition-colors">
+            <X size={22} />
           </button>
         </div>
 
