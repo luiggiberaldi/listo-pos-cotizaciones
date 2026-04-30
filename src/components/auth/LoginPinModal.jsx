@@ -59,7 +59,7 @@ export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
     <div
       className="fixed inset-0 z-[300] flex items-end sm:items-center justify-center animate-in fade-in duration-200"
       style={{ background: 'rgba(5, 10, 24, 0.85)', backdropFilter: 'blur(8px)' }}
-      onClick={bloqueado ? undefined : onClose}
+      onClick={onClose}
     >
       <div
         className="relative w-full sm:max-w-sm sm:mx-4 rounded-t-3xl sm:rounded-3xl overflow-hidden animate-in slide-in-from-bottom sm:zoom-in-95 duration-300 max-h-[95dvh] overflow-y-auto"
