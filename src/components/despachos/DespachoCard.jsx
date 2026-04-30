@@ -6,7 +6,7 @@ import MobileActionSheet from '../cotizaciones/MobileActionSheet'
 import ConfirmModal from '../ui/ConfirmModal'
 import useAuthStore from '../../store/useAuthStore'
 import { getDespachoAction, PRIMARY_ACTION_COLORS } from '../../utils/despachoActions'
-import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs } from '../../utils/format'
+import { fmtUsdSimple as fmtUsd, fmtFecha, fmtFechaHora, fmtBs, usdToBs } from '../../utils/format'
 import supabase from '../../services/supabase/client'
 import { apiUrl } from '../../services/apiBase'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
@@ -302,10 +302,10 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         <div className="flex items-center gap-1.5 text-xs text-slate-400">
           <Calendar size={11} />
           {despacho.estado === 'entregada' && despacho.entregada_en
-            ? <span className="text-teal-500 font-medium">Entregada {fmtFecha(despacho.entregada_en)}</span>
+            ? <span className="text-teal-500 font-medium">Entregada {fmtFechaHora(despacho.entregada_en)}</span>
             : despacho.estado === 'despachada' && despacho.despachada_en
-              ? <span className="text-indigo-400 font-medium">Despachada {fmtFecha(despacho.despachada_en)}</span>
-              : <span>{fmtFecha(despacho.creado_en)}</span>
+              ? <span className="text-indigo-400 font-medium">Despachada {fmtFechaHora(despacho.despachada_en)}</span>
+              : <span>{fmtFechaHora(despacho.actualizado_en || despacho.creado_en)}</span>
           }
         </div>
         {(despacho.cliente_factura || despacho.cliente)?.nombre && (

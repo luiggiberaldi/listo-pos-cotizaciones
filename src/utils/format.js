@@ -24,6 +24,11 @@ export function fmtFecha(f) {
   return new Date(f).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
+export function fmtFechaHora(f) {
+  if (!f) return '—'
+  return new Date(f).toLocaleString('es-VE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
 export function fmtFechaLarga(f) {
   if (!f) return '—'
   const d = new Date(f)

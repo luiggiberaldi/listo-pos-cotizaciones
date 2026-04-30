@@ -9,7 +9,7 @@ import supabase from '../../services/supabase/client'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
 import { compartirPorWhatsApp, generarMensaje } from '../../utils/whatsapp'
-import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs } from '../../utils/format'
+import { fmtUsdSimple as fmtUsd, fmtFecha, fmtFechaHora, fmtBs, usdToBs } from '../../utils/format'
 import { getAction, PRIMARY_ACTION_COLORS } from '../../utils/cotizacionActions'
 import { apiUrl } from '../../services/apiBase'
 import DetalleModal from '../ui/DetalleModal'
@@ -286,7 +286,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
       <div className="px-3 pt-2 pb-1.5 space-y-1">
         <div className="flex items-center gap-1.5 text-xs text-slate-400">
           <Calendar size={11} />
-          {fmtFecha(cotizacion.creado_en)}
+          {fmtFechaHora(cotizacion.actualizado_en || cotizacion.creado_en)}
         </div>
         {cotizacion.cliente?.nombre && (
           <div className="space-y-1">

@@ -4,7 +4,7 @@ import { memo } from 'react'
 import { Calendar, Eye, FileText, Pencil } from 'lucide-react'
 import EstadoBadge from '../cotizaciones/EstadoBadge'
 import useAuthStore from '../../store/useAuthStore'
-import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs } from '../../utils/format'
+import { fmtUsdSimple as fmtUsd, fmtFecha, fmtFechaHora, fmtBs, usdToBs } from '../../utils/format'
 
 export default memo(function DespachoRow({ despacho, onVer, onEditar, tasa = 0 }) {
   const { perfil } = useAuthStore()
@@ -55,7 +55,7 @@ export default memo(function DespachoRow({ despacho, onVer, onEditar, tasa = 0 }
         {/* Fecha */}
         <div className="hidden sm:flex items-center gap-1 text-xs text-slate-400 shrink-0">
           <Calendar size={11} />
-          {fmtFecha(despacho.creado_en)}
+          {fmtFechaHora(despacho.actualizado_en || despacho.creado_en)}
         </div>
 
         {/* Total + Flete */}

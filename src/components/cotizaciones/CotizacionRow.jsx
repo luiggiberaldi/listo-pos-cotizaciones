@@ -4,7 +4,7 @@ import { memo } from 'react'
 import { Calendar, Eye, Pencil, Clock, Truck, PackageCheck, XCircle } from 'lucide-react'
 import EstadoBadge from './EstadoBadge'
 import useAuthStore from '../../store/useAuthStore'
-import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs } from '../../utils/format'
+import { fmtUsdSimple as fmtUsd, fmtFecha, fmtFechaHora, fmtBs, usdToBs } from '../../utils/format'
 
 export default memo(function CotizacionRow({ cotizacion, onEditar, onVer, tasa = 0 }) {
   const { perfil } = useAuthStore()
@@ -59,7 +59,7 @@ export default memo(function CotizacionRow({ cotizacion, onEditar, onVer, tasa =
         {/* Fecha */}
         <div className="hidden sm:flex items-center gap-1 text-xs text-slate-400 shrink-0">
           <Calendar size={11} />
-          {fmtFecha(cotizacion.creado_en)}
+          {fmtFechaHora(cotizacion.actualizado_en || cotizacion.creado_en)}
         </div>
 
         {/* Total */}
