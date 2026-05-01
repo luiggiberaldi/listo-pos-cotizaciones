@@ -123,6 +123,11 @@ export default {
       return handleListarClientes(request, env);
     }
 
+    // ── API: check if RIF/cédula already exists ─────────────────────────────
+    if (url.pathname === '/api/clientes/check-rif' && request.method === 'GET') {
+      return handleCheckRif(request, env);
+    }
+
     // ── API: lookup clientes por IDs (bypass RLS para vendedores) ──────────
     if (url.pathname === '/api/clientes/lookup' && request.method === 'POST') {
       return handleClientesLookup(request, env);
@@ -1570,6 +1575,37 @@ async function handleClearInventory(request, env) {
   return json({ ok: true }, 200, request);
 }
 
+
+async function handleCheckRif(request, env) {
+  const user = await verifyAuth(request, env);
+  if (!user?.id) return jsonError('No autenticado', 401, request);
+
+  const url = new URL(request.url);
+  const rif = url.searchParams.get('rif');
+  const exclude = url.searchParams.get('exclude');
+  if (!rif) return json({ existe: false }, 200, request);
+
+  let queryUrl = `${env.SUPABASE_URL}/rest/v1/clientes?rif_cedula=eq.${encodeURIComponent(rif)}&activo=eq.true&select=id,nombre,vendedor:usuarios!clientes_vendedor_id_fkey(nombre)&limit=1`;
+  if (exclude) queryUrl += `&id=neq.${encodeURIComponent(exclude)}`;
+
+  const res = await fetch(queryUrl, {
+    headers: {
+      apikey: env.SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    },
+  });
+  if (!res.ok) return json({ existe: false }, 200, request);
+
+  const data = await res.json();
+  if (data.length === 0) return json({ existe: false }, 200, request);
+
+  const c = data[0];
+  return json({
+    existe: true,
+    nombre: c.nombre,
+    vendedor: c.vendedor?.nombre || 'Sin vendedor',
+  }, 200, request);
+}
 
 async function handleListarClientes(request, env) {
   const user = await verifyAuth(request, env);
