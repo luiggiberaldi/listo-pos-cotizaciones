@@ -114,13 +114,7 @@ function PlantillaDropdown({ config }) {
             onClick={() => { generarPlantillaOrdenDespachoPDF({ config, incluirTransporte: true }); setOpen(false) }}
             className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 transition-colors text-slate-700"
           >
-            Orden de Despacho (con transporte)
-          </button>
-          <button
-            onClick={() => { generarPlantillaOrdenDespachoPDF({ config, incluirTransporte: false }); setOpen(false) }}
-            className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 transition-colors text-slate-700"
-          >
-            Orden de Despacho (sin transporte)
+            Orden de Despacho
           </button>
         </div>
       )}
