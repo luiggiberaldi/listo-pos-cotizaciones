@@ -272,13 +272,13 @@ export async function generarPlantillaOrdenDespachoPDF({ config = {}, incluirTra
     doc.text(label, fx + 2, row1Y + 3.5)
   })
 
-  // Fila 2: VEHÍCULO, PLACA, PLACA CHUTO, PLACA BATEA
-  const row2Labels = ['VEHÍCULO', 'PLACA', 'PLACA CHUTO', 'PLACA BATEA']
+  // Fila 2: VEHÍCULO, PLACA CHUTO, PLACA BATEA
+  const row2Labels = ['VEHÍCULO', 'PLACA CHUTO', 'PLACA BATEA']
   row2Labels.forEach((label, i) => {
-    const fx = MARGIN + i * col4W
+    const fx = MARGIN + i * col3W
     doc.setDrawColor(120, 120, 120)
     doc.setLineWidth(0.3)
-    doc.rect(fx, row2Y, col4W, ROW_H2, 'S')
+    doc.rect(fx, row2Y, col3W, ROW_H2, 'S')
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(6.5)
     doc.setTextColor(100, 100, 100)
