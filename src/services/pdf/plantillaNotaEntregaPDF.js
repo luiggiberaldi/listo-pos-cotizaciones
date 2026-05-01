@@ -283,13 +283,14 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
     doc.text(rightLabels[r], MARGIN + comboLeftW + 3, ry + dataRowH / 2 + 1)
   }
 
-  // Barra TOTAL (fondo negro, alineada con cuadrícula derecha)
+  // Barra TOTAL (fondo blanco, borde, alineada con cuadrícula derecha)
   const totTopY = comboTop + comboRows * dataRowH
-  doc.setFillColor(60, 60, 60)
-  doc.rect(MARGIN + comboLeftW, totTopY, comboRightW, totalBarH, 'F')
+  doc.setDrawColor(160, 160, 160)
+  doc.setLineWidth(0.15)
+  doc.rect(MARGIN + comboLeftW, totTopY, comboRightW, totalBarH, 'S')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(13)
-  doc.setTextColor(...C_WHITE)
+  doc.setTextColor(...C_DARK)
   doc.text('Total:', MARGIN + comboLeftW + 3, totTopY + 7)
 
   // ══════════════════════════════════════════════════════════════════════════

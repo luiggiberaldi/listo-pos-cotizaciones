@@ -230,13 +230,14 @@ export async function generarPlantillaOrdenDespachoPDF({ config = {}, incluirTra
   drawCheck(doc, 'TRANSF.',    MARGIN + 114, fpY + 6)
   drawCheck(doc, 'CTA X COB.', MARGIN + 134, fpY + 6)
 
-  // Barra TOTAL — fondo negro, "Total:" alineado a la cuadrícula
+  // Barra TOTAL — fondo blanco, borde, "Total:" en negro
   const totTopY = fpY + 9
-  doc.setFillColor(60, 60, 60)
-  doc.rect(MARGIN, totTopY, CONTENT_W, 10, 'F')
+  doc.setDrawColor(160, 160, 160)
+  doc.setLineWidth(0.15)
+  doc.rect(MARGIN, totTopY, CONTENT_W, 10, 'S')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(13)
-  doc.setTextColor(...C_WHITE)
+  doc.setTextColor(...C_DARK)
   doc.text('Total:', MARGIN + 4, totTopY + 7)
 
   // ══════════════════════════════════════════════════════════════════════════
