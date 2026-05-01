@@ -1583,8 +1583,55 @@ async function handleListarClientes(request, env) {
   if (busqueda.trim()) {
     const safe = sanitizeSearch(busqueda);
     if (safe) {
-      queryUrl += `&or=(nombre.ilike.*${encodeURIComponent(safe)}*,rif_cedula.ilike.*${encodeURIComponent(safe)}*)`;
+      // Strip dots/dashes/spaces so "12364" matches "V12.364.799"
+      const stripped = safe.replace(/[\.\-\s]/g, '');
+      // Build multiple patterns: original term + stripped version
+      const enc = encodeURIComponent(safe);
+      const encStrip = encodeURIComponent(stripped);
+      // Search in nombre, rif_cedula (with and without punctuation), telefono
+      queryUrl += `&or=(nombre.ilike.*${enc}*,rif_cedula.ilike.*${enc}*,rif_cedula.ilike.*${encStrip}*,telefono.ilike.*${enc}*)`;
     }
+  }
+
+  // Also fetch all and do a server-side stripped match for rif_cedula
+  // PostgREST ilike can't strip punctuation, so we fetch candidates and filter
+  if (busqueda.trim()) {
+    const res = await fetch(queryUrl, {
+      headers: {
+        apikey: env.SUPABASE_SERVICE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+      },
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      return jsonError(`Error al cargar clientes: ${errText}`, res.status, request);
+    }
+    let data = await res.json();
+
+    // If no results from PostgREST filter, do a broader search stripping punctuation
+    if (data.length === 0) {
+      const allUrl = `${env.SUPABASE_URL}/rest/v1/clientes?activo=eq.true&order=nombre.asc&select=id,nombre,rif_cedula,telefono,email,direccion,estado,ciudad,notas,tipo_cliente,activo,vendedor_id,saldo_pendiente,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color)`;
+      const allRes = await fetch(allUrl, {
+        headers: {
+          apikey: env.SUPABASE_SERVICE_KEY,
+          Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+        },
+      });
+      if (allRes.ok) {
+        const allData = await allRes.json();
+        const needle = busqueda.trim().toLowerCase().replace(/[\.\-\s]/g, '');
+        data = allData.filter(c => {
+          const rif = (c.rif_cedula || '').toLowerCase().replace(/[\.\-\s]/g, '');
+          const nombre = (c.nombre || '').toLowerCase();
+          const tel = (c.telefono || '').toLowerCase().replace(/[\.\-\s]/g, '');
+          return rif.includes(needle) || nombre.includes(needle) || tel.includes(needle);
+        });
+      }
+    }
+
+    return new Response(JSON.stringify(data), {
+      headers: { 'Content-Type': 'application/json', ...corsHeaders(request) },
+    });
   }
 
   const res = await fetch(queryUrl, {
