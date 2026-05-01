@@ -4,6 +4,7 @@
 import { useState, useEffect } from 'react'
 import { User, Hash, Phone, Mail, MapPin, StickyNote, Loader2, Tag, Building } from 'lucide-react'
 import { useCrearCliente, useActualizarCliente } from '../../hooks/useClientes'
+import supabase from '../../services/supabase/client'
 import CustomSelect from '../ui/CustomSelect'
 import { ESTADOS, getCiudades } from '../../data/venezuelaGeo'
 
@@ -186,6 +187,25 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
     }
 
     try {
+      // Pre-check: buscar si ya existe un cliente con ese RIF/cédula
+      const rifFinal = camposFinales.rif_cedula
+      if (rifFinal) {
+        let query = supabase
+          .from('clientes')
+          .select('id, nombre, vendedor:usuarios!clientes_vendedor_id_fkey(nombre)')
+          .eq('rif_cedula', rifFinal)
+          .eq('activo', true)
+          .limit(1)
+        if (esEdicion) query = query.neq('id', cliente.id)
+        const { data: existente } = await query
+        if (existente?.length) {
+          const c = existente[0]
+          const vendNombre = c.vendedor?.nombre || 'Sin vendedor'
+          setErrorGeneral(`Ya existe un cliente con ese RIF/Cédula: "${c.nombre}" — asignado a ${vendNombre}`)
+          return
+        }
+      }
+
       let resultado
       if (esEdicion) {
         resultado = await actualizarCliente.mutateAsync({ id: cliente.id, campos: camposFinales })
