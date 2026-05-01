@@ -201,6 +201,13 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
   return (
     <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
 
+      {/* Error general — arriba para máxima visibilidad */}
+      {errorGeneral && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700 font-medium animate-pulse">
+          {errorGeneral}
+        </div>
+      )}
+
       {/* Nombre */}
       <Campo label="Nombre *" icono={User} error={errores.nombre}>
         <input
@@ -386,13 +393,6 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
           disabled={cargando}
         />
       </Campo>
-
-      {/* Error general */}
-      {errorGeneral && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
-          {errorGeneral}
-        </div>
-      )}
 
       {/* Botones */}
       <div className={`flex gap-3 pt-4 pb-4 ${compact ? '' : 'sticky bottom-0 bg-white'}`}>
