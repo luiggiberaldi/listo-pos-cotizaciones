@@ -2202,7 +2202,7 @@ async function validateOperator(request, env, { requireSupervisor = false } = {}
   }
 
   const h = supaServiceHeaders(env);
-  const rolFilter = requireSupervisor ? '&rol=in.(supervisor,logistica)' : '';
+  const rolFilter = requireSupervisor ? '&rol=in.(supervisor,logistica,administracion)' : '';
   const res = await fetch(
     `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${user.operator_id}&activo=eq.true${rolFilter}&select=id,nombre,rol,color`,
     { headers: h }
@@ -2210,7 +2210,7 @@ async function validateOperator(request, env, { requireSupervisor = false } = {}
   const [operador] = await res.json();
   if (!operador) {
     const msg = requireSupervisor
-      ? 'Solo supervisores o logística pueden realizar esta acción'
+      ? 'Solo supervisores, logística o administración pueden realizar esta acción'
       : 'Operador no encontrado o inactivo';
     return { error: jsonError(msg, 403, request) };
   }

@@ -6,6 +6,22 @@ export function getLocalISODate(d = new Date()) {
 }
 
 /**
+ * Rango de un solo día
+ * @param {number} offset 0 = hoy, -1 = ayer, etc.
+ */
+export function getDayRange(offset = 0) {
+    const now = new Date();
+    const d = new Date(now);
+    d.setDate(now.getDate() + offset);
+    // Si offset es mayor a 0, y la fecha es futura, limitamos a 'now'? 
+    // Para días no suele ser necesario si es solo para rangos "pasados" o "presente".
+    // Siguiendo el patrón, no pasamos de 'hoy' si el fin del día es en el futuro.
+    // Como es de un solo día, from y to son iguales.
+    const dStr = getLocalISODate(d);
+    return { from: dStr, to: dStr };
+}
+
+/**
  * Rango de semana lunes-domingo
  * @param {number} offset 0 = esta semana, -1 = semana pasada, etc.
  */

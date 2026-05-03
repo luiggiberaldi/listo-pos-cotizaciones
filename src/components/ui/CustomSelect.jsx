@@ -151,10 +151,10 @@ export default function CustomSelect({
           <span className="text-xs text-slate-400 truncate max-w-[120px] hidden sm:inline">{seleccionada.sub}</span>
         )}
         {clearable && seleccionadaLabel && !disabled && (
-          <button type="button" onClick={limpiar}
+          <div role="button" tabIndex={0} onClick={limpiar}
             className="p-0.5 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors shrink-0">
             <X size={13} />
-          </button>
+          </div>
         )}
         <ChevronDown size={15} className={`text-slate-400 transition-transform shrink-0 ${abierto ? 'rotate-180' : ''}`} />
       </button>

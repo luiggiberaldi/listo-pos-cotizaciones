@@ -4,7 +4,7 @@
 // — Supervisor: vista completa + crear/editar/desactivar
 import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Package, Plus, Search, RefreshCw, X, Filter, LayoutGrid, List, AlertTriangle, ArrowLeftRight, FileText } from 'lucide-react'
+import { Package, Plus, Search, RefreshCw, X, Filter, LayoutGrid, List, AlertTriangle, ArrowLeftRight, FileText, ClipboardPaste } from 'lucide-react'
 import { smartSearchProductos } from '../utils/smartSearch'
 import useAuthStore from '../store/useAuthStore'
 import { useTasaCambio } from '../hooks/useTasaCambio'
@@ -20,6 +20,7 @@ import MovimientosHistorial from '../components/inventario/MovimientosHistorial'
 import KardexModal from '../components/inventario/KardexModal'
 import ProductoDetalleModal from '../components/inventario/ProductoDetalleModal'
 import ListaPreciosModal from '../components/inventario/ListaPreciosModal'
+import BusquedaListaModal from '../components/inventario/BusquedaListaModal'
 import { Modal }     from '../components/ui/Modal'
 import ConfirmModal  from '../components/ui/ConfirmModal'
 import EmptyState    from '../components/ui/EmptyState'
@@ -91,6 +92,7 @@ export default function InventarioView() {
   const [detalleProducto,  setDetalleProducto]  = useState(null)
   const [tabActivo,        setTabActivo]        = useState('productos') // 'productos' | 'movimientos'
   const [showListaPrecios, setShowListaPrecios] = useState(false)
+  const [showBusquedaLista, setShowBusquedaLista] = useState(false)
 
   // Data — todos los productos (sin filtro de búsqueda, filtro client-side con smartSearch)
   const { data: inventarioData, isLoading, isError, refetch } = useInventario({ categoria, pageSize: 1000 })
@@ -283,6 +285,13 @@ export default function InventarioView() {
           </button>
 
           <div className="flex items-center gap-2 shrink-0 ml-auto">
+            {/* Botón Procesar Lista */}
+            <button type="button" onClick={() => setShowBusquedaLista(true)} title="Procesar lista de cliente"
+              className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-colors border bg-white border-slate-200 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-300 shrink-0">
+              <ClipboardPaste size={14} />
+              <span className="hidden sm:inline">Procesar Lista</span>
+            </button>
+
             {/* Botón Lista de Precios */}
             <button type="button" onClick={() => setShowListaPrecios(true)} title="Lista de precios PDF"
               className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-colors border bg-white border-slate-200 text-slate-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 shrink-0">
@@ -479,6 +488,15 @@ export default function InventarioView() {
         onClose={() => setDetalleProducto(null)}
         producto={detalleProducto}
         tasa={tasaEfectiva}
+      />
+
+      {/* ── Modal: Búsqueda por Lista (procesar texto de clientes) ──────── */}
+      <BusquedaListaModal
+        open={showBusquedaLista}
+        onClose={() => setShowBusquedaLista(false)}
+        productos={todosProductos}
+        tasa={tasaEfectiva}
+        configNeg={configNeg}
       />
     </div>
   )

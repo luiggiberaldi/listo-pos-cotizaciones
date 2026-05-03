@@ -1,9 +1,11 @@
 // src/components/reportes/DateRangeSelector.jsx
 import { useState } from 'react'
 import { Calendar } from 'lucide-react'
-import { getWeekRange, getMonthRange, getLocalISODate } from '../../utils/dateHelpers'
+import { getDayRange, getWeekRange, getMonthRange, getLocalISODate } from '../../utils/dateHelpers'
 
 const PRESETS = [
+  { id: 'today',     label: 'Hoy',           short: 'Hoy',       getRango: () => getDayRange(0),   getPrev: () => getDayRange(-1) },
+  { id: 'yesterday', label: 'Ayer',          short: 'Ayer',      getRango: () => getDayRange(-1),  getPrev: () => getDayRange(-2) },
   { id: 'thisWeek',  label: 'Esta semana',   short: 'Semana',    getRango: () => getWeekRange(0),  getPrev: () => getWeekRange(-1) },
   { id: 'lastWeek',  label: 'Semana pasada', short: 'Anterior',  getRango: () => getWeekRange(-1), getPrev: () => getWeekRange(-2) },
   { id: 'thisMonth', label: 'Este mes',      short: 'Mes',       getRango: () => getMonthRange(0), getPrev: () => getMonthRange(-1) },

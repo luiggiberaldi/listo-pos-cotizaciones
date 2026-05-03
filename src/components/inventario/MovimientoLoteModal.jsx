@@ -106,7 +106,7 @@ export default function MovimientoLoteModal({ isOpen, onClose, productos = [] })
   const esIngreso = tipo === 'ingreso'
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Movimiento de inventario" className="max-w-lg sm:max-w-2xl">
+    <Modal isOpen={isOpen} onClose={onClose} title="Movimiento de inventario" className="max-w-2xl lg:max-w-4xl">
       <div className="space-y-4">
 
         {/* Toggle Ingreso / Egreso */}
