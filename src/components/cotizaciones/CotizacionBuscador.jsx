@@ -231,11 +231,13 @@ export default function BuscadorProductos({ onAgregar, onScanClick, itemsAgregad
             </button>
           )}
         </div>
-        <button type="button" onClick={onScanClick} title="Escanear lista de materiales"
-          className="shrink-0 flex items-center gap-1.5 px-3 py-2.5 bg-primary text-white font-bold rounded-xl hover:opacity-90 transition-opacity text-xs sm:text-sm">
-          <Camera size={16} />
-          <span className="hidden sm:inline">Escanear</span>
-        </button>
+        {onScanClick && (
+          <button type="button" onClick={onScanClick} title="Escanear lista de materiales"
+            className="shrink-0 flex items-center gap-1.5 px-3 py-2.5 bg-primary text-white font-bold rounded-xl hover:opacity-90 transition-opacity text-xs sm:text-sm">
+            <Camera size={16} />
+            <span className="hidden sm:inline">Escanear</span>
+          </button>
+        )}
       </div>
 
       {/* Chips de categoría — colapsables en móvil, scroll en desktop */}

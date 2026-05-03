@@ -1021,7 +1021,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
               {/* ── Catálogo de productos ── */}
               <div className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
                 <div className="flex-1 min-h-0 overflow-y-auto pb-20 lg:pb-0">
-                  <BuscadorProductos onAgregar={agregarProducto} onScanClick={() => setShowScanModal(true)} itemsAgregados={items} tasa={tasaHook.tasaEfectiva} onCambiarCantidad={cambiarItem} onEliminarItem={eliminarItem} />
+                  <BuscadorProductos onAgregar={agregarProducto} itemsAgregados={items} tasa={tasaHook.tasaEfectiva} onCambiarCantidad={cambiarItem} onEliminarItem={eliminarItem} />
                   <ScanMaterialListModal
                     open={showScanModal}
                     onClose={() => setShowScanModal(false)}

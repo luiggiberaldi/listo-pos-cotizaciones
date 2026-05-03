@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "dev:worker": "npx wrangler dev --port 8787",
-    "dev:full": "npx concurrently -n VITE,WORKER -c cyan,yellow \"vite\" \"npx wrangler dev --port 8787\"",
+    "dev": "npx concurrently -n VITE,WORKER -c cyan,yellow \"vite\" \"npx wrangler dev --port 8787 --local\"",
+    "dev:vite": "vite",
+    "dev:worker": "npx wrangler dev --port 8787 --local",
     "build": "vitest run --reporter=json 2>/dev/null > dist-test-results.json || true && vite build && cp dist-test-results.json dist/test-results.json 2>/dev/null || true",
     "preview": "vite preview",
     "lint": "eslint .",

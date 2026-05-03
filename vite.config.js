@@ -9,7 +9,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'https://listo-pos-cotizaciones.luigistorelogistics.workers.dev',
+        target: 'http://localhost:8787',
         changeOrigin: true,
         secure: false,
       }
@@ -51,7 +51,8 @@ export default defineConfig({
       },
 
       devOptions: {
-        enabled: false,
+        enabled: true,
+        type: 'module',
       },
     }),
   ],
