@@ -1449,6 +1449,7 @@ async function handleBackup(request, env) {
     headers: {
       'Content-Type': 'application/json',
       'Content-Disposition': `attachment; filename="${filename}"`,
+      ...corsHeaders(request),
       ...(errors.length > 0 ? { 'X-Backup-Warnings': errors.join('; ') } : {}),
     },
   });
