@@ -20,6 +20,7 @@ import CotizacionBuilder from '../components/cotizaciones/CotizacionBuilder'
 import ConfirmModal      from '../components/ui/ConfirmModal'
 import { Modal }         from '../components/ui/Modal'
 import EmptyState        from '../components/ui/EmptyState'
+import CustomSelect      from '../components/ui/CustomSelect'
 import Skeleton          from '../components/ui/Skeleton'
 import { useVendedores } from '../hooks/useClientes'
 import { useTransportistas, useCrearTransportista } from '../hooks/useTransportistas'
@@ -324,41 +325,22 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Transportista</p>
               <div className="flex items-center gap-1.5">
                 <div className="relative flex-1 min-w-0">
-                  <button type="button"
-                    onClick={() => setShowTransportistaMenu(v => !v)}
-                    onBlur={() => setTimeout(() => setShowTransportistaMenu(false), 200)}
-                    className="w-full flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium border border-slate-200 bg-slate-50 hover:border-indigo-300 transition-colors text-left"
-                  >
-                    <span className="flex items-center gap-1.5 truncate min-w-0">
-                      <Truck size={12} className="text-slate-400 shrink-0" />
-                      {transportistaId
-                        ? <span className="text-slate-700 truncate text-xs">{transportistas.find(t => t.id === transportistaId)?.nombre || 'Seleccionado'}</span>
-                        : <span className="text-slate-400 text-xs">Sin transportista</span>}
-                    </span>
-                    <ChevronDown size={12} className={`text-slate-400 shrink-0 transition-transform ${showTransportistaMenu ? 'rotate-180' : ''}`} />
-                  </button>
-                  {showTransportistaMenu && (
-                    <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20 max-h-44 overflow-y-auto"
-                      onMouseDown={e => e.preventDefault()}>
-                      <button onClick={() => { setTransportistaId(''); setFleteUsd(''); setShowTransportistaMenu(false) }}
-                        className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors ${!transportistaId ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-500 hover:bg-slate-50'}`}>
-                        Sin transportista
-                      </button>
-                      {transportistas.map(t => (
-                        <button key={t.id} onClick={() => { setTransportistaId(t.id); setShowTransportistaMenu(false) }}
-                          className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-left transition-colors ${transportistaId === t.id ? 'bg-indigo-50 font-semibold text-indigo-700' : 'text-slate-700 hover:bg-slate-50'}`}>
-                          <div className="min-w-0">
-                            <p className="font-medium truncate">{t.nombre}</p>
-                            {(t.vehiculo || t.placa_chuto) && (
-                              <p className="text-xs text-slate-400 truncate">{[t.vehiculo, t.placa_chuto].filter(Boolean).join(' · ')}</p>
-                            )}
-                          </div>
-                          {transportistaId === t.id && <span className="text-indigo-500 shrink-0">✓</span>}
-                        </button>
-                      ))}
-                      {transportistas.length === 0 && <p className="px-3 py-2 text-sm text-slate-400">Sin registros</p>}
-                    </div>
-                  )}
+                  <CustomSelect
+                    value={transportistaId}
+                    onChange={(v) => {
+                      setTransportistaId(v)
+                      if (!v) setFleteUsd('')
+                    }}
+                    placeholder="Sin transportista"
+                    clearable
+                    icon={Truck}
+                    disabled={cargando}
+                    options={transportistas.map(t => ({
+                      value: t.id,
+                      label: t.nombre,
+                      sub: [t.vehiculo, t.placa_chuto].filter(Boolean).join(' · ') || undefined,
+                    }))}
+                  />
                 </div>
                 {transportistaId && (
                   <div className="relative w-24 shrink-0">

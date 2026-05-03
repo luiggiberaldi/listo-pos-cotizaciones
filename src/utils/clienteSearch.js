@@ -4,8 +4,8 @@
 /**
  * Normaliza un string: minúsculas, sin acentos, sin puntos/guiones
  */
-function normalizar(str = '') {
-  return str
+function normalizar(str) {
+  return (str || '')
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '') // quitar acentos
@@ -23,8 +23,8 @@ function calcularScore(cliente, termino) {
 
   const campos = [
     { valor: normalizar(cliente.nombre),     peso: 10 },
-    { valor: normalizar(cliente.rif_cedula), peso: 8  },
-    { valor: normalizar(cliente.telefono),   peso: 6  },
+    { valor: normalizar(cliente.rif_cedula).replace(/\s+/g, ''), peso: 8  },
+    { valor: normalizar(cliente.telefono).replace(/\s+/g, ''),   peso: 6  },
     { valor: normalizar(cliente.email),      peso: 4  },
     { valor: normalizar(cliente.ciudad),     peso: 3  },
     { valor: normalizar(cliente.estado),     peso: 2  },

@@ -13,7 +13,7 @@ fi
 set -a && source .env.secrets && set +a
 
 # Build
-bun run build
+npm run build
 
 # Deploy with secrets as --var overrides
 wrangler deploy --dispatch-namespace chiridion \
