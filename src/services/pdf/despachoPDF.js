@@ -399,7 +399,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     { label: 'Base', value: fmtTotal(baseImponible, monedaPDF, tasa, factorBcv) },
     { label: `IVA ${ivaPct}%`, value: fmtTotal(ivaAmount, monedaPDF, tasa, factorBcv) },
   ]
-  if (hasFlete) rightItems.push({ label: 'Flete', value: fmtTotal(flete, monedaPDF, tasa, factorBcv) })
+  rightItems.push({ label: 'Flete', value: hasFlete ? fmtTotal(flete, monedaPDF, tasa, factorBcv) : '' })
   if (hasDescuento) rightItems.push({ label: 'Descuento', value: '-' + fmtTotal(descuentoTotal, monedaPDF, tasa, factorBcv), color: [180, 100, 0] })
   if (refPago) rightItems.push({ label: 'Ref:', value: refPago })
 
