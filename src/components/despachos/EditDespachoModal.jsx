@@ -5,6 +5,7 @@ import { X, Pencil, Loader2, Truck, ChevronDown, StickyNote, Plus } from 'lucide
 import { useTransportistas, useCrearTransportista } from '../../hooks/useTransportistas'
 import { useEditarDespacho } from '../../hooks/useDespachos'
 import { fmtUsdSimple as fmtUsd } from '../../utils/format'
+import CustomSelect from '../ui/CustomSelect'
 
 const FORMAS_PAGO = ['Efectivo', 'Zelle', 'Pago Móvil', 'USDT', 'Transferencia', 'Cta por cobrar']
 
@@ -18,7 +19,6 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
   const [transportistaId, setTransportistaId] = useState('')
   const [fleteUsd, setFleteUsd] = useState('')
   const [notas, setNotas] = useState('')
-  const [showTransportistaMenu, setShowTransportistaMenu] = useState(false)
   const [showNuevoTransp, setShowNuevoTransp] = useState(false)
   const [nuevoNombre, setNuevoNombre] = useState('')
   const [nuevoRif, setNuevoRif] = useState('')
@@ -88,7 +88,7 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" onClick={e => { e.stopPropagation(); if (e.target === e.currentTarget) onClose() }}>
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-lg p-4 sm:p-6 max-h-[90vh] flex flex-col gap-4">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-2xl p-4 sm:p-8 max-h-[90vh] flex flex-col gap-4">
 
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -108,7 +108,7 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
         </div>
 
         {/* Scrollable content */}
-        <div className="flex-1 min-h-0 overflow-y-auto space-y-4">
+        <div className="flex-1 min-h-0 overflow-y-auto pb-24 space-y-4">
 
           {/* Forma de pago */}
           <div className="space-y-2">
@@ -151,7 +151,7 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
                         onChange={e => setMontoForma(fp.metodo, e.target.value)}
                         onFocus={e => e.target.select()}
                         placeholder="0.00"
-                        className="w-full pl-7 pr-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:bg-white"
+                        className="w-full pl-7 pr-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/20 focus:bg-white"
                         disabled={cargando}
                       />
                       {mostrarResto && (
@@ -198,7 +198,7 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
                 value={referenciaPago}
                 onChange={e => setReferenciaPago(e.target.value)}
                 placeholder="Nº confirmación, comprobante..."
-                className="w-full px-3 py-2.5 rounded-xl text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:bg-white min-h-[44px]"
+                className="w-full px-3 py-2.5 rounded-xl text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/20 focus:bg-white min-h-[44px]"
                 disabled={cargando}
               />
             </div>
@@ -207,58 +207,24 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
           {/* Transportista */}
           <div className="space-y-2">
             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Transportista</p>
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <button
-                  type="button"
-                  onClick={() => setShowTransportistaMenu(v => !v)}
-                  onBlur={() => setTimeout(() => setShowTransportistaMenu(false), 200)}
+            <div className="flex items-center gap-1.5">
+              <div className="relative flex-1 min-w-0">
+                <CustomSelect
+                  value={transportistaId}
+                  onChange={(v) => {
+                    setTransportistaId(v)
+                    if (!v) setFleteUsd('') // Si se deselecciona, limpiamos el flete
+                  }}
+                  options={transportistas.map(t => ({
+                    value: t.id,
+                    label: t.nombre,
+                    sub: [t.vehiculo, t.placa_chuto].filter(Boolean).join(' · ')
+                  }))}
+                  placeholder="Seleccionar transportista..."
                   disabled={cargando}
-                  className="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-slate-200 bg-slate-50 hover:border-indigo-300 transition-colors text-left min-h-[44px]"
-                >
-                  <span className="flex items-center gap-2 truncate">
-                    <Truck size={15} className="text-slate-400 shrink-0" />
-                    {transportistaId
-                      ? <span className="text-slate-700">{transportistas.find(t => t.id === transportistaId)?.nombre || 'Seleccionado'}</span>
-                      : <span className="text-slate-400">Sin transportista (opcional)</span>
-                    }
-                  </span>
-                  <ChevronDown size={14} className={`text-slate-400 shrink-0 transition-transform ${showTransportistaMenu ? 'rotate-180' : ''}`} />
-                </button>
-                {showTransportistaMenu && (
-                  <div className="absolute left-0 right-0 bottom-full mb-1 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20 max-h-48 overflow-y-auto"
-                    onMouseDown={e => e.preventDefault()}>
-                    <button
-                      onClick={() => { setTransportistaId(''); setFleteUsd(''); setShowTransportistaMenu(false) }}
-                      className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left transition-colors ${
-                        !transportistaId ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-500 hover:bg-slate-50'
-                      }`}
-                    >
-                      Sin transportista
-                    </button>
-                    {transportistas.map(t => (
-                      <button key={t.id}
-                        onClick={() => { setTransportistaId(t.id); setShowTransportistaMenu(false) }}
-                        className={`w-full flex items-center justify-between gap-2 px-4 py-2.5 text-sm text-left transition-colors ${
-                          transportistaId === t.id ? 'bg-indigo-50 font-semibold text-indigo-700' : 'text-slate-700 hover:bg-slate-50'
-                        }`}
-                      >
-                        <div className="min-w-0">
-                          <p className="font-medium truncate">{t.nombre}</p>
-                          {(t.vehiculo || t.placa_chuto) && (
-                            <p className="text-xs text-slate-400 truncate">
-                              {[t.vehiculo, t.placa_chuto].filter(Boolean).join(' · ')}
-                            </p>
-                          )}
-                        </div>
-                        {transportistaId === t.id && <span className="text-indigo-500 shrink-0">✓</span>}
-                      </button>
-                    ))}
-                    {transportistas.length === 0 && (
-                      <p className="px-4 py-2.5 text-sm text-slate-400">No hay transportistas registrados</p>
-                    )}
-                  </div>
-                )}
+                  searchable
+                  icon={Truck}
+                />
               </div>
               <button type="button"
                 onClick={() => setShowNuevoTransp(v => !v)}
@@ -275,20 +241,20 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
                 <p className="text-sm font-bold text-emerald-700">Nuevo transportista</p>
                 {nuevoError && <p className="text-xs text-red-500 font-medium">{nuevoError}</p>}
                 <input type="text" value={nuevoNombre} onChange={e => setNuevoNombre(e.target.value)}
-                  placeholder="Nombre del chofer *" className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:bg-white" />
+                  placeholder="Nombre del chofer *" className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/20 focus:bg-white" />
                 <input type="text" value={nuevoRif} onChange={e => setNuevoRif(e.target.value)}
-                  placeholder="C.I. / RIF" className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:bg-white" />
+                  placeholder="C.I. / RIF" className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/20 focus:bg-white" />
                 <div className="grid grid-cols-2 gap-2">
                   <input type="text" value={nuevoVehiculo} onChange={e => setNuevoVehiculo(e.target.value)}
-                    placeholder="Vehículo" className="px-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:bg-white" />
+                    placeholder="Vehículo" className="px-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/20 focus:bg-white" />
                   <input type="text" value={nuevoColor} onChange={e => setNuevoColor(e.target.value)}
-                    placeholder="Color" className="px-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:bg-white" />
+                    placeholder="Color" className="px-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/20 focus:bg-white" />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <input type="text" value={nuevoPlacaChuto} onChange={e => setNuevoPlacaChuto(e.target.value)}
-                    placeholder="Placa chuto" className="px-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:bg-white" />
+                    placeholder="Placa chuto" className="px-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/20 focus:bg-white" />
                   <input type="text" value={nuevoPlacaBatea} onChange={e => setNuevoPlacaBatea(e.target.value)}
-                    placeholder="Placa batea" className="px-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:bg-white" />
+                    placeholder="Placa batea" className="px-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/20 focus:bg-white" />
                 </div>
                 <div className="flex gap-2">
                   <button type="button" onClick={() => { setShowNuevoTransp(false); setNuevoError('') }}
@@ -333,7 +299,7 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
                 value={fleteUsd}
                 onChange={e => setFleteUsd(e.target.value)}
                 placeholder="0.00"
-                className="w-full px-4 py-2.5 rounded-xl text-sm font-medium border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 focus:bg-white transition-colors min-h-[44px]"
+                className="w-full px-4 py-2.5 rounded-xl text-sm font-medium border border-slate-200 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/20 focus:border-indigo-300 focus:bg-white transition-colors min-h-[44px]"
                 disabled={cargando}
               />
               {Number(fleteUsd) > 0 && (
@@ -354,7 +320,7 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
               onChange={e => setNotas(e.target.value)}
               placeholder="Observaciones adicionales..."
               rows={3}
-              className="w-full px-4 py-2.5 rounded-xl text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:bg-white resize-none"
+              className="w-full px-4 py-2.5 rounded-xl text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/20 focus:bg-white resize-none"
               disabled={cargando}
             />
           </div>

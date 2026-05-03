@@ -906,7 +906,7 @@ function Step1Productos({
                 value={clienteBusqueda}
                 onChange={e => { setClienteBusqueda(e.target.value); setClienteOpen(true) }}
                 onFocus={() => setClienteOpen(true)}
-                className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-sky-200 focus:border-sky-400 outline-none"
+                className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-sm focus:ring-1 focus:ring-sky-400/20 focus:border-sky-400 outline-none"
               />
               {clienteOpen && clientesFiltrados.length > 0 && (
                 <div className="absolute z-30 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-auto">
@@ -942,7 +942,7 @@ function Step1Productos({
             type="text" placeholder="Buscar por nombre o código..."
             value={productoBusqueda}
             onChange={e => setProductoBusqueda(e.target.value)}
-            className="w-full pl-10 pr-10 py-2 rounded-xl border border-slate-200 bg-slate-50 shadow-inner text-sm focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400 transition-all"
+            className="w-full pl-10 pr-10 py-2 rounded-xl border border-slate-200 bg-slate-50 shadow-inner text-sm focus:outline-none focus:ring-1 focus:ring-primary-focus/20 focus:border-primary placeholder:text-slate-400 transition-all"
           />
           {productoBusqueda && (
             <button type="button" onClick={() => setProductoBusqueda('')}

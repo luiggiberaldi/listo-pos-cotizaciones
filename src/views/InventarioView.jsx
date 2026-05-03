@@ -236,7 +236,7 @@ export default function InventarioView() {
               value={textoBusqueda}
               onChange={e => setTextoBusqueda(e.target.value)}
               placeholder="Buscar por nombre o código..."
-              className="w-full pl-9 pr-9 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400"
+              className="w-full pl-9 pr-9 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-1 focus:ring-primary-focus/20 focus:border-primary placeholder:text-slate-400"
             />
             {textoBusqueda && (
               <button type="button" onClick={() => setTextoBusqueda('')}

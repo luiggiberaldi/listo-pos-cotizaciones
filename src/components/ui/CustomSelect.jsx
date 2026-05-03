@@ -135,7 +135,7 @@ export default function CustomSelect({
         className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border text-left transition-all text-sm ${
           disabled ? 'opacity-50 cursor-not-allowed bg-slate-100 border-slate-200' :
           abierto
-            ? 'border-primary ring-2 ring-primary-focus bg-white'
+            ? 'border-primary ring-1 ring-primary/30 bg-white'
             : seleccionada
               ? 'border-slate-200 bg-white hover:border-slate-300'
               : 'border-slate-200 bg-slate-50 hover:border-slate-300'

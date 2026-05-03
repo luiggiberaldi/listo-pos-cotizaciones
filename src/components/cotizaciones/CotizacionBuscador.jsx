@@ -99,7 +99,7 @@ export function ItemLinea({ item, idx, onChange, onDelete, tasa = 0, precios }) 
             onChange(idx, 'cantidad', (!isNaN(v) && v > 0) ? v : 1)
           }}
           onFocus={e => e.target.select()}
-          className="w-20 px-2 py-2.5 text-sm text-right border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary bg-white transition-all min-h-[44px]"
+          className="w-20 px-2 py-2.5 text-sm text-right border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-focus/20 focus:border-primary bg-white transition-all min-h-[44px]"
         />
       </td>
       <td className="py-3 px-2">
@@ -107,7 +107,7 @@ export function ItemLinea({ item, idx, onChange, onDelete, tasa = 0, precios }) 
           value={item.precioUnitUsd}
           onChange={e => onChange(idx, 'precioUnitUsd', Math.max(0, Number(e.target.value)))}
           onFocus={e => e.target.select()}
-          className="w-24 px-2 py-1.5 text-sm text-right border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary bg-white transition-all"
+          className="w-24 px-2 py-1.5 text-sm text-right border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-focus/20 focus:border-primary bg-white transition-all"
         />
         <PrecioSelector precios={precios} currentPrice={item.precioUnitUsd} onSelect={v => onChange(idx, 'precioUnitUsd', v)} />
         {tasa > 0 && <p className="text-[10px] text-slate-400 text-right pr-1 mt-0.5">{fmtBs(usdToBs(item.precioUnitUsd, tasa))}</p>}
@@ -221,7 +221,7 @@ export default function BuscadorProductos({ onAgregar, onScanClick, itemsAgregad
             value={texto}
             onChange={e => cambiarTexto(e.target.value)}
             placeholder="Buscar por nombre o código..."
-            className="w-full pl-10 pr-10 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 shadow-inner focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400 transition-all"
+            className="w-full pl-10 pr-10 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 shadow-inner focus:outline-none focus:ring-1 focus:ring-primary-focus/20 focus:border-primary placeholder:text-slate-400 transition-all"
             autoFocus
           />
           {texto && (

@@ -175,7 +175,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 lg:p-6 bg-slate-900/60 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-3xl max-h-[92vh] flex flex-col">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-5xl max-h-[92vh] flex flex-col">
 
         {/* ── Header ─────────────────────────────────────────────── */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 shrink-0">
@@ -268,7 +268,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
           </div>
 
           {/* ── Columna derecha: configuración del despacho ── */}
-          <div className="lg:w-80 xl:w-96 min-h-0 overflow-y-auto p-4 lg:p-5 space-y-3">
+          <div className="lg:w-96 xl:w-[450px] min-h-0 overflow-y-auto lg:overflow-visible p-4 lg:p-5 lg:pb-24 space-y-3">
 
             {/* Formas de pago — chips con input integrado */}
             <div className="space-y-2">
