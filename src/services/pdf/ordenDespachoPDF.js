@@ -200,7 +200,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   doc.rect(MARGIN + tlfLblW + tlfValW + vendLblW, f6Y, vendValW, rowH, 'FD')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(9)
-  const vendStr = (despacho.vendedor?.nombre || '—') + vendedorTlf
+  const vendStr = (despacho.vendedor?.nombre?.toUpperCase() || '—') + vendedorTlf
   const maxVendW = vendValW - 4
   let vStr = vendStr
   if (doc.getTextWidth(vStr) > maxVendW) {
@@ -255,7 +255,12 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
 
     doc.setLineWidth(0.2)
     doc.setDrawColor(200, 200, 200)
-    doc.rect(MARGIN, y, CONTENT_W, ROW_H, 'S')
+    if (item.tiene_descuento) {
+      doc.setFillColor(235, 235, 240)
+      doc.rect(MARGIN, y, CONTENT_W, ROW_H, 'FD')
+    } else {
+      doc.rect(MARGIN, y, CONTENT_W, ROW_H, 'S')
+    }
     COLS.forEach(col => { doc.line(col.x, y, col.x, y + ROW_H) })
 
     doc.setFont('helvetica', 'normal')
@@ -334,8 +339,8 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   const hasDescuento = descuentoTotal > 0
 
   // Posicionar recuadro unificado fijo sobre el chofer
-  // El flete siempre ocupará 14mm (Subtotal + Flete)
-  const desgloseH = 14 + (hasDescuento ? 7 : 0)
+  // Si hay flete, el desglose ocupa 14mm (Subtotal + Flete), si no, 7mm (solo Subtotal)
+  const desgloseH = (hasFleteReal ? 14 : 7) + (hasDescuento ? 7 : 0)
   const ty = choferY - 24 - desgloseH
 
   // Parsear formas de pago (JSON array o string legacy)
@@ -384,24 +389,27 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
     cx += checkSize + 1.2 + doc.getTextWidth(txt) + 4
   })
 
-  // Desglose Subtotal + Flete + Descuento
+  // Desglose Subtotal + Flete (si aplica) + Descuento
   let desY = fpY + 9
   
   doc.setDrawColor(120, 120, 120)
   doc.setLineWidth(0.2)
 
-  // SIEMPRE imprimir Subtotal y Flete
+  // Subtotal
   doc.rect(MARGIN, desY, CONTENT_W, 7, 'S')
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
   doc.setTextColor(...C_DARK)
   doc.text('Subtotal', MARGIN + 4, desY + 5)
   doc.text(fmtTotal(subtotal, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, desY + 5, { align: 'right' })
+  desY += 7
 
-  doc.rect(MARGIN, desY + 7, CONTENT_W, 7, 'S')
-  doc.text('Flete', MARGIN + 4, desY + 12)
-  doc.text(hasFleteReal ? fmtTotal(flete, monedaPDF, tasa, factorBcv) : '', MARGIN + CONTENT_W - 4, desY + 12, { align: 'right' })
-  desY += 14
+  if (hasFleteReal) {
+    doc.rect(MARGIN, desY, CONTENT_W, 7, 'S')
+    doc.text('Flete', MARGIN + 4, desY + 5)
+    doc.text(fmtTotal(flete, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, desY + 5, { align: 'right' })
+    desY += 7
+  }
 
   if (hasDescuento) {
     doc.setDrawColor(120, 120, 120)
@@ -422,8 +430,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(13)
   doc.setTextColor(...C_WHITE)
-  const textoTotal = hasFleteReal ? 'Total:' : 'Total sin Flete:'
-  doc.text(textoTotal, MARGIN + 4, totTopY + 7)
+  doc.text('Total:', MARGIN + 4, totTopY + 7)
   doc.text(fmtTotal(totalFinal, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, totTopY + 7, { align: 'right' })
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -456,6 +463,9 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   ]
   row2Fields.push({ label: 'PLACA CHUTO', val: (transportista?.placa_chuto || '').toUpperCase() })
   row2Fields.push({ label: 'PLACA BATEA', val: (transportista?.placa_batea || '').toUpperCase() })
+  if (!hasFleteReal) {
+    row2Fields.push({ label: 'FLETE', val: '' })
+  }
   function drawRow(fields, ry, colW) {
     fields.forEach((f, i) => {
       const fx = MARGIN + i * colW
@@ -473,7 +483,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
     })
   }
   drawRow(row1Fields, row1Y, col3W)
-  drawRow(row2Fields, row2Y, col3W)
+  drawRow(row2Fields, row2Y, !hasFleteReal ? col4W : col3W)
 
   // ── NO cuentas, NO slogan, NO condiciones ──
 

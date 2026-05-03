@@ -258,7 +258,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.rect(MARGIN + tlfLblW + tlfValW + vendLblW, f6Y, vendValW, rowH, 'FD')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(9)
-  const vendStr = (despacho.vendedor?.nombre || '—') + vendedorTlf
+  const vendStr = (despacho.vendedor?.nombre?.toUpperCase() || '—') + vendedorTlf
   const maxVendW = vendValW - 4
   let vStr = vendStr
   if (doc.getTextWidth(vStr) > maxVendW) {
@@ -315,7 +315,12 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
 
     doc.setLineWidth(0.2)
     doc.setDrawColor(200, 200, 200)
-    doc.rect(MARGIN, y, CONTENT_W, ROW_H, 'S')
+    if (item.tiene_descuento) {
+      doc.setFillColor(235, 235, 240)
+      doc.rect(MARGIN, y, CONTENT_W, ROW_H, 'FD')
+    } else {
+      doc.rect(MARGIN, y, CONTENT_W, ROW_H, 'S')
+    }
     COLS.forEach(col => { doc.line(col.x, y, col.x, y + ROW_H) })
 
     doc.setFont('helvetica', 'normal')
@@ -399,7 +404,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     { label: 'Base', value: fmtTotal(baseImponible, monedaPDF, tasa, factorBcv) },
     { label: `IVA ${ivaPct}%`, value: fmtTotal(ivaAmount, monedaPDF, tasa, factorBcv) },
   ]
-  rightItems.push({ label: 'Flete', value: hasFlete ? fmtTotal(flete, monedaPDF, tasa, factorBcv) : '' })
+  if (hasFlete) rightItems.push({ label: 'Flete', value: fmtTotal(flete, monedaPDF, tasa, factorBcv) })
   if (hasDescuento) rightItems.push({ label: 'Descuento', value: '-' + fmtTotal(descuentoTotal, monedaPDF, tasa, factorBcv), color: [180, 100, 0] })
   if (refPago) rightItems.push({ label: 'Ref:', value: refPago })
 
@@ -426,35 +431,63 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     return lines
   }
 
-  const BLANK = '_______________'
-  const BLANK_VEH = '_______________________________'
   const leftLines = [{ text: '8 DÍAS DE CRÉDITO CONTINUO', bold: true, size: 9 }]
-  const tNom = (transportista?.nombre || '').toUpperCase()
-  const tCI = (transportista?.rif || '').toUpperCase()
-  const tColor = (transportista?.color || '').toUpperCase()
-  const choferSegs = [
-    { text: 'Chofer: ', bold: false }, { text: tNom, bold: true },
-    { text: '  —  CI: ', bold: false }, { text: tCI, bold: true },
-    { text: '  —  Color: ', bold: false }, { text: tColor, bold: true },
-  ]
-  for (const segs of splitSegmentsIntoLines(choferSegs, 8, comboLeftW)) {
-    leftLines.push({ segments: segs, size: 8 })
-  }
-  const tVeh = (transportista?.vehiculo || '').toUpperCase()
-  const tChuto = (transportista?.placa_chuto || '').toUpperCase()
-  const tBatea = (transportista?.placa_batea || '').toUpperCase()
-  const vehSegs = [
-    { text: 'Vehículo: ', bold: false }, { text: tVeh, bold: true },
-    { text: '  —  Chuto: ', bold: false }, { text: tChuto, bold: true },
-  ]
-  for (const segs of splitSegmentsIntoLines(vehSegs, 8, comboLeftW)) {
-    leftLines.push({ segments: segs, size: 8 })
-  }
-  const bateaSegs = [
-    { text: 'Batea: ', bold: false }, { text: tBatea, bold: true },
-  ]
-  for (const segs of splitSegmentsIntoLines(bateaSegs, 8, comboLeftW)) {
-    leftLines.push({ segments: segs, size: 8 })
+
+  // ── Info Transporte ──
+  if (!transportista) {
+    const col3 = comboLeftW / 3
+    const col2 = comboLeftW / 2
+    leftLines.push({
+      columns: [
+        { text: 'Chofer:', w: col3 },
+        { text: 'C.I.:', w: col3 },
+        { text: 'Color:', w: col3 }
+      ], size: 8
+    })
+    leftLines.push({
+      columns: [
+        { text: 'Vehículo:', w: col2 },
+        { text: 'Chuto:', w: col2 }
+      ], size: 8
+    })
+    const bateaCols = [{ text: 'Batea:', w: col2 }]
+    if (!hasFlete) {
+      bateaCols.push({ text: 'Flete:', w: col2 })
+    }
+    leftLines.push({ columns: bateaCols, size: 8 })
+  } else {
+    const tNom = (transportista?.nombre || '').toUpperCase()
+    const tCI = (transportista?.rif || '').toUpperCase()
+    const tColor = (transportista?.color || '').toUpperCase()
+    const choferSegs = [
+      { text: 'Chofer: ', bold: false }, { text: tNom, bold: true },
+      { text: '  —  CI: ', bold: false }, { text: tCI, bold: true },
+      { text: '  —  Color: ', bold: false }, { text: tColor, bold: true },
+    ]
+    for (const segs of splitSegmentsIntoLines(choferSegs, 8, comboLeftW)) {
+      leftLines.push({ segments: segs, size: 8 })
+    }
+
+    const tVeh = (transportista?.vehiculo || '').toUpperCase()
+    const tChuto = (transportista?.placa_chuto || '').toUpperCase()
+    const vehSegs = [
+      { text: 'Vehículo: ', bold: false }, { text: tVeh, bold: true },
+      { text: '  —  Chuto: ', bold: false }, { text: tChuto, bold: true },
+    ]
+    for (const segs of splitSegmentsIntoLines(vehSegs, 8, comboLeftW)) {
+      leftLines.push({ segments: segs, size: 8 })
+    }
+
+    const tBatea = (transportista?.placa_batea || '').toUpperCase()
+    const bateaSegs = [
+      { text: 'Batea: ', bold: false }, { text: tBatea, bold: true },
+    ]
+    if (!hasFlete) {
+      bateaSegs.push({ text: '  —  Flete: ', bold: false }, { text: '', bold: true })
+    }
+    for (const segs of splitSegmentsIntoLines(bateaSegs, 8, comboLeftW)) {
+      leftLines.push({ segments: segs, size: 8 })
+    }
   }
 
   const numComboRows = Math.max(leftLines.length, rightItems.length)
@@ -475,7 +508,18 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
       const line = leftLines[r]
       doc.setFontSize(line.size)
       doc.setTextColor(...C_DARK)
-      if (line.segments) {
+      if (line.columns) {
+        let cx = MARGIN
+        for (let i = 0; i < line.columns.length; i++) {
+          const col = line.columns[i]
+          if (i < line.columns.length - 1) {
+            doc.line(cx + col.w, ry, cx + col.w, ry + dataRowH)
+          }
+          doc.setFont('helvetica', col.bold ? 'bold' : 'normal')
+          doc.text(col.text, cx + 2, ry + dataRowH / 2 + 1)
+          cx += col.w
+        }
+      } else if (line.segments) {
         let cx = MARGIN + 3
         for (const seg of line.segments) {
           doc.setFont('helvetica', seg.bold ? 'bold' : 'normal')

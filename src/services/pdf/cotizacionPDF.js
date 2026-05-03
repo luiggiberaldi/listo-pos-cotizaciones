@@ -140,7 +140,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   y += ROW_H_INFO
 
   // Fila 4: Vendedor (ancho completo, fondo gris)
-  const vendedorStr = (cotizacion.vendedor?.nombre || '—') + (cotizacion.vendedor?.telefono ? ` — ${cotizacion.vendedor.telefono}` : '')
+  const vendedorStr = (cotizacion.vendedor?.nombre?.toUpperCase() || '—') + (cotizacion.vendedor?.telefono ? ` — ${cotizacion.vendedor.telefono}` : '')
   drawCell(MARGIN, y, CONTENT_W, 'Vendedor', vendedorStr, { fill: true })
   y += ROW_H_INFO
 

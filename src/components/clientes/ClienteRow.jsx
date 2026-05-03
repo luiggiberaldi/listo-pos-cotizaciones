@@ -10,7 +10,7 @@ const TIPO_COLORS = {
   juridico: 'bg-violet-50 text-violet-700 border-violet-200',
 }
 
-export default function ClienteRow({ cliente, onEditar, onDesactivar, onReasignar, onCotizar, onVerFicha }) {
+export default function ClienteRow({ cliente, onEditar, onReasignar, onCotizar, onVerFicha }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const esAdministracion = perfil?.rol === 'administracion'
@@ -120,12 +120,6 @@ export default function ClienteRow({ cliente, onEditar, onDesactivar, onReasigna
               <button onClick={() => onReasignar(cliente)}
                 className="p-1.5 rounded-lg text-slate-400 hover:text-sky-500 hover:bg-sky-50 transition-colors">
                 <ArrowRightLeft size={15} />
-              </button>
-            )}
-            {esSupervisor && (
-              <button onClick={() => onDesactivar(cliente)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
-                <UserMinus size={15} />
               </button>
             )}
           </>

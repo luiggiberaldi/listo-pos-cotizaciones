@@ -6,7 +6,7 @@ import { useState, useMemo, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Users, Plus, Search, RefreshCw, X, LayoutGrid, List, Filter, ChevronDown, Check, AlertCircle } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
-import { useClientes, useDesactivarCliente, useVendedores } from '../hooks/useClientes'
+import { useClientes, useVendedores } from '../hooks/useClientes'
 import ClienteCard       from '../components/clientes/ClienteCard'
 import ClienteRow        from '../components/clientes/ClienteRow'
 import ClienteForm       from '../components/clientes/ClienteForm'
@@ -118,15 +118,13 @@ export default function ClientesView() {
   const [clienteEditando,  setClienteEditando]  = useState(null)
   const [clienteReasig,    setClienteReasig]    = useState(null)
   const [modalReasigOpen,  setModalReasigOpen]  = useState(false)
-  const [clienteADesact,   setClienteADesact]   = useState(null)
-  const [confirmDesactOpen,setConfirmDesactOpen]= useState(false)
+
   const [clienteFicha,     setClienteFicha]     = useState(null)
   const [fichaOpen,        setFichaOpen]        = useState(false)
 
   // Data + mutations
   const { data: clientes = [], isLoading, isError, refetch } = useClientes(busqueda)
   const { data: vendedores = [] } = useVendedores()
-  const desactivar = useDesactivarCliente()
 
   // Filtrado local
   const clientesFiltrados = useMemo(() => {
@@ -187,11 +185,6 @@ export default function ClientesView() {
     setModalFormOpen(true)
   }
 
-  function abrirDesactivar(cliente) {
-    setClienteADesact(cliente)
-    setConfirmDesactOpen(true)
-  }
-
   function abrirReasignar(cliente) {
     setClienteReasig(cliente)
     setModalReasigOpen(true)
@@ -204,15 +197,6 @@ export default function ClientesView() {
 
   function cotizarCliente(cliente) {
     navigate(`/cotizaciones?nueva=1&cliente=${cliente.id}`)
-  }
-
-  async function confirmarDesactivar() {
-    if (!clienteADesact) return
-    try {
-      await desactivar.mutateAsync(clienteADesact.id)
-    } finally {
-      setClienteADesact(null)
-    }
   }
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -394,7 +378,6 @@ export default function ClientesView() {
                 key={cliente.id}
                 cliente={cliente}
                 onEditar={abrirEditar}
-                onDesactivar={abrirDesactivar}
                 onReasignar={abrirReasignar}
                 onCotizar={cotizarCliente}
                 onVerFicha={abrirFicha}
@@ -408,7 +391,6 @@ export default function ClientesView() {
                 key={cliente.id}
                 cliente={cliente}
                 onEditar={abrirEditar}
-                onDesactivar={abrirDesactivar}
                 onReasignar={abrirReasignar}
                 onCotizar={cotizarCliente}
                 onVerFicha={abrirFicha}
@@ -454,16 +436,7 @@ export default function ClientesView() {
         onClose={() => { setFichaOpen(false); setClienteFicha(null) }}
       />
 
-      {/* ── Confirm: Desactivar cliente ─────────────────────────────────────── */}
-      <ConfirmModal
-        isOpen={confirmDesactOpen}
-        onClose={() => { setConfirmDesactOpen(false); setClienteADesact(null) }}
-        onConfirm={confirmarDesactivar}
-        title="¿Desactivar cliente?"
-        message={`"${clienteADesact?.nombre}" quedará inactivo y no aparecerá en la lista.\nPuedes reactivarlo más adelante desde la base de datos.`}
-        confirmText="Sí, desactivar"
-        variant="danger"
-      />
+
 
     </div>
   )

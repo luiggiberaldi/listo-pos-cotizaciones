@@ -6,27 +6,33 @@ import supabase from '../../services/supabase/client'
 import { fmtUsdSimple as fmtUsd } from '../../utils/format'
 import { useDespachoDescuentos, useGuardarDescuentos } from '../../hooks/useDespachoDescuentos'
 
-const TIPOS = [
-  { key: 'porcentaje', label: '%' },
-  { key: 'monto', label: '$' },
-]
-
 function calcMonto(tipo, valor, totalLinea, cantidad) {
+  if (tipo === 'nuevo_precio') {
+    if (valor === '' || Number(valor) < 0) return 0
+    const v = Number(valor)
+    const precioOriginal = totalLinea / Number(cantidad)
+    if (v >= precioOriginal) return 0
+    return Math.round((precioOriginal - v) * Number(cantidad) * 10000) / 10000
+  }
   if (!valor || Number(valor) <= 0) return 0
   const v = Number(valor)
   if (tipo === 'porcentaje') return v > 100 ? totalLinea : Math.round(totalLinea * v / 100 * 10000) / 10000
   if (tipo === 'monto_unitario') { const m = v * Number(cantidad); return Math.round(Math.min(m, totalLinea) * 10000) / 10000 }
-  // tipo 'monto' = descuento por unidad → multiplicar por cantidad
-  const m = v * Number(cantidad)
-  return Math.round(Math.min(m, totalLinea) * 10000) / 10000
+  return Math.round(Math.min(v, totalLinea) * 10000) / 10000
 }
 
 function getError(d, item) {
-  if (!d?.valor || Number(d.valor) <= 0) return null
+  if (!d?.valor || d.valor === '') return null
   const v = Number(d.valor), t = Number(item.total_linea_usd)
+  if (d.tipo === 'nuevo_precio') {
+    const precioUnit = Number(item.precio_unit_usd)
+    if (v < 0) return 'No puede ser negativo'
+    if (v >= precioUnit) return `Debe ser menor a ${fmtUsd(precioUnit)}`
+    return null
+  }
   if (d.tipo === 'porcentaje' && v > 100) return 'Máximo 100%'
-  if (d.tipo === 'monto' && v * Number(item.cantidad) > t) return `Máximo ${fmtUsd(t / Number(item.cantidad))}/u`
-  if (d.tipo === 'monto_unitario' && v * Number(item.cantidad) > t) return 'Excede el total'
+  if (d.tipo === 'monto_unitario' && v * Number(item.cantidad) > t) return `Máximo ${fmtUsd(t / Number(item.cantidad))}/u`
+  if (d.tipo === 'monto' && v > t) return 'Excede el total'
   return null
 }
 
@@ -59,8 +65,23 @@ function ItemRow({ item, desc, montoDesc, soloLectura, editandoId, onEdit, onUpd
               {cantidad} {item.unidad_snap || 'und'}
             </p>
           </div>
-          {!soloLectura && !tiene && (
-            <ChevronRight size={16} className={`shrink-0 mt-1 transition-transform ${editando ? 'rotate-90 text-amber-500' : 'text-slate-300'}`} />
+          {!soloLectura && (
+            <div className="flex items-center gap-1 shrink-0 mt-0.5 -mr-1">
+              {tiene && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onRemove(item.id)
+                  }}
+                  className="p-1.5 text-amber-500/70 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                  title="Eliminar descuento"
+                >
+                  <Trash2 size={16} />
+                </button>
+              )}
+              <ChevronRight size={16} className={`transition-transform ${editando ? 'rotate-90 text-amber-500' : 'text-slate-300'}`} />
+            </div>
           )}
         </div>
         <div className="mt-2 flex items-end justify-between gap-4">
@@ -92,30 +113,15 @@ function ItemRow({ item, desc, montoDesc, soloLectura, editandoId, onEdit, onUpd
       {editando && !soloLectura && (
         <div className="px-4 pb-3.5 pt-1 space-y-2.5 border-t border-amber-100/80">
           <div className="flex items-center gap-2">
-            <div className="flex rounded-lg overflow-hidden ring-1 ring-amber-200 bg-white shrink-0">
-              {TIPOS.map(t => (
-                <button key={t.key} onClick={() => onUpdate(item.id, 'tipo', t.key)}
-                  className={`w-10 py-[7px] text-[11px] font-bold transition-all text-center ${
-                    desc?.tipo === t.key ? 'bg-amber-500 text-white' : 'text-amber-500/50 hover:bg-amber-50'
-                  }`}>{t.label}</button>
-              ))}
-            </div>
             <div className="relative flex-1">
-              {desc?.tipo !== 'porcentaje' && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-[13px] pointer-events-none">$</span>}
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-[13px] pointer-events-none font-medium">$</span>
               <input type="number" inputMode="decimal" step="any" min="0"
-                max={desc?.tipo === 'porcentaje' ? 100 : undefined}
                 value={desc?.valor || ''} onChange={e => onUpdate(item.id, 'valor', e.target.value)}
-                onFocus={e => e.target.select()} placeholder="0" autoFocus
-                className={`w-full py-2 text-[15px] font-semibold rounded-lg tabular-nums focus:outline-none focus:ring-2 transition-all ${
-                  desc?.tipo !== 'porcentaje' ? 'pl-7 pr-3' : 'pl-3 pr-8'
-                } ${error ? 'border border-red-300 bg-red-50/50 focus:ring-red-200 text-red-700' : 'border border-amber-200 bg-white focus:ring-amber-300 text-slate-800'}`} />
-              {desc?.tipo === 'porcentaje' && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 text-[14px] pointer-events-none font-semibold">%</span>}
+                onFocus={e => e.target.select()} placeholder="Nuevo precio unitario..." autoFocus
+                className={`w-full py-2 text-[15px] font-semibold rounded-lg tabular-nums focus:outline-none focus:ring-1 transition-all pl-7 pr-3 ${
+                  error ? 'border border-red-300 bg-red-50/50 focus:ring-red-300 text-red-700' : 'border border-amber-200 bg-white focus:ring-amber-300 text-slate-800'
+                }`} />
             </div>
-            {tiene && (
-              <button onClick={() => onRemove(item.id)} className="p-2 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all shrink-0">
-                <Trash2 size={15} />
-              </button>
-            )}
           </div>
           {error && <p className="text-[11px] text-red-500 font-medium flex items-center gap-1 pl-0.5"><AlertCircle size={11} /> {error}</p>}
         </div>
@@ -125,8 +131,8 @@ function ItemRow({ item, desc, montoDesc, soloLectura, editandoId, onEdit, onUpd
         <div className="px-4 pb-3 -mt-1">
           <span className="inline-flex items-center gap-1 bg-amber-100/80 text-amber-700 rounded-md px-2 py-1 text-[11px] font-semibold">
             <Tag size={10} />
-            {desc.tipo === 'porcentaje' ? `${desc.valor}%` : desc.tipo === 'monto_unitario' ? `${fmtUsd(desc.valor)}/u` : fmtUsd(desc.valor)}
-            = -{fmtUsd(montoDesc)}
+            {desc.tipo === 'nuevo_precio' ? `Nuevo precio: ${fmtUsd(desc.valor)}/u` : desc.tipo === 'porcentaje' ? `${desc.valor}%` : desc.tipo === 'monto_unitario' ? `${fmtUsd(desc.valor)}/u` : fmtUsd(desc.valor)}
+            (Ahorro: {fmtUsd(montoDesc)})
           </span>
         </div>
       )}
@@ -174,7 +180,7 @@ function Confirmacion({ items, descLocal, calc, flete, subtotalProductos, totalD
                   const cant = Number(item.cantidad)
                   const nuevoTotal = total - monto
                   const nuevoPrecioUnit = cant > 0 ? nuevoTotal / cant : 0
-                  const tipoLabel = d.tipo === 'porcentaje' ? `${d.valor}%` : fmtUsd(d.valor)
+                  const tipoLabel = d.tipo === 'nuevo_precio' ? `Precio final: ${fmtUsd(d.valor)}/u` : (d.tipo === 'porcentaje' ? `${d.valor}%` : fmtUsd(d.valor))
 
                   return (
                     <div key={item.id} className="bg-amber-50/60 rounded-xl px-3.5 py-2.5">
@@ -306,11 +312,23 @@ export default function DescuentoModal({ isOpen, onClose, despacho }) {
   }, [isOpen, despacho?.cotizacion_id])
 
   useEffect(() => {
-    if (!guardados.length) { setDescLocal({}); return }
+    if (!guardados.length || !items.length) { 
+      if (!guardados.length) setDescLocal(prev => Object.keys(prev).length === 0 ? prev : {}); 
+      return 
+    }
     const m = {}
-    for (const d of guardados) m[d.cotizacion_item_id] = { tipo: d.tipo, valor: String(d.valor) }
-    setDescLocal(m)
-  }, [guardados])
+    for (const d of guardados) {
+      const item = items.find(i => i.id === d.cotizacion_item_id)
+      if (!item) continue
+      const precioUnit = Number(item.precio_unit_usd)
+      let nuevoPrecio = precioUnit
+      if (d.tipo === 'monto_unitario') nuevoPrecio = precioUnit - Number(d.valor)
+      else if (d.tipo === 'porcentaje') nuevoPrecio = precioUnit * (1 - Number(d.valor)/100)
+      else if (d.tipo === 'nuevo_precio') nuevoPrecio = Number(d.valor)
+      m[d.cotizacion_item_id] = { tipo: 'nuevo_precio', valor: String(Math.round(nuevoPrecio*10000)/10000) }
+    }
+    setDescLocal(prev => JSON.stringify(prev) === JSON.stringify(m) ? prev : m)
+  }, [guardados, items])
 
   useEffect(() => { if (!isOpen) { setEditandoId(null); setConfirmando(false) } }, [isOpen])
 
@@ -319,7 +337,7 @@ export default function DescuentoModal({ isOpen, onClose, despacho }) {
     let total = 0
     for (const item of items) {
       const d = descLocal[item.id]
-      if (!d?.valor || Number(d.valor) <= 0) continue
+      if (!d?.valor || d.valor === '') continue
       const m = calcMonto(d.tipo, d.valor, Number(item.total_linea_usd), item.cantidad)
       if (m > 0) { porItem[item.id] = m; total += m }
     }
@@ -333,7 +351,7 @@ export default function DescuentoModal({ isOpen, onClose, despacho }) {
   const tieneErrores = items.some(i => { const d = descLocal[i.id]; return d && getError(d, i) })
 
   const handleUpdate = useCallback((id, field, value) => {
-    setDescLocal(prev => ({ ...prev, [id]: { ...(prev[id] || { tipo: 'porcentaje', valor: '' }), [field]: value } }))
+    setDescLocal(prev => ({ ...prev, [id]: { ...(prev[id] || { tipo: 'nuevo_precio', valor: '' }), [field]: value } }))
   }, [])
 
   const handleRemove = useCallback(id => {
@@ -343,7 +361,7 @@ export default function DescuentoModal({ isOpen, onClose, despacho }) {
 
   const handleEdit = useCallback(id => {
     if (id && !descLocal[id]) {
-      setDescLocal(prev => ({ ...prev, [id]: { tipo: 'porcentaje', valor: '' } }))
+      setDescLocal(prev => ({ ...prev, [id]: { tipo: 'nuevo_precio', valor: '' } }))
     }
     setEditandoId(id)
   }, [descLocal])
@@ -351,9 +369,16 @@ export default function DescuentoModal({ isOpen, onClose, despacho }) {
   async function handleConfirmar() {
     const descuentos = []
     for (const [id, d] of Object.entries(descLocal)) {
+      if (d.valor === '') continue
       const v = Number(d.valor)
-      if (v <= 0 || getError(d, items.find(i => i.id === id))) continue
-      descuentos.push({ cotizacionItemId: id, tipo: d.tipo, valor: v })
+      const item = items.find(i => i.id === id)
+      if (v < 0 || getError(d, item)) continue
+      
+      const precioUnit = Number(item.precio_unit_usd)
+      const descuentoUnitario = precioUnit - v
+      if (descuentoUnitario <= 0) continue
+
+      descuentos.push({ cotizacionItemId: id, tipo: 'monto_unitario', valor: Math.round(descuentoUnitario * 10000) / 10000 })
     }
     await guardarMut.mutateAsync({ despachoId, descuentos })
     setConfirmando(false)

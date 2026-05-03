@@ -213,30 +213,30 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, onBorra
       </div>
 
       {/* Acciones */}
-      <div className="border-t border-slate-100 px-2 py-1.5 flex items-center gap-1">
+      <div className="border-t border-slate-100 px-2 py-1.5 flex flex-wrap items-center gap-1">
         <button onClick={() => onDetalle?.(producto)} title="Ver detalle"
-          className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors border border-emerald-200">
+          className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors border border-emerald-200 whitespace-nowrap shrink-0">
           <Eye size={14} /> Ver detalle
         </button>
         {esPrivilegiado && (
           <>
             <button onClick={() => onKardex(producto)} title="Kardex"
-              className="flex items-center gap-0.5 px-1.5 sm:px-2 py-1 rounded-lg text-[10px] font-medium text-violet-600 hover:bg-violet-50 transition-colors">
-              <ClipboardList size={11} /><span className="hidden sm:inline">Kardex</span>
+              className="flex items-center justify-center p-1.5 rounded-lg text-violet-600 hover:bg-violet-50 transition-colors shrink-0">
+              <ClipboardList size={13} />
             </button>
             {esAdministracion && (
               <>
                 <button onClick={() => onEditar(producto)} title="Editar"
-                  className="flex items-center gap-0.5 px-1.5 sm:px-2 py-1 rounded-lg text-[10px] font-medium text-sky-600 hover:bg-sky-50 transition-colors">
-                  <Pencil size={11} /><span className="hidden sm:inline">Editar</span>
+                  className="flex items-center justify-center p-1.5 rounded-lg text-sky-600 hover:bg-sky-50 transition-colors shrink-0">
+                  <Pencil size={13} />
                 </button>
                 <button onClick={() => onDesactivar(producto)} title="Desactivar"
-                  className="flex items-center gap-0.5 px-1.5 sm:px-2 py-1 rounded-lg text-[10px] font-medium text-amber-500 hover:bg-amber-50 transition-colors">
-                  <EyeOff size={11} /><span className="hidden sm:inline">Desact.</span>
+                  className="flex items-center justify-center p-1.5 rounded-lg text-amber-500 hover:bg-amber-50 transition-colors shrink-0">
+                  <EyeOff size={13} />
                 </button>
                 <button onClick={() => onBorrar(producto)} title="Borrar"
-                  className="flex items-center gap-0.5 px-1.5 sm:px-2 py-1 rounded-lg text-[10px] font-medium text-red-400 hover:bg-red-50 transition-colors">
-                  <Trash2 size={11} />
+                  className="flex items-center justify-center p-1.5 rounded-lg text-red-400 hover:bg-red-50 transition-colors shrink-0">
+                  <Trash2 size={13} />
                 </button>
               </>
             )}

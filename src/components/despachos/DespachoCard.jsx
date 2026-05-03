@@ -72,9 +72,9 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     setPdfLoading(true)
     try {
       const session = (await supabase.auth.getSession()).data.session
-      const [{ generarDespachoPDF }, itemsRes, clienteData, vendedorRes, transportistaRes] = await Promise.all([
+      const [{ generarDespachoPDF }, itemsRes, clienteData, vendedorRes, transportistaRes, descuentosRes] = await Promise.all([
         import('../../services/pdf/despachoPDF'),
-        supabase.from('cotizacion_items').select('codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, total_linea_usd, orden').eq('cotizacion_id', despacho.cotizacion_id).order('orden'),
+        supabase.from('cotizacion_items').select('id, codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, total_linea_usd, orden').eq('cotizacion_id', despacho.cotizacion_id).order('orden'),
         despacho.cliente_id
           ? fetch(apiUrl('/api/clientes/lookup'), {
               method: 'POST',
@@ -84,8 +84,11 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           : Promise.resolve([]),
         despacho.vendedor_id ? supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', despacho.vendedor_id).single() : Promise.resolve({ data: null }),
         despacho.transportista_id ? supabase.from('transportistas').select('id, nombre, rif, telefono, vehiculo, placa_chuto, placa_batea, color').eq('id', despacho.transportista_id).single() : Promise.resolve({ data: null }),
+        supabase.from('despacho_descuentos').select('cotizacion_item_id').eq('despacho_id', despacho.id)
       ])
       if (itemsRes.error) throw itemsRes.error
+      const descMap = new Set((descuentosRes.data || []).map(d => d.cotizacion_item_id))
+      const itemsFinal = (itemsRes.data ?? []).map(i => ({ ...i, tiene_descuento: descMap.has(i.id) }))
       const desConDatos = {
         ...despacho,
         cliente: clienteData?.find(c => c.id === despacho.cliente_id) || despacho.cliente,
@@ -93,7 +96,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         vendedor: vendedorRes.data || despacho.vendedor,
         transportista: transportistaRes.data || despacho.transportista,
       }
-      await generarDespachoPDF({ despacho: desConDatos, items: itemsRes.data ?? [], config, formaPago: despacho.forma_pago || '', monedaPDF: 'bs', tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio })
+      await generarDespachoPDF({ despacho: desConDatos, items: itemsFinal, config, formaPago: despacho.forma_pago || '', monedaPDF: 'bs', tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio })
     } catch (err) {
       showToast('Error al generar PDF: ' + (err.message || 'Error desconocido'), 'error')
     } finally {
@@ -105,9 +108,9 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     setOrdenLoading(true)
     try {
       const session = (await supabase.auth.getSession()).data.session
-      const [{ generarOrdenDespachoPDF }, itemsRes, clienteData, vendedorRes, transportistaRes] = await Promise.all([
+      const [{ generarOrdenDespachoPDF }, itemsRes, clienteData, vendedorRes, transportistaRes, descuentosRes] = await Promise.all([
         import('../../services/pdf/ordenDespachoPDF'),
-        supabase.from('cotizacion_items').select('codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, total_linea_usd, orden').eq('cotizacion_id', despacho.cotizacion_id).order('orden'),
+        supabase.from('cotizacion_items').select('id, codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, total_linea_usd, orden').eq('cotizacion_id', despacho.cotizacion_id).order('orden'),
         despacho.cliente_id
           ? fetch(apiUrl('/api/clientes/lookup'), {
               method: 'POST',
@@ -117,8 +120,11 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           : Promise.resolve([]),
         despacho.vendedor_id ? supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', despacho.vendedor_id).single() : Promise.resolve({ data: null }),
         despacho.transportista_id ? supabase.from('transportistas').select('id, nombre, rif, telefono, vehiculo, placa_chuto, placa_batea, color').eq('id', despacho.transportista_id).single() : Promise.resolve({ data: null }),
+        supabase.from('despacho_descuentos').select('cotizacion_item_id').eq('despacho_id', despacho.id)
       ])
       if (itemsRes.error) throw itemsRes.error
+      const descMap = new Set((descuentosRes.data || []).map(d => d.cotizacion_item_id))
+      const itemsFinal = (itemsRes.data ?? []).map(i => ({ ...i, tiene_descuento: descMap.has(i.id) }))
       const desConDatos = {
         ...despacho,
         cliente: clienteData?.find(c => c.id === despacho.cliente_id) || despacho.cliente,
@@ -126,7 +132,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         vendedor: vendedorRes.data || despacho.vendedor,
         transportista: transportistaRes.data || despacho.transportista,
       }
-      await generarOrdenDespachoPDF({ despacho: desConDatos, items: itemsRes.data ?? [], config, formaPago: despacho.forma_pago || '', monedaPDF: '$', tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio })
+      await generarOrdenDespachoPDF({ despacho: desConDatos, items: itemsFinal, config, formaPago: despacho.forma_pago || '', monedaPDF: '$', tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio })
     } catch (err) {
       showToast('Error al generar Orden de Despacho: ' + (err.message || 'Error desconocido'), 'error')
     } finally {
@@ -171,9 +177,9 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     setShowPrintMenu(false)
     try {
       const session = (await supabase.auth.getSession()).data.session
-      const [{ generarDespachoPDF }, itemsRes, clienteData, vendedorRes, transportistaRes] = await Promise.all([
+      const [{ generarDespachoPDF }, itemsRes, clienteData, vendedorRes, transportistaRes, descuentosRes] = await Promise.all([
         import('../../services/pdf/despachoPDF'),
-        supabase.from('cotizacion_items').select('codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, total_linea_usd, orden').eq('cotizacion_id', despacho.cotizacion_id).order('orden'),
+        supabase.from('cotizacion_items').select('id, codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, total_linea_usd, orden').eq('cotizacion_id', despacho.cotizacion_id).order('orden'),
         despacho.cliente_id
           ? fetch(apiUrl('/api/clientes/lookup'), {
               method: 'POST',
@@ -183,8 +189,11 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           : Promise.resolve([]),
         despacho.vendedor_id ? supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', despacho.vendedor_id).single() : Promise.resolve({ data: null }),
         despacho.transportista_id ? supabase.from('transportistas').select('id, nombre, rif, telefono, vehiculo, placa_chuto, placa_batea, color').eq('id', despacho.transportista_id).single() : Promise.resolve({ data: null }),
+        supabase.from('despacho_descuentos').select('cotizacion_item_id').eq('despacho_id', despacho.id)
       ])
       if (itemsRes.error) throw itemsRes.error
+      const descMap = new Set((descuentosRes.data || []).map(d => d.cotizacion_item_id))
+      const itemsFinal = (itemsRes.data ?? []).map(i => ({ ...i, tiene_descuento: descMap.has(i.id) }))
       const desConDatos = {
         ...despacho,
         cliente: clienteData?.find(c => c.id === despacho.cliente_id) || despacho.cliente,
@@ -192,7 +201,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         vendedor: vendedorRes.data || despacho.vendedor,
         transportista: transportistaRes.data || despacho.transportista,
       }
-      const blob = await generarDespachoPDF({ despacho: desConDatos, items: itemsRes.data ?? [], config, formaPago: despacho.forma_pago || '', monedaPDF: 'bs', tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio, returnBlob: true })
+      const blob = await generarDespachoPDF({ despacho: desConDatos, items: itemsFinal, config, formaPago: despacho.forma_pago || '', monedaPDF: 'bs', tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio, returnBlob: true })
       printOrDownloadPdf(blob, `${numDisplay}-nota-entrega.pdf`)
     } catch (err) {
       showToast('Error al imprimir: ' + (err.message || 'Error desconocido'), 'error')
@@ -206,9 +215,9 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     setShowPrintMenu(false)
     try {
       const session = (await supabase.auth.getSession()).data.session
-      const [{ generarOrdenDespachoPDF }, itemsRes, clienteData, vendedorRes, transportistaRes] = await Promise.all([
+      const [{ generarOrdenDespachoPDF }, itemsRes, clienteData, vendedorRes, transportistaRes, descuentosRes] = await Promise.all([
         import('../../services/pdf/ordenDespachoPDF'),
-        supabase.from('cotizacion_items').select('codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, total_linea_usd, orden').eq('cotizacion_id', despacho.cotizacion_id).order('orden'),
+        supabase.from('cotizacion_items').select('id, codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, total_linea_usd, orden').eq('cotizacion_id', despacho.cotizacion_id).order('orden'),
         despacho.cliente_id
           ? fetch(apiUrl('/api/clientes/lookup'), {
               method: 'POST',
@@ -218,8 +227,11 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           : Promise.resolve([]),
         despacho.vendedor_id ? supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', despacho.vendedor_id).single() : Promise.resolve({ data: null }),
         despacho.transportista_id ? supabase.from('transportistas').select('id, nombre, rif, telefono, vehiculo, placa_chuto, placa_batea, color').eq('id', despacho.transportista_id).single() : Promise.resolve({ data: null }),
+        supabase.from('despacho_descuentos').select('cotizacion_item_id').eq('despacho_id', despacho.id)
       ])
       if (itemsRes.error) throw itemsRes.error
+      const descMap = new Set((descuentosRes.data || []).map(d => d.cotizacion_item_id))
+      const itemsFinal = (itemsRes.data ?? []).map(i => ({ ...i, tiene_descuento: descMap.has(i.id) }))
       const desConDatos = {
         ...despacho,
         cliente: clienteData?.find(c => c.id === despacho.cliente_id) || despacho.cliente,
@@ -227,7 +239,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         vendedor: vendedorRes.data || despacho.vendedor,
         transportista: transportistaRes.data || despacho.transportista,
       }
-      const blob = await generarOrdenDespachoPDF({ despacho: desConDatos, items: itemsRes.data ?? [], config, formaPago: despacho.forma_pago || '', monedaPDF: '$', tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio, returnBlob: true })
+      const blob = await generarOrdenDespachoPDF({ despacho: desConDatos, items: itemsFinal, config, formaPago: despacho.forma_pago || '', monedaPDF: '$', tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio, returnBlob: true })
       printOrDownloadPdf(blob, `${numDisplay}-orden-despacho.pdf`)
     } catch (err) {
       showToast('Error al imprimir orden: ' + (err.message || 'Error desconocido'), 'error')

@@ -64,10 +64,12 @@ export default function ClienteSelector({ clientes, clienteId, onSelect }) {
   return (
     <div ref={ref} className="relative">
       {/* Trigger */}
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setAbierto(!abierto)}
-        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all ${
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setAbierto(!abierto) } }}
+        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all cursor-pointer ${
           abierto
             ? 'border-primary ring-2 ring-primary-focus bg-white'
             : seleccionado
@@ -103,7 +105,7 @@ export default function ClienteSelector({ clientes, clienteId, onSelect }) {
             <ChevronDown size={16} className={`text-slate-400 transition-transform ${abierto ? 'rotate-180' : ''}`} />
           </>
         )}
-      </button>
+      </div>
 
       {/* Dropdown */}
       {abierto && (

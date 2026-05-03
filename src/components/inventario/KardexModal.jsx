@@ -32,9 +32,9 @@ function SummaryCard({ icon: Icon, label, value, color, suffix }) {
   }
   return (
     <div className={`rounded-xl border px-3 py-2.5 ${colorMap[color]}`}>
-      <div className="flex items-center gap-2 mb-1">
-        <Icon size={13} className={iconColor[color]} />
-        <span className="text-[10px] font-bold uppercase tracking-wider opacity-70">{label}</span>
+      <div className="flex items-center gap-2 mb-1 min-w-0">
+        <Icon size={13} className={`${iconColor[color]} shrink-0`} />
+        <span className="text-[9px] font-bold uppercase tracking-tight opacity-70 truncate">{label}</span>
       </div>
       <p className="text-lg font-black leading-none">
         {typeof value === 'number' ? value.toLocaleString('es-VE') : value}
@@ -81,7 +81,7 @@ export default function KardexModal({ isOpen, onClose, producto }) {
   if (!producto) return null
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Kardex" className="max-w-2xl sm:max-w-4xl">
+    <Modal isOpen={isOpen} onClose={onClose} title="Kardex" className="!max-w-2xl sm:!max-w-4xl">
       <div className="space-y-4">
 
         {/* ── Encabezado del producto ─────────────────────────────────────── */}
@@ -93,7 +93,7 @@ export default function KardexModal({ isOpen, onClose, producto }) {
             }
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-bold text-slate-800 truncate">{producto.nombre}</h3>
+            <h3 className="text-sm font-bold text-slate-800 line-clamp-2 leading-snug">{producto.nombre}</h3>
             <div className="flex items-center gap-3 mt-0.5">
               {producto.codigo && (
                 <span className="flex items-center gap-1 text-[11px] text-slate-400 font-mono">
@@ -123,7 +123,7 @@ export default function KardexModal({ isOpen, onClose, producto }) {
         </div>
 
         {/* ── Filtro de fechas ────────────────────────────────────────────── */}
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="text-slate-400 font-medium">Filtrar:</span>
           <input
             type="date"
@@ -163,7 +163,7 @@ export default function KardexModal({ isOpen, onClose, producto }) {
         ) : (
           <div className="border border-slate-200 rounded-xl overflow-hidden">
             {/* Header */}
-            <div className="grid grid-cols-[70px_1fr_60px_70px_70px] sm:grid-cols-[80px_1fr_60px_70px_70px_70px_1fr] gap-1 px-3 py-2 bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+            <div className="grid grid-cols-[75px_1fr_60px_70px_70px] sm:grid-cols-[85px_1.2fr_80px_70px_70px_150px_1.5fr] gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
               <span>Correlat.</span>
               <span>Fecha</span>
               <span className="text-center">Tipo</span>
@@ -185,8 +185,8 @@ export default function KardexModal({ isOpen, onClose, producto }) {
                 return (
                   <div key={m.id}>
                     <div
-                      className={`grid grid-cols-[70px_1fr_60px_70px_70px] sm:grid-cols-[80px_1fr_60px_70px_70px_70px_1fr] gap-1 px-3 py-2.5 hover:bg-slate-50/50 transition-colors items-center cursor-pointer ${
-                        idx % 2 === 0 ? '' : 'bg-slate-50/30'
+                      className={`grid grid-cols-[75px_1fr_60px_70px_70px] sm:grid-cols-[85px_1.2fr_80px_70px_70px_150px_1.5fr] gap-2 px-4 py-3 hover:bg-slate-50/60 transition-colors items-center cursor-pointer ${
+                        idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'
                       }`}
                       onClick={() => motivoLargo && toggleRow(m.id)}
                     >
@@ -201,12 +201,12 @@ export default function KardexModal({ isOpen, onClose, producto }) {
                           <Clock size={10} className="text-slate-300 shrink-0" />
                           <span className="text-[11px] text-slate-500 truncate">{formatFecha(m.creado_en)}</span>
                         </div>
-                        <div className="flex items-center gap-1 ml-3.5">
+                        <div className="flex items-center gap-1.5 ml-3.5 mt-0.5">
                           {m.usuario_color && (
                             <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: m.usuario_color }} />
                           )}
-                          <User size={9} className="text-slate-300" />
-                          <span className="text-[10px] text-slate-400 truncate">{m.usuario_nombre || 'Sin usuario'}</span>
+                          <User size={10} className="text-slate-400 shrink-0" />
+                          <span className="text-[10.5px] font-medium text-slate-600 truncate">{m.usuario_nombre || 'Sin usuario'}</span>
                         </div>
                       </div>
 
@@ -219,7 +219,8 @@ export default function KardexModal({ isOpen, onClose, producto }) {
                             ? <ArrowDownToLine size={9} />
                             : <ArrowUpFromLine size={9} />
                           }
-                          {esIngreso ? 'Ing' : 'Egr'}
+                          <span className="hidden sm:inline">{esIngreso ? 'Ingreso' : 'Egreso'}</span>
+                          <span className="sm:hidden">{esIngreso ? 'Ing' : 'Egr'}</span>
                         </span>
                       </div>
 
@@ -234,16 +235,16 @@ export default function KardexModal({ isOpen, onClose, producto }) {
                       </span>
 
                       {/* Categoría */}
-                      <div className="hidden sm:flex justify-center">
-                        <span className={`inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${motivoColors.bg} ${motivoColors.text} ${motivoColors.border}`}>
-                          <span className={`w-1 h-1 rounded-full ${motivoColors.dot}`} />
-                          {motivoCfg.label}
+                      <div className="hidden sm:flex justify-center min-w-0">
+                        <span className={`inline-flex items-center gap-1 text-[9.5px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap overflow-hidden max-w-full ${motivoColors.bg} ${motivoColors.text} ${motivoColors.border}`}>
+                          <span className={`w-1 h-1 rounded-full shrink-0 ${motivoColors.dot}`} />
+                          <span className="truncate">{motivoCfg.label}</span>
                         </span>
                       </div>
 
                       {/* Motivo */}
                       <div className="hidden sm:flex items-center gap-1 min-w-0">
-                        <span className="text-[11px] text-slate-400 truncate">{m.motivo || ''}</span>
+                        <span className="text-[11px] font-medium text-slate-500 truncate">{m.motivo || '—'}</span>
                         {motivoLargo && (
                           isExpanded
                             ? <ChevronUp size={10} className="text-slate-300 shrink-0" />

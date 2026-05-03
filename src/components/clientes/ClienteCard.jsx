@@ -23,7 +23,7 @@ function getIniciales(nombre = '') {
   return nombre.slice(0, 2).toUpperCase()
 }
 
-export default function ClienteCard({ cliente, onEditar, onDesactivar, onReasignar, onCotizar, onVerFicha }) {
+export default function ClienteCard({ cliente, onEditar, onReasignar, onCotizar, onVerFicha }) {
   const { perfil } = useAuthStore()
   const esSupervisor = perfil?.rol === 'supervisor'
   const esAdministracion = perfil?.rol === 'administracion'
@@ -165,12 +165,6 @@ export default function ClienteCard({ cliente, onEditar, onDesactivar, onReasign
           <button onClick={() => onReasignar(cliente)} title="Reasignar cliente"
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
             <ArrowRightLeft size={14} />
-          </button>
-        )}
-        {esSupervisor && (
-          <button onClick={() => onDesactivar(cliente)} title="Desactivar cliente"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors ml-auto">
-            <UserMinus size={14} />
           </button>
         )}
       </div>

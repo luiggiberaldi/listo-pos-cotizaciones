@@ -411,40 +411,57 @@ export default function DashboardView() {
         </div>
       )}
 
-      {/* ── ADMIN: Stock bajo ── */}
-      {esAdministracion && !loading && dm?.stockBajoCount > 0 && (
+      {/* ── ADMIN: Despachos por aprobar (posición prominente) ── */}
+      {esAdministracion && !loading && (
         <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="font-bold text-slate-700 text-sm uppercase tracking-wide flex items-center gap-2">
-              <AlertTriangle size={14} className="text-amber-500" />Inventario bajo stock
+              <Clock size={14} className="text-amber-500" />Despachos por aprobar
             </h2>
-            <button onClick={() => navigate('/inventario?filtro=stock_bajo')}
+            <button onClick={() => navigate('/despachos?estado=pendiente')}
               className="text-xs font-semibold text-sky-600 hover:text-sky-700 flex items-center gap-1 transition-colors">
-              Ver todo <ArrowRight size={12} />
+              Ver todos <ArrowRight size={12} />
             </button>
           </div>
-          <div className="space-y-2">
-            {dm.stockBajoItems.map(p => {
-              const pct = p.stock_minimo > 0 ? Math.round((p.stock_actual / p.stock_minimo) * 100) : 0
-              return (
-                <div key={p.id} className="flex items-center gap-3 p-2.5 rounded-xl border border-slate-100">
+
+          {(dm?.pendientesList?.length ?? 0) === 0 ? (
+            <EmptyState
+              icon={ClipboardList}
+              title="Sin despachos pendientes"
+              description="Todo está al día. No hay despachos esperando aprobación."
+            />
+          ) : (
+            <div className="space-y-2">
+              {dm.pendientesList.map(d => (
+                <button
+                  key={d.id}
+                  onClick={() => navigate('/despachos')}
+                  className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-100 hover:border-slate-200 hover:bg-slate-50 transition-all text-left active:scale-[0.99]"
+                >
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                    style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>
+                    <ClipboardList size={18} className="text-white" />
+                  </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-slate-800 truncate">{p.nombre}</p>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      {p.stock_actual} / {p.stock_minimo} {p.unidad || 'und'}
-                    </p>
-                  </div>
-                  <div className="w-16">
-                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full rounded-full"
-                        style={{ width: `${Math.min(pct, 100)}%`, background: pct < 30 ? '#ef4444' : pct < 70 ? '#f59e0b' : '#10b981' }} />
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-slate-800 font-mono">
+                        DES-{String(d.numero).padStart(5, '0')}
+                      </span>
+                      <span className="text-[11px] text-slate-400">{fmtRelativo(d.creado_en)}</span>
                     </div>
-                    <p className="text-[10px] text-slate-400 text-center mt-0.5">{pct}%</p>
+                    {d.cliente && (
+                      <p className="text-xs truncate mt-0.5" style={{ color: d.cliente.vendedor?.color || '#64748b' }}>
+                        {d.cliente.nombre}
+                      </p>
+                    )}
                   </div>
-                </div>
-              )
-            })}
-          </div>
+                  <div className="text-right shrink-0">
+                    <span className="text-sm font-bold text-slate-700">{fmtUsd(d.total_usd)}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -452,28 +469,109 @@ export default function DashboardView() {
       {esAdministracion && !loading && (
         <div className="bg-white border border-slate-200 rounded-2xl p-5 flex flex-col gap-3">
           <p className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
-            <Users size={12} />Accesos rápidos
+            <Zap size={12} />Accesos rápidos
           </p>
-          {[
-            { label: 'Despachos',          icon: ClipboardList, path: '/cotizaciones', colors: ['#92400e', '#B8860B'] },
-            { label: 'Clientes',           icon: UserRound,     path: '/clientes',     colors: ['#0369a1', '#0ea5e9'] },
-            { label: 'Inventario',         icon: Package,       path: '/inventario',   colors: ['#065f46', '#10b981'] },
-            { label: 'Reportes',           icon: BarChart2,     path: '/reportes',     colors: ['#7c3aed', '#a78bfa'] },
-          ].map(({ label, icon: Icon, path, colors }) => (
-            <button key={path} onClick={() => navigate(path)}
-              className="flex items-center justify-between w-full px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all group/btn hover:shadow-md"
-              style={{ background: 'linear-gradient(135deg, rgba(27,54,93,0.06), rgba(184,134,11,0.06))', border: '1px solid rgba(27,54,93,0.12)' }}>
-              <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${colors[0]}, ${colors[1]})` }}>
-                  <Icon size={13} className="text-white" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {[
+              { label: 'Despachos',  icon: ClipboardList, path: '/despachos',  colors: ['#92400e', '#B8860B'] },
+              { label: 'Inventario', icon: Package,       path: '/inventario', colors: ['#065f46', '#10b981'] },
+              { label: 'Comisiones', icon: DollarSign,    path: '/comisiones', colors: ['#1B365D', '#3b82f6'] },
+              { label: 'Reportes',   icon: BarChart2,     path: '/reportes',   colors: ['#7c3aed', '#a78bfa'] },
+            ].map(({ label, icon: Icon, path, colors }) => (
+              <button key={path} onClick={() => navigate(path)}
+                className="flex items-center justify-between w-full px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all group/btn hover:shadow-md"
+                style={{ background: 'linear-gradient(135deg, rgba(27,54,93,0.06), rgba(184,134,11,0.06))', border: '1px solid rgba(27,54,93,0.12)' }}>
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${colors[0]}, ${colors[1]})` }}>
+                    <Icon size={13} className="text-white" />
+                  </div>
+                  <span className="text-slate-700">{label}</span>
                 </div>
-                <span className="text-slate-700">{label}</span>
-              </div>
-              <ArrowRight size={14} className="text-slate-400 group-hover/btn:translate-x-0.5 transition-transform" />
-            </button>
-          ))}
+                <ArrowRight size={14} className="text-slate-400 group-hover/btn:translate-x-0.5 transition-transform" />
+              </button>
+            ))}
+          </div>
         </div>
       )}
+
+      {/* ── ADMIN: Comisiones de la semana ── */}
+      {esAdministracion && !loading && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-bold text-slate-700 text-sm uppercase tracking-wide flex items-center gap-2">
+              <DollarSign size={14} className="text-emerald-500" />Comisiones semana
+              {dm?.comisionesSemana && (
+                <span className="text-[10px] font-normal text-slate-400 normal-case">
+                  {dm.comisionesSemana.lunes} – {dm.comisionesSemana.sabado}
+                </span>
+              )}
+            </h2>
+            <button onClick={() => navigate('/comisiones')}
+              className="text-xs font-semibold text-sky-600 hover:text-sky-700 flex items-center gap-1 transition-colors">
+              Ver todas <ArrowRight size={12} />
+            </button>
+          </div>
+
+          {(!dm?.comisionesSemana?.vendedores?.length) ? (
+            <EmptyState
+              icon={DollarSign}
+              title="Sin comisiones esta semana"
+              description="No se han registrado comisiones del lunes al sábado."
+            />
+          ) : (
+            <>
+              {/* Totalizador */}
+              <div className="grid grid-cols-3 gap-2">
+                <div className="bg-slate-50 rounded-xl p-2.5 text-center">
+                  <p className="text-[10px] text-slate-400 font-medium">Total semana</p>
+                  <p className="text-sm font-black text-slate-800">{fmtUsd(dm.comisionesSemana.total)}</p>
+                </div>
+                <div className="bg-amber-50 rounded-xl p-2.5 text-center">
+                  <p className="text-[10px] text-amber-600 font-medium">Pendiente</p>
+                  <p className="text-sm font-black text-amber-700">{fmtUsd(dm.comisionesSemana.vendedores.reduce((s,v) => s+v.pendiente,0))}</p>
+                </div>
+                <div className="bg-emerald-50 rounded-xl p-2.5 text-center">
+                  <p className="text-[10px] text-emerald-600 font-medium">Pagado</p>
+                  <p className="text-sm font-black text-emerald-700">{fmtUsd(dm.comisionesSemana.vendedores.reduce((s,v) => s+v.pagado,0))}</p>
+                </div>
+              </div>
+
+              {/* Tabla por vendedor */}
+              <div className="overflow-hidden rounded-xl border border-slate-100">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-slate-50">
+                      <th className="text-left px-3 py-2 text-slate-500 font-semibold">Vendedor</th>
+                      <th className="text-center px-2 py-2 text-slate-500 font-semibold">Coms.</th>
+                      <th className="text-right px-3 py-2 text-amber-600 font-semibold">Pendiente</th>
+                      <th className="text-right px-3 py-2 text-emerald-600 font-semibold">Pagado</th>
+                      <th className="text-right px-3 py-2 text-slate-700 font-semibold">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dm.comisionesSemana.vendedores.map((v, i) => (
+                      <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full shrink-0" style={{ background: v.color }} />
+                            <span className="font-medium text-slate-700 truncate max-w-[100px]">{v.nombre}</span>
+                          </div>
+                        </td>
+                        <td className="px-2 py-2 text-center text-slate-500">{v.count}</td>
+                        <td className="px-3 py-2 text-right text-amber-600 font-medium">{fmtUsd(v.pendiente)}</td>
+                        <td className="px-3 py-2 text-right text-emerald-600 font-medium">{fmtUsd(v.pagado)}</td>
+                        <td className="px-3 py-2 text-right font-bold text-slate-800">{fmtUsd(v.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+
 
       {/* ── VENDEDOR / SUPERVISOR: Desglose por estado ── */}
       {(esVendedor || esSupervisor || esDesarrollador) && (

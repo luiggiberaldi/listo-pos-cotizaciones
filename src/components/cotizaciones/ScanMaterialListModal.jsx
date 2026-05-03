@@ -1,11 +1,18 @@
 // src/components/cotizaciones/ScanMaterialListModal.jsx
 // Modal para escanear listas de materiales (foto) o pegar texto (WhatsApp)
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { X, Camera, Image as ImageIcon, Loader2, AlertCircle, Check, Search, Package, MessageSquareText, ClipboardPaste } from 'lucide-react'
 import { comprimirParaOCR } from '../../utils/imageToBase64'
 import { useScanMaterialList } from '../../hooks/useScanMaterialList'
 import { fmtUsdSimple as fmtUsd } from '../../utils/format'
 import ProductoAutocomplete from './ProductoAutocomplete'
+
+const PROCESSING_STEPS = [
+  { icon: '🔍', text: 'Leyendo imagen...' },
+  { icon: '🧠', text: 'Analizando con inteligencia artificial...' },
+  { icon: '📦', text: 'Buscando materiales en inventario...' },
+  { icon: '✅', text: 'Preparando resultados...' },
+]
 
 export default function ScanMaterialListModal({ open, onClose, onBulkAdd, tasa = 0 }) {
   const [phase, setPhase] = useState('capture') // capture | paste | processing | results
@@ -15,8 +22,18 @@ export default function ScanMaterialListModal({ open, onClose, onBulkAdd, tasa =
   const [items, setItems] = useState([])
   const [debugLog, setDebugLog] = useState('')
   const [debugCopied, setDebugCopied] = useState(false)
+  const [stepIdx, setStepIdx] = useState(0)
   const { scan, parseText, loading, error, results, reset } = useScanMaterialList()
   const fileRef = useRef(null)
+
+  // Cicla los pasos descriptivos mientras procesa
+  useEffect(() => {
+    if (phase !== 'processing') { setStepIdx(0); return }
+    const interval = setInterval(() => {
+      setStepIdx(prev => (prev + 1) % PROCESSING_STEPS.length)
+    }, 2200)
+    return () => clearInterval(interval)
+  }, [phase])
 
   if (!open) return null
 
@@ -62,8 +79,9 @@ export default function ScanMaterialListModal({ open, onClose, onBulkAdd, tasa =
   async function handleFile(e) {
     const file = e.target.files?.[0]
     if (!file) return
-    const url = URL.createObjectURL(file)
-    setPreview(url)
+    // Mostrar preview inmediatamente antes de comprimir
+    const previewUrl = URL.createObjectURL(file)
+    setPreview(previewUrl)
     setPhase('processing')
     try {
       const { base64, mimeType } = await comprimirParaOCR(file)
@@ -71,6 +89,8 @@ export default function ScanMaterialListModal({ open, onClose, onBulkAdd, tasa =
       processResults(data)
     } catch {
       setPhase('capture')
+    } finally {
+      URL.revokeObjectURL(previewUrl)
     }
   }
 
@@ -277,14 +297,41 @@ export default function ScanMaterialListModal({ open, onClose, onBulkAdd, tasa =
           {/* ── FASE 2: Procesando ── */}
           {phase === 'processing' && (
             <div className="flex flex-col items-center gap-6 py-8">
+              {/* Preview de imagen inmediato */}
               {preview && (
-                <img src={preview} alt="Lista" className="w-40 h-52 object-cover rounded-xl border border-slate-200 shadow-sm" />
+                <div className="relative">
+                  <img src={preview} alt="Lista" className="w-36 h-48 object-cover rounded-xl border border-slate-200 shadow-md" />
+                  <div className="absolute inset-0 bg-primary/10 rounded-xl flex items-center justify-center">
+                    <Loader2 size={28} className="text-primary animate-spin drop-shadow" />
+                  </div>
+                </div>
               )}
-              <div className="flex flex-col items-center gap-3">
-                <Loader2 size={32} className="text-primary animate-spin" />
-                <p className="text-sm font-bold text-slate-700">Buscando materiales en inventario...</p>
-                <p className="text-xs text-slate-400">Esto puede tomar unos segundos</p>
+
+              {/* Spinner solo texto (sin imagen) */}
+              {!preview && (
+                <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+                  <Loader2 size={32} className="text-primary animate-spin" />
+                </div>
+              )}
+
+              {/* Paso actual animado */}
+              <div className="flex flex-col items-center gap-2 text-center">
+                <p className="text-xl">{PROCESSING_STEPS[stepIdx].icon}</p>
+                <p className="text-sm font-bold text-slate-700 transition-all">
+                  {PROCESSING_STEPS[stepIdx].text}
+                </p>
+                {/* Barra de pasos */}
+                <div className="flex gap-1.5 mt-1">
+                  {PROCESSING_STEPS.map((_, i) => (
+                    <div key={i}
+                      className="h-1 rounded-full transition-all duration-500"
+                      style={{ width: i === stepIdx ? 20 : 6, background: i === stepIdx ? 'var(--color-primary, #1B365D)' : '#cbd5e1' }}
+                    />
+                  ))}
+                </div>
+                <p className="text-xs text-slate-400 mt-1">Esto puede tomar unos segundos</p>
               </div>
+
               {error && (
                 <div className="text-center space-y-3">
                   <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 px-4 py-2 rounded-lg">
