@@ -1,6 +1,7 @@
 // src/components/ui/CustomSelect.jsx
 // Selector personalizado con búsqueda — reemplaza el <select> nativo
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { Search, ChevronDown, X, Check, Plus } from 'lucide-react'
 
 /** Normaliza texto: quita acentos y pasa a minúsculas */
@@ -55,10 +56,18 @@ export default function CustomSelect({
   const [abierto, setAbierto] = useState(false)
   const [busqueda, setBusqueda] = useState('')
   const [openUp, setOpenUp] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
   const ref = useRef(null)
   const searchRef = useRef(null)
 
   const showSearch = searchable ?? (creatable || options.length > 5)
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768)
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   // Cerrar al hacer click/touch fuera
   useEffect(() => {
@@ -75,29 +84,23 @@ export default function CustomSelect({
     }
   }, [abierto])
 
-  // Calcular dirección del dropdown
+  // Calcular dirección del dropdown en desktop
   useEffect(() => {
     if (!abierto || !ref.current) return
 
-    const rect = ref.current.getBoundingClientRect()
-    const viewH = window.visualViewport?.height || window.innerHeight
-    const spaceBelow = viewH - rect.bottom
-    const isMobile = window.innerWidth < 768
-    
-    // Solución B: En móviles, forzamos abrir siempre hacia arriba para evitar
-    // choques con el borde inferior del modal y el teclado.
-    // En PC, usamos el cálculo de espacio dinámico.
-    if (isMobile) {
-      setOpenUp(true)
-    } else {
+    if (!isMobile) {
+      const rect = ref.current.getBoundingClientRect()
+      const viewH = window.visualViewport?.height || window.innerHeight
+      const spaceBelow = viewH - rect.bottom
       setOpenUp(spaceBelow < 220)
     }
 
-    // Focus search input (sin scrollIntoView para evitar bugs de touch en Android)
-    if (showSearch && searchRef.current) {
+    // Auto-focus search input en desktop. En móvil es mejor no hacerlo automático
+    // para no levantar el teclado de golpe y estropear la animación del cajón.
+    if (showSearch && searchRef.current && !isMobile) {
       requestAnimationFrame(() => searchRef.current?.focus())
     }
-  }, [abierto, showSearch])
+  }, [abierto, showSearch, isMobile])
 
   const seleccionada = options.find(o => o.value === value)
   // Si el valor actual no está en options (fue creado), mostrarlo como seleccionado
@@ -167,76 +170,167 @@ export default function CustomSelect({
         <ChevronDown size={15} className={`text-slate-400 transition-transform shrink-0 ${abierto ? 'rotate-180' : ''}`} />
       </button>
 
-      {/* Dropdown */}
+      {/* Dropdown / Bottom Sheet */}
       {abierto && (
-        <div className={`absolute z-50 left-0 right-0 bg-white rounded-xl border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden ${
-          openUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
-        }`}>
-          {/* Buscador */}
-          {showSearch && (
-            <div className="p-2 border-b border-slate-100">
-              <div className="relative">
-                <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                <input
-                  ref={searchRef}
-                  type="text"
-                  inputMode="search"
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  spellCheck={false}
-                  value={busqueda}
-                  onChange={e => setBusqueda(e.target.value)}
-                  placeholder="Buscar..."
-                  className="w-full pl-7 pr-3 py-1.5 text-sm border border-slate-100 rounded-lg bg-slate-50 focus:outline-none focus:ring-1 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400"
-                />
+        isMobile ? createPortal(
+          <div className="fixed inset-0 z-[9999] flex flex-col justify-end" style={{ isolation: 'isolate' }}>
+            {/* Backdrop oscuro */}
+            <div 
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] animate-in fade-in duration-200" 
+              onClick={() => setAbierto(false)} 
+            />
+            
+            {/* Bottom Sheet Modal */}
+            <div className="relative bg-white rounded-t-2xl shadow-2xl flex flex-col max-h-[85vh] animate-in slide-in-from-bottom-full duration-200 ease-out">
+              {/* Header del cajón */}
+              <div className="p-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+                <span className="font-semibold text-slate-800 text-lg">{placeholder}</span>
+                <button type="button" onClick={() => setAbierto(false)} className="p-2 -mr-2 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-full transition-colors">
+                  <X size={18} />
+                </button>
+              </div>
+              
+              <div className="flex flex-col min-h-0 overflow-hidden">
+                {/* Buscador grande para móvil */}
+                {showSearch && (
+                  <div className="p-3 border-b border-slate-100 shrink-0">
+                    <div className="relative">
+                      <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                      <input
+                        ref={searchRef}
+                        type="text"
+                        inputMode="search"
+                        autoComplete="off"
+                        autoCorrect="off"
+                        autoCapitalize="off"
+                        spellCheck={false}
+                        value={busqueda}
+                        onChange={e => setBusqueda(e.target.value)}
+                        placeholder="Buscar..."
+                        className="w-full pl-9 pr-4 py-3 text-base border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary placeholder:text-slate-400"
+                      />
+                    </div>
+                  </div>
+                )}
+                
+                {/* Lista amigable con scroll */}
+                <div className="overflow-y-auto p-2 pb-8 overscroll-contain">
+                  {filtradas.length === 0 && !puedeCrear ? (
+                    <p className="text-base text-slate-400 text-center py-8">
+                      {busqueda ? 'Sin resultados' : 'Sin opciones'}
+                    </p>
+                  ) : (
+                    <div className="space-y-1">
+                      {filtradas.map(opt => {
+                        const isSelected = opt.value === value
+                        const OptIcon = opt.icon
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => elegir(opt.value)}
+                            className={`w-full flex items-center gap-3 px-4 py-3.5 text-left rounded-xl transition-colors ${
+                              isSelected
+                                ? 'bg-primary/10 text-primary font-medium'
+                                : 'active:bg-slate-100 text-slate-700'
+                            }`}
+                          >
+                            {OptIcon && <OptIcon size={18} className={isSelected ? 'text-primary shrink-0' : 'text-slate-400 shrink-0'} />}
+                            <div className="flex-1 min-w-0">
+                              <div className="truncate text-base">{opt.label}</div>
+                              {opt.sub && <div className="text-[13px] text-slate-400 truncate mt-0.5">{opt.sub}</div>}
+                            </div>
+                            {isSelected && <Check size={18} className="text-primary shrink-0" />}
+                          </button>
+                        )
+                      })}
+                      {puedeCrear && (
+                        <button
+                          type="button"
+                          onClick={() => elegir(busqueda.trim())}
+                          className="w-full flex items-center gap-3 px-4 py-3.5 text-left rounded-xl transition-colors active:bg-emerald-50 text-emerald-700 mt-2 border border-emerald-100/50 bg-emerald-50/30"
+                        >
+                          <Plus size={18} className="text-emerald-500 shrink-0" />
+                          <div className="flex-1 truncate text-base">{createLabel} "<span className="font-bold">{busqueda.trim()}</span>"</div>
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          )}
-
-          {/* Lista */}
-          <div className="max-h-52 overflow-y-auto py-1 overscroll-contain">
-            {filtradas.length === 0 && !puedeCrear ? (
-              <p className="text-sm text-slate-400 text-center py-4">
-                {busqueda ? 'Sin resultados' : 'Sin opciones'}
-              </p>
-            ) : (
-              <>
-                {filtradas.map(opt => {
-                  const isSelected = opt.value === value
-                  const OptIcon = opt.icon
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => elegir(opt.value)}
-                      className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left text-sm transition-colors ${
-                        isSelected
-                          ? 'bg-primary-light/40 text-primary font-medium'
-                          : 'hover:bg-slate-50 text-slate-700'
-                      }`}
-                    >
-                      {OptIcon && <OptIcon size={14} className={isSelected ? 'text-primary shrink-0' : 'text-slate-400 shrink-0'} />}
-                      <span className="flex-1 truncate">{opt.label}</span>
-                      {opt.sub && <span className="text-xs text-slate-400 truncate max-w-[140px]">{opt.sub}</span>}
-                      {isSelected && <Check size={14} className="text-primary shrink-0" />}
-                    </button>
-                  )
-                })}
-                {puedeCrear && (
-                  <button
-                    type="button"
-                    onClick={() => elegir(busqueda.trim())}
-                    className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left text-sm transition-colors hover:bg-emerald-50 text-emerald-700 border-t border-slate-100"
-                  >
-                    <Plus size={14} className="text-emerald-500 shrink-0" />
-                    <span className="flex-1 truncate">{createLabel} "<span className="font-bold">{busqueda.trim()}</span>"</span>
-                  </button>
-                )}
-              </>
+          </div>,
+          document.body
+        ) : (
+          <div className={`absolute z-50 left-0 right-0 bg-white rounded-xl border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden ${
+            openUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
+          }`}>
+            {/* Buscador Desktop */}
+            {showSearch && (
+              <div className="p-2 border-b border-slate-100">
+                <div className="relative">
+                  <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  <input
+                    ref={searchRef}
+                    type="text"
+                    inputMode="search"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                    value={busqueda}
+                    onChange={e => setBusqueda(e.target.value)}
+                    placeholder="Buscar..."
+                    className="w-full pl-7 pr-3 py-1.5 text-sm border border-slate-100 rounded-lg bg-slate-50 focus:outline-none focus:ring-1 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400"
+                  />
+                </div>
+              </div>
             )}
+  
+            {/* Lista Desktop */}
+            <div className="max-h-52 overflow-y-auto py-1 overscroll-contain">
+              {filtradas.length === 0 && !puedeCrear ? (
+                <p className="text-sm text-slate-400 text-center py-4">
+                  {busqueda ? 'Sin resultados' : 'Sin opciones'}
+                </p>
+              ) : (
+                <>
+                  {filtradas.map(opt => {
+                    const isSelected = opt.value === value
+                    const OptIcon = opt.icon
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => elegir(opt.value)}
+                        className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left text-sm transition-colors ${
+                          isSelected
+                            ? 'bg-primary-light/40 text-primary font-medium'
+                            : 'hover:bg-slate-50 text-slate-700'
+                        }`}
+                      >
+                        {OptIcon && <OptIcon size={14} className={isSelected ? 'text-primary shrink-0' : 'text-slate-400 shrink-0'} />}
+                        <span className="flex-1 truncate">{opt.label}</span>
+                        {opt.sub && <span className="text-xs text-slate-400 truncate max-w-[140px]">{opt.sub}</span>}
+                        {isSelected && <Check size={14} className="text-primary shrink-0" />}
+                      </button>
+                    )
+                  })}
+                  {puedeCrear && (
+                    <button
+                      type="button"
+                      onClick={() => elegir(busqueda.trim())}
+                      className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left text-sm transition-colors hover:bg-emerald-50 text-emerald-700 border-t border-slate-100"
+                    >
+                      <Plus size={14} className="text-emerald-500 shrink-0" />
+                      <span className="flex-1 truncate">{createLabel} "<span className="font-bold">{busqueda.trim()}</span>"</span>
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
           </div>
-        </div>
+        )
       )}
     </div>
   )
