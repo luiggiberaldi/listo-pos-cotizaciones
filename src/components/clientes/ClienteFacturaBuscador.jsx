@@ -50,34 +50,48 @@ export default function ClienteFacturaBuscador({ clientes = [], clienteId, onSel
     <>
       {/* ── Botón / chip de selección ── */}
       {seleccionado ? (
-        <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-violet-300 bg-violet-50 text-left">
-          <Receipt size={12} className="text-violet-500 shrink-0" />
-          <span className="flex-1 min-w-0 text-xs font-semibold text-violet-800 truncate">
-            {seleccionado.nombre}
-            {seleccionado.rif_cedula && <span className="font-normal text-violet-500 ml-1">· {seleccionado.rif_cedula}</span>}
-          </span>
-          <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${TIPO_BADGE[seleccionado.tipo_cliente]?.cls ?? TIPO_BADGE.natural.cls}`}>
-            {TIPO_BADGE[seleccionado.tipo_cliente]?.label ?? 'N'}
-          </span>
-          <button type="button" onClick={() => setAbierto(true)}
-            className="p-0.5 rounded hover:bg-violet-200 text-violet-500 hover:text-violet-700 transition-colors shrink-0 text-[10px] font-medium">
-            Cambiar
-          </button>
-          <button type="button" onClick={limpiar}
-            className="p-0.5 rounded hover:bg-violet-200 text-violet-400 hover:text-violet-700 transition-colors shrink-0">
-            <X size={12} />
+        <div className="flex items-center gap-1.5">
+          <div className="flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-violet-300 bg-violet-50 text-left">
+            <Receipt size={12} className="text-violet-500 shrink-0" />
+            <span className="flex-1 min-w-0 text-xs font-semibold text-violet-800 truncate">
+              {seleccionado.nombre}
+              {seleccionado.rif_cedula && <span className="font-normal text-violet-500 ml-1">· {seleccionado.rif_cedula}</span>}
+            </span>
+            <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${TIPO_BADGE[seleccionado.tipo_cliente]?.cls ?? TIPO_BADGE.natural.cls}`}>
+              {TIPO_BADGE[seleccionado.tipo_cliente]?.label ?? 'N'}
+            </span>
+            <button type="button" onClick={() => setAbierto(true)}
+              className="p-0.5 rounded hover:bg-violet-200 text-violet-500 hover:text-violet-700 transition-colors shrink-0 text-[10px] font-medium">
+              Cambiar
+            </button>
+            <button type="button" onClick={limpiar}
+              className="p-0.5 rounded hover:bg-violet-200 text-violet-400 hover:text-violet-700 transition-colors shrink-0">
+              <X size={12} />
+            </button>
+          </div>
+          <button type="button" onClick={() => setShowCrear(true)}
+            className="shrink-0 w-8 h-8 rounded-lg bg-violet-50 hover:bg-violet-100 border border-violet-200 flex items-center justify-center transition-colors active:scale-95"
+            title="Nuevo cliente">
+            <Plus size={13} className="text-violet-600" />
           </button>
         </div>
       ) : (
-        <button
-          type="button"
-          onClick={() => setAbierto(true)}
-          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-dashed border-slate-200 text-xs text-slate-400 hover:border-violet-300 hover:text-violet-500 transition-colors"
-        >
-          <Receipt size={12} />
-          <span>Facturar a otro cliente</span>
-          <span className="ml-auto text-[10px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded-full font-semibold">Opcional</span>
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setAbierto(true)}
+            className="flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-dashed border-slate-200 text-xs text-slate-400 hover:border-violet-300 hover:text-violet-500 transition-colors"
+          >
+            <Receipt size={12} />
+            <span>Facturar a otro cliente</span>
+            <span className="ml-auto text-[10px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded-full font-semibold">Opcional</span>
+          </button>
+          <button type="button" onClick={() => setShowCrear(true)}
+            className="shrink-0 w-8 h-8 rounded-lg bg-violet-50 hover:bg-violet-100 border border-violet-200 flex items-center justify-center transition-colors active:scale-95"
+            title="Nuevo cliente">
+            <Plus size={13} className="text-violet-600" />
+          </button>
+        </div>
       )}
 
       {/* ── Modal selector de cliente ── */}
