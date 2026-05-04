@@ -3,6 +3,7 @@
 // Sube el PDF al worker y envía el link por wa.me directo al número del cliente
 
 import supabase from '../services/supabase/client'
+import { showToast } from '../components/ui/Toast'
 
 /**
  * Formatea un número de teléfono para wa.me
@@ -103,17 +104,31 @@ export async function compartirPorWhatsApp({ pdfBlob, pdfFilename, telefono, men
   // ── Móvil: intentar Web Share API con archivo adjunto ──
   if (isMobile && pdfBlob && navigator.canShare) {
     try {
+      // 1. Copiar al portapapeles
+      let copiado = false
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(mensaje)
+          copiado = true
+        }
+      } catch (err) {
+        console.warn('[WhatsApp] No se pudo copiar al portapapeles', err)
+      }
+
       const pdfFile = new File([pdfBlob], pdfFilename || 'cotizacion.pdf', { type: 'application/pdf' })
       const shareData = {
         text: mensaje,
         files: [pdfFile],
       }
       if (navigator.canShare(shareData)) {
+        if (copiado) {
+          showToast('Texto copiado. Dale a "Pegar" en WhatsApp', 'success')
+          await new Promise(r => setTimeout(r, 800)) // delay to let user read
+        }
         await navigator.share(shareData)
         return { method: 'web_share_api' }
       }
     } catch (err) {
-      // Si el usuario cancela el share (AbortError), no es un error real
       if (err.name === 'AbortError') return { method: 'web_share_cancelled' }
       console.warn('[WhatsApp] Web Share API falló, usando fallback:', err?.message)
     }
