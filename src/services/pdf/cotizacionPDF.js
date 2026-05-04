@@ -144,10 +144,34 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   drawCell(MARGIN, y, CONTENT_W, 'Vendedor', vendedorStr, { fill: true })
   y += ROW_H_INFO
 
-  // Fila 5: Dirección Fiscal (ancho completo)
+  // Fila 5: Dirección Fiscal (ancho completo) — multilínea si es larga
   const dirFiscal = [cliente.direccion, cliente.ciudad, cliente.estado].filter(Boolean).join(', ') || '—'
-  drawCell(MARGIN, y, CONTENT_W, 'Dirección Fiscal', dirFiscal)
-  y += ROW_H_INFO
+  {
+    const dirLabel = 'Dirección Fiscal'
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    const dirLblW = doc.getTextWidth(`${dirLabel}: `)
+    const dirAvailW = CONTENT_W - 2 - dirLblW - 3 // margen izq + derecho
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9.5)
+    const dirLines = doc.splitTextToSize(String(dirFiscal), dirAvailW)
+    const dirLineH = 4.5
+    const dirCellH = Math.max(ROW_H_INFO, dirLines.length * dirLineH + 3)
+    doc.setLineWidth(0.2)
+    doc.setDrawColor(200, 200, 200)
+    doc.rect(MARGIN, y, CONTENT_W, dirCellH, 'S')
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    doc.setTextColor(100, 100, 100)
+    doc.text(`${dirLabel}:`, MARGIN + 2, y + 4.5)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9.5)
+    doc.setTextColor(...C_DARK)
+    dirLines.forEach((line, idx) => {
+      doc.text(line, MARGIN + 2 + dirLblW + 1, y + 4.8 + idx * dirLineH)
+    })
+    y += dirCellH
+  }
 
   y += 3
 
@@ -218,15 +242,25 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     doc.text(item.unidad_snap || '—', COLS[3].x + COLS[3].w / 2, midY, { align: 'center' })
 
     const tasaEfectiva = tasa > 0 ? tasa : Number(cotizacion.tasa_bcv_snapshot || 0)
-    // Auto-ajustar fuente si el texto es muy largo para la columna
     const precioText = fmtPrecio(item.precio_unit_usd, monedaPDF, tasaEfectiva, factorBcv)
     const totalText = fmtPrecio(item.total_linea_usd, monedaPDF, tasaEfectiva, factorBcv)
-    doc.setFontSize(10.5)
-    doc.text(precioText, COLS[4].x + COLS[4].w - 2, midY, { align: 'right' })
 
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(10.5)
-    doc.text(totalText, COLS[5].x + COLS[5].w - 2, midY, { align: 'right' })
+    // Auto-reducir fuente si el precio no cabe en la columna
+    const fitText = (text, col, baseFontSize, bold) => {
+      const maxW = col.w - 4
+      let fs = baseFontSize
+      doc.setFont('helvetica', bold ? 'bold' : 'normal')
+      while (fs > 6) {
+        doc.setFontSize(fs)
+        if (doc.getTextWidth(text) <= maxW) break
+        fs -= 0.5
+      }
+      doc.setFontSize(fs)
+      doc.text(text, col.x + col.w - 2, midY, { align: 'right' })
+    }
+
+    fitText(precioText, COLS[4], 10.5, false)
+    fitText(totalText, COLS[5], 10.5, true)
     doc.setFontSize(9)
 
     y += rowH
