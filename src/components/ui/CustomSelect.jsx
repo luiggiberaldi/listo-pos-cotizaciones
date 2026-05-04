@@ -82,8 +82,16 @@ export default function CustomSelect({
     const rect = ref.current.getBoundingClientRect()
     const viewH = window.visualViewport?.height || window.innerHeight
     const spaceBelow = viewH - rect.bottom
-    // Si hay poco espacio abajo (menos de 220px), abrir arriba
-    setOpenUp(spaceBelow < 220)
+    const isMobile = window.innerWidth < 768
+    
+    // Solución B: En móviles, forzamos abrir siempre hacia arriba para evitar
+    // choques con el borde inferior del modal y el teclado.
+    // En PC, usamos el cálculo de espacio dinámico.
+    if (isMobile) {
+      setOpenUp(true)
+    } else {
+      setOpenUp(spaceBelow < 220)
+    }
 
     // Focus search input (sin scrollIntoView para evitar bugs de touch en Android)
     if (showSearch && searchRef.current) {
