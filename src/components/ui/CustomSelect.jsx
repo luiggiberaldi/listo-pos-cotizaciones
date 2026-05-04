@@ -69,9 +69,10 @@ export default function CustomSelect({
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
 
-  // Cerrar al hacer click/touch fuera
+  // Cerrar al hacer click/touch fuera en Desktop. En móvil lo maneja el backdrop.
   useEffect(() => {
     function handleOutside(e) {
+      if (isMobile) return // En móvil, el portal está fuera del ref, el backdrop cierra el modal.
       if (ref.current && !ref.current.contains(e.target)) setAbierto(false)
     }
     if (abierto) {
@@ -82,7 +83,7 @@ export default function CustomSelect({
       document.removeEventListener('mousedown', handleOutside)
       document.removeEventListener('touchstart', handleOutside)
     }
-  }, [abierto])
+  }, [abierto, isMobile])
 
   // Calcular dirección del dropdown en desktop
   useEffect(() => {
