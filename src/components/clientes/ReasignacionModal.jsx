@@ -9,7 +9,6 @@ import { useReasignarCliente, useVendedores } from '../../hooks/useClientes'
 
 export default function ReasignacionModal({ cliente, isOpen, onClose }) {
   const [nuevoVendedorId, setNuevoVendedorId] = useState('')
-  const [motivo, setMotivo] = useState('')
   const [error, setError] = useState('')
 
   const { data: vendedores = [], isLoading: cargandoVendedores } = useVendedores()
@@ -22,7 +21,6 @@ export default function ReasignacionModal({ cliente, isOpen, onClose }) {
   function handleClose() {
     if (cargando) return
     setNuevoVendedorId('')
-    setMotivo('')
     setError('')
     onClose()
   }
@@ -32,13 +30,11 @@ export default function ReasignacionModal({ cliente, isOpen, onClose }) {
     setError('')
 
     if (!nuevoVendedorId) { setError('Selecciona el vendedor destino'); return }
-    if (motivo.trim().length < 10) { setError('El motivo debe tener al menos 10 caracteres'); return }
 
     try {
       await reasignar.mutateAsync({
         clienteId:      cliente.id,
         nuevoVendedorId,
-        motivo:         motivo.trim(),
       })
       handleClose()
     } catch (err) {
@@ -87,22 +83,6 @@ export default function ReasignacionModal({ cliente, isOpen, onClose }) {
               />
             )
           }
-        </div>
-
-        {/* Motivo */}
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">
-            Motivo de reasignación *
-          </label>
-          <textarea
-            value={motivo}
-            onChange={e => { setMotivo(e.target.value); setError('') }}
-            rows={3}
-            placeholder="Describe el motivo (mínimo 10 caracteres)..."
-            disabled={cargando}
-            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary resize-none disabled:opacity-50 placeholder:text-slate-400"
-          />
-          <p className="text-xs text-slate-400 text-right">{motivo.trim().length}/10 min</p>
         </div>
 
         {/* Error */}

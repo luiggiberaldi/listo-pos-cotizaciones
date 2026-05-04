@@ -260,7 +260,7 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   const ivaPct = Number(config.iva_pct) || 16
 
   const leftLabels = ['8 DÍAS DE CRÉDITO CONTINUO', '', '']
-  const rightLabels = ['Base', `IVA ${ivaPct}%`, 'Flete']
+  const rightLabels = ['Base', `IVA ${ivaPct}%`, 'Flete (E)']
 
   for (let r = 0; r < comboRows; r++) {
     const ry = comboTop + r * dataRowH

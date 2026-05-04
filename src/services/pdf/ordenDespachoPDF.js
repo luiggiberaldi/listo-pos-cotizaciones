@@ -406,7 +406,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
 
   if (hasFleteReal) {
     doc.rect(MARGIN, desY, CONTENT_W, 7, 'S')
-    doc.text('Flete', MARGIN + 4, desY + 5)
+    doc.text('Flete (E)', MARGIN + 4, desY + 5)
     doc.text(fmtTotal(flete, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, desY + 5, { align: 'right' })
     desY += 7
   }

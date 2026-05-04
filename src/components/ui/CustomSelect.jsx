@@ -57,7 +57,9 @@ export default function CustomSelect({
   const [busqueda, setBusqueda] = useState('')
   const [openUp, setOpenUp] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  const [portalPos, setPortalPos] = useState({ top: 0, left: 0, width: 0 })
   const ref = useRef(null)
+  const dropdownRef = useRef(null)
   const searchRef = useRef(null)
 
   const showSearch = searchable ?? (creatable || options.length > 5)
@@ -72,8 +74,10 @@ export default function CustomSelect({
   // Cerrar al hacer click/touch fuera en Desktop. En móvil lo maneja el backdrop.
   useEffect(() => {
     function handleOutside(e) {
-      if (isMobile) return // En móvil, el portal está fuera del ref, el backdrop cierra el modal.
-      if (ref.current && !ref.current.contains(e.target)) setAbierto(false)
+      if (isMobile) return
+      const inTrigger = ref.current && ref.current.contains(e.target)
+      const inDropdown = dropdownRef.current && dropdownRef.current.contains(e.target)
+      if (!inTrigger && !inDropdown) setAbierto(false)
     }
     if (abierto) {
       document.addEventListener('mousedown', handleOutside)
@@ -85,7 +89,7 @@ export default function CustomSelect({
     }
   }, [abierto, isMobile])
 
-  // Calcular dirección del dropdown en desktop
+  // Calcular posición del dropdown portal en desktop
   useEffect(() => {
     if (!abierto || !ref.current) return
 
@@ -93,11 +97,16 @@ export default function CustomSelect({
       const rect = ref.current.getBoundingClientRect()
       const viewH = window.visualViewport?.height || window.innerHeight
       const spaceBelow = viewH - rect.bottom
-      setOpenUp(spaceBelow < 220)
+      const goUp = spaceBelow < 220
+      setOpenUp(goUp)
+      setPortalPos({
+        top: goUp ? rect.top : rect.bottom + 6,
+        left: rect.left,
+        width: rect.width,
+        goUp,
+      })
     }
 
-    // Auto-focus search input en desktop. En móvil es mejor no hacerlo automático
-    // para no levantar el teclado de golpe y estropear la animación del cajón.
     if (showSearch && searchRef.current && !isMobile) {
       requestAnimationFrame(() => searchRef.current?.focus())
     }
@@ -253,10 +262,20 @@ export default function CustomSelect({
               </div>
             </div>,
             document.body
-        ) : (
-          <div className={`absolute z-50 left-0 right-0 bg-white rounded-xl border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden ${
-            openUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
-          }`}>
+        ) : createPortal(
+          <div
+            ref={dropdownRef}
+            className="bg-white rounded-xl border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden"
+            style={{
+              position: 'fixed',
+              zIndex: 9999,
+              left: portalPos.left,
+              width: portalPos.width,
+              ...(portalPos.goUp
+                ? { bottom: `calc(100vh - ${portalPos.top}px + 6px)` }
+                : { top: portalPos.top }),
+            }}
+          >
             {/* Buscador Desktop */}
             {showSearch && (
               <div className="p-2 border-b border-slate-100">
@@ -278,7 +297,7 @@ export default function CustomSelect({
                 </div>
               </div>
             )}
-  
+
             {/* Lista Desktop */}
             <div className="max-h-52 overflow-y-auto py-1 overscroll-contain">
               {filtradas.length === 0 && !puedeCrear ? (
@@ -321,7 +340,8 @@ export default function CustomSelect({
                 </>
               )}
             </div>
-          </div>
+          </div>,
+          document.body
         )
       )}
     </div>

@@ -3283,7 +3283,7 @@ async function handleReasignarCliente(request, env) {
   const { clienteId, nuevoVendedorId, motivo } = body;
   if (!clienteId || !nuevoVendedorId) return jsonError('Faltan campos', 400, request);
   if (!isValidUuid(clienteId) || !isValidUuid(nuevoVendedorId)) return jsonError('IDs inválidos', 400, request);
-  if (!motivo || motivo.trim().length < 10) return jsonError('El motivo debe tener al menos 10 caracteres', 400, request);
+  const motivoFinal = (motivo || '').trim() || null;
 
   try {
     // 1. Obtener cliente
@@ -3303,7 +3303,7 @@ async function handleReasignarCliente(request, env) {
       body: JSON.stringify({
         vendedor_id: nuevoVendedorId,
         ultima_reasig_por: user.operator_id,
-        ultima_reasig_motivo: motivo,
+        ultima_reasig_motivo: motivoFinal,
         ultima_reasig_en: new Date().toISOString(),
         actualizado_en: new Date().toISOString(),
       }),
@@ -3317,7 +3317,7 @@ async function handleReasignarCliente(request, env) {
         vendedor_origen: cliente.vendedor_id,
         vendedor_destino: nuevoVendedorId,
         supervisor_id: user.operator_id,
-        motivo,
+        motivo: motivoFinal,
       }),
     });
 
@@ -3325,9 +3325,9 @@ async function handleReasignarCliente(request, env) {
     await registrarAuditoria(env, headers, {
       usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: 'supervisor',
       categoria: 'REASIGNACION', accion: 'REASIGNAR_CLIENTE',
-      descripcion: `Cliente "${cliente.nombre}" reasignado. Motivo: ${motivo}`,
+      descripcion: `Cliente "${cliente.nombre}" reasignado${motivoFinal ? `. Motivo: ${motivoFinal}` : ''}`,
       entidadTipo: 'cliente', entidadId: clienteId,
-      meta: { vendedor_origen: cliente.vendedor_id, vendedor_destino: nuevoVendedorId, motivo }, ip,
+      meta: { vendedor_origen: cliente.vendedor_id, vendedor_destino: nuevoVendedorId, motivo: motivoFinal }, ip,
     });
 
     return json({ ok: true }, 200, request);
