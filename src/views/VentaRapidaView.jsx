@@ -1424,7 +1424,7 @@ function Step2Pago({
 
         {/* Modal para crear transportista */}
         {showNuevoTransp && (
-          <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="fixed inset-0 z-[110] bg-black/40 flex items-end sm:items-center justify-center p-0 sm:p-4">
             <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[90vh] overflow-auto">
               <div className="flex items-center justify-between p-4 border-b">
                 <h3 className="font-semibold text-slate-800 flex items-center gap-2">
