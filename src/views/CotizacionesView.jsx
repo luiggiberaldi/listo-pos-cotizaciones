@@ -482,7 +482,7 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
   const [vendedorFiltro, setVendedorFiltro] = useState('')
   const [verTodos, setVerTodos] = useState(false)
   const [pagina, setPagina] = useState(1)
-  const [vistaMode, setVistaMode] = useState(() => localStorage.getItem('cotizaciones_vista') || (window.innerWidth < 768 ? 'list' : 'grid'))
+  const [vistaMode, setVistaMode] = useState(() => localStorage.getItem('cotizaciones_vista') || 'grid')
   const [cotizacionAAnular, setCotizacionAAnular] = useState(null)
   const [cotizacionADespachar, setCotizacionADespachar] = useState(null)
   const [cotizacionAReciclar, setCotizacionAReciclar] = useState(null)
