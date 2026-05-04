@@ -174,48 +174,40 @@ export default function CustomSelect({
       {/* Dropdown / Bottom Sheet */}
       {abierto && (
         isMobile ? createPortal(
-          <div className="fixed inset-0 z-[9999] flex flex-col justify-end" style={{ isolation: 'isolate' }}>
-            {/* Backdrop oscuro */}
-            <div 
-              className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] animate-in fade-in duration-200" 
-              onClick={() => setAbierto(false)} 
-            />
+          <div className="fixed inset-0 z-[9999] bg-white flex flex-col h-[100dvh] animate-in slide-in-from-bottom-8 fade-in duration-200 ease-out" style={{ isolation: 'isolate' }}>
+            {/* Header del modal */}
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
+              <span className="font-semibold text-slate-800 text-lg">{placeholder}</span>
+              <button type="button" onClick={() => setAbierto(false)} className="p-2 -mr-2 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-full transition-colors">
+                <X size={20} />
+              </button>
+            </div>
             
-            {/* Bottom Sheet Modal */}
-            <div className="relative bg-white rounded-t-2xl shadow-2xl flex flex-col max-h-[85vh] animate-in slide-in-from-bottom-full duration-200 ease-out">
-              {/* Header del cajón */}
-              <div className="p-4 border-b border-slate-100 flex items-center justify-between shrink-0">
-                <span className="font-semibold text-slate-800 text-lg">{placeholder}</span>
-                <button type="button" onClick={() => setAbierto(false)} className="p-2 -mr-2 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-full transition-colors">
-                  <X size={18} />
-                </button>
-              </div>
-              
-              <div className="flex flex-col min-h-0 overflow-hidden">
-                {/* Buscador grande para móvil */}
-                {showSearch && (
-                  <div className="p-3 border-b border-slate-100 shrink-0">
-                    <div className="relative">
-                      <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                      <input
-                        ref={searchRef}
-                        type="text"
-                        inputMode="search"
-                        autoComplete="off"
-                        autoCorrect="off"
-                        autoCapitalize="off"
-                        spellCheck={false}
-                        value={busqueda}
-                        onChange={e => setBusqueda(e.target.value)}
-                        placeholder="Buscar..."
-                        className="w-full pl-9 pr-4 py-3 text-base border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary placeholder:text-slate-400"
-                      />
-                    </div>
+            <div className="flex flex-col flex-1 min-h-0 bg-slate-50/30">
+              {/* Buscador estático arriba */}
+              {showSearch && (
+                <div className="p-4 border-b border-slate-100 shrink-0 bg-white">
+                  <div className="relative">
+                    <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    <input
+                      ref={searchRef}
+                      type="text"
+                      inputMode="search"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck={false}
+                      value={busqueda}
+                      onChange={e => setBusqueda(e.target.value)}
+                      placeholder="Buscar..."
+                      className="w-full pl-11 pr-4 py-3.5 text-[16px] border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary placeholder:text-slate-400 transition-shadow"
+                    />
                   </div>
-                )}
-                
-                {/* Lista amigable con scroll */}
-                <div className="overflow-y-auto p-2 pb-8 overscroll-contain">
+                </div>
+              )}
+              
+              {/* Lista amigable con scroll */}
+              <div className="overflow-y-auto p-3 pb-8 overscroll-contain flex-1">
                   {filtradas.length === 0 && !puedeCrear ? (
                     <p className="text-base text-slate-400 text-center py-8">
                       {busqueda ? 'Sin resultados' : 'Sin opciones'}
