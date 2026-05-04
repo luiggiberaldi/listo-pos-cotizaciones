@@ -251,9 +251,8 @@ export default function CustomSelect({
                   )}
                 </div>
               </div>
-            </div>
-          </div>,
-          document.body
+            </div>,
+            document.body
         ) : (
           <div className={`absolute z-50 left-0 right-0 bg-white rounded-xl border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden ${
             openUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
