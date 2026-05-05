@@ -116,6 +116,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
   const [formasPago, setFormasPago] = useState([]) // [{metodo, monto}]
   const [transportistaId, setTransportistaId] = useState('')
   const [fleteUsd, setFleteUsd] = useState('')
+  const [corteUsd, setCorteUsd] = useState('')
   const [referenciaPago, setReferenciaPago] = useState('')
   const [showTransportistaMenu, setShowTransportistaMenu] = useState(false)
   const [stockMap, setStockMap] = useState({})
@@ -151,11 +152,11 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
 
   const numDisplay = `COT-${String(cotizacion.numero).padStart(5, '0')}`
 
-  const totalSinFlete = Number(cotizacion?.total_usd || 0)
-  const totalConFlete = totalSinFlete + Number(fleteUsd || 0)
+  const totalSinFlete = Number(cotizacion?.total_usd || 0) - Number(cotizacion?.costo_envio_usd || 0) - Number(cotizacion?.corte_usd || 0)
+  const totalConFlete = totalSinFlete + Number(fleteUsd || 0) + Number(corteUsd || 0)
   const montoAsignado = formasPago.reduce((s, fp) => s + (Number(fp.monto) || 0), 0)
-  const pagoCuadrado = formasPago.length > 0 && Math.abs(montoAsignado - totalSinFlete) < 0.02
-  const diferencia = montoAsignado - totalSinFlete
+  const pagoCuadrado = formasPago.length > 0 && Math.abs(montoAsignado - totalConFlete) < 0.02
+  const diferencia = montoAsignado - totalConFlete
   const hayVuelto = formasPago.length > 0 && diferencia > 0.02
   const faltante = formasPago.length > 0 && diferencia < -0.02
 
@@ -164,7 +165,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
       const existe = prev.find(fp => fp.metodo === metodo)
       if (existe) return prev.filter(fp => fp.metodo !== metodo)
       // Si es el primero, asignar el total restante automáticamente
-      const restante = totalSinFlete - prev.reduce((s, fp) => s + (Number(fp.monto) || 0), 0)
+      const restante = totalConFlete - prev.reduce((s, fp) => s + (Number(fp.monto) || 0), 0)
       return [...prev, { metodo, monto: restante > 0 ? Number(restante.toFixed(2)) : '' }]
     })
   }
@@ -217,7 +218,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                   const cant = Number(item.cantidad)
                   return (
                     <div key={item.id || i} className="flex items-baseline gap-2 py-1 border-b border-slate-50">
-                      <span className="flex-1 min-w-0 text-xs text-slate-700 font-medium truncate">{item.nombre_snap}</span>
+                      <span className="flex-1 min-w-0 text-xs text-slate-700 font-medium">{item.nombre_snap}</span>
                       {cant > 1 && (
                         <span className="text-[10px] text-slate-400 whitespace-nowrap shrink-0">{cant.toLocaleString('es-VE')} × {fmtUsd(item.precio_unit_usd)}</span>
                       )}
@@ -261,6 +262,18 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
               {Number(fleteUsd) > 0 && (
                 <div className="flex justify-between text-xs text-indigo-500 font-medium">
                   <span>+ Flete</span>
+                  <span>{fmtUsd(Number(fleteUsd))}</span>
+                </div>
+              )}
+              {Number(corteUsd) > 0 && (
+                <div className="flex justify-between text-xs text-indigo-500 font-medium">
+                  <span>+ Corte</span>
+                  <span>{fmtUsd(Number(corteUsd))}</span>
+                </div>
+              )}
+              {(Number(fleteUsd) > 0 || Number(corteUsd) > 0) && (
+                <div className="flex justify-between text-xs font-bold text-slate-700 mt-1 pt-1 border-t border-slate-200">
+                  <span>Total final</span>
                   <span>{fmtUsd(totalConFlete)}</span>
                 </div>
               )}
@@ -279,7 +292,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                 {FORMAS_PAGO.map(fp => {
                   const fpData = formasPago.find(f => f.metodo === fp)
                   if (fpData) {
-                    const restante = totalSinFlete - formasPago.reduce((s, f) => s + (Number(f.monto) || 0), 0)
+                    const restante = totalConFlete - formasPago.reduce((s, f) => s + (Number(f.monto) || 0), 0)
                     const mostrarResto = formasPago.length > 1 && (!fpData.monto || Number(fpData.monto) === 0) && restante > 0.01
                     // Chip activo con input integrado
                     return (
@@ -359,6 +372,20 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
               </div>
             </div>
 
+            {/* FEATURE_CORTE_HIDDEN: Oculto temporalmente a petición del usuario. Cambiar a true para reactivar. */}
+            {false && (
+              <div className="space-y-1.5">
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Corte de Material</p>
+                <div className="relative w-full">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">Corte $</span>
+                  <input type="number" min="0" step="0.01" value={corteUsd}
+                    onChange={e => setCorteUsd(e.target.value)} placeholder="0.00"
+                    className="w-full pl-16 pr-2 py-1.5 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:bg-white"
+                    disabled={cargando} />
+                </div>
+              </div>
+            )}
+
             {/* Notas — colapsable */}
             <div>
               {!showNotas ? (
@@ -403,7 +430,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
               : 'bg-red-50 text-red-600'
             }`}>
               <span>Asignado: {fmtUsd(montoAsignado)}</span>
-              <span>Total: {fmtUsd(totalSinFlete)}</span>
+              <span>Total: {fmtUsd(totalConFlete)}</span>
               {pagoCuadrado ? <span>✓</span> : hayVuelto ? <span>Sobran {fmtUsd(diferencia)}</span> : <span>Faltan {fmtUsd(Math.abs(diferencia))}</span>}
             </div>
           )}
@@ -414,7 +441,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
             </button>
             <button onClick={() => {
                 const fpJson = JSON.stringify(formasPago)
-                onConfirm(fpJson, transportistaId || null, Number(fleteUsd) || 0, referenciaPago, fpJson, notas, clienteFacturaId || null)
+                onConfirm(fpJson, transportistaId || null, Number(fleteUsd) || 0, Number(corteUsd) || 0, referenciaPago, fpJson, notas, clienteFacturaId || null)
               }} disabled={cargando || items.length === 0 || !pagoCuadrado}
               title={formasPago.length === 0 ? 'Selecciona forma de pago' : !pagoCuadrado ? 'Los montos no cuadran con el total' : undefined}
               className="flex-1 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-semibold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20">
@@ -538,7 +565,7 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
     setCotizacionAAnular(null)
   }
 
-  async function confirmarDespachar(formaPago = '', transportistaId = null, fleteUsd = 0, referenciaPago = '', formaPagoCliente = '', notas = '', clienteFacturaId = null) {
+  async function confirmarDespachar(formaPago = '', transportistaId = null, fleteUsd = 0, corteUsd = 0, referenciaPago = '', formaPagoCliente = '', notas = '', clienteFacturaId = null) {
     if (!cotizacionADespachar) return
     try {
       await crearDespacho.mutateAsync({
@@ -546,6 +573,7 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
         formaPago: formaPago || null,
         transportistaId: transportistaId || null,
         fleteUsd: fleteUsd || 0,
+        corteUsd: corteUsd || 0,
         referenciaPago: referenciaPago || null,
         formaPagoCliente: formaPagoCliente || null,
         notas: notas || null,

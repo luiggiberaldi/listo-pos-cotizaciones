@@ -421,7 +421,7 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
                     : yaAgregado ? <CheckCircle size={14} className="text-emerald-400" /> : <Package size={14} className="text-slate-300" />
                   }
                 </div>
-                <p className={`text-[9px] sm:text-[11px] font-bold leading-tight line-clamp-2 mb-0.5 ${
+                <p className={`text-[9px] sm:text-[11px] font-bold leading-tight mb-0.5 ${
                   yaAgregado ? 'text-emerald-700' : 'text-slate-700'
                 }`}>{p.nombre}</p>
                 <p className={`text-[10px] sm:text-[11px] font-black ${yaAgregado ? 'text-emerald-600' : 'text-slate-800'}`}>
@@ -475,7 +475,7 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
               <div key={it._key} className="px-2.5 sm:px-3 py-2 sm:py-2.5 group hover:bg-slate-50/50 transition-colors">
                 {/* Fila 1: nombre completo + precio línea */}
                 <div className="flex items-start gap-1.5 mb-1">
-                  <p className="flex-1 text-[10px] sm:text-[11px] font-bold text-slate-700 leading-snug line-clamp-2">{it.nombreSnap}</p>
+                  <p className="flex-1 text-[10px] sm:text-[11px] font-bold text-slate-700 leading-snug">{it.nombreSnap}</p>
                   <span className="text-[11px] sm:text-xs font-bold text-slate-800 shrink-0">{fmtUsd(linea)}</span>
                 </div>
                 {/* Fila 2: precio unitario + controles cantidad */}

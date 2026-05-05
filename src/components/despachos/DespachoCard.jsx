@@ -64,9 +64,10 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const canEditar = despacho.estado === 'pendiente' && (esPrivilegiado || despacho.vendedor_id === perfil?.id)
   const descuentoTotal = Number(despacho.descuento_total_usd || 0)
   const fleteUsd = Number(despacho.flete_usd || 0)
-  const totalBruto = Number(despacho.total_usd || 0) // ya incluye flete
-  const subtotalProductos = totalBruto - fleteUsd // solo productos
-  const totalFinal = totalBruto - descuentoTotal // total con flete, menos descuento
+  const corteUsd = Number(despacho.corte_usd || 0)
+  const totalBruto = Number(despacho.total_usd || 0) // ya incluye flete y corte
+  const subtotalProductos = totalBruto - fleteUsd - corteUsd // solo productos sin servicios
+  const totalFinal = totalBruto - descuentoTotal // total con flete+corte, menos descuento
 
   async function descargarPDF() {
     setPdfLoading(true)
@@ -349,18 +350,26 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         )}
       </div>
 
-      {/* ── Total + Flete ── */}
+      {/* ── Total + Flete + Corte ── */}
       <div className="mx-3 mb-2 bg-slate-50 rounded-xl px-3 py-2 space-y-1">
-        {fleteUsd > 0 && (
+        {(fleteUsd > 0 || corteUsd > 0) && (
           <>
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-medium text-slate-400">Subtotal</span>
               <span className="text-xs font-semibold text-slate-500">{fmtUsd(subtotalProductos)}</span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-medium text-slate-400">Flete</span>
-              <span className="text-xs font-semibold text-emerald-600">+{fmtUsd(fleteUsd)}</span>
-            </div>
+            {fleteUsd > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-medium text-slate-400">Flete</span>
+                <span className="text-xs font-semibold text-emerald-600">+{fmtUsd(fleteUsd)}</span>
+              </div>
+            )}
+            {corteUsd > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-medium text-slate-400">Corte</span>
+                <span className="text-xs font-semibold text-emerald-600">+{fmtUsd(corteUsd)}</span>
+              </div>
+            )}
           </>
         )}
         <div className="flex items-center justify-between">

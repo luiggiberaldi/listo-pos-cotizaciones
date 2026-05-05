@@ -407,6 +407,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
   const setMonedaPDF = (v) => { setMonedaPDFRaw(v); localStorage.setItem('construacero_moneda_pdf', v) }
   const descuentoGlobalPct = 0 // Discount disabled — always 0
   const [costoEnvioUsd,      setCostoEnvioUsd]      = useState(cotizacionExistente?.costo_envio_usd ?? 0)
+  const [corteUsd,           setCorteUsd]           = useState(cotizacionExistente?.corte_usd ?? 0)
   const [items,              setItems]              = useState(
     (cotizacionExistente?.items ?? []).map(it => ({
       _key:          `item-${++_itemCounter}`,
@@ -453,6 +454,8 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
     if (d.notasCliente) setNotasCliente(d.notasCliente)
     if (d.notasInternas) setNotasInternas(d.notasInternas)
     if (d.monedaPDF) setMonedaPDF(d.monedaPDF)
+    if (d.costoEnvioUsd !== undefined) setCostoEnvioUsd(d.costoEnvioUsd)
+    if (d.corteUsd !== undefined) setCorteUsd(d.corteUsd)
     if (d.items?.length > 0) {
       setItems(d.items.map(it => ({ ...it, _key: `item-${++_itemCounter}` })))
     }
@@ -472,11 +475,11 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
     if (esEdicion || paso === 4 || enviada) return
     const timer = setTimeout(() => {
       if (items.length > 0 || clienteId) {
-        saveDraft({ paso, clienteId, vendedorId, notasCliente, notasInternas, monedaPDF, items }, perfil?.id)
+        saveDraft({ paso, clienteId, vendedorId, notasCliente, notasInternas, monedaPDF, items, costoEnvioUsd, corteUsd }, perfil?.id)
       }
     }, 1500)
     return () => clearTimeout(timer)
-  }, [paso, clienteId, vendedorId, notasCliente, notasInternas, monedaPDF, items, esEdicion, enviada])
+  }, [paso, clienteId, vendedorId, notasCliente, notasInternas, monedaPDF, items, costoEnvioUsd, corteUsd, esEdicion, enviada])
 
   const { data: clientes      = [], refetch: refetchClientes } = useClientes()
   const { data: transportistas = [] } = useTransportistas()
@@ -487,7 +490,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
   const tasaHook         = useTasaCambio()
   const { data: inventarioParaPrecios } = useInventario({ pageSize: 1000 })
 
-  const { subtotal, descuentoUsd, totalUsd } = calcTotales(items, descuentoGlobalPct, costoEnvioUsd)
+  const { subtotal, descuentoUsd, totalUsd } = calcTotales(items, descuentoGlobalPct, costoEnvioUsd, corteUsd)
   const totalBs = tasaHook.tasaEfectiva > 0 ? mulR(totalUsd, tasaHook.tasaEfectiva) : 0
 
   // Conversión visual según moneda seleccionada
@@ -629,7 +632,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
     try {
       const id = await guardarBorrador.mutateAsync({
         cotizacionId,
-        campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd },
+        campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd, corteUsd },
         items,
       })
       setCotizacionId(id)
@@ -651,7 +654,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
       if (!id) {
         id = await guardarBorrador.mutateAsync({
           cotizacionId,
-          campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd },
+          campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd, corteUsd },
           items,
         })
         setCotizacionId(id)
@@ -659,7 +662,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
         // Actualizar borrador con datos actuales antes de enviar
         await guardarBorrador.mutateAsync({
           cotizacionId: id,
-          campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd },
+          campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd, corteUsd },
           items,
         })
       }
@@ -692,7 +695,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
       const [{ generarPDF }, itemsRes, cotRes] = await Promise.all([
         import('../../services/pdf/cotizacionPDF'),
         supabase.from('cotizacion_items').select('cantidad, codigo_snap, nombre_snap, unidad_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacionId).order('orden'),
-        supabase.from('cotizaciones').select('id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en').eq('id', cotizacionId).single(),
+        supabase.from('cotizaciones').select('id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, corte_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en').eq('id', cotizacionId).single(),
       ])
       if (itemsRes.error) throw itemsRes.error
       if (cotRes.error) throw cotRes.error
@@ -744,7 +747,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
       const [{ generarPDF }, itemsRes, cotRes] = await Promise.all([
         import('../../services/pdf/cotizacionPDF'),
         supabase.from('cotizacion_items').select('cantidad, codigo_snap, nombre_snap, unidad_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacionId).order('orden'),
-        supabase.from('cotizaciones').select('id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en').eq('id', cotizacionId).single(),
+        supabase.from('cotizaciones').select('id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, corte_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en').eq('id', cotizacionId).single(),
       ])
       if (itemsRes.error) throw itemsRes.error
       if (cotRes.error) throw cotRes.error
@@ -775,7 +778,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
       const [{ generarPDF }, itemsRes, cotRes] = await Promise.all([
         import('../../services/pdf/cotizacionPDF'),
         supabase.from('cotizacion_items').select('cantidad, codigo_snap, nombre_snap, unidad_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacionId).order('orden'),
-        supabase.from('cotizaciones').select('id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en').eq('id', cotizacionId).single(),
+        supabase.from('cotizaciones').select('id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, corte_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en').eq('id', cotizacionId).single(),
       ])
       if (itemsRes.error) throw itemsRes.error
       if (cotRes.error) throw cotRes.error
@@ -1091,7 +1094,49 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                     )}
                 </div>
 
-                {/* Transportista - oculto por solicitud */}
+                {/* Servicios Extras */}
+                <div className="space-y-3">
+                  <SectionH3 icon={Truck}>Servicios Adicionales (USD)</SectionH3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Flete / Envío</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                        <input
+                          type="text"
+                          value={costoEnvioUsd || ''}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.')
+                            setCostoEnvioUsd(val ? Number(val) : 0)
+                          }}
+                          className={`${inputCls} pl-7`}
+                          placeholder="0.00"
+                          disabled={cargando}
+                        />
+                      </div>
+                    </div>
+                    {/* FEATURE_CORTE_HIDDEN: Oculto temporalmente a petición del usuario. Cambiar a true para reactivar. */}
+                    {false && (
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Corte de Material</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                        <input
+                          type="text"
+                          value={corteUsd || ''}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.')
+                            setCorteUsd(val ? Number(val) : 0)
+                          }}
+                          className={`${inputCls} pl-7`}
+                          placeholder="0.00"
+                          disabled={cargando}
+                        />
+                      </div>
+                    </div>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {/* Notas */}
@@ -1176,7 +1221,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                     return (
                       <div key={it._id ?? i} className="px-4 py-2.5 flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs font-semibold text-slate-700 leading-tight line-clamp-2">{it.nombreSnap}</p>
+                          <p className="text-xs font-semibold text-slate-700 leading-tight">{it.nombreSnap}</p>
                           <p className="text-[11px] text-slate-400 mt-0.5">
                             {it.cantidad} {it.unidadSnap}
                           </p>
@@ -1198,6 +1243,12 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                   <div className="flex justify-between text-sm text-slate-500">
                     <span>Envío</span>
                     <span className="font-medium text-slate-700">+{fmtMoneda(costoEnvioUsd)}</span>
+                  </div>
+                )}
+                {corteUsd > 0 && (
+                  <div className="flex justify-between text-sm text-slate-500">
+                    <span>Corte</span>
+                    <span className="font-medium text-slate-700">+{fmtMoneda(corteUsd)}</span>
                   </div>
                 )}
 
@@ -1325,6 +1376,12 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                           <span className="font-medium text-emerald-600 text-xs">+{fmtMoneda(costoEnvioUsd)}</span>
                         </div>
                       )}
+                      {corteUsd > 0 && (
+                        <div className="flex justify-between py-1.5">
+                          <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Corte</span>
+                          <span className="font-medium text-emerald-600 text-xs">+{fmtMoneda(corteUsd)}</span>
+                        </div>
+                      )}
                     </>
                   )}
                   <div className="flex justify-between py-1.5 last:pb-0">
@@ -1406,6 +1463,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
             cliente: clienteSeleccionado,
             total_usd: totalUsd,
             costo_envio_usd: costoEnvioUsd,
+            corte_usd: corteUsd,
             notas_cliente: notasCliente,
             creado_en: new Date().toISOString(),
           }}

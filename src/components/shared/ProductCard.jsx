@@ -51,7 +51,7 @@ export default function ProductCard({
       )}
 
       {/* Nombre */}
-      <p className={`text-[10px] font-bold leading-tight line-clamp-2 mb-0.5 w-full ${
+      <p className={`text-[10px] font-bold leading-tight mb-0.5 w-full ${
         agregado ? 'text-emerald-700' : 'text-slate-700'
       }`}>
         {p.nombre}

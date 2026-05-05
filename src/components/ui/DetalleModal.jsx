@@ -159,6 +159,7 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
 
   const vendedorColor = registro.vendedor?.color || '#64748b'
   const envio     = Number(registro.costo_envio_usd || 0)
+  const corte     = Number(registro.corte_usd || 0)
   const total     = Number(registro.total_usd     || 0)
   const notas     = registro.notas_cliente || registro.observaciones || ''
 
@@ -171,7 +172,7 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
     } catch { formasDisplay = [{ metodo: registro.forma_pago, monto: null }] }
   }
 
-  const tieneTransporte = !esCot && (registro.transportista?.nombre || Number(registro.flete_usd || 0) > 0)
+  const tieneChofer = !esCot && registro.transportista?.nombre
   const tienePago = !esCot && (formasDisplay.length > 0 || registro.referencia_pago)
 
   return (
@@ -229,29 +230,21 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
           </div>
         )}
 
-        {/* ── Bloque Transporte (solo despachos, si hay transportista o flete) ── */}
-        {tieneTransporte && (
+        {/* ── Bloque Transporte (solo despachos, si hay transportista) ── */}
+        {tieneChofer && (
           <div className="mx-5 mt-2 rounded-xl bg-blue-50/60 border border-blue-200 p-3">
             <p className="text-[11px] font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
               <Truck size={11} /> Transporte
             </p>
             <div className="flex items-center justify-between gap-3">
-              {registro.transportista?.nombre && (
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-slate-800">{registro.transportista.nombre}</p>
-                  {(registro.transportista.vehiculo || registro.transportista.placa_chuto) && (
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      {[registro.transportista.vehiculo, registro.transportista.placa_chuto, registro.transportista.placa_batea].filter(Boolean).join(' · ')}
-                    </p>
-                  )}
-                </div>
-              )}
-              {Number(registro.flete_usd || 0) > 0 && (
-                <div className="shrink-0 text-right">
-                  <p className="text-[10px] font-medium text-slate-400 uppercase">Flete</p>
-                  <p className="text-sm font-bold text-emerald-700">{fmtUsd(registro.flete_usd)}</p>
-                </div>
-              )}
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-slate-800">{registro.transportista.nombre}</p>
+                {(registro.transportista.vehiculo || registro.transportista.placa_chuto) && (
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    {[registro.transportista.vehiculo, registro.transportista.placa_chuto, registro.transportista.placa_batea].filter(Boolean).join(' · ')}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -346,7 +339,12 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
             )}
             {envio > 0 && (
               <div className="flex justify-between text-xs text-slate-500">
-                <span>Costo de envío</span><span>{fmt(envio)}</span>
+                <span>Flete / Envío</span><span>{fmt(envio)}</span>
+              </div>
+            )}
+            {corte > 0 && (
+              <div className="flex justify-between text-xs text-slate-500">
+                <span>Corte de material</span><span>{fmt(corte)}</span>
               </div>
             )}
             <div className="flex justify-between font-black text-slate-800 text-base pt-1 border-t border-slate-200">
@@ -361,11 +359,12 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
         )}
         {!esCot && (() => {
           const flete = Number(registro.flete_usd || 0)
+          const corteDesc = Number(registro.corte_usd || 0)
           const descuento = Number(registro.descuento_total_usd || 0)
-          const totalConFlete = total // total_usd ya incluye el flete
-          const subtotal = total - flete // total de productos sin flete
-          const totalFinal = totalConFlete - descuento
-          const hayDesglose = descuento > 0 || flete > 0
+          const totalConServicios = total // total_usd ya incluye el flete y corte
+          const subtotal = total - flete - corteDesc // total de productos sin flete ni corte
+          const totalFinal = totalConServicios - descuento
+          const hayDesglose = descuento > 0 || flete > 0 || corteDesc > 0
 
           return (
           <div className="border-t border-slate-100 px-5 py-3 bg-slate-50 shrink-0 space-y-1.5">
@@ -382,6 +381,11 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
             {flete > 0 && (
               <div className="flex justify-between text-xs text-emerald-600">
                 <span>Flete</span><span>+{fmtUsd(flete)}</span>
+              </div>
+            )}
+            {corteDesc > 0 && (
+              <div className="flex justify-between text-xs text-emerald-600">
+                <span>Corte</span><span>+{fmtUsd(corteDesc)}</span>
               </div>
             )}
             <div className={`flex justify-between font-black text-slate-800 text-base ${hayDesglose ? 'pt-1 border-t border-slate-200' : ''}`}>

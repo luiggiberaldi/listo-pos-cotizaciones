@@ -93,7 +93,7 @@ export default function KardexModal({ isOpen, onClose, producto }) {
             }
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-bold text-slate-800 line-clamp-2 leading-snug">{producto.nombre}</h3>
+            <h3 className="text-sm font-bold text-slate-800 leading-snug">{producto.nombre}</h3>
             <div className="flex items-center gap-3 mt-0.5">
               {producto.codigo && (
                 <span className="flex items-center gap-1 text-[11px] text-slate-400 font-mono">

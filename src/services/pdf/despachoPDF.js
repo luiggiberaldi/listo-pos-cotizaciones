@@ -317,6 +317,19 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     })
   }
 
+  const corteVal = Number(despacho.corte_usd || 0)
+  if (corteVal > 0) {
+    itemsToRender.push({
+      cantidad: 1,
+      codigo_snap: 'CRT1254698',
+      nombre_snap: 'SERVICIO DE CORTE (E)',
+      unidad_snap: 'GLB',
+      precio_unit_usd: corteVal,
+      total_linea_usd: corteVal,
+      tiene_descuento: false
+    })
+  }
+
   itemsToRender.forEach((item) => {
     // Calcular cuántas líneas necesita la descripción
     doc.setFont('helvetica', 'normal')
@@ -395,12 +408,15 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
 
   const total = Number(despacho.total_usd || 0)
   const flete = Number(despacho.flete_usd || 0)
+  const corte = Number(despacho.corte_usd || 0)
+  const montoExento = flete + corte
   const descuentoTotal = Number(despacho.descuento_total_usd || 0)
   const totalFinal = total - descuentoTotal
+  const hasExento = montoExento > 0
   const hasFlete = flete > 0
   const hasDescuento = descuentoTotal > 0
   const ivaPct = Number(config.iva_pct) || 16
-  const montoGravado = totalFinal - flete  // IVA solo sobre productos, no flete
+  const montoGravado = totalFinal - montoExento  // IVA solo sobre productos, no exentos
   const baseImponible = montoGravado / (1 + ivaPct / 100)
   const ivaAmount = montoGravado - baseImponible
   const transportista = despacho.transportista_id ? (despacho.transportista || null) : null
@@ -418,7 +434,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     { label: 'Base', value: fmtTotal(baseImponible, monedaPDF, tasa, factorBcv) },
     { label: `IVA ${ivaPct}%`, value: fmtTotal(ivaAmount, monedaPDF, tasa, factorBcv) },
   ]
-  if (hasFlete) rightItems.push({ label: 'Monto Exento', value: fmtTotal(flete, monedaPDF, tasa, factorBcv) })
+  if (hasExento) rightItems.push({ label: 'Monto Exento', value: fmtTotal(montoExento, monedaPDF, tasa, factorBcv) })
   if (hasDescuento) rightItems.push({ label: 'Descuento', value: '-' + fmtTotal(descuentoTotal, monedaPDF, tasa, factorBcv), color: [180, 100, 0] })
   if (refPago) rightItems.push({ label: 'Ref:', value: refPago })
 

@@ -21,7 +21,7 @@ export function useVentaRapida() {
 
   return useMutation({
     mutationFn: async ({
-      clienteId, clienteNombre, transportistaId, fleteUsd,
+      clienteId, clienteNombre, transportistaId, fleteUsd, corteUsd,
       formaPago, formaPagoCliente, referenciaPago,
       notas, notasCliente, items, costoEnvioUsd, tasaBcv,
     }) => {
@@ -33,6 +33,7 @@ export function useVentaRapida() {
         body: JSON.stringify({
           clienteId, transportistaId: transportistaId || null,
           fleteUsd: Number(fleteUsd) || 0,
+          corteUsd: Number(corteUsd) || 0,
           formaPago, formaPagoCliente: formaPagoCliente || null,
           referenciaPago: referenciaPago || null,
           notas: notas || null, notasCliente: notasCliente || null,

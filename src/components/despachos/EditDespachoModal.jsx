@@ -18,6 +18,7 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
   const [referenciaPago, setReferenciaPago] = useState('')
   const [transportistaId, setTransportistaId] = useState('')
   const [fleteUsd, setFleteUsd] = useState('')
+  const [corteUsd, setCorteUsd] = useState('')
   const [notas, setNotas] = useState('')
   const [showNuevoTransp, setShowNuevoTransp] = useState(false)
   const [nuevoNombre, setNuevoNombre] = useState('')
@@ -40,16 +41,17 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
     setReferenciaPago(despacho.referencia_pago || '')
     setTransportistaId(despacho.transportista_id || '')
     setFleteUsd(despacho.flete_usd ? String(Number(despacho.flete_usd)) : '')
+    setCorteUsd(despacho.corte_usd ? String(Number(despacho.corte_usd)) : '')
     setNotas(despacho.notas || '')
   }, [despacho, isOpen])
 
   if (!isOpen || !despacho) return null
 
-  const totalBase = Number(despacho.total_usd || 0) - Number(despacho.flete_usd || 0)
-  const totalConFlete = totalBase + (Number(fleteUsd) || 0)
+  const totalBase = Number(despacho.total_usd || 0) - Number(despacho.flete_usd || 0) - Number(despacho.corte_usd || 0)
+  const totalConFlete = totalBase + (Number(fleteUsd) || 0) + (Number(corteUsd) || 0)
   const montoAsignado = formasPago.reduce((s, fp) => s + (Number(fp.monto) || 0), 0)
-  const pagoCuadrado = formasPago.length > 0 && Math.abs(montoAsignado - totalBase) < 0.02
-  const diferencia = montoAsignado - totalBase
+  const pagoCuadrado = formasPago.length > 0 && Math.abs(montoAsignado - totalConFlete) < 0.02
+  const diferencia = montoAsignado - totalConFlete
   const hayVuelto = formasPago.length > 0 && diferencia > 0.02
   const faltante = formasPago.length > 0 && diferencia < -0.02
 
@@ -61,7 +63,7 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
     setFormasPago(prev => {
       const existe = prev.find(fp => fp.metodo === metodo)
       if (existe) return prev.filter(fp => fp.metodo !== metodo)
-      const restante = totalBase - prev.reduce((s, fp) => s + (Number(fp.monto) || 0), 0)
+      const restante = totalConFlete - prev.reduce((s, fp) => s + (Number(fp.monto) || 0), 0)
       return [...prev, { metodo, monto: restante > 0 ? Number(restante.toFixed(2)) : '' }]
     })
   }
@@ -79,6 +81,7 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
       referenciaPago: referenciaPago || null,
       transportistaId: transportistaId || null,
       fleteUsd: Number(fleteUsd) || 0,
+      corteUsd: Number(corteUsd) || 0,
       notas: notas || null,
     })
     onClose()
@@ -136,7 +139,7 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
             {formasPago.length > 0 && (
               <div className="space-y-2 mt-2">
                 {formasPago.map(fp => {
-                  const restante = totalBase - formasPago.reduce((s, f) => s + (Number(f.monto) || 0), 0)
+                  const restante = totalConFlete - formasPago.reduce((s, f) => s + (Number(f.monto) || 0), 0)
                   const mostrarResto = formasPago.length > 1 && (!fp.monto || Number(fp.monto) === 0) && restante > 0.01
                   return (
                   <div key={fp.metodo} className="flex items-center gap-2">
@@ -174,7 +177,7 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
                       : 'bg-red-50 text-red-600 border border-red-200'
                 }`}>
                   <span>Asignado: ${montoAsignado.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                  <span>Total: ${totalBase.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span>Total: ${totalConFlete.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   {pagoCuadrado
                     ? <span className="text-emerald-500">✓</span>
                     : hayVuelto
@@ -304,7 +307,34 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
               />
               {Number(fleteUsd) > 0 && (
                 <p className="text-xs text-indigo-500 font-medium">
-                  Total con flete: ${totalConFlete.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  + Flete: ${Number(fleteUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* FEATURE_CORTE_HIDDEN: Oculto temporalmente a petición del usuario. Cambiar a true para reactivar. */}
+          {false && (
+            <div className="space-y-2">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Corte de Material (USD)</p>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={corteUsd}
+                onChange={e => setCorteUsd(e.target.value)}
+                placeholder="0.00"
+                className="w-full px-4 py-2.5 rounded-xl text-sm font-medium border border-slate-200 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/20 focus:border-indigo-300 focus:bg-white transition-colors min-h-[44px]"
+                disabled={cargando}
+              />
+              {Number(corteUsd) > 0 && (
+                <p className="text-xs text-indigo-500 font-medium">
+                  + Corte: ${Number(corteUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              )}
+              {(Number(fleteUsd) > 0 || Number(corteUsd) > 0) && (
+                <p className="text-xs text-slate-600 font-bold border-t border-slate-200 pt-1 mt-1">
+                  Total Final: ${totalConFlete.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
               )}
             </div>

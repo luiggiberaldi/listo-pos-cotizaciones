@@ -25,7 +25,7 @@ export default function CestaPanel({ items, onCambiar, onEliminar, subtotal, tas
   // 'closed' | 'normal' | 'expanded'
   const [sheetState, setSheetState] = useState('closed')
   const sheetOpen = sheetState !== 'closed'
-  const setSheetOpen = (v) => setSheetState(v ? 'normal' : 'closed')
+  const setSheetOpen = (v) => setSheetState(v ? 'expanded' : 'closed')
   const fabRef = useRef(null)
 
   // Bloquear scroll del body cuando la cesta está abierta
@@ -49,7 +49,7 @@ export default function CestaPanel({ items, onCambiar, onEliminar, subtotal, tas
     if (swipeStartY.current === null) return
     if (swipeStartY.current - e.clientY > 30) {
       swipeStartY.current = null
-      setSheetState('normal')
+      setSheetState('expanded')
     }
   }
   const onPointerUp = () => { swipeStartY.current = null }
@@ -135,7 +135,7 @@ export default function CestaPanel({ items, onCambiar, onEliminar, subtotal, tas
           <div key={it._key} className="px-3 sm:px-4 py-2 group">
             {/* Fila 1: nombre completo + total línea */}
             <div className="flex items-start justify-between gap-2 mb-1">
-              <p className="flex-1 text-[12px] sm:text-[12px] font-bold text-slate-700 leading-snug line-clamp-2">{it.nombreSnap}</p>
+              <p className="flex-1 text-[12px] sm:text-[12px] font-bold text-slate-700 leading-snug">{it.nombreSnap}</p>
               <span className="text-[11px] sm:text-xs font-black text-slate-800 shrink-0">{fmtUsd(linea)}</span>
             </div>
             {/* Fila 2: precio unitario + unidad + controles */}

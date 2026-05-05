@@ -476,7 +476,7 @@ function ScanResultRow({ item, idx, tasa, onToggle, onCantidadChange, onSelectMa
               </div>
             )}
             <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-bold text-slate-700 leading-snug line-clamp-2">{match.nombre}</p>
+              <p className="text-[11px] font-bold text-slate-700 leading-snug">{match.nombre}</p>
               {match.codigo && <p className="text-[10px] text-slate-400">{match.codigo}</p>}
             </div>
             <div className="text-right shrink-0">

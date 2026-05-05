@@ -41,8 +41,9 @@ function ModalVentaExitosa({ data, onClose, config }) {
 
   if (!data) return null
 
-  const { numero, despachoId, cotizacionId, clienteNombre, items, subtotal, totalUsd, totalBs, tasa, formasPago, transportista, flete, notas } = data
+  const { numero, despachoId, cotizacionId, clienteNombre, items, subtotal, totalUsd, totalBs, tasa, formasPago, transportista, flete, corte, notas } = data
   const numDisplay = `VR-${String(numero).padStart(5, '0')}`
+  const totalConFlete = (totalUsd || 0) + (Number(flete) || 0) + (Number(corte) || 0)
 
   function printOrDownloadPdf(blob, filename) {
     const url = URL.createObjectURL(blob)
@@ -162,10 +163,16 @@ function ModalVentaExitosa({ data, onClose, config }) {
                 <span className="font-medium text-slate-600 text-xs">${fmtUsd(flete)}</span>
               </div>
             )}
+            {corte > 0 && (
+              <div className="flex justify-between py-1.5">
+                <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Corte</span>
+                <span className="font-medium text-slate-600 text-xs">${fmtUsd(corte)}</span>
+              </div>
+            )}
             <div className="flex justify-between py-1.5">
               <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Total</span>
               <div className="text-right">
-                <span className="font-bold text-slate-900 text-sm">{fmtUsd(totalUsd)}</span>
+                <span className="font-bold text-slate-900 text-sm">{fmtUsd(totalConFlete || totalUsd)}</span>
                 {totalBs > 0 && (
                   <p className="text-[10px] text-slate-400 font-mono">{fmtBs(totalBs)}</p>
                 )}
@@ -310,6 +317,7 @@ export default function VentaRapidaView() {
   const [referenciaPago, setReferenciaPago] = useState('')
   const [transportistaId, setTransportistaId] = useState('')
   const [fleteUsd, setFleteUsd] = useState('')
+  const [corteUsd, setCorteUsd] = useState('')
   const [notas, setNotas] = useState('')
 
   const clienteRef = useRef(null)
@@ -333,11 +341,11 @@ export default function VentaRapidaView() {
     if (ventaRapida.isPending) return
     const timer = setTimeout(() => {
       if (items.length > 0 || clienteId) {
-        saveDraft({ step, clienteId, items, formasPago, referenciaPago, transportistaId, fleteUsd, notas }, perfil?.id)
+        saveDraft({ step, clienteId, items, formasPago, referenciaPago, transportistaId, fleteUsd, corteUsd, notas }, perfil?.id)
       }
     }, 1500)
     return () => clearTimeout(timer)
-  }, [step, clienteId, items, formasPago, referenciaPago, transportistaId, fleteUsd, notas, ventaRapida.isPending])
+  }, [step, clienteId, items, formasPago, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, ventaRapida.isPending])
 
   function restoreDraft() {
     const d = draftRef.current
@@ -349,6 +357,7 @@ export default function VentaRapidaView() {
     if (d.referenciaPago) setReferenciaPago(d.referenciaPago)
     if (d.transportistaId) setTransportistaId(d.transportistaId)
     if (d.fleteUsd) setFleteUsd(d.fleteUsd)
+    if (d.corteUsd) setCorteUsd(d.corteUsd)
     if (d.notas) setNotas(d.notas)
     if (d.step != null && d.step >= 0 && d.step <= 2) setStep(d.step)
     setShowDraftBanner(false)
@@ -366,7 +375,8 @@ export default function VentaRapidaView() {
   const tasa = tasaHook.tasaEfectiva || 0
   const totalBs = tasa > 0 ? mulR(totalUsd, tasa) : 0
   const flete = Math.max(0, Number(fleteUsd) || 0)
-  const totalConFlete = round2(totalUsd + flete)
+  const corte = Math.max(0, Number(corteUsd) || 0)
+  const totalConFlete = round2(totalUsd + flete + corte)
 
   const idsAgregados = new Set(items.map(it => it.productoId))
   const clienteSeleccionado = clientes.find(c => c.id === clienteId)
@@ -384,7 +394,7 @@ export default function VentaRapidaView() {
   const transportistaSeleccionado = transportistas.find(t => t.id === transportistaId)
 
   const montoAsignadoVR = formasPago.reduce((s, fp) => s + (Number(fp.monto) || 0), 0)
-  const pagoCuadradoVR = formasPago.length > 0 && Math.abs(montoAsignadoVR - totalUsd) < 0.02
+  const pagoCuadradoVR = formasPago.length > 0 && Math.abs(montoAsignadoVR - totalConFlete) < 0.02
 
   // Validaciones
   const step1Valid = !!clienteId && items.length > 0
@@ -448,6 +458,7 @@ export default function VentaRapidaView() {
       clienteNombre: clienteSeleccionado?.nombre,
       transportistaId: transportistaId || null,
       fleteUsd: flete,
+      corteUsd: corte,
       formaPago: fpJson,
       formaPagoCliente: fpJson,
       referenciaPago: referenciaPago || null,
@@ -475,6 +486,7 @@ export default function VentaRapidaView() {
           transportistaId: transportistaId || null,
           transportista: transportistaSeleccionado?.nombre || null,
           flete,
+          corte,
           items: items.map(it => ({ ...it })),
           subtotal,
           totalUsd,
@@ -493,6 +505,7 @@ export default function VentaRapidaView() {
         setReferenciaPago('')
         setTransportistaId('')
         setFleteUsd('')
+        setCorteUsd('')
         setNotas('')
       },
     })
@@ -603,7 +616,7 @@ export default function VentaRapidaView() {
           <Step2Pago
             formasPago={formasPago}
             setFormasPago={setFormasPago}
-            totalConFlete={totalUsd}
+            totalConFlete={totalConFlete}
             referenciaPago={referenciaPago}
             setReferenciaPago={setReferenciaPago}
             transportistas={transportistas}
@@ -611,8 +624,11 @@ export default function VentaRapidaView() {
             setTransportistaId={setTransportistaId}
             fleteUsd={fleteUsd}
             setFleteUsd={setFleteUsd}
+            corteUsd={corteUsd}
+            setCorteUsd={setCorteUsd}
             notas={notas}
             setNotas={setNotas}
+            tasa={tasa}
           />
         )}
 
@@ -623,6 +639,7 @@ export default function VentaRapidaView() {
             subtotal={subtotal}
             totalUsd={totalUsd}
             flete={flete}
+            corte={corte}
             totalConFlete={totalConFlete}
             totalBs={totalBs}
             tasa={tasa}
@@ -762,7 +779,7 @@ function Step1Productos({
 }) {
   const [sheetState, setSheetState] = useState('closed')
   const sheetOpen = sheetState !== 'closed'
-  const setSheetOpen = (v) => setSheetState(v ? 'normal' : 'closed')
+  const setSheetOpen = (v) => setSheetState(v ? 'expanded' : 'closed')
   const sheetRef = useRef(null)
   const handleRef = useRef(null)
   const sheetStateRef = useRef(sheetState)
@@ -1007,7 +1024,7 @@ function Step1Productos({
                 return (
                   <div key={it.productoId} className="py-2">
                     <div className="flex items-start justify-between gap-2 mb-1">
-                      <p className="flex-1 text-[12px] font-bold text-slate-700 leading-snug line-clamp-2">{it.nombreSnap}</p>
+                      <p className="flex-1 text-[12px] font-bold text-slate-700 leading-snug">{it.nombreSnap}</p>
                       <span className="text-[11px] font-black text-slate-800 shrink-0">{fmtUsd(linea)}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
@@ -1094,7 +1111,7 @@ function Step1Productos({
           onClick={() => setEditQty(null)}>
           <div className="bg-white rounded-2xl p-5 w-full max-w-[280px] shadow-2xl" onClick={e => e.stopPropagation()}>
             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Cantidad</p>
-            <p className="text-sm font-bold text-slate-700 truncate mb-3">{editQty.nombre}</p>
+            <p className="text-sm font-bold text-slate-700 mb-3">{editQty.nombre}</p>
             <input
               ref={editQtyRef}
               type="text"
@@ -1194,7 +1211,7 @@ function Step1Productos({
                 return (
                   <div key={it.productoId} className="py-2">
                     <div className="flex items-start justify-between gap-2 mb-1">
-                      <p className="flex-1 text-[12px] font-bold text-slate-700 leading-snug line-clamp-2">{it.nombreSnap}</p>
+                      <p className="flex-1 text-[12px] font-bold text-slate-700 leading-snug">{it.nombreSnap}</p>
                       <span className="text-[11px] font-black text-slate-800 shrink-0">{fmtUsd(linea)}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
@@ -1275,7 +1292,8 @@ function Step2Pago({
   formasPago, setFormasPago, totalConFlete,
   referenciaPago, setReferenciaPago,
   transportistas, transportistaId, setTransportistaId,
-  fleteUsd, setFleteUsd, notas, setNotas,
+  fleteUsd, setFleteUsd, corteUsd, setCorteUsd, notas, setNotas,
+  tasa,
 }) {
   const [showNuevoTransp, setShowNuevoTransp] = useState(false)
   const crearTransp = useCrearTransportista()
@@ -1372,28 +1390,58 @@ function Step2Pago({
         )}
 
         {/* Barra de totales */}
-        {formasPago.length > 0 && (
-          <div className={`flex items-center justify-between mt-3 mb-2 px-3 py-2 rounded-xl text-sm font-semibold ${
-            pagoCuadrado ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-            : hayVuelto ? 'bg-amber-50 text-amber-700 border border-amber-200'
-            : 'bg-red-50 text-red-700 border border-red-200'
-          }`}>
-            <span>Asignado: ${montoAsignado.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-            <span>Total: ${totalConFlete.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-            {pagoCuadrado
-              ? <CheckCircle size={16} className="text-emerald-500" />
-              : hayVuelto
-                ? <span className="text-xs font-bold text-amber-600">Sobran ${diferencia.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                : <span className="text-xs font-bold text-red-600">Faltan ${Math.abs(diferencia).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-            }
-          </div>
-        )}
+        <div className={`flex items-center justify-between mt-3 mb-2 px-3 py-2 rounded-xl text-sm font-semibold ${
+          pagoCuadrado ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+          : hayVuelto ? 'bg-amber-50 text-amber-700 border border-amber-200'
+          : formasPago.length === 0 ? 'bg-slate-50 text-slate-700 border border-slate-200'
+          : 'bg-red-50 text-red-700 border border-red-200'
+        }`}>
+          <span>Asignado: ${montoAsignado.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          <span>Total: ${totalConFlete.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          {pagoCuadrado
+            ? <CheckCircle size={16} className="text-emerald-500" />
+            : hayVuelto
+              ? <span className="text-xs font-bold text-amber-600">Sobran ${diferencia.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              : <span className="text-xs font-bold text-red-600">Faltan ${Math.abs(diferencia).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          }
+        </div>
       </div>
 
       </div>{/* ── Fin columna izquierda ── */}
 
       {/* ── Columna derecha: Transportista + Flete + Notas ── */}
       <div className="lg:w-80 xl:w-96 shrink-0 flex flex-col gap-5">
+      {/* Resumen de totales */}
+      <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm mb-[-8px]">
+        <div className="space-y-2 text-[15px]">
+          <div className="flex justify-between items-center text-slate-500">
+            <span>Subtotal</span>
+            <span className="text-slate-700">${(totalConFlete - Math.max(0, Number(fleteUsd) || 0) - Math.max(0, Number(corteUsd) || 0)).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          </div>
+          {Number(fleteUsd) > 0 && (
+            <div className="flex justify-between items-center text-slate-500">
+              <span>Flete</span>
+              <span className="text-slate-700">${Number(fleteUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+          )}
+          {Number(corteUsd) > 0 && (
+            <div className="flex justify-between items-center text-slate-500">
+              <span>Corte</span>
+              <span className="text-slate-700">${Number(corteUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+          )}
+          <div className="pt-3 pb-1 mt-2 border-t border-slate-100 flex justify-between items-end">
+            <span className="text-[17px] font-bold text-slate-800">Total</span>
+            <div className="text-right">
+              <span className="text-2xl font-bold tracking-tight text-slate-900">${totalConFlete.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              {tasa > 0 && (
+                <p className="text-[13px] text-slate-400 font-medium mt-0.5">≈ Bs {(totalConFlete * tasa).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Transportista */}
       <div>
         <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">
@@ -1462,6 +1510,18 @@ function Step2Pago({
             placeholder="0.00"
             className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-sky-200 focus:border-sky-400 outline-none" />
         </div>
+      )}
+
+      {/* FEATURE_CORTE_HIDDEN: Oculto temporalmente a petición del usuario. Cambiar a true para reactivar. */}
+      {false && (
+      <div>
+        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">
+          Monto del corte (USD)
+        </label>
+        <input type="text" inputMode="decimal" value={corteUsd} onChange={e => { const v = e.target.value; if (/^[0-9]*[.,]?[0-9]*$/.test(v)) setCorteUsd(v) }}
+          placeholder="0.00"
+          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-sky-200 focus:border-sky-400 outline-none" />
+      </div>
       )}
 
       {/* Notas */}
@@ -1605,7 +1665,7 @@ function TransportistaFormCompact({ onGuardar, onCancelar, cargando }) {
 // Step 3: Confirmar
 // ─────────────────────────────────────────────────────────────────────────────
 function Step3Confirmar({
-  clienteSeleccionado, items, subtotal, totalUsd, flete, totalConFlete,
+  clienteSeleccionado, items, subtotal, totalUsd, flete, corte, totalConFlete,
   totalBs, tasa, formasPago, referenciaPago, transportistaSeleccionado, notas,
 }) {
   return (
@@ -1633,7 +1693,7 @@ function Step3Confirmar({
             {items.map(it => (
               <div key={it.productoId} className="flex items-center justify-between text-sm py-1">
                 <div className="flex-1 min-w-0">
-                  <span className="text-slate-700 truncate block text-sm">{it.nombreSnap}</span>
+                  <span className="text-slate-700 block text-sm">{it.nombreSnap}</span>
                   <span className="text-xs text-slate-400">{it.cantidad} × {fmtUsd(it.precioUnitUsd)}</span>
                 </div>
                 <span className="font-semibold text-slate-800 shrink-0 ml-2">{fmtUsd(round2(it.cantidad * it.precioUnitUsd))}</span>
@@ -1655,6 +1715,12 @@ function Step3Confirmar({
             <div className="flex justify-between text-sm">
               <span className="text-slate-500">Flete</span>
               <span className="text-slate-700">{fmtUsd(flete)}</span>
+            </div>
+          )}
+          {corte > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-500">Corte</span>
+              <span className="text-slate-700">{fmtUsd(corte)}</span>
             </div>
           )}
           <div className="border-t border-slate-100 pt-1.5 flex justify-between items-end">

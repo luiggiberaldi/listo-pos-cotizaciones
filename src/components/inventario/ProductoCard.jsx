@@ -126,7 +126,7 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, onBorra
               </span>
             )}
           </div>
-          <h3 className="font-bold text-slate-800 text-[11px] sm:text-xs leading-snug line-clamp-2">{producto.nombre}</h3>
+          <h3 className="font-bold text-slate-800 text-[11px] sm:text-xs leading-snug">{producto.nombre}</h3>
           {producto.categoria && (
             <span className="inline-flex items-center gap-0.5 mt-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full max-w-full"
               style={{ background: bg, color: fg }}>

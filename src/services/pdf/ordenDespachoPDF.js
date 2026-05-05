@@ -257,6 +257,19 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
     })
   }
 
+  const corteVal = Number(despacho.corte_usd || 0)
+  if (corteVal > 0) {
+    itemsToRender.push({
+      cantidad: 1,
+      codigo_snap: 'CRT1254698',
+      nombre_snap: 'SERVICIO DE CORTE (E)',
+      unidad_snap: 'GLB',
+      precio_unit_usd: corteVal,
+      total_linea_usd: corteVal,
+      tiene_descuento: false
+    })
+  }
+
   itemsToRender.forEach((item) => {
     // Calcular cuántas líneas necesita la descripción
     doc.setFont('helvetica', 'normal')
@@ -344,17 +357,20 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   const totX = PAGE_W - MARGIN - totW
   const total = Number(despacho.total_usd || 0)
   const flete = Number(despacho.flete_usd || 0)
+  const corte = Number(despacho.corte_usd || 0)
+  const montoExento = flete + corte
   const descuentoTotal = Number(despacho.descuento_total_usd || 0)
   
-  // En orden de despacho ahora SIEMPRE se muestra el flete
-  const subtotal = total - flete
+  // En orden de despacho ahora SIEMPRE se muestra el exento
+  const subtotal = total - montoExento
   const totalFinal = total - descuentoTotal
+  const hasExentoReal = montoExento > 0
   const hasFleteReal = flete > 0
   const hasDescuento = descuentoTotal > 0
 
   // Posicionar recuadro unificado fijo sobre el chofer
-  // Si hay flete, el desglose ocupa 14mm (Subtotal + Flete), si no, 7mm (solo Subtotal)
-  const desgloseH = (hasFleteReal ? 14 : 7) + (hasDescuento ? 7 : 0)
+  // Si hay exento, el desglose ocupa 14mm (Subtotal + Exento), si no, 7mm (solo Subtotal)
+  const desgloseH = (hasExentoReal ? 14 : 7) + (hasDescuento ? 7 : 0)
   const ty = choferY - 24 - desgloseH
 
   // Parsear formas de pago (JSON array o string legacy)
@@ -403,7 +419,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
     cx += checkSize + 1.2 + doc.getTextWidth(txt) + 4
   })
 
-  // Desglose Subtotal + Flete (si aplica) + Descuento
+  // Desglose Subtotal + Exento (si aplica) + Descuento
   let desY = fpY + 9
   
   doc.setDrawColor(120, 120, 120)
@@ -418,10 +434,10 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   doc.text(fmtTotal(subtotal, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, desY + 5, { align: 'right' })
   desY += 7
 
-  if (hasFleteReal) {
+  if (hasExentoReal) {
     doc.rect(MARGIN, desY, CONTENT_W, 7, 'S')
     doc.text('Monto Exento', MARGIN + 4, desY + 5)
-    doc.text(fmtTotal(flete, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, desY + 5, { align: 'right' })
+    doc.text(fmtTotal(montoExento, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, desY + 5, { align: 'right' })
     desY += 7
   }
 
@@ -477,7 +493,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   ]
   row2Fields.push({ label: 'PLACA CHUTO', val: (transportista?.placa_chuto || '').toUpperCase() })
   row2Fields.push({ label: 'PLACA BATEA', val: (transportista?.placa_batea || '').toUpperCase() })
-  if (!hasFleteReal) {
+  if (!hasExentoReal) {
     row2Fields.push({ label: 'FLETE', val: '' })
   }
   function drawRow(fields, ry, colW) {

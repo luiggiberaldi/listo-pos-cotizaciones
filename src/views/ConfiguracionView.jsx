@@ -235,6 +235,7 @@ export default function ConfiguracionView() {
   const { perfil } = useAuthStore()
   const esAdmin = perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador'
   const esDesarrollador = perfil?.rol === 'desarrollador'
+  const esSupervisor = perfil?.rol === 'supervisor' || perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador'
   const [tab, setTab]         = useState(esAdmin ? 'comisiones' : 'negocio')
   const [guardado, setGuardado] = useState(false)
   const [error,    setError]    = useState('')
@@ -569,6 +570,84 @@ export default function ConfiguracionView() {
             )}
           </div>
 
+          {/* ── Reinicio Operacional (supervisores+) ─────────────────────── */}
+          {esSupervisor && (
+          <div className="bg-white rounded-2xl border border-orange-200 p-5 space-y-4">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-0.5 self-stretch rounded-full shrink-0 bg-orange-400" style={{ minHeight: '20px' }} />
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-orange-50 border border-orange-200">
+                <AlertTriangle size={13} className="text-orange-500" />
+              </div>
+              <h2 className="text-sm font-bold text-orange-700 uppercase tracking-wide">Reinicio operacional</h2>
+            </div>
+
+            {/* Qué borra / qué conserva */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-red-50 border border-red-100 rounded-xl p-3">
+                <p className="text-[10px] font-bold text-red-600 uppercase tracking-wide mb-1.5">Se borra</p>
+                <ul className="space-y-0.5">
+                  {['Cotizaciones','Ítems cotiz.','Notas de despacho','Comisiones','Cuentas por cobrar','Kardex (movimientos)','Auditoría','Logs del sistema'].map(item => (
+                    <li key={item} className="flex items-center gap-1.5 text-[11px] text-red-700">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />{item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3">
+                <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wide mb-1.5">Se conserva</p>
+                <ul className="space-y-0.5">
+                  {['Usuarios','Clientes','Productos (stock)','Transportistas','Configuración'].map(item => (
+                    <li key={item} className="flex items-center gap-1.5 text-[11px] text-emerald-700">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />{item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+            <p className="text-xs text-slate-500">Los correlativos se reinician a <strong className="text-slate-700">COT-00200</strong>. Esta acción es <strong className="text-orange-600">irreversible</strong> — descarga un backup primero.</p>
+
+            {!confirmResetOp ? (
+              <button type="button" onClick={() => setConfirmResetOp(true)}
+                className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white font-bold text-sm px-5 py-2.5 rounded-xl transition-all shadow-md active:scale-[0.98]">
+                <AlertTriangle size={15} />Ejecutar reinicio operacional
+              </button>
+            ) : (
+              <div className="bg-orange-50 border border-orange-300 rounded-xl p-4 space-y-3">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle size={16} className="text-orange-600 mt-0.5 shrink-0" />
+                  <p className="text-sm font-semibold text-orange-900">
+                    ¿Confirmas el reinicio operacional? Se borrarán todas las cotizaciones, despachos, comisiones y el kardex. Los correlativos reinician en <strong>COT-00200</strong>. Esta acción no se puede deshacer.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button type="button" onClick={handleResetOperacional} disabled={resetOpLoading}
+                    className="flex items-center gap-1.5 bg-orange-600 hover:bg-orange-700 text-white font-bold text-sm px-5 py-2.5 rounded-xl transition-colors disabled:opacity-50 shadow-md">
+                    {resetOpLoading
+                      ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Reiniciando...</>
+                      : <><AlertTriangle size={14} />Sí, reiniciar ahora</>
+                    }
+                  </button>
+                  <button type="button" onClick={() => setConfirmResetOp(false)}
+                    className="text-sm font-semibold text-slate-600 px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors">
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+            {resetOpMsg && (
+              <div className={`flex items-start gap-2 text-sm font-medium p-3 rounded-xl border ${
+                resetOpMsg.tipo === 'ok'
+                  ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                  : 'text-red-700 bg-red-50 border-red-200'
+              }`}>
+                {resetOpMsg.tipo === 'ok' ? <CheckCircle size={16} className="mt-0.5 shrink-0" /> : <AlertCircle size={16} className="mt-0.5 shrink-0" />}
+                <span>{resetOpMsg.texto}</span>
+              </div>
+            )}
+          </div>
+          )}
+
+          {/* ── Zona de peligro (solo desarrollador) ────────────────────── */}
           {esDesarrollador && (
           <div className="bg-white rounded-2xl border border-red-200 p-5 space-y-4">
             <div className="flex items-center gap-3 mb-1">
@@ -578,7 +657,7 @@ export default function ConfiguracionView() {
               </div>
               <h2 className="text-sm font-bold text-red-700 uppercase tracking-wide">Zona de peligro</h2>
             </div>
-            <p className="text-xs text-slate-500 -mt-2">Acciones permanentes e irreversibles. Descarga un backup antes.</p>
+            <p className="text-xs text-slate-500 -mt-2">Acciones permanentes e irreversibles. Solo para desarrolladores.</p>
             {!confirmClear ? (
               <button type="button" onClick={() => setConfirmClear(true)}
                 className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-semibold text-sm px-5 py-2.5 rounded-xl transition-colors shadow-sm">
@@ -642,43 +721,6 @@ export default function ConfiguracionView() {
                 <div className={`flex items-center gap-1.5 text-sm font-medium mt-2 ${resetMsg.tipo === 'ok' ? 'text-emerald-600' : 'text-red-600'}`}>
                   {resetMsg.tipo === 'ok' ? <CheckCircle size={15} /> : <AlertCircle size={15} />}
                   {resetMsg.texto}
-                </div>
-              )}
-            </div>
-
-            <div className="border-t border-red-100 pt-4 mt-2">
-              <p className="text-xs text-slate-500 mb-3">
-                Borra cotizaciones, despachos y comisiones. <strong>Clientes, inventario, transportistas y usuarios se conservan.</strong> Los correlativos se reinician a <strong>COT-00200</strong>.
-              </p>
-              {!confirmResetOp ? (
-                <button type="button" onClick={() => setConfirmResetOp(true)}
-                  className="flex items-center gap-2 bg-orange-700 hover:bg-orange-800 text-white font-semibold text-sm px-5 py-2.5 rounded-xl transition-colors shadow-sm">
-                  <AlertTriangle size={15} />Reinicio operacional
-                </button>
-              ) : (
-                <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 space-y-3">
-                  <p className="text-sm font-semibold text-orange-900">
-                    ¿Estás seguro? Se borrarán cotizaciones, despachos y comisiones. Los correlativos reinician en <strong>COT-00200</strong>. <strong>Clientes e inventario se conservan.</strong>
-                  </p>
-                  <div className="flex gap-2">
-                    <button type="button" onClick={handleResetOperacional} disabled={resetOpLoading}
-                      className="flex items-center gap-1.5 bg-orange-700 hover:bg-orange-800 text-white font-semibold text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-50">
-                      {resetOpLoading
-                        ? <><div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />Reiniciando...</>
-                        : 'Sí, reiniciar operacional'
-                      }
-                    </button>
-                    <button type="button" onClick={() => setConfirmResetOp(false)}
-                      className="text-sm font-medium text-slate-600 px-4 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors">
-                      Cancelar
-                    </button>
-                  </div>
-                </div>
-              )}
-              {resetOpMsg && (
-                <div className={`flex items-center gap-1.5 text-sm font-medium mt-2 ${resetOpMsg.tipo === 'ok' ? 'text-emerald-600' : 'text-red-600'}`}>
-                  {resetOpMsg.tipo === 'ok' ? <CheckCircle size={15} /> : <AlertCircle size={15} />}
-                  {resetOpMsg.texto}
                 </div>
               )}
             </div>

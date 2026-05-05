@@ -266,7 +266,67 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     y += rowH
   })
 
-  // Notas Adicionales
+  // ── Flete y Corte como filas exentas en la tabla ──
+  const fleRef = Number(cotizacion.costo_envio_usd || 0)
+  const corRef = Number(cotizacion.corte_usd || 0)
+
+  const extraRows = []
+  if (fleRef > 0) extraRows.push({ codigo: 'FTL1005632', nombre: 'SERVICIO DE FLETE', unidad: 'GLB', precio: fleRef, total: fleRef })
+  if (corRef > 0) extraRows.push({ codigo: 'CRT1254698', nombre: 'SERVICIO DE CORTE', unidad: 'GLB', precio: corRef, total: corRef })
+
+  const tasaEfectivaExtra = tasa > 0 ? tasa : Number(cotizacion.tasa_bcv_snapshot || 0)
+
+  extraRows.forEach(row => {
+    const descLines = doc.splitTextToSize(row.nombre, COLS[2].w - 4)
+    const lineH = 4.5
+    const rowH = Math.max(ROW_H, descLines.length * lineH + 4)
+
+    if (y > PAGE_H - 55) { doc.addPage(); y = MARGIN }
+
+    doc.setLineWidth(0.2)
+    doc.setDrawColor(200, 200, 200)
+    // Fondo tenue para filas exentas
+    doc.setFillColor(245, 250, 255)
+    doc.rect(MARGIN, y, CONTENT_W, rowH, 'FD')
+    COLS.forEach(col => { doc.line(col.x, y, col.x, y + rowH) })
+
+    const midY = y + rowH / 2 + 1.2
+    doc.setFont('helvetica', 'italic')
+    doc.setFontSize(8.5)
+    doc.setTextColor(...C_DARK)
+
+    doc.text('1', COLS[0].x + COLS[0].w / 2, midY, { align: 'center' })
+    doc.text(row.codigo, COLS[1].x + COLS[1].w / 2, midY, { align: 'center' })
+
+    const descStartY = y + (rowH - descLines.length * lineH) / 2 + lineH
+    descLines.forEach((line, idx) => {
+      doc.text(line + ' (E)', COLS[2].x + 2, descStartY + idx * lineH)
+    })
+    doc.text(row.unidad, COLS[3].x + COLS[3].w / 2, midY, { align: 'center' })
+
+    const precioText = fmtPrecio(row.precio, monedaPDF, tasaEfectivaExtra, factorBcv)
+    const totalText  = fmtPrecio(row.total,  monedaPDF, tasaEfectivaExtra, factorBcv)
+    
+    const fitTextExtra = (text, col, baseFontSize, bold) => {
+      const maxW = col.w - 4
+      let fs = baseFontSize
+      doc.setFont('helvetica', bold ? 'bold' : 'normal')
+      while (fs > 6) {
+        doc.setFontSize(fs)
+        if (doc.getTextWidth(text) <= maxW) break
+        fs -= 0.5
+      }
+      doc.setFontSize(fs)
+      doc.text(text, col.x + col.w - 2, midY, { align: 'right' })
+    }
+
+    fitTextExtra(precioText, COLS[4], 10.5, false)
+    fitTextExtra(totalText, COLS[5], 10.5, true)
+    doc.setFontSize(9)
+
+    y += rowH
+  })
+
   if (cotizacion.notas_cliente?.trim()) {
     y += 3
     if (y > PAGE_H - 65) { doc.addPage(); y = MARGIN }
@@ -351,7 +411,16 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   const baseImponible = subtotal
   const ivaUsd = 0
 
+  const totalExento = Number(cotizacion.costo_envio_usd || 0) + Number(cotizacion.corte_usd || 0)
+
   const totLines = []
+  totLines.push({ label: 'Subtotal:', val: fmtPrecio(subtotal, monedaPDF, tasaEfectivaTot, factorBcv) })
+  if (descuento > 0) {
+    totLines.push({ label: 'Descuento:', val: `-${fmtPrecio(descuento, monedaPDF, tasaEfectivaTot, factorBcv)}`, color: [220, 38, 38] })
+  }
+  if (totalExento > 0) {
+    totLines.push({ label: 'Exento:', val: fmtPrecio(totalExento, monedaPDF, tasaEfectivaTot, factorBcv), color: [50, 100, 180] })
+  }
 
   // Borde del cuadro de totales
   const totStartY = y

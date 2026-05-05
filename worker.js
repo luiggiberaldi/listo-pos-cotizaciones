@@ -2311,8 +2311,9 @@ async function handleCrearDespacho(request, env) {
 
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
-  const { cotizacionId, notas, formaPago, transportistaId, fleteUsd, clienteFacturaId } = body;
+  const { cotizacionId, notas, formaPago, transportistaId, fleteUsd, corteUsd, clienteFacturaId } = body;
   const flete = Math.max(0, Number(fleteUsd) || 0);
+  const corte = Math.max(0, Number(corteUsd) || 0);
   if (!cotizacionId) return jsonError('Falta cotizacionId', 400, request);
   if (!isValidUuid(cotizacionId)) return jsonError('cotizacionId inválido', 400, request);
 
@@ -2349,7 +2350,12 @@ async function handleCrearDespacho(request, env) {
     }
 
     // 4. Crear nota de despacho (stock se descuenta al confirmar entrega por logística)
-    const totalConFlete = Number(cot.total_usd) + flete;
+    // Se resta costo_envio_usd y corte_usd de la cotización (estimados) para evitar doble suma
+    // con el flete y corte reales ingresados al momento del despacho.
+    const cotEnvio = Number(cot.costo_envio_usd || 0);
+    const cotCorte = Number(cot.corte_usd || 0);
+    const totalBase = Number(cot.total_usd) - cotEnvio - cotCorte;
+    const totalConFleteCorte = totalBase + flete + corte;
     const despRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?select=id,numero`, {
       method: 'POST',
       headers: { ...headers, Prefer: 'return=representation' },
@@ -2360,8 +2366,9 @@ async function handleCrearDespacho(request, env) {
         vendedor_id: cot.vendedor_id,
         transportista_id: transportistaId || cot.transportista_id,
         estado: 'pendiente',
-        total_usd: totalConFlete,
+        total_usd: totalConFleteCorte,
         flete_usd: flete,
+        corte_usd: corte,
         notas: notas || null,
         forma_pago: formaPago || null,
         creado_por: user.operator_id,
@@ -2402,7 +2409,7 @@ async function handleVentaRapida(request, env) {
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
 
   const {
-    clienteId, transportistaId, fleteUsd,
+    clienteId, transportistaId, fleteUsd, corteUsd,
     formaPago, formaPagoCliente, referenciaPago,
     notas, notasCliente, items,
     descuentoGlobalPct, costoEnvioUsd, tasaBcv,
@@ -2412,6 +2419,7 @@ async function handleVentaRapida(request, env) {
   if (!items || !Array.isArray(items) || items.length === 0) return jsonError('Faltan items', 400, request);
 
   const flete = Math.max(0, Number(fleteUsd) || 0);
+  const corte = Math.max(0, Number(corteUsd) || 0);
   const descPct = Math.max(0, Number(descuentoGlobalPct) || 0);
   const envio = Math.max(0, Number(costoEnvioUsd) || 0);
 
@@ -2460,7 +2468,7 @@ async function handleVentaRapida(request, env) {
 
     const descMonto = subtotal * (descPct / 100);
     const subtotalDesc = subtotal - descMonto;
-    const totalUsd = subtotalDesc + envio;
+    const totalUsd = subtotalDesc + envio + flete + corte;
 
     // 3. Create cotización in estado 'aceptada'
     const cotBody = {
@@ -2470,7 +2478,8 @@ async function handleVentaRapida(request, env) {
       subtotal_usd: subtotal,
       descuento_global_pct: descPct,
       descuento_usd: descMonto,
-      costo_envio_usd: envio,
+      costo_envio_usd: flete,
+      corte_usd: corte,
       total_usd: totalUsd,
       tasa_bcv_snapshot: tasaBcv || null,
       total_bs_snapshot: tasaBcv ? totalUsd * tasaBcv : null,
@@ -2509,7 +2518,6 @@ async function handleVentaRapida(request, env) {
     // 5. Stock se descuenta al confirmar entrega por logística
 
     // 6. Create nota de despacho
-    const totalConFlete = totalUsd + flete;
     const despRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?select=id,numero`, {
       method: 'POST',
       headers: { ...headers, Prefer: 'return=representation' },
@@ -2520,8 +2528,9 @@ async function handleVentaRapida(request, env) {
         vendedor_id: user.operator_id,
         transportista_id: transportistaId || null,
         estado: 'pendiente',
-        total_usd: totalConFlete,
+        total_usd: totalUsd,
         flete_usd: flete,
+        corte_usd: corte,
         notas: notas || null,
         forma_pago: formaPago || null,
         forma_pago_cliente: formaPagoCliente || formaPago || null,
@@ -2680,7 +2689,7 @@ async function handleEditarPagoDespacho(request, env) {
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
 
-  const { despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, notas } = body;
+  const { despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas } = body;
   if (!despachoId) return jsonError('Falta despachoId', 400, request);
 
   const h = {
@@ -2690,7 +2699,7 @@ async function handleEditarPagoDespacho(request, env) {
   };
 
   // Verificar que el despacho existe, su estado y vendedor
-  const checkRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&select=id,estado,vendedor_id,flete_usd,total_usd,cotizacion_id`, { headers: h });
+  const checkRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&select=id,estado,vendedor_id,flete_usd,corte_usd,total_usd,cotizacion_id`, { headers: h });
   if (!checkRes.ok) return jsonError('Error al verificar despacho', 500, request);
   const despachos = await checkRes.json();
   if (!despachos.length) return jsonError('Despacho no encontrado', 404, request);
@@ -2718,12 +2727,15 @@ async function handleEditarPagoDespacho(request, env) {
   if (formaPagoCliente !== undefined) campos.forma_pago_cliente = formaPagoCliente;
   if (referenciaPago !== undefined) campos.referencia_pago = referenciaPago;
   if (transportistaId !== undefined) campos.transportista_id = transportistaId || null;
-  if (fleteUsd !== undefined) {
-    const nuevoFlete = Number(fleteUsd) || 0;
+  if (fleteUsd !== undefined || corteUsd !== undefined) {
+    const nuevoFlete = fleteUsd !== undefined ? (Number(fleteUsd) || 0) : Number(despacho.flete_usd || 0);
+    const nuevoCorte = corteUsd !== undefined ? (Number(corteUsd) || 0) : Number(despacho.corte_usd || 0);
     const fleteAnterior = Number(despacho.flete_usd) || 0;
+    const corteAnterior = Number(despacho.corte_usd) || 0;
     campos.flete_usd = nuevoFlete;
-    // Recalcular total_usd: total actual - flete anterior + nuevo flete
-    campos.total_usd = Number(despacho.total_usd) - fleteAnterior + nuevoFlete;
+    campos.corte_usd = nuevoCorte;
+    // Recalcular total_usd: total actual - flete/corte anterior + nuevo flete/corte
+    campos.total_usd = Number(despacho.total_usd) - fleteAnterior - corteAnterior + nuevoFlete + nuevoCorte;
   }
   if (notas !== undefined) campos.notas = notas || null;
 
@@ -3703,7 +3715,7 @@ async function handleResetOperacional(request, env) {
       return json({ ok: true, elapsed_ms: elapsed, correlativo_inicio: 200, log }, 200, request);
     }
 
-    // Fallback: borrar manualmente (sin reset de sequences — migración no aplicada)
+    // Fallback: borrar manualmente vía PostgREST (service_role, sin RPC)
     logStep(`RPC no disponible (HTTP ${rpcRes.status}), usando borrado manual...`);
 
     logStep('Eliminando comisiones...');
@@ -3716,12 +3728,13 @@ async function handleResetOperacional(request, env) {
     await supaDelete(env, 'cotizacion_items', logStep);
     logStep('Eliminando cotizaciones...');
     await supaDelete(env, 'cotizaciones', logStep);
+    logStep('Eliminando inventario_movimientos...');
+    await supaDelete(env, 'inventario_movimientos', logStep);
     logStep('Eliminando auditoria...');
     await supaDelete(env, 'auditoria', logStep);
     logStep('Eliminando system_logs...');
     await supaDelete(env, 'system_logs', logStep);
     logStep('Clientes, transportistas e inventario conservados.');
-    logStep('⚠ Sequences no reiniciadas — aplica migración 067 en Supabase para reset a 200.');
 
     const elapsed = Date.now() - start;
     logStep(`✓ Borrado manual completado en ${elapsed}ms`);

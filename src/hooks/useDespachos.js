@@ -34,7 +34,7 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false } = {}
         .from('notas_despacho')
         .select(`
           id, numero, cotizacion_id, estado,
-          total_usd, flete_usd, descuento_total_usd, notas, forma_pago,
+          total_usd, flete_usd, corte_usd, descuento_total_usd, notas, forma_pago,
           referencia_pago, forma_pago_cliente,
           creado_en, despachada_en, entregada_en,
           cliente_id, cliente_factura_id, vendedor_id, transportista_id,
@@ -101,7 +101,7 @@ export function useCrearDespacho() {
   const rol = useAuthStore.getState().perfil?.rol
 
   return useMutation({
-    mutationFn: async ({ cotizacionId, notas = null, formaPago = null, transportistaId = null, fleteUsd = 0, referenciaPago = null, formaPagoCliente = null, clienteFacturaId = null, numeroCotizacion, clienteNombre }) => {
+    mutationFn: async ({ cotizacionId, notas = null, formaPago = null, transportistaId = null, fleteUsd = 0, corteUsd = 0, referenciaPago = null, formaPagoCliente = null, clienteFacturaId = null, numeroCotizacion, clienteNombre }) => {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session?.access_token) throw new Error('No autenticado')
 
@@ -111,7 +111,7 @@ export function useCrearDespacho() {
           Authorization: `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ cotizacionId, notas: notas || null, formaPago: formaPago || null, transportistaId: transportistaId || null, fleteUsd: Number(fleteUsd) || 0, referenciaPago: referenciaPago || null, formaPagoCliente: formaPagoCliente || null, clienteFacturaId: clienteFacturaId || null }),
+        body: JSON.stringify({ cotizacionId, notas: notas || null, formaPago: formaPago || null, transportistaId: transportistaId || null, fleteUsd: Number(fleteUsd) || 0, corteUsd: Number(corteUsd) || 0, referenciaPago: referenciaPago || null, formaPagoCliente: formaPagoCliente || null, clienteFacturaId: clienteFacturaId || null }),
       })
       const result = await res.json()
       if (!res.ok) throw new Error(result.error || 'Error al crear despacho')
@@ -236,14 +236,14 @@ export function useEditarDespacho() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, notas }) => {
+    mutationFn: async ({ despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas }) => {
       const headers = await getAuthHeaders()
       if (!headers.Authorization || headers.Authorization === 'Bearer undefined') throw new Error('No autenticado')
 
       const res = await fetch(apiUrl('/api/despachos/editar-pago'), {
         method: 'POST',
         headers,
-        body: JSON.stringify({ despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, notas }),
+        body: JSON.stringify({ despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas }),
       })
       const result = await res.json()
       if (!res.ok) throw new Error(result.error || 'Error al editar despacho')
