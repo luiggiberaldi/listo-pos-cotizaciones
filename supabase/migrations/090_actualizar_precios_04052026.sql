@@ -14,8 +14,8 @@ UPDATE productos SET precio_usd = 4.4, precio_2 = 3.16, stock_actual = 9655, cat
 UPDATE productos SET precio_usd = 7.34, precio_2 = 6.66, stock_actual = 2637, categoria = 'BARRAS' WHERE codigo = 'BAR0103002'; -- BARRA REDONDA LISA 12mm X 6,00 mts
 UPDATE productos SET precio_usd = 9, precio_2 = NULL, stock_actual = 4803, categoria = 'CABILLAS' WHERE codigo = 'CAB0114004'; -- CABILLA ESTRIADA 3/8 X 12,00 mts SIDETUR
 UPDATE productos SET precio_usd = 4.5, precio_2 = NULL, stock_actual = 274, categoria = 'CABILLAS' WHERE codigo = 'CAB0114005'; -- CABILLA ESTRIADA 3/8 X 6,00 mts SIDETUR
-UPDATE productos SET precio_usd = 12, precio_2 = NULL, stock_actual = NULL, categoria = 'CABILLAS' WHERE codigo = 'CAB0114006'; -- CABILLA ESTRIADA 1/2 X 12,00 mts SIDETUR
-UPDATE productos SET precio_usd = 12, precio_2 = NULL, stock_actual = NULL, categoria = 'CABILLAS' WHERE codigo = 'CAB0114010'; -- CABILLA ESTRIADA 1/2 X 12,00 mts SIDOR
+UPDATE productos SET precio_usd = 12, precio_2 = NULL, stock_actual = 0, categoria = 'CABILLAS' WHERE codigo = 'CAB0114006'; -- CABILLA ESTRIADA 1/2 X 12,00 mts SIDETUR
+UPDATE productos SET precio_usd = 12, precio_2 = NULL, stock_actual = 0, categoria = 'CABILLAS' WHERE codigo = 'CAB0114010'; -- CABILLA ESTRIADA 1/2 X 12,00 mts SIDOR
 UPDATE productos SET precio_usd = 6, precio_2 = NULL, stock_actual = 4117, categoria = 'CABILLAS' WHERE codigo = 'CAB0114007'; -- CABILLA ESTRIADA 1/2 X 6,00 mts SIDETUR
 UPDATE productos SET precio_usd = 22, precio_2 = NULL, stock_actual = 100, categoria = 'CABILLAS' WHERE codigo = 'CAB0114009'; -- CABILLA ESTRIADA 5/8 X 12,00 mts SIDETUR
 UPDATE productos SET precio_usd = 42, precio_2 = 38, stock_actual = 1, categoria = 'CABILLAS' WHERE codigo = 'CAB0114001'; -- CABILLA ESTRIADA 1" X 12,00 mts LEVE OXIDO
@@ -50,7 +50,7 @@ UPDATE productos SET precio_usd = 100, precio_2 = NULL, stock_actual = 1, catego
 UPDATE productos SET precio_usd = 150, precio_2 = NULL, stock_actual = 1, categoria = 'LAMINAS DE TECHO' WHERE codigo = 'LAM1255005'; -- LAMINA TERMOPANEL SOLAR 5,90 X 1,04 mts
 UPDATE productos SET precio_usd = 150, precio_2 = NULL, stock_actual = 7, categoria = 'LAMINAS DE TECHO' WHERE codigo = 'LAM1255006'; -- LAMINA TERMOPANEL SOLAR 7,90 X 1,04 mts
 UPDATE productos SET precio_usd = 59.5, precio_2 = NULL, stock_actual = 168, categoria = 'LAMINAS DE TECHO' WHERE codigo = 'LAM1915006'; -- LOSACERO 6,10 X 0,80 mts CAL 20
-UPDATE productos SET precio_usd = 49.5, precio_2 = NULL, stock_actual = NULL, categoria = 'LAMINAS DE TECHO' WHERE codigo = 'LAM1915001'; -- LOSACERO 6,10 X 0,79 mts CAL 22
+UPDATE productos SET precio_usd = 49.5, precio_2 = NULL, stock_actual = 0, categoria = 'LAMINAS DE TECHO' WHERE codigo = 'LAM1915001'; -- LOSACERO 6,10 X 0,79 mts CAL 22
 UPDATE productos SET precio_usd = 43.2, precio_2 = NULL, stock_actual = 52, categoria = 'LAMINAS DE TECHO' WHERE codigo = 'LAM1915003'; -- LOSACERO 6,10 X 0,60 mts CAL 24
 UPDATE productos SET precio_usd = 44.95, precio_2 = NULL, stock_actual = 37, categoria = 'LAMINAS DE TECHO' WHERE codigo = 'LAM1915004'; -- LOSACERO 6,10 X 0,65 mts CAL 24
 UPDATE productos SET precio_usd = 46.95, precio_2 = NULL, stock_actual = 84, categoria = 'LAMINAS DE TECHO' WHERE codigo = 'LAM1915002'; -- LOSACERO 6,10 X 0,80 mts CAL 24
