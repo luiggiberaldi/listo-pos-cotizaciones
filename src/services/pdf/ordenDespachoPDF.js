@@ -165,7 +165,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   doc.rect(MARGIN + dirLblW, f5Y, CONTENT_W - dirLblW, rowH, 'S')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(9)
-  const dirStr = [cliente.direccion, cliente.ciudad, cliente.estado].filter(Boolean).join(', ') || '—'
+  const dirStr = [cliente.direccion, cliente.ciudad, cliente.estado].filter(Boolean).join(', ').toUpperCase() || '—'
   const maxDirW = CONTENT_W - dirLblW - 4
   let dStr = dirStr
   if (doc.getTextWidth(dStr) > maxDirW) {
@@ -243,7 +243,21 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   doc.setLineWidth(0.2)
   doc.setDrawColor(200, 200, 200)
 
-  items.forEach((item) => {
+  const itemsToRender = [...items]
+  const fleteVal = Number(despacho.flete_usd || 0)
+  if (fleteVal > 0) {
+    itemsToRender.push({
+      cantidad: 1,
+      codigo_snap: 'FTL1005632',
+      nombre_snap: 'SERVICIO DE FLETE (E)',
+      unidad_snap: 'GLB',
+      precio_unit_usd: fleteVal,
+      total_linea_usd: fleteVal,
+      tiene_descuento: false
+    })
+  }
+
+  itemsToRender.forEach((item) => {
     // Calcular cuántas líneas necesita la descripción
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
@@ -406,7 +420,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
 
   if (hasFleteReal) {
     doc.rect(MARGIN, desY, CONTENT_W, 7, 'S')
-    doc.text('Flete (E)', MARGIN + 4, desY + 5)
+    doc.text('Monto Exento', MARGIN + 4, desY + 5)
     doc.text(fmtTotal(flete, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, desY + 5, { align: 'right' })
     desY += 7
   }

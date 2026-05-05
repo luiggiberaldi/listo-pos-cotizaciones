@@ -676,6 +676,7 @@ async function handleAdmin(request, env, url) {
         activo: true,
         pin_hash: hash,
         pin_salt: salt,
+        cuenta_id: user.id,
         ...(color ? { color } : {}),
         ...(telefono ? { telefono: telefono.trim() } : {}),
       }),

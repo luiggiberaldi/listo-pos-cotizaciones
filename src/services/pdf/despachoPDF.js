@@ -223,7 +223,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.rect(MARGIN + dirLblW, f5Y, CONTENT_W - dirLblW, rowH, 'S')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(9)
-  const dirStr = [cliente.direccion, cliente.ciudad, cliente.estado].filter(Boolean).join(', ') || '—'
+  const dirStr = [cliente.direccion, cliente.ciudad, cliente.estado].filter(Boolean).join(', ').toUpperCase() || '—'
   const maxDirW = CONTENT_W - dirLblW - 4
   let dStr = dirStr
   if (doc.getTextWidth(dStr) > maxDirW) {
@@ -303,7 +303,21 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.setLineWidth(0.2)
   doc.setDrawColor(200, 200, 200)
 
-  items.forEach((item) => {
+  const itemsToRender = [...items]
+  const fleteVal = Number(despacho.flete_usd || 0)
+  if (fleteVal > 0) {
+    itemsToRender.push({
+      cantidad: 1,
+      codigo_snap: 'FTL1005632',
+      nombre_snap: 'SERVICIO DE FLETE (E)',
+      unidad_snap: 'GLB',
+      precio_unit_usd: fleteVal,
+      total_linea_usd: fleteVal,
+      tiene_descuento: false
+    })
+  }
+
+  itemsToRender.forEach((item) => {
     // Calcular cuántas líneas necesita la descripción
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
@@ -404,7 +418,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     { label: 'Base', value: fmtTotal(baseImponible, monedaPDF, tasa, factorBcv) },
     { label: `IVA ${ivaPct}%`, value: fmtTotal(ivaAmount, monedaPDF, tasa, factorBcv) },
   ]
-  if (hasFlete) rightItems.push({ label: 'Flete (E)', value: fmtTotal(flete, monedaPDF, tasa, factorBcv) })
+  if (hasFlete) rightItems.push({ label: 'Monto Exento', value: fmtTotal(flete, monedaPDF, tasa, factorBcv) })
   if (hasDescuento) rightItems.push({ label: 'Descuento', value: '-' + fmtTotal(descuentoTotal, monedaPDF, tasa, factorBcv), color: [180, 100, 0] })
   if (refPago) rightItems.push({ label: 'Ref:', value: refPago })
 
