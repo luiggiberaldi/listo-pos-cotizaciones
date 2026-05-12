@@ -264,11 +264,11 @@ export function useEditarItemsDespacho() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ despachoId, items }) => {
+    mutationFn: async ({ despachoId, items, pagos }) => {
       const res = await authFetch('/api/despachos/editar-items', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ despachoId, items }),
+        body: JSON.stringify({ despachoId, items, pagos }),
       })
       const result = await res.json()
       if (!res.ok) throw new Error(result.error || 'Error al editar ítems del despacho')

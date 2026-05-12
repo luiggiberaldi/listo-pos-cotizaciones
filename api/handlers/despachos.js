@@ -573,8 +573,9 @@ export async function handleEditarItemsDespacho(request, env) {
   try { body = await request.json(); }
   catch { return jsonError('Body inválido', 400, request); }
 
-  const { despachoId, items } = body;
+  const { despachoId, items, pagos } = body;
   // items: [{ producto_id, codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, descuento_pct, orden }]
+  // pagos: string (JSON stringified array of payments)
 
   if (!despachoId || !isValidUuid(despachoId)) return jsonError('despachoId inválido', 400, request);
   if (!Array.isArray(items) || items.length === 0) return jsonError('items no puede estar vacío', 400, request);
@@ -590,6 +591,7 @@ export async function handleEditarItemsDespacho(request, env) {
         p_usuario_id:     operador.id,
         p_usuario_nombre: operador.nombre,
         p_usuario_rol:    operador.rol,
+        p_forma_pago:     pagos || null
       }),
     });
 
