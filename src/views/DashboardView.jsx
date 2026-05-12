@@ -196,7 +196,7 @@ export default function DashboardView() {
             </button>
             <button onClick={() => navigate('/cotizaciones?nueva=1')}
               className="flex items-center gap-1.5 font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow active:scale-[0.98] border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
-              <FileText size={15} strokeWidth={2} />Cotización
+              <FileText size={15} strokeWidth={2} />Cotizar
             </button>
           </div>
         ) : null}
