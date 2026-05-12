@@ -59,11 +59,13 @@ deploy_ahora.bat
 !vercel.json
 !eslint.config.json
 
-# Ignorar archivos de script temporales y tests
+# Ignorar archivos de script temporales y tests específicos
 *.cjs
 *.mjs
 scratch*
-test*
+*.test.js
+*.test.jsx
+__tests__/
 *.md
 !README.md
 !ARQUITECTURA.md
