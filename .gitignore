@@ -1,0 +1,71 @@
+# Dependencias y Build
+node_modules
+dist
+dist-ssr
+.dev.vars
+dist-test-results.json
+
+# Entorno (NUNCA subir al repo)
+.env
+.env.local
+.env*.local
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo *.ntvs* *.njsproj *.sln *.sw?
+
+# Logs
+*.log
+npm-debug.log* yarn-debug.log* pnpm-debug.log*
+
+# Vercel & Cloudflare
+.vercel
+.wrangler
+
+# Archivos de datos y backups locales
+*.zip *.xls *.xlsx
+backup_*.json
+
+# Capturas y videos de trabajo
+*.mp4 *.mov
+frames/
+
+# Scripts internos (contienen credenciales y datos sensibles)
+scripts/
+.env.production
+.env.bak
+.env.secrets
+
+# Otros archivos locales sensibles o pesados
+*.txt
+*.mp4
+*.zip
+*.pdf
+ Nueva carpeta/
+
+# Ignorar el propio script de subida que tiene el token
+subir_cambios.bat
+deploy_ahora.bat
+
+# Ignorar archivos de pruebas y reportes que pueden tener data sensible (JWTs, hashes)
+*.json
+!package.json
+!package-lock.json
+!manifest.webmanifest
+!wrangler.jsonc
+!vercel.json
+!eslint.config.json
+
+# Ignorar archivos de script temporales y tests
+*.cjs
+*.mjs
+scratch*
+test*
+*.md
+!README.md
+!ARQUITECTURA.md
+!ROADMAP.md
+!BITACORA.md

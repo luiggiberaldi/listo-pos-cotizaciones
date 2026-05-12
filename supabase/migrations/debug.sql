@@ -1,0 +1,1 @@
+SELECT * FROM public.comisiones ORDER BY creado_en DESC LIMIT 1; SELECT * FROM public.cuentas_por_cobrar ORDER BY creado_en DESC LIMIT 5;
