@@ -82,13 +82,18 @@ export default function MovimientosHistorial() {
         fecha: m.creado_en,
         numero: m.numero,
         items: [],
+        esMixto: false,
       }
       loteMap.set(m.lote_id, lote)
       lotes.push(lote)
     }
-    loteMap.get(m.lote_id).items.push(m)
-    // Usar el menor numero como correlativo del lote
     const l = loteMap.get(m.lote_id)
+    l.items.push(m)
+    
+    // Detectar si el lote tiene tipos mixtos
+    if (m.tipo !== l.tipo) l.esMixto = true
+
+    // Usar el menor numero como correlativo del lote
     if (m.numero && (!l.numero || m.numero < l.numero)) {
       l.numero = m.numero
     }
@@ -205,9 +210,10 @@ export default function MovimientosHistorial() {
                   <div className={`flex items-center gap-3 px-4 py-3 ${esIngreso ? 'bg-emerald-50/50' : 'bg-red-50/50'}`}>
                     {/* Icono tipo */}
                     <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                      esIngreso ? 'bg-emerald-100' : 'bg-red-100'
+                      lote.esMixto ? 'bg-slate-100' : esIngreso ? 'bg-emerald-100' : 'bg-red-100'
                     }`}>
-                      {esIngreso
+                      {lote.esMixto ? <ArrowDownToLine size={16} className="text-slate-600 rotate-180" /> :
+                       esIngreso
                         ? <ArrowDownToLine size={16} className="text-emerald-600" />
                         : <ArrowUpFromLine size={16} className="text-red-600" />
                       }
@@ -223,9 +229,10 @@ export default function MovimientosHistorial() {
 
                         {/* Badge tipo */}
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          lote.esMixto ? 'bg-slate-200 text-slate-600' :
                           esIngreso ? 'bg-emerald-200/60 text-emerald-700' : 'bg-red-200/60 text-red-700'
                         }`}>
-                          {esIngreso ? 'INGRESO' : 'EGRESO'}
+                          {lote.esMixto ? 'MIXTO' : esIngreso ? 'INGRESO' : 'EGRESO'}
                         </span>
 
                         {/* Chip categoría motivo */}
@@ -258,9 +265,11 @@ export default function MovimientosHistorial() {
                     {/* Resumen derecha */}
                     <div className="text-right shrink-0 flex items-center gap-3">
                       <div>
-                        <span className={`text-sm font-bold ${esIngreso ? 'text-emerald-600' : 'text-red-600'}`}>
-                          {esIngreso ? '+' : '-'}{totalCantidad.toLocaleString('es-VE')}
-                        </span>
+                        {!lote.esMixto && (
+                          <span className={`text-sm font-bold ${esIngreso ? 'text-emerald-600' : 'text-red-600'}`}>
+                            {esIngreso ? '+' : '-'}{totalCantidad.toLocaleString('es-VE')}
+                          </span>
+                        )}
                         <p className="text-[10px] text-slate-400">{lote.items.length} item{lote.items.length > 1 ? 's' : ''}</p>
                       </div>
                       <div className="text-slate-300">
@@ -289,8 +298,8 @@ export default function MovimientosHistorial() {
                               <span className="text-[10px] text-slate-300 font-mono">{formatCorrelativo(m.numero)}</span>
                             )}
                           </div>
-                          <span className={`text-sm font-bold text-right ${esIngreso ? 'text-emerald-600' : 'text-red-600'}`}>
-                            {esIngreso ? '+' : '-'}{Number(m.cantidad).toLocaleString('es-VE')}
+                          <span className={`text-sm font-bold text-right ${m.tipo === 'ingreso' ? 'text-emerald-600' : 'text-red-600'}`}>
+                            {m.tipo === 'ingreso' ? '+' : '-'}{Number(m.cantidad).toLocaleString('es-VE')}
                           </span>
                           <span className="text-sm font-bold text-slate-700 text-right">
                             {Number(m.stock_nuevo).toLocaleString('es-VE')}
