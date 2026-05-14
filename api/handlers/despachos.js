@@ -181,10 +181,10 @@ export async function handleEditarPagoDespacho(request, env) {
   if (!upRes.ok) return jsonError('Error al actualizar despacho', 500, request);
 
   // Recalcular comision si ya existe (porque pudo cambiar el total o forma de pago)
-  const comRes = await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despacho_id=eq.${despachoId}&select=id`, { headers: h });
+  const comRes = await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}&select=id`, { headers: h });
   const comEntries = await comRes.json();
   if (Array.isArray(comEntries) && comEntries.length > 0) {
-    await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despacho_id=eq.${despachoId}`, {
+    await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}`, {
       method: 'DELETE', headers: h,
     });
     await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcular_comision_despacho`, {
@@ -629,10 +629,10 @@ export async function handleEditarItemsDespacho(request, env) {
     }
 
     // Recalcular comision si ya existe
-    const comRes = await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despacho_id=eq.${despachoId}&select=id`, { headers });
+    const comRes = await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}&select=id`, { headers });
     const comEntries = await comRes.json();
     if (Array.isArray(comEntries) && comEntries.length > 0) {
-      await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despacho_id=eq.${despachoId}`, {
+      await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}`, {
         method: 'DELETE', headers,
       });
       await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcular_comision_despacho`, {
@@ -779,13 +779,13 @@ export async function handleGuardarDescuentos(request, env) {
 
       // 8. Si ya existe comisión, eliminarla para recalcular con descuentos
       const comRes = await fetch(
-        `${env.SUPABASE_URL}/rest/v1/comisiones?despacho_id=eq.${despachoId}&select=id`,
+        `${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}&select=id`,
         { headers }
       );
       const comEntries = await comRes.json();
       if (Array.isArray(comEntries) && comEntries.length > 0) {
         // Eliminar comisión existente para que se recalcule
-        await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despacho_id=eq.${despachoId}`, {
+        await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}`, {
           method: 'DELETE', headers,
         });
         // Recalcular comisión con descuentos aplicados

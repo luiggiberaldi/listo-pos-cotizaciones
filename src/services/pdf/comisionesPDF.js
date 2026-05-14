@@ -431,10 +431,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
         }
       }
       const v = porVendedor[vName]
-        onClose={() => setDetalleProducto(null)}
-        producto={detalleProducto ? { ...detalleProducto, nombre: detalleProducto.nombre?.toUpperCase() } : null}
-        tasa={tasaEfectiva}
-      />
+
       const monto = c.totalcomision
       v.total += monto
       v.count++
