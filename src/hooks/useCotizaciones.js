@@ -349,7 +349,9 @@ export function useAnularCotizacion() {
         .from('cotizaciones')
         .update({ estado: 'anulada' })
         .eq('id', id)
-      if (error) throw error
+        .select('id')
+        .single()
+      if (error) throw new Error('No se pudo cancelar la cotización. Puede que ya haya sido procesada.')
       return { numero }
     },
     onSuccess: async ({ numero }) => {
@@ -380,7 +382,9 @@ export function useActualizarEstado() {
         .from('cotizaciones')
         .update({ estado })
         .eq('id', id)
-      if (error) throw error
+        .select('id')
+        .single()
+      if (error) throw new Error(`No se pudo actualizar el estado a ${estado}. Puede que la cotización haya cambiado.`)
       return { estado, numero, clienteNombre, totalUsd, vendedorId }
     },
     onSuccess: async ({ estado, numero, clienteNombre, totalUsd, vendedorId }) => {

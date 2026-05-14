@@ -1,15 +1,16 @@
 // src/components/despachos/EditDespachoModal.jsx
 // Modal para editar forma de pago, transportista y notas de un despacho pendiente
 import { useState, useEffect } from 'react'
-import { X, Pencil, Loader2, Truck, ChevronDown, StickyNote, Plus } from 'lucide-react'
+import { X, Pencil, Loader2, Truck, ChevronDown, StickyNote, Plus, User, Clock } from 'lucide-react'
 import { useTransportistas, useCrearTransportista } from '../../hooks/useTransportistas'
 import { useEditarDespacho } from '../../hooks/useDespachos'
 import { useClientes } from '../../hooks/useClientes'
 import { useFormasPago } from '../../hooks/useFormasPago'
 import { fmtUsdSimple as fmtUsd } from '../../utils/format'
-import { User } from 'lucide-react'
 import CustomSelect from '../ui/CustomSelect'
 import TransportistaFormCompact from '../transportistas/TransportistaFormCompact'
+import ClienteForm from '../clientes/ClienteForm'
+import { Modal } from '../ui/Modal'
 import { showToast } from '../ui/Toast'
 
 import { FORMAS_PAGO } from '../../constants/formasPago'
@@ -28,6 +29,7 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
   const [corteUsd, setCorteUsd] = useState('')
   const [notas, setNotas] = useState('')
   const [showNuevoTransp, setShowNuevoTransp] = useState(false)
+  const [showNuevoCliente, setShowNuevoCliente] = useState(false)
   const [nuevoError, setNuevoError] = useState('')
 
   // 1. Cálculos derivados (necesarios para el hook)
@@ -37,7 +39,7 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
 
   // 2. Hook de formas de pago
   const {
-    formasPago, setFormas, toggleForma, setMontoForma,
+    formasPago, setFormas, toggleForma, setMontoForma, updateForma,
     totalAsignado, pagoCuadrado, diferencia, hayVuelto, faltante
   } = useFormasPago(totalConFlete)
 
@@ -110,19 +112,30 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
           {/* ── 0. Cliente ── */}
           <div className="space-y-2">
             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Cliente (Facturar a nombre de...)</p>
-            <CustomSelect
-              value={clienteId}
-              onChange={setClienteId}
-              options={clientes.map(c => ({
-                value: c.id,
-                label: c.nombre,
-                sub: c.rif_cedula
-              }))}
-              placeholder="Seleccionar cliente..."
-              disabled={cargando}
-              searchable
-              icon={User}
-            />
+            <div className="flex items-center gap-1.5">
+              <div className="flex-1 min-w-0">
+                <CustomSelect
+                  value={clienteId}
+                  onChange={setClienteId}
+                  options={clientes.map(c => ({
+                    value: c.id,
+                    label: c.nombre,
+                    sub: c.rif_cedula
+                  }))}
+                  placeholder="Seleccionar cliente..."
+                  disabled={cargando}
+                  searchable
+                  icon={User}
+                />
+              </div>
+              <button type="button"
+                onClick={() => setShowNuevoCliente(true)}
+                disabled={cargando}
+                className="shrink-0 w-10 h-10 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 flex items-center justify-center transition-colors active:scale-95 disabled:opacity-50"
+                title="Crear nuevo cliente">
+                <Plus size={16} className="text-emerald-600" />
+              </button>
+            </div>
           </div>
 
           {/* ── 1. Transportista ── */}
@@ -235,30 +248,47 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
                   const restante = totalConFlete - formasPago.reduce((s, f) => s + (Number(f.monto) || 0), 0)
                   const mostrarResto = formasPago.length > 1 && (!fp.monto || Number(fp.monto) === 0) && restante > 0.01
                   return (
-                  <div key={fp.metodo} className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-slate-600 w-28 truncate">{fp.metodo}</span>
-                    <div className="relative flex-1 flex items-center">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={fp.monto}
-                        onChange={e => setMontoForma(fp.metodo, e.target.value)}
-                        onFocus={e => e.target.select()}
-                        placeholder="0.00"
-                        className="w-full pl-7 pr-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/20 focus:bg-white"
-                        disabled={cargando}
-                      />
-                      {mostrarResto && (
-                        <button type="button"
-                          onClick={() => setMontoForma(fp.metodo, Number(restante.toFixed(2)))}
-                          className="ml-1 px-2 py-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition-colors shrink-0"
-                          title={`Asignar $${restante.toFixed(2)} restante`}>
-                          Resto
-                        </button>
-                      )}
+                  <div key={fp.metodo} className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-slate-600 w-28 truncate">{fp.metodo}</span>
+                      <div className="relative flex-1 flex items-center">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={fp.monto}
+                          onChange={e => setMontoForma(fp.metodo, e.target.value)}
+                          onFocus={e => e.target.select()}
+                          placeholder="0.00"
+                          className="w-full pl-7 pr-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/20 focus:bg-white"
+                          disabled={cargando}
+                        />
+                        {mostrarResto && (
+                          <button type="button"
+                            onClick={() => setMontoForma(fp.metodo, Number(restante.toFixed(2)))}
+                            className="ml-1 px-2 py-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition-colors shrink-0"
+                            title={`Asignar $${restante.toFixed(2)} restante`}>
+                            Resto
+                          </button>
+                        )}
+                      </div>
                     </div>
+                    {fp.metodo === 'Cta por cobrar' && (
+                      <div className="flex items-center gap-2 pl-28">
+                        <span className="text-xs text-slate-500 font-medium">Días venc.:</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={fp.diasVencimiento ?? ''}
+                          onChange={e => updateForma(fp.metodo, { diasVencimiento: e.target.value ? parseInt(e.target.value) : null })}
+                          placeholder="Opcional"
+                          className="w-24 px-2 py-1.5 rounded-lg text-xs border border-slate-200 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:bg-white"
+                          disabled={cargando}
+                        />
+                      </div>
+                    )}
                   </div>
                   )
                 })}
@@ -318,6 +348,24 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
           </button>
         </div>
       </div>
+
+      {/* Modal: Nuevo Cliente */}
+      <Modal 
+        isOpen={showNuevoCliente} 
+        onClose={() => setShowNuevoCliente(false)} 
+        title="Nuevo cliente"
+        className="sm:max-w-2xl"
+      >
+        <ClienteForm 
+          onSuccess={(nuevo) => {
+            const cid = nuevo?.cliente?.id || nuevo?.id
+            if (cid) setClienteId(cid)
+            setShowNuevoCliente(false)
+          }}
+          onCancel={() => setShowNuevoCliente(false)}
+        />
+      </Modal>
+
     </div>
   )
 }

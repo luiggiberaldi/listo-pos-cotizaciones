@@ -43,7 +43,8 @@ export async function handleListarClientes(request, env) {
 
   // Fetch ALL active clients — filtrado en el Worker (in-memory, rápido)
   // limit=10000 evita el tope de 1000 filas de PostgREST
-  const baseUrl = `${env.SUPABASE_URL}/rest/v1/clientes?activo=eq.true&cuenta_id=eq.${user.id}&order=nombre.asc&limit=10000&select=id,nombre,rif_cedula,telefono,email,direccion,estado,ciudad,notas,tipo_cliente,activo,vendedor_id,saldo_pendiente,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color)`;
+  // Fetch ALL clients (incluyendo inactivos) — filtrado en el Worker
+  const baseUrl = `${env.SUPABASE_URL}/rest/v1/clientes?cuenta_id=eq.${user.id}&order=nombre.asc&limit=10000&select=id,nombre,rif_cedula,telefono,email,direccion,estado,ciudad,notas,tipo_cliente,activo,vendedor_id,saldo_pendiente,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color)`;
 
   const supaHeaders = {
     apikey: env.SUPABASE_SERVICE_KEY,
@@ -178,6 +179,193 @@ export async function handleReasignarCliente(request, env) {
   } catch (e) {
     return jsonError(e.message || 'Error al reasignar cliente', 500, request);
   }
+}
+
+export async function handleBorrarCliente(request, env) {
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { user, headers } = v;
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+  const { id } = body;
+  if (!id || !isValidUuid(id)) return jsonError('ID inválido', 400, request);
+
+  // Verificar que el cliente pertenece a este tenant
+  const cRes = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${id}&cuenta_id=eq.${user.id}&select=id,nombre,saldo_pendiente,activo&limit=1`,
+    { headers }
+  );
+  const [cliente] = await cRes.json();
+  if (!cliente) return jsonError('Cliente no encontrado', 404, request);
+
+  // NIVEL 3: Deuda activa → bloqueo total
+  if (Number(cliente.saldo_pendiente || 0) > 0) {
+    return jsonError(
+      `No se puede eliminar "${cliente.nombre}" porque tiene una deuda pendiente de $${Number(cliente.saldo_pendiente).toFixed(2)}. Sáldale la deuda primero.`,
+      409,
+      request
+    );
+  }
+
+  // NIVEL 2: ¿Tiene cotizaciones o despachos? → solo desactivar
+  const [cotRes, ndRes] = await Promise.all([
+    fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?cliente_id=eq.${id}&select=id&limit=1`, { headers }),
+    fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?cliente_id=eq.${id}&select=id&limit=1`, { headers }),
+  ]);
+  const cots = await cotRes.json();
+  const nds  = await ndRes.json();
+  const tieneHistorial = (Array.isArray(cots) && cots.length > 0) || (Array.isArray(nds) && nds.length > 0);
+
+  if (tieneHistorial) {
+    // Solo desactivar — preservar integridad histórica
+    await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${id}&cuenta_id=eq.${user.id}`, {
+      method: 'PATCH',
+      headers: { ...headers, Prefer: 'return=minimal' },
+      body: JSON.stringify({ activo: false, actualizado_en: new Date().toISOString() }),
+    });
+    return json({ accion: 'desactivado', nombre: cliente.nombre }, 200, request);
+  }
+
+  // NIVEL 1: Sin historial → borrado físico real
+  const delRes = await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${id}&cuenta_id=eq.${user.id}`, {
+    method: 'DELETE',
+    headers: { ...headers, Prefer: 'return=minimal' },
+  });
+
+  if (!delRes.ok && delRes.status !== 204) {
+    const err = await delRes.text();
+    return jsonError(`Error al borrar cliente: ${err}`, delRes.status, request);
+  }
+
+  return json({ accion: 'eliminado', nombre: cliente.nombre }, 200, request);
+}
+
+export async function handleCrearCliente(request, env) {
+
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { user, operador, headers } = v;
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+
+  const { nombre, rif_cedula, telefono, email, direccion, estado, ciudad, notas, tipo_cliente, vendedor_id } = body;
+  if (!nombre?.trim()) return jsonError('El nombre es obligatorio', 400, request);
+
+  // Verificar duplicado de RIF si se proporciona
+  if (rif_cedula?.trim()) {
+    const checkUrl = `${env.SUPABASE_URL}/rest/v1/clientes?rif_cedula=eq.${encodeURIComponent(rif_cedula.trim())}&activo=eq.true&cuenta_id=eq.${user.id}&select=id&limit=1`;
+    const checkRes = await fetch(checkUrl, { headers });
+    if (checkRes.ok) {
+      const existing = await checkRes.json();
+      if (existing.length > 0) return jsonError('Ya existe un cliente con ese RIF/cédula', 409, request);
+    }
+  }
+
+  const payload = {
+    nombre: nombre.trim(),
+    rif_cedula: rif_cedula?.trim() || null,
+    telefono: telefono?.trim() || null,
+    email: email?.trim() || null,
+    direccion: direccion?.trim() || null,
+    estado: estado?.trim() || null,
+    ciudad: ciudad?.trim() || null,
+    notas: notas?.trim() || null,
+    tipo_cliente: tipo_cliente || 'natural',
+    vendedor_id: vendedor_id || operador.id,
+    cuenta_id: user.id,
+    activo: true,
+  };
+
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/clientes`, {
+    method: 'POST',
+    headers: { ...headers, Prefer: 'return=representation' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    return jsonError(`Error al crear cliente: ${err}`, res.status, request);
+  }
+
+  const [data] = await res.json();
+  return json(data, 201, request);
+}
+
+export async function handleActualizarCliente(request, env) {
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { user, headers } = v;
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+
+  const { id, nombre, rif_cedula, telefono, email, direccion, estado, ciudad, notas, tipo_cliente } = body;
+  if (!id || !isValidUuid(id)) return jsonError('ID inválido', 400, request);
+  if (!nombre?.trim()) return jsonError('El nombre es obligatorio', 400, request);
+
+  // Verificar duplicado de RIF excluyendo este cliente
+  if (rif_cedula?.trim()) {
+    const checkUrl = `${env.SUPABASE_URL}/rest/v1/clientes?rif_cedula=eq.${encodeURIComponent(rif_cedula.trim())}&activo=eq.true&cuenta_id=eq.${user.id}&id=neq.${id}&select=id&limit=1`;
+    const checkRes = await fetch(checkUrl, { headers });
+    if (checkRes.ok) {
+      const existing = await checkRes.json();
+      if (existing.length > 0) return jsonError('Ya existe un cliente con ese RIF/cédula', 409, request);
+    }
+  }
+
+  const payload = {
+    nombre: nombre.trim(),
+    rif_cedula: rif_cedula?.trim() || null,
+    telefono: telefono?.trim() || null,
+    email: email?.trim() || null,
+    direccion: direccion?.trim() || null,
+    estado: estado?.trim() || null,
+    ciudad: ciudad?.trim() || null,
+    notas: notas?.trim() || null,
+    tipo_cliente: tipo_cliente || 'natural',
+    actualizado_en: new Date().toISOString(),
+  };
+
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${id}&cuenta_id=eq.${user.id}`, {
+    method: 'PATCH',
+    headers: { ...headers, Prefer: 'return=representation' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    return jsonError(`Error al actualizar cliente: ${err}`, res.status, request);
+  }
+
+  const [data] = await res.json();
+  return json(data, 200, request);
+}
+
+export async function handleActivarCliente(request, env) {
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { user, headers } = v;
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+  const { id } = body;
+  if (!id || !isValidUuid(id)) return jsonError('ID inválido', 400, request);
+
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${id}&cuenta_id=eq.${user.id}`, {
+    method: 'PATCH',
+    headers: { ...headers, Prefer: 'return=representation' },
+    body: JSON.stringify({ activo: true, actualizado_en: new Date().toISOString() }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    return jsonError(`Error al activar cliente: ${err}`, res.status, request);
+  }
+
+  const [data] = await res.json();
+  return json(data, 200, request);
 }
 
 export async function handleReasignarClientesBulk(request, env) {

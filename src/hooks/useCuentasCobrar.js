@@ -19,7 +19,7 @@ export function useCuentasCobrar(clienteId) {
         .from('cuentas_por_cobrar')
         .select(`
           id, cliente_id, despacho_id, tipo, monto_usd, saldo_usd,
-          forma_pago_abono, referencia, descripcion,
+          forma_pago_abono, referencia, descripcion, fecha_vencimiento,
           registrado_por, creado_en
         `)
         .eq('cliente_id', clienteId)
@@ -61,6 +61,7 @@ export function useResumenCxC() {
 
       const clientes = clientesConDeuda ?? []
       const totalDeuda = clientes.reduce((s, c) => s + Number(c.saldo_pendiente || 0), 0)
+      const promedioDeuda = clientes.length > 0 ? totalDeuda / clientes.length : 0
 
       // Obtener transacciones recientes para aging
       const clienteIds = clientes.map(c => c.id)
@@ -70,7 +71,7 @@ export function useResumenCxC() {
           const batch = clienteIds.slice(i, i + 50)
           const { data } = await supabase
             .from('cuentas_por_cobrar')
-            .select('id, cliente_id, monto_usd, saldo_usd, creado_en')
+            .select('id, cliente_id, monto_usd, saldo_usd, fecha_vencimiento, creado_en')
             .eq('tipo', 'cargo')
             .in('cliente_id', batch)
             .order('creado_en', { ascending: false })
@@ -87,11 +88,13 @@ export function useResumenCxC() {
         { rango: '90+ días', count: 0, totalUsd: 0 },
       ]
 
-      // Deduplicar por despacho (tomar solo cargos sin abono completo)
-      const cargosPorCliente = {}
+      // Dias sin pago por cliente (fecha del cargo más antiguo no cubierto)
+      const diasPorCliente = {}
       cargos.forEach(c => {
-        if (!cargosPorCliente[c.cliente_id]) cargosPorCliente[c.cliente_id] = []
-        cargosPorCliente[c.cliente_id].push(c)
+        const dias = Math.floor((now - new Date(c.creado_en)) / (1000 * 60 * 60 * 24))
+        if (!diasPorCliente[c.cliente_id] || dias > diasPorCliente[c.cliente_id]) {
+          diasPorCliente[c.cliente_id] = dias
+        }
       })
 
       cargos.forEach(c => {
@@ -110,15 +113,40 @@ export function useResumenCxC() {
         ? Math.floor((now - new Date(cargoMasAntiguo.creado_en)) / (1000 * 60 * 60 * 24))
         : 0
 
+      // Enriquecer clientes con cargos pendientes próximos a vencer
+      // Generar alertas de vencimiento (solo saldo pendiente > 0)
+      const alertasVencimiento = cargos.filter(c => {
+        if (!c.fecha_vencimiento || c.saldo_usd <= 0) return false
+        const fv = new Date(c.fecha_vencimiento)
+        const diffDays = Math.ceil((fv - now) / (1000 * 60 * 60 * 24))
+        return diffDays <= 3 // Ya venció o vence en 3 días o menos
+      }).map(c => {
+        const fv = new Date(c.fecha_vencimiento)
+        const diffDays = Math.ceil((fv - now) / (1000 * 60 * 60 * 24))
+        const cClient = clientes.find(cli => cli.id === c.cliente_id)
+        return {
+          ...c,
+          cliente_nombre: cClient ? cClient.nombre : 'Desconocido',
+          diasRestantes: diffDays
+        }
+      })
+
+      const clientesEnriquecidos = clientes.map(c => ({
+        ...c,
+        diasSinPago: diasPorCliente[c.id] ?? 0,
+      }))
+
       return {
         kpis: {
           totalDeuda,
+          promedioDeuda,
           numClientesConDeuda: clientes.length,
           diasMasAntiguo,
           numCargos: cargos.length,
         },
-        clientesConDeuda: clientes,
+        clientesConDeuda: clientesEnriquecidos,
         aging,
+        alertasVencimiento
       }
     },
     enabled: !!perfil,

@@ -6,8 +6,9 @@ import {
   Zap, User, X, Plus, Minus, Package, ArrowLeft, ArrowRight, Loader2,
   Search, CheckCircle, ShoppingCart, DollarSign, Truck, CreditCard,
   AlertCircle, ChevronRight, ChevronLeft, UserPlus, ChevronUp, Hash, FileText, Trash2, Save,
-  Download, Printer,
+  Download, Printer, MessageCircle, Clock
 } from 'lucide-react'
+import { compartirPorWhatsApp, generarMensaje } from '../utils/whatsapp'
 import { useClientes } from '../hooks/useClientes'
 import ClienteForm from '../components/clientes/ClienteForm'
 import { useInventario, useCategorias } from '../hooks/useInventario'
@@ -110,13 +111,48 @@ function ModalVentaExitosa({ data, onClose, config }) {
     } finally { setPdfLoading(false) }
   }
 
+  async function handleCompartir(tipo) {
+    setShowPdfMenu(false)
+    setPdfLoading(true)
+    try {
+      const { generarFn, despachoObj, items: pdfItems } = await fetchDespachoData(tipo)
+      const { blob, filename } = await generarFn({ despacho: despachoObj, items: pdfItems, config, formaPago: despachoObj.forma_pago || '', monedaPDF: tipo === 'orden' ? '$' : 'bs', tasa: data.tasa, tasaUsdt: data.tasaUsdt || 0, tasaBcv: data.tasaBcv || 0, returnBlob: true })
+      
+      const msg = generarMensaje({
+        nombreNegocio: config.nombre_negocio,
+        nombreCliente: data.clienteNombre,
+        numDisplay,
+        totalUsd: totalConFlete,
+        nombreVendedor: despachoObj.vendedor?.nombre,
+        tipo: tipo === 'orden' ? 'Orden de Despacho' : 'Nota de Entrega'
+      })
+
+      await compartirPorWhatsApp({
+        pdfBlob: blob,
+        pdfFilename: filename,
+        telefono: despachoObj.cliente?.telefono,
+        mensaje: msg,
+        mensajeParams: {
+          nombreNegocio: config.nombre_negocio,
+          nombreCliente: data.clienteNombre,
+          numDisplay,
+          totalUsd: totalConFlete,
+          nombreVendedor: despachoObj.vendedor?.nombre,
+          tipo: tipo === 'orden' ? 'Orden de Despacho' : 'Nota de Entrega'
+        }
+      })
+    } catch (err) {
+      showToast('Error al compartir: ' + (err.message || 'Error'), 'error')
+    } finally { setPdfLoading(false) }
+  }
+
   async function handleImprimir(tipo) {
     setShowPrintMenu(false)
     setPrintLoading(true)
     try {
       const { generarFn, despachoObj, items: pdfItems } = await fetchDespachoData(tipo)
-      const blob = await generarFn({ despacho: despachoObj, items: pdfItems, config, formaPago: despachoObj.forma_pago || '', monedaPDF: tipo === 'orden' ? '$' : 'bs', tasa: data.tasa, tasaUsdt: data.tasaUsdt || 0, tasaBcv: data.tasaBcv || 0, returnBlob: true })
-      printOrDownloadPdf(blob, `${numDisplay}-${tipo === 'orden' ? 'orden' : 'nota'}.pdf`)
+      const { blob, filename } = await generarFn({ despacho: despachoObj, items: pdfItems, config, formaPago: despachoObj.forma_pago || '', monedaPDF: tipo === 'orden' ? '$' : 'bs', tasa: data.tasa, tasaUsdt: data.tasaUsdt || 0, tasaBcv: data.tasaBcv || 0, returnBlob: true })
+      printOrDownloadPdf(blob, filename)
     } catch (err) {
       showToast('Error al imprimir: ' + (err.message || 'Error'), 'error')
     } finally { setPrintLoading(false) }
@@ -207,12 +243,31 @@ function ModalVentaExitosa({ data, onClose, config }) {
                   Descargar
                 </button>
                 {showPdfMenu && (
-                  <div className="absolute bottom-full left-0 right-0 mb-1 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-50">
-                    <button onClick={() => handleDescargar('nota')} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 text-slate-700">
-                      <FileText size={12} className="inline mr-1.5" />Nota de entrega
+                  <div className="absolute bottom-full left-0 right-0 mb-1 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-50 overflow-hidden">
+                    {/* Sección Descargas */}
+                    <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50 border-b border-slate-100 mb-1">
+                      Descargar PDF
+                    </div>
+                    <button onClick={() => handleDescargar('nota')} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 text-slate-700 flex items-center justify-between">
+                      <span><FileText size={12} className="inline mr-1.5 text-slate-400" />Nota de Entrega</span>
+                      <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-1 rounded">Bs</span>
                     </button>
-                    <button onClick={() => handleDescargar('orden')} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 text-slate-700">
-                      <Package size={12} className="inline mr-1.5" />Orden de despacho
+                    <button onClick={() => handleDescargar('orden')} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 text-slate-700 flex items-center justify-between border-b border-slate-100">
+                      <span><Package size={12} className="inline mr-1.5 text-slate-400" />Orden de Despacho</span>
+                      <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1 rounded">USD</span>
+                    </button>
+
+                    {/* Sección WhatsApp */}
+                    <div className="px-3 py-1.5 text-[10px] font-bold text-emerald-600 uppercase tracking-wider bg-emerald-50/50 border-b border-emerald-100 my-1">
+                      Enviar por WhatsApp
+                    </div>
+                    <button onClick={() => handleCompartir('nota')} className="w-full text-left px-3 py-2 text-xs hover:bg-emerald-50 text-emerald-700 flex items-center justify-between">
+                      <span><MessageCircle size={12} className="inline mr-1.5" />Compartir Nota</span>
+                      <span className="text-[9px] font-bold">WA</span>
+                    </button>
+                    <button onClick={() => handleCompartir('orden')} className="w-full text-left px-3 py-2 text-xs hover:bg-emerald-50 text-emerald-700 flex items-center justify-between">
+                      <span><MessageCircle size={12} className="inline mr-1.5" />Compartir Orden</span>
+                      <span className="text-[9px] font-bold">WA</span>
                     </button>
                   </div>
                 )}
@@ -416,7 +471,7 @@ export default function VentaRapidaView() {
   const totalParaPago = round2(totalUsd + corte)
 
   const {
-    formasPago, setFormas, toggleForma, setMontoForma, resetFormas,
+    formasPago, setFormas, toggleForma, setMontoForma, updateForma, resetFormas,
     totalAsignado: montoAsignadoVR, pagoCuadrado: pagoCuadradoVR
   } = useFormasPago(totalConFlete)
 
@@ -663,6 +718,7 @@ export default function VentaRapidaView() {
             setMobileCartOpen={setMobileCartOpen}
             step1Valid={step1Valid}
             onSiguiente={() => setStep(1)}
+            productos={productos}
           />
         )}
 
@@ -745,6 +801,11 @@ export default function VentaRapidaView() {
       )}
     </div>
   )
+}
+
+const getStockHelper = (prodId, productos = []) => {
+  const p = productos.find(x => x.id === prodId)
+  return p ? Number(p.stock_actual) || 0 : 0
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -833,6 +894,7 @@ function Step1Productos({
   mobileCartOpen, setMobileCartOpen,
   step1Valid, onSiguiente,
   preciosMap = {},
+  productos = [],
 }) {
   const [sheetState, setSheetState] = useState('closed')
   const sheetOpen = sheetState !== 'closed'
@@ -1159,7 +1221,14 @@ function Step1Productos({
                 return (
                   <div key={it.productoId} className="py-2">
                     <div className="flex items-start justify-between gap-2 mb-1">
-                      <p className="flex-1 text-[12px] font-bold text-slate-700 leading-snug">{it.nombreSnap}</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[12px] font-bold text-slate-700 leading-snug">{it.nombreSnap}</p>
+                        {it.cantidad > getStockHelper(it.productoId, productos) && (
+                          <div className="flex items-center gap-1 text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-200 mt-0.5 w-fit">
+                            <AlertCircle size={10} /> Stock insuficiente ({getStockHelper(it.productoId, productos)} disp.)
+                          </div>
+                        )}
+                      </div>
                       <span className="text-[11px] font-black text-slate-800 shrink-0">{fmtUsd(linea)}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
@@ -1346,7 +1415,14 @@ function Step1Productos({
                 return (
                   <div key={it.productoId} className="py-2">
                     <div className="flex items-start justify-between gap-2 mb-1">
-                      <p className="flex-1 text-[12px] font-bold text-slate-700 leading-snug">{it.nombreSnap}</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[12px] font-bold text-slate-700 leading-snug">{it.nombreSnap}</p>
+                        {it.cantidad > getStockHelper(it.productoId, productos) && (
+                          <div className="flex items-center gap-1 text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-200 mt-0.5 w-fit">
+                            <AlertCircle size={10} /> Stock insuficiente ({getStockHelper(it.productoId, productos)} disp.)
+                          </div>
+                        )}
+                      </div>
                       <span className="text-[11px] font-black text-slate-800 shrink-0">{fmtUsd(linea)}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
@@ -1522,31 +1598,48 @@ function Step2Pago({
             const restante = totalConFlete - formasPago.reduce((s, f) => s + (Number(f.monto) || 0), 0)
             const mostrarResto = formasPago.length > 1 && (!fp.monto || Number(fp.monto) === 0) && restante > 0.01
             return (
-            <div key={fp.metodo} className="flex items-center gap-2 bg-sky-50 border border-sky-300 rounded-xl px-3 py-2">
-              <span className="text-sm font-bold text-sky-700 w-32 shrink-0 truncate">{fp.metodo}</span>
-              <div className="relative flex-1 flex items-center">
-                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">$</span>
-                <input
-                  type="number" min="0" step="0.01"
-                  value={fp.monto}
-                  onChange={e => setMontoForma(fp.metodo, e.target.value)}
-                  onFocus={e => e.target.select()}
-                  placeholder="0.00"
-                  className="w-full pl-6 pr-2 py-1.5 rounded-lg text-sm font-semibold border border-sky-200 bg-white focus:outline-none focus:ring-2 focus:ring-sky-300 text-slate-800"
-                />
-                {mostrarResto && (
-                  <button type="button"
-                    onClick={() => setMontoForma(fp.metodo, Number(restante.toFixed(2)))}
-                    className="ml-1 px-2 py-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition-colors shrink-0"
-                    title={`Asignar $${restante.toFixed(2)} restante`}>
-                    Resto
-                  </button>
-                )}
+            <div key={fp.metodo} className="space-y-2">
+              <div className="flex items-center gap-2 bg-sky-50 border border-sky-300 rounded-xl px-3 py-2">
+                <span className="text-sm font-bold text-sky-700 w-32 shrink-0 truncate">{fp.metodo}</span>
+                <div className="relative flex-1 flex items-center">
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">$</span>
+                  <input
+                    type="number" min="0" step="0.01"
+                    value={fp.monto}
+                    onChange={e => setMontoForma(fp.metodo, e.target.value)}
+                    onFocus={e => e.target.select()}
+                    placeholder="0.00"
+                    className="w-full pl-6 pr-2 py-1.5 rounded-lg text-sm font-semibold border border-sky-200 bg-white focus:outline-none focus:ring-2 focus:ring-sky-300 text-slate-800"
+                  />
+                  {mostrarResto && (
+                    <button type="button"
+                      onClick={() => setMontoForma(fp.metodo, Number(restante.toFixed(2)))}
+                      className="ml-1 px-2 py-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition-colors shrink-0"
+                      title={`Asignar $${restante.toFixed(2)} restante`}>
+                      Resto
+                    </button>
+                  )}
+                </div>
+                <button onClick={() => toggleForma(fp.metodo)}
+                  className="p-1 rounded-lg hover:bg-sky-100 text-sky-400 hover:text-sky-600 transition-colors shrink-0">
+                  <X size={14} />
+                </button>
               </div>
-              <button onClick={() => toggleForma(fp.metodo)}
-                className="p-1 rounded-lg hover:bg-sky-100 text-sky-400 hover:text-sky-600 transition-colors shrink-0">
-                <X size={14} />
-              </button>
+              
+              {/* Opción de días de vencimiento para CxC */}
+              {fp.metodo === 'Cta por cobrar' && (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50/50 border border-amber-200/50 rounded-lg ml-6">
+                  <Clock size={12} className="text-amber-500 shrink-0" />
+                  <span className="text-[11px] font-medium text-amber-700 whitespace-nowrap">Días de vencimiento (opcional):</span>
+                  <input
+                    type="number" min="0" step="1"
+                    value={fp.diasVencimiento ?? ''}
+                    onChange={e => updateForma(fp.metodo, { diasVencimiento: e.target.value ? parseInt(e.target.value) : null })}
+                    placeholder="Ej. 15"
+                    className="w-16 px-2 py-1 rounded text-[11px] font-semibold border border-amber-200 bg-white focus:outline-none focus:ring-1 focus:ring-amber-400 text-slate-700 text-center"
+                  />
+                </div>
+              )}
             </div>
             )
           })}

@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query'
 import useAuthStore from '../store/useAuthStore'
 import supabase from '../services/supabase/client'
-import { apiUrl } from '../services/apiBase'
+import { apiUrl, getAuthHeaders } from '../services/apiBase'
 
 export const DASHBOARD_KEY = ['dashboard_metrics']
 
@@ -74,13 +74,18 @@ export function useDashboardMetrics() {
             .eq('estado', 'enviada')
             .order('total_usd', { ascending: false })
             .limit(5),
-          // Comisiones de la semana (lunes → sábado)
-          supabase
-            .from('comisiones')
-            .select('id, total_comision, estado, creado_en, vendedor_id, vendedor:usuarios(nombre, color)')
-            .gte('creado_en', lunes.toISOString())
-            .lte('creado_en', sabado.toISOString())
-            .order('creado_en', { ascending: false }),
+          // Comisiones de la semana (lunes → sábado) — vía Worker v2
+          (async () => {
+            const params = new URLSearchParams()
+            params.set('desde', lunes.toISOString().split('T')[0])
+            params.set('hasta', sabado.toISOString().split('T')[0])
+            params.set('pageSize', '200')
+            const headers = await getAuthHeaders()
+            const res = await fetch(apiUrl(`/api/comisiones/lista?${params}`), { headers })
+            if (!res.ok) return { data: [] }
+            const json = await res.json()
+            return { data: json?.data ?? [] }
+          })(),
         ])
 
         result.despachosPendientes = pendientes.count ?? 0
@@ -118,7 +123,7 @@ export function useDashboardMetrics() {
         const porVendedor = {}
         let totalSemana = 0
         for (const c of comsSemana) {
-          const vid = c.vendedor_id
+          const vid = c.vendedorid
           if (!porVendedor[vid]) {
             porVendedor[vid] = {
               nombre: c.vendedor?.nombre || '—',
@@ -126,7 +131,7 @@ export function useDashboardMetrics() {
               total: 0, pendiente: 0, pagado: 0, count: 0,
             }
           }
-          const monto = Number(c.total_comision || 0)
+          const monto = Number(c.totalcomision || 0)
           porVendedor[vid].total += monto
           porVendedor[vid].count++
           if (c.estado === 'pendiente') porVendedor[vid].pendiente += monto

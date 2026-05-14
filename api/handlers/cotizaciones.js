@@ -142,10 +142,10 @@ export async function handleReciclarCotizacion(request, env) {
     const [cotOrig] = await cotRes.json();
     if (!cotOrig) return jsonError('Cotización no encontrada', 404, request);
 
-    // 2. Validar estado
-    if (!['rechazada', 'anulada', 'vencida'].includes(cotOrig.estado)) {
-      return jsonError('Solo se pueden reciclar cotizaciones rechazadas, anuladas o vencidas', 400, request);
-    }
+    // 2. Validar estado (Removido para permitir reciclar cualquier cotización, ej: aceptada)
+    // if (!['rechazada', 'anulada', 'vencida'].includes(cotOrig.estado)) {
+    //   return jsonError('Solo se pueden reciclar cotizaciones rechazadas, anuladas o vencidas', 400, request);
+    // }
 
     // 3. Fetch vendedor destino, vendedor original, and supervisor data in parallel
     const [vendRes, vendOrigRes, supRes] = await Promise.all([

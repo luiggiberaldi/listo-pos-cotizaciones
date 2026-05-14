@@ -1,6 +1,6 @@
 // src/components/clientes/ClienteRow.jsx
 // Fila compacta de cliente para vista de lista — barra lateral color vendedor
-import { Phone, Mail, MapPin, Hash, Tag, Pencil, UserMinus, ArrowRightLeft, FileText, AlertCircle, BookOpen } from 'lucide-react'
+import { Phone, Mail, MapPin, Hash, Tag, Pencil, UserMinus, ArrowRightLeft, FileText, AlertCircle, BookOpen, Trash2, UserCheck } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtUsdSimple as fmtUsd } from '../../utils/format'
 
@@ -10,7 +10,7 @@ const TIPO_COLORS = {
   juridico: 'bg-violet-50 text-violet-700 border-violet-200',
 }
 
-export default function ClienteRow({ cliente, onEditar, onReasignar, onCotizar, onVerFicha }) {
+export default function ClienteRow({ cliente, onEditar, onReasignar, onCotizar, onVerFicha, onBorrar, onActivar }) {
   const { perfil } = useAuthStore()
   const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
   const esAdministracion = perfil?.rol === 'administracion'
@@ -18,7 +18,7 @@ export default function ClienteRow({ cliente, onEditar, onReasignar, onCotizar, 
   const color = cliente.vendedor?.color || null
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 hover:shadow-md transition-all overflow-hidden flex items-stretch"
+    <div className={`bg-white rounded-xl border border-slate-200 hover:shadow-md transition-all overflow-hidden flex items-stretch ${!cliente.activo ? 'opacity-60 grayscale-[0.5]' : ''}`}
       style={color ? { borderColor: color + '40' } : undefined}>
 
       {/* Barra lateral de color del vendedor */}
@@ -38,6 +38,11 @@ export default function ClienteRow({ cliente, onEditar, onReasignar, onCotizar, 
           {cliente.tipo_cliente && (
             <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${TIPO_COLORS[cliente.tipo_cliente] || TIPO_COLORS.natural}`}>
               <Tag size={9} />{TIPO_LABELS[cliente.tipo_cliente] || cliente.tipo_cliente}
+            </span>
+          )}
+          {!cliente.activo && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-white border border-slate-600">
+              DESACTIVADO
             </span>
           )}
         </div>
@@ -126,6 +131,18 @@ export default function ClienteRow({ cliente, onEditar, onReasignar, onCotizar, 
               <button onClick={() => onReasignar(cliente)}
                 className="p-1.5 rounded-lg text-slate-400 hover:text-sky-500 hover:bg-sky-50 transition-colors">
                 <ArrowRightLeft size={15} />
+              </button>
+            )}
+            {!cliente.activo && onActivar && (
+              <button onClick={() => onActivar(cliente)} title="Reactivar cliente"
+                className="p-1.5 rounded-lg text-emerald-500 hover:bg-emerald-50 active:bg-emerald-100 transition-colors">
+                <UserCheck size={16} />
+              </button>
+            )}
+            {(esPropio || esSupervisor) && onBorrar && cliente.activo && (
+              <button onClick={() => onBorrar(cliente)} title="Eliminar cliente"
+                className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 active:bg-red-100 transition-colors">
+                <Trash2 size={15} />
               </button>
             )}
           </>

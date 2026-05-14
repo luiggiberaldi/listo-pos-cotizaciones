@@ -136,7 +136,7 @@ export default function CestaPanel({ items, onCambiar, onEliminar, subtotal, tas
             {/* Fila 1: nombre completo + total línea */}
             <div className="flex items-start justify-between gap-2 mb-1">
               <div className="flex-1 min-w-0">
-                <p className="text-[12px] sm:text-[12px] font-bold text-slate-700 leading-snug break-words">
+                <p className="text-[12px] sm:text-[12px] font-bold text-slate-700 leading-snug break-words uppercase">
                   {it.nombreSnap}
                   {it.origen === 'externo' && (
                     <span className="inline-block ml-1.5 mb-0.5 text-[9px] uppercase tracking-wider font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded align-middle">

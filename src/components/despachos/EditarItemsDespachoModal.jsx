@@ -327,55 +327,75 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
           {/* Tabla de pagos */}
           <div className="px-6 pb-3 space-y-1.5">
             {pagos.map((p, i) => (
-              <div key={i} className="flex items-center gap-3 bg-white rounded-2xl border border-slate-200 px-4 py-2.5 shadow-sm hover:border-slate-300 transition-colors group">
+              <div key={i} className="flex flex-col gap-2 bg-white rounded-2xl border border-slate-200 px-4 py-2.5 shadow-sm hover:border-slate-300 transition-colors group">
+                <div className="flex items-center gap-3">
+                  {/* Nombre del método */}
+                  <span className="text-[11px] font-black text-slate-500 uppercase tracking-wide w-32 shrink-0">{p.metodo}</span>
 
-                {/* Nombre del método */}
-                <span className="text-[11px] font-black text-slate-500 uppercase tracking-wide w-32 shrink-0">{p.metodo}</span>
-
-                {/* Input monto — generoso y legible */}
-                <div className="flex items-center gap-1.5 flex-1">
-                  <span className="text-slate-400 text-sm font-bold shrink-0">$</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={p.monto}
-                    onChange={e => {
-                      const newPagos = [...pagos]
-                      newPagos[i] = { ...p, monto: e.target.value }
-                      setPagos(newPagos)
-                    }}
-                    className="flex-1 min-w-0 max-w-[160px] py-1.5 px-3 rounded-xl border border-slate-200 text-base font-black text-slate-800 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all bg-slate-50 focus:bg-white"
-                    placeholder="0.00"
-                  />
-                </div>
-
-                {/* Acciones */}
-                <div className="flex items-center gap-2 shrink-0">
-                  {/* +Resto */}
-                  {!totales.estaCuadrado && totales.diferencia > 0 && (
-                    <button
-                      onClick={() => {
+                  {/* Input monto — generoso y legible */}
+                  <div className="flex items-center gap-1.5 flex-1">
+                    <span className="text-slate-400 text-sm font-bold shrink-0">$</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={p.monto}
+                      onChange={e => {
                         const newPagos = [...pagos]
-                        newPagos[i] = { ...p, monto: Math.round((Number(p.monto) + totales.diferencia) * 100) / 100 }
+                        newPagos[i] = { ...p, monto: e.target.value }
                         setPagos(newPagos)
                       }}
-                      className="px-2.5 py-1 text-[11px] font-black bg-amber-50 text-amber-600 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors whitespace-nowrap"
-                      title="Añadir la diferencia pendiente a este método"
-                    >
-                      + Resto
-                    </button>
-                  )}
-                  {/* Eliminar — solo si hay más de 1 método */}
-                  {pagos.length > 1 && (
-                    <button
-                      onClick={() => setPagos(pagos.filter((_, idx) => idx !== i))}
-                      className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                      title="Eliminar este método"
-                    >
-                      <X size={14} />
-                    </button>
-                  )}
+                      className="flex-1 min-w-0 max-w-[160px] py-1.5 px-3 rounded-xl border border-slate-200 text-base font-black text-slate-800 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all bg-slate-50 focus:bg-white"
+                      placeholder="0.00"
+                    />
+                  </div>
+
+                  {/* Acciones */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {/* +Resto */}
+                    {!totales.estaCuadrado && totales.diferencia > 0 && (
+                      <button
+                        onClick={() => {
+                          const newPagos = [...pagos]
+                          newPagos[i] = { ...p, monto: Math.round((Number(p.monto) + totales.diferencia) * 100) / 100 }
+                          setPagos(newPagos)
+                        }}
+                        className="px-2.5 py-1 text-[11px] font-black bg-amber-50 text-amber-600 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors whitespace-nowrap"
+                        title="Añadir la diferencia pendiente a este método"
+                      >
+                        + Resto
+                      </button>
+                    )}
+                    {/* Eliminar — solo si hay más de 1 método */}
+                    {pagos.length > 1 && (
+                      <button
+                        onClick={() => setPagos(pagos.filter((_, idx) => idx !== i))}
+                        className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Eliminar este método"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
                 </div>
+                {/* Opcional: Días de Vencimiento para Cta por cobrar */}
+                {p.metodo === 'Cta por cobrar' && (
+                  <div className="flex items-center gap-2 pl-[140px]">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">Días venc.:</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={p.diasVencimiento || ''}
+                      onChange={e => {
+                        const newPagos = [...pagos]
+                        newPagos[i] = { ...p, diasVencimiento: e.target.value }
+                        setPagos(newPagos)
+                      }}
+                      className="w-24 px-2 py-1.5 rounded-lg text-xs font-bold border border-slate-200 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:bg-white transition-all"
+                      placeholder="Opcional"
+                    />
+                  </div>
+                )}
               </div>
             ))}
 

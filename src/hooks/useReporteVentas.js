@@ -2,6 +2,7 @@
 // Hook principal para datos del reporte de ventas
 import { useQuery } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
+import { apiUrl, getAuthHeaders } from '../services/apiBase'
 import useAuthStore from '../store/useAuthStore'
 
 export const REPORTE_KEY = ['reporte-ventas']
@@ -43,35 +44,33 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
         return q
       }
 
-      const [despachosRes, prevDespachosRes, comisionesRes, prevComisionesRes] = await Promise.all([
+      // Queries al Worker para comisiones (v2) — evita RLS directo y usa nombres v2
+      const fetchComisionesWorker = async (f, t) => {
+        const params = new URLSearchParams()
+        params.set('desde', f)
+        params.set('hasta', t)
+        params.set('pageSize', '1000')
+        if (!esPrivilegiado && perfil?.id) params.set('vendedorId', perfil.id)
+        const headers = await getAuthHeaders()
+        const res = await fetch(apiUrl(`/api/comisiones/lista?${params}`), { headers })
+        if (!res.ok) return []
+        const json = await res.json()
+        return json?.data ?? []
+      }
+
+      const [despachosRes, prevDespachosRes, comisionesData, prevComisionesData] = await Promise.all([
         buildQuery(from, to),
         buildQuery(prevFrom, prevTo),
-        (() => {
-          let q = supabase.from('comisiones')
-            .select('id, vendedor_id, total_comision, estado, creado_en')
-            .gte('creado_en', `${from}T00:00:00${tzStr}`)
-            .lte('creado_en', `${to}T23:59:59${tzStr}`)
-          if (!esPrivilegiado) q = q.eq('vendedor_id', perfil.id)
-          return q
-        })(),
-        (() => {
-          let q = supabase.from('comisiones')
-            .select('id, vendedor_id, total_comision, estado, creado_en')
-            .gte('creado_en', `${prevFrom}T00:00:00${tzStr}`)
-            .lte('creado_en', `${prevTo}T23:59:59${tzStr}`)
-          if (!esPrivilegiado) q = q.eq('vendedor_id', perfil.id)
-          return q
-        })(),
+        fetchComisionesWorker(from, to),
+        fetchComisionesWorker(prevFrom, prevTo),
       ])
 
       if (despachosRes.error) throw despachosRes.error
       if (prevDespachosRes.error) throw prevDespachosRes.error
-      if (comisionesRes.error) throw comisionesRes.error
-      if (prevComisionesRes.error) throw prevComisionesRes.error
       const despachos = despachosRes.data ?? []
       const prevDespachos = prevDespachosRes.data ?? []
-      const comisiones = comisionesRes.data ?? []
-      const prevComisiones = prevComisionesRes.data ?? []
+      const comisiones = comisionesData   // ya es array v2 directo del Worker
+      const prevComisiones = prevComisionesData
 
       // ── 2. Items de las cotizaciones de los despachos ──
       const cotIds = [...new Set(despachos.map(d => d.cotizacion_id).filter(Boolean))]
@@ -101,15 +100,15 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
       const totalDescuentos = despachos.reduce((s, d) => s + Number(d.descuento_total_usd || 0), 0)
       const numDespachos = despachos.length
       const ticketPromedio = numDespachos > 0 ? totalVentas / numDespachos : 0
-      const totalComisiones = comisiones.reduce((s, c) => s + Number(c.total_comision || 0), 0)
-      const comisionesPagadas = comisiones.filter(c => c.estado === 'pagada').reduce((s, c) => s + Number(c.total_comision || 0), 0)
-      const comisionesPendientes = comisiones.filter(c => c.estado === 'pendiente').reduce((s, c) => s + Number(c.total_comision || 0), 0)
+      const totalComisiones = comisiones.reduce((s, c) => s + Number(c.totalcomision || 0), 0)
+      const comisionesPagadas = comisiones.filter(c => c.estado === 'pagada').reduce((s, c) => s + Number(c.totalcomision || 0), 0)
+      const comisionesPendientes = comisiones.filter(c => c.estado === 'pendiente').reduce((s, c) => s + Number(c.totalcomision || 0), 0)
 
       // KPIs anteriores (para comparativo, también sin flete ni descuentos)
       const prevTotalVentas = prevDespachos.reduce((s, d) => s + (Number(d.total_usd || 0) - Number(d.flete_usd || 0) - Number(d.descuento_total_usd || 0)), 0)
       const prevNumDespachos = prevDespachos.length
       const prevTicketPromedio = prevNumDespachos > 0 ? prevTotalVentas / prevNumDespachos : 0
-      const prevTotalComisiones = prevComisiones.reduce((s, c) => s + Number(c.total_comision || 0), 0)
+      const prevTotalComisiones = prevComisiones.reduce((s, c) => s + Number(c.totalcomision || 0), 0)
 
       // Por vendedor
       const vendedorMap = {}
@@ -129,8 +128,8 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
         vendedorMap[vid].totalUsd += ventaNeta(d)
       })
       comisiones.forEach(c => {
-        if (vendedorMap[c.vendedor_id]) {
-          vendedorMap[c.vendedor_id].comision += Number(c.total_comision || 0)
+        if (vendedorMap[c.vendedorid]) {
+          vendedorMap[c.vendedorid].comision += Number(c.totalcomision || 0)
         }
       })
       const porVendedor = Object.values(vendedorMap).sort((a, b) => b.totalUsd - a.totalUsd)

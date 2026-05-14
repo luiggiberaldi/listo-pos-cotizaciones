@@ -251,10 +251,10 @@ export async function handleActualizarEstadoDespacho(request, env) {
       }
     }
 
-    // 2d. Anular: administración, supervisor, desarrollador, o vendedor dueño si está pendiente. logistica si está despachada.
+    // 2d. Anular: administración, supervisor, desarrollador, o vendedor dueño si está pendiente.
     if (nuevoEstado === 'anulada') {
       const esVendedorPropio = rolOp === 'vendedor' && desp.vendedor_id === operador.id && desp.estado === 'pendiente';
-      if (!['administracion', 'supervisor', 'desarrollador', 'logistica'].includes(rolOp) && !esVendedorPropio) {
+      if (!['administracion', 'supervisor', 'desarrollador'].includes(rolOp) && !esVendedorPropio) {
         return jsonError('No tiene permiso para anular despachos', 403, request);
       }
       if (desp.estado === 'despachada') {
@@ -384,7 +384,10 @@ export async function handleActualizarEstadoDespacho(request, env) {
     // 4. Actualizar estado
     const updateData = { estado: nuevoEstado };
     const ahora = new Date().toISOString();
-    if (nuevoEstado === 'despachada') updateData.despachada_en = ahora;
+    if (nuevoEstado === 'despachada') {
+      updateData.despachada_en = ahora;
+      updateData.aprobado_por_nombre = operador.nombre;
+    }
     if (nuevoEstado === 'entregada') {
       updateData.entregada_en = ahora;
       if (!desp.despachada_en) updateData.despachada_en = ahora; // auto-despachar
@@ -398,35 +401,49 @@ export async function handleActualizarEstadoDespacho(request, env) {
       updateData.motivo_anulacion = body.motivo_anulacion;
     }
 
-    await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}`, {
+    const patchRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}`, {
       method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
       body: JSON.stringify(updateData),
     });
+    if (!patchRes.ok) {
+      const err = await patchRes.text();
+      console.error('[DESPACHOS] Error al hacer PATCH notas_despacho:', err);
+      return jsonError(`Error BD al actualizar despacho: ${err}`, 500, request);
+    }
 
     // 5. Calcular comisión solo al confirmar entrega
     if (nuevoEstado === 'entregada') {
       try {
-        const comRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcular_comision_despacho`, {
+        const comRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcularcomisiondespacho`, {
           method: 'POST', headers,
-          body: JSON.stringify({ p_despacho_id: despachoId }),
+          body: JSON.stringify({ p_despachoid: despachoId }),
         });
         if (!comRes.ok) {
           const comErr = await comRes.text();
-          console.error(`[ENTREGA] Error al calcular comisión para despacho ${despachoId}:`, comErr);
+          console.error('[COMISION] Error al calcular:', comErr);
+        } else {
+          const comisionId = await comRes.json();
+          console.log('[COMISION] Creada con id:', comisionId);
         }
       } catch (comEx) {
-        console.error(`[ENTREGA] Excepción al calcular comisión para despacho ${despachoId}:`, comEx?.message);
+        console.error('[COMISION] Error al calcular:', comEx?.message);
       }
 
       // Registrar cargo CxC al confirmar entrega
       try {
         const fpRaw = desp.forma_pago_cliente || desp.forma_pago || '[]';
         let montoCxC = 0;
+        let diasVencimiento = null;
         try {
           const fps = JSON.parse(fpRaw);
           if (Array.isArray(fps)) {
             const cxc = fps.find(f => f.metodo === 'Cta por cobrar');
-            if (cxc) montoCxC = Number(cxc.monto) || 0;
+            if (cxc) {
+              montoCxC = Number(cxc.monto) || 0;
+              if (cxc.diasVencimiento) {
+                diasVencimiento = parseInt(cxc.diasVencimiento, 10);
+              }
+            }
           }
         } catch { if (fpRaw === 'Cta por cobrar') montoCxC = Number(desp.total_usd) || 0; }
 
@@ -447,6 +464,13 @@ export async function handleActualizarEstadoDespacho(request, env) {
             const saldoActual = Number(clienteSaldo?.saldo_pendiente || 0);
             const nuevoSaldo = saldoActual + montoCxC;
 
+            let fecha_vencimiento = null;
+            if (diasVencimiento && !isNaN(diasVencimiento)) {
+              const date = new Date();
+              date.setDate(date.getDate() + diasVencimiento);
+              fecha_vencimiento = date.toISOString().split('T')[0]; // Format YYYY-MM-DD
+            }
+
             await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
               method: 'POST', headers,
               body: JSON.stringify({
@@ -457,6 +481,7 @@ export async function handleActualizarEstadoDespacho(request, env) {
                 saldo_usd: nuevoSaldo,
                 descripcion: `Orden de despacho #${cot.numero}`,
                 registrado_por: user.operator_id,
+                fecha_vencimiento: fecha_vencimiento
               }),
             });
 

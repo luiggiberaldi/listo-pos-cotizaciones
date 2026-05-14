@@ -4,9 +4,9 @@
 // — Supervisor: ve todos los clientes + puede reasignar
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Users, Plus, Search, RefreshCw, X, LayoutGrid, List, Filter, ChevronDown, Check, AlertCircle } from 'lucide-react'
+import { Users, Plus, Search, RefreshCw, X, LayoutGrid, List, Filter, ChevronDown, Check, AlertCircle, Trash2, UserCheck } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
-import { useClientes, useVendedores } from '../hooks/useClientes'
+import { useClientes, useVendedores, useBorrarCliente, useActivarCliente } from '../hooks/useClientes'
 import ClienteCard       from '../components/clientes/ClienteCard'
 import ClienteRow        from '../components/clientes/ClienteRow'
 import ClienteForm       from '../components/clientes/ClienteForm'
@@ -109,6 +109,7 @@ export default function ClientesView() {
   const [filtroTipo, setFiltroTipo]         = useState('')
   const [filtroVendedor, setFiltroVendedor] = useState('')
   const [filtroConDeuda, setFiltroConDeuda] = useState(false)
+  const [filtroEstado, setFiltroEstado]     = useState('activos')
   const [verTodos, setVerTodos] = useState(false)
   const [vistaMode, setVistaMode] = useState(() => {
     const businessId = useAuthStore.getState().perfil?.cuenta_id
@@ -126,9 +127,14 @@ export default function ClientesView() {
   const [clienteFicha,     setClienteFicha]     = useState(null)
   const [fichaOpen,        setFichaOpen]        = useState(false)
 
+  const [clienteBorrando,  setClienteBorrando]  = useState(null)
+  const [confirmBorrarOpen, setConfirmBorrarOpen] = useState(false)
+
   // Data + mutations
   const { data: clientes = [], isLoading, isError, refetch } = useClientes(busqueda)
   const { data: vendedores = [] } = useVendedores()
+  const borrarCliente = useBorrarCliente()
+  const activarCliente = useActivarCliente()
 
   // Filtrado local
   const clientesFiltrados = useMemo(() => {
@@ -138,16 +144,21 @@ export default function ClientesView() {
       if (filtroTipo     && c.tipo_cliente !== filtroTipo)               return false
       if (filtroVendedor && c.vendedor_id  !== filtroVendedor)           return false
       if (filtroConDeuda && !(Number(c.saldo_pendiente || 0) > 0))      return false
+      
+      if (filtroEstado === 'activos' && !c.activo) return false
+      if (filtroEstado === 'desactivados' && c.activo) return false
+      
       return true
     })
-  }, [clientes, filtroTipo, filtroVendedor, filtroConDeuda, mostrarToggle, verTodos, perfil?.id])
+  }, [clientes, filtroTipo, filtroVendedor, filtroConDeuda, filtroEstado, mostrarToggle, verTodos, perfil?.id])
 
-  const hayFiltros = filtroTipo || filtroVendedor || filtroConDeuda
+  const hayFiltros = filtroTipo || filtroVendedor || filtroConDeuda || filtroEstado !== 'activos'
 
   function limpiarFiltros() {
     setFiltroTipo('')
     setFiltroVendedor('')
     setFiltroConDeuda(false)
+    setFiltroEstado('activos')
     setPagina(1)
   }
 
@@ -203,6 +214,48 @@ export default function ClientesView() {
 
   function cotizarCliente(cliente) {
     navigate(`/cotizaciones?nueva=1&cliente=${cliente.id}`)
+  }
+
+  function abrirBorrar(cliente) {
+    setClienteBorrando(cliente)
+    setConfirmBorrarOpen(true)
+  }
+
+  async function handleBorrar() {
+    if (!clienteBorrando) return
+    try {
+      const result = await borrarCliente.mutateAsync(clienteBorrando.id)
+      if (result.accion === 'eliminado') {
+        // showToast is not in scope here — the hook's onSuccess handles cache, toast from component
+        import('../components/ui/Toast').then(({ showToast }) =>
+          showToast(`"${result.nombre}" eliminado permanentemente`, 'success')
+        )
+      } else {
+        import('../components/ui/Toast').then(({ showToast }) =>
+          showToast(`"${result.nombre}" desactivado (tiene historial)`, 'warning')
+        )
+      }
+    } catch (err) {
+      import('../components/ui/Toast').then(({ showToast }) =>
+        showToast(err.message, 'error')
+      )
+    } finally {
+      setConfirmBorrarOpen(false)
+      setClienteBorrando(null)
+    }
+  }
+
+  async function handleActivar(cliente) {
+    try {
+      await activarCliente.mutateAsync(cliente.id)
+      import('../components/ui/Toast').then(({ showToast }) =>
+        showToast(`"${cliente.nombre}" activado con éxito`, 'success')
+      )
+    } catch (err) {
+      import('../components/ui/Toast').then(({ showToast }) =>
+        showToast(err.message, 'error')
+      )
+    }
   }
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -308,6 +361,17 @@ export default function ClientesView() {
           ]}
         />
 
+        {/* Estado */}
+        <Dropdown
+          value={filtroEstado}
+          onChange={v => { setFiltroEstado(v); setPagina(1) }}
+          placeholder="Todos los estados"
+          options={[
+            { value: 'activos', label: 'Solo activos' },
+            { value: 'desactivados', label: 'Solo desactivados' },
+          ]}
+        />
+
         {/* Vendedor — solo visible cuando "Todos" está activo o para admin */}
         {(!mostrarToggle || verTodos) && (
           <Dropdown
@@ -387,6 +451,8 @@ export default function ClientesView() {
                 onReasignar={abrirReasignar}
                 onCotizar={cotizarCliente}
                 onVerFicha={abrirFicha}
+                onBorrar={abrirBorrar}
+                onActivar={handleActivar}
               />
             ))}
           </div>
@@ -400,6 +466,8 @@ export default function ClientesView() {
                 onReasignar={abrirReasignar}
                 onCotizar={cotizarCliente}
                 onVerFicha={abrirFicha}
+                onBorrar={abrirBorrar}
+                onActivar={handleActivar}
               />
             ))}
           </div>
@@ -442,7 +510,23 @@ export default function ClientesView() {
         onClose={() => { setFichaOpen(false); setClienteFicha(null) }}
       />
 
-
+      {/* ── Modal: Confirmar borrado ──────────────────────────────────────── */}
+      <ConfirmModal
+        isOpen={confirmBorrarOpen}
+        onClose={() => { setConfirmBorrarOpen(false); setClienteBorrando(null) }}
+        onConfirm={handleBorrar}
+        loading={borrarCliente.isPending}
+        title="Eliminar cliente"
+        message={
+          clienteBorrando
+            ? Number(clienteBorrando.saldo_pendiente || 0) > 0
+              ? `"${clienteBorrando.nombre}" tiene deuda activa y no puede eliminarse.`
+              : `¿Eliminar a "${clienteBorrando.nombre}"? Si tiene historial de cotizaciones o despachos, quedará desactivado. Si no tiene historial, se borrará permanentemente.`
+            : ''
+        }
+        confirmLabel="Eliminar"
+        confirmVariant="danger"
+      />
 
     </div>
   )

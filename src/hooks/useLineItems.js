@@ -35,8 +35,7 @@ export function useLineItems({ withDescuento = false, checkStock = false } = {})
       if (idx !== -1) {
         // Ya existe → incrementar cantidad
         if (checkStock && prev[idx].cantidad >= stock) {
-          showToast(`Stock máximo: ${stock} ${producto.unidad ?? 'und'}`, 'error')
-          return prev
+          showToast(`Stock excedido: ${stock} disp.`, 'warning')
         }
         return prev.map((it, i) => i === idx ? { ...it, cantidad: it.cantidad + 1 } : it)
       }
@@ -73,9 +72,8 @@ export function useLineItems({ withDescuento = false, checkStock = false } = {})
       const nueva = Math.max(1, it.cantidad + delta)
       if (checkStock) {
         const stock = getStock(productoId)
-        if (nueva > stock) {
-          showToast(`Stock máximo: ${stock}`, 'error')
-          return it
+        if (nueva > stock && delta > 0) {
+          showToast(`Stock insuficiente: ${stock} disp.`, 'warning')
         }
       }
       return { ...it, cantidad: nueva }
@@ -87,8 +85,7 @@ export function useLineItems({ withDescuento = false, checkStock = false } = {})
     if (checkStock) {
       const stock = getStock(productoId)
       if (n > stock) {
-        showToast(`Stock máximo: ${stock}`, 'error')
-        n = Math.max(1, Math.floor(stock))
+        showToast(`Cantidad supera el stock (${stock})`, 'warning')
       }
     }
     setItems(prev => prev.map(it =>

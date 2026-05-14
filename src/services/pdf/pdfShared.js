@@ -136,6 +136,25 @@ export function drawAnuladaWatermark(doc) {
   } catch (_) {}
 }
 
+/** Dibuja marca de agua "APROBADO POR: [NOMBRE]" en verde, diagonal, semitransparente */
+export function drawAprobadoWatermark(doc, nombre) {
+  try {
+    doc.saveGraphicsState()
+    const gState = new doc.GState({ opacity: 0.18 })
+    doc.setGState(gState)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(24)
+    doc.setTextColor(30, 80, 160)
+    const cx = PAGE_W / 2
+    const cy = (PAGE_H / 2) + 30
+    // Ajustado para que quede más centrado y pequeño
+    doc.text(`APROBADO POR:`, cx - 6, cy - 8, { align: 'center', angle: 35 })
+    doc.setFontSize(18)
+    doc.text(`${nombre}`.toUpperCase(), cx + 6, cy + 8, { align: 'center', angle: 35 })
+    doc.restoreGraphicsState()
+  } catch (_) {}
+}
+
 /** Verifica si necesita salto de página, agrega nueva con watermark si es necesario */
 export function checkPage(doc, y, needed = 30) {
   if (y + needed > PAGE_H - 25) {

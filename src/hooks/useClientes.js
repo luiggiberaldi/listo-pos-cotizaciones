@@ -63,9 +63,10 @@ export function useCrearCliente() {
 
   return useMutation({
     mutationFn: async (campos) => {
-      const { data, error } = await supabase
-        .from('clientes')
-        .insert({
+      const res = await authFetch('/api/clientes/crear', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           nombre:      campos.nombre.trim(),
           rif_cedula:  campos.rif_cedula?.trim() || null,
           telefono:    campos.telefono?.trim() || null,
@@ -77,14 +78,11 @@ export function useCrearCliente() {
           tipo_cliente: campos.tipo_cliente || 'natural',
           vendedor_id: perfil.id,
         })
-        .select()
-        .single()
+      })
 
-      if (error) {
-        if (error.code === '23505') throw new Error('Ya existe un cliente con ese RIF/cédula')
-        throw error
-      }
-      return data
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Error al crear cliente')
+      return result
     },
     onSuccess: async () => {
       await qc.cancelQueries({ queryKey: CLIENTES_KEY })
@@ -101,9 +99,11 @@ export function useActualizarCliente() {
 
   return useMutation({
     mutationFn: async ({ id, campos }) => {
-      const { data, error } = await supabase
-        .from('clientes')
-        .update({
+      const res = await authFetch('/api/clientes/actualizar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id,
           nombre:      campos.nombre.trim(),
           rif_cedula:  campos.rif_cedula?.trim() || null,
           telefono:    campos.telefono?.trim() || null,
@@ -114,15 +114,11 @@ export function useActualizarCliente() {
           notas:       campos.notas?.trim()     || null,
           tipo_cliente: campos.tipo_cliente || 'natural',
         })
-        .eq('id', id)
-        .select()
-        .single()
+      })
 
-      if (error) {
-        if (error.code === '23505') throw new Error('Ya existe un cliente con ese RIF/cédula')
-        throw error
-      }
-      return data
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Error al actualizar cliente')
+      return result
     },
     onSuccess: async () => {
       await qc.cancelQueries({ queryKey: CLIENTES_KEY })
@@ -150,6 +146,54 @@ export function useDesactivarCliente() {
     },
   })
 }
+
+// ─── Mutation: borrar cliente (con lógica de 3 niveles en el Worker) ──────────
+// Nivel 1 (limpio)     → DELETE físico en DB
+// Nivel 2 (historial)  → soft delete (activo = false)
+// Nivel 3 (deuda)      → 409 bloqueado
+export function useBorrarCliente() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (id) => {
+      const res = await authFetch('/api/clientes/borrar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Error al eliminar cliente')
+      return result // { accion: 'eliminado' | 'desactivado', nombre }
+    },
+    onSuccess: async () => {
+      await qc.cancelQueries({ queryKey: CLIENTES_KEY })
+      qc.invalidateQueries({ queryKey: CLIENTES_KEY, exact: false })
+    },
+  })
+}
+
+// ─── Mutation: activar cliente ───────────────────────────────────────────────
+export function useActivarCliente() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (id) => {
+      const res = await authFetch('/api/clientes/activar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Error al activar cliente')
+      return result
+    },
+    onSuccess: async () => {
+      await qc.cancelQueries({ queryKey: CLIENTES_KEY })
+      qc.invalidateQueries({ queryKey: CLIENTES_KEY, exact: false })
+    },
+  })
+}
+
 
 // ─── Mutation: reasignar cliente (solo supervisor, via Worker API) ───────────
 export function useReasignarCliente() {

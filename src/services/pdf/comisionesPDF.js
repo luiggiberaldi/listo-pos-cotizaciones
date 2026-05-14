@@ -22,23 +22,33 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
     return {
       ...c,
       // Totales
-      total_com: Number(c.total_com ?? c.total_comision ?? 0),
+      totalcomision: Number(c.totalcomision || c.total_com || 0),
+      comisioncabilla: Number(c.comisioncabilla || 0),
+      comisionotros: Number(c.comisionotros || 0),
+      // Valor del item (si aplica)
+      valor: Number(c.total || 0),
+      pct: Number(c.comision_pct || c.pct || 0),
+      // Producto
+      codigo: c.codigo || '',
+      descripcion: (c.descripcion || '').toUpperCase(),
       // Número de despacho
-      despacho_numero: c.despacho_numero ?? c.despacho?.numero ?? c.notas_despacho?.numero ?? c.numero_despacho ?? '—',
-      // Estado
-      estado_comision: c.estado_comision ?? c.estado ?? '',
-      // Tasa snapshot — prioridad: snapshot RPC > snapshot cotización > tasa directa > 0
+      despachonumero: c.despachonumero || c.despacho_numero || c.despacho?.numero || '---',
+      montopagado: Number(c.montopagado || 0),
+      // Tasa
       tasa_snapshot: Number(
-        c.tasa_snapshot ?? 
-        c.despacho?.tasa_snapshot ?? 
-        c.cotizacion?.tasa_bcv_snapshot ?? 
-        c.tasa ?? 
+        c.tasa ||
+        c.tasa_snapshot || 
+        c.despacho?.tasa_snapshot || 
+        c.cotizacion?.tasa_bcv_snapshot || 
         0
       ),
+      estado: (c.estado || c.estado_comision || 'pendiente').toLowerCase(),
+      creadoen: c.fecha || c.creadoen || new Date().toISOString()
     }
   }
 
   const comisionesNorm = (comisiones || []).map(normalizarComision)
+  const esDetallado = comisionesNorm.some(c => c.descripcion) // Si hay descripciones, es el reporte por producto
 
   // ══════════════════════════════════════════════════════════════════════════
   // 1. CABECERA
@@ -107,19 +117,19 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
   // ══════════════════════════════════════════════════════════════════════════
   // 3. RESUMEN
   // ══════════════════════════════════════════════════════════════════════════
-  const pendientes = comisionesNorm.filter(c => c.estado_comision !== 'pagada')
-  const pagadas = comisionesNorm.filter(c => c.estado_comision === 'pagada')
-  const totalPendiente = pendientes.reduce((s, c) => s + c.total_com, 0)
-  const totalPagado = pagadas.reduce((s, c) => s + c.total_com, 0)
+  const pendientes = comisionesNorm.filter(c => c.estado !== 'pagada')
+  const pagadas = comisionesNorm.filter(c => c.estado === 'pagada')
+  const totalPendiente = pendientes.reduce((s, c) => s + c.totalcomision, 0)
+  const totalPagado = pagadas.reduce((s, c) => s + c.montopagado, 0)
   const totalGeneral = totalPendiente + totalPagado
 
   // Cuadro resumen
   const boxH = 18
   const boxW = CONTENT_W / 3
   const boxes = [
-    { label: 'Total acumulado', value: fmtUsd(totalGeneral), count: `${comisionesNorm.length} comisiones`, color: C_PRIMARY },
-    { label: 'Pendiente', value: fmtUsd(totalPendiente), count: `${pendientes.length} por pagar`, color: C_AMBER },
-    { label: 'Pagado', value: fmtUsd(totalPagado), count: `${pagadas.length} pagadas`, color: C_EMERALD },
+    { label: 'Generado Histórico', value: fmtUsd(totalGeneral), count: `${comisionesNorm.length} comisiones`, color: C_PRIMARY },
+    { label: 'Total Pagado', value: fmtUsd(totalPagado), count: `${pagadas.length} pagadas`, color: C_EMERALD },
+    { label: 'Saldo Pendiente', value: fmtUsd(totalPendiente), count: `${pendientes.length} por pagar`, color: C_AMBER },
   ]
 
   boxes.forEach((box, i) => {
@@ -144,63 +154,95 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
   // 4. TABLA DE COMISIONES
   // ══════════════════════════════════════════════════════════════════════════
   // Header de la tabla
-  const cols = vendedor
-    ? [
-        { label: 'Fecha', x: MARGIN, w: 16 },
-        { label: 'Doc', x: MARGIN + 16, w: 12 },
-        { label: 'Producto / Descripción', x: MARGIN + 28, w: 60 },
-        { label: 'Valor ($)', x: MARGIN + 88, w: 20 },
-        { label: '%', x: MARGIN + 108, w: 8 },
-        { label: 'Com. ($)', x: MARGIN + 116, w: 22 },
-        { label: 'Tasa', x: MARGIN + 138, w: 15 },
-        { label: 'Com. (Bs)', x: MARGIN + 153, w: 22 },
-        { label: 'Estado', x: MARGIN + 175, w: 17 },
-      ]
-    : [
-        { label: 'Vendedor', x: MARGIN, w: 22 },
-        { label: 'Fecha/Doc', x: MARGIN + 22, w: 20 },
-        { label: 'Producto / Descripción', x: MARGIN + 42, w: 50 },
-        { label: 'Valor ($)', x: MARGIN + 92, w: 18 },
-        { label: '%', x: MARGIN + 110, w: 8 },
-        { label: 'Com. ($)', x: MARGIN + 118, w: 20 },
-        { label: 'Tasa', x: MARGIN + 138, w: 15 },
-        { label: 'Com. (Bs)', x: MARGIN + 153, w: 22 },
-        { label: 'Estado', x: MARGIN + 175, w: 17 },
-      ]
+  let cols = []
+  
+  if (esDetallado) {
+    cols = vendedor
+      ? [
+          { label: 'Fecha', x: MARGIN, w: 16 },
+          { label: 'Nº Doc', x: MARGIN + 16, w: 12 },
+          { label: 'Producto / Descripción', x: MARGIN + 28, w: 55 },
+          { label: 'Valor ($)', x: MARGIN + 83, w: 15, align: 'right' },
+          { label: '%', x: MARGIN + 98, w: 8, align: 'right' },
+          { label: 'Com ($)', x: MARGIN + 106, w: 15, align: 'right' },
+          { label: 'Tasa (Bs)', x: MARGIN + 121, w: 15, align: 'right' },
+          { label: 'Com (Bs)', x: MARGIN + 136, w: 18, align: 'right' },
+          { label: 'Estado', x: MARGIN + 154, w: 18, align: 'center' },
+        ]
+      : [
+          { label: 'Vendedor', x: MARGIN, w: 18 },
+          { label: 'Nº Doc', x: MARGIN + 18, w: 12 },
+          { label: 'Producto / Descripción', x: MARGIN + 30, w: 50 },
+          { label: 'Valor ($)', x: MARGIN + 80, w: 15, align: 'right' },
+          { label: '%', x: MARGIN + 95, w: 8, align: 'right' },
+          { label: 'Com ($)', x: MARGIN + 103, w: 15, align: 'right' },
+          { label: 'Tasa (Bs)', x: MARGIN + 118, w: 15, align: 'right' },
+          { label: 'Com (Bs)', x: MARGIN + 133, w: 18, align: 'right' },
+          { label: 'Estado', x: MARGIN + 151, w: 18, align: 'center' },
+        ]
+  } else {
+    cols = vendedor
+      ? [
+          { label: 'Fecha', x: MARGIN, w: 18 },
+          { label: 'Nº Doc', x: MARGIN + 18, w: 15 },
+          { label: 'Cabilla ($)', x: MARGIN + 33, w: 22, align: 'right' },
+          { label: 'Otros ($)', x: MARGIN + 55, w: 22, align: 'right' },
+          { label: 'Total Com ($)', x: MARGIN + 77, w: 25, align: 'right' },
+          { label: 'Abonado ($)', x: MARGIN + 102, w: 22, align: 'right' },
+          { label: 'Tasa (Bs)', x: MARGIN + 124, w: 18, align: 'right' },
+          { label: 'Com. (Bs)', x: MARGIN + 142, w: 25, align: 'right' },
+          { label: 'Estado', x: MARGIN + 167, w: 25, align: 'center' },
+        ]
+      : [
+          { label: 'Vendedor', x: MARGIN, w: 25 },
+          { label: 'Fecha', x: MARGIN + 25, w: 18 },
+          { label: 'Nº Doc', x: MARGIN + 43, w: 15 },
+          { label: 'Total Com ($)', x: MARGIN + 58, w: 25, align: 'right' },
+          { label: 'Abonado ($)', x: MARGIN + 83, w: 22, align: 'right' },
+          { label: 'Tasa (Bs)', x: MARGIN + 105, w: 18, align: 'right' },
+          { label: 'Com. (Bs)', x: MARGIN + 123, w: 25, align: 'right' },
+          { label: 'Estado', x: MARGIN + 148, w: 25, align: 'center' },
+        ]
+  }
 
   function drawTableHeader(doc, yPos) {
-    doc.setFillColor(240, 242, 245)
-    doc.rect(MARGIN, yPos, CONTENT_W, 7, 'F')
+    // Solo líneas sutiles, sin fondo gris pesado
     doc.setDrawColor(210, 215, 225)
     doc.setLineWidth(0.3)
+    doc.line(MARGIN, yPos, MARGIN + CONTENT_W, yPos)
     doc.line(MARGIN, yPos + 7, MARGIN + CONTENT_W, yPos + 7)
+    
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(6.5)
     doc.setTextColor(80, 90, 110)
     cols.forEach(col => {
-      doc.text(col.label, col.x + 1, yPos + 5)
+      const align = col.align || 'left'
+      let posX = col.x + 1
+      if (align === 'right') posX = col.x + col.w - 2
+      if (align === 'center') posX = col.x + (col.w / 2)
+      doc.text(col.label, posX, yPos + 5, { align })
     })
     return yPos + 9
   }
 
   y = drawTableHeader(doc, y)
 
+  // Variables para totalizar al final
+  let sumCabillaUsd = 0
+  let sumOtrosUsd = 0
+  let sumTotalUsd = 0
+  let sumAbonadoUsd = 0
+  let sumTotalBs = 0
+
   // Filas
   comisionesNorm.forEach((c, idx) => {
-    const extras = (c.detalle_extras || []).filter(e => Number(e.monto) > 0)
-    const extrasText = extras.length > 0
-      ? extras.map(e => `${e.cat}(${e.pct}%): ${fmtUsd(e.comision)}`).join(', ')
-      : '—'
-
     const rowH = 6
     y = checkPage(doc, y, rowH + 2)
 
-    // Re-draw header si es nueva página
     if (y < MARGIN + 12) {
       y = drawTableHeader(doc, y)
     }
 
-    // Fondo alterno
     if (idx % 2 === 0) {
       doc.setFillColor(252, 252, 253)
       doc.rect(MARGIN, y - 1, CONTENT_W, rowH, 'F')
@@ -210,124 +252,169 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
     doc.setFontSize(6.5)
     doc.setTextColor(...C_DARK)
 
-    if (vendedor) {
-      doc.text(fmtFechaCorta(c.fecha || c.creado_en), cols[0].x + 1, y + 3)
-      doc.text(`#${c.despacho_numero}`, cols[1].x + 1, y + 3)
-      
-      // Producto / Descripción
-      doc.setFontSize(5.5)
-      const desc = `${c.codigo ? '['+c.codigo+'] ' : ''}${c.descripcion || '—'}`
-      const splitDesc = doc.splitTextToSize(desc, cols[2].w - 2)
-      doc.text(splitDesc, cols[2].x + 1, y + 2.5)
-      doc.setFontSize(6.5)
+    const tasa = c.tasa_snapshot
+    const comBs = tasa > 0 ? c.totalcomision * tasa : 0
+    const esPend = c.estado !== 'pagada'
+    const textoEstado = esPend ? 'Pendiente' : 'Pagada'
 
-      doc.text(fmtUsd(c.total), cols[3].x + 1, y + 3)
-      doc.text(`${c.comision_pct || 0}%`, cols[4].x + 1, y + 3)
+    // Sumar a totales
+    sumCabillaUsd += c.comisioncabilla
+    sumOtrosUsd += c.comisionotros
+    sumTotalUsd += c.totalcomision
+    sumAbonadoUsd += c.montopagado
+    sumTotalBs += comBs
 
-      doc.setFont('helvetica', 'bold')
-      doc.text(fmtUsd(c.total_com), cols[5].x + 1, y + 3)
-      
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(5.5)
-      const tasa = c.tasa_snapshot
-      doc.text(`Bs ${tasa}`, cols[6].x + 1, y + 3)
-      doc.setFontSize(6.5)
+    if (esDetallado) {
+      if (vendedor) {
+        doc.text(fmtFechaCorta(c.creadoen), cols[0].x + 1, y + 3)
+        doc.text(`#${c.despachonumero}`, cols[1].x + 1, y + 3)
+        
+        doc.setFontSize(5.5)
+        const desc = `${c.codigo ? '['+c.codigo+'] ' : ''}${c.descripcion || '—'}`
+        const splitDesc = doc.splitTextToSize(desc, cols[2].w - 2)
+        doc.text(splitDesc, cols[2].x + 1, y + 2.5)
+        doc.setFontSize(6.5)
 
-      doc.setFont('helvetica', 'bold')
-      const comBs = tasa > 0 ? c.total_com * tasa : 0
-      doc.text(fmtBs(comBs), cols[7].x + 1, y + 3)
+        doc.text(fmtUsd(c.valor), cols[3].x + cols[3].w - 2, y + 3, { align: 'right' })
+        doc.text(`${c.pct}%`, cols[4].x + cols[4].w - 2, y + 3, { align: 'right' })
+        
+        doc.setFont('helvetica', 'bold')
+        doc.text(fmtUsd(c.totalcomision), cols[5].x + cols[5].w - 2, y + 3, { align: 'right' })
+        
+        doc.setFont('helvetica', 'normal')
+        doc.text(`Bs ${tasa}`, cols[6].x + cols[6].w - 2, y + 3, { align: 'right' })
+        
+        doc.setFont('helvetica', 'bold')
+        doc.text(fmtBs(comBs), cols[7].x + cols[7].w - 2, y + 3, { align: 'right' })
 
-      // Estado
-      doc.setFontSize(5.5)
-      const esPend = c.estado_comision !== 'pagada'
-      doc.setTextColor(...(esPend ? C_AMBER : C_EMERALD))
-      doc.text(esPend ? 'Pendiente' : 'Pagada', cols[8].x + 1, y + 3)
-      doc.setFontSize(6.5)
+        // Estado
+        doc.setFontSize(6)
+        doc.setTextColor(...(esPend ? C_AMBER : C_EMERALD))
+        doc.text(textoEstado, cols[8].x + (cols[8].w / 2), y + 3, { align: 'center' })
+        doc.setFontSize(6.5)
+      } else {
+        doc.setFont('helvetica', 'bold')
+        const vName = (c.vendedornombre || c.vendedor?.nombre || '—').split(' ').slice(0, 2).join(' ')
+        doc.text(vName, cols[0].x + 1, y + 3)
+        
+        doc.setFont('helvetica', 'normal')
+        doc.text(`#${c.despachonumero}`, cols[1].x + 1, y + 3)
+
+        doc.setFontSize(5.5)
+        const desc = `${c.codigo ? '['+c.codigo+'] ' : ''}${c.descripcion || '—'}`
+        const splitDesc = doc.splitTextToSize(desc, cols[2].w - 2)
+        doc.text(splitDesc, cols[2].x + 1, y + 2.5)
+        doc.setFontSize(6.5)
+
+        doc.text(fmtUsd(c.valor), cols[3].x + cols[3].w - 2, y + 3, { align: 'right' })
+        doc.text(`${c.pct}%`, cols[4].x + cols[4].w - 2, y + 3, { align: 'right' })
+        
+        doc.setFont('helvetica', 'bold')
+        doc.text(fmtUsd(c.totalcomision), cols[5].x + cols[5].w - 2, y + 3, { align: 'right' })
+        
+        doc.setFont('helvetica', 'normal')
+        doc.text(`Bs ${tasa}`, cols[6].x + cols[6].w - 2, y + 3, { align: 'right' })
+        
+        doc.setFont('helvetica', 'bold')
+        doc.text(fmtBs(comBs), cols[7].x + cols[7].w - 2, y + 3, { align: 'right' })
+
+        doc.setFontSize(6)
+        doc.setTextColor(...(esPend ? C_AMBER : C_EMERALD))
+        doc.text(textoEstado, cols[8].x + (cols[8].w / 2), y + 3, { align: 'center' })
+        doc.setFontSize(6.5)
+      }
     } else {
-      // General: Detalle con Vendedor y Producto
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(5.5)
-      const vName = (c.asesor || c.vendedor_nombre || c.vendedor?.nombre || '—').split(' ').slice(0, 2).join(' ')
-      doc.text(vName, cols[0].x + 1, y + 3)
-      doc.setFont('helvetica', 'normal')
-      
-      const fDoc = `${fmtFechaCorta(c.fecha || c.creado_en)} / #${c.despacho_numero}`
-      doc.text(fDoc, cols[1].x + 1, y + 3)
+      if (vendedor) {
+        doc.text(fmtFechaCorta(c.creadoen), cols[0].x + 1, y + 3)
+        doc.text(`#${c.despachonumero}`, cols[1].x + 1, y + 3)
+        
+        doc.text(fmtUsd(c.comisioncabilla), cols[2].x + cols[2].w - 2, y + 3, { align: 'right' })
+        doc.text(fmtUsd(c.comisionotros), cols[3].x + cols[3].w - 2, y + 3, { align: 'right' })
+        
+        doc.setFont('helvetica', 'bold')
+        doc.text(fmtUsd(c.totalcomision), cols[4].x + cols[4].w - 2, y + 3, { align: 'right' })
+        
+        doc.setFont('helvetica', 'normal')
+        doc.text(c.montopagado > 0 ? fmtUsd(c.montopagado) : '—', cols[5].x + cols[5].w - 2, y + 3, { align: 'right' })
+        
+        doc.text(`Bs ${tasa}`, cols[6].x + cols[6].w - 2, y + 3, { align: 'right' })
+        
+        doc.setFont('helvetica', 'bold')
+        doc.text(fmtBs(comBs), cols[7].x + cols[7].w - 2, y + 3, { align: 'right' })
 
-      // Producto / Descripción
-      doc.setFontSize(5.5)
-      const desc = `${c.codigo ? '['+c.codigo+'] ' : ''}${c.descripcion || '—'}`
-      const splitDesc = doc.splitTextToSize(desc, cols[2].w - 2)
-      doc.text(splitDesc, cols[2].x + 1, y + 2.5)
-      doc.setFontSize(6.5)
+        // Estado
+        doc.setFontSize(6)
+        doc.setTextColor(...(esPend ? C_AMBER : C_EMERALD))
+        doc.text(textoEstado, cols[8].x + (cols[8].w / 2), y + 3, { align: 'center' })
+        doc.setFontSize(6.5)
+      } else {
+        // General
+        doc.setFont('helvetica', 'bold')
+        const vName = (c.vendedornombre || c.vendedor?.nombre || '—').split(' ').slice(0, 2).join(' ')
+        doc.text(vName, cols[0].x + 1, y + 3)
+        
+        doc.setFont('helvetica', 'normal')
+        doc.text(fmtFechaCorta(c.creadoen), cols[1].x + 1, y + 3)
+        doc.text(`#${c.despachonumero}`, cols[2].x + 1, y + 3)
 
-      doc.text(fmtUsd(c.total), cols[3].x + 1, y + 3)
-      doc.text(`${c.comision_pct || 0}%`, cols[4].x + 1, y + 3)
+        doc.setFont('helvetica', 'bold')
+        doc.text(fmtUsd(c.totalcomision), cols[3].x + cols[3].w - 2, y + 3, { align: 'right' })
+        
+        doc.setFont('helvetica', 'normal')
+        doc.text(c.montopagado > 0 ? fmtUsd(c.montopagado) : '—', cols[4].x + cols[4].w - 2, y + 3, { align: 'right' })
+        
+        doc.text(`Bs ${tasa}`, cols[5].x + cols[5].w - 2, y + 3, { align: 'right' })
+        
+        doc.setFont('helvetica', 'bold')
+        doc.text(fmtBs(comBs), cols[6].x + cols[6].w - 2, y + 3, { align: 'right' })
 
-      doc.setFont('helvetica', 'bold')
-      doc.text(fmtUsd(c.total_com), cols[5].x + 1, y + 3)
-
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(5.5)
-      const tasa = c.tasa_snapshot
-      doc.text(`Bs ${tasa}`, cols[6].x + 1, y + 3)
-      doc.setFontSize(6.5)
-
-      doc.setFont('helvetica', 'bold')
-      const comBs = tasa > 0 ? c.total_com * tasa : 0
-      doc.text(fmtBs(comBs), cols[7].x + 1, y + 3)
-
-      // Estado
-      doc.setFontSize(5.5)
-      const esPend = c.estado_comision !== 'pagada'
-      doc.setTextColor(...(esPend ? C_AMBER : C_EMERALD))
-      doc.text(esPend ? 'Pendiente' : 'Pagada', cols[8].x + 1, y + 3)
-      doc.setFontSize(6.5)
+        // Estado
+        doc.setFontSize(6)
+        doc.setTextColor(...(esPend ? C_AMBER : C_EMERALD))
+        doc.text(textoEstado, cols[7].x + (cols[7].w / 2), y + 3, { align: 'center' })
+        doc.setFontSize(6.5)
+      }
     }
 
     y += rowH
   })
 
-  // Línea final de la tabla
+  // Línea final y TOTALIZACIÓN
+  y = checkPage(doc, y, 10)
   doc.setDrawColor(210, 215, 225)
-  doc.setLineWidth(0.3)
+  doc.setLineWidth(0.5)
   doc.line(MARGIN, y, MARGIN + CONTENT_W, y)
   y += 4
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // 5. DETALLE DE EXTRAS POR COMISIÓN (si hay extras)
-  // ══════════════════════════════════════════════════════════════════════════
-  const conExtras = comisionesNorm.filter(c => (c.detalle_extras || []).some(e => Number(e.monto) > 0))
-  if (conExtras.length > 0) {
-    y = checkPage(doc, y, 20)
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
-    doc.setTextColor(...C_DARK)
-    doc.text('Detalle de Categorías Extra', MARGIN, y + 4)
-    y += 8
-
-    conExtras.forEach(c => {
-      const extras = (c.detalle_extras || []).filter(e => Number(e.monto) > 0)
-      y = checkPage(doc, y, 10 + extras.length * 5)
-
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(7)
-      doc.setTextColor(...C_PRIMARY)
-      const ref = `Despacho #${c.despacho_numero} / Cot. #${c.cotizacion?.numero ?? '—'}`
-      const vLabel = !vendedor ? ` — ${c.vendedor?.nombre || ''}` : ''
-      doc.text(ref + vLabel, MARGIN, y + 3)
-      y += 5
-
-      extras.forEach(e => {
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(6.5)
-        doc.setTextColor(...C_DARK)
-        doc.text(`  ${e.cat}: Monto ${fmtUsd(e.monto)} × ${e.pct}% = ${fmtUsd(e.comision)}`, MARGIN + 2, y + 3)
-        y += 5
-      })
-      y += 2
-    })
+  // Fila de gran total
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(7)
+  doc.setTextColor(...C_DARK)
+  doc.text('TOTALES:', MARGIN + 2, y + 1)
+  
+  if (esDetallado) {
+    if (vendedor) {
+      doc.text(fmtUsd(sumTotalUsd), cols[5].x + cols[5].w - 2, y + 1, { align: 'right' })
+      doc.text(fmtBs(sumTotalBs), cols[7].x + cols[7].w - 2, y + 1, { align: 'right' })
+    } else {
+      doc.text(fmtUsd(sumTotalUsd), cols[5].x + cols[5].w - 2, y + 1, { align: 'right' })
+      doc.text(fmtBs(sumTotalBs), cols[7].x + cols[7].w - 2, y + 1, { align: 'right' })
+    }
+  } else {
+    if (vendedor) {
+      doc.text(fmtUsd(sumCabillaUsd), cols[2].x + cols[2].w - 2, y + 1, { align: 'right' })
+      doc.text(fmtUsd(sumOtrosUsd), cols[3].x + cols[3].w - 2, y + 1, { align: 'right' })
+      doc.text(fmtUsd(sumTotalUsd), cols[4].x + cols[4].w - 2, y + 1, { align: 'right' })
+      doc.text(fmtUsd(sumAbonadoUsd), cols[5].x + cols[5].w - 2, y + 1, { align: 'right' })
+      doc.text(fmtBs(sumTotalBs), cols[7].x + cols[7].w - 2, y + 1, { align: 'right' })
+    } else {
+      doc.text(fmtUsd(sumTotalUsd), cols[3].x + cols[3].w - 2, y + 1, { align: 'right' })
+      doc.text(fmtUsd(sumAbonadoUsd), cols[4].x + cols[4].w - 2, y + 1, { align: 'right' })
+      doc.text(fmtBs(sumTotalBs), cols[6].x + cols[6].w - 2, y + 1, { align: 'right' })
+    }
   }
+  
+  y += 6
 
   // ══════════════════════════════════════════════════════════════════════════
   // 6. RESUMEN POR VENDEDOR (si es reporte general)
@@ -335,19 +422,23 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
   if (!vendedor) {
     const porVendedor = {}
     comisionesNorm.forEach(c => {
-      const vName = c.asesor || c.vendedor_nombre || c.vendedor?.nombre || 'Sin Asesor'
+      const vName = c.vendedornombre || c.vendedor?.nombre || 'Sin Asesor'
       if (!porVendedor[vName]) {
         porVendedor[vName] = {
           nombre: vName,
-          color: c.asesor_color || c.vendedor?.color || '#1B365D',
+          color: c.vendedorcolor || c.vendedor?.color || '#1B365D',
           total: 0, pendiente: 0, pagado: 0, count: 0,
         }
       }
       const v = porVendedor[vName]
-      const monto = c.total_com
+        onClose={() => setDetalleProducto(null)}
+        producto={detalleProducto ? { ...detalleProducto, nombre: detalleProducto.nombre?.toUpperCase() } : null}
+        tasa={tasaEfectiva}
+      />
+      const monto = c.totalcomision
       v.total += monto
       v.count++
-      if (c.estado_comision !== 'pagada') v.pendiente += monto
+      if (c.estado !== 'pagada') v.pendiente += monto
       else v.pagado += monto
     })
 

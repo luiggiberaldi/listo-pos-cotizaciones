@@ -29,7 +29,7 @@ export default function ProductCard({
   const stock = Number(p.stock_actual) || 0
   const sinStock = stock <= 0
   const sinPrecio = !p.precio_usd || Number(p.precio_usd) <= 0
-  const bloqueado = sinStock || sinPrecio
+  const bloqueado = sinPrecio
   const disponibleReal = stock - comprometido
   const tieneMultiprecios = p.precio_2 != null || p.precio_3 != null
 

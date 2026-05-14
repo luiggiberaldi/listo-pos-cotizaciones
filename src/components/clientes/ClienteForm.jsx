@@ -171,9 +171,7 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
     if (!campos.ciudad) {
       errs.ciudad = 'Selecciona una ciudad'
     }
-    if (!campos.direccion.trim()) {
-      errs.direccion = 'La dirección es obligatoria'
-    }
+    // direccion: opcional
     return errs
   }
 
@@ -375,7 +373,7 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
       </div>
 
       {/* Dirección (línea específica) */}
-      <Campo label="Dirección *" icono={MapPin} error={errores.direccion}>
+      <Campo label="Dirección" icono={MapPin} error={errores.direccion}>
         <input
           type="text"
           name="direccion"

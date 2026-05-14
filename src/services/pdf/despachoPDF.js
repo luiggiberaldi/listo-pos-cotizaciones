@@ -18,33 +18,27 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   let y = 0
 
   const numDes = `N°- ${String(despacho.cotizacion?.numero ?? despacho.numero).padStart(5, '0')}`
+  let pageNum = 1
+  // isLargeDoc se definirá después de calcular itemsToRender (con flete/corte)
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // 1. CABECERA HORIZONTAL COMPACTA (blanco y negro)
-  // ══════════════════════════════════════════════════════════════════════════
-  const HDR_H = 20
+  const drawHeader = (doc, num) => {
+    const HDR_H = 20
+    try { doc.addImage(LOGO_DESPACHO, 'PNG', MARGIN - 2, 6, 22, 22) } catch (_) {}
+    const centerX = PAGE_W / 2
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(17)
+    doc.setTextColor(...C_DARK)
+    doc.text('CONSTRUACERO CARABOBO, C.A.', centerX, 16, { align: 'center' })
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(10)
+    doc.text('RIF.: J-50115913-0', centerX, 22, { align: 'center' })
+    doc.setLineWidth(0.8)
+    doc.setDrawColor(...C_DARK)
+    doc.line(MARGIN, HDR_H + 10, PAGE_W - MARGIN, HDR_H + 10)
+    return HDR_H + 17
+  }
 
-  // Logo a la izquierda (más pequeño)
-  try { doc.addImage(LOGO_DESPACHO, 'PNG', MARGIN - 2, 6, 22, 22) } catch (_) {}
-
-  // Nombre del negocio centrado
-  const centerX = PAGE_W / 2
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(17)
-  doc.setTextColor(...C_DARK)
-  doc.text('CONSTRUACERO CARABOBO, C.A.', centerX, 16, { align: 'center' })
-
-  // RIF centrado
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(10)
-  doc.text('RIF.: J-50115913-0', centerX, 22, { align: 'center' })
-
-  // Línea separadora
-  doc.setLineWidth(0.8)
-  doc.setDrawColor(...C_DARK)
-  doc.line(MARGIN, HDR_H + 10, PAGE_W - MARGIN, HDR_H + 10)
-
-  y = HDR_H + 17
+  y = drawHeader(doc, numDes)
 
   // ── Marca de agua central ──
   drawWatermark(doc)
@@ -290,7 +284,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     { label: precioLabel,    x: MARGIN + 129,  w: 27,  align: 'center' },
     { label: totalLabel,     x: MARGIN + 156,  w: 32,  align: 'right'  },
   ]
-  const ROW_H_BASE = 6.5
+  const ROW_H_BASE = 6.0
 
   // Cabecera tabla
   doc.setFillColor(60, 60, 60)
@@ -338,15 +332,35 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     })
   }
 
+  const isLargeDoc = itemsToRender.length >= 23
+
   itemsToRender.forEach((item) => {
     // Calcular cuántas líneas necesita la descripción
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
-    const descLines = doc.splitTextToSize(item.nombre_snap || '', COLS[2].w - 4)
-    const lineH = 4.5
+    const descLines = doc.splitTextToSize((item.nombre_snap || '').toUpperCase(), COLS[2].w - 4)
+    const lineH = 4.0
     const ROW_H = Math.max(ROW_H_BASE, descLines.length * lineH + 2)
 
-    if (y + ROW_H > PAGE_H - 60) { doc.addPage(); y = MARGIN }
+    const limitY = (pageNum === 1 && isLargeDoc) ? PAGE_H - 15 : PAGE_H - 50
+    if (y + ROW_H > limitY) {
+      doc.addPage()
+      pageNum++
+      y = drawHeader(doc, numDes)
+      // Redraw table header on new page
+      doc.setFillColor(60, 60, 60)
+      doc.rect(MARGIN, y, CONTENT_W, 9, 'F')
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8.5)
+      doc.setTextColor(...C_WHITE)
+      COLS.forEach(col => {
+        let tx = col.x + 2
+        if (col.align === 'center') tx = col.x + col.w / 2
+        else if (col.align === 'right') tx = col.x + col.w - 2
+        doc.text(col.label, tx, y + 6.5, { align: col.align })
+      })
+      y += 9
+    }
 
     doc.setLineWidth(0.2)
     doc.setDrawColor(200, 200, 200)
@@ -364,7 +378,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
 
     const midY = y + ROW_H / 2 + 1.2
     doc.text(String(item.cantidad), COLS[0].x + COLS[0].w / 2, midY, { align: 'center' })
-    doc.setFontSize(8)
+    doc.setFontSize(6.5)
     doc.text(item.codigo_snap || '—', COLS[1].x + COLS[1].w / 2, midY, { align: 'center' })
     doc.setFontSize(9)
 
@@ -378,12 +392,23 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
 
     const precioText = fmtPrecio(item.precio_unit_usd, monedaPDF, tasa, factorBcv)
     const totalText = fmtPrecio(item.total_linea_usd, monedaPDF, tasa, factorBcv)
-    doc.setFontSize(10.5)
-    doc.text(precioText, COLS[4].x + COLS[4].w - 2, midY, { align: 'right' })
 
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(10.5)
-    doc.text(totalText, COLS[5].x + COLS[5].w - 2, midY, { align: 'right' })
+    // Auto-reducir fuente si el texto no cabe
+    const fitTextCol = (text, col, baseFontSize, bold) => {
+      const maxW = col.w - 4
+      let fs = baseFontSize
+      doc.setFont('helvetica', bold ? 'bold' : 'normal')
+      while (fs > 6) {
+        doc.setFontSize(fs)
+        if (doc.getTextWidth(text) <= maxW) break
+        fs -= 0.5
+      }
+      doc.setFontSize(fs)
+      doc.text(text, col.x + col.w - 2, midY, { align: 'right' })
+    }
+
+    fitTextCol(precioText, COLS[4], 10.5, false)
+    fitTextCol(totalText, COLS[5], 10.5, true)
     doc.setFontSize(9)
 
     y += ROW_H
@@ -392,6 +417,13 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   y += 2
 
   // ── Layout fijo: posiciones calculadas desde el fondo ──
+  // Si es un documento grande y todavía estamos en la página 1, forzamos página para los totales
+  if (isLargeDoc && pageNum === 1) {
+    doc.addPage()
+    pageNum++
+    y = drawHeader(doc, numDes)
+  }
+
   const sloganY = PAGE_H - 33
 
   const total = Number(despacho.total_usd || 0)
@@ -556,7 +588,13 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   // ══════════════════════════════════════════════════════════════════════════
   // Footer SOLO en la última página — en páginas intermedias el espacio queda libre
   const totalPages = doc.internal.getNumberOfPages()
-  doc.setPage(totalPages)
+  // Si es documento grande, asegurar que el footer NO esté en la página 1 aunque sea la única (poco probable por el force addPage anterior)
+  if (isLargeDoc && totalPages === 1) {
+    doc.addPage()
+    doc.setPage(2)
+  } else {
+    doc.setPage(totalPages)
+  }
   const ph = PAGE_H
   {
 
@@ -593,6 +631,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const clienteNombreDes = ((despacho.cliente_factura || despacho.cliente)?.nombre || 'cliente').replace(/[^a-zA-Z0-9à-ÿ\s]/g, '').trim().replace(/\s+/g, '_').toUpperCase()
   const fechaDes = (despacho.creado_en || new Date().toISOString()).slice(0, 10)
   const filename = `${numDes.replace(/ /g, '_')}_${clienteNombreDes}_${fechaDes}.pdf`
-  if (returnBlob) return doc.output('blob')
+  if (returnBlob) return { blob: doc.output('blob'), filename }
   doc.save(filename)
+  return { filename }
 }

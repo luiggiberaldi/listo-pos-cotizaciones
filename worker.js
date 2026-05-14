@@ -14,11 +14,11 @@ import { verifyAuth, getOperatorRole, verifySupervisor, verifyPrivileged, valida
 import { groqFetch, groqCounters } from './api/lib/groq.js'
 import { logToSystem, registrarAuditoria } from './api/lib/audit.js'
 import { sendWebPush } from './api/lib/webpush.js'
-import { handleListarClientes, handleCheckRif, handleClientesLookup, handleReasignarCliente, handleReasignarClientesBulk } from './api/handlers/clientes.js'
+import { handleListarClientes, handleCheckRif, handleClientesLookup, handleReasignarCliente, handleReasignarClientesBulk, handleCrearCliente, handleActualizarCliente, handleBorrarCliente, handleActivarCliente } from './api/handlers/clientes.js'
 import { handlePush } from './api/handlers/push.js'
 import { handleLogFromClient, handleGetLogs, handleGetLogStats, handleDownloadLogs, handleAnalyzeLogs, handlePurgeLogs } from './api/handlers/logs.js'
 import { handleGetAudit, handleGetAuditStats, handleAnalyzeAudit } from './api/handlers/audit.js'
-import { handleMarcarComisionPagada, handleGetComisionesConfig, handleGetComisiones, handleGetComisionesResumen } from './api/handlers/comisiones.js'
+import { handleMarcarComisionPagada, handleActualizarEstadoComision, handleGetComisionesConfig, handleGetComisiones, handleGetComisionesResumen } from './api/handlers/comisiones.js'
 import { handleRegistrarAbono } from './api/handlers/cxc.js'
 import { handleSwitchOperator, handleClearOperator, handleGetOperators, handleSuperAdmin } from './api/handlers/auth-operators.js'
 import { handleBuscarProductosHibrido, handleSyncEmbeddings, handleParseMaterialText, handleAplicarMovimientoLote, handleClearInventory, handlePdfTemp } from './api/handlers/inventario.js'
@@ -169,6 +169,26 @@ export default {
       return handleReasignarClientesBulk(request, env);
     }
 
+    // ── API: borrar cliente (con validación de niveles) ──────────────────────
+    if (url.pathname === '/api/clientes/borrar' && request.method === 'POST') {
+      return handleBorrarCliente(request, env);
+    }
+
+    // ── API: activar cliente ───────────────────────────────────────────────
+    if (url.pathname === '/api/clientes/activar' && request.method === 'POST') {
+      return handleActivarCliente(request, env);
+    }
+
+    // ── API: crear cliente (bypass RLS) ────────────────────────────────────
+    if (url.pathname === '/api/clientes/crear' && request.method === 'POST') {
+      return handleCrearCliente(request, env);
+    }
+
+    // ── API: actualizar cliente (bypass RLS) ───────────────────────────────
+    if (url.pathname === '/api/clientes/actualizar' && request.method === 'POST') {
+      return handleActualizarCliente(request, env);
+    }
+
     // ── API: registrar abono CxC (bypass RLS) ──────────────────────────────
     if (url.pathname === '/api/cxc/abono' && request.method === 'POST') {
       return handleRegistrarAbono(request, env);
@@ -197,6 +217,10 @@ export default {
     // ── API: marcar comisión pagada (bypass RLS) ────────────────────────────
     if (url.pathname === '/api/comisiones/pagar' && request.method === 'POST') {
       return handleMarcarComisionPagada(request, env);
+    }
+
+    if (url.pathname === '/api/comisiones/estado' && request.method === 'POST') {
+      return handleActualizarEstadoComision(request, env);
     }
 
     // ── API: aplicar movimiento de inventario (bypass RLS) ──────────────────

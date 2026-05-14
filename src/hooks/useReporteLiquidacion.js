@@ -2,6 +2,7 @@
 // Hook para el reporte de Liquidación: ventas entregadas + comisiones por asesor
 import { useQuery } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
+import { apiUrl, getAuthHeaders } from '../services/apiBase'
 import useAuthStore from '../store/useAuthStore'
 
 export function useReporteLiquidacion({ fechaInicio, fechaFin, vendedorId } = {}) {
@@ -35,17 +36,16 @@ export function useReporteLiquidacion({ fechaInicio, fechaFin, vendedorId } = {}
       const { data: despachos = [], error: errDespachos } = await despachoQuery
       if (errDespachos) throw errDespachos
 
-      // ── 2. Comisiones en el período ────────────────────────────────────────
-      let comisionQuery = supabase
-        .from('comisiones')
-        .select('id, vendedor_id, cotizacion_id, total_comision, porcentaje, estado, creado_en, tasa_bcv')
-        .gte('creado_en', `${fechaInicio}T00:00:00${tzStr}`)
-        .lte('creado_en', `${fechaFin}T23:59:59${tzStr}`)
-
-      if (vendedorId) comisionQuery = comisionQuery.eq('vendedor_id', vendedorId)
-
-      const { data: comisiones = [], error: errComisiones } = await comisionQuery
-      if (errComisiones) throw errComisiones
+      // ── 2. Comisiones en el período — vía Worker v2 ────────────────────────
+      const comisionParams = new URLSearchParams()
+      comisionParams.set('desde', fechaInicio)
+      comisionParams.set('hasta', fechaFin)
+      comisionParams.set('pageSize', '1000')
+      if (vendedorId) comisionParams.set('vendedorId', vendedorId)
+      const comHeaders = await getAuthHeaders()
+      const comRes = await fetch(apiUrl(`/api/comisiones/lista?${comisionParams}`), { headers: comHeaders })
+      const comJson = comRes.ok ? await comRes.json() : { data: [] }
+      const comisiones = comJson?.data ?? []
 
       // ── 3. Items de cotizaciones para detalle por artículo ─────────────────
       const cotIds = [...new Set(despachos.map(d => d.cotizacion_id).filter(Boolean))]
@@ -65,7 +65,7 @@ export function useReporteLiquidacion({ fechaInicio, fechaFin, vendedorId } = {}
       // ── 4. Mapear comisiones por cotizacion_id para consulta rápida ─────────
       const comisionPorCot = {}
       comisiones.forEach(c => {
-        comisionPorCot[c.cotizacion_id] = c
+        comisionPorCot[c.cotizacionid] = c
       })
 
       // ── 5. Construir registros enriquecidos con items y comisión ─────────────
@@ -104,7 +104,7 @@ export function useReporteLiquidacion({ fechaInicio, fechaFin, vendedorId } = {}
         grupo.ventas.push(r)
         grupo.totalVentas += r.ventaNeta
         if (r.comision) {
-          const monto = Number(r.comision.total_comision || 0)
+          const monto = Number(r.comision.totalcomision || 0)
           grupo.totalComisiones += monto
           if (r.comision.estado === 'pagada')    grupo.totalPagado    += monto
           else                                   grupo.totalPendiente += monto
@@ -116,9 +116,9 @@ export function useReporteLiquidacion({ fechaInicio, fechaFin, vendedorId } = {}
 
       // ── 7. KPIs globales ─────────────────────────────────────────────────────
       const totalVentas      = registros.reduce((s, r) => s + r.ventaNeta, 0)
-      const totalComisiones  = comisiones.reduce((s, c) => s + Number(c.total_comision || 0), 0)
-      const totalPagado      = comisiones.filter(c => c.estado === 'pagada').reduce((s, c) => s + Number(c.total_comision || 0), 0)
-      const totalPendiente   = comisiones.filter(c => c.estado === 'pendiente').reduce((s, c) => s + Number(c.total_comision || 0), 0)
+      const totalComisiones  = comisiones.reduce((s, c) => s + Number(c.totalcomision || 0), 0)
+      const totalPagado      = comisiones.filter(c => c.estado === 'pagada').reduce((s, c) => s + Number(c.totalcomision || 0), 0)
+      const totalPendiente   = comisiones.filter(c => c.estado === 'pendiente').reduce((s, c) => s + Number(c.totalcomision || 0), 0)
 
       return {
         kpis: { totalVentas, totalComisiones, totalPagado, totalPendiente },

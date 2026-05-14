@@ -51,8 +51,7 @@ async function subirPdfTemporal(pdfBlob, pdfFilename) {
 /**
  * Genera el mensaje para WhatsApp (con link al PDF)
  */
-export function generarMensaje({ nombreNegocio, nombreCliente, numDisplay, totalUsd, nombreVendedor, items = [], pdfUrl = null }) {
-  const total = `$${Number(totalUsd || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+export function generarMensaje({ nombreNegocio, nombreCliente, numDisplay, totalUsd, nombreVendedor, items = [], pdfUrl = null, tipo = 'cotización' }) {
   const empresa = nombreNegocio || 'Construacero Carabobo'
   const saludo = nombreCliente ? `Estimado/a *${nombreCliente}*,` : 'Estimado/a cliente,'
 
@@ -60,24 +59,14 @@ export function generarMensaje({ nombreNegocio, nombreCliente, numDisplay, total
     ? `Atentamente,\n*${nombreVendedor}*\n_${empresa}_`
     : `Atentamente,\n_${empresa}_`
 
+  const sustantivo = tipo.toLowerCase().includes('orden') ? 'la orden de despacho' : (tipo.toLowerCase().includes('nota') || tipo.toLowerCase().includes('despacho')) ? 'el despacho' : 'la cotización'
   const intro = nombreVendedor
-    ? `Le saluda *${nombreVendedor}* de *${empresa}*. Le enviamos la cotizacion *${numDisplay}*:`
-    : `Le enviamos la cotizacion *${numDisplay}* de *${empresa}*:`
-
-  const lineasProductos = items.slice(0, 15).map(it => {
-    const cant = Number(it.cantidad || 1)
-    const precio = Number(it.precio_unit_usd || it.precioUnitUsd || 0)
-    const subtotal = cant * precio
-    return `- ${it.nombre_snap || it.nombreSnap} x${cant} -- *$${subtotal.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}*`
-  })
-
-  const hayMas = items.length > 15
-    ? `_...y ${items.length - 15} producto(s) mas (ver PDF adjunto)_`
-    : ''
+    ? `Le saluda *${nombreVendedor}* de *${empresa}*. Le enviamos ${sustantivo} *${numDisplay}*:`
+    : `Le enviamos ${sustantivo} *${numDisplay}* de *${empresa}*:`
 
   const pdfLine = pdfUrl
-    ? `*Pulse aca para ver su cotizacion:*\n${pdfUrl}`
-    : 'Adjunto encontrara el documento PDF para su revision.'
+    ? `*Pulse acá para ver su ${tipo.toLowerCase()}:*\n${pdfUrl}`
+    : 'Adjunto encontrará el documento PDF para su revisión.'
 
   return [
     saludo,
@@ -86,7 +75,7 @@ export function generarMensaje({ nombreNegocio, nombreCliente, numDisplay, total
     '',
     pdfLine,
     '',
-    'Quedamos a su disposicion para cualquier consulta.',
+    'Quedamos a su disposición para cualquier consulta.',
     '',
     firma,
   ].filter(l => l !== null && l !== undefined).join('\n')

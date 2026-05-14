@@ -140,10 +140,12 @@ export default function ConfirmModal({
             <button
               onClick={handleConfirm}
               disabled={loading}
-              className="flex-1 py-3 text-sm font-bold text-white rounded-xl active:scale-95 transition-all disabled:opacity-70 flex items-center justify-center gap-2"
+              className="flex-1 h-11 text-sm font-bold text-white rounded-xl active:scale-95 transition-all disabled:opacity-70 flex items-center justify-center"
               style={v.btnStyle}>
-              {loading && <Loader2 size={14} className="animate-spin" />}
-              {confirmText}
+              {loading
+                ? <Loader2 size={18} className="animate-spin" />
+                : <span className="px-2 text-center leading-snug">{confirmText}</span>
+              }
             </button>
           </div>
         </div>

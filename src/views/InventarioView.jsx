@@ -291,12 +291,14 @@ export default function InventarioView() {
           </button>
 
           <div className="flex items-center gap-2 shrink-0 ml-auto">
-            {/* Botón Procesar Lista */}
+            {/* Botón Procesar Lista (Oculto temporalmente) */}
+            {/* 
             <button type="button" onClick={() => setShowBusquedaLista(true)} title="Procesar lista de cliente"
               className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-colors border bg-white border-slate-200 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-300 shrink-0">
               <ClipboardPaste size={14} />
               <span className="hidden sm:inline">Procesar Lista</span>
             </button>
+            */}
 
             {/* Botón Lista de Precios */}
             <button type="button" onClick={() => setShowListaPrecios(true)} title="Lista de precios PDF"
@@ -492,7 +494,7 @@ export default function InventarioView() {
       <ProductoDetalleModal
         isOpen={!!detalleProducto}
         onClose={() => setDetalleProducto(null)}
-        producto={detalleProducto}
+        producto={detalleProducto ? { ...detalleProducto, nombre: detalleProducto.nombre?.toUpperCase() } : null}
         tasa={tasaEfectiva}
       />
 

@@ -1,6 +1,6 @@
 // src/components/clientes/ClienteCard.jsx
 // Tarjeta de cliente — color header strip del vendedor asignado
-import { Phone, Mail, MapPin, Hash, Tag, Pencil, UserMinus, ArrowRightLeft, FileText, AlertCircle, BookOpen } from 'lucide-react'
+import { Phone, Mail, MapPin, Hash, Tag, Pencil, UserMinus, ArrowRightLeft, FileText, AlertCircle, BookOpen, Trash2, UserCheck } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtUsdSimple as fmtUsd } from '../../utils/format'
 
@@ -23,7 +23,7 @@ function getIniciales(nombre = '') {
   return nombre.slice(0, 2).toUpperCase()
 }
 
-export default function ClienteCard({ cliente, onEditar, onReasignar, onCotizar, onVerFicha }) {
+export default function ClienteCard({ cliente, onEditar, onReasignar, onCotizar, onVerFicha, onBorrar, onActivar }) {
   const { perfil } = useAuthStore()
   const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
   const esAdministracion = perfil?.rol === 'administracion'
@@ -31,7 +31,7 @@ export default function ClienteCard({ cliente, onEditar, onReasignar, onCotizar,
   const color        = cliente.vendedor?.color || '#64748b'
 
   return (
-    <div className="group bg-white rounded-2xl border border-slate-200 hover:shadow-lg transition-all duration-200 overflow-hidden flex flex-col"
+    <div className={`group bg-white rounded-2xl border border-slate-200 hover:shadow-lg transition-all duration-200 overflow-hidden flex flex-col ${!cliente.activo ? 'opacity-60 grayscale-[0.5]' : ''}`}
       style={{ '--card-color': color }}>
 
       {/* ── Header strip con color del vendedor ── */}
@@ -63,6 +63,13 @@ export default function ClienteCard({ cliente, onEditar, onReasignar, onCotizar,
           <span className="relative z-10 ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full"
             style={{ background: 'rgba(255,255,255,0.25)', color: 'white', border: '1px solid rgba(255,255,255,0.4)' }}>
             {TIPO_LABELS[cliente.tipo_cliente] || cliente.tipo_cliente}
+          </span>
+        )}
+
+        {/* Badge Desactivado */}
+        {!cliente.activo && (
+          <span className="relative z-10 ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-white border border-slate-600">
+            DESACTIVADO
           </span>
         )}
       </div>
@@ -165,6 +172,18 @@ export default function ClienteCard({ cliente, onEditar, onReasignar, onCotizar,
           <button onClick={() => onReasignar(cliente)} title="Reasignar cliente"
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
             <ArrowRightLeft size={14} />
+          </button>
+        )}
+        {!cliente.activo && onActivar && (
+          <button onClick={() => onActivar(cliente)} title="Reactivar cliente"
+            className="p-1.5 rounded-lg text-emerald-500 hover:bg-emerald-50 active:bg-emerald-100 transition-colors">
+            <UserCheck size={14} />
+          </button>
+        )}
+        {!esAdministracion && (esPropio || esSupervisor) && onBorrar && cliente.activo && (
+          <button onClick={() => onBorrar(cliente)} title="Eliminar cliente"
+            className="ml-auto p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 active:bg-red-100 transition-colors">
+            <Trash2 size={14} />
           </button>
         )}
       </div>

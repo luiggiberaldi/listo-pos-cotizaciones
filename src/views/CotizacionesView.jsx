@@ -3,7 +3,7 @@
 // El builder reemplaza la lista in-page (sin navegación adicional)
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { FileText, Plus, RefreshCw, AlertTriangle, PackageCheck, Loader2, X, AlertCircle, LayoutGrid, List, ChevronDown, Truck, Receipt, MessageSquare, Filter, Search } from 'lucide-react'
+import { FileText, Plus, RefreshCw, AlertTriangle, PackageCheck, Loader2, X, AlertCircle, LayoutGrid, List, ChevronDown, Truck, Receipt, MessageSquare, Filter, Search, Clock } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import supabase from '../services/supabase/client'
 import { useTasaCambio } from '../hooks/useTasaCambio'
@@ -147,7 +147,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
   const totalConFlete = totalSinFlete + Number(fleteUsd || 0) + Number(corteUsd || 0)
 
   const {
-    formasPago, toggleForma, setMontoForma, resetFormas,
+    formasPago, toggleForma, setMontoForma, updateForma, resetFormas,
     totalAsignado, pagoCuadrado, diferencia, hayVuelto, faltante
   } = useFormasPago(totalConFlete)
 
@@ -310,29 +310,6 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                 </button>
               </div>
 
-            {showNuevoTransp && (
-              <div className="bg-white rounded-2xl border-2 border-emerald-200 shadow-lg p-3 sm:p-4 space-y-3">
-                <p className="text-sm font-bold text-emerald-700">Nuevo transportista</p>
-                {transpError && <p className="text-xs text-red-500 font-medium">{transpError}</p>}
-                <TransportistaFormCompact
-                  cargando={crearTransp.isPending}
-                  onCancelar={() => { setShowNuevoTransp(false); setTranspError('') }}
-                  onGuardar={async (campos) => {
-                    setTranspError('')
-                    try {
-                      const nuevo = await crearTransp.mutateAsync(campos)
-                      const idNuevo = nuevo.transportista?.id || nuevo.id
-                      if (idNuevo) setTransportistaId(idNuevo)
-                      setShowNuevoTransp(false)
-                    } catch (e) {
-                      const msg = e.message || 'Error al crear'
-                      setTranspError(msg)
-                      showToast(msg, 'error')
-                    }
-                  }}
-                />
-              </div>
-            )}
 
             {/* Formas de pago — chips con input integrado */}
             <div className="space-y-2">
@@ -346,28 +323,44 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                     const restante = totalConFlete - formasPago.reduce((s, f) => s + (Number(f.monto) || 0), 0)
                     const mostrarResto = formasPago.length > 1 && (!fpData.monto || Number(fpData.monto) === 0) && restante > 0.01
                     return (
-                      <div key={fp} className="flex items-center gap-0 rounded-lg border border-indigo-300 bg-indigo-50 overflow-hidden">
-                        <button type="button" onClick={() => toggleForma(fp)}
-                          className="flex items-center gap-0.5 px-2 py-1.5 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100 transition-colors shrink-0 border-r border-indigo-200">
-                          {fp} <X size={9} className="ml-0.5" />
-                        </button>
-                        <div className="relative flex items-center">
-                          <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-indigo-400 text-[10px]">$</span>
-                          <input type="number" min="0" step="0.01" value={fpData.monto}
-                            onChange={e => setMontoForma(fp, e.target.value)}
-                            onFocus={e => e.target.select()}
-                            placeholder="0"
-                            className="w-16 pl-4 pr-1 py-1.5 text-xs font-semibold text-indigo-800 bg-transparent focus:outline-none focus:bg-white/60"
-                            disabled={cargando} />
-                          {mostrarResto && (
-                            <button type="button"
-                              onClick={() => setMontoForma(fp, Number(restante.toFixed(2)))}
-                              className="mr-1 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded transition-colors shrink-0"
-                              title={`Asignar $${restante.toFixed(2)} restante`}>
-                              Resto
-                            </button>
-                          )}
+                      <div key={fp} className="flex flex-col gap-1">
+                        <div className="flex items-center gap-0 rounded-lg border border-indigo-300 bg-indigo-50 overflow-hidden">
+                          <button type="button" onClick={() => toggleForma(fp)}
+                            className="flex items-center gap-0.5 px-2 py-1.5 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100 transition-colors shrink-0 border-r border-indigo-200">
+                            {fp} <X size={9} className="ml-0.5" />
+                          </button>
+                          <div className="relative flex items-center">
+                            <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-indigo-400 text-[10px]">$</span>
+                            <input type="number" min="0" step="0.01" value={fpData.monto}
+                              onChange={e => setMontoForma(fp, e.target.value)}
+                              onFocus={e => e.target.select()}
+                              placeholder="0"
+                              className="w-16 pl-4 pr-1 py-1.5 text-xs font-semibold text-indigo-800 bg-transparent focus:outline-none focus:bg-white/60"
+                              disabled={cargando} />
+                            {mostrarResto && (
+                              <button type="button"
+                                onClick={() => setMontoForma(fp, Number(restante.toFixed(2)))}
+                                className="mr-1 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded transition-colors shrink-0"
+                                title={`Asignar $${restante.toFixed(2)} restante`}>
+                                Resto
+                              </button>
+                            )}
+                          </div>
                         </div>
+                        {/* Opción de días de vencimiento para CxC */}
+                        {fp === 'Cta por cobrar' && (
+                          <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 border border-amber-200 rounded-lg ml-2">
+                            <Clock size={10} className="text-amber-500 shrink-0" />
+                            <span className="text-[10px] font-medium text-amber-700 whitespace-nowrap">Días:</span>
+                            <input
+                              type="number" min="0" step="1"
+                              value={fpData.diasVencimiento ?? ''}
+                              onChange={e => updateForma(fp, { diasVencimiento: e.target.value ? parseInt(e.target.value) : null })}
+                              placeholder="Ej. 15"
+                              className="w-12 px-1 py-0.5 rounded text-[10px] font-semibold border border-amber-200 bg-white focus:outline-none focus:ring-1 focus:ring-amber-400 text-slate-700 text-center"
+                            />
+                          </div>
+                        )}
                       </div>
                     )
                   }
@@ -446,7 +439,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
           )}
           <div className="flex gap-3 px-5 py-3">
             <button onClick={handleCerrar} disabled={cargando}
-              className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-semibold text-sm hover:bg-slate-50 transition-colors disabled:opacity-50">
+              className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-semibold text-sm hover:bg-slate-50 transition-colors disabled:opacity-50 whitespace-nowrap">
               Cancelar
             </button>
             <button onClick={() => {
@@ -454,7 +447,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                 onConfirm(fpJson, transportistaId || null, Number(fleteUsd) || 0, Number(corteUsd) || 0, referenciaPago, fpJson, notas, clienteFacturaId || null)
               }} disabled={cargando || items.length === 0 || !pagoCuadrado}
               title={formasPago.length === 0 ? 'Selecciona forma de pago' : !pagoCuadrado ? 'Los montos no cuadran con el total' : undefined}
-              className="flex-1 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-semibold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20">
+              className="flex-1 px-4 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-semibold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 whitespace-nowrap">
               {cargando
                 ? <><Loader2 size={15} className="animate-spin" />Procesando...</>
                 : <><PackageCheck size={15} />Confirmar despacho</>}
@@ -575,6 +568,13 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
                totalStr.includes(q)
       })
     }
+
+    // Ordenar siempre por fecha de actualización descendente (lo más nuevo arriba)
+    filtered = [...filtered].sort((a, b) => {
+      const dateA = new Date(a.actualizado_en || a.creado_en || 0).getTime()
+      const dateB = new Date(b.actualizado_en || b.creado_en || 0).getTime()
+      return dateB - dateA
+    })
 
     return filtered
   }, [cotizaciones, vendedorFiltro, esAdmin, estadoFiltro, busquedaGlobal])

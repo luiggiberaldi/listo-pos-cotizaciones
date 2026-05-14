@@ -37,12 +37,12 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false } = {}
           id, numero, cotizacion_id, estado,
           total_usd, flete_usd, corte_usd, descuento_total_usd, notas, forma_pago,
           referencia_pago, forma_pago_cliente,
-          creado_en, despachada_en, entregada_en,
+          creado_en, actualizado_en, despachada_en, entregada_en, aprobado_por_nombre,
           cliente_id, cliente_factura_id, vendedor_id, transportista_id,
           transportista:transportistas!notas_despacho_transportista_id_fkey(id, nombre, rif, telefono, color, vehiculo, placa_chuto, placa_batea),
           cotizacion:cotizaciones!notas_despacho_cotizacion_id_fkey(id, numero, version)
         `)
-        .order('numero', { ascending: false })
+        .order('actualizado_en', { ascending: false })
         .limit(200)
 
       if (estado) query = query.eq('estado', estado)

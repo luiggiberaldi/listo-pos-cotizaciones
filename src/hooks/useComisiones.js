@@ -47,6 +47,7 @@ export function useComisiones({
         const res = await fetch(apiUrl(`/api/comisiones/lista?${params}`), {
           headers
         })
+
         
         const text = await res.text()
         if (!res.ok) {
@@ -54,9 +55,36 @@ export function useComisiones({
         }
         
         const data = JSON.parse(text)
+
+        // ── DEBUG TEMPORAL ──────────────────────────────────────────────
+        const items = data?.data ?? []
+        console.log('[useComisiones] WORKER RESPONSE total:', data?.total, '| items count:', items.length)
+        console.log('[useComisiones] PRIMER ITEM RAW:', JSON.stringify(items?.[0] ?? null))
+        // ───────────────────────────────────────────────────────────────
         
-        // La API ahora devuelve { data: [], total: 0, ... }
-        return data ?? { data: [], total: 0, page, pageSize, totalPages: 0 }
+        return {
+          ...(data ?? { total: 0, page, pageSize, totalPages: 0 }),
+          data: (data?.data ?? []).map(c => ({
+            id: c.id,
+            despachoid: c.despachoid,
+            vendedorid: c.vendedorid,
+            cotizacionid: c.cotizacionid,
+            cuentaid: c.cuentaid,
+            totalcomision: Number(c.totalcomision || 0),
+            comisioncabilla: Number(c.comisioncabilla || 0),
+            comisionotros: Number(c.comisionotros || 0),
+            pctcabilla: Number(c.pctcabilla || 0),
+            pctotros: Number(c.pctotros || 0),
+            montopagado: Number(c.montopagado || 0),
+            estado: c.estado,
+            pagadaen: c.pagadaen,
+            pagadapor: c.pagadapor,
+            creadoen: c.creadoen,
+            vendedor: c.vendedor,
+            despacho: c.despacho,
+            cotizacion: c.cotizacion,
+          })),
+        }
       } catch (e) {
         console.error('Error useComisiones:', e.message)
         throw e
@@ -99,7 +127,23 @@ export function useComisionesResumen({ vendedorId = '', desde = '', hasta = '', 
           throw new Error(`HTTP ${res.status}: ${text}`)
         }
         
-        return JSON.parse(text)
+        const data = JSON.parse(text)
+        return {
+          // Claves alineadas con ReportesView.jsx y TabLiquidacion.jsx
+          total:          Number(data.totalAcumulado || 0),
+          pendiente:      Number(data.pendientePago  || 0),
+          pagado:         Number(data.yaPagado       || 0),
+          retenida:       0, // v2 no tiene campo retenida separado
+          countPendiente: Number(data.numPendientes  || 0),
+          countPagado:    Number(data.numPagadas     || 0),
+          // Campos originales también disponibles por compatibilidad
+          totalAcumulado: Number(data.totalAcumulado || 0),
+          pendientePago:  Number(data.pendientePago  || 0),
+          yaPagado:       Number(data.yaPagado       || 0),
+          numPendientes:  Number(data.numPendientes  || 0),
+          numPagadas:     Number(data.numPagadas     || 0),
+          totalRegistros: Number(data.total          || 0),
+        }
       } catch (e) {
         console.error('Error useComisionesResumen:', e.message)
         throw e
@@ -119,7 +163,7 @@ export function useMarcarComisionPagada() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async (comisionId) => {
+    mutationFn: async ({ comisionid, montopagado }) => {
       const headers = await getAuthHeaders()
       const res = await fetch(apiUrl('/api/comisiones/pagar'), {
         method: 'POST',
@@ -127,7 +171,7 @@ export function useMarcarComisionPagada() {
           ...headers,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ comisionId }),
+        body: JSON.stringify({ comisionid, montopagado }),
       })
       const result = await res.json()
       if (!res.ok) throw new Error(result.error || result.message || 'Error al procesar pago')
@@ -150,8 +194,8 @@ export function useReporteVentasComisiones({ desde, hasta, vendedorId } = {}) {
     queryFn: async () => {
       if (!perfil?.id) return []
 
-      const p_fecha_inicio = desde ? `${desde}T00:00:00` : null
-      const p_fecha_fin = hasta ? `${hasta}T23:59:59` : null
+      const p_fecha_inicio = desde ? `${desde}T00:00:00-04:00` : null
+      const p_fecha_fin = hasta ? `${hasta}T23:59:59-04:00` : null
       const vId = vendedorId || null
 
       const { data, error } = await supabase.rpc('obtener_reporte_ventas_comisiones', {

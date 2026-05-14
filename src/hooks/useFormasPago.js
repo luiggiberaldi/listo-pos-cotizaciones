@@ -46,6 +46,15 @@ export function useFormasPago(totalRequerido = 0) {
   }, [])
 
   /**
+   * Actualiza propiedades extra de una forma de pago específica.
+   */
+  const updateForma = useCallback((metodo, updates) => {
+    setFormasPago(prev => prev.map(fp => 
+      fp.metodo === metodo ? { ...fp, ...updates } : fp
+    ))
+  }, [])
+
+  /**
    * Reinicia todas las formas de pago.
    */
   const resetFormas = useCallback(() => {
@@ -93,6 +102,7 @@ export function useFormasPago(totalRequerido = 0) {
     setFormas,
     toggleForma,
     setMontoForma,
+    updateForma,
     resetFormas,
     totalAsignado,
     pagoCuadrado,

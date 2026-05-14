@@ -20,60 +20,59 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   const logoData = await cargarLogo(config.logo_url)
   const rif = config.rif_negocio || 'J-50115913-0'
 
-  const numDisplay = `Nº- ${String(cotizacion.numero).padStart(5, '0')}`
+  const drawHeader = (doc, num) => {
+    const HDR_H = 40
+    doc.setFillColor(...C_PRIMARY)
+    doc.rect(0, 0, PAGE_W, HDR_H, 'F')
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // 1. CABECERA GIGANTE AMARILLA
-  // ══════════════════════════════════════════════════════════════════════════
-  const HDR_H = 40
-  doc.setFillColor(...C_PRIMARY)
-  doc.rect(0, 0, PAGE_W, HDR_H, 'F')
-
-  // Decoraciones: Cuadrícula de puntos a la izquierda (color del vendedor)
-  const vendedorColor = hexToRgb(cotizacion.vendedor?.color)
-  doc.setFillColor(...vendedorColor)
-  for(let i = 0; i < 4; i++) {
-    for(let j = 0; j < 6; j++) {
-      doc.circle(MARGIN + i * 2.5, 4 + j * 2.5, 0.4, 'F')
+    // Decoraciones: Cuadrícula de puntos
+    const vColor = hexToRgb(cotizacion.vendedor?.color)
+    doc.setFillColor(...vColor)
+    for(let i = 0; i < 4; i++) {
+      for(let j = 0; j < 6; j++) {
+        doc.circle(MARGIN + i * 2.5, 4 + j * 2.5, 0.4, 'F')
+      }
     }
+
+    // Cuadro derecho con franjas diagonales "Hazard"
+    const hazW = 40
+    const hazX = PAGE_W - hazW
+    doc.setFillColor(...C_DARK)
+    doc.rect(hazX, 0, hazW, 14, 'F')
+    doc.setLineWidth(0.8)
+    doc.setDrawColor(...C_PRIMARY)
+    for (let k = 0; k < 15; k++) {
+      doc.line(hazX + k*4, 0, hazX + k*4 - 8, 14)
+    }
+
+    // Logo
+    if (logoData) {
+      try { doc.addImage(logoData, 'PNG', MARGIN + 12, 4, 32, 32) } catch (_) {}
+    }
+
+    // Títulos Negocio
+    const textCenterX = (MARGIN + 44 + PAGE_W - MARGIN - 40) / 2
+    doc.setFont('times', 'bold')
+    doc.setTextColor(...C_WHITE)
+    doc.setFontSize(22)
+    doc.text('CONSTRUACERO', textCenterX, 18, { align: 'center' })
+    doc.setFontSize(14)
+    doc.text('CARABOBO C.A.', textCenterX, 27, { align: 'center' })
+
+    // "Cotización" + número
+    doc.setFontSize(13)
+    doc.text('Cotización', PAGE_W - MARGIN, HDR_H - 10, { align: 'right' })
+    doc.setFontSize(11)
+    doc.text(num, PAGE_W - MARGIN, HDR_H - 4, { align: 'right' })
+
+    return HDR_H + 6
   }
 
-  // Cuadro derecho con rayas diagonales "Hazard"
-  const hazW = 40
-  const hazX = PAGE_W - hazW
-  doc.setFillColor(...C_DARK)
-  doc.rect(hazX, 0, hazW, 14, 'F')
 
-  doc.setLineWidth(0.8)
-  doc.setDrawColor(...C_PRIMARY)
-  for (let k = 0; k < 15; k++) {
-    doc.line(hazX + k*4, 0, hazX + k*4 - 8, 14)
-  }
+  const numDisplay = `Nº- ${String(cotizacion.numero).padStart(5, '0')}`
+  let pageNum = 1
 
-  // Logo a la izquierda
-  if (logoData) {
-    try { doc.addImage(logoData, 'PNG', MARGIN + 12, 4, 32, 32) } catch (_) {}
-  }
-  const textX = MARGIN + 48
-
-  // Títulos Negocio Grandes — centrados entre logo y bloque derecho
-  const textCenterX = (MARGIN + 44 + PAGE_W - MARGIN - 40) / 2
-  doc.setFont('times', 'bold')
-  doc.setTextColor(...C_WHITE)
-
-  doc.setFontSize(22)
-  doc.text('CONSTRUACERO', textCenterX, 18, { align: 'center' })
-
-  doc.setFontSize(14)
-  doc.text('CARABOBO C.A.', textCenterX, 27, { align: 'center' })
-
-  // "Cotización" + número a la derecha inferior
-  doc.setFontSize(13)
-  doc.text('Cotización', PAGE_W - MARGIN, HDR_H - 10, { align: 'right' })
-  doc.setFontSize(11)
-  doc.text(numDisplay, PAGE_W - MARGIN, HDR_H - 4, { align: 'right' })
-
-  y = HDR_H + 6
+  y = drawHeader(doc, numDisplay)
 
   // ── Marca de agua central ──
   drawWatermark(doc)
@@ -251,19 +250,50 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   doc.setLineWidth(0.2)
   doc.setDrawColor(200, 200, 200)
 
-  items.forEach((item) => {
+  const itemsToRender = [...items]
+  const fleRef = Number(cotizacion.costo_envio_usd || 0)
+  const corRef = Number(cotizacion.corte_usd || 0)
+  if (fleRef > 0) itemsToRender.push({ codigo_snap: 'FTL1005632', nombre_snap: 'SERVICIO DE FLETE', unidad_snap: 'UND', precio_unit_usd: fleRef, total_linea_usd: fleRef, isExento: true })
+  if (corRef > 0) itemsToRender.push({ codigo_snap: 'CRT1254698', nombre_snap: 'SERVICIO DE CORTE', unidad_snap: 'UND', precio_unit_usd: corRef, total_linea_usd: corRef, isExento: true })
+
+  const isLargeDoc = itemsToRender.length >= 23
+
+  itemsToRender.forEach((item) => {
     // Calcular cuántas líneas necesita la descripción
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(8.5)
-    const descLines = doc.splitTextToSize(item.nombre_snap || '', COLS[2].w - 4)
+    const descLines = doc.splitTextToSize((item.nombre_snap || '').toUpperCase(), COLS[2].w - 4)
     const lineH = 4.0
     const rowH = Math.max(ROW_H_BASE, descLines.length * lineH + 2)
 
-    if (y + rowH > PAGE_H - 45) { dibujarBloqueFinal(y); doc.addPage(); y = MARGIN }
+    const limitY = (pageNum === 1 && isLargeDoc) ? PAGE_H - 10 : PAGE_H - 45
+    if (y + rowH > limitY) {
+      doc.addPage()
+      pageNum++
+      y = drawHeader(doc, numDisplay)
+      // Redraw table header
+      doc.setFillColor(...C_ACCENT)
+      doc.rect(MARGIN, y, CONTENT_W, 9, 'F')
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9.5)
+      doc.setTextColor(...C_WHITE)
+      COLS.forEach(col => {
+        let tx = col.x + 2
+        if (col.align === 'center') tx = col.x + col.w / 2
+        else if (col.align === 'right') tx = col.x + col.w - 2
+        doc.text(col.label, tx, y + 6.5, { align: col.align })
+      })
+      y += 9
+    }
 
     doc.setLineWidth(0.2)
     doc.setDrawColor(200, 200, 200)
-    doc.rect(MARGIN, y, CONTENT_W, rowH, 'S')
+    if (item.isExento) {
+      doc.setFillColor(245, 250, 255)
+      doc.rect(MARGIN, y, CONTENT_W, rowH, 'FD')
+    } else {
+      doc.rect(MARGIN, y, CONTENT_W, rowH, 'S')
+    }
     COLS.forEach(col => { doc.line(col.x, y, col.x, y + rowH) })
 
     const midY = y + rowH / 2 + 1.2
@@ -316,68 +346,12 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     y += rowH
   })
 
-  // ── Flete y Corte como filas exentas en la tabla ──
-  const fleRef = Number(cotizacion.costo_envio_usd || 0)
-  const corRef = Number(cotizacion.corte_usd || 0)
-
-  const extraRows = []
-  if (fleRef > 0) extraRows.push({ codigo: 'FTL1005632', nombre: 'SERVICIO DE FLETE', unidad: 'UND', precio: fleRef, total: fleRef })
-  if (corRef > 0) extraRows.push({ codigo: 'CRT1254698', nombre: 'SERVICIO DE CORTE', unidad: 'UND', precio: corRef, total: corRef })
-
-  const tasaEfectivaExtra = tasa > 0 ? tasa : Number(cotizacion.tasa_bcv_snapshot || 0)
-
-  extraRows.forEach(row => {
-    const descLines = doc.splitTextToSize(row.nombre, COLS[2].w - 4)
-    const lineH = 4.5
-    const rowH = Math.max(ROW_H_BASE, descLines.length * lineH + 2)
-
-    if (y + rowH > PAGE_H - 45) { dibujarBloqueFinal(y); doc.addPage(); y = MARGIN }
-
-    doc.setLineWidth(0.2)
-    doc.setDrawColor(200, 200, 200)
-    // Fondo tenue para filas exentas
-    doc.setFillColor(245, 250, 255)
-    doc.rect(MARGIN, y, CONTENT_W, rowH, 'FD')
-    COLS.forEach(col => { doc.line(col.x, y, col.x, y + rowH) })
-
-    const midY = y + rowH / 2 + 1.2
-    doc.setFont('helvetica', 'italic')
-    doc.setFontSize(8.5)
-    doc.setTextColor(...C_DARK)
-
-    doc.text('1', COLS[0].x + COLS[0].w / 2, midY, { align: 'center' })
-    doc.text(row.codigo, COLS[1].x + COLS[1].w / 2, midY, { align: 'center' })
-
-    const descStartY = y + (rowH - descLines.length * lineH) / 2 + lineH
-    descLines.forEach((line, idx) => {
-      doc.text(line + ' (E)', COLS[2].x + 2, descStartY + idx * lineH)
-    })
-    doc.text((row.unidad || '-').toUpperCase(), COLS[3].x + COLS[3].w / 2, midY, { align: 'center' })
-
-    const precioText = fmtPrecio(row.precio, monedaPDF, tasaEfectivaExtra, factorBcv)
-    const totalText  = fmtPrecio(row.total,  monedaPDF, tasaEfectivaExtra, factorBcv)
-    
-    const fitTextExtra = (text, col, baseFontSize, bold) => {
-      const maxW = col.w - 4
-      let fs = baseFontSize
-      doc.setFont('helvetica', bold ? 'bold' : 'normal')
-      while (fs > 6) {
-        doc.setFontSize(fs)
-        if (doc.getTextWidth(text) <= maxW) break
-        fs -= 0.5
-      }
-      doc.setFontSize(fs)
-      doc.text(text, col.x + col.w - 2, midY, { align: 'right' })
-    }
-
-    fitTextExtra(precioText, COLS[4], 10.5, false)
-    fitTextExtra(totalText, COLS[5], 10.5, true)
-    doc.setFontSize(9)
-
-    y += rowH
-  })
-
   // 4. CONDICIONES + TOTALES (via helper)
+  if (isLargeDoc && pageNum === 1) {
+    doc.addPage()
+    pageNum++
+    y = drawSimplifiedHeader(doc, numDisplay)
+  }
   const bTotW = (monedaPDF === 'mixto' || monedaPDF === 'mixto_bcv') ? 90 : 75
   const bTotX = PAGE_W - MARGIN - bTotW
   const bLeftW = bTotX - MARGIN - 5
@@ -423,9 +397,12 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   // ══════════════════════════════════════════════════════════════════════════
   // 5. FOOTER CON FRANJA DE PRECAUCIÓN
   // ══════════════════════════════════════════════════════════════════════════
-  // Footer en todas las páginas
+  // Footer en páginas finales
   const totalPages = doc.internal.getNumberOfPages()
   for (let p = 1; p <= totalPages; p++) {
+    // Si es doc grande, no dibujar footer en la página 1
+    if (isLargeDoc && p === 1) continue;
+    
     doc.setPage(p)
     const ph = PAGE_H
     {

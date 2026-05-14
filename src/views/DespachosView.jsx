@@ -162,10 +162,12 @@ export default function DespachosView() {
       lista = lista.filter(d => d.estado === estadoFiltro)
     }
 
-    // Ordenar siempre por número descendente (lo más nuevo arriba)
-    lista = [...lista].sort((a, b) => (b.numero || 0) - (a.numero || 0))
-
-
+    // Ordenar siempre por fecha de actualización descendente (lo más nuevo arriba)
+    lista = [...lista].sort((a, b) => {
+      const dateA = new Date(a.actualizado_en || a.creado_en || 0).getTime()
+      const dateB = new Date(b.actualizado_en || b.creado_en || 0).getTime()
+      return dateB - dateA
+    })
     if (busquedaGlobal) {
       const q = busquedaGlobal.toLowerCase()
       const qClean = q.replace(/[\.\-\s]/g, '')

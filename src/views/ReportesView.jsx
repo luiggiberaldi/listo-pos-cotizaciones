@@ -10,7 +10,7 @@ import { useReporteInventario } from '../hooks/useReporteInventario'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import { useComisiones, useReporteVentasComisiones, useComisionesResumen } from '../hooks/useComisiones'
 import { useResumenCxC } from '../hooks/useCuentasCobrar'
-import { getWeekRange } from '../utils/dateHelpers'
+import { getWeekRange, getMonthRange } from '../utils/dateHelpers'
 import { fmtUsd, fmtBs } from '../utils/format'
 import useAuthStore from '../store/useAuthStore'
 import Skeleton from '../components/ui/Skeleton'
@@ -374,9 +374,9 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose }) {
                   </div>
                 },
                 { content: fmtUsd(d.total), className: 'text-right font-medium text-slate-600' },
-                { content: `${d.comisionpct}%`, className: 'text-right text-[10px] font-bold text-slate-400' },
+                { content: `${d.comision_pct}%`, className: 'text-right text-[11px] font-bold text-slate-500' },
                 { content: fmtUsd(d.total_com), className: 'text-right font-bold text-slate-900' },
-                { content: `Bs ${d.tasa}`, className: 'text-right text-[10px] text-slate-400 font-mono' },
+                { content: `Bs ${Number(d.tasa || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })}`, className: 'text-right text-[11px] text-slate-600 font-semibold' },
                 { content: fmtBs(comBs), className: 'text-right font-bold text-indigo-600' },
                 {
                   content: <div className={`inline-flex px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${d.estado_comision !== 'pagada' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
@@ -401,7 +401,7 @@ function TabComisiones({ configNeg }) {
   const esAdmin = perfil?.rol === 'administracion'
 
   const [rango, setRango] = useState(() => {
-    const r = getWeekRange(0)
+    const r = getMonthRange(0)
     return { from: r.from, to: r.to }
   })
   const [filtroEstado, setFiltroEstado] = useState('') // '', 'pendiente', 'pagada'
@@ -444,14 +444,14 @@ function TabComisiones({ configNeg }) {
           cantidad: 0
         }
       }
-      const m = Number(c.total_comision || 0)
+      const m = Number(c.totalcomision || 0)
       const tasa = Number(c.despacho?.tasa_snapshot || c.cotizacion?.tasa_bcv_snapshot || 0)
       const mBs = m * tasa
 
       map[vId].totalUsd += m
       map[vId].totalBs += mBs
       map[vId].cantidad++
-      if (['retenida', 'pago_parcial', 'liberada'].includes(c.estado)) map[vId].pendUsd += m
+      if (['pendiente', 'cta_cobrar'].includes(c.estado)) map[vId].pendUsd += m
       else map[vId].pagUsd += m
     })
     return Object.values(map).sort((a, b) => b.totalUsd - a.totalUsd)
@@ -677,8 +677,74 @@ function ErrorMsg({ onRetry }) {
 // ═══════════════════════════════════════════════════════════════════════════
 // TAB: CRÉDITO
 // ═══════════════════════════════════════════════════════════════════════════
+
+// Colores de riesgo por días sin pago
+function riesgoCliente(dias) {
+  if (dias <= 30) return { label: 'Al día', color: '#10b981', bg: 'bg-emerald-50', text: 'text-emerald-700', bar: '#10b981' }
+  if (dias <= 60) return { label: 'Moderado', color: '#f59e0b', bg: 'bg-amber-50', text: 'text-amber-700', bar: '#f59e0b' }
+  if (dias <= 90) return { label: 'Alto', color: '#ef4444', bg: 'bg-red-50', text: 'text-red-700', bar: '#ef4444' }
+  return { label: 'Crítico', color: '#7c3aed', bg: 'bg-purple-50', text: 'text-purple-700', bar: '#7c3aed' }
+}
+
+// Aging mejorado con barras visuales
+function AgingBars({ aging }) {
+  const maxUsd = Math.max(...aging.map(a => a.totalUsd), 1)
+  const COLORS = ['#10b981', '#f59e0b', '#ef4444', '#7c3aed']
+  const totalUsd = aging.reduce((s, a) => s + a.totalUsd, 0)
+
+  return (
+    <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 overflow-hidden">
+      <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Clock size={14} className="text-slate-500" />
+          <h3 className="text-xs sm:text-sm font-black text-slate-800">Antigüedad de deuda</h3>
+        </div>
+        <span className="text-[10px] text-slate-400 font-mono">Total: ${totalUsd.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+      </div>
+      <div className="p-4 space-y-4">
+        {aging.map((a, i) => {
+          const pct = maxUsd > 0 ? (a.totalUsd / maxUsd) * 100 : 0
+          const pctTotal = totalUsd > 0 ? (a.totalUsd / totalUsd) * 100 : 0
+          return (
+            <div key={a.rango} className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: COLORS[i] }} />
+                  <span className="text-xs font-semibold text-slate-700">{a.rango}</span>
+                  <span className="text-[10px] text-slate-400 font-medium">{a.count} cargo{a.count !== 1 ? 's' : ''}</span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-[10px] text-slate-400">{pctTotal.toFixed(0)}%</span>
+                  <span className="text-xs font-bold text-slate-800">
+                    ${a.totalUsd.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+              <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-700"
+                  style={{ width: `${pct}%`, background: COLORS[i] }}
+                />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function TabCredito() {
   const { data, isLoading, isError, refetch } = useResumenCxC()
+  const [sortBy, setSortBy] = useState('saldo') // 'saldo' | 'dias'
+  const [sortDir, setSortDir] = useState('desc')
+  const { perfil } = useAuthStore()
+  const esAdmin = perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador'
+
+  function toggleSort(col) {
+    if (sortBy === col) setSortDir(d => d === 'desc' ? 'asc' : 'desc')
+    else { setSortBy(col); setSortDir('desc') }
+  }
 
   if (isLoading) return <SkeletonReporte />
   if (isError) return <ErrorMsg onRetry={refetch} />
@@ -692,11 +758,74 @@ function TabCredito() {
     )
   }
 
-  const { kpis, clientesConDeuda, aging } = data
+  const { kpis, clientesConDeuda, aging, alertasVencimiento } = data
+
+  const clientesOrdenados = [...clientesConDeuda].sort((a, b) => {
+    const va = sortBy === 'saldo' ? Number(a.saldo_pendiente) : (a.diasSinPago ?? 0)
+    const vb = sortBy === 'saldo' ? Number(b.saldo_pendiente) : (b.diasSinPago ?? 0)
+    return sortDir === 'desc' ? vb - va : va - vb
+  })
+
+  const maxSaldo = Math.max(...clientesConDeuda.map(c => Number(c.saldo_pendiente)), 1)
+
+  function buildWA(telefono, nombre, saldo) {
+    const clean = (telefono || '').replace(/\D/g, '')
+    const num = clean.startsWith('58') ? clean : `58${clean.startsWith('0') ? clean.slice(1) : clean}`
+    const msg = encodeURIComponent(`Estimado/a ${nombre}, le recordamos que tiene un saldo pendiente de $${Number(saldo).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} con nosotros. Agradecemos su pronta cancelación.`)
+    return `https://wa.me/${num}?text=${msg}`
+  }
+
+  const SortBtn = ({ col, label }) => (
+    <button
+      onClick={() => toggleSort(col)}
+      className={`flex items-center gap-0.5 hover:text-slate-700 transition-colors ${sortBy === col ? 'text-slate-800 font-black' : 'text-slate-400 font-semibold'}`}
+    >
+      {label}
+      <span className="text-[9px] ml-0.5">{sortBy === col ? (sortDir === 'desc' ? '↓' : '↑') : '↕'}</span>
+    </button>
+  )
 
   return (
     <div className="space-y-4">
-      {/* KPIs */}
+      {/* Alertas de Vencimiento para Admin */}
+      {esAdmin && alertasVencimiento?.length > 0 && (
+        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle className="text-orange-600" size={18} />
+            <h3 className="text-sm font-bold text-orange-900">Alertas de Vencimiento de Crédito</h3>
+            <span className="bg-orange-200 text-orange-800 text-[10px] px-2 py-0.5 rounded-full font-bold">
+              {alertasVencimiento.length}
+            </span>
+          </div>
+          <div className="space-y-2">
+            {alertasVencimiento.map(alerta => (
+              <div key={alerta.id} className="flex items-center justify-between bg-white border border-orange-100 rounded-lg p-2.5">
+                <div>
+                  <div className="text-xs font-bold text-slate-800">{alerta.cliente_nombre}</div>
+                  <div className="text-[10px] text-slate-500">
+                    Cargo: {new Date(alerta.creado_en).toLocaleDateString()}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-xs font-black text-orange-600">
+                    ${Number(alerta.saldo_usd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                  <div className="text-[10px] font-semibold text-orange-500">
+                    {alerta.diasRestantes < 0 
+                      ? `Vencido hace ${Math.abs(alerta.diasRestantes)} días` 
+                      : alerta.diasRestantes === 0 
+                        ? 'Vence hoy' 
+                        : `Vence en ${alerta.diasRestantes} días`
+                    }
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* KPIs — 5 tarjetas */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard
           icon={DollarSign} label="Total por cobrar"
@@ -706,13 +835,14 @@ function TabCredito() {
         <KpiCard
           icon={Users} label="Clientes con deuda"
           value={String(kpis.numClientesConDeuda)}
+          sub={kpis.promedioDeuda > 0 ? `Prom. $${Number(kpis.promedioDeuda).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : undefined}
           gradient="linear-gradient(135deg, #92400e, #B8860B)" border="rgba(255,255,255,0.10)"
         />
         <KpiCard
           icon={Clock} label="Deuda más antigua"
           value={`${kpis.diasMasAntiguo}d`}
           sub="días sin pago"
-          gradient="linear-gradient(135deg, #1e3a5f, #1B365D)" border="rgba(255,255,255,0.07)"
+          gradient={kpis.diasMasAntiguo > 60 ? "linear-gradient(135deg, #7c3aed, #6d28d9)" : "linear-gradient(135deg, #1e3a5f, #1B365D)"} border="rgba(255,255,255,0.07)"
         />
         <KpiCard
           icon={CreditCard} label="Total cargos"
@@ -722,47 +852,117 @@ function TabCredito() {
         />
       </div>
 
-      {/* Aging */}
-      <AgingSection title="Antigüedad de deuda" data={aging} countLabel="Cargos" />
+      {/* Aging con barras */}
+      <AgingBars aging={aging} />
 
-      {/* Clientes con deuda */}
-      <AdminTable
-        icon={Users} iconColor="text-red-500" title="Clientes con saldo pendiente"
-        headers={[
-          { label: 'Cliente' },
-          { label: 'Vendedor' },
-          { label: 'Saldo pendiente', align: 'text-right' },
-        ]}
-        rows={clientesConDeuda.map(c => [
-          {
-            content: (
-              <div>
-                <p className="font-semibold text-slate-800 text-xs">{c.nombre}</p>
-                {c.rif_cedula && <p className="text-[10px] text-slate-400 font-mono">{c.rif_cedula}</p>}
-              </div>
-            ),
-          },
-          {
-            content: c.vendedor ? (
-              <span className="flex items-center gap-1.5 text-xs">
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: c.vendedor.color || '#64748b' }} />
-                {c.vendedor.nombre}
-              </span>
-            ) : '—',
-          },
-          {
-            content: (
-              <span className="font-black text-red-600 text-xs">
-                ${Number(c.saldo_pendiente).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-            ),
-            className: 'text-right',
-          },
-        ])}
-      />
+      {/* Tabla de clientes mejorada */}
+      <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 overflow-hidden">
+        <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Users size={14} className="text-red-500" />
+            <h3 className="text-xs sm:text-sm font-black text-slate-800">Clientes con saldo pendiente</h3>
+            <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-[10px] font-bold">{clientesConDeuda.length}</span>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-[10px] text-slate-400 uppercase bg-slate-50 border-b border-slate-100">
+                <th className="px-4 py-2.5 text-left font-semibold">Cliente</th>
+                <th className="px-3 py-2.5 text-left font-semibold">Vendedor</th>
+                <th className="px-3 py-2.5 text-center font-semibold">Riesgo</th>
+                <th className="px-3 py-2.5 text-center">
+                  <SortBtn col="dias" label="Días" />
+                </th>
+                <th className="px-3 py-2.5 text-right">
+                  <SortBtn col="saldo" label="Saldo USD" />
+                </th>
+                <th className="px-3 py-2.5 text-center font-semibold">Contacto</th>
+              </tr>
+            </thead>
+            <tbody>
+              {clientesOrdenados.map((c, i) => {
+                const saldo = Number(c.saldo_pendiente)
+                const dias = c.diasSinPago ?? 0
+                const riesgo = riesgoCliente(dias)
+                const barPct = Math.min((saldo / maxSaldo) * 100, 100)
+
+                return (
+                  <tr key={c.id} className={`border-b border-slate-50 hover:bg-slate-50/60 transition-colors ${i % 2 === 0 ? '' : 'bg-slate-50/20'}`}>
+                    {/* Cliente */}
+                    <td className="px-4 py-3">
+                      <p className="font-bold text-slate-800 leading-tight">{c.nombre}</p>
+                      {c.rif_cedula && <p className="text-[10px] text-slate-400 font-mono mt-0.5">{c.rif_cedula}</p>}
+                      {/* Mini barra de saldo relativo */}
+                      <div className="mt-1.5 h-1 rounded-full bg-slate-100 w-24 overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${barPct}%`, background: riesgo.bar }} />
+                      </div>
+                    </td>
+                    {/* Vendedor */}
+                    <td className="px-3 py-3">
+                      {c.vendedor ? (
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: c.vendedor.color || '#64748b' }} />
+                          <span className="text-slate-600 font-medium">{c.vendedor.nombre}</span>
+                        </span>
+                      ) : <span className="text-slate-300">—</span>}
+                    </td>
+                    {/* Riesgo badge */}
+                    <td className="px-3 py-3 text-center">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${riesgo.bg} ${riesgo.text}`}>
+                        {riesgo.label}
+                      </span>
+                    </td>
+                    {/* Días */}
+                    <td className="px-3 py-3 text-center">
+                      <span className={`font-black text-sm ${dias > 60 ? 'text-red-600' : dias > 30 ? 'text-amber-600' : 'text-slate-600'}`}>
+                        {dias}d
+                      </span>
+                    </td>
+                    {/* Saldo */}
+                    <td className="px-3 py-3 text-right">
+                      <span className="font-black text-red-600 text-sm">
+                        ${saldo.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </td>
+                    {/* WhatsApp */}
+                    <td className="px-3 py-3 text-center">
+                      {c.telefono ? (
+                        <a
+                          href={buildWA(c.telefono, c.nombre, c.saldo_pendiente)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors font-semibold text-[10px]"
+                          title={`Contactar a ${c.nombre}`}
+                        >
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                            <path d="M12 0C5.373 0 0 5.373 0 12c0 2.025.507 3.934 1.395 5.604L0 24l6.545-1.371A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.88 0-3.645-.5-5.17-1.37l-.37-.22-3.885.815.827-3.784-.24-.39A9.94 9.94 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
+                          </svg>
+                          WA
+                        </a>
+                      ) : <span className="text-slate-300 text-[10px]">—</span>}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Footer resumen */}
+        <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+          <span className="text-[10px] text-slate-400">{clientesConDeuda.length} cliente{clientesConDeuda.length !== 1 ? 's' : ''} con deuda activa</span>
+          <span className="text-xs font-black text-red-600">
+            Total: ${Number(kpis.totalDeuda).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </span>
+        </div>
+      </div>
     </div>
   )
 }
+
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MAIN VIEW

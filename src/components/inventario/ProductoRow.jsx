@@ -50,7 +50,7 @@ export default function ProductoRow({ producto, onEditar, onDesactivar, onBorrar
       {/* Info principal */}
       <div className="min-w-0 flex-1 px-3 py-3">
         <div className="flex items-center gap-2 flex-wrap">
-          <h3 className="font-bold text-slate-800 text-sm truncate">{producto.nombre}</h3>
+          <h3 className="font-bold text-slate-800 text-sm truncate uppercase">{producto.nombre}</h3>
           {producto.codigo && (
             <span className="px-1 py-0.5 bg-slate-50 border border-slate-200 rounded text-[9px] font-mono font-bold text-slate-400 uppercase tracking-tighter">
               {producto.codigo}

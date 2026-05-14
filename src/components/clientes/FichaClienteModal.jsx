@@ -1,6 +1,6 @@
 // src/components/clientes/FichaClienteModal.jsx
 // Modal ficha del cliente: historial de crédito + formulario de abono
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { X, CreditCard, ArrowUpCircle, ArrowDownCircle, AlertCircle, RefreshCw, DollarSign, Hash, Phone, FileText, ChevronRight } from 'lucide-react'
 import { useCuentasCobrar, useRegistrarAbono } from '../../hooks/useCuentasCobrar'
 import { useCotizacionesCliente } from '../../hooks/useClientes'
@@ -15,29 +15,58 @@ function fmtFecha(iso) {
     ' ' + d.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })
 }
 
-// ─── Formulario de abono ────────────────────────────────────────────────────
-function FormAbono({ clienteId, onSuccess }) {
-  const [monto, setMonto] = useState('')
-  const [formaPago, setFormaPago] = useState('Efectivo')
-  const [referencia, setReferencia] = useState('')
+const METODOS = ['Efectivo', 'Zelle', 'Pago Móvil', 'Punto de Venta', 'USDT', 'Transferencia']
+
+function FormAbono({ clienteId, saldo, onSuccess }) {
+  // Cada línea de pago: { metodo, monto, referencia }
+  const [lineas, setLineas] = useState([{ metodo: 'Efectivo', monto: '', referencia: '' }])
   const [descripcion, setDescripcion] = useState('')
   const registrar = useRegistrarAbono()
 
+  // Total acumulado de todas las líneas
+  const totalIngresado = lineas.reduce((acc, l) => acc + (parseFloat(l.monto) || 0), 0)
+  const excede = saldo > 0 && totalIngresado > saldo + 0.001
+  const sinMonto = totalIngresado <= 0
+
+  function actualizarLinea(idx, campo, valor) {
+    setLineas(prev => prev.map((l, i) => i === idx ? { ...l, [campo]: valor } : l))
+  }
+
+  function agregarLinea() {
+    setLineas(prev => [...prev, { metodo: 'Efectivo', monto: '', referencia: '' }])
+  }
+
+  function quitarLinea(idx) {
+    setLineas(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  function ponerTotal() {
+    if (lineas.length === 1) {
+      setLineas([{ ...lineas[0], monto: saldo.toFixed(2) }])
+    }
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
-    const montoNum = parseFloat(monto)
-    if (!montoNum || montoNum <= 0) return
+    if (excede || sinMonto) return
+
+    // Enviar como JSON array de formas de pago (igual que despachos)
+    const formasPagoJson = JSON.stringify(lineas.map(l => ({
+      metodo: l.metodo,
+      monto: parseFloat(l.monto) || 0,
+      referencia: l.referencia || '',
+    })))
+
     await registrar.mutateAsync({
       clienteId,
-      monto: montoNum,
-      formaPago,
-      referencia,
+      monto: totalIngresado,
+      formaPago: formasPagoJson,
+      referencia: lineas[0]?.referencia || '',
       descripcion: descripcion || 'Abono recibido',
     })
-    setMonto('')
-    setReferencia('')
+    setLineas([{ metodo: 'Efectivo', monto: '', referencia: '' }])
     setDescripcion('')
-    onSuccess?.()
+    onSuccess?.(totalIngresado)
   }
 
   return (
@@ -47,51 +76,79 @@ function FormAbono({ clienteId, onSuccess }) {
         Registrar abono
       </h4>
 
-      <div className="grid grid-cols-2 gap-3">
-        {/* Monto */}
-        <div>
-          <label className="block text-xs font-semibold text-slate-600 mb-1">Monto USD *</label>
-          <input
-            type="number"
-            step="0.01"
-            min="0.01"
-            value={monto}
-            onChange={e => setMonto(e.target.value)}
-            placeholder="0.00"
-            required
-            className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
-          />
-        </div>
+      {/* Líneas de pago */}
+      <div className="space-y-2">
+        {lineas.map((linea, idx) => (
+          <div key={idx} className="bg-white border border-emerald-100 rounded-xl p-3 space-y-2">
+            {/* Fila: monto + botón total + quitar */}
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <label className="block text-[10px] font-semibold text-slate-500 mb-1">Monto USD</label>
+                <div className="flex gap-1">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={linea.monto}
+                    onChange={e => actualizarLinea(idx, 'monto', e.target.value)}
+                    placeholder="0.00"
+                    className="flex-1 px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                  />
+                  {/* Botón Total solo en primera línea cuando hay 1 sola */}
+                  {lineas.length === 1 && saldo > 0 && (
+                    <button
+                      type="button"
+                      onClick={ponerTotal}
+                      className="px-3 py-2 rounded-lg bg-emerald-100 text-emerald-700 text-xs font-bold hover:bg-emerald-200 transition-colors whitespace-nowrap"
+                    >
+                      Total
+                    </button>
+                  )}
+                </div>
+              </div>
+              {lineas.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => quitarLinea(idx)}
+                  className="mt-4 p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                  title="Quitar"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
 
-        {/* Forma de pago */}
-        <div>
-          <label className="block text-xs font-semibold text-slate-600 mb-1.5">Forma de pago</label>
-          <div className="flex flex-wrap gap-1.5">
-            {['Efectivo', 'Zelle', 'Pago Móvil', 'Punto de Venta', 'USDT', 'Transferencia'].map(f => (
-              <button key={f} type="button"
-                onClick={() => setFormaPago(f)}
-                className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-all ${
-                  formaPago === f
-                    ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm'
-                    : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300 hover:text-emerald-600'
-                }`}>
-                {f}
-              </button>
-            ))}
+            {/* Métodos de pago */}
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-500 mb-1">Forma de pago</label>
+              <div className="flex flex-wrap gap-1">
+                {METODOS.map(m => (
+                  <button key={m} type="button"
+                    onClick={() => actualizarLinea(idx, 'metodo', m)}
+                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition-all ${
+                      linea.metodo === m
+                        ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm'
+                        : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300 hover:text-emerald-600'
+                    }`}>
+                    {m}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Referencia por línea */}
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-500 mb-1">Referencia (opcional)</label>
+              <input
+                type="text"
+                value={linea.referencia}
+                onChange={e => actualizarLinea(idx, 'referencia', e.target.value)}
+                placeholder="Nº de confirmación, comprobante..."
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
+              />
+            </div>
           </div>
-        </div>
-      </div>
-
-      {/* Referencia */}
-      <div>
-        <label className="block text-xs font-semibold text-slate-600 mb-1">Referencia (opcional)</label>
-        <input
-          type="text"
-          value={referencia}
-          onChange={e => setReferencia(e.target.value)}
-          placeholder="Nº de confirmación, comprobante..."
-          className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
-        />
+        ))}
       </div>
 
       {/* Descripción */}
@@ -106,16 +163,33 @@ function FormAbono({ clienteId, onSuccess }) {
         />
       </div>
 
+      {/* Resumen total + error */}
+      {totalIngresado > 0 && (
+        <div className={`flex items-center justify-between px-3 py-2 rounded-xl text-sm font-bold ${
+          excede ? 'bg-red-50 border border-red-200 text-red-700' : 'bg-emerald-100 text-emerald-800'
+        }`}>
+          <span>Total a abonar:</span>
+          <span>${totalIngresado.toFixed(2)}</span>
+        </div>
+      )}
+      {excede && (
+        <p className="text-xs text-red-600 font-semibold flex items-center gap-1">
+          <AlertCircle size={12} />
+          El monto supera la deuda ({fmtUsd(saldo)}). Reduce el abono.
+        </p>
+      )}
+
       <button
         type="submit"
-        disabled={registrar.isPending || !monto}
-        className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-bold rounded-lg transition-colors"
+        disabled={registrar.isPending || sinMonto || excede}
+        className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold rounded-lg transition-colors"
       >
         {registrar.isPending ? 'Registrando...' : 'Confirmar abono'}
       </button>
     </form>
   )
 }
+
 
 // ─── Historial de cotizaciones ───────────────────────────────────────────────
 function HistorialCotizaciones({ clienteId, onVerCotizacion }) {
@@ -187,9 +261,17 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
   const puedeRegistrarAbono = ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)
   const { data: movimientos = [], isLoading, refetch } = useCuentasCobrar(isOpen ? cliente?.id : null)
 
+  // Saldo local para actualización inmediata tras abonar (sin esperar cache del padre)
+  const [saldoLocal, setSaldoLocal] = useState(null)
+
+  // Sincronizar cuando el prop cambia (al abrir el modal o cuando el padre refresca)
+  useEffect(() => {
+    setSaldoLocal(Number(cliente?.saldo_pendiente || 0))
+  }, [cliente?.id, cliente?.saldo_pendiente])
+
   if (!isOpen || !cliente) return null
 
-  const saldo = Number(cliente.saldo_pendiente || 0)
+  const saldo = saldoLocal ?? Number(cliente.saldo_pendiente || 0)
   const color = cliente.vendedor?.color || '#64748b'
 
   return (
@@ -239,7 +321,14 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
 
           {/* Formulario abono (supervisor o administración si hay deuda) */}
           {puedeRegistrarAbono && saldo > 0 && (
-            <FormAbono clienteId={cliente.id} onSuccess={refetch} />
+            <FormAbono
+              clienteId={cliente.id}
+              saldo={saldo}
+              onSuccess={(montoAbonado) => {
+                setSaldoLocal(prev => Math.max(0, (prev ?? saldo) - montoAbonado))
+                refetch()
+              }}
+            />
           )}
 
           {/* Historial */}

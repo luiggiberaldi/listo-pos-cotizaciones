@@ -3,6 +3,7 @@
 // Exporta también useOffline() para que el layout pueda ajustar el padding.
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import { WifiOff, Wifi } from 'lucide-react'
+import { apiUrl } from '../../services/apiBase'
 
 // ─── Contexto ─────────────────────────────────────────────────────────────────
 const OfflineCtx = createContext(false)
@@ -13,7 +14,7 @@ const BANNER_H = 38 // px — altura del banner (py-2 + text-sm ≈ 38px)
 // ─── Verificación real de red (ping al worker, no solo navigator.onLine) ──────
 async function checkRealConnectivity() {
   try {
-    const res = await fetch('/api/ping', {
+    const res = await fetch(apiUrl('/api/ping'), {
       method: 'HEAD',
       cache: 'no-store',
       signal: AbortSignal.timeout(4000),

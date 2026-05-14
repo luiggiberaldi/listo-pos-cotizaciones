@@ -1,6 +1,5 @@
-// src/components/despachos/DespachoCard.jsx
 import { useState, useRef, useEffect, memo, Fragment } from 'react'
-import { FileText, Calendar, Truck, CheckCircle, Ban, RefreshCcw, RefreshCw, Download, Loader2, Eye, MoreHorizontal, ChevronDown, Printer, Tag, Pencil, RotateCcw } from 'lucide-react'
+import { FileText, Calendar, Truck, CheckCircle, Ban, RefreshCcw, RefreshCw, Download, Loader2, Eye, MoreHorizontal, ChevronDown, Printer, Tag, Pencil, RotateCcw, AlertTriangle, Clock, CreditCard } from 'lucide-react'
 import EstadoBadge from '../cotizaciones/EstadoBadge'
 import MobileActionSheet from '../cotizaciones/MobileActionSheet'
 import ConfirmModal from '../ui/ConfirmModal'
@@ -14,6 +13,8 @@ import DescuentoModal from './DescuentoModal'
 import EditDespachoModal from './EditDespachoModal'
 import DevolverAnularModal from './DevolverAnularModal'
 import { showToast } from '../ui/Toast'
+import { MessageCircle } from 'lucide-react'
+import { compartirPorWhatsApp, generarMensaje } from '../../utils/whatsapp'
 
 export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular, onReciclar, tasa = 0, config = {}, estadoCambiando = false }) {
   const { perfil } = useAuthStore()
@@ -44,6 +45,35 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     }
   }, [despacho.estado, accionPendiente])
 
+  // Verificar stock insuficiente para Admin
+  const [itemsFaltantes, setItemsFaltantes] = useState([])
+  const hayFaltaStock = itemsFaltantes.length > 0
+
+  useEffect(() => {
+    if (['pendiente', 'despachada'].includes(despacho.estado) && esPrivilegiado) {
+      async function checkStock() {
+        try {
+          const items = await fetchItemsDespacho()
+          const ids = items.map(it => it.producto_id).filter(Boolean)
+          if (ids.length === 0) return
+          
+          const { data: prods } = await supabase.from('productos').select('id, stock_actual').in('id', ids)
+          
+          const faltantes = items.filter(it => {
+            const p = prods?.find(x => x.id === it.producto_id)
+            return it.cantidad > (p?.stock_actual || 0)
+          })
+          setItemsFaltantes(faltantes)
+        } catch (err) {
+          console.error('Error verificando stock:', err)
+        }
+      }
+      checkStock()
+    } else {
+      setItemsFaltantes([])
+    }
+  }, [despacho.id, despacho.estado])
+
   const numDisplay = despacho.cotizacion
     ? `DES-${String(despacho.cotizacion.numero).padStart(5, '0')}`
     : `DES-${String(despacho.numero).padStart(5, '0')}`
@@ -57,7 +87,6 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const canEntregar = (perfil?.rol === 'logistica' || esDesarrollador) && despacho.estado === 'despachada'
   const esVendedorPropio = perfil?.id === despacho.vendedor_id
   const canAnular = ((esAdministracion || esDesarrollador || esSupervisor) && (despacho.estado === 'pendiente' || despacho.estado === 'despachada'))
-    || (perfil?.rol === 'logistica' && despacho.estado === 'despachada')
     || (esVendedorPropio && despacho.estado === 'pendiente')
   const canDevolver = (esAdministracion || esSupervisor || esDesarrollador || perfil?.rol === 'logistica') && despacho.estado === 'despachada'
   const canReciclar = ((esSupervisor || esDesarrollador) && despacho.estado === 'anulada' && onReciclar)
@@ -71,6 +100,27 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const subtotalProductos = totalBruto - fleteUsd - corteUsd // solo productos sin servicios
   const totalFinal = totalBruto - descuentoTotal // total con flete+corte, menos descuento
 
+  let isCtaPorCobrar = false
+  let textVencimiento = null
+  try {
+    const fp = typeof despacho.forma_pago === 'string' ? JSON.parse(despacho.forma_pago) : (despacho.forma_pago || [])
+    if (Array.isArray(fp)) {
+      const cta = fp.find(f => f.metodo === 'Cta por cobrar')
+      if (cta && cta.diasVencimiento > 0) {
+        isCtaPorCobrar = true
+        const fCreacion = new Date(despacho.creado_en)
+        const fVenc = new Date(fCreacion.getTime() + cta.diasVencimiento * 24 * 60 * 60 * 1000)
+        const hoy = new Date()
+        const restantes = Math.ceil((fVenc - hoy) / (1000 * 60 * 60 * 24))
+        const vencido = restantes < 0
+        textVencimiento = `${cta.diasVencimiento} días (${vencido ? `Vencido hace ${Math.abs(restantes)}d` : `${restantes}d restantes`})`
+      } else if (cta) {
+        isCtaPorCobrar = true
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
   // Helper: fetch notas_despacho_items con fallback offline
   async function fetchItemsDespacho() {
     const res = await supabase
@@ -162,16 +212,63 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         import('../../services/pdf/despachoPDF'),
         fetchItemsDespacho(),
       ])
-      const blob = await generarDespachoPDF({
+      const { blob, filename } = await generarDespachoPDF({
         despacho, items: itemsFinal, config,
         formaPago: despacho.forma_pago || '',
         monedaPDF: 'bs', tasa,
         tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio,
         returnBlob: true,
       })
-      printOrDownloadPdf(blob, `${numDisplay}-nota-entrega.pdf`)
+      printOrDownloadPdf(blob, filename)
     } catch (err) {
       showToast('Error al imprimir: ' + (err.message || 'Error desconocido'), 'error')
+    } finally {
+      setPrintLoading(false)
+    }
+  }
+
+  async function compartirDespacho() {
+    setPrintLoading(true)
+    setShowPrintMenu(false)
+    try {
+      const [{ generarDespachoPDF }, itemsFinal] = await Promise.all([
+        import('../../services/pdf/despachoPDF'),
+        fetchItemsDespacho(),
+      ])
+      const { blob, filename } = await generarDespachoPDF({
+        despacho, items: itemsFinal, config,
+        formaPago: despacho.forma_pago || '',
+        monedaPDF: 'bs', tasa,
+        tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio,
+        returnBlob: true,
+      })
+
+      const clienteObj = despacho.cliente_factura || despacho.cliente
+      const mensaje = generarMensaje({
+        nombreNegocio: config.nombre_negocio,
+        nombreCliente: clienteObj?.nombre,
+        numDisplay,
+        totalUsd: totalFinal,
+        nombreVendedor: despacho.vendedor?.nombre,
+        tipo: 'Nota de Entrega'
+      })
+
+      await compartirPorWhatsApp({
+        pdfBlob: blob,
+        pdfFilename: filename,
+        telefono: clienteObj?.telefono,
+        mensaje,
+        mensajeParams: {
+          nombreNegocio: config.nombre_negocio,
+          nombreCliente: clienteObj?.nombre,
+          numDisplay,
+          totalUsd: totalFinal,
+          nombreVendedor: despacho.vendedor?.nombre,
+          tipo: 'Nota de Entrega'
+        }
+      })
+    } catch (err) {
+      showToast('Error al compartir: ' + (err.message || 'Error desconocido'), 'error')
     } finally {
       setPrintLoading(false)
     }
@@ -185,16 +282,63 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         import('../../services/pdf/ordenDespachoPDF'),
         fetchItemsDespacho(),
       ])
-      const blob = await generarOrdenDespachoPDF({
+      const { blob, filename } = await generarOrdenDespachoPDF({
         despacho, items: itemsFinal, config,
         formaPago: despacho.forma_pago || '',
         monedaPDF: '$', tasa,
         tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio,
         returnBlob: true,
       })
-      printOrDownloadPdf(blob, `${numDisplay}-orden-despacho.pdf`)
+      printOrDownloadPdf(blob, filename)
     } catch (err) {
       showToast('Error al imprimir orden: ' + (err.message || 'Error desconocido'), 'error')
+    } finally {
+      setPrintLoading(false)
+    }
+  }
+
+  async function compartirOrdenDespacho() {
+    setPrintLoading(true)
+    setShowPrintMenu(false)
+    try {
+      const [{ generarOrdenDespachoPDF }, itemsFinal] = await Promise.all([
+        import('../../services/pdf/ordenDespachoPDF'),
+        fetchItemsDespacho(),
+      ])
+      const { blob, filename } = await generarOrdenDespachoPDF({
+        despacho, items: itemsFinal, config,
+        formaPago: despacho.forma_pago || '',
+        monedaPDF: '$', tasa,
+        tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio,
+        returnBlob: true,
+      })
+
+      const clienteObj = despacho.cliente_factura || despacho.cliente
+      const mensaje = generarMensaje({
+        nombreNegocio: config.nombre_negocio,
+        nombreCliente: clienteObj?.nombre,
+        numDisplay,
+        totalUsd: totalFinal,
+        nombreVendedor: despacho.vendedor?.nombre,
+        tipo: 'Orden de Despacho'
+      })
+
+      await compartirPorWhatsApp({
+        pdfBlob: blob,
+        pdfFilename: filename,
+        telefono: clienteObj?.telefono,
+        mensaje,
+        mensajeParams: {
+          nombreNegocio: config.nombre_negocio,
+          nombreCliente: clienteObj?.nombre,
+          numDisplay,
+          totalUsd: totalFinal,
+          nombreVendedor: despacho.vendedor?.nombre,
+          tipo: 'Orden de Despacho'
+        }
+      })
+    } catch (err) {
+      showToast('Error al compartir orden: ' + (err.message || 'Error desconocido'), 'error')
     } finally {
       setPrintLoading(false)
     }
@@ -224,8 +368,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   function getMoreActions() {
     const actions = []
     actions.push({ label: 'Ver detalle', icon: Eye, onClick: () => setShowDetalle(true) })
-    if (canDescuento)
-      actions.push({ label: `Descuento${descuentoTotal > 0 ? ' ✓' : ''}`, icon: Tag, onClick: () => setShowDescuento(true), textColor: 'text-amber-600' })
+    // if (canDescuento)
+    //   actions.push({ label: `Descuento${descuentoTotal > 0 ? ' ✓' : ''}`, icon: Tag, onClick: () => setShowDescuento(true), textColor: 'text-amber-600' })
     if (canDespachar && primaryAction.key !== 'despachar') {
       const cfg = getDespachoAction('despachar', rol)
       actions.push({ label: cfg.label || 'Aprobar despacho', icon: Truck, onClick: () => setAccionPendiente({ id: despacho.id, estado: 'despachada', actionConfig: cfg }), textColor: 'text-blue-600' })
@@ -309,6 +453,12 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             <span className="truncate">{despacho.transportista.nombre}</span>
           </div>
         )}
+        {isCtaPorCobrar && (
+          <div className="flex items-center gap-1.5 text-[11px] text-amber-600 font-medium mt-0.5">
+            <CreditCard size={11} className="shrink-0" />
+            <span>Cta. por cobrar {textVencimiento ? `- ${textVencimiento}` : ''}</span>
+          </div>
+        )}
       </div>
 
       {/* ── Total + Flete + Corte ── */}
@@ -355,6 +505,14 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           </div>
         </div>
       </div>
+
+      {/* Banner Advertencia Stock (Admin) */}
+      {hayFaltaStock && ['pendiente', 'despachada'].includes(despacho.estado) && esPrivilegiado && (
+        <div className="mx-3 mb-2 p-2 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2 text-amber-700 animate-in slide-in-from-top-2 duration-300">
+          <AlertTriangle size={16} className="shrink-0" />
+          <span className="text-[10px] font-black uppercase leading-tight">Stock insuficiente en {itemsFaltantes.length} ítem(s)</span>
+        </div>
+      )}
 
       {/* ══════════ MOBILE ACTIONS (< md) ══════════ */}
       <div className="md:hidden mt-auto border-t border-slate-100 p-2.5">
@@ -417,14 +575,27 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             <div className="fixed inset-0 z-40" onClick={() => setShowPrintMenu(false)} />
             <div style={style} className="w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1">
               <button onClick={imprimirDespacho}
-                className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-700 active:bg-slate-100 text-left">
-                <Printer size={14} /> Nota de Entrega
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 active:bg-slate-100 text-left">
+                <Printer size={14} className="text-slate-400" /> Nota de Entrega
                 <span className="ml-auto text-[9px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-1 py-0.5 rounded leading-none">Bs</span>
               </button>
               <button onClick={imprimirOrdenDespacho}
-                className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-700 active:bg-slate-100 text-left">
-                <Printer size={14} /> Orden de Despacho
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 active:bg-slate-100 text-left">
+                <Printer size={14} className="text-slate-400" /> Orden de Despacho
                 <span className="ml-auto text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-1 py-0.5 rounded leading-none">USD</span>
+              </button>
+
+              <div className="h-px bg-slate-100 my-1" />
+
+              <button onClick={compartirDespacho}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-emerald-700 active:bg-emerald-50 text-left">
+                <MessageCircle size={14} className="text-emerald-400" /> Compartir Nota
+                <span className="ml-auto text-[10px] font-bold text-emerald-600">WA</span>
+              </button>
+              <button onClick={compartirOrdenDespacho}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-emerald-700 active:bg-emerald-50 text-left">
+                <MessageCircle size={14} className="text-emerald-400" /> Compartir Orden
+                <span className="ml-auto text-[10px] font-bold text-emerald-600">WA</span>
               </button>
             </div>
           </>
@@ -486,13 +657,26 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
               onMouseDown={e => e.preventDefault()}>
               <button onClick={imprimirDespacho}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
-                <Printer size={14} /> Nota de Entrega
+                <Printer size={14} className="text-slate-400" /> Nota de Entrega
                 <span className="ml-auto text-[9px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-1 py-0.5 rounded leading-none">Bs</span>
               </button>
               <button onClick={imprimirOrdenDespacho}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
-                <Printer size={14} /> Orden de Despacho
+                <Printer size={14} className="text-slate-400" /> Orden de Despacho
                 <span className="ml-auto text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-1 py-0.5 rounded leading-none">USD</span>
+              </button>
+
+              <div className="h-px bg-slate-100 my-1" />
+
+              <button onClick={compartirDespacho}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-emerald-700 hover:bg-emerald-50 text-left">
+                <MessageCircle size={14} className="text-emerald-400" /> Compartir Nota
+                <span className="ml-auto text-[10px] font-bold text-emerald-600">WhatsApp</span>
+              </button>
+              <button onClick={compartirOrdenDespacho}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-emerald-700 hover:bg-emerald-50 text-left">
+                <MessageCircle size={14} className="text-emerald-400" /> Compartir Orden
+                <span className="ml-auto text-[10px] font-bold text-emerald-600">WhatsApp</span>
               </button>
             </div>
           )}
@@ -572,10 +756,18 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           setAccionPendiente(null)
         }}
         title={confirmConfig.confirmTitle || (accionPendiente?.estado === 'despachada' ? '¿Marcar como despachada?' : '¿Marcar como entregada?')}
-        message={confirmConfig.confirmMessage || `El despacho ${numDisplay} cambiará de estado.`}
+        message={hayFaltaStock && accionPendiente?.estado === 'despachada' ? (
+          <div className="flex flex-col items-center gap-2">
+            <p>{confirmConfig.confirmMessage}</p>
+            <div className="mt-2 p-2.5 bg-red-50 border border-red-200 rounded-xl text-red-600 font-bold text-xs flex items-center gap-2">
+              <AlertTriangle size={14} className="shrink-0" />
+              <span>Hay productos sin stock suficiente. ¿Aprobar de todas formas?</span>
+            </div>
+          </div>
+        ) : confirmConfig.confirmMessage || `El despacho ${numDisplay} cambiará de estado.`}
         details={confirmConfig.confirmDetails || ''}
         confirmText={confirmConfig.confirmText || 'Confirmar'}
-        variant={confirmConfig.variant || 'default'}
+        variant={hayFaltaStock && accionPendiente?.estado === 'despachada' ? 'warning' : (confirmConfig.variant || 'default')}
       />
 
       {/* Modal especial para Devolver o Anular desde "despachada" */}
