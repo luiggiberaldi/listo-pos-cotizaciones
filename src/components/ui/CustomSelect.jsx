@@ -114,7 +114,7 @@ export default function CustomSelect({
       const rect = ref.current.getBoundingClientRect()
       const viewH = window.visualViewport?.height || window.innerHeight
       const spaceBelow = viewH - rect.bottom
-      const goUp = spaceBelow < 220
+      const goUp = spaceBelow < 280
       setOpenUp(goUp)
       setPortalPos({
         top: goUp ? rect.top : rect.bottom + 6,

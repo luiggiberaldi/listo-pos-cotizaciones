@@ -4,7 +4,7 @@
 // — Supervisor: vista completa + crear/editar/desactivar
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Package, Plus, Search, RefreshCw, X, Filter, LayoutGrid, List, AlertTriangle, ArrowLeftRight, FileText, ClipboardPaste } from 'lucide-react'
+import { Package, Plus, Search, RefreshCw, X, Filter, LayoutGrid, List, AlertTriangle, ArrowLeftRight, FileText, ClipboardPaste, TrendingUp } from 'lucide-react'
 import { smartSearchProductos } from '../utils/smartSearch'
 import useAuthStore from '../store/useAuthStore'
 import { useTasaCambio } from '../hooks/useTasaCambio'
@@ -21,6 +21,8 @@ import KardexModal from '../components/inventario/KardexModal'
 import ProductoDetalleModal from '../components/inventario/ProductoDetalleModal'
 import ListaPreciosModal from '../components/inventario/ListaPreciosModal'
 import BusquedaListaModal from '../components/inventario/BusquedaListaModal'
+import ModalBatchPrice from '../components/ModalBatchPrice'
+import ModalTransformacion from '../components/inventario/ModalTransformacion'
 import { Modal }     from '../components/ui/Modal'
 import ConfirmModal  from '../components/ui/ConfirmModal'
 import EmptyState    from '../components/ui/EmptyState'
@@ -52,6 +54,7 @@ function SkeletonProductos() {
 // ─── Vista principal ──────────────────────────────────────────────────────────
 export default function InventarioView() {
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
+  const user = useAuthStore(useCallback(s => s.user, []))
   const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
   const esAdministracion = perfil?.rol === 'administracion'
   const esDesarrollador = perfil?.rol === 'desarrollador'
@@ -97,6 +100,8 @@ export default function InventarioView() {
   const [tabActivo,        setTabActivo]        = useState('productos') // 'productos' | 'movimientos'
   const [showListaPrecios, setShowListaPrecios] = useState(false)
   const [showBusquedaLista, setShowBusquedaLista] = useState(false)
+  const [showBatchPrice, setShowBatchPrice] = useState(false)
+  const [showTransformacion, setShowTransformacion] = useState(false)
 
   // Data — todos los productos (sin filtro de búsqueda, filtro client-side con smartSearch)
   const { data: inventarioData, isLoading, isError, refetch } = useInventario({ categoria, pageSize: 1000 })
@@ -107,6 +112,7 @@ export default function InventarioView() {
   const desactivar = useDesactivarProducto()
   const borrar = useBorrarProducto()
   const { data: stockComprometido = {} } = useStockComprometido()
+  const categoriasBatch = useMemo(() => [...new Set(todosProductos.map(p => p.categoria).filter(Boolean))].sort(), [todosProductos])
 
   // Smart search client-side con ranking por relevancia
   const productos = useMemo(() => {
@@ -224,6 +230,21 @@ export default function InventarioView() {
             <button onClick={() => setModalLoteOpen(true)} className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98] bg-slate-700 hover:bg-slate-600">
               <ArrowLeftRight size={16} />
               <span className="hidden sm:inline">Ingreso / Egreso</span>
+            </button>
+            <button
+              onClick={() => setShowBatchPrice(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-amber-400 text-amber-700 font-bold text-sm hover:bg-amber-50 transition-all shadow-sm"
+            >
+              <TrendingUp size={16} />
+              <span className="hidden sm:inline">Actualizar Precios</span>
+              <span className="sm:hidden">Precios</span>
+            </button>
+            <button
+              onClick={() => setShowTransformacion(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 transition-all shadow-sm"
+            >
+              <ArrowLeftRight size={16} />
+              <span className="hidden sm:inline">Transformar</span>
             </button>
             <button onClick={abrirCrear} className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98]"
               style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
@@ -504,6 +525,22 @@ export default function InventarioView() {
         productos={todosProductos}
         tasa={tasaEfectiva}
         configNeg={configNeg}
+      />
+
+      <ModalBatchPrice
+        isOpen={showBatchPrice}
+        onClose={() => setShowBatchPrice(false)}
+        cuentaId={user?.id}
+        categorias={categoriasBatch}
+        onSuccess={() => refetch()}
+      />
+
+      <ModalTransformacion
+        isOpen={showTransformacion}
+        onClose={() => setShowTransformacion(false)}
+        productos={todosProductos}
+        cuentaId={user?.id}
+        onSuccess={refetch}
       />
     </div>
   )

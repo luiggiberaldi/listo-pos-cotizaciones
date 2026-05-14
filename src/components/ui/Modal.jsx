@@ -34,24 +34,30 @@ export const Modal = ({ isOpen, onClose, title, children, className = '' }) => {
 
   useEffect(() => {
     if (!isOpen) return;
-    // Save previous focus to restore later
+    
+    // Guardar el foco previo
     previousFocusRef.current = document.activeElement;
     document.addEventListener('keydown', handleKeyDown);
-    // Focus first focusable element in modal
-    requestAnimationFrame(() => {
+
+    // Solo hacer autofoco al abrir, no en cada render
+    const timer = setTimeout(() => {
       if (modalRef.current) {
+        // Si ya hay un elemento del modal con foco, no forzar el primero
+        if (modalRef.current.contains(document.activeElement)) return;
+        
         const firstFocusable = modalRef.current.querySelector(
           'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
         );
         firstFocusable?.focus();
       }
-    });
+    }, 50);
+
     return () => {
+      clearTimeout(timer);
       document.removeEventListener('keydown', handleKeyDown);
-      // Restore focus on close
       previousFocusRef.current?.focus();
     };
-  }, [isOpen, handleKeyDown]);
+  }, [isOpen]); // Quitar handleKeyDown de dependencias para evitar re-foco constante
 
   if (!isOpen) return null;
 

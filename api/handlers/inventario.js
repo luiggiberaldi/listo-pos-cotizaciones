@@ -387,3 +387,237 @@ export async function handleSyncEmbeddings(request, env) {
 
   return json({ ok: true, procesados, faltantes_estimados: productos.length === 50 ? 'mas de 50' : 0 }, 200, request)
 }
+
+// ── Actualización Masiva de Precios (Admin) ──────────────────────────────────
+export async function handleBatchPriceUpdate(request, env) {
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { user, operador, headers, ip } = v;
+
+  const ROLES_BATCH = ['administracion', 'jefe', 'desarrollador'];
+  if (!ROLES_BATCH.includes(operador.rol)) {
+    return jsonError('Permisos insuficientes para actualización masiva de precios', 403, request);
+  }
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+
+  const { 
+    cuenta_id, modo, porcentaje, valor_fijo, 
+    categoria, precio_objetivo, preview_only 
+  } = body;
+
+  if (!cuenta_id) return jsonError('cuenta_id es obligatorio', 400, request);
+  if (!['porcentaje', 'valor_fijo'].includes(modo)) return jsonError('Modo inválido', 400, request);
+  if (!['precio_usd', 'precio_2', 'precio_3', 'todos'].includes(precio_objetivo)) return jsonError('Precio objetivo inválido', 400, request);
+
+  // 1. Obtener productos activos del tenant
+  let query = `${env.SUPABASE_URL}/rest/v1/productos?activo=eq.true&cuenta_id=eq.${cuenta_id}&select=id,nombre,precio_usd,precio_2,precio_3,categoria`;
+  if (categoria) {
+    query += `&categoria=eq.${encodeURIComponent(categoria)}`;
+  }
+
+  const prodRes = await fetch(query, { headers });
+  if (!prodRes.ok) return jsonError('Error al obtener productos', 500, request);
+  const productos = await prodRes.json();
+
+  if (productos.length === 0) return json({ count: 0, updated: 0, message: 'No se encontraron productos' }, 200, request);
+
+  const calculateNewPrice = (current) => {
+    let newVal = 0;
+    const actual = Number(current || 0);
+    if (modo === 'porcentaje') {
+      newVal = actual * (1 + (Number(porcentaje) || 0) / 100);
+    } else {
+      newVal = Number(valor_fijo) || 0;
+    }
+    return Math.round(newVal * 100) / 100;
+  };
+
+  const fieldMap = {
+    'precio_usd': ['precio_usd'],
+    'precio_2': ['precio_2'],
+    'precio_3': ['precio_3'],
+    'todos': ['precio_usd', 'precio_2', 'precio_3']
+  };
+
+  const targetFields = fieldMap[precio_objetivo];
+  const timestamp = new Date().toISOString();
+
+  if (preview_only) {
+    const ejemplos = productos.slice(0, 3).map(p => {
+      const result = { nombre: p.nombre };
+      targetFields.forEach(f => {
+        result[f] = { actual: p[f], nuevo: calculateNewPrice(p[f]) };
+      });
+      return result;
+    });
+    return json({ count: productos.length, ejemplos }, 200, request);
+  }
+
+  // Actualización masiva (vía RPC o múltiples patches, preferimos upsert si js-sdk permitiera bulk patch por id)
+  // Como fetch directo a PostgREST no soporta "bulk patch different values", usamos upsert con IDs
+  const updates = productos.map(p => {
+    const updateObj = { id: p.id, actualizado_en: timestamp };
+    targetFields.forEach(f => {
+      updateObj[f] = calculateNewPrice(p[f]);
+    });
+    return updateObj;
+  });
+
+  // Dividir en batches de 100 para evitar límites de payload
+  const batchSize = 100;
+  let totalUpdated = 0;
+  for (let i = 0; i < updates.length; i += batchSize) {
+    const batch = updates.slice(i, i + batchSize);
+    const upRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos`, {
+      method: 'POST',
+      headers: { ...headers, 'Prefer': 'resolution=merge-duplicates' },
+      body: JSON.stringify(batch)
+    });
+    if (!upRes.ok) {
+      const errText = await upRes.text();
+      return jsonError(`Error al actualizar batch: ${errText}`, 500, request);
+    }
+    totalUpdated += batch.length;
+  }
+
+  // Auditoría
+  try {
+    await registrarAuditoria(env, headers, {
+      usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
+      categoria: 'INVENTARIO', accion: 'BATCH_PRICE_UPDATE',
+      descripcion: `Actualización masiva de precios (${modo}): ${totalUpdated} productos.`,
+      entidadTipo: 'productos', entidadId: null, 
+      meta: { modo, porcentaje, valor_fijo, categoria, precio_objetivo, count: totalUpdated }, ip
+    });
+  } catch {}
+
+  return json({ updated: totalUpdated }, 200, request);
+}
+
+// ── Transformación de Inventario (Procesamiento de un producto en otro) ──────
+export async function handleTransformacionInventario(request, env) {
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { user, operador, headers, ip } = v;
+
+  const ROLES_TRANSFORM = ['administracion', 'jefe', 'desarrollador'];
+  if (!ROLES_TRANSFORM.includes(operador.rol)) {
+    return jsonError('Permisos insuficientes para realizar transformaciones', 403, request);
+  }
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+
+  const { origen, destino, motivo } = body;
+
+  if (!origen?.producto_id || !origen?.cantidad || !destino?.producto_id || !destino?.cantidad || !motivo) {
+    return jsonError('Faltan campos: origen, destino, motivo', 400, request);
+  }
+
+  if (origen.producto_id === destino.producto_id) {
+    return jsonError('Origen y destino no pueden ser el mismo producto', 400, request);
+  }
+
+  const loteId = crypto.randomUUID();
+  const timestamp = new Date().toISOString();
+
+  try {
+    // 1. Fetch producto origen
+    const oriRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${origen.producto_id}&cuenta_id=eq.${user.id}&activo=eq.true&select=id,nombre,stock_actual`, { headers });
+    const oriData = await oriRes.json();
+    if (!Array.isArray(oriData) || oriData.length === 0) return jsonError('Producto origen no encontrado', 400, request);
+    const prodOri = oriData[0];
+
+    if (Number(prodOri.stock_actual) < Number(origen.cantidad)) {
+      return jsonError(`Stock insuficiente en origen. Disponible: ${prodOri.stock_actual}`, 400, request);
+    }
+
+    // 2. Fetch producto destino
+    const desRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${destino.producto_id}&cuenta_id=eq.${user.id}&activo=eq.true&select=id,nombre,stock_actual`, { headers });
+    const desData = await desRes.json();
+    if (!Array.isArray(desData) || desData.length === 0) return jsonError('Producto destino no encontrado', 400, request);
+    const prodDes = desData[0];
+
+    const stockNuevoOri = Math.round((Number(prodOri.stock_actual) - Number(origen.cantidad)) * 100) / 100;
+    const stockNuevoDes = Math.round((Number(prodDes.stock_actual) + Number(destino.cantidad)) * 100) / 100;
+
+    // 3. PATCH producto origen
+    const patchOri = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${origen.producto_id}`, {
+      method: 'PATCH',
+      headers: { ...headers, Prefer: 'return=minimal' },
+      body: JSON.stringify({ stock_actual: stockNuevoOri, actualizado_en: timestamp }),
+    });
+    if (!patchOri.ok) throw new Error('Error al descontar stock de origen');
+
+    // 4. PATCH producto destino
+    const patchDes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${destino.producto_id}`, {
+      method: 'PATCH',
+      headers: { ...headers, Prefer: 'return=minimal' },
+      body: JSON.stringify({ stock_actual: stockNuevoDes, actualizado_en: timestamp }),
+    });
+    if (!patchDes.ok) throw new Error('Error al sumar stock de destino');
+
+    // 5. INSERT movimientos
+    const movimientos = [
+      {
+        lote_id: loteId,
+        tipo: "egreso",
+        motivo: motivo.trim(),
+        motivo_tipo: "transformacion",
+        producto_id: prodOri.id,
+        producto_nombre: prodOri.nombre,
+        cantidad: Number(origen.cantidad),
+        stock_anterior: Number(prodOri.stock_actual),
+        stock_nuevo: stockNuevoOri,
+        usuario_id: user.operator_id,
+        usuario_nombre: operador.nombre
+      },
+      {
+        lote_id: loteId,
+        tipo: "ingreso",
+        motivo: motivo.trim(),
+        motivo_tipo: "transformacion",
+        producto_id: prodDes.id,
+        producto_nombre: prodDes.nombre,
+        cantidad: Number(destino.cantidad),
+        stock_anterior: Number(prodDes.stock_actual),
+        stock_nuevo: stockNuevoDes,
+        usuario_id: user.operator_id,
+        usuario_nombre: operador.nombre
+      }
+    ];
+
+    const movRes = await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos`, {
+      method: 'POST',
+      headers: { ...headers, Prefer: 'return=minimal' },
+      body: JSON.stringify(movimientos),
+    });
+    if (!movRes.ok) {
+      const errText = await movRes.text();
+      throw new Error(`Error al registrar movimientos: ${errText}`);
+    }
+
+    // 6. Auditoría
+    try {
+      await registrarAuditoria(env, headers, {
+        usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
+        categoria: 'INVENTARIO', accion: 'TRANSFORMACION_INVENTARIO',
+        descripcion: `Transformación: ${prodOri.nombre} (${origen.cantidad}) → ${prodDes.nombre} (${destino.cantidad})`,
+        entidadTipo: 'inventario', entidadId: loteId, 
+        meta: { motivo, origen, destino, lote_id: loteId }, ip,
+      });
+    } catch {}
+
+    return json({ 
+      ok: true, 
+      lote_id: loteId, 
+      origen: { nombre: prodOri.nombre, stock_nuevo: stockNuevoOri },
+      destino: { nombre: prodDes.nombre, stock_nuevo: stockNuevoDes } 
+    }, 200, request);
+
+  } catch (e) {
+    return jsonError(e.message || 'Error en proceso de transformación', 500, request);
+  }
+}

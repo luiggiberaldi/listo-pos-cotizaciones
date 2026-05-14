@@ -21,7 +21,7 @@ import { handleGetAudit, handleGetAuditStats, handleAnalyzeAudit } from './api/h
 import { handleMarcarComisionPagada, handleActualizarEstadoComision, handleGetComisionesConfig, handleGetComisiones, handleGetComisionesResumen } from './api/handlers/comisiones.js'
 import { handleRegistrarAbono } from './api/handlers/cxc.js'
 import { handleSwitchOperator, handleClearOperator, handleGetOperators, handleSuperAdmin } from './api/handlers/auth-operators.js'
-import { handleBuscarProductosHibrido, handleSyncEmbeddings, handleParseMaterialText, handleAplicarMovimientoLote, handleClearInventory, handlePdfTemp } from './api/handlers/inventario.js'
+import { handleBuscarProductosHibrido, handleSyncEmbeddings, handleParseMaterialText, handleAplicarMovimientoLote, handleTransformacionInventario, handleBatchPriceUpdate, handleClearInventory, handlePdfTemp } from './api/handlers/inventario.js'
 import { handleGuardarCotizacion, handleReciclarCotizacion, handleReabrirCotizacion, handleCrearVersion, handleEnviarCotizacion, handleVentaRapida } from './api/handlers/cotizaciones.js'
 import { handleCrearDespacho, handleActualizarEstadoDespacho, handleEditarItemsDespacho, handleReciclarDespacho, handleGuardarDescuentos, handleObtenerDescuentos, handleEditarPagoDespacho } from './api/handlers/despachos.js'
 import { handleDevTools } from './api/handlers/dev.js'
@@ -117,6 +117,11 @@ export default {
     // ── API: Búsqueda híbrida de productos ──────────────────────────────────
     if (url.pathname === '/api/productos/buscar' && request.method === 'POST') {
       return handleBuscarProductosHibrido(request, env);
+    }
+
+    // ── API: Actualización masiva de precios ────────────────────────────────
+    if (url.pathname === '/api/productos/batch-price' && request.method === 'PATCH') {
+      return handleBatchPriceUpdate(request, env);
     }
 
     // ── API: Sincronizar embeddings de productos (admin) ────────────────────
@@ -226,6 +231,11 @@ export default {
     // ── API: aplicar movimiento de inventario (bypass RLS) ──────────────────
     if (url.pathname === '/api/inventario/movimiento' && request.method === 'POST') {
       return handleAplicarMovimientoLote(request, env);
+    }
+
+    // ── API: transformación de inventario (admin) ──────────────────────────
+    if (url.pathname === '/api/inventario/transformacion' && request.method === 'POST') {
+      return handleTransformacionInventario(request, env);
     }
 
     // ── API: admin logs (CRUD + análisis AI) ──────────────────────────────
