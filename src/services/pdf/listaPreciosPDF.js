@@ -73,24 +73,6 @@ const MONEDA_LABELS = {
 // ─── Layout y Colores ────────────────────────────────────────────────────────
 const C_CAT_BG  = [235, 240, 250]
 
-function addWatermark(doc) {
-  try {
-    const gState = new doc.GState({ opacity: 0.06 })
-    doc.setGState(gState)
-    doc.addImage(WATERMARK_LOGO, 'PNG', (PAGE_W - 140) / 2, (PAGE_H - 140) / 2, 140, 140)
-    doc.setGState(new doc.GState({ opacity: 1 }))
-  } catch (_) {}
-}
-
-function checkPage(doc, y, needed = 30, onNewPage = null) {
-  if (y + needed > PAGE_H - 36) {
-    doc.addPage()
-    addWatermark(doc)
-    if (onNewPage) return onNewPage(doc)
-    return MARGIN + 10
-  }
-  return y
-}
 
 // Trunca texto para que quepa en maxW mm, agregando '…' si se corta
 function fitText(doc, text, maxW) {
