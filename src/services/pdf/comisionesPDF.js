@@ -17,12 +17,14 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
 
   const logoData = await cargarLogo(config.logo_url)
 
-  // NORMALIZAR: unificar naming antes de procesar
+  // NORMALIZAR: unificar naming antes de procesar (soporte para Worker API y RPC)
   function normalizarComision(c) {
+    const rawEstado = (c.estado || c.estado_comision || 'pendiente').toLowerCase()
+    
     return {
       ...c,
-      // Totales
-      totalcomision: Number(c.totalcomision || c.total_com || 0),
+      // Totales (Prioridad a RPC si existen, luego Worker, luego default)
+      totalcomision: Number(c.total_com || c.totalcomision || c.despacho_comision_total || 0),
       comisioncabilla: Number(c.comisioncabilla || 0),
       comisionotros: Number(c.comisionotros || 0),
       // Valor del item (si aplica)
@@ -30,10 +32,10 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
       pct: Number(c.comision_pct || c.pct || 0),
       // Producto
       codigo: c.codigo || '',
-      descripcion: (c.descripcion || '').toUpperCase(),
+      descripcion: (c.descripcion || c.nombre_snap || '').toUpperCase(),
       // Número de despacho
-      despachonumero: c.despachonumero || c.despacho_numero || c.despacho?.numero || '---',
-      montopagado: Number(c.montopagado || 0),
+      despachonumero: c.despacho_numero || c.despachonumero || c.despacho?.numero || '---',
+      montopagado: Number(c.despacho_comision_liberada || c.montopagado || 0),
       // Tasa
       tasa_snapshot: Number(
         c.tasa ||
@@ -42,13 +44,15 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
         c.cotizacion?.tasa_bcv_snapshot || 
         0
       ),
-      estado: (c.estado || c.estado_comision || 'pendiente').toLowerCase(),
+      // Mapeo de estados: 'pagada' es el único estado que suma al pagado, resto son pendientes
+      estado: rawEstado,
       creadoen: c.fecha || c.creadoen || new Date().toISOString()
     }
   }
 
   const comisionesNorm = (comisiones || []).map(normalizarComision)
-  const esDetallado = comisionesNorm.some(c => c.descripcion) // Si hay descripciones, es el reporte por producto
+  // Si hay descripciones significativas, es el reporte detallado
+  const esDetallado = comisionesNorm.some(c => c.descripcion && c.descripcion !== '---')
 
   // ══════════════════════════════════════════════════════════════════════════
   // 1. CABECERA

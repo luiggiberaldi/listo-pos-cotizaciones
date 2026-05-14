@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react'
 import {
   BarChart3, CreditCard, RefreshCw, Download,
   FileText, DollarSign, AlertTriangle,
-  Clock, Users, Percent, ArrowUpCircle,
+  Clock, Users, Percent, ArrowUpCircle, Loader2
 } from 'lucide-react'
 import { useReporteVentas } from '../hooks/useReporteVentas'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
@@ -364,7 +364,7 @@ function TabVentas({ configNeg }) {
 }
 
 // ─── Modal Detalle Vendedor ──────────────────────────────────────────────────
-function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose }) {
+function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
   const { data: comisionesRes, isLoading } = useComisiones({
     desde: rango?.from,
     hasta: rango?.to,
@@ -383,17 +383,38 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose }) {
     return acc
   }, { totalUsd: 0, comBs: 0 })
 
+  const [exportando, setExportando] = useState(false)
+
   async function exportarPDF() {
+    setExportando(true)
     try {
       const { generarComisionesPDF } = await import('../services/pdf/comisionesPDF')
-      if (!detalle || detalle.length === 0) return
+
+      // Obtener el reporte detallado desde la RPC para que calcule bien los montos
+      const { data: detalleVendedor, error } = await supabase.rpc('obtener_reporte_ventas_comisiones', {
+        p_fecha_inicio: rango?.from ? `${rango.from}T00:00:00-04:00` : null,
+        p_fecha_fin: rango?.to ? `${rango.to}T23:59:59-04:00` : null,
+        p_vendedor_id: vendedor?.id
+      })
+
+      if (error) throw error
+
+      if (!detalleVendedor || detalleVendedor.length === 0) {
+        alert('No hay datos para generar el PDF de este vendedor en este rango.')
+        return
+      }
 
       await generarComisionesPDF({
-        comisiones: detalle,
+        comisiones: detalleVendedor,
         vendedor: { nombre: vendedor?.nombre, color: vendedor?.color },
-        config: {}
+        config: configNeg ?? {}
       })
-    } catch (e) { console.error('Error generando PDF individual:', e) }
+    } catch (e) {
+      console.error('Error generando PDF individual:', e)
+      alert('Error generando PDF: ' + e.message)
+    } finally {
+      setExportando(false)
+    }
   }
 
   return (
@@ -412,10 +433,11 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose }) {
             </div>
             <button
               onClick={(e) => { e.stopPropagation(); exportarPDF(); }}
-              className="ml-3 shrink-0 flex flex-col items-center justify-center gap-1 w-14 h-14 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white transition-all shadow-lg border border-white/10 group"
+              disabled={exportando}
+              className="ml-3 shrink-0 flex flex-col items-center justify-center gap-1 w-14 h-14 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white transition-all shadow-lg border border-white/10 group disabled:opacity-50"
               title="Descargar Reporte PDF"
             >
-              <Download size={18} className="group-hover:scale-110 transition-transform" />
+              {exportando ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} className="group-hover:scale-110 transition-transform" />}
               <span className="text-[9px] font-black tracking-widest uppercase">PDF</span>
             </button>
           </div>
@@ -538,8 +560,8 @@ function TabComisiones({ configNeg }) {
 
       // Corregimos nombres de parámetros y formateo de fechas
       const { data: detalleCompleto, error } = await supabase.rpc('obtener_reporte_ventas_comisiones', {
-        p_fecha_inicio: rango.from ? `${rango.from}T00:00:00` : null,
-        p_fecha_fin: rango.to ? `${rango.to}T23:59:59` : null,
+        p_fecha_inicio: rango.from ? `${rango.from}T00:00:00-04:00` : null,
+        p_fecha_fin: rango.to ? `${rango.to}T23:59:59-04:00` : null,
         p_vendedor_id: null
       })
 
@@ -564,8 +586,8 @@ function TabComisiones({ configNeg }) {
 
       // Corregimos nombres de parámetros y formateo de fechas
       const { data: detalleVendedor, error } = await supabase.rpc('obtener_reporte_ventas_comisiones', {
-        p_fecha_inicio: rango.from ? `${rango.from}T00:00:00` : null,
-        p_fecha_fin: rango.to ? `${rango.to}T23:59:59` : null,
+        p_fecha_inicio: rango.from ? `${rango.from}T00:00:00-04:00` : null,
+        p_fecha_fin: rango.to ? `${rango.to}T23:59:59-04:00` : null,
         p_vendedor_id: vendedor.id
       })
 
@@ -710,6 +732,7 @@ function TabComisiones({ configNeg }) {
             onClose={() => setVendedorSeleccionado(null)}
             vendedor={vendedorSeleccionado}
             rango={rango}
+            configNeg={configNeg}
           />
 
           {comisiones.length === 0 && (
