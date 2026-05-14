@@ -5,7 +5,7 @@ import { X, Delete, Loader2 } from 'lucide-react'
 import LoginAvatar from './LoginAvatar'
 
 export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
-  const PIN_LEN = user?.rol === 'vendedor' ? 4 : 6
+  const PIN_LEN = (user?.rol === 'vendedor' || user?.rol === 'vendedor_sin_comision') ? 4 : 6
 
   const [pin,     setPin]     = useState('')
   const [error,   setError]   = useState(false)

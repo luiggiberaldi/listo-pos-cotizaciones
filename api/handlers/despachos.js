@@ -184,13 +184,22 @@ export async function handleEditarPagoDespacho(request, env) {
   const comRes = await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}&select=id`, { headers: h });
   const comEntries = await comRes.json();
   if (Array.isArray(comEntries) && comEntries.length > 0) {
-    await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}`, {
-      method: 'DELETE', headers: h,
-    });
-    await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcular_comision_despacho`, {
-      method: 'POST', headers: { ...h, Prefer: 'return=representation' },
-      body: JSON.stringify({ p_despacho_id: despachoId }),
-    });
+    const vendRolRes2 = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${despacho.vendedor_id}&select=rol`,
+      { headers: h }
+    );
+    const [vendRol2] = await vendRolRes2.json();
+    console.log('[COMISION][EDITAR_PAGO] rol vendedor:', vendRol2?.rol);
+
+    if (vendRol2?.rol !== 'vendedor_sin_comision') {
+      await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}`, {
+        method: 'DELETE', headers: h,
+      });
+      await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcular_comision_despacho`, {
+        method: 'POST', headers: { ...h, Prefer: 'return=representation' },
+        body: JSON.stringify({ p_despacho_id: despachoId }),
+      });
+    }
   }
 
   // Auditoría
@@ -414,16 +423,27 @@ export async function handleActualizarEstadoDespacho(request, env) {
     // 5. Calcular comisión solo al confirmar entrega
     if (nuevoEstado === 'entregada') {
       try {
-        const comRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcularcomisiondespacho`, {
-          method: 'POST', headers,
-          body: JSON.stringify({ p_despachoid: despachoId }),
-        });
-        if (!comRes.ok) {
-          const comErr = await comRes.text();
-          console.error('[COMISION] Error al calcular:', comErr);
+        const vendRolRes = await fetch(
+          `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${desp.vendedor_id}&select=rol`,
+          { headers }
+        );
+        const [vendRol] = await vendRolRes.json();
+        console.log('[COMISION] rol vendedor:', vendRol?.rol);
+
+        if (vendRol?.rol !== 'vendedor_sin_comision') {
+          const comRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcularcomisiondespacho`, {
+            method: 'POST', headers,
+            body: JSON.stringify({ p_despachoid: despachoId }),
+          });
+          if (!comRes.ok) {
+            const comErr = await comRes.text();
+            console.error('[COMISION] Error al calcular:', comErr);
+          } else {
+            const comisionId = await comRes.json();
+            console.log('[COMISION] Creada con id:', comisionId);
+          }
         } else {
-          const comisionId = await comRes.json();
-          console.log('[COMISION] Creada con id:', comisionId);
+          console.log('[COMISION] Vendedor sin comisión, se omite el cálculo.');
         }
       } catch (comEx) {
         console.error('[COMISION] Error al calcular:', comEx?.message);
@@ -632,13 +652,27 @@ export async function handleEditarItemsDespacho(request, env) {
     const comRes = await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}&select=id`, { headers });
     const comEntries = await comRes.json();
     if (Array.isArray(comEntries) && comEntries.length > 0) {
-      await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}`, {
-        method: 'DELETE', headers,
-      });
-      await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcular_comision_despacho`, {
-        method: 'POST', headers: { ...headers, Prefer: 'return=representation' },
-        body: JSON.stringify({ p_despacho_id: despachoId }),
-      });
+      const dResCheck = await fetch(
+        `${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&select=vendedor_id`,
+        { headers }
+      );
+      const [despCheck] = await dResCheck.json();
+      const vendRolRes4 = await fetch(
+        `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${despCheck?.vendedor_id}&select=rol`,
+        { headers }
+      );
+      const [vendRol4] = await vendRolRes4.json();
+      console.log('[COMISION][EDITAR_ITEMS] rol vendedor:', vendRol4?.rol);
+
+      if (vendRol4?.rol !== 'vendedor_sin_comision') {
+        await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}`, {
+          method: 'DELETE', headers,
+        });
+        await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcular_comision_despacho`, {
+          method: 'POST', headers: { ...headers, Prefer: 'return=representation' },
+          body: JSON.stringify({ p_despacho_id: despachoId }),
+        });
+      }
     }
 
     return json({ ok: true }, 200, request);
@@ -784,15 +818,24 @@ export async function handleGuardarDescuentos(request, env) {
       );
       const comEntries = await comRes.json();
       if (Array.isArray(comEntries) && comEntries.length > 0) {
-        // Eliminar comisión existente para que se recalcule
-        await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}`, {
-          method: 'DELETE', headers,
-        });
-        // Recalcular comisión con descuentos aplicados
-        await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcular_comision_despacho`, {
-          method: 'POST', headers: { ...headers, Prefer: 'return=representation' },
-          body: JSON.stringify({ p_despacho_id: despachoId }),
-        });
+        const vendRolRes3 = await fetch(
+          `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${desp.vendedor_id}&select=rol`,
+          { headers }
+        );
+        const [vendRol3] = await vendRolRes3.json();
+        console.log('[COMISION][DESCUENTOS] rol vendedor:', vendRol3?.rol);
+
+        if (vendRol3?.rol !== 'vendedor_sin_comision') {
+          // Eliminar comisión existente para que se recalcule
+          await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}`, {
+            method: 'DELETE', headers,
+          });
+          // Recalcular comisión con descuentos aplicados
+          await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcular_comision_despacho`, {
+            method: 'POST', headers: { ...headers, Prefer: 'return=representation' },
+            body: JSON.stringify({ p_despacho_id: despachoId }),
+          });
+        }
       }
     }
 

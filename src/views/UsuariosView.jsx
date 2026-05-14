@@ -42,10 +42,22 @@ const ROL_CONFIG = {
     border: 'border-teal-200',
   },
   vendedor_sin_comision: {
-    label:  'Vendedor (Sin Comisión)',
-    bg:     'bg-slate-50',
-    text:   'text-slate-500',
-    border: 'border-slate-200',
+    label:  'Vendedor',
+    bg:     'bg-teal-50',
+    text:   'text-teal-700',
+    border: 'border-teal-200',
+  },
+  trabajador: {
+    label:  'Trabajador',
+    bg:     'bg-orange-50',
+    text:   'text-orange-600',
+    border: 'border-orange-200',
+  },
+  desarrollador: {
+    label:  'Desarrollador',
+    bg:     'bg-violet-50',
+    text:   'text-violet-600',
+    border: 'border-violet-200',
   },
   logistica: {
     label:  'Logística',
@@ -149,11 +161,13 @@ function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
         }}
         options={[
           { value: 'vendedor', label: 'Vendedor' },
-          { value: 'vendedor_sin_comision', label: 'Vendedor (Sin Comisión)' },
+          { value: 'vendedor_sin_comision', label: 'Vendedor sin comisión' },
           { value: 'administracion', label: 'Administración' },
           { value: 'logistica', label: 'Logística' },
           { value: 'supervisor', label: 'Supervisor' },
+          { value: 'trabajador', label: 'Trabajador' },
           { value: 'jefe', label: 'Jefe' },
+          { value: 'desarrollador', label: 'Desarrollador' },
         ]}
         placeholder="Seleccionar rol..."
         disabled={cargando}
@@ -279,11 +293,13 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando, coloresUsados = 
         }}
         options={[
           { value: 'vendedor', label: 'Vendedor' },
-          { value: 'vendedor_sin_comision', label: 'Vendedor (Sin Comisión)' },
+          { value: 'vendedor_sin_comision', label: 'Vendedor sin comisión' },
           { value: 'administracion', label: 'Administración' },
           { value: 'logistica', label: 'Logística' },
           { value: 'supervisor', label: 'Supervisor' },
+          { value: 'trabajador', label: 'Trabajador' },
           { value: 'jefe', label: 'Jefe' },
+          { value: 'desarrollador', label: 'Desarrollador' },
         ]}
         placeholder="Seleccionar rol..."
         disabled={cargando}
@@ -733,7 +749,7 @@ export default function UsuariosView() {
     }
   }
 
-  const ROL_ORDEN = { jefe: 0, logistica: 1, administracion: 1, supervisor: 2, vendedor: 3, vendedor_sin_comision: 4 }
+  const ROL_ORDEN = { jefe: 0, logistica: 1, administracion: 1, supervisor: 2, vendedor: 3, vendedor_sin_comision: 4, trabajador: 5, desarrollador: 6 }
   const sortUsuarios = (arr) => [...arr].sort((a, b) => {
     const oa = ROL_ORDEN[a.rol] ?? 9
     const ob = ROL_ORDEN[b.rol] ?? 9

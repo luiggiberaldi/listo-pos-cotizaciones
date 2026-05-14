@@ -101,7 +101,7 @@ function useMetricas() {
         delMesCount: delMes.length, pendientesRespuesta, tasaAceptacion,
       }
     },
-    enabled: !!perfil && (perfil.rol === 'vendedor' || perfil.rol === 'supervisor' || perfil.rol === 'jefe' || perfil.rol === 'desarrollador'),
+    enabled: !!perfil && (perfil.rol === 'vendedor' || perfil.rol === 'vendedor_sin_comision' || perfil.rol === 'supervisor' || perfil.rol === 'jefe' || perfil.rol === 'desarrollador'),
     retry: 1,
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 15,
@@ -145,7 +145,7 @@ export default function DashboardView() {
   const esAdministracion = perfil?.rol === 'administracion'
   const esDesarrollador = perfil?.rol === 'desarrollador'
   const esLogistica = perfil?.rol === 'logistica'
-  const esVendedor = perfil?.rol === 'vendedor'
+  const esVendedor = perfil?.rol === 'vendedor' || perfil?.rol === 'vendedor_sin_comision'
   const esPrivilegiado = esSupervisor || esAdministracion || esDesarrollador || esJefe
 
   const { data: m, isLoading } = useMetricas()

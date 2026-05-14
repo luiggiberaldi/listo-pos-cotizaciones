@@ -455,10 +455,20 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
     const nombre = (fp.metodo || '').toUpperCase()
     if (!nombre) return
     const boxY = fpY + 2.5
-    // Checkbox (sin palomita)
+    // Checkbox
     doc.setDrawColor(80, 80, 80)
     doc.setLineWidth(0.3)
     doc.rect(cx, boxY, checkSize, checkSize, 'S')
+
+    // Dibuja la palomita (check) si está aprobado
+    if (despacho.aprobado_por_nombre) {
+      doc.setLineWidth(0.6)
+      doc.setDrawColor(30, 80, 160) // Color azul institucional (mismo que marca de agua de aprobación)
+      doc.line(cx + 0.6, boxY + 1.8, cx + 1.6, boxY + 2.8)
+      doc.line(cx + 1.6, boxY + 2.8, cx + 3.1, boxY + 0.5)
+      doc.setLineWidth(0.3)
+    }
+
     const monto = fp.monto != null && fp.monto !== '' ? ` $${Number(fp.monto).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''
     const txt = nombre + monto
     // Label

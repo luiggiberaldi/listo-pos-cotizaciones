@@ -15,7 +15,7 @@ const BOTTOM_ITEMS = [
 ]
 
 const MORE_ITEMS = [
-  { path: '/venta-rapida', label: 'Venta rápida', icon: Zap, onlyRoles: ['vendedor', 'supervisor'] },
+  { path: '/venta-rapida', label: 'Venta rápida', icon: Zap, onlyRoles: ['vendedor', 'vendedor_sin_comision', 'supervisor'] },
   { path: '/inventario', label: 'Inventario', icon: Package, excludeRoles: ['logistica'] },
   { path: '/transportistas', label: 'Transportistas', icon: Truck, excludeRoles: ['administracion', 'logistica'] },
   { path: '/comisiones', label: 'Comisiones', icon: DollarSign, excludeRoles: ['logistica'] },

@@ -71,7 +71,7 @@ function NotifIcon({ type }) {
 // ─── Definición de rutas de navegación ────────────────────────────────────────
 const NAV_TODOS = [
   { path: '/',               label: 'Inicio',         icono: LayoutDashboard },
-  { path: '/venta-rapida',   label: 'Venta rápida',   icono: Zap,            onlyRoles: ['vendedor', 'supervisor'] },
+  { path: '/venta-rapida',   label: 'Venta rápida',   icono: Zap,            onlyRoles: ['vendedor', 'vendedor_sin_comision', 'supervisor'] },
   { path: '/cotizaciones',   label: 'Cotizaciones',   icono: FileText,       excludeRoles: ['logistica', 'administracion'] },
   { path: '/despachos',      label: 'Despachos',      icono: PackageCheck,   labelByRole: { logistica: 'Entregas' } },
   { path: '/clientes',       label: 'Clientes',       icono: Users,          excludeRoles: ['logistica'] },
@@ -82,7 +82,7 @@ const NAV_TODOS = [
 
 const NAV_SUPERVISOR = [
   { path: '/reportes',      label: 'Reportes',      icono: BarChart3,   excludeRoles: ['supervisor'] },
-  { path: '/configuracion', label: 'Configuración', icono: Settings, excludeRoles: ['vendedor', 'logistica'] },
+  { path: '/configuracion', label: 'Configuración', icono: Settings, excludeRoles: ['vendedor', 'vendedor_sin_comision', 'logistica'] },
   { path: '/logs',          label: 'System Logs',   icono: ScrollText, onlyRoles: ['desarrollador'] },
   { path: '/tester',        label: 'Tester',        icono: FlaskConical, onlyRoles: ['desarrollador'] },
 ]
@@ -92,11 +92,14 @@ function BadgeRol({ rol }) {
   const estilos = {
     supervisor:      'bg-sky-500/20 text-sky-300 border border-sky-500/30',
     vendedor:        'bg-teal-500/20 text-teal-300 border border-teal-500/30',
+    vendedor_sin_comision: 'bg-teal-500/20 text-teal-300 border border-teal-500/30',
     administracion:  'bg-amber-500/20 text-amber-300 border border-amber-500/30',
     logistica:       'bg-purple-500/20 text-purple-300 border border-purple-500/30',
     desarrollador:   'bg-violet-500/20 text-violet-300 border border-violet-500/30',
+    jefe:            'bg-amber-600/20 text-amber-400 border border-amber-600/30',
+    trabajador:      'bg-orange-500/20 text-orange-300 border border-orange-500/30',
   }
-  const textos = { supervisor: 'Supervisor', vendedor: 'Vendedor', administracion: 'Administración', logistica: 'Logística', desarrollador: 'Dev' }
+  const textos = { supervisor: 'Supervisor', vendedor: 'Vendedor', vendedor_sin_comision: 'Vendedor', administracion: 'Administración', logistica: 'Logística', desarrollador: 'Dev', jefe: 'Jefe', trabajador: 'Trabajador' }
   return (
     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${estilos[rol] ?? 'bg-white/10 text-white/50'}`}>
       {textos[rol] ?? rol}
