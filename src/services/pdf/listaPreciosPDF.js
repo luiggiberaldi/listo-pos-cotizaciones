@@ -3,6 +3,12 @@
 import { jsPDF } from 'jspdf'
 import { cargarLogo } from './pdfLogo'
 import { WATERMARK_LOGO } from './watermarkBase64'
+import { 
+  PAGE_W, PAGE_H, MARGIN, CONTENT_W, 
+  C_PRIMARY, C_DARK, C_WHITE, C_GRAY,
+  drawSimplifiedHeader, checkPage
+} from './pdfShared'
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const CATEGORY_GROUPS = [
   'CONEXIONES',
@@ -65,15 +71,6 @@ const MONEDA_LABELS = {
 }
 
 // ─── Layout y Colores ────────────────────────────────────────────────────────
-const PAGE_W    = 216
-const PAGE_H    = 279
-const MARGIN    = 14
-const CONTENT_W = PAGE_W - MARGIN * 2
-
-const C_PRIMARY = [58, 99, 168]
-const C_DARK    = [5, 8, 52]
-const C_WHITE   = [255, 255, 255]
-const C_GRAY    = [100, 116, 139]
 const C_CAT_BG  = [235, 240, 250]
 
 function addWatermark(doc) {
@@ -257,28 +254,6 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
   let y = drawHeader(doc, logoData, config, moneda, tasa)
   addWatermark(doc)
 
-  const drawSimplifiedHeader = (d) => {
-    const SHDR_H = 12
-    d.setFillColor(...C_PRIMARY)
-    d.rect(0, 0, PAGE_W, SHDR_H, 'F')
-
-    if (logoData) {
-      try { d.addImage(logoData, 'PNG', MARGIN + 4, 1.5, 9, 9) } catch (_) {}
-    }
-
-    let n = config.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.'
-    if (n.trim().toUpperCase() === 'PRUEBA' || n.trim() === '') n = 'CONSTRUACERO CARABOBO C.A.'
-    d.setFont('times', 'bold')
-    d.setFontSize(11)
-    d.setTextColor(...C_WHITE)
-    d.text(n.toUpperCase(), MARGIN + 16, 8.5)
-
-    d.setFont('helvetica', 'normal')
-    d.setFontSize(8)
-    d.text('Lista de Precios (Cont.)', PAGE_W - MARGIN, 8.5, { align: 'right' })
-
-    return SHDR_H + 4
-  }
 
   // Agrupar por categoría usando el normalizador para corregir errores de tipeo
   const grupos = {}
@@ -388,7 +363,7 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
 
     // Subtítulo de categoría
     let prevY = y
-    y = checkPage(doc, y, 12, drawSimplifiedHeader)
+      y = checkPage(doc, y, ROW_H, (d) => drawSimplifiedHeader(d, logoData, config, 'Lista de Precios (Cont.)'))
     if (needsHeader || y < prevY) {
       y = drawTableHeader(y, isGrid)
       needsHeader = false
@@ -418,7 +393,7 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
     const ROW_H = 6.0
     items.forEach((p, idx) => {
       let prevY = y
-      y = checkPage(doc, y, ROW_H, drawSimplifiedHeader)
+      y = checkPage(doc, y, ROW_H, (d) => drawSimplifiedHeader(d, logoData, config, 'Lista de Precios (Cont.)'))
       if (y < prevY) {
         y = drawTableHeader(y, isGrid)
         needsHeader = false

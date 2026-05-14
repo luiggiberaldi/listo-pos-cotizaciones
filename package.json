@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "npx concurrently -n VITE,API -c cyan,yellow \"vite\" \"node dev-server.mjs\"",
+    "dev": "npx concurrently -n VITE,API -c cyan,yellow \"vite\" \"npm run dev:worker\"",
     "dev:vite": "vite",
-    "dev:api": "node dev-server.mjs",
+    "dev:api": "npm run dev:worker",
     "dev:worker": "npx wrangler dev --port 8787 --local --config wrangler.dev.jsonc",
     "build": "vite build",
     "preview": "vite preview",

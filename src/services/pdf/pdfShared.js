@@ -155,12 +155,48 @@ export function drawAprobadoWatermark(doc, nombre) {
   } catch (_) {}
 }
 
-/** Verifica si necesita salto de página, agrega nueva con watermark si es necesario */
-export function checkPage(doc, y, needed = 30) {
+/** Verifica si necesita salto de página, agrega nueva con watermark y ejecuta callback si existe */
+export function checkPage(doc, y, needed = 30, onPageAdd = null) {
   if (y + needed > PAGE_H - 25) {
     doc.addPage()
     drawWatermark(doc)
+    if (onPageAdd && typeof onPageAdd === 'function') {
+      return onPageAdd(doc)
+    }
     return MARGIN + 10
   }
   return y
+}
+
+/** 
+ * Dibuja un encabezado simplificado (banner azul pequeño) para páginas subsiguientes.
+ * @param {Object} doc - Instancia de jsPDF
+ * @param {string} logoData - Base64 del logo
+ * @param {Object} config - Configuración del negocio
+ * @param {string} rightTitle - Texto a mostrar a la derecha (ej: "Cotización Nº- 00001" o "Lista de Precios (Cont.)")
+ */
+export function drawSimplifiedHeader(doc, logoData, config, rightTitle = '') {
+  const SHDR_H = 12
+  doc.setFillColor(...C_PRIMARY)
+  doc.rect(0, 0, PAGE_W, SHDR_H, 'F')
+
+  if (logoData) {
+    try { doc.addImage(logoData, 'PNG', MARGIN + 4, 1.5, 9, 9) } catch (_) {}
+  }
+
+  let n = config.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.'
+  if (!n || n.trim().toUpperCase() === 'PRUEBA' || n.trim() === '') n = 'CONSTRUACERO CARABOBO C.A.'
+  
+  doc.setFont('times', 'bold')
+  doc.setFontSize(11)
+  doc.setTextColor(...C_WHITE)
+  doc.text(n.toUpperCase(), MARGIN + 16, 8.5)
+
+  if (rightTitle) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    doc.text(rightTitle, PAGE_W - MARGIN, 8.5, { align: 'right' })
+  }
+
+  return SHDR_H + 4
 }

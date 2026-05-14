@@ -7,7 +7,8 @@ import {
   C_PRIMARY, C_ACCENT, C_DARK, C_WHITE,
   CUENTAS_BANCARIAS,
   fmtFecha, fmtPrecio, fmtTotal, fmtTelefono,
-  hexToRgb, drawWatermark,
+  hexToRgb, drawWatermark, drawSimplifiedHeader,
+  checkPage
 } from './pdfShared'
 
 export async function generarPDF({ cotizacion, items = [], config = {}, returnBlob = false, monedaPDF = '$', tasa = 0, tasaUsdt = 0, tasaBcv = 0 }) {
@@ -193,18 +194,21 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     const bConds = ['Precios Sujetos a cambios sin previo aviso.', 'El cliente se encarga de descargar la mercancía.']
     const bCP = 2, bCTH = 6, bCLH = 5.0
     const bBoxH = bCTH + bConds.length * bCLH + bCP * 2 + 1
-    const sY = Math.max(afterY + 6, PAGE_H - 73)
+    const sY = afterY + 6
+    // Solo anclar al fondo si hay MUCHO espacio (poca densidad)
+    const finalY = (afterY < PAGE_H - 120) ? Math.max(sY, PAGE_H - 73) : sY
+    
     // Condiciones
     doc.setFillColor(230, 242, 255); doc.setDrawColor(...C_ACCENT); doc.setLineWidth(0.5)
-    doc.roundedRect(MARGIN, sY, bLeftW, bBoxH, 1.5, 1.5, 'FD')
+    doc.roundedRect(MARGIN, finalY, bLeftW, bBoxH, 1.5, 1.5, 'FD')
     doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...C_PRIMARY)
-    doc.text('CONDICIONES GENERALES:', MARGIN + bCP, sY + bCP + 4.5)
+    doc.text('CONDICIONES GENERALES:', MARGIN + bCP, finalY + bCP + 4.5)
     doc.setDrawColor(...C_ACCENT); doc.setLineWidth(0.3)
-    doc.line(MARGIN + bCP, sY + bCP + bCTH, MARGIN + bLeftW - bCP, sY + bCP + bCTH)
+    doc.line(MARGIN + bCP, finalY + bCP + bCTH, MARGIN + bLeftW - bCP, finalY + bCP + bCTH)
     doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(...C_DARK)
-    let bCY = sY + bCP + bCTH + 4.5
+    let bCY = finalY + bCP + bCTH + 4.5
     bConds.forEach(c => { doc.text('\u2022 ' + c, MARGIN + bCP, bCY); bCY += bCLH })
-    bCY = sY + bBoxH + 2
+    bCY = finalY + bBoxH + 2
     // Totales
     const bSub = Number(cotizacion.subtotal_usd || 0)
     const bDesc = Number(cotizacion.descuento_usd || 0)
@@ -216,8 +220,8 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     if (bExento > 0) bLines.push({ label: 'Exento:', val: fmtPrecio(bExento, monedaPDF, bTasa, factorBcv), color: [50, 100, 180] })
     const bLH = 7, bTH = (bLines.length + 1) * bLH + 4
     doc.setFillColor(250, 250, 250); doc.setDrawColor(220, 220, 220); doc.setLineWidth(0.3)
-    doc.roundedRect(bTotX, sY, bTotW, bTH, 1.5, 1.5, 'FD')
-    let bTy = sY + 5
+    doc.roundedRect(bTotX, finalY, bTotW, bTH, 1.5, 1.5, 'FD')
+    let bTy = finalY + 5
     bLines.forEach(l => {
       doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(...(l.color || C_DARK))
       doc.text(l.label, bTotX + 4, bTy); doc.text(l.val, bTotX + bTotW - 4, bTy, { align: 'right' })
@@ -266,7 +270,19 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     const lineH = 4.0
     const rowH = Math.max(ROW_H_BASE, descLines.length * lineH + 2)
 
-    const limitY = (pageNum === 1 && isLargeDoc) ? PAGE_H - 10 : PAGE_H - 45
+    // BALANCEO: Si hay muchos ítems, reducimos el límite de la página 1 para que algunos pasen a la página 2
+    // Esto evita que la página 2 tenga solo los totales.
+    const safeZone = 75
+    let limitY = PAGE_H - 45 // Default
+    if (pageNum === 1) {
+      if (itemsToRender.length > 20) {
+         // Si hay > 20 ítems, limitamos la página 1 a ~18 ítems para forzar balanceo
+         limitY = PAGE_H - 100 
+      } else {
+         limitY = PAGE_H - 20 // Máximo aprovechamiento para docs cortos
+      }
+    }
+    
     if (y + rowH > limitY) {
       doc.addPage()
       pageNum++
@@ -347,11 +363,8 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   })
 
   // 4. CONDICIONES + TOTALES (via helper)
-  if (isLargeDoc && pageNum === 1) {
-    doc.addPage()
-    pageNum++
-    y = drawSimplifiedHeader(doc, numDisplay)
-  }
+  // Verificamos si caben los totales (75mm de altura necesaria)
+  y = checkPage(doc, y, 75, (d) => drawSimplifiedHeader(d, logoData, config, `Cotización (Cont.) ${numDisplay}`))
   const bTotW = (monedaPDF === 'mixto' || monedaPDF === 'mixto_bcv') ? 90 : 75
   const bTotX = PAGE_W - MARGIN - bTotW
   const bLeftW = bTotX - MARGIN - 5
