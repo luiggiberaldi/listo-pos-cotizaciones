@@ -2,13 +2,13 @@
 // Vista profesional de reportes administrativos con tabs
 import { useState, useMemo } from 'react'
 import {
-  BarChart3, CreditCard, RefreshCw, Download, Package,
-  FileText, DollarSign, TrendingUp, AlertTriangle,
+  BarChart3, CreditCard, RefreshCw, Download,
+  FileText, DollarSign, AlertTriangle,
   Clock, Users, Percent, ArrowUpCircle,
 } from 'lucide-react'
-import { useReporteInventario } from '../hooks/useReporteInventario'
+import { useReporteVentas } from '../hooks/useReporteVentas'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
-import { useComisiones, useReporteVentasComisiones, useComisionesResumen } from '../hooks/useComisiones'
+import { useComisiones, useComisionesResumen } from '../hooks/useComisiones'
 import { useResumenCxC } from '../hooks/useCuentasCobrar'
 import { getWeekRange, getMonthRange } from '../utils/dateHelpers'
 import { fmtUsd, fmtBs } from '../utils/format'
@@ -17,13 +17,17 @@ import Skeleton from '../components/ui/Skeleton'
 import EmptyState from '../components/ui/EmptyState'
 import { Modal } from '../components/ui/Modal'
 import DateRangeSelector from '../components/reportes/DateRangeSelector'
+import KpiCards from '../components/reportes/KpiCards'
+import TablaVendedores from '../components/reportes/TablaVendedores'
+import TablaProductos from '../components/reportes/TablaProductos'
+import TablaClientes from '../components/reportes/TablaClientes'
 import supabase from '../services/supabase/client'
 
 // ─── Tabs Definition ──────────────────────────────────────────────────────
 const TABS = [
   { id: 'comisiones', label: 'Comisiones', short: 'Comis.', icon: Percent },
   { id: 'credito', label: 'Crédito', short: 'Créd.', icon: CreditCard },
-  { id: 'inventario', label: 'Inventario', short: 'Invent.', icon: Package },
+  { id: 'ventas', label: 'Ventas', short: 'Ventas', icon: BarChart3 },
 ]
 
 // ─── Skeleton ──────────────────────────────────────────────────────────────
@@ -238,81 +242,150 @@ function AgingSection({ title, data, countLabel }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ─── Tab Inventario ──────────────────────────────────────────────────────────
-function TabInventario({ configNeg }) {
-  const { data: reporte, isLoading, isError, refetch } = useReporteInventario()
+// ─── Tab Ventas ───────────────────────────────────────────────────────────────
+function TabVentas({ configNeg }) {
+  const [rango, setRango] = useState(() => {
+    const actual = getWeekRange(0)
+    const anterior = getWeekRange(-1)
+    return { from: actual.from, to: actual.to, prevFrom: anterior.from, prevTo: anterior.to }
+  })
   const [exportando, setExportando] = useState(false)
+
+  const { data: reporte, isLoading, isError, refetch } = useReporteVentas({
+    from: rango.from,
+    to: rango.to,
+    prevFrom: rango.prevFrom,
+    prevTo: rango.prevTo,
+  })
 
   async function exportarPDF() {
     if (!reporte) return
     setExportando(true)
     try {
-      const { generarInventarioPDF } = await import('../services/pdf/inventarioPDF')
-      await generarInventarioPDF({ reporte, config: configNeg })
-    } catch (e) { console.error('Error generando PDF:', e) }
-    setExportando(false)
+      const { generarReporteVentasPDF } = await import('../services/pdf/comisionesPDF')
+      const reportePDF = {
+        ...reporte,
+        porVendedor: (reporte.porVendedor || []).map(v => ({
+          ...v,
+          vendedor: v.nombre,
+          vendedorColor: v.color,
+          count: v.despachos,
+        })),
+        porCliente: (reporte.porCliente || []).map(c => ({
+          ...c,
+          cliente: c.nombre,
+          count: c.despachos,
+        })),
+      }
+      await generarReporteVentasPDF({ reporte: reportePDF, rango, config: configNeg })
+    } catch (e) {
+      console.error('Error generando reporte de ventas:', e)
+    } finally {
+      setExportando(false)
+    }
   }
 
   if (isLoading) return <SkeletonReporte />
   if (isError) return <ErrorMsg onRetry={refetch} />
   if (!reporte) return null
 
-  const { kpis, porCategoria } = reporte
+  const { kpis, porVendedor, porCliente, porProducto, porCategoria, porFormaPago, despachos } = reporte
+  const rangoLabel = `${new Date(`${rango.from}T00:00:00`).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })} - ${new Date(`${rango.to}T00:00:00`).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}`
+  const ventasNetas = despachos.slice(0, 12).map(d => {
+    const neto = Number(d.total_usd || 0) - Number(d.flete_usd || 0) - Number(d.descuento_total_usd || 0)
+    return [
+      { content: <span className="font-mono font-bold text-slate-700">{d.numero || '—'}</span> },
+      { content: d.cliente?.nombre || 'Sin cliente', className: 'font-semibold text-slate-700' },
+      {
+        content: (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: d.vendedor?.color || '#64748b' }} />
+            <span>{d.vendedor?.nombre || 'Sin vendedor'}</span>
+          </span>
+        )
+      },
+      { content: d.entregada_en ? new Date(d.entregada_en).toLocaleDateString('es-VE') : '—', className: 'text-center text-slate-500' },
+      { content: fmtUsd(neto), className: 'text-right font-black text-slate-800' },
+    ]
+  })
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <ExportButton onClick={exportarPDF} loading={exportando} disabled={!reporte} />
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex flex-col lg:flex-row lg:items-end gap-4">
+          <div className="flex-1 min-w-0 overflow-x-auto pb-1">
+            <div className="flex items-center gap-2 ml-1 mb-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Periodo de ventas</label>
+              <span className="hidden sm:inline-flex text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 rounded-full px-2 py-0.5">
+                {rangoLabel}
+              </span>
+            </div>
+            <DateRangeSelector value={rango} onChange={setRango} />
+          </div>
+          <div className="shrink-0">
+            <ExportButton onClick={exportarPDF} loading={exportando} disabled={exportando || !despachos.length} />
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCard icon={Package} label="Total Productos" value={String(kpis.totalProductos)}
-          gradient="linear-gradient(135deg, #1e293b, #0f172a)" border="rgba(255,255,255,0.05)" />
-        <KpiCard icon={DollarSign} label="Valor Venta" value={fmtUsd(kpis.totalValorVenta)}
-          gradient="linear-gradient(135deg, #065f46, #064e3b)" border="rgba(255,255,255,0.05)" />
-        {kpis.esPrivilegiado && (
-          <KpiCard icon={TrendingUp} label="Valor Costo" value={fmtUsd(kpis.totalValorCosto)}
-            gradient="linear-gradient(135deg, #1e3a8a, #172554)" border="rgba(255,255,255,0.05)" />
-        )}
-        <KpiCard icon={AlertTriangle} label="Bajo Stock" value={String(kpis.numBajoStock)}
-          gradient="linear-gradient(135deg, #991b1b, #7f1d1d)" border="rgba(255,255,255,0.05)" />
-      </div>
+      {despachos.length === 0 ? (
+        <EmptyState icon={BarChart3} title="Sin ventas entregadas" description="No hay despachos entregados en el periodo seleccionado." />
+      ) : (
+        <>
+          <KpiCards kpis={kpis} />
 
-      <AdminTable
-        icon={BarChart3} iconColor="text-emerald-500" title="Distribución por Categoría"
-        headers={[
-          { label: 'Categoría' }, { label: 'Items' }, { label: 'Stock Total', align: 'text-center' }, { label: 'Valor Venta', align: 'text-right' }
-        ]}
-        rows={porCategoria.map(c => [
-          { content: c.categoria, className: 'font-bold text-slate-700' },
-          { content: c.count },
-          { content: c.stockTotal, className: 'text-center' },
-          { content: fmtUsd(c.valorVenta), className: 'text-right font-bold' }
-        ])}
-      />
+          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)] gap-4">
+            <TablaVendedores data={porVendedor} />
+            <FormaPagoSection data={porFormaPago} />
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <TablaProductos porProducto={porProducto} porCategoria={porCategoria} />
+            <TablaClientes data={porCliente} />
+          </div>
+
+          <AdminTable
+            icon={FileText}
+            iconColor="text-slate-500"
+            title="Últimas ventas entregadas"
+            headers={[
+              { label: 'Despacho' },
+              { label: 'Cliente' },
+              { label: 'Vendedor' },
+              { label: 'Fecha', align: 'text-center' },
+              { label: 'Venta neta', align: 'text-right' },
+            ]}
+            rows={ventasNetas}
+          />
+        </>
+      )}
     </div>
   )
 }
 
 // ─── Modal Detalle Vendedor ──────────────────────────────────────────────────
 function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose }) {
-  const { data: detalle = [], isLoading } = useReporteVentasComisiones({
+  const { data: comisionesRes, isLoading } = useComisiones({
     desde: rango?.from,
     hasta: rango?.to,
-    vendedorId: vendedor?.id
+    vendedorId: vendedor?.id,
+    pageSize: 1000
   })
+  const detalle = comisionesRes?.data ?? []
+
+  const tasaComision = (item) => Number(item.despacho?.tasa_snapshot || item.cotizacion?.tasa_bcv_snapshot || 0)
 
   // Calcular totales del detalle
   const totales = detalle.reduce((acc, item) => {
-    acc.totalUsd += Number(item.total_com || 0)
-    acc.comBs += Number(item.total_com || 0) * Number(item.tasa || 0)
+    const total = Number(item.totalcomision || 0)
+    acc.totalUsd += total
+    acc.comBs += total * tasaComision(item)
     return acc
   }, { totalUsd: 0, comBs: 0 })
 
   async function exportarPDF() {
     try {
       const { generarComisionesPDF } = await import('../services/pdf/comisionesPDF')
-      // Ya tenemos los datos detallados en 'detalle' gracias al hook useReporteVentasComisiones
       if (!detalle || detalle.length === 0) return
 
       await generarComisionesPDF({
@@ -348,40 +421,35 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose }) {
           </div>
 
           <AdminTable
-            icon={FileText} iconColor="text-indigo-500" title="Productos Vendidos"
+            icon={FileText} iconColor="text-indigo-500" title="Comisiones generadas"
             headers={[
-              { label: 'Fecha' }, { label: 'Doc' }, { label: 'Producto' },
-              { label: 'Valor ($)', align: 'text-right' },
-              { label: '% Com.', align: 'text-right' },
+              { label: 'Fecha' }, { label: 'Despacho' }, { label: 'Cotización' },
+              { label: 'Venta ($)', align: 'text-right' },
+              { label: 'Cabilla', align: 'text-right' },
+              { label: 'Otros', align: 'text-right' },
               { label: 'Com. ($)', align: 'text-right' },
               { label: 'Tasa BCV', align: 'text-right' },
               { label: 'Com. (Bs)', align: 'text-right' },
               { label: 'Estado', align: 'text-center' }
             ]}
-            rows={detalle.map((d, index) => {
-              const comBs = Number(d.total_com || 0) * Number(d.tasa || 0)
+            rows={detalle.map((d) => {
+              const total = Number(d.totalcomision || 0)
+              const tasa = tasaComision(d)
+              const comBs = total * tasa
               return [
-                { content: new Date(d.fecha).toLocaleDateString('es-VE', { day: '2-digit', month: 'short' }) },
-                { content: <div className="text-[10px] leading-tight font-bold">D: #{d.despacho_numero}</div> },
-                {
-                  content: <div className="min-w-[150px] py-1">
-                    <div className="flex flex-col gap-1">
-                      <span className="w-fit px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-[9px] font-mono font-bold text-slate-500 uppercase tracking-tighter">
-                        {d.codigo}
-                      </span>
-                      <div className="font-bold text-slate-800 text-[11px] leading-tight break-words">{d.descripcion}</div>
-                    </div>
-                  </div>
-                },
-                { content: fmtUsd(d.total), className: 'text-right font-medium text-slate-600' },
-                { content: `${d.comision_pct}%`, className: 'text-right text-[11px] font-bold text-slate-500' },
-                { content: fmtUsd(d.total_com), className: 'text-right font-bold text-slate-900' },
-                { content: `Bs ${Number(d.tasa || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })}`, className: 'text-right text-[11px] text-slate-600 font-semibold' },
+                { content: new Date(d.creadoen).toLocaleDateString('es-VE', { day: '2-digit', month: 'short' }) },
+                { content: <div className="text-[10px] leading-tight font-bold">D: #{d.despacho?.numero || '—'}</div> },
+                { content: <div className="text-[10px] leading-tight font-bold">C: #{d.cotizacion?.numero || '—'}</div> },
+                { content: fmtUsd(d.despacho?.totalusd || 0), className: 'text-right font-medium text-slate-600' },
+                { content: fmtUsd(d.comisioncabilla || 0), className: 'text-right font-semibold text-slate-700' },
+                { content: fmtUsd(d.comisionotros || 0), className: 'text-right font-semibold text-slate-700' },
+                { content: fmtUsd(total), className: 'text-right font-bold text-slate-900' },
+                { content: tasa > 0 ? `Bs ${tasa.toLocaleString('es-VE', { minimumFractionDigits: 2 })}` : '—', className: 'text-right text-[11px] text-slate-600 font-semibold' },
                 { content: fmtBs(comBs), className: 'text-right font-bold text-indigo-600' },
                 {
-                  content: <div className={`inline-flex px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${d.estado_comision !== 'pagada' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+                  content: <div className={`inline-flex px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${d.estado !== 'pagada' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
                     }`}>
-                    {d.estado_comision}
+                    {d.estado === 'cta_cobrar' ? 'cta x cobrar' : d.estado}
                   </div>, className: 'text-center'
                 }
               ]
@@ -1019,7 +1087,7 @@ export default function ReportesView() {
       {/* Tab Content */}
       {activeTab === 'comisiones' && <TabComisiones configNeg={configNeg} />}
       {activeTab === 'credito' && <TabCredito />}
-      {activeTab === 'inventario' && <TabInventario configNeg={configNeg} />}
+      {activeTab === 'ventas' && <TabVentas configNeg={configNeg} />}
     </div>
   )
 }

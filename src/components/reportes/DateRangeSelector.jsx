@@ -12,12 +12,16 @@ const PRESETS = [
   { id: 'lastMonth', label: 'Mes pasado',    short: 'Mes ant.',  getRango: () => getMonthRange(-1),getPrev: () => getMonthRange(-2) },
 ]
 
+function mismoRango(a, b) {
+  return a?.from === b?.from && a?.to === b?.to
+}
+
 export default function DateRangeSelector({ value, onChange }) {
-  const [activePreset, setActivePreset] = useState('thisWeek')
   const [showCustom, setShowCustom] = useState(false)
+  const activePreset = PRESETS.find(p => mismoRango(value, p.getRango()))?.id || ''
+  const customActivo = showCustom || !activePreset
 
   function selectPreset(preset) {
-    setActivePreset(preset.id)
     setShowCustom(false)
     const rango = preset.getRango()
     const prev = preset.getPrev()
@@ -56,9 +60,9 @@ export default function DateRangeSelector({ value, onChange }) {
           </button>
         ))}
         <button
-          onClick={() => { setShowCustom(true); setActivePreset('') }}
+          onClick={() => setShowCustom(true)}
           className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold transition-colors border whitespace-nowrap shrink-0 ${
-            showCustom
+            customActivo
               ? 'bg-primary text-white border-primary'
               : 'bg-white text-slate-600 border-slate-200 hover:border-primary-focus'
           }`}>

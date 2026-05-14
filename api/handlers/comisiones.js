@@ -212,8 +212,8 @@ export async function handleGetComisiones(request, env) {
   }
 
   const rows = await res.json()
-  const despachos = await fetchByIds(env, headers, 'notas_despacho', rows.map(c => c.despachoid), 'id,numero,total_usd')
-  const cotizaciones = await fetchByIds(env, headers, 'cotizaciones', rows.map(c => c.cotizacionid), 'id,numero')
+  const despachos = await fetchByIds(env, headers, 'notas_despacho', rows.map(c => c.despachoid), 'id,numero,total_usd,tasa_snapshot')
+  const cotizaciones = await fetchByIds(env, headers, 'cotizaciones', rows.map(c => c.cotizacionid), 'id,numero,tasa_bcv_snapshot')
   const vendedores = await fetchByIds(env, headers, 'usuarios', rows.map(c => c.vendedorid), 'id,nombre,color')
   const data = rows.map(c => {
     const despacho = despachos[c.despachoid]
@@ -234,7 +234,7 @@ export async function handleGetComisiones(request, env) {
       pagadapor: c.pagadapor,
       creadoen: c.creadoen,
       vendedor: vendedores[c.vendedorid] || null,
-      despacho: despacho ? { id: despacho.id, numero: despacho.numero, totalusd: despacho.total_usd } : null,
+      despacho: despacho ? { id: despacho.id, numero: despacho.numero, totalusd: despacho.total_usd, tasa_snapshot: despacho.tasa_snapshot } : null,
       cotizacion: cotizaciones[c.cotizacionid] || null
     }
   })
