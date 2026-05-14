@@ -85,10 +85,11 @@ function addWatermark(doc) {
   } catch (_) {}
 }
 
-function checkPage(doc, y, needed = 30) {
-  if (y + needed > PAGE_H - 25) {
+function checkPage(doc, y, needed = 30, onNewPage = null) {
+  if (y + needed > PAGE_H - 36) {
     doc.addPage()
     addWatermark(doc)
+    if (onNewPage) return onNewPage(doc)
     return MARGIN + 10
   }
   return y
@@ -141,12 +142,16 @@ function drawHeader(doc, logoData, config, moneda, tasa) {
   doc.setFontSize(8)
   doc.setFont('helvetica', 'normal')
   const fechaTxt = new Date().toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })
-  const tasaTxt = (moneda === 'bs' || moneda === 'mixto' || moneda === 'mixto_bcv' || moneda === 'bcv') && tasa > 0
-    ? `  ·  Tasa: Bs ${tasa.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-    : ''
-  doc.text(fechaTxt + tasaTxt, PAGE_W - MARGIN, HDR_H - 3, { align: 'right' })
+  doc.text(fechaTxt, PAGE_W - MARGIN, HDR_H - 3, { align: 'right' })
 
   return HDR_H + 6
+}
+
+function fmtTelefono(tel) {
+  if (!tel) return ''
+  const s = String(tel).replace(/\D/g, '')
+  if (s.length === 11) return `${s.slice(0, 4)}-${s.slice(4, 7)}.${s.slice(7, 9)}.${s.slice(9, 11)}`
+  return tel
 }
 
 // ─── Footer ──────────────────────────────────────────────────────────────────
@@ -154,17 +159,86 @@ function drawFooter(doc, config) {
   const totalPages = doc.internal.getNumberOfPages()
   for (let p = 1; p <= totalPages; p++) {
     doc.setPage(p)
+    const ph = PAGE_H
+
+    // Franja negra superior con las diagonales
+    const hazardY = ph - 30
+    doc.setFillColor(...C_DARK)
+    doc.rect(0, hazardY, PAGE_W, 4, 'F')
+
     doc.setDrawColor(...C_PRIMARY)
-    doc.setLineWidth(0.5)
-    doc.line(MARGIN, PAGE_H - 15, MARGIN + CONTENT_W, PAGE_H - 15)
+    doc.setLineWidth(0.8)
+    for(let k = 1; k < 20; k++) {
+      doc.line(k * 4, hazardY, k * 4 - 3, hazardY + 4)
+      doc.line(PAGE_W - k * 4, hazardY, PAGE_W - k * 4 + 3, hazardY + 4)
+    }
+
+    // Franja principal azul
+    doc.setFillColor(...C_PRIMARY)
+    doc.rect(0, ph - 29, PAGE_W, 29, 'F')
+
+    // ── Icono pin ubicación + dirección ──
+    doc.setFillColor(...C_WHITE)
+    doc.setDrawColor(...C_WHITE)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8.5)
+    doc.setTextColor(...C_WHITE)
+
+    const addr1 = 'Av. 76, (Calle S-3) Nro. 70-C-766, Local Galpón Nro. 3 Edificio Centro Industrial Massico II'
+    const addr2 = 'Parcela MB-6 y Mb7, Urb. Industrial Aeropuerto Vía Flor Amarillo, Valencia, Edo. Carabobo, Zona Postal 2003'
+
+    const addr1W = doc.getTextWidth(addr1)
+    const addr1X = PAGE_W/2 - addr1W/2
+    const pinX = addr1X - 4
+    const pinY = ph - 21
+    doc.circle(pinX, pinY - 0.3, 1.4, 'F')
+    doc.triangle(pinX - 1.2, pinY, pinX + 1.2, pinY, pinX, pinY + 2.4, 'F')
+
+    doc.text(addr1, PAGE_W/2, ph - 19.5, { align: 'center' })
+    doc.setFont('helvetica', 'normal')
+    doc.text(addr2, PAGE_W/2, ph - 15, { align: 'center' })
+
+    const tel = fmtTelefono(config.telefono_negocio) || ''
+    const email = config.email_negocio || ''
+    if (tel || email) {
+      const parts = []
+      if (tel && tel !== '—') parts.push({ icon: 'phone', text: tel })
+      if (email) parts.push({ icon: 'mail', text: email })
+
+      doc.setFont('helvetica', 'normal')
+      const gap = 12
+      let totalW = 0
+      parts.forEach((p, i) => {
+        totalW += 5 + doc.getTextWidth(p.text)
+        if (i < parts.length - 1) totalW += gap
+      })
+
+      let cx = PAGE_W/2 - totalW/2
+      const cy = ph - 7
+
+      parts.forEach((p, i) => {
+        doc.setFillColor(...C_WHITE)
+        doc.setDrawColor(...C_WHITE)
+        if (p.icon === 'phone') {
+           doc.setLineWidth(0.4)
+           doc.roundedRect(cx, cy - 2.2, 1.6, 2.8, 0.3, 0.3, 'S')
+           doc.setLineWidth(0.3)
+           doc.line(cx + 0.3, cy + 0.2, cx + 1.3, cy + 0.2)
+        } else {
+           doc.setLineWidth(0.3)
+           doc.rect(cx, cy - 1.8, 2.4, 1.8, 'S')
+           doc.line(cx, cy - 1.8, cx + 1.2, cy - 0.6)
+           doc.line(cx + 2.4, cy - 1.8, cx + 1.2, cy - 0.6)
+        }
+        doc.setTextColor(...C_WHITE)
+        doc.text(p.text, cx + 4, cy)
+        cx += 5 + doc.getTextWidth(p.text) + gap
+      })
+    }
+
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(6)
-    doc.setTextColor(...C_GRAY)
-    let footName = config.nombre_negocio || 'Construacero Carabobo C.A.'
-    if (footName.trim().toUpperCase() === 'PRUEBA' || footName.trim() === '') footName = 'Construacero Carabobo C.A.'
-    doc.text(footName, MARGIN, PAGE_H - 10)
-    doc.text(`Generado: ${new Date().toLocaleString('es-VE')}`, MARGIN, PAGE_H - 6)
-    doc.text(`Página ${p} de ${totalPages}`, PAGE_W - MARGIN, PAGE_H - 10, { align: 'right' })
+    doc.text(`Página ${p} de ${totalPages}`, PAGE_W - 10, ph - 4, { align: 'right' })
   }
 }
 
@@ -176,12 +250,35 @@ function drawFooter(doc, config) {
  * @param {Object} params.opciones   - { moneda: 'usd'|'bs'|'mixto', tasa: number, columnas: { codigo, categoria, unidad, stock, precio2, precio3 } }
  */
 export async function generarListaPreciosPDF({ productos, config = {}, opciones = {} }) {
-  const { moneda = 'usd', tasa = 0, columnas = {} } = opciones
+  const { moneda = 'usd', tasa = 0, columnas = {}, formato = 'lista' } = opciones
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
   const logoData = await cargarLogo(config.logo_url)
 
   let y = drawHeader(doc, logoData, config, moneda, tasa)
   addWatermark(doc)
+
+  const drawSimplifiedHeader = (d) => {
+    const SHDR_H = 12
+    d.setFillColor(...C_PRIMARY)
+    d.rect(0, 0, PAGE_W, SHDR_H, 'F')
+
+    if (logoData) {
+      try { d.addImage(logoData, 'PNG', MARGIN + 4, 1.5, 9, 9) } catch (_) {}
+    }
+
+    let n = config.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.'
+    if (n.trim().toUpperCase() === 'PRUEBA' || n.trim() === '') n = 'CONSTRUACERO CARABOBO C.A.'
+    d.setFont('times', 'bold')
+    d.setFontSize(11)
+    d.setTextColor(...C_WHITE)
+    d.text(n.toUpperCase(), MARGIN + 16, 8.5)
+
+    d.setFont('helvetica', 'normal')
+    d.setFontSize(8)
+    d.text('Lista de Precios (Cont.)', PAGE_W - MARGIN, 8.5, { align: 'right' })
+
+    return SHDR_H + 4
+  }
 
   // Agrupar por categoría usando el normalizador para corregir errores de tipeo
   const grupos = {}
@@ -192,25 +289,37 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
   })
   const categoriasOrdenadas = Object.keys(grupos).sort()
 
-  // ─── Definir columnas estrictas (diseño original) ──────────────────────────
+  // ─── Definir columnas dinámicas según opciones ──────────────────────────
   const cols = []
   let xCursor = MARGIN
 
-  cols.push({ key: 'codigo', label: 'CODIGO', x: xCursor, w: 22 })
-  xCursor += 22
+  let usedCodigoW = 0
+  if (columnas.codigo !== false) { // Default to true if undefined
+    cols.push({ key: 'codigo', label: 'CÓDIGO', x: xCursor, w: 22 })
+    usedCodigoW = 22
+    xCursor += 22
+  }
 
-  const nombreCol = { key: 'nombre', label: 'DESCRIPCION DE PRODUCTO', x: xCursor, w: 0 }
+  const nombreCol = { key: 'nombre', label: 'DESCRIPCIÓN DE PRODUCTO', x: xCursor, w: 0 }
   cols.push(nombreCol)
 
-  const rightCols = [
-    { key: 'unidad', label: 'UND', w: 14 },
-    { key: 'precio', label: 'PRECIO DETAL USD', w: 28 },
-    { key: 'precio2', label: 'PRECIO MAYOR USD', w: 28 },
-    { key: 'stock', label: 'STOCK', w: 16 }
-  ]
+  const rightCols = []
+  if (columnas.unidad !== false) rightCols.push({ key: 'unidad', label: 'UND', w: 14 })
+
+  const labelPrecio = (MONEDA_LABELS[moneda] || 'PRECIO DETAL USDT').toUpperCase()
+  rightCols.push({ key: 'precio', label: labelPrecio, w: 32 })
+
+  if (columnas.precio2) {
+    const labelPrecio2 = moneda === 'bs' ? 'PRECIO MAYOR Bs' : moneda === 'bcv' ? 'PRECIO MAYOR BCV' : 'PRECIO MAYOR USDT'
+    rightCols.push({ key: 'precio2', label: labelPrecio2, w: 32 })
+  }
+
+  if (columnas.stock) {
+    rightCols.push({ key: 'stock', label: 'STOCK', w: 16 })
+  }
 
   const rightTotalW = rightCols.reduce((sum, c) => sum + c.w, 0)
-  nombreCol.w = CONTENT_W - 22 - rightTotalW
+  nombreCol.w = CONTENT_W - usedCodigoW - rightTotalW
 
   let rightX = nombreCol.x + nombreCol.w
   rightCols.forEach(c => {
@@ -220,22 +329,47 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
   })
 
   // ─── Función para dibujar cabecera de tabla ──────────────────────────────
-  function drawTableHeader(yPos) {
-    doc.setDrawColor(0, 0, 0) // Black lines
-    doc.setLineWidth(0.4)
-    doc.line(MARGIN, yPos, MARGIN + CONTENT_W, yPos)
-    doc.line(MARGIN, yPos + 7, MARGIN + CONTENT_W, yPos + 7)
+  function drawTableHeader(yPos, isGrid) {
+    const TH_H = 5.5
+    if (isGrid) {
+      doc.setDrawColor(60, 60, 60)
+      doc.setLineWidth(0.3)
+      doc.setFillColor(20, 20, 20)
+      doc.rect(MARGIN, yPos, CONTENT_W, TH_H, 'FD')
+      cols.forEach(col => {
+        if (col.x > MARGIN) doc.line(col.x, yPos, col.x, yPos + TH_H)
+      })
+    } else {
+      doc.setDrawColor(0, 0, 0) // Black lines
+      doc.setLineWidth(0.4)
+      doc.line(MARGIN, yPos, MARGIN + CONTENT_W, yPos)
+      doc.line(MARGIN, yPos + TH_H, MARGIN + CONTENT_W, yPos + TH_H)
+    }
     
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7)
-    doc.setTextColor(0, 0, 0) // Black text
+    doc.setFontSize(6.5)
+    if (isGrid) {
+      doc.setTextColor(255, 255, 255)
+    } else {
+      doc.setTextColor(0, 0, 0)
+    }
     
     cols.forEach(col => {
       const align = ['precio', 'precio2', 'stock'].includes(col.key) ? 'right' : 'left'
-      const tx = align === 'right' ? col.x + col.w - 2 : col.x + 1
-      doc.text(col.label, tx, yPos + 5, { align })
+      let tx = align === 'right' ? col.x + col.w - 2 : col.x + 1
+      if (isGrid && align === 'left') tx = col.x + 2
+      
+      let fs = 6.5
+      doc.setFontSize(fs)
+      while (doc.getTextWidth(col.label) > col.w - 3 && fs > 4.5) {
+        fs -= 0.5
+        doc.setFontSize(fs)
+      }
+      
+      doc.text(col.label, tx, yPos + 3.8, { align })
+      doc.setFontSize(6.5) // restore
     })
-    return yPos + 9
+    return yPos + (isGrid ? 5.5 : 6.5)
   }
 
   // ─── Resumen rápido ──────────────────────────────────────────────────────
@@ -246,49 +380,76 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
   y += 8
 
   // ─── Iterar por categoría ────────────────────────────────────────────────
+  const isGrid = formato === 'cuadricula'
   let needsHeader = true
 
   categoriasOrdenadas.forEach(cat => {
     const items = grupos[cat]
 
     // Subtítulo de categoría
-    y = checkPage(doc, y, 18)
-    if (needsHeader || y < MARGIN + 20) {
-      y = drawTableHeader(y)
+    let prevY = y
+    y = checkPage(doc, y, 12, drawSimplifiedHeader)
+    if (needsHeader || y < prevY) {
+      y = drawTableHeader(y, isGrid)
       needsHeader = false
     }
 
-    // Barra de categoría (Estilo Clásico: texto negrita)
+    const CAT_H = 5.5
+    if (isGrid) {
+      doc.setFillColor(200, 205, 210)
+      doc.rect(MARGIN, y, CONTENT_W, CAT_H, 'F')
+      doc.setDrawColor(180, 180, 180)
+      doc.setLineWidth(0.3)
+      doc.rect(MARGIN, y, CONTENT_W, CAT_H, 'S')
+    } else {
+      doc.setFillColor(210, 210, 210)
+      doc.rect(MARGIN, y, CONTENT_W, CAT_H, 'F')
+    }
+
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
+    doc.setFontSize(8)
     doc.setTextColor(0, 0, 0)
     const indexStr = String(categoriasOrdenadas.indexOf(cat) + 1)
-    doc.text(indexStr, MARGIN + 1, y + 4.5)
-    doc.text(cat.toUpperCase(), MARGIN + 10, y + 4.5)
-    y += 7.5
+    doc.text(indexStr, MARGIN + 2, y + 3.8)
+    doc.text(cat.toUpperCase(), MARGIN + 10, y + 3.8)
+    y += (isGrid ? 5.5 : 6.0)
 
     // Filas de productos
+    const ROW_H = 6.0
     items.forEach((p, idx) => {
-      y = checkPage(doc, y, 8)
-      if (y < MARGIN + 14) {
-        y = drawTableHeader(y)
+      let prevY = y
+      y = checkPage(doc, y, ROW_H, drawSimplifiedHeader)
+      if (y < prevY) {
+        y = drawTableHeader(y, isGrid)
         needsHeader = false
       }
 
-      if (idx % 2 === 0) {
-        doc.setFillColor(252, 252, 253)
-        doc.rect(MARGIN, y - 1, CONTENT_W, 7.5, 'F')
+      if (isGrid) {
+        if (idx % 2 === 0) {
+          doc.setFillColor(252, 252, 255)
+          doc.rect(MARGIN, y, CONTENT_W, ROW_H, 'FD')
+        } else {
+          doc.rect(MARGIN, y, CONTENT_W, ROW_H, 'S')
+        }
+        cols.forEach(col => {
+          if (col.x > MARGIN) doc.line(col.x, y, col.x, y + ROW_H)
+        })
+      } else {
+        if (idx % 2 === 0) {
+          doc.setFillColor(252, 252, 253)
+          doc.rect(MARGIN, y, CONTENT_W, ROW_H, 'F')
+        }
       }
 
       doc.setFont('helvetica', 'normal')
-      doc.setFontSize(8)
+      doc.setFontSize(7.5)
       doc.setTextColor(...C_DARK)
 
       cols.forEach(col => {
         let val = ''
         const align = ['precio', 'precio2', 'stock'].includes(col.key) ? 'right' : 'left'
-        const tx = align === 'right' ? col.x + col.w - 2 : col.x + 1
-        const maxChars = Math.floor(col.w / 1.6)
+        let tx = align === 'right' ? col.x + col.w - 2 : col.x + 1
+        if (isGrid && align === 'left') tx = col.x + 2
 
         const colMaxW = col.w - 2 // 1mm padding each side
 
@@ -308,21 +469,32 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
             if (p.stock_actual <= 0) doc.setTextColor(185, 28, 28)
             break
           case 'precio':
-            val = p.precio_usd != null ? Number(p.precio_usd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'
-            break
           case 'precio2':
-            val = p.precio_2 != null ? Number(p.precio_2).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'
+            const basePrecio = col.key === 'precio' ? p.precio_usd : p.precio_2;
+            if (basePrecio != null) {
+              const usd = Number(basePrecio)
+              if (moneda === 'bs' && tasa > 0) {
+                 val = 'Bs ' + (usd * tasa).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+              } else {
+                 val = '$' + usd.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+              }
+            } else {
+              val = '—'
+            }
             break
         }
 
-        doc.text(val, tx, y + 3, { align })
+        const textY = y + 4.2
+        if (isGrid && ['precio', 'precio2', 'stock'].includes(col.key) && val !== '—') doc.setFont('helvetica', 'bold')
+
+        doc.text(val, tx, textY, { align })
         doc.setFont('helvetica', 'normal')
         doc.setTextColor(...C_DARK)
       })
 
-      y += 7.5
+      y += ROW_H
     })
-    y += 2
+    y += (isGrid ? 0 : 2)
   })
 
   drawFooter(doc, config)

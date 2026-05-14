@@ -328,7 +328,7 @@ export default {
 
       } catch (e) {
         // Log unhandled API errors to system_logs
-        console.error(`[API ERROR] ${request.method} ${url.pathname}:`, e.message, e.stack?.slice(0, 500))
+        console.error(`[API ERROR] ${request.method} ${url.pathname}:`, e.message, e.stack)
         const user = await verifyAuth(request, env).catch(() => null)
         await logToSystem(env, {
           nivel: 'error',

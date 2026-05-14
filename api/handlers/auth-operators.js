@@ -5,7 +5,6 @@ import { verifyPinPBKDF2 } from '../lib/crypto.js'
 import { registrarAuditoria, logToSystem } from '../lib/audit.js'
 
 export async function handleSwitchOperator(request, env) {
-  console.log('[SWITCH-OP] Start')
   // Rate limit
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown'
   if (isRateLimited(`switch:${ip}`)) {
@@ -15,7 +14,6 @@ export async function handleSwitchOperator(request, env) {
   // Verify business account is authenticated
   const user = await verifyAuth(request, env);
   if (!user?.id) return jsonError('No autenticado', 401, request);
-  console.log('[SWITCH-OP] Auth OK, user:', user.id)
 
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
@@ -23,7 +21,6 @@ export async function handleSwitchOperator(request, env) {
   const { operator_id, pin } = body;
   if (!operator_id || !pin) return jsonError('operator_id y pin requeridos', 400, request);
   if (!isValidUuid(operator_id)) return jsonError('operator_id inválido', 400, request);
-  console.log('[SWITCH-OP] operator_id:', operator_id)
 
   // Fetch operator from usuarios table
   const res = await fetch(
@@ -36,10 +33,13 @@ export async function handleSwitchOperator(request, env) {
     }
   );
   console.log('[SWITCH-OP] Supabase fetch status:', res.status)
-  if (!res.ok) return jsonError('Error al buscar operador', 500, request);
+  if (!res.ok) {
+    const errText = await res.text().catch(() => 'no body')
+    console.error('[SWITCH-OP] Supabase fetch error:', errText)
+    return jsonError('Error al buscar operador', 500, request);
+  }
   const [operator] = await res.json();
   if (!operator) return jsonError('Operador no encontrado o inactivo', 404, request);
-  console.log('[SWITCH-OP] Operator found:', operator.nombre, 'has pin_hash:', !!operator.pin_hash)
 
   // Validate PIN
   if (!operator.pin_hash || !operator.pin_salt) {
@@ -79,7 +79,10 @@ export async function handleSwitchOperator(request, env) {
     }
   );
 
+  console.log('[SWITCH-OP] Metadata update status:', metaRes.status)
   if (!metaRes.ok) {
+    const errText = await metaRes.text().catch(() => 'no body')
+    console.error('[SWITCH-OP] Metadata update error:', errText)
     return jsonError('Error al establecer operador', 500, request);
   }
 

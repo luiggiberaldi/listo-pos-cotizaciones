@@ -756,15 +756,69 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           setAccionPendiente(null)
         }}
         title={confirmConfig.confirmTitle || (accionPendiente?.estado === 'despachada' ? '¿Marcar como despachada?' : '¿Marcar como entregada?')}
-        message={hayFaltaStock && accionPendiente?.estado === 'despachada' ? (
-          <div className="flex flex-col items-center gap-2">
-            <p>{confirmConfig.confirmMessage}</p>
-            <div className="mt-2 p-2.5 bg-red-50 border border-red-200 rounded-xl text-red-600 font-bold text-xs flex items-center gap-2">
-              <AlertTriangle size={14} className="shrink-0" />
-              <span>Hay productos sin stock suficiente. ¿Aprobar de todas formas?</span>
-            </div>
+        message={
+          <div className="flex flex-col items-center gap-3 w-full">
+            <p className="text-center">{confirmConfig.confirmMessage || `El despacho ${numDisplay} cambiará de estado.`}</p>
+            
+            {accionPendiente?.estado === 'despachada' && (
+              <div className="w-full text-left bg-slate-50 p-3 rounded-xl text-sm border border-slate-200 mt-2 shadow-sm">
+                <h4 className="font-bold text-slate-700 border-b border-slate-200 pb-1.5 mb-2">Resumen de la Operación</h4>
+                <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs">
+                  <span className="text-slate-500">Cliente:</span>
+                  <span className="font-semibold text-slate-800 text-right line-clamp-2">{(despacho.cliente_factura || despacho.cliente)?.nombre || 'N/A'}</span>
+                  
+                  <span className="text-slate-500">Vendedor:</span>
+                  <span className="font-semibold text-slate-800 text-right truncate">{despacho.vendedor?.nombre || 'N/A'}</span>
+
+                  {despacho.transportista?.nombre && (
+                    <>
+                      <span className="text-slate-500">Transporte:</span>
+                      <span className="font-semibold text-slate-800 text-right truncate">{despacho.transportista.nombre}</span>
+                    </>
+                  )}
+
+                  <span className="col-span-2 border-t border-slate-200 my-0.5"></span>
+
+                  <span className="text-slate-500">Subtotal:</span>
+                  <span className="font-medium text-slate-700 text-right">{fmtUsd(subtotalProductos)}</span>
+                  
+                  {fleteUsd > 0 && (
+                    <>
+                      <span className="text-slate-500">Flete:</span>
+                      <span className="font-medium text-emerald-600 text-right">+{fmtUsd(fleteUsd)}</span>
+                    </>
+                  )}
+                  
+                  {corteUsd > 0 && (
+                    <>
+                      <span className="text-slate-500">Corte:</span>
+                      <span className="font-medium text-emerald-600 text-right">+{fmtUsd(corteUsd)}</span>
+                    </>
+                  )}
+
+                  {descuentoTotal > 0 && (
+                    <>
+                      <span className="text-slate-500">Descuento:</span>
+                      <span className="font-medium text-amber-600 text-right">-{fmtUsd(descuentoTotal)}</span>
+                    </>
+                  )}
+
+                  <span className="col-span-2 border-t border-slate-200 my-0.5"></span>
+
+                  <span className="font-bold text-slate-700 text-[13px] pt-0.5">Total USD:</span>
+                  <span className="font-black text-slate-800 text-right text-[14px]">{fmtUsd(totalFinal)}</span>
+                </div>
+              </div>
+            )}
+
+            {hayFaltaStock && accionPendiente?.estado === 'despachada' && (
+              <div className="w-full p-2.5 bg-red-50 border border-red-200 rounded-xl text-red-600 font-bold text-xs flex items-center gap-2 mt-1">
+                <AlertTriangle size={14} className="shrink-0" />
+                <span className="text-left">Hay productos sin stock suficiente. ¿Aprobar de todas formas?</span>
+              </div>
+            )}
           </div>
-        ) : confirmConfig.confirmMessage || `El despacho ${numDisplay} cambiará de estado.`}
+        }
         details={confirmConfig.confirmDetails || ''}
         confirmText={confirmConfig.confirmText || 'Confirmar'}
         variant={hayFaltaStock && accionPendiente?.estado === 'despachada' ? 'warning' : (confirmConfig.variant || 'default')}

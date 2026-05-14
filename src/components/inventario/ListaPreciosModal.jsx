@@ -7,13 +7,13 @@ export default function ListaPreciosModal({
   isOpen,
   onClose,
   productos = [],
-  categorias = [],
   tasa = 0,
   config = {},
 }) {
   const [moneda, setMoneda] = useState('$')
   const [soloConStock, setSoloConStock] = useState(true)
   const [modoCats, setModoCats] = useState('todas') // 'todas' | 'seleccionar'
+  const [formato, setFormato] = useState('lista') // 'lista' | 'cuadricula'
   const [catsSeleccionadas, setCatsSeleccionadas] = useState(new Set())
   const [columnas, setColumnas] = useState({
     codigo: true,
@@ -21,7 +21,6 @@ export default function ListaPreciosModal({
     unidad: true,
     stock: false,
     precio2: false,
-    precio3: false,
   })
   const [generando, setGenerando] = useState(false)
 
@@ -54,7 +53,7 @@ export default function ListaPreciosModal({
       await generarListaPreciosPDF({
         productos: productosFiltrados,
         config,
-        opciones: { moneda, tasa, columnas },
+        opciones: { moneda, tasa, columnas, formato },
       })
       onClose()
     } catch (e) {
@@ -65,7 +64,6 @@ export default function ListaPreciosModal({
   }
 
   const tieneP2 = productos.some(p => p.precio_2 != null)
-  const tieneP3 = productos.some(p => p.precio_3 != null)
 
   const MONEDAS = [
     { value: '$', label: 'USDT ($)', icon: '$' },
@@ -78,7 +76,6 @@ export default function ListaPreciosModal({
     { key: 'unidad', label: 'Unidad' },
     { key: 'stock', label: 'Stock disponible' },
     ...(tieneP2 ? [{ key: 'precio2', label: 'Precio Mayor' }] : []),
-    ...(tieneP3 ? [{ key: 'precio3', label: 'Precio 3' }] : []),
   ]
 
   return (
@@ -140,7 +137,7 @@ export default function ListaPreciosModal({
 
             {modoCats === 'seleccionar' && (
               <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pt-1">
-                {categorias.map(cat => {
+                {Array.from(new Set(productos.map(p => p.categoria || 'Sin categoría'))).sort().map(cat => {
                   const sel = catsSeleccionadas.has(cat)
                   const count = productos.filter(p => (p.categoria || 'Sin categoría') === cat).length
                   return (
@@ -163,6 +160,26 @@ export default function ListaPreciosModal({
                 {productosFiltrados.length} productos seleccionados
               </p>
             )}
+          </div>
+
+          {/* ── 1.5 Formato ── */}
+          <div className="space-y-2.5">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Formato de PDF</label>
+            <div className="flex gap-2">
+              {[
+                { id: 'lista', label: 'Lista (Clásico)' },
+                { id: 'cuadricula', label: 'Cuadrícula (Catálogo)' }
+              ].map(f => (
+                <button key={f.id} type="button" onClick={() => setFormato(f.id)}
+                  className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                    formato === f.id
+                      ? 'bg-blue-50 border-2 border-blue-400 text-blue-700'
+                      : 'bg-white border border-slate-200 text-slate-500 hover:border-slate-300'
+                  }`}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* ── 1b. Filtro stock ── */}

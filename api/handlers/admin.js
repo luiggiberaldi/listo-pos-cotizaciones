@@ -379,8 +379,14 @@ export async function handleSaveConfig(request, env) {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return jsonError('Server misconfigured', 500, request);
   const user = await verifyAuth(request, env);
   if (!user?.id) return jsonError('No autenticado', 401, request);
-  const isPriv = await verifyPrivileged(user.operator_id, env);
-  if (!isPriv) return jsonError('Solo supervisores o administración', 403, request);
+
+  const ROLES_CONFIG = ['supervisor', 'jefe', 'administracion', 'desarrollador']
+  const rol = user.operator_rol
+  if (!rol || !ROLES_CONFIG.includes(rol)) {
+    // Fallback: si el JWT no tiene operator_rol aún, verificar via DB
+    const isPriv = await verifyPrivileged(user.operator_id, env)
+    if (!isPriv) return jsonError('Solo supervisores o administración', 403, request)
+  }
 
   const campos = await request.json();
   const res = await fetch(`${env.SUPABASE_URL}/rest/v1/configuracion_negocio?on_conflict=cuenta_id`, {

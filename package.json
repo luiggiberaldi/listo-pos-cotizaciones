@@ -4,10 +4,11 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "npx concurrently -n VITE,WORKER -c cyan,yellow \"vite\" \"npx wrangler dev --port 8787\"",
+    "dev": "npx concurrently -n VITE,API -c cyan,yellow \"vite\" \"node dev-server.mjs\"",
     "dev:vite": "vite",
-    "dev:worker": "npx wrangler dev --port 8787",
-    "build": "vitest run --reporter=json 2>/dev/null > dist-test-results.json || true && vite build && cp dist-test-results.json dist/test-results.json 2>/dev/null || true",
+    "dev:api": "node dev-server.mjs",
+    "dev:worker": "npx wrangler dev --port 8787 --local --config wrangler.dev.jsonc",
+    "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
@@ -48,6 +49,6 @@
     "tailwindcss": "^3.4.17",
     "vite": "^7.2.4",
     "vitest": "^4.1.5",
-    "wrangler": "^4.87.0"
+    "wrangler": "^4.91.0"
   }
 }

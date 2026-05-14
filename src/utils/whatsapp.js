@@ -51,7 +51,7 @@ async function subirPdfTemporal(pdfBlob, pdfFilename) {
 /**
  * Genera el mensaje para WhatsApp (con link al PDF)
  */
-export function generarMensaje({ nombreNegocio, nombreCliente, numDisplay, totalUsd, nombreVendedor, items = [], pdfUrl = null, tipo = 'cotización' }) {
+export function generarMensaje({ nombreNegocio, nombreCliente, numDisplay, totalUsd, nombreVendedor, items = [], tipo = 'cotización' }) {
   const empresa = nombreNegocio || 'Construacero Carabobo'
   const saludo = nombreCliente ? `Estimado/a *${nombreCliente}*,` : 'Estimado/a cliente,'
 
@@ -64,27 +64,23 @@ export function generarMensaje({ nombreNegocio, nombreCliente, numDisplay, total
     ? `Le saluda *${nombreVendedor}* de *${empresa}*. Le enviamos ${sustantivo} *${numDisplay}*:`
     : `Le enviamos ${sustantivo} *${numDisplay}* de *${empresa}*:`
 
-  const pdfLine = pdfUrl
-    ? `*Pulse acá para ver su ${tipo.toLowerCase()}:*\n${pdfUrl}`
-    : 'Adjunto encontrará el documento PDF para su revisión.'
-
   return [
     saludo,
     '',
     intro,
     '',
-    pdfLine,
+    'Adjunto encontrará el documento PDF para su revisión.',
     '',
     'Quedamos a su disposición para cualquier consulta.',
     '',
     firma,
-  ].filter(l => l !== null && l !== undefined).join('\n')
+  ].join('\n')
 }
 
 /**
  * Comparte una cotización por WhatsApp
  * - Móvil: usa Web Share API para adjuntar el PDF directamente
- * - PC: descarga el PDF automáticamente y abre wa.me con el mensaje
+ * - PC: descarga el PDF automáticamente y abre wa.me con el mensaje (sin link, para adjuntar manual)
  */
 export async function compartirPorWhatsApp({ pdfBlob, pdfFilename, telefono, mensaje, mensajeParams = null }) {
   const telFormateado = formatearTelefono(telefono)
@@ -93,27 +89,22 @@ export async function compartirPorWhatsApp({ pdfBlob, pdfFilename, telefono, men
   // ── Móvil: intentar Web Share API con archivo adjunto ──
   if (isMobile && pdfBlob && navigator.canShare) {
     try {
-      // 1. Copiar al portapapeles
-      let copiado = false
+      // 1. Copiar al portapapeles el texto (opcional, por si el usuario quiere pegarlo manual)
       try {
         if (navigator.clipboard && navigator.clipboard.writeText) {
           await navigator.clipboard.writeText(mensaje)
-          copiado = true
         }
       } catch (err) {
         console.warn('[WhatsApp] No se pudo copiar al portapapeles', err)
       }
 
-      const pdfFile = new File([pdfBlob], pdfFilename || 'cotizacion.pdf', { type: 'application/pdf' })
+      const pdfFile = new File([pdfBlob], pdfFilename || 'documento.pdf', { type: 'application/pdf' })
       const shareData = {
         text: mensaje,
         files: [pdfFile],
       }
+      
       if (navigator.canShare(shareData)) {
-        if (copiado) {
-          showToast('Texto copiado. Dale a "Pegar" en WhatsApp', 'success')
-          await new Promise(r => setTimeout(r, 800)) // delay to let user read
-        }
         await navigator.share(shareData)
         return { method: 'web_share_api' }
       }
@@ -123,28 +114,25 @@ export async function compartirPorWhatsApp({ pdfBlob, pdfFilename, telefono, men
     }
   }
 
-  // ── PC: siempre descargar PDF + abrir WhatsApp Web con mensaje ──
-  let mensajeFinal = mensaje
-  if (pdfBlob && mensajeParams) {
-    try {
-      const pdfUrl = await subirPdfTemporal(pdfBlob, pdfFilename)
-      mensajeFinal = generarMensaje({ ...mensajeParams, pdfUrl })
-    } catch (err) {
-      console.error('[WhatsApp] Error subiendo PDF:', err?.message || err)
-    }
-  }
-
-  // En PC: descargar el PDF automáticamente para que lo pueda adjuntar
+  // ── PC / Fallback: descargar PDF + abrir WhatsApp con mensaje (sin link) ──
+  
+  // 1. Siempre descargar el PDF en PC para que el usuario pueda adjuntarlo
   if (!isMobile && pdfBlob) {
     const url = URL.createObjectURL(pdfBlob)
     const a = document.createElement('a')
     a.href = url
-    a.download = pdfFilename || 'cotizacion.pdf'
+    a.download = pdfFilename || 'documento.pdf'
     a.click()
     setTimeout(() => URL.revokeObjectURL(url), 5000)
   }
 
-  // Abrir WhatsApp directo al número del cliente
+  // 2. Preparar mensaje final (sin link al servidor)
+  // Si tenemos mensajeParams, generamos el mensaje limpio (sin pdfUrl)
+  const mensajeFinal = (mensajeParams) 
+    ? generarMensaje({ ...mensajeParams, pdfUrl: null }) 
+    : mensaje
+
+  // 3. Abrir WhatsApp directo al número del cliente
   const waUrl = telFormateado
     ? `https://wa.me/${telFormateado}?text=${encodeURIComponent(mensajeFinal)}`
     : `https://wa.me/?text=${encodeURIComponent(mensajeFinal)}`

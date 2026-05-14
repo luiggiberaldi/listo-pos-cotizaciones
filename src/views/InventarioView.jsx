@@ -485,7 +485,6 @@ export default function InventarioView() {
         isOpen={showListaPrecios}
         onClose={() => setShowListaPrecios(false)}
         productos={productosFiltrados}
-        categorias={categorias}
         tasa={tasaEfectiva}
         config={configNeg}
       />
