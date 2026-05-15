@@ -6,7 +6,7 @@ import { WATERMARK_LOGO } from './watermarkBase64'
 import { 
   PAGE_W, PAGE_H, MARGIN, CONTENT_W, 
   C_PRIMARY, C_DARK, C_WHITE, C_GRAY,
-  drawSimplifiedHeader, checkPage
+  drawSimplifiedHeader, checkPage, drawWatermark
 } from './pdfShared'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -234,7 +234,7 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
   const logoData = await cargarLogo(config.logo_url)
 
   let y = drawHeader(doc, logoData, config, moneda, tasa)
-  addWatermark(doc)
+  drawWatermark(doc)
 
 
   // Agrupar por categoría usando el normalizador para corregir errores de tipeo
@@ -339,6 +339,7 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
   // ─── Iterar por categoría ────────────────────────────────────────────────
   const isGrid = formato === 'cuadricula'
   let needsHeader = true
+  const ROW_H = 6.0
 
   categoriasOrdenadas.forEach(cat => {
     const items = grupos[cat]
@@ -372,7 +373,6 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
     y += (isGrid ? 5.5 : 6.0)
 
     // Filas de productos
-    const ROW_H = 6.0
     items.forEach((p, idx) => {
       let prevY = y
       y = checkPage(doc, y, ROW_H, (d) => drawSimplifiedHeader(d, logoData, config, 'Lista de Precios (Cont.)'))

@@ -469,6 +469,11 @@ const useAuthStore = create((set, get) => ({
       }
 
       if (!res.ok) {
+        // Si el worker está caído (500) → intentar validación offline con cache
+        // Esto evita falsos "PIN incorrecto" cuando wrangler no corre localmente
+        if (res.status === 500) {
+          throw new Error('worker_unavailable')
+        }
         set({ loading: false, error: result.error || 'PIN incorrecto' })
         return { ok: false }
       }

@@ -157,7 +157,7 @@ export function drawAprobadoWatermark(doc, nombre) {
 
 /** Verifica si necesita salto de página, agrega nueva con watermark y ejecuta callback si existe */
 export function checkPage(doc, y, needed = 30, onPageAdd = null) {
-  if (y + needed > PAGE_H - 25) {
+  if (y + needed > PAGE_H - 35) {
     doc.addPage()
     drawWatermark(doc)
     if (onPageAdd && typeof onPageAdd === 'function') {

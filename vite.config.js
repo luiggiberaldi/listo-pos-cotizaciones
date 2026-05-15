@@ -15,9 +15,11 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:8787',
+        // Proxy a la producción mientras wrangler local no funciona en Windows+Node22
+        // Para usar el worker local: cambiar a 'http://localhost:8787'
+        target: 'https://listo-pos-cotizaciones.luigistorelogistics.workers.dev',
         changeOrigin: true,
-        secure: false,
+        secure: true,
       }
     }
   },
