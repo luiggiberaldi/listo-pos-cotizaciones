@@ -27,4 +27,4 @@ jobs:
         with:
           apiToken: ${{ secrets.CF_API_TOKEN }}
           accountId: ${{ secrets.CF_ACCOUNT_ID }}
-          command: deploy --config wrangler.jsonc
+          command: deploy --config wrangler.toml
