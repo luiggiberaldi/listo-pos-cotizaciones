@@ -5,13 +5,7 @@ import { useCallback } from 'react'
 import supabase from '../services/supabase/client'
 import { apiUrl, getAuthHeaders } from '../services/apiBase'
 import useAuthStore from '../store/useAuthStore'
-import { INVENTARIO_KEY } from './useInventario'
-import { COTIZACIONES_KEY } from './useCotizaciones'
-import { COMISIONES_KEY } from './useComisiones'
-import { STOCK_COMPROMETIDO_KEY } from './useStockComprometido'
 import { authFetch } from '../services/authFetch'
-import { REPORTE_KEY } from './useReporteVentas'
-import { CXC_KEY } from './useCuentasCobrar'
 import { notifyDespachoCreado, notifyStockBajo, notifyDespachoEnRuta, notifyDespachoEntregado, notifyDespachoCancelado } from '../services/notificationService'
 import { showToast } from '../components/ui/Toast'
 import { sendPushNotification } from './usePushNotifications'
@@ -224,12 +218,12 @@ export function useActualizarEstadoDespacho() {
     onSettled: () => {
       // Pequeño delay para que el Worker haya comprometido el cambio de estado
       setTimeout(() => {
-        qc.invalidateQueries({ queryKey: DESPACHOS_KEY, exact: false })
-        qc.invalidateQueries({ queryKey: INVENTARIO_KEY, exact: false })
-        qc.invalidateQueries({ queryKey: COMISIONES_KEY, exact: false })
-        qc.invalidateQueries({ queryKey: COTIZACIONES_KEY, exact: false })
-        qc.invalidateQueries({ queryKey: STOCK_COMPROMETIDO_KEY })
-        qc.invalidateQueries({ queryKey: REPORTE_KEY })
+        qc.invalidateQueries({ queryKey: ['despachos'], exact: false })
+        qc.invalidateQueries({ queryKey: ['inventario'], exact: false })
+        qc.invalidateQueries({ queryKey: ['comisiones'], exact: false })
+        qc.invalidateQueries({ queryKey: ['cotizaciones'], exact: false })
+        qc.invalidateQueries({ queryKey: ['stock_comprometido'] })
+        qc.invalidateQueries({ queryKey: ['reporte-ventas'] })
         qc.invalidateQueries({ queryKey: ['dashboard_metrics'] })
       }, 400)
     },
@@ -253,7 +247,10 @@ export function useEditarDespacho() {
     },
     onSuccess: async () => {
       showToast('Despacho actualizado', 'success')
-      qc.invalidateQueries({ queryKey: DESPACHOS_KEY, exact: false })
+      qc.invalidateQueries({ queryKey: ['despachos'], exact: false })
+      qc.invalidateQueries({ queryKey: ['stock_comprometido'] })
+      qc.invalidateQueries({ queryKey: ['reporte-ventas'] })
+      qc.invalidateQueries({ queryKey: ['dashboard_metrics'] })
     },
     onError: (error) => {
       showToast(error.message || 'Error al editar despacho', 'error')
@@ -278,9 +275,9 @@ export function useEditarItemsDespacho() {
     },
     onSuccess: async () => {
       showToast('Ítems del despacho actualizados con éxito', 'success')
-      qc.invalidateQueries({ queryKey: DESPACHOS_KEY, exact: false })
-      qc.invalidateQueries({ queryKey: INVENTARIO_KEY, exact: false })
-      qc.invalidateQueries({ queryKey: STOCK_COMPROMETIDO_KEY })
+      qc.invalidateQueries({ queryKey: ['despachos'], exact: false })
+      qc.invalidateQueries({ queryKey: ['inventario'], exact: false })
+      qc.invalidateQueries({ queryKey: ['stock_comprometido'] })
       qc.invalidateQueries({ queryKey: ['dashboard_metrics'] })
     },
     onError: (error) => {
