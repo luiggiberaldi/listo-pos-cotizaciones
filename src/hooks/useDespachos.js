@@ -115,12 +115,12 @@ export function useCrearDespacho() {
     onSuccess: async ({ id, numeroCotizacion, clienteNombre }) => {
       if (!id) return
 
-      qc.invalidateQueries({ queryKey: DESPACHOS_KEY, exact: false })
-      qc.invalidateQueries({ queryKey: INVENTARIO_KEY, exact: false })
-      qc.invalidateQueries({ queryKey: COMISIONES_KEY, exact: false })
-      qc.invalidateQueries({ queryKey: COTIZACIONES_KEY, exact: false })
-      qc.invalidateQueries({ queryKey: STOCK_COMPROMETIDO_KEY })
-      qc.invalidateQueries({ queryKey: CXC_KEY })
+      qc.invalidateQueries({ queryKey: ['despachos'], exact: false })
+      qc.invalidateQueries({ queryKey: ['inventario'], exact: false })
+      qc.invalidateQueries({ queryKey: ['comisiones'], exact: false })
+      qc.invalidateQueries({ queryKey: ['cotizaciones'], exact: false })
+      qc.invalidateQueries({ queryKey: ['stock_comprometido'] })
+      qc.invalidateQueries({ queryKey: ['cuentas-cobrar'] })
       showToast('Nota de despacho creada', 'success')
       notifyDespachoCreado(numeroCotizacion ?? '—', clienteNombre ?? 'cliente', usuarioNombre, rol)
       sendPushNotification({
@@ -302,8 +302,8 @@ export function useReciclarDespacho() {
       return result.id
     },
     onSuccess: async () => {
-      qc.invalidateQueries({ queryKey: DESPACHOS_KEY, exact: false })
-      qc.invalidateQueries({ queryKey: COTIZACIONES_KEY, exact: false })
+      qc.invalidateQueries({ queryKey: ['despachos'], exact: false })
+      qc.invalidateQueries({ queryKey: ['cotizaciones'], exact: false })
     },
   })
 }
