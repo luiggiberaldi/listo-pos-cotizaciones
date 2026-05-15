@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, memo, Fragment } from 'react'
-import { FileText, Calendar, Truck, CheckCircle, Ban, RefreshCcw, RefreshCw, Download, Loader2, Eye, MoreHorizontal, ChevronDown, Printer, Tag, Pencil, RotateCcw, AlertTriangle, Clock, CreditCard, DollarSign, Check } from 'lucide-react'
+import { FileText, Calendar, Truck, CheckCircle, Ban, RefreshCcw, RefreshCw, Download, Loader2, Eye, MoreHorizontal, ChevronDown, Printer, Tag, Pencil, RotateCcw, AlertTriangle, Clock, CreditCard, DollarSign, Check, PackageCheck } from 'lucide-react'
 import EstadoBadge from '../cotizaciones/EstadoBadge'
 import MobileActionSheet from '../cotizaciones/MobileActionSheet'
 import ConfirmModal from '../ui/ConfirmModal'

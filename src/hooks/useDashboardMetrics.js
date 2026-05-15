@@ -43,7 +43,7 @@ export function useDashboardMetrics() {
           // Despachos por aprobar
           supabase
             .from('notas_despacho')
-            .select('id, numero, cliente_id, total_usd, creado_en', { count: 'exact' })
+            .select('id, numero, cliente_id, total_usd, creado_en, items_count:notas_despacho_items(count)', { count: 'exact' })
             .eq('estado', 'pendiente')
             .order('creado_en', { ascending: false })
             .limit(5),
@@ -70,7 +70,7 @@ export function useDashboardMetrics() {
           // Cotizaciones importantes enviadas
           supabase
             .from('cotizaciones')
-            .select('id, numero, cliente_id, total_usd, creado_en, vendedor_id')
+            .select('id, numero, cliente_id, total_usd, creado_en, vendedor_id, items_count:cotizacion_items(count)')
             .eq('estado', 'enviada')
             .order('total_usd', { ascending: false })
             .limit(5),
@@ -165,7 +165,7 @@ export function useDashboardMetrics() {
           // Próximas entregas (top 5 despachadas)
           supabase
             .from('notas_despacho')
-            .select('id, numero, cliente_id, creado_en, total_usd')
+            .select('id, numero, cliente_id, creado_en, total_usd, items_count:notas_despacho_items(count)')
             .eq('estado', 'despachada')
             .order('creado_en', { ascending: true })
             .limit(5),

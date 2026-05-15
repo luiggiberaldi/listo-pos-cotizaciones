@@ -230,6 +230,7 @@ export function useActualizarEstadoDespacho() {
         qc.invalidateQueries({ queryKey: COTIZACIONES_KEY, exact: false })
         qc.invalidateQueries({ queryKey: STOCK_COMPROMETIDO_KEY })
         qc.invalidateQueries({ queryKey: REPORTE_KEY })
+        qc.invalidateQueries({ queryKey: ['dashboard_metrics'] })
       }, 400)
     },
   })
@@ -280,6 +281,7 @@ export function useEditarItemsDespacho() {
       qc.invalidateQueries({ queryKey: DESPACHOS_KEY, exact: false })
       qc.invalidateQueries({ queryKey: INVENTARIO_KEY, exact: false })
       qc.invalidateQueries({ queryKey: STOCK_COMPROMETIDO_KEY })
+      qc.invalidateQueries({ queryKey: ['dashboard_metrics'] })
     },
     onError: (error) => {
       showToast(error.message || 'Error al editar ítems', 'error')

@@ -520,6 +520,12 @@ export default function DashboardView() {
                       <span className="text-sm font-bold text-slate-800 font-mono">
                         DES-{String(d.numero).padStart(5, '0')}
                       </span>
+                      {d.items_count?.[0] && (
+                        <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded flex items-center gap-1">
+                          <Package size={10} />
+                          {d.items_count[0].count}
+                        </span>
+                      )}
                       <span className="text-[11px] text-slate-400">{fmtRelativo(d.creado_en)}</span>
                     </div>
                     {d.cliente && (
@@ -577,6 +583,12 @@ export default function DashboardView() {
                       <span className="text-sm font-bold text-slate-800 font-mono">
                         DES-{String(d.numero).padStart(5, '0')}
                       </span>
+                      {d.items_count?.[0] && (
+                        <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded flex items-center gap-1">
+                          <PackageCheck size={10} />
+                          {d.items_count[0].count}
+                        </span>
+                      )}
                       <span className="text-[11px] text-slate-400">{fmtRelativo(d.creado_en)}</span>
                     </div>
                     {d.cliente && (
