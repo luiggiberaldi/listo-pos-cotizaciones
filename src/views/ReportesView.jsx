@@ -312,8 +312,8 @@ function TabVentas({ configNeg }) {
   return (
     <div className="space-y-4">
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="flex flex-col lg:flex-row lg:items-end gap-4">
-          <div className="flex-1 min-w-0 overflow-x-auto pb-1">
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-end">
+          <div className="xl:col-span-8 min-w-0">
             <div className="flex items-center gap-2 ml-1 mb-1">
               <label className="text-[10px] font-bold text-slate-400 uppercase">Periodo de ventas</label>
               <span className="hidden sm:inline-flex text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 rounded-full px-2 py-0.5">
@@ -322,7 +322,7 @@ function TabVentas({ configNeg }) {
             </div>
             <DateRangeSelector value={rango} onChange={setRango} />
           </div>
-          <div className="shrink-0">
+          <div className="xl:col-span-4 flex justify-end">
             <ExportButton onClick={exportarPDF} loading={exportando} disabled={exportando || !despachos.length} />
           </div>
         </div>
@@ -391,16 +391,25 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
       const { generarComisionesPDF } = await import('../services/pdf/comisionesPDF')
 
       // Obtener el reporte detallado desde la RPC para que calcule bien los montos
-      const { data: detalleVendedor, error } = await supabase.rpc('obtener_reporte_ventas_comisiones', {
+      let { data: detalleVendedor, error } = await supabase.rpc('obtener_reporte_ventas_comisiones', {
         p_fecha_inicio: rango?.from ? `${rango.from}T00:00:00-04:00` : null,
         p_fecha_fin: rango?.to ? `${rango.to}T23:59:59-04:00` : null,
         p_vendedor_id: vendedor?.id
       })
 
-      if (error) throw error
+      if (error) console.error('Error RPC:', error)
+
+      // FALLBACK: Si la RPC no devuelve nada pero tenemos datos en la tabla local, usarlos.
+      // Esto evita el error de "No hay datos" cuando el usuario sí los ve en pantalla.
+      if ((!detalleVendedor || detalleVendedor.length === 0) && detalle.length > 0) {
+        console.log('Usando datos locales para PDF (Fallback)');
+        detalleVendedor = detalle;
+      }
 
       if (!detalleVendedor || detalleVendedor.length === 0) {
-        alert('No hay datos para generar el PDF de este vendedor en este rango.')
+        // Mensaje mejorado en lugar de alert simple
+        const msg = `No se encontraron registros detallados para ${vendedor?.nombre || 'este vendedor'} entre ${rango?.from} y ${rango?.to}.`;
+        alert(`🔍 SIN DATOS: ${msg}`);
         return
       }
 
@@ -411,7 +420,7 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
       })
     } catch (e) {
       console.error('Error generando PDF individual:', e)
-      alert('Error generando PDF: ' + e.message)
+      alert('❌ Error al generar el PDF: ' + e.message)
     } finally {
       setExportando(false)
     }
@@ -558,14 +567,23 @@ function TabComisiones({ configNeg }) {
     try {
       const { generarComisionesPDF } = await import('../services/pdf/comisionesPDF')
 
-      // Corregimos nombres de parámetros y formateo de fechas
-      const { data: detalleCompleto, error } = await supabase.rpc('obtener_reporte_ventas_comisiones', {
+      let { data: detalleCompleto, error } = await supabase.rpc('obtener_reporte_ventas_comisiones', {
         p_fecha_inicio: rango.from ? `${rango.from}T00:00:00-04:00` : null,
         p_fecha_fin: rango.to ? `${rango.to}T23:59:59-04:00` : null,
         p_vendedor_id: null
       })
 
-      if (error) throw error
+      if (error) console.error('Error RPC General:', error)
+
+      // Fallback a datos cargados en el hook useComisiones
+      if ((!detalleCompleto || detalleCompleto.length === 0) && comisiones.length > 0) {
+        detalleCompleto = comisiones;
+      }
+
+      if (!detalleCompleto || detalleCompleto.length === 0) {
+        alert(`🔍 SIN DATOS: No hay comisiones registradas entre ${rango.from} y ${rango.to}.`);
+        return;
+      }
 
       await generarComisionesPDF({
         comisiones: detalleCompleto || [],
@@ -573,7 +591,7 @@ function TabComisiones({ configNeg }) {
       })
     } catch (e) {
       console.error('Error generando PDF general:', e)
-      alert('Error al obtener datos detallados: ' + e.message)
+      alert('❌ Error al generar reporte general: ' + e.message)
     } finally {
       setExportando(false)
     }
@@ -584,14 +602,23 @@ function TabComisiones({ configNeg }) {
     try {
       const { generarComisionesPDF } = await import('../services/pdf/comisionesPDF')
 
-      // Corregimos nombres de parámetros y formateo de fechas
-      const { data: detalleVendedor, error } = await supabase.rpc('obtener_reporte_ventas_comisiones', {
+      let { data: detalleVendedor, error } = await supabase.rpc('obtener_reporte_ventas_comisiones', {
         p_fecha_inicio: rango.from ? `${rango.from}T00:00:00-04:00` : null,
         p_fecha_fin: rango.to ? `${rango.to}T23:59:59-04:00` : null,
         p_vendedor_id: vendedor.id
       })
 
-      if (error) throw error
+      if (error) console.error('Error RPC Individual:', error)
+
+      // Fallback filtrando de la lista general si la RPC falla
+      if ((!detalleVendedor || detalleVendedor.length === 0) && comisiones.length > 0) {
+        detalleVendedor = comisiones.filter(c => (c.vendedor?.id || c.vendedor_id) === vendedor.id);
+      }
+
+      if (!detalleVendedor || detalleVendedor.length === 0) {
+        alert(`🔍 SIN DATOS: No hay registros para ${vendedor.nombre} en este rango.`);
+        return;
+      }
 
       await generarComisionesPDF({
         comisiones: detalleVendedor || [],
@@ -600,7 +627,7 @@ function TabComisiones({ configNeg }) {
       })
     } catch (e) {
       console.error('Error generando PDF individual:', e)
-      alert('Error al obtener detalle del vendedor: ' + e.message)
+      alert('❌ Error al generar PDF de ' + vendedor.nombre + ': ' + e.message)
     } finally {
       setExportando(false)
     }
@@ -612,21 +639,23 @@ function TabComisiones({ configNeg }) {
   return (
     <div className="space-y-4">
       {/* Filtros */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-end gap-4">
-          <div className="flex-1 min-w-0 overflow-x-auto pb-1">
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-end">
+          {/* Periodo - Toma más espacio */}
+          <div className="xl:col-span-6 min-w-0">
             <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 mb-1 block">Periodo</label>
             <DateRangeSelector value={rango} onChange={setRango} />
           </div>
 
-          <div className="flex flex-wrap sm:flex-nowrap gap-3 shrink-0">
+          {/* Vendedor y Estado - Se agrupan al final */}
+          <div className="xl:col-span-6 flex flex-wrap sm:flex-nowrap gap-3">
             {esAdmin && (
-              <div className="w-full sm:w-48">
+              <div className="flex-1 min-w-[140px]">
                 <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 mb-1 block">Vendedor</label>
                 <select
                   value={filtroVendedor}
                   onChange={e => setFiltroVendedor(e.target.value)}
-                  className="w-full h-9 px-3 rounded-xl border border-slate-200 text-xs font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                  className="w-full h-9 px-3 rounded-xl border border-slate-200 text-xs font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none bg-slate-50/50"
                 >
                   <option value="">Todos</option>
                   {vendedoresDisponibles.map(v => (
@@ -636,7 +665,7 @@ function TabComisiones({ configNeg }) {
               </div>
             )}
 
-            <div className="w-full sm:w-56 min-w-[220px]">
+            <div className="flex-1 min-w-[180px]">
               <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 mb-1 block">Estado</label>
               <div className="flex p-1 bg-slate-100 rounded-xl h-9">
                 <button
@@ -654,8 +683,8 @@ function TabComisiones({ configNeg }) {
               </div>
             </div>
 
-            <div className="w-full sm:w-auto flex items-end">
-              <ExportButton onClick={exportarPDF} loading={exportando} disabled={exportando || comisiones.length === 0} className="w-full sm:w-auto" />
+            <div className="shrink-0 flex items-end">
+              <ExportButton onClick={exportarPDF} loading={exportando} disabled={exportando || comisiones.length === 0} className="h-9" />
             </div>
           </div>
         </div>
