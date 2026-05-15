@@ -342,7 +342,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     const lineH = 4.0
     const ROW_H = Math.max(ROW_H_BASE, descLines.length * lineH + 2)
 
-    const limitY = (pageNum === 1 && isLargeDoc) ? PAGE_H - 15 : PAGE_H - 50
+    const limitY = PAGE_H - 40 // Margen de seguridad para el footer
     if (y + ROW_H > limitY) {
       doc.addPage()
       pageNum++
@@ -418,11 +418,8 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
 
   // ── Layout fijo: posiciones calculadas desde el fondo ──
   // Si es un documento grande y todavía estamos en la página 1, forzamos página para los totales
-  if (isLargeDoc && pageNum === 1) {
-    doc.addPage()
-    pageNum++
-    y = drawHeader(doc, numDes)
-  }
+  // No forzar salto de página artificial, el limitY ya se encarga de dejar espacio
+  y = y + 2
 
   const sloganY = PAGE_H - 33
 
@@ -588,13 +585,8 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   // ══════════════════════════════════════════════════════════════════════════
   // Footer SOLO en la última página — en páginas intermedias el espacio queda libre
   const totalPages = doc.internal.getNumberOfPages()
-  // Si es documento grande, asegurar que el footer NO esté en la página 1 aunque sea la única (poco probable por el force addPage anterior)
-  if (isLargeDoc && totalPages === 1) {
-    doc.addPage()
-    doc.setPage(2)
-  } else {
-    doc.setPage(totalPages)
-  }
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p)
   const ph = PAGE_H
   {
 

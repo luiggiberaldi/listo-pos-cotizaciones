@@ -273,15 +273,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     // BALANCEO: Si hay muchos ítems, reducimos el límite de la página 1 para que algunos pasen a la página 2
     // Esto evita que la página 2 tenga solo los totales.
     const safeZone = 75
-    let limitY = PAGE_H - 45 // Default
-    if (pageNum === 1) {
-      if (itemsToRender.length > 20) {
-         // Si hay > 20 ítems, limitamos la página 1 a ~18 ítems para forzar balanceo
-         limitY = PAGE_H - 100 
-      } else {
-         limitY = PAGE_H - 20 // Máximo aprovechamiento para docs cortos
-      }
-    }
+    const limitY = PAGE_H - 40 // Margen de seguridad para el footer
     
     if (y + rowH > limitY) {
       doc.addPage()
@@ -413,9 +405,6 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   // Footer en páginas finales
   const totalPages = doc.internal.getNumberOfPages()
   for (let p = 1; p <= totalPages; p++) {
-    // Si es doc grande, no dibujar footer en la página 1
-    if (isLargeDoc && p === 1) continue;
-    
     doc.setPage(p)
     const ph = PAGE_H
     {
