@@ -589,6 +589,11 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
   // Reset página al cambiar filtro
   useEffect(() => { setPagina(1) }, [estadoFiltro, vendedorFiltro, verTodos])
 
+  // Subir al inicio al cambiar de página
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [pagina])
+
   const anular        = useAnularCotizacion()
   const cambiarEstado = useActualizarEstado()
   const crearDespacho = useCrearDespacho()

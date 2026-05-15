@@ -203,6 +203,11 @@ export default function DespachosView() {
   // Reset página al cambiar filtro
   useEffect(() => { setPagina(1) }, [estadoFiltro, vendedorFiltro, verTodos])
 
+  // Subir al inicio al cambiar de página
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [pagina])
+
   // Config de confirmación por rol
   const anularConfig = getDespachoAction('anular', rol)
   const reciclarConfig = getDespachoAction('reciclar', rol)
