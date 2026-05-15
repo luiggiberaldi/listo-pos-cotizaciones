@@ -270,10 +270,14 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     const lineH = 4.0
     const rowH = Math.max(ROW_H_BASE, descLines.length * lineH + 2)
 
-    // BALANCEO: Si hay muchos ítems, reducimos el límite de la página 1 para que algunos pasen a la página 2
-    // Esto evita que la página 2 tenga solo los totales.
-    const safeZone = 75
-    const limitY = PAGE_H - 40 // Margen de seguridad para el footer
+    let limitY = PAGE_H - 40 // Margen de seguridad para el footer
+    
+    // BALANCEO INTELIGENTE: 
+    // Si el documento tiene más de 20 items, forzamos un corte temprano en la pág 1
+    // para que la pág 2 no quede vacía y el documento se vea equilibrado.
+    if (pageNum === 1 && itemsToRender.length > 20) {
+      limitY = PAGE_H - 110 // Deja espacio para que ~12-15 items pasen a la siguiente página
+    }
     
     if (y + rowH > limitY) {
       doc.addPage()

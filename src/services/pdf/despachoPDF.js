@@ -342,7 +342,13 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     const lineH = 4.0
     const ROW_H = Math.max(ROW_H_BASE, descLines.length * lineH + 2)
 
-    const limitY = PAGE_H - 40 // Margen de seguridad para el footer
+    let limitY = PAGE_H - 40 // Margen de seguridad para el footer
+    
+    // BALANCEO INTELIGENTE: Si hay más de 20 items, cortamos antes en la Pág 1
+    if (pageNum === 1 && itemsToRender.length > 20) {
+      limitY = PAGE_H - 120 // Forzamos un reparto más equitativo
+    }
+    
     if (y + ROW_H > limitY) {
       doc.addPage()
       pageNum++

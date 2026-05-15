@@ -290,7 +290,13 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
     const lineH = 4.0
     const ROW_H = Math.max(ROW_H_BASE, descLines.length * lineH + 2)
 
-    const limitY = (pageNum === 1 && isLargeDoc) ? PAGE_H - 15 : PAGE_H - 85
+    let limitY = PAGE_H - 40 // Margen de seguridad estándar
+    
+    // BALANCEO INTELIGENTE: Si hay más de 20 items, repartimos entre páginas
+    if (pageNum === 1 && itemsToRender.length > 20) {
+      limitY = PAGE_H - 130 // Reparto equitativo para ODC
+    }
+    
     if (y + ROW_H > limitY) {
       doc.addPage()
       pageNum++
