@@ -633,3 +633,4 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.save(filename)
   return { filename }
 }
+}
