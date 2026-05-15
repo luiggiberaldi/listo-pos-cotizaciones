@@ -22,6 +22,7 @@ export default function ListaPreciosModal({
     stock: false,
     precio2: false,
   })
+  const [ajustePorcentaje, setAjustePorcentaje] = useState(0)
   const [generando, setGenerando] = useState(false)
 
   if (!isOpen) return null
@@ -49,9 +50,16 @@ export default function ListaPreciosModal({
   const handleGenerar = async () => {
     setGenerando(true)
     try {
+      const pAj = Number(ajustePorcentaje) || 0
+      const productosFinales = productosFiltrados.map(p => ({
+        ...p,
+        precio_usd: p.precio_usd != null ? (Number(p.precio_usd) * (1 + (pAj / 100))) : p.precio_usd,
+        precio_2: p.precio_2 != null ? (Number(p.precio_2) * (1 + (pAj / 100))) : p.precio_2,
+      }))
+
       const { generarListaPreciosPDF } = await import('../../services/pdf/listaPreciosPDF')
       await generarListaPreciosPDF({
-        productos: productosFiltrados,
+        productos: productosFinales,
         config,
         opciones: { moneda, tasa, columnas, formato },
       })
@@ -244,6 +252,22 @@ export default function ListaPreciosModal({
             {['bs', 'mixto', 'mixto_bcv', 'bcv'].includes(moneda) && tasa <= 0 && (
               <p className="text-xs text-amber-600 font-medium ml-1">No hay tasa disponible — se mostrará en USD</p>
             )}
+          </div>
+
+          {/* ── 2.5 Ajuste de Precio (%) ── */}
+          <div className="space-y-2.5">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Ajuste de Precio (%)</label>
+            <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 transition-all">
+              <span className="text-sm font-bold text-slate-400">%</span>
+              <input 
+                type="number" 
+                className="flex-1 bg-transparent border-none p-0 text-sm font-bold text-slate-700 focus:ring-0 outline-none"
+                placeholder="0"
+                value={ajustePorcentaje === 0 ? '' : ajustePorcentaje}
+                onChange={(e) => setAjustePorcentaje(e.target.value ? Number(e.target.value) : 0)}
+              />
+            </div>
+            <p className="text-[11px] text-slate-400 ml-1">Ej: <strong className="text-slate-600">10</strong> para aumentar 10%, <strong className="text-slate-600">-5</strong> para descontar 5%</p>
           </div>
 
           {/* ── 3. Columnas opcionales ── */}

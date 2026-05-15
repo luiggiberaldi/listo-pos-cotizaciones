@@ -186,54 +186,6 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   ]
   const ROW_H_BASE = 6.0
 
-  // ── Helper: dibuja condiciones+totales, retorna endY ─────────────────────
-  function dibujarBloqueFinal(afterY) {
-    const bTotW = (monedaPDF === 'mixto' || monedaPDF === 'mixto_bcv') ? 90 : 75
-    const bTotX = PAGE_W - MARGIN - bTotW
-    const bLeftW = bTotX - MARGIN - 5
-    const bConds = ['Precios Sujetos a cambios sin previo aviso.', 'El cliente se encarga de descargar la mercancía.']
-    const bCP = 2, bCTH = 6, bCLH = 5.0
-    const bBoxH = bCTH + bConds.length * bCLH + bCP * 2 + 1
-    const sY = afterY + 6
-    // Solo anclar al fondo si hay MUCHO espacio (poca densidad)
-    const finalY = (afterY < PAGE_H - 120) ? Math.max(sY, PAGE_H - 73) : sY
-    
-    // Condiciones
-    doc.setFillColor(230, 242, 255); doc.setDrawColor(...C_ACCENT); doc.setLineWidth(0.5)
-    doc.roundedRect(MARGIN, finalY, bLeftW, bBoxH, 1.5, 1.5, 'FD')
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...C_PRIMARY)
-    doc.text('CONDICIONES GENERALES:', MARGIN + bCP, finalY + bCP + 4.5)
-    doc.setDrawColor(...C_ACCENT); doc.setLineWidth(0.3)
-    doc.line(MARGIN + bCP, finalY + bCP + bCTH, MARGIN + bLeftW - bCP, finalY + bCP + bCTH)
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(...C_DARK)
-    let bCY = finalY + bCP + bCTH + 4.5
-    bConds.forEach(c => { doc.text('\u2022 ' + c, MARGIN + bCP, bCY); bCY += bCLH })
-    bCY = finalY + bBoxH + 2
-    // Totales
-    const bSub = Number(cotizacion.subtotal_usd || 0)
-    const bDesc = Number(cotizacion.descuento_usd || 0)
-    const bTot = Number(cotizacion.total_usd || 0)
-    const bTasa = tasa > 0 ? tasa : Number(cotizacion.tasa_bcv_snapshot || 0)
-    const bExento = Number(cotizacion.costo_envio_usd || 0) + Number(cotizacion.corte_usd || 0)
-    const bLines = [{ label: 'Subtotal:', val: fmtPrecio(bSub, monedaPDF, bTasa, factorBcv) }]
-    if (bDesc > 0) bLines.push({ label: 'Descuento:', val: '-' + fmtPrecio(bDesc, monedaPDF, bTasa, factorBcv), color: [220, 38, 38] })
-    if (bExento > 0) bLines.push({ label: 'Exento:', val: fmtPrecio(bExento, monedaPDF, bTasa, factorBcv), color: [50, 100, 180] })
-    const bLH = 7, bTH = (bLines.length + 1) * bLH + 4
-    doc.setFillColor(250, 250, 250); doc.setDrawColor(220, 220, 220); doc.setLineWidth(0.3)
-    doc.roundedRect(bTotX, finalY, bTotW, bTH, 1.5, 1.5, 'FD')
-    let bTy = finalY + 5
-    bLines.forEach(l => {
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(...(l.color || C_DARK))
-      doc.text(l.label, bTotX + 4, bTy); doc.text(l.val, bTotX + bTotW - 4, bTy, { align: 'right' })
-      bTy += bLH
-    })
-    doc.setFillColor(...C_ACCENT); doc.rect(bTotX, bTy - 2, bTotW, 10, 'F')
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(...C_WHITE)
-    doc.text('Total:', bTotX + 4, bTy + 5)
-    doc.text(fmtTotal(bTot, monedaPDF, bTasa, factorBcv), bTotX + bTotW - 4, bTy + 5, { align: 'right' })
-    const endY = Math.max(bCY, bTy + 14) + 3
-    return endY
-  }
 
   // Cabecera tabla
   doc.setFillColor(...C_ACCENT)
@@ -358,30 +310,61 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     y += rowH
   })
 
-  // 4. CONDICIONES + TOTALES (via helper)
-  // Verificamos si caben los totales (75mm de altura necesaria)
-  y = checkPage(doc, y, 75, (d) => drawSimplifiedHeader(d, logoData, config, `Cotización (Cont.) ${numDisplay}`))
+  // 4. CONDICIONES + TOTALES + NOTAS
+  // Calculamos la altura de cada bloque para ubicarlos anclados al fondo
   const bTotW = (monedaPDF === 'mixto' || monedaPDF === 'mixto_bcv') ? 90 : 75
   const bTotX = PAGE_W - MARGIN - bTotW
   const bLeftW = bTotX - MARGIN - 5
   const bConds = ['Precios Sujetos a cambios sin previo aviso.', 'El cliente se encarga de descargar la mercancía.']
   const bCP = 2, bCTH = 6, bCLH = 5.0
-  const bBoxH = bCTH + bConds.length * bCLH + bCP * 2 + 1
-  const sY = Math.max(y + 6, PAGE_H - 73)
+  const bBoxH = bCTH + bConds.length * bCLH + bCP * 2 + 1 // Altura bloque Condiciones
+  
+  const bSub = Number(cotizacion.subtotal_usd || 0)
+  const bDesc = Number(cotizacion.descuento_usd || 0)
+  const bTot = Number(cotizacion.total_usd || 0)
+  const bTasa = tasa > 0 ? tasa : Number(cotizacion.tasa_bcv_snapshot || 0)
+  const bExento = Number(cotizacion.costo_envio_usd || 0) + Number(cotizacion.corte_usd || 0)
+  
+  const bLines = [{ label: 'Subtotal:', val: fmtPrecio(bSub, monedaPDF, bTasa, factorBcv) }]
+  if (bDesc > 0) bLines.push({ label: 'Descuento:', val: '-' + fmtPrecio(bDesc, monedaPDF, bTasa, factorBcv), color: [220, 38, 38] })
+  if (bExento > 0) bLines.push({ label: 'Exento:', val: fmtPrecio(bExento, monedaPDF, bTasa, factorBcv), color: [50, 100, 180] })
+  
+  const bLH = 7
+  const bTH = (bLines.length + 1) * bLH + 4
+  const totalsTotalH = bTH + 10 - 2 // La caja redondeada + la caja azul de Total
 
-  // Notas del Cliente — ancladas 2mm sobre Condiciones Generales
+  const blockH = Math.max(bBoxH, totalsTotalH)
+
+  let notasH = 0
+  let notasLineas = []
   if (cotizacion.notas_cliente?.trim()) {
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
-    const notasLineas = doc.splitTextToSize(cotizacion.notas_cliente.trim(), bLeftW)
-    const notasH = 5 + notasLineas.length * 5
-    const notasStartY = sY - 2 - notasH
+    notasLineas = doc.splitTextToSize(cotizacion.notas_cliente.trim(), bLeftW)
+    notasH = 5 + notasLineas.length * 5 // 5mm margen + lineas
+  }
 
+  // Verificamos si todo esto cabe
+  const totalNeededH = (notasH > 0 ? notasH + 2 : 0) + blockH + 2 + 8 // 8 = altura slogan
+  y = checkPage(doc, y, totalNeededH, (d) => drawSimplifiedHeader(d, logoData, config, `Cotización (Cont.) ${numDisplay}`))
+
+  // ── Slogan — fijo 10mm sobre el footer (PAGE_H - 35) ──
+  const sloganY = PAGE_H - 35
+  const topOfSlogan = sloganY - 6 // ~ top de 16pt
+
+  // Bloque Totales/Condiciones -> ANCLADO 2mm por encima del slogan
+  const blockFinalY = topOfSlogan - 2 - blockH
+  
+  // Si por alguna razón la tabla llega súper abajo, respetamos y para no solapar la tabla
+  const finalY = Math.max(y + 6 + (notasH > 0 ? notasH + 2 : 0), blockFinalY)
+
+  // DIBUJAR NOTAS (2mm sobre Condiciones)
+  if (notasH > 0) {
+    const notasStartY = finalY - 2 - notasH
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(9.5)
     doc.setTextColor(...C_ACCENT)
     doc.text('NOTAS:', MARGIN, notasStartY + 4)
-
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
     doc.setTextColor(...C_DARK)
@@ -390,16 +373,36 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     })
   }
 
-  // ── Slogan — fijo 10mm sobre el footer (PAGE_H - 30) ──
-  const sloganY = PAGE_H - 35
-  if (y < sloganY) {
-    doc.setFont('helvetica', 'bolditalic')
-    doc.setFontSize(16)
-    doc.setTextColor(...C_DARK)
-    doc.text('"Todo lo puedo en Cristo que me fortalece" — Filipenses 4:13', PAGE_W / 2, sloganY, { align: 'center' })
-  }
+  // DIBUJAR CONDICIONES
+  doc.setFillColor(230, 242, 255); doc.setDrawColor(...C_ACCENT); doc.setLineWidth(0.5)
+  doc.roundedRect(MARGIN, finalY, bLeftW, bBoxH, 1.5, 1.5, 'FD')
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...C_PRIMARY)
+  doc.text('CONDICIONES GENERALES:', MARGIN + bCP, finalY + bCP + 4.5)
+  doc.setDrawColor(...C_ACCENT); doc.setLineWidth(0.3)
+  doc.line(MARGIN + bCP, finalY + bCP + bCTH, MARGIN + bLeftW - bCP, finalY + bCP + bCTH)
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(...C_DARK)
+  let bCY = finalY + bCP + bCTH + 4.5
+  bConds.forEach(c => { doc.text('\u2022 ' + c, MARGIN + bCP, bCY); bCY += bCLH })
 
-  dibujarBloqueFinal(y)
+  // DIBUJAR TOTALES
+  doc.setFillColor(250, 250, 250); doc.setDrawColor(220, 220, 220); doc.setLineWidth(0.3)
+  doc.roundedRect(bTotX, finalY, bTotW, bTH, 1.5, 1.5, 'FD')
+  let bTy = finalY + 5
+  bLines.forEach(l => {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(...(l.color || C_DARK))
+    doc.text(l.label, bTotX + 4, bTy); doc.text(l.val, bTotX + bTotW - 4, bTy, { align: 'right' })
+    bTy += bLH
+  })
+  doc.setFillColor(...C_ACCENT); doc.rect(bTotX, bTy - 2, bTotW, 10, 'F')
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(...C_WHITE)
+  doc.text('Total:', bTotX + 4, bTy + 5)
+  doc.text(fmtTotal(bTot, monedaPDF, bTasa, factorBcv), bTotX + bTotW - 4, bTy + 5, { align: 'right' })
+
+  // DIBUJAR SLOGAN
+  doc.setFont('helvetica', 'bolditalic')
+  doc.setFontSize(16)
+  doc.setTextColor(...C_DARK)
+  doc.text('"Todo lo puedo en Cristo que me fortalece" — Filipenses 4:13', PAGE_W / 2, sloganY, { align: 'center' })
 
 
 
