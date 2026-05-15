@@ -355,7 +355,7 @@ export async function handleCrearVersion(request, env) {
     }
 
     // 4. Validar acceso
-    if (cotOrig.vendedor_id !== user.operator_id && operador.rol !== 'supervisor') {
+    if (cotOrig.vendedor_id !== user.operator_id && !['supervisor', 'jefe', 'administracion'].includes(operador.rol)) {
       return jsonError('No tienes permiso para versionar esta cotización', 403, request);
     }
 
@@ -477,7 +477,7 @@ export async function handleEnviarCotizacion(request, env) {
     if (!cot) return jsonError('Cotización no encontrada', 404, request);
 
     // 2. Validar acceso
-    if (cot.vendedor_id !== user.operator_id && operador.rol !== 'supervisor') {
+    if (cot.vendedor_id !== user.operator_id && !['supervisor', 'jefe', 'administracion'].includes(operador.rol)) {
       return jsonError('No tienes permiso para enviar esta cotización', 403, request);
     }
 

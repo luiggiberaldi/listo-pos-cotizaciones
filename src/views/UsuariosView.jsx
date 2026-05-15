@@ -67,9 +67,9 @@ const ROL_CONFIG = {
   },
   jefe: {
     label:  'Jefe',
-    bg:     'bg-amber-100',
-    text:   'text-amber-900',
-    border: 'border-amber-400/60',
+    bg:     'bg-gradient-to-br from-[#FFD700] via-[#B8860B] to-[#8B6914]',
+    text:   'text-[#451a03]',
+    border: 'border-[#B8860B]/50',
   },
 }
 
@@ -90,7 +90,7 @@ const COLORES_VENDEDOR = [
 ]
 
 const COLOR_PLATEADO = '#E2E8F0' // slate-200 (plateado brillante)
-const COLOR_DORADO = '#D4AF37' // metallic gold
+const COLOR_DORADO = '#B8860B' // Metallic gold base
 
 // ─── Formulario crear usuario ─────────────────────────────────────────────────
 function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
@@ -167,7 +167,7 @@ function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
           { value: 'supervisor', label: 'Supervisor' },
           { value: 'trabajador', label: 'Trabajador' },
           { value: 'jefe', label: 'Jefe' },
-          { value: 'desarrollador', label: 'Desarrollador' },
+
         ]}
         placeholder="Seleccionar rol..."
         disabled={cargando}
@@ -299,7 +299,7 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando, coloresUsados = 
           { value: 'supervisor', label: 'Supervisor' },
           { value: 'trabajador', label: 'Trabajador' },
           { value: 'jefe', label: 'Jefe' },
-          { value: 'desarrollador', label: 'Desarrollador' },
+
         ]}
         placeholder="Seleccionar rol..."
         disabled={cargando}
@@ -450,7 +450,7 @@ function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar, c
   const esSupervisor = usuario.rol === 'jefe'
   // Color del strip: usar colores de rol para jefe/admin/logistica (igual que login)
   const COLOR_POR_ROL = {
-    jefe:           '#D4AF37',   // dorado metalílico
+    jefe:           '#B8860B',   // dorado metalílico
     administracion: '#94a3b8',   // plateado
     logistica:      '#94a3b8',   // plateado
   }
@@ -523,7 +523,8 @@ function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar, c
         </div>
 
         {/* Badge de rol */}
-        <span className={`inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full border ${conf.bg} ${conf.text} ${conf.border}`}>
+        <span className={`inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full border shadow-sm ${conf.bg} ${conf.text} ${conf.border}`}
+          style={usuario.rol === 'jefe' ? { textShadow: '0 0.5px 0 rgba(255,255,255,0.2)' } : {}}>
           {conf.label}
         </span>
 
@@ -749,7 +750,7 @@ export default function UsuariosView() {
     }
   }
 
-  const ROL_ORDEN = { jefe: 0, logistica: 1, administracion: 1, supervisor: 2, vendedor: 3, vendedor_sin_comision: 4, trabajador: 5, desarrollador: 6 }
+  const ROL_ORDEN = { jefe: 0, logistica: 1, administracion: 1, supervisor: 2, vendedor: 3, vendedor_sin_comision: 4, trabajador: 5 }
   const sortUsuarios = (arr) => [...arr].sort((a, b) => {
     const oa = ROL_ORDEN[a.rol] ?? 9
     const ob = ROL_ORDEN[b.rol] ?? 9

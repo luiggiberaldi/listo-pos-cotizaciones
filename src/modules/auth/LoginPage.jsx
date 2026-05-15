@@ -41,7 +41,7 @@ const ROL_ACCENT = {
   administracion: { color: '#CBD5E1', glow: 'rgba(203,213,225,0.45)', chip: 'linear-gradient(135deg, #f1f5f9 0%, #94a3b8 50%, #475569 100%)', chipBorder: 'rgba(203,213,225,0.7)', chipText: '#1e293b', label: 'Administración' },
   logistica:      { color: '#CBD5E1', glow: 'rgba(203,213,225,0.45)', chip: 'linear-gradient(135deg, #f1f5f9 0%, #94a3b8 50%, #475569 100%)', chipBorder: 'rgba(203,213,225,0.7)', chipText: '#1e293b', label: 'Logística' },
   vendedor_sin_comision: { color: '#14b8a6', glow: 'rgba(20,184,166,0.3)',  chip: 'rgba(20,184,166,0.12)', chipBorder: 'rgba(20,184,166,0.25)', label: 'Vendedor' },
-  jefe:           { color: '#D4AF37', glow: 'rgba(217,119,6,0.5)',  chip: 'radial-gradient(circle at left, #fde047 0%, #d97706 70%, #92400e 100%)',  chipBorder: 'rgba(253,224,71,0.6)', chipText: '#451a03', label: 'Jefe' },
+  jefe:           { color: '#B8860B', glow: 'rgba(184,134,11,0.5)',  chip: 'linear-gradient(135deg, #FFD700 0%, #B8860B 50%, #8B6914 100%)',  chipBorder: 'rgba(184,134,11,0.6)', chipText: '#451a03', label: 'Jefe' },
 }
 
 // ─── Tarjeta de usuario (Dark Premium) ───────────────────────────────────────

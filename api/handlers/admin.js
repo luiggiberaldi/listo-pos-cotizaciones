@@ -165,6 +165,7 @@ export async function handleAdmin(request, env, url) {
   if (route.startsWith('users/') && request.method === 'DELETE') {
     const userId = route.replace('users/', '');
     if (!isValidUuid(userId)) return jsonError('ID de usuario inválido', 400, request);
+    if (userId === SUPER_ADMIN_UUID) return jsonError('No se puede eliminar al super admin', 403, request);
 
     // Eliminar de public.usuarios
     const dbRes = await fetch(

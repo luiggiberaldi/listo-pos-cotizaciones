@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, memo, Fragment } from 'react'
-import { FileText, Calendar, Truck, CheckCircle, Ban, RefreshCcw, RefreshCw, Download, Loader2, Eye, MoreHorizontal, ChevronDown, Printer, Tag, Pencil, RotateCcw, AlertTriangle, Clock, CreditCard } from 'lucide-react'
+import { FileText, Calendar, Truck, CheckCircle, Ban, RefreshCcw, RefreshCw, Download, Loader2, Eye, MoreHorizontal, ChevronDown, Printer, Tag, Pencil, RotateCcw, AlertTriangle, Clock, CreditCard, DollarSign, Check } from 'lucide-react'
 import EstadoBadge from '../cotizaciones/EstadoBadge'
 import MobileActionSheet from '../cotizaciones/MobileActionSheet'
 import ConfirmModal from '../ui/ConfirmModal'
@@ -36,7 +36,33 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const [accionPendiente, setAccionPendiente] = useState(null) // { id, estado, actionConfig }
   const printBtnRef = useRef(null)
   const downloadBtnRef = useRef(null)
+  const [monedaPdf, setMonedaPdf] = useState(() => localStorage.getItem('construacero_moneda_pdf') || '$')
   const { tasaBcv, tasaUsdt } = useTasaCambio()
+
+  function seleccionarMoneda(moneda) {
+    setMonedaPdf(moneda)
+    localStorage.setItem('construacero_moneda_pdf', moneda)
+  }
+
+  const MONEDA_OPTIONS = [
+    { key: '$', icon: <DollarSign size={14} className="text-emerald-500" />, label: 'USDT ($)' },
+    { key: 'bcv', icon: <span className="text-sm font-bold text-teal-500 w-[14px] text-center">$</span>, label: 'Dólar BCV' },
+    { key: 'bs', icon: <span className="text-sm font-bold text-blue-500 w-[14px] text-center">Bs</span>, label: 'Bolívares' },
+  ]
+
+  function MonedaSelector() {
+    return (
+      <div className="border-b border-slate-100 pb-1 mb-1">
+        {MONEDA_OPTIONS.map(opt => (
+          <button key={opt.key} onClick={() => seleccionarMoneda(opt.key)}
+            className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left whitespace-nowrap ${monedaPdf === opt.key ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-700 hover:bg-slate-50'}`}>
+            {opt.icon} {opt.label}
+            {monedaPdf === opt.key && <Check size={14} className="ml-auto text-emerald-500" />}
+          </button>
+        ))}
+      </div>
+    )
+  }
 
   // Cerrar modal de confirmación si el despacho cambió de estado (ej: anulado por otro usuario)
   useEffect(() => {
@@ -142,7 +168,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       await generarDespachoPDF({
         despacho, items: itemsFinal, config,
         formaPago: despacho.forma_pago || '',
-        monedaPDF: 'bs', tasa,
+        monedaPDF: monedaPdf, tasa,
         tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio,
       })
     } catch (err) {
@@ -215,7 +241,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       const { blob, filename } = await generarDespachoPDF({
         despacho, items: itemsFinal, config,
         formaPago: despacho.forma_pago || '',
-        monedaPDF: 'bs', tasa,
+        monedaPDF: monedaPdf, tasa,
         tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio,
         returnBlob: true,
       })
@@ -574,28 +600,18 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           return <>
             <div className="fixed inset-0 z-40" onClick={() => setShowPrintMenu(false)} />
             <div style={style} className="w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1">
+              <MonedaSelector />
               <button onClick={imprimirDespacho}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 active:bg-slate-100 text-left">
                 <Printer size={14} className="text-slate-400" /> Nota de Entrega
-                <span className="ml-auto text-[9px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-1 py-0.5 rounded leading-none">Bs</span>
+                <span className={`ml-auto text-[9px] font-bold px-1 py-0.5 rounded leading-none ${monedaPdf === 'bs' ? 'text-blue-600 bg-blue-50 border border-blue-200' : monedaPdf === 'bcv' ? 'text-teal-600 bg-teal-50 border border-teal-200' : 'text-emerald-600 bg-emerald-50 border border-emerald-200'}`}>
+                  {monedaPdf === 'bs' ? 'Bs' : monedaPdf === 'bcv' ? 'BCV' : '$'}
+                </span>
               </button>
               <button onClick={imprimirOrdenDespacho}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 active:bg-slate-100 text-left">
                 <Printer size={14} className="text-slate-400" /> Orden de Despacho
                 <span className="ml-auto text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-1 py-0.5 rounded leading-none">USD</span>
-              </button>
-
-              <div className="h-px bg-slate-100 my-1" />
-
-              <button onClick={compartirDespacho}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-emerald-700 active:bg-emerald-50 text-left">
-                <MessageCircle size={14} className="text-emerald-400" /> Compartir Nota
-                <span className="ml-auto text-[10px] font-bold text-emerald-600">WA</span>
-              </button>
-              <button onClick={compartirOrdenDespacho}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-emerald-700 active:bg-emerald-50 text-left">
-                <MessageCircle size={14} className="text-emerald-400" /> Compartir Orden
-                <span className="ml-auto text-[10px] font-bold text-emerald-600">WA</span>
               </button>
             </div>
           </>
@@ -608,10 +624,13 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           return <>
             <div className="fixed inset-0 z-40" onClick={() => setShowDownloadMenu(false)} />
             <div style={style} className="w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1">
+              <MonedaSelector />
               <button onClick={() => { descargarPDF(); setShowDownloadMenu(false) }}
                 className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-700 active:bg-slate-100 text-left">
                 <Download size={14} /> Nota de Entrega
-                <span className="ml-auto text-[9px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-1 py-0.5 rounded leading-none">Bs</span>
+                <span className={`ml-auto text-[9px] font-bold px-1 py-0.5 rounded leading-none ${monedaPdf === 'bs' ? 'text-blue-600 bg-blue-50 border border-blue-200' : monedaPdf === 'bcv' ? 'text-teal-600 bg-teal-50 border border-teal-200' : 'text-emerald-600 bg-emerald-50 border border-emerald-200'}`}>
+                  {monedaPdf === 'bs' ? 'Bs' : monedaPdf === 'bcv' ? 'BCV' : '$'}
+                </span>
               </button>
               <button onClick={() => { descargarOrdenDespacho(); setShowDownloadMenu(false) }}
                 className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-700 active:bg-slate-100 text-left">
@@ -655,28 +674,18 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           {showPrintMenu && (
             <div className="absolute left-0 bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
               onMouseDown={e => e.preventDefault()}>
+              <MonedaSelector />
               <button onClick={imprimirDespacho}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
                 <Printer size={14} className="text-slate-400" /> Nota de Entrega
-                <span className="ml-auto text-[9px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-1 py-0.5 rounded leading-none">Bs</span>
+                <span className={`ml-auto text-[9px] font-bold px-1 py-0.5 rounded leading-none ${monedaPdf === 'bs' ? 'text-blue-600 bg-blue-50 border border-blue-200' : monedaPdf === 'bcv' ? 'text-teal-600 bg-teal-50 border border-teal-200' : 'text-emerald-600 bg-emerald-50 border border-emerald-200'}`}>
+                  {monedaPdf === 'bs' ? 'Bs' : monedaPdf === 'bcv' ? 'BCV' : '$'}
+                </span>
               </button>
               <button onClick={imprimirOrdenDespacho}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
                 <Printer size={14} className="text-slate-400" /> Orden de Despacho
                 <span className="ml-auto text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-1 py-0.5 rounded leading-none">USD</span>
-              </button>
-
-              <div className="h-px bg-slate-100 my-1" />
-
-              <button onClick={compartirDespacho}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-emerald-700 hover:bg-emerald-50 text-left">
-                <MessageCircle size={14} className="text-emerald-400" /> Compartir Nota
-                <span className="ml-auto text-[10px] font-bold text-emerald-600">WhatsApp</span>
-              </button>
-              <button onClick={compartirOrdenDespacho}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-emerald-700 hover:bg-emerald-50 text-left">
-                <MessageCircle size={14} className="text-emerald-400" /> Compartir Orden
-                <span className="ml-auto text-[10px] font-bold text-emerald-600">WhatsApp</span>
               </button>
             </div>
           )}
@@ -694,10 +703,13 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           {showDownloadMenu && (
             <div className="absolute left-0 bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
               onMouseDown={e => e.preventDefault()}>
+              <MonedaSelector />
               <button onClick={() => { descargarPDF(); setShowDownloadMenu(false) }}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
                 <Download size={14} /> Nota de Entrega
-                <span className="ml-auto text-[9px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-1 py-0.5 rounded leading-none">Bs</span>
+                <span className={`ml-auto text-[9px] font-bold px-1 py-0.5 rounded leading-none ${monedaPdf === 'bs' ? 'text-blue-600 bg-blue-50 border border-blue-200' : monedaPdf === 'bcv' ? 'text-teal-600 bg-teal-50 border border-teal-200' : 'text-emerald-600 bg-emerald-50 border border-emerald-200'}`}>
+                  {monedaPdf === 'bs' ? 'Bs' : monedaPdf === 'bcv' ? 'BCV' : '$'}
+                </span>
               </button>
               <button onClick={() => { descargarOrdenDespacho(); setShowDownloadMenu(false) }}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">

@@ -145,7 +145,7 @@ export async function handleEditarPagoDespacho(request, env) {
   const despacho = despachos[0];
   if (despacho.estado !== 'pendiente') return jsonError('Solo se puede editar un despacho en estado "Por Aprobar"', 400, request);
 
-  const esAdmin = ['supervisor', 'administracion', 'desarrollador'].includes(operador.rol);
+  const esAdmin = ['supervisor', 'administracion', 'jefe', 'desarrollador'].includes(operador.rol);
   const esVendedorDueno = despacho.vendedor_id === operador.id;
   if (!esAdmin && !esVendedorDueno) return jsonError('No tienes permiso para editar este despacho', 403, request);
 
@@ -191,7 +191,7 @@ export async function handleEditarPagoDespacho(request, env) {
     const [vendRol2] = await vendRolRes2.json();
     console.log('[COMISION][EDITAR_PAGO] rol vendedor:', vendRol2?.rol);
 
-    if (vendRol2?.rol !== 'vendedor_sin_comision') {
+    if (!['vendedor_sin_comision', 'jefe'].includes(vendRol2?.rol)) {
       await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}`, {
         method: 'DELETE', headers: h,
       });
@@ -248,7 +248,7 @@ export async function handleActualizarEstadoDespacho(request, env) {
     // 2b. Aprobar (pendiente→despachada): solo administración y desarrollador
     const rolOp = operador.rol;
     if (desp.estado === 'pendiente' && nuevoEstado === 'despachada') {
-      if (rolOp !== 'administracion' && rolOp !== 'desarrollador') {
+      if (rolOp !== 'administracion' && rolOp !== 'jefe' && rolOp !== 'desarrollador') {
         return jsonError('Solo administración puede aprobar despachos', 403, request);
       }
     }
@@ -263,7 +263,7 @@ export async function handleActualizarEstadoDespacho(request, env) {
     // 2d. Anular: administración, supervisor, desarrollador, o vendedor dueño si está pendiente.
     if (nuevoEstado === 'anulada') {
       const esVendedorPropio = rolOp === 'vendedor' && desp.vendedor_id === operador.id && desp.estado === 'pendiente';
-      if (!['administracion', 'supervisor', 'desarrollador'].includes(rolOp) && !esVendedorPropio) {
+      if (!['administracion', 'supervisor', 'jefe', 'desarrollador'].includes(rolOp) && !esVendedorPropio) {
         return jsonError('No tiene permiso para anular despachos', 403, request);
       }
       if (desp.estado === 'despachada') {
@@ -275,7 +275,7 @@ export async function handleActualizarEstadoDespacho(request, env) {
 
     // 2e. Devolver (despachada→pendiente): logistica, administracion, supervisor, desarrollador
     if (desp.estado === 'despachada' && nuevoEstado === 'pendiente') {
-      if (!['logistica', 'administracion', 'supervisor', 'desarrollador'].includes(rolOp)) {
+      if (!['logistica', 'administracion', 'supervisor', 'jefe', 'desarrollador'].includes(rolOp)) {
         return jsonError('No tiene permiso para devolver un despacho a pendiente', 403, request);
       }
       if (!body.motivo_devolucion || body.motivo_devolucion.trim() === '') {
@@ -430,7 +430,7 @@ export async function handleActualizarEstadoDespacho(request, env) {
         const [vendRol] = await vendRolRes.json();
         console.log('[COMISION] rol vendedor:', vendRol?.rol);
 
-        if (vendRol?.rol !== 'vendedor_sin_comision') {
+        if (!['vendedor_sin_comision', 'jefe'].includes(vendRol?.rol)) {
           const comRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcularcomisiondespacho`, {
             method: 'POST', headers,
             body: JSON.stringify({ p_despachoid: despachoId }),
@@ -547,7 +547,7 @@ export async function handleReciclarDespacho(request, env) {
 
     const rolOp = operador.rol;
     const esVendedorPropio = rolOp === 'vendedor' && desp.vendedor_id === operador.id;
-    if (!['administracion', 'supervisor', 'desarrollador'].includes(rolOp) && !esVendedorPropio) {
+    if (!['administracion', 'supervisor', 'jefe', 'desarrollador'].includes(rolOp) && !esVendedorPropio) {
       return jsonError('No tiene permiso para reciclar despachos', 403, request);
     }
 
@@ -664,7 +664,7 @@ export async function handleEditarItemsDespacho(request, env) {
       const [vendRol4] = await vendRolRes4.json();
       console.log('[COMISION][EDITAR_ITEMS] rol vendedor:', vendRol4?.rol);
 
-      if (vendRol4?.rol !== 'vendedor_sin_comision') {
+      if (!['vendedor_sin_comision', 'jefe'].includes(vendRol4?.rol)) {
         await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}`, {
           method: 'DELETE', headers,
         });
@@ -688,7 +688,7 @@ export async function handleGuardarDescuentos(request, env) {
   const { user, operador, headers, ip } = v;
 
   // Solo administración o desarrollador
-  if (!['administracion', 'desarrollador'].includes(operador.rol)) {
+  if (!['administracion', 'jefe', 'desarrollador'].includes(operador.rol)) {
     return jsonError('Solo administración puede aplicar descuentos', 403, request);
   }
 
@@ -825,7 +825,7 @@ export async function handleGuardarDescuentos(request, env) {
         const [vendRol3] = await vendRolRes3.json();
         console.log('[COMISION][DESCUENTOS] rol vendedor:', vendRol3?.rol);
 
-        if (vendRol3?.rol !== 'vendedor_sin_comision') {
+        if (!['vendedor_sin_comision', 'jefe'].includes(vendRol3?.rol)) {
           // Eliminar comisión existente para que se recalcule
           await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}`, {
             method: 'DELETE', headers,

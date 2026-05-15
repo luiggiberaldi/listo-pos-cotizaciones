@@ -6,7 +6,7 @@ import {
   Zap, User, X, Plus, Minus, Package, ArrowLeft, ArrowRight, Loader2,
   Search, CheckCircle, ShoppingCart, DollarSign, Truck, CreditCard,
   AlertCircle, ChevronRight, ChevronLeft, UserPlus, ChevronUp, Hash, FileText, Trash2, Save,
-  Download, Printer, MessageCircle, Clock
+  Download, Printer, MessageCircle, Clock, Check
 } from 'lucide-react'
 import { compartirPorWhatsApp, generarMensaje } from '../utils/whatsapp'
 import { useClientes } from '../hooks/useClientes'
@@ -42,6 +42,27 @@ function ModalVentaExitosa({ data, onClose, config }) {
   const [printLoading, setPrintLoading] = useState(false)
   const [showPdfMenu, setShowPdfMenu] = useState(false)
   const [showPrintMenu, setShowPrintMenu] = useState(false)
+  const [monedaPdf, setMonedaPdf] = useState(() => localStorage.getItem('construacero_moneda_pdf') || '$')
+
+  const MONEDA_OPTIONS = [
+    { key: '$', icon: <DollarSign size={12} className="text-emerald-500" />, label: 'USDT ($)' },
+    { key: 'bcv', icon: <span className="text-[10px] font-bold text-teal-500 w-[12px] text-center">$</span>, label: 'Dólar BCV' },
+    { key: 'bs', icon: <span className="text-[10px] font-bold text-blue-500 w-[12px] text-center">Bs</span>, label: 'Bolívares' },
+  ]
+
+  function MonedaSelector() {
+    return (
+      <div className="border-b border-slate-100 pb-1 mb-1">
+        {MONEDA_OPTIONS.map(opt => (
+          <button key={opt.key} onClick={() => { setMonedaPdf(opt.key); localStorage.setItem('construacero_moneda_pdf', opt.key) }}
+            className={`w-full flex items-center gap-2 px-3 py-1.5 text-[10px] text-left whitespace-nowrap ${monedaPdf === opt.key ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}>
+            {opt.icon} {opt.label}
+            {monedaPdf === opt.key && <Check size={12} className="ml-auto text-emerald-500" />}
+          </button>
+        ))}
+      </div>
+    )
+  }
 
   if (!data) return null
 
@@ -105,7 +126,7 @@ function ModalVentaExitosa({ data, onClose, config }) {
     setPdfLoading(true)
     try {
       const { generarFn, despachoObj, items: pdfItems } = await fetchDespachoData(tipo)
-      await generarFn({ despacho: despachoObj, items: pdfItems, config, formaPago: despachoObj.forma_pago || '', monedaPDF: tipo === 'orden' ? '$' : 'bs', tasa: data.tasa, tasaUsdt: data.tasaUsdt || 0, tasaBcv: data.tasaBcv || 0 })
+      await generarFn({ despacho: despachoObj, items: pdfItems, config, formaPago: despachoObj.forma_pago || '', monedaPDF: tipo === 'orden' ? '$' : monedaPdf, tasa: data.tasa, tasaUsdt: data.tasaUsdt || 0, tasaBcv: data.tasaBcv || 0 })
     } catch (err) {
       showToast('Error al generar PDF: ' + (err.message || 'Error'), 'error')
     } finally { setPdfLoading(false) }
@@ -116,7 +137,7 @@ function ModalVentaExitosa({ data, onClose, config }) {
     setPdfLoading(true)
     try {
       const { generarFn, despachoObj, items: pdfItems } = await fetchDespachoData(tipo)
-      const { blob, filename } = await generarFn({ despacho: despachoObj, items: pdfItems, config, formaPago: despachoObj.forma_pago || '', monedaPDF: tipo === 'orden' ? '$' : 'bs', tasa: data.tasa, tasaUsdt: data.tasaUsdt || 0, tasaBcv: data.tasaBcv || 0, returnBlob: true })
+      const { blob, filename } = await generarFn({ despacho: despachoObj, items: pdfItems, config, formaPago: despachoObj.forma_pago || '', monedaPDF: tipo === 'orden' ? '$' : monedaPdf, tasa: data.tasa, tasaUsdt: data.tasaUsdt || 0, tasaBcv: data.tasaBcv || 0, returnBlob: true })
       
       const msg = generarMensaje({
         nombreNegocio: config.nombre_negocio,
@@ -151,7 +172,7 @@ function ModalVentaExitosa({ data, onClose, config }) {
     setPrintLoading(true)
     try {
       const { generarFn, despachoObj, items: pdfItems } = await fetchDespachoData(tipo)
-      const { blob, filename } = await generarFn({ despacho: despachoObj, items: pdfItems, config, formaPago: despachoObj.forma_pago || '', monedaPDF: tipo === 'orden' ? '$' : 'bs', tasa: data.tasa, tasaUsdt: data.tasaUsdt || 0, tasaBcv: data.tasaBcv || 0, returnBlob: true })
+      const { blob, filename } = await generarFn({ despacho: despachoObj, items: pdfItems, config, formaPago: despachoObj.forma_pago || '', monedaPDF: tipo === 'orden' ? '$' : monedaPdf, tasa: data.tasa, tasaUsdt: data.tasaUsdt || 0, tasaBcv: data.tasaBcv || 0, returnBlob: true })
       printOrDownloadPdf(blob, filename)
     } catch (err) {
       showToast('Error al imprimir: ' + (err.message || 'Error'), 'error')
@@ -244,30 +265,16 @@ function ModalVentaExitosa({ data, onClose, config }) {
                 </button>
                 {showPdfMenu && (
                   <div className="absolute bottom-full left-0 right-0 mb-1 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-50 overflow-hidden">
-                    {/* Sección Descargas */}
-                    <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50 border-b border-slate-100 mb-1">
-                      Descargar PDF
-                    </div>
+                    <MonedaSelector />
                     <button onClick={() => handleDescargar('nota')} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 text-slate-700 flex items-center justify-between">
                       <span><FileText size={12} className="inline mr-1.5 text-slate-400" />Nota de Entrega</span>
-                      <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-1 rounded">Bs</span>
+                      <span className={`text-[9px] font-bold px-1 rounded ${monedaPdf === 'bs' ? 'text-blue-600 bg-blue-50' : monedaPdf === 'bcv' ? 'text-teal-600 bg-teal-50' : 'text-emerald-600 bg-emerald-50'}`}>
+                        {monedaPdf === 'bs' ? 'Bs' : monedaPdf === 'bcv' ? 'BCV' : '$'}
+                      </span>
                     </button>
                     <button onClick={() => handleDescargar('orden')} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 text-slate-700 flex items-center justify-between border-b border-slate-100">
                       <span><Package size={12} className="inline mr-1.5 text-slate-400" />Orden de Despacho</span>
                       <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1 rounded">USD</span>
-                    </button>
-
-                    {/* Sección WhatsApp */}
-                    <div className="px-3 py-1.5 text-[10px] font-bold text-emerald-600 uppercase tracking-wider bg-emerald-50/50 border-b border-emerald-100 my-1">
-                      Enviar por WhatsApp
-                    </div>
-                    <button onClick={() => handleCompartir('nota')} className="w-full text-left px-3 py-2 text-xs hover:bg-emerald-50 text-emerald-700 flex items-center justify-between">
-                      <span><MessageCircle size={12} className="inline mr-1.5" />Compartir Nota</span>
-                      <span className="text-[9px] font-bold">WA</span>
-                    </button>
-                    <button onClick={() => handleCompartir('orden')} className="w-full text-left px-3 py-2 text-xs hover:bg-emerald-50 text-emerald-700 flex items-center justify-between">
-                      <span><MessageCircle size={12} className="inline mr-1.5" />Compartir Orden</span>
-                      <span className="text-[9px] font-bold">WA</span>
                     </button>
                   </div>
                 )}
@@ -282,11 +289,16 @@ function ModalVentaExitosa({ data, onClose, config }) {
                 </button>
                 {showPrintMenu && (
                   <div className="absolute bottom-full left-0 right-0 mb-1 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-50">
-                    <button onClick={() => handleImprimir('nota')} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 text-slate-700">
-                      <FileText size={12} className="inline mr-1.5" />Nota de entrega
+                    <MonedaSelector />
+                    <button onClick={() => handleImprimir('nota')} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 text-slate-700 flex items-center justify-between">
+                      <span><FileText size={12} className="inline mr-1.5 text-slate-400" />Nota de entrega</span>
+                      <span className={`text-[9px] font-bold px-1 rounded ${monedaPdf === 'bs' ? 'text-blue-600 bg-blue-50' : monedaPdf === 'bcv' ? 'text-teal-600 bg-teal-50' : 'text-emerald-600 bg-emerald-50'}`}>
+                        {monedaPdf === 'bs' ? 'Bs' : monedaPdf === 'bcv' ? 'BCV' : '$'}
+                      </span>
                     </button>
-                    <button onClick={() => handleImprimir('orden')} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 text-slate-700">
-                      <Package size={12} className="inline mr-1.5" />Orden de despacho
+                    <button onClick={() => handleImprimir('orden')} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 text-slate-700 flex items-center justify-between border-t border-slate-100">
+                      <span><Package size={12} className="inline mr-1.5 text-slate-400" />Orden de despacho</span>
+                      <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1 rounded">USD</span>
                     </button>
                   </div>
                 )}

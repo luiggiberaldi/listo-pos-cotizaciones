@@ -48,11 +48,11 @@ export default function LoginAvatar({ user, size = 'lg', className = '' }) {
       }
     : (esDorado 
         ? {
-            background: 'radial-gradient(circle at center, #fde047 0%, #d97706 60%, #92400e 100%)',
-            border: 'rgba(253,224,71,0.5)',
-            shadow: '#451a03',
-            shadowGlow: 'rgba(217,119,6,0.3)',
-            accent: '#fde047'
+            background: 'linear-gradient(135deg, #BF953F 0%, #FCF6BA 45%, #B38728 70%, #AA771C 100%)',
+            border: 'rgba(184,134,11,0.6)',
+            shadow: '#5e4406',
+            shadowGlow: 'rgba(184,134,11,0.3)',
+            accent: '#BF953F'
           }
         : (user?.color ? hexVariants(user.color) : (COLORES_ROL[user?.rol] ?? COLORES_ROL.vendedor)))
 

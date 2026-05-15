@@ -77,7 +77,7 @@ export async function getOperatorRole(operatorId, env) {
 // Verifica que el operador sea supervisor consultando la tabla usuarios
 export async function verifySupervisor(operatorId, env) {
   const rol = await getOperatorRole(operatorId, env);
-  return rol === 'supervisor' || rol === 'jefe' || rol === 'desarrollador';
+  return rol === 'supervisor' || rol === 'jefe' || rol === 'administracion' || rol === 'desarrollador';
 }
 
 // Verifica supervisor O administracion O jefe (para endpoints compartidos como reportes)

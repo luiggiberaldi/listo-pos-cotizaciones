@@ -3,6 +3,17 @@ import { json, jsonError, isValidUuid } from '../lib/utils.js'
 import { verifyAuth, validateOperator } from '../lib/auth.js'
 import { registrarAuditoria } from '../lib/audit.js'
 
+async function obtenerVendedoresConRol(env, headers, cuentaId, roles) {
+  const res = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/usuarios?cuenta_id=eq.${cuentaId}&rol=in.(${roles.join(',')})&activo=eq.true&select=id`,
+    { headers }
+  );
+  if (!res.ok) return '00000000-0000-0000-0000-000000000000';
+  const rows = await res.json();
+  if (!rows.length) return '00000000-0000-0000-0000-000000000000';
+  return rows.map(r => r.id).join(',');
+}
+
 // Helper interno para unificar la lógica de filtros entre Lista y Resumen
 function aplicarFiltrosComisiones(query, urlParams, user) {
   const vendedorId = urlParams.get('vendedorId')
@@ -58,7 +69,7 @@ export async function handleMarcarComisionPagada(request, env) {
   if (v.error) return v.error;
   const { operador, headers, ip } = v;
 
-  const ROLES_PAGO = ['supervisor', 'administracion'];
+  const ROLES_PAGO = ['supervisor', 'administracion', 'jefe'];
   if (!ROLES_PAGO.includes(operador.rol)) {
     return jsonError('Solo supervisor o administracion pueden registrar pagos de comisiones', 403, request);
   }
@@ -121,7 +132,7 @@ export async function handleActualizarEstadoComision(request, env) {
   if (v.error) return v.error;
   const { operador, headers, ip } = v;
 
-  const ROLES_ESTADO = ['supervisor', 'administracion'];
+  const ROLES_ESTADO = ['supervisor', 'administracion', 'jefe'];
   if (!ROLES_ESTADO.includes(operador.rol)) {
     return jsonError('Solo supervisor o administracion pueden cambiar el estado de comisiones', 403, request);
   }
@@ -192,7 +203,8 @@ export async function handleGetComisiones(request, env) {
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  let baseUrl = `${env.SUPABASE_URL}/rest/v1/comisiones?select=id,despachoid,vendedorid,cotizacionid,cuentaid,totalcomision,comisioncabilla,comisionotros,pctcabilla,pctotros,montopagado,estado,pagadaen,pagadapor,creadoen,actualizadoen&order=creadoen.desc`
+  const vendedorIds = await obtenerVendedoresConRol(env, headers, user.id, ['vendedor', 'supervisor']);
+  let baseUrl = `${env.SUPABASE_URL}/rest/v1/comisiones?vendedorid=in.(${vendedorIds})&select=id,despachoid,vendedorid,cotizacionid,cuentaid,totalcomision,comisioncabilla,comisionotros,pctcabilla,pctotros,montopagado,estado,pagadaen,pagadapor,creadoen,actualizadoen&order=creadoen.desc`
   
   const userContext = { ...user, operator_rol: operador.rol, operator_id: operador.id };
   let query = aplicarFiltrosComisiones(baseUrl, url.searchParams, userContext)
@@ -260,7 +272,12 @@ export async function handleGetComisionesResumen(request, env) {
   const url = new URL(request.url);
 
   try {
-    let query = `${env.SUPABASE_URL}/rest/v1/comisiones?select=totalcomision,montopagado,estado`
+    const headers = {
+      apikey: env.SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    };
+    const vendedorIds = await obtenerVendedoresConRol(env, headers, user.id, ['vendedor', 'supervisor']);
+    let query = `${env.SUPABASE_URL}/rest/v1/comisiones?vendedorid=in.(${vendedorIds})&select=totalcomision,montopagado,estado`
     const userContext = { ...user, operator_rol: operador.rol, operator_id: operador.id }
     query = aplicarFiltrosComisiones(query, url.searchParams, userContext)
 
