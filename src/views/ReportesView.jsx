@@ -311,19 +311,20 @@ function TabVentas({ configNeg }) {
 
   return (
     <div className="space-y-4">
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-end">
-          <div className="xl:col-span-8 min-w-0">
-            <div className="flex items-center gap-2 ml-1 mb-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase">Periodo de ventas</label>
-              <span className="hidden sm:inline-flex text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 rounded-full px-2 py-0.5">
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex flex-col gap-6">
+          <div className="w-full">
+            <div className="flex items-center gap-2 ml-1 mb-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Periodo de ventas</label>
+              <span className="hidden sm:inline-flex text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full px-2 py-0.5">
                 {rangoLabel}
               </span>
             </div>
             <DateRangeSelector value={rango} onChange={setRango} />
           </div>
-          <div className="xl:col-span-4 flex justify-end">
-            <ExportButton onClick={exportarPDF} loading={exportando} disabled={exportando || !despachos.length} />
+          
+          <div className="flex justify-end border-t border-slate-50 pt-4">
+            <ExportButton onClick={exportarPDF} loading={exportando} disabled={exportando || !despachos.length} className="h-11 px-8" />
           </div>
         </div>
       </div>
@@ -639,25 +640,25 @@ function TabComisiones({ configNeg }) {
   return (
     <div className="space-y-4">
       {/* Filtros */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-end">
-          {/* Periodo - Toma más espacio */}
-          <div className="xl:col-span-6 min-w-0">
-            <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 mb-1 block">Periodo</label>
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex flex-col gap-6">
+          {/* Fila Superior: Periodo (con mucho espacio) */}
+          <div className="w-full">
+            <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-2 block tracking-wider">Rango de Periodo</label>
             <DateRangeSelector value={rango} onChange={setRango} />
           </div>
 
-          {/* Vendedor y Estado - Se agrupan al final */}
-          <div className="xl:col-span-6 flex flex-wrap sm:flex-nowrap gap-3">
+          {/* Fila Inferior: Otros Filtros y Acciones */}
+          <div className="flex flex-wrap lg:flex-nowrap items-end gap-4 border-t border-slate-50 pt-4">
             {esAdmin && (
-              <div className="flex-1 min-w-[140px]">
-                <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 mb-1 block">Vendedor</label>
+              <div className="flex-1 min-w-[200px]">
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">Vendedor</label>
                 <select
                   value={filtroVendedor}
                   onChange={e => setFiltroVendedor(e.target.value)}
-                  className="w-full h-9 px-3 rounded-xl border border-slate-200 text-xs font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none bg-slate-50/50"
+                  className="w-full h-11 px-4 rounded-xl border border-slate-200 text-sm font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none bg-slate-50/50 appearance-none cursor-pointer hover:border-indigo-300 transition-all"
                 >
-                  <option value="">Todos</option>
+                  <option value="">Todos los Asesores</option>
                   {vendedoresDisponibles.map(v => (
                     <option key={v.id} value={v.id}>{v.nombre}</option>
                   ))}
@@ -665,26 +666,26 @@ function TabComisiones({ configNeg }) {
               </div>
             )}
 
-            <div className="flex-1 min-w-[180px]">
-              <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 mb-1 block">Estado</label>
-              <div className="flex p-1 bg-slate-100 rounded-xl h-9">
+            <div className="flex-1 min-w-[240px]">
+              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">Estado de Comisión</label>
+              <div className="flex p-1 bg-slate-100/80 rounded-xl h-11">
                 <button
                   onClick={() => setFiltroEstado('')}
-                  className={`flex-1 text-[10px] font-bold rounded-lg transition-all ${!filtroEstado ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500'}`}
+                  className={`flex-1 text-xs font-black rounded-lg transition-all ${!filtroEstado ? 'bg-white shadow-md text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
                 >Todas</button>
                 <button
                   onClick={() => setFiltroEstado('pendiente')}
-                  className={`flex-1 text-[10px] font-bold rounded-lg transition-all ${filtroEstado === 'pendiente' ? 'bg-white shadow-sm text-amber-600' : 'text-slate-500'}`}
-                >Pend.</button>
+                  className={`flex-1 text-xs font-black rounded-lg transition-all ${filtroEstado === 'pendiente' ? 'bg-white shadow-md text-amber-600' : 'text-slate-500 hover:text-slate-700'}`}
+                >Pendientes</button>
                 <button
                   onClick={() => setFiltroEstado('pagada')}
-                  className={`flex-1 text-[10px] font-bold rounded-lg transition-all ${filtroEstado === 'pagada' ? 'bg-white shadow-sm text-emerald-600' : 'text-slate-500'}`}
+                  className={`flex-1 text-xs font-black rounded-lg transition-all ${filtroEstado === 'pagada' ? 'bg-white shadow-md text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}
                 >Pagadas</button>
               </div>
             </div>
 
-            <div className="shrink-0 flex items-end">
-              <ExportButton onClick={exportarPDF} loading={exportando} disabled={exportando || comisiones.length === 0} className="h-9" />
+            <div className="w-full lg:w-auto shrink-0">
+              <ExportButton onClick={exportarPDF} loading={exportando} disabled={exportando || comisiones.length === 0} className="w-full h-11" />
             </div>
           </div>
         </div>
