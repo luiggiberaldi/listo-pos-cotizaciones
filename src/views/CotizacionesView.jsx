@@ -591,7 +591,10 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
 
   // Subir al inicio al cambiar de página
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    const mainContainer = document.querySelector('main')
+    if (mainContainer) {
+      mainContainer.scrollTo({ top: 0, behavior: 'smooth' })
+    }
   }, [pagina])
 
   const anular        = useAnularCotizacion()
