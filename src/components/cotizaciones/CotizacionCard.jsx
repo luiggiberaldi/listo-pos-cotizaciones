@@ -318,7 +318,15 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
 
       {/* ── Total ── */}
       <div className="mx-3 mb-2 bg-slate-50 rounded-xl px-3 py-2 flex items-center justify-between">
-        <span className="text-xs font-medium text-slate-400">Total</span>
+        <div className="flex flex-col">
+          <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Total</span>
+          {cotizacion.items_count?.[0] && (
+            <div className="flex items-center gap-1 text-[10px] font-bold text-indigo-500 mt-0.5">
+              <PackageCheck size={11} />
+              {cotizacion.items_count[0].count} {cotizacion.items_count[0].count === 1 ? 'Ítem' : 'Ítems'}
+            </div>
+          )}
+        </div>
         <div className="text-right">
           <span className="text-lg font-bold text-slate-800">{fmtUsd(cotizacion.total_usd)}</span>
           {tasa > 0 && cotizacion.total_usd > 0 && (

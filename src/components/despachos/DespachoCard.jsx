@@ -510,7 +510,15 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           </>
         )}
         <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-slate-400">Total</span>
+          <div className="flex flex-col">
+            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Total</span>
+            {despacho.items_count?.[0] && (
+              <div className="flex items-center gap-1 text-[10px] font-bold text-indigo-500 mt-0.5">
+                <PackageCheck size={11} />
+                {despacho.items_count[0].count} {despacho.items_count[0].count === 1 ? 'Ítem' : 'Ítems'}
+              </div>
+            )}
+          </div>
           <div className="text-right">
             {descuentoTotal > 0 ? (
               <>

@@ -39,6 +39,7 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false } = {}
           referencia_pago, forma_pago_cliente,
           creado_en, actualizado_en, despachada_en, entregada_en, aprobado_por_nombre,
           cliente_id, cliente_factura_id, vendedor_id, transportista_id,
+          items_count:notas_despacho_items(count),
           transportista:transportistas!notas_despacho_transportista_id_fkey(id, nombre, rif, telefono, color, vehiculo, placa_chuto, placa_batea),
           cotizacion:cotizaciones!notas_despacho_cotizacion_id_fkey(id, numero, version)
         `)
