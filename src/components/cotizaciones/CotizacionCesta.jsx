@@ -138,7 +138,7 @@ export default function CestaPanel({ items, onCambiar, onEliminar, onEditar, sub
               <div className="flex-1 min-w-0">
                 <p className="text-[12px] sm:text-[12px] font-bold text-slate-700 leading-snug break-words uppercase">
                   {it.nombreSnap}
-                  {it.origen === 'externo' && (
+                  {(it.origen === 'externo' || !it.productoId) && (
                     <span className="inline-block ml-1.5 mb-0.5 text-[9px] uppercase tracking-wider font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded align-middle">
                       Externo - {it.codigoSnap}
                     </span>
@@ -148,7 +148,7 @@ export default function CestaPanel({ items, onCambiar, onEliminar, onEditar, sub
               <span className="text-[11px] sm:text-xs font-black text-slate-800 shrink-0">{fmtUsd(linea)}</span>
             </div>
             {/* Badge: stock insuficiente (solo para productos de inventario) */}
-            {it.origen !== 'externo' && stockMap[it.productoId] !== undefined && it.cantidad > stockMap[it.productoId] && (
+            {(it.origen !== 'externo' && it.productoId) && stockMap[it.productoId] !== undefined && it.cantidad > stockMap[it.productoId] && (
               <div className="flex items-center gap-1 mb-1">
                 <span className="text-[10px] font-bold text-amber-700 bg-amber-100 border border-amber-300 rounded-full px-2 py-0.5 leading-none">
                   ⚠ Stock insuficiente — disponible: {stockMap[it.productoId]}
@@ -187,7 +187,7 @@ export default function CestaPanel({ items, onCambiar, onEliminar, onEditar, sub
                   <Plus size={12} strokeWidth={3} />
                 </button>
               </div>
-              {it.origen === 'externo' && (
+              {(it.origen === 'externo' || !it.productoId) && (
                 <button type="button" onClick={() => onEditar(idx)}
                   className="w-7 h-7 rounded-md bg-amber-50 hover:bg-amber-100 flex items-center justify-center shrink-0 transition-colors active:scale-95 border border-amber-200">
                   <Edit2 size={11} className="text-amber-600" />

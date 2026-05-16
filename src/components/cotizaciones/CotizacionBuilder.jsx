@@ -487,6 +487,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
       cantidad:      Number(it.cantidad),
       precioUnitUsd: Number(it.precio_unit_usd),
       descuentoPct:  0, // Discount disabled — always 0
+      origen:        it.producto_id ? (it.origen || 'inventario') : 'externo',
     }))
   )
 
@@ -1338,7 +1339,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-semibold text-slate-700 leading-tight">
                             {it.nombreSnap}
-                            {it.origen === 'externo' && (
+                            {(it.origen === 'externo' || !it.productoId) && (
                               <span className="inline-block ml-1.5 align-middle mb-0.5 text-[8px] uppercase tracking-wider font-bold bg-amber-100 text-amber-700 px-1 py-0.5 rounded">
                                 Ext - {it.codigoSnap}
                               </span>

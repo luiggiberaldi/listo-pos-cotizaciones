@@ -123,7 +123,7 @@ export function useCotizacion(id) {
           .maybeSingle(),
         supabase
           .from('cotizacion_items')
-          .select('producto_id, codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, descuento_pct, total_linea_usd, orden')
+          .select('producto_id, codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, descuento_pct, total_linea_usd, orden, origen')
           .eq('cotizacion_id', id)
           .order('orden'),
       ])
@@ -165,7 +165,13 @@ export function useCotizacion(id) {
         vendedor: lookups[1]?.data ?? null,
       }
 
-      return { ...cot, items: itemsRes.data ?? [] }
+      return { 
+        ...cot, 
+        items: (itemsRes.data ?? []).map(it => ({
+          ...it,
+          origen: it.producto_id ? (it.origen || 'inventario') : 'externo'
+        }))
+      }
     },
     enabled: !!id && !!perfil,
   })
@@ -209,6 +215,7 @@ export function useGuardarBorrador() {
         descuento_pct:   0,
         total_linea_usd: round2(it.cantidad * it.precioUnitUsd),
         orden:           idx,
+        origen:          it.producto_id ? (it.origen || 'inventario') : 'externo',
       }))
 
       const payload = { cotizacionId, headerData, items: itemRows }
