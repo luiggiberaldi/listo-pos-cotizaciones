@@ -27,7 +27,18 @@ async function fetchClienteViaAPI(clienteId) {
     })
     if (!res.ok) return null
     const data = await res.json()
-    return data?.[0] ?? null
+    const clienteRaw = data?.[0] ?? null
+    
+    // Si el cliente tiene vendedor_id pero no tiene teléfono en el objeto anidado, lo hidratamos
+    if (clienteRaw?.vendedor_id && !clienteRaw?.vendedor?.telefono) {
+      const { data: vData } = await supabase
+        .from('usuarios')
+        .select('id, nombre, color, telefono')
+        .eq('id', clienteRaw.vendedor_id)
+        .maybeSingle()
+      if (vData) clienteRaw.vendedor = vData
+    }
+    return clienteRaw
   } catch { return null }
 }
 
