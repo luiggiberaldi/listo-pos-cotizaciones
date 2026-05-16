@@ -197,11 +197,10 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                     <div
                       key={p.id}
                       onClick={() => !enCarrito && stock > 0 && agregarItem(p)}
-                      className={`group p-3 rounded-xl border transition-all cursor-pointer flex flex-col gap-1 ${
-                        enCarrito ? 'bg-indigo-50 border-indigo-200 opacity-60 cursor-default' :
-                        stock <= 0 ? 'bg-slate-50 border-slate-100 opacity-50 cursor-not-allowed' :
-                        'bg-white border-slate-200 hover:border-indigo-300 hover:shadow-md'
-                      }`}
+                      className={`group p-3 rounded-xl border transition-all cursor-pointer flex flex-col gap-1 ${enCarrito ? 'bg-indigo-50 border-indigo-200 opacity-60 cursor-default' :
+                          stock <= 0 ? 'bg-slate-50 border-slate-100 opacity-50 cursor-not-allowed' :
+                            'bg-white border-slate-200 hover:border-indigo-300 hover:shadow-md'
+                        }`}
                     >
                       <div className="flex justify-between gap-2">
                         <p className="text-xs font-bold text-slate-700 leading-tight">{p.nombre}</p>
@@ -311,11 +310,10 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                 <CheckCircle size={12} /> Pagos cuadrados ✓
               </span>
             ) : (
-              <span className={`inline-flex items-center gap-1.5 text-[11px] font-black px-3 py-1 rounded-full border ${
-                totales.diferencia > 0
+              <span className={`inline-flex items-center gap-1.5 text-[11px] font-black px-3 py-1 rounded-full border ${totales.diferencia > 0
                   ? 'bg-amber-50 text-amber-700 border-amber-200'
                   : 'bg-red-50 text-red-600 border-red-200'
-              }`}>
+                }`}>
                 <AlertCircle size={12} />
                 {totales.diferencia > 0
                   ? `Pendiente: ${fmtUsd(totales.diferencia)}`
@@ -324,34 +322,43 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
             )}
           </div>
 
-          {/* Tabla de pagos */}
-          <div className="px-6 pb-3 space-y-1.5">
+          {/* Grilla de pagos — inteligente y horizontal */}
+          <div className="px-6 pb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {pagos.map((p, i) => (
-              <div key={i} className="flex flex-col gap-2 bg-white rounded-2xl border border-slate-200 px-4 py-2.5 shadow-sm hover:border-slate-300 transition-colors group">
-                <div className="flex items-center gap-3">
-                  {/* Nombre del método */}
-                  <span className="text-[11px] font-black text-slate-500 uppercase tracking-wide w-32 shrink-0">{p.metodo}</span>
-
-                  {/* Input monto — generoso y legible */}
-                  <div className="flex items-center gap-1.5 flex-1">
-                    <span className="text-slate-400 text-sm font-bold shrink-0">$</span>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={p.monto}
-                      onChange={e => {
-                        const newPagos = [...pagos]
-                        newPagos[i] = { ...p, monto: e.target.value }
-                        setPagos(newPagos)
-                      }}
-                      className="flex-1 min-w-0 max-w-[160px] py-1.5 px-3 rounded-xl border border-slate-200 text-base font-black text-slate-800 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all bg-slate-50 focus:bg-white"
-                      placeholder="0.00"
-                    />
+              <div key={i} className="flex flex-col gap-2 bg-white rounded-2xl border border-slate-200 p-3 shadow-sm hover:border-indigo-200 transition-colors group relative">
+                
+                {/* Fila Principal: Método + Monto */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{p.metodo}</p>
+                    <div className="flex items-center gap-1">
+                      <span className="text-slate-400 text-xs font-bold">$</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={p.monto}
+                        onChange={e => {
+                          const newPagos = [...pagos]
+                          newPagos[i] = { ...p, monto: e.target.value }
+                          setPagos(newPagos)
+                        }}
+                        className="w-full py-1 px-2 rounded-lg border border-slate-100 text-sm font-black text-slate-800 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-all bg-slate-50 focus:bg-white"
+                        placeholder="0.00"
+                      />
+                    </div>
                   </div>
 
-                  {/* Acciones */}
-                  <div className="flex items-center gap-2 shrink-0">
-                    {/* +Resto */}
+                  {/* Acciones compactas */}
+                  <div className="flex flex-col items-end gap-1">
+                    {pagos.length > 1 && (
+                      <button
+                        onClick={() => setPagos(pagos.filter((_, idx) => idx !== i))}
+                        className="text-slate-300 hover:text-red-500 transition-colors p-1"
+                        title="Eliminar este método"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
                     {!totales.estaCuadrado && totales.diferencia > 0 && (
                       <button
                         onClick={() => {
@@ -359,28 +366,18 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                           newPagos[i] = { ...p, monto: Math.round((Number(p.monto) + totales.diferencia) * 100) / 100 }
                           setPagos(newPagos)
                         }}
-                        className="px-2.5 py-1 text-[11px] font-black bg-amber-50 text-amber-600 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors whitespace-nowrap"
-                        title="Añadir la diferencia pendiente a este método"
+                        className="text-[9px] font-black text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100 hover:bg-amber-100 transition-colors whitespace-nowrap"
                       >
-                        + Resto
-                      </button>
-                    )}
-                    {/* Eliminar — solo si hay más de 1 método */}
-                    {pagos.length > 1 && (
-                      <button
-                        onClick={() => setPagos(pagos.filter((_, idx) => idx !== i))}
-                        className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Eliminar este método"
-                      >
-                        <X size={14} />
+                        + RESTO
                       </button>
                     )}
                   </div>
                 </div>
-                {/* Opcional: Días de Vencimiento para Cta por cobrar */}
+
+                {/* Fila Secundaria: Días Vencimiento (si aplica) */}
                 {p.metodo === 'Cta por cobrar' && (
-                  <div className="flex items-center gap-2 pl-[140px]">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase">Días venc.:</span>
+                  <div className="flex items-center gap-2 mt-1 pt-1 border-t border-slate-50">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase">Días venc.:</span>
                     <input
                       type="number"
                       min="0"
@@ -391,23 +388,20 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                         newPagos[i] = { ...p, diasVencimiento: e.target.value }
                         setPagos(newPagos)
                       }}
-                      className="w-24 px-2 py-1.5 rounded-lg text-xs font-bold border border-slate-200 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:bg-white transition-all"
-                      placeholder="Opcional"
+                      className="flex-1 py-1 px-2 rounded-lg text-[11px] font-bold border border-slate-100 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:bg-white transition-all"
+                      placeholder="0"
                     />
                   </div>
                 )}
               </div>
             ))}
 
-            {/* Añadir método */}
+            {/* Añadir método — se integra en la grilla */}
             {!totales.estaCuadrado && Math.abs(totales.diferencia) > 0.01 && (
-              <div>
+              <div className="flex flex-col h-full">
                 {mostrarSelectorMetodo ? (
-                  <div className="bg-indigo-50 border border-indigo-200 rounded-2xl px-4 py-3">
-                    <p className="text-[10px] font-black text-indigo-500 uppercase tracking-wider mb-2">
-                      Seleccionar método de pago para {fmtUsd(totales.diferencia)} pendiente
-                    </p>
-                    <div className="flex flex-wrap gap-2">
+                  <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-3 h-full flex flex-col justify-center">
+                    <div className="flex flex-wrap gap-1.5">
                       {metodosDisponibles.map(metodo => (
                         <button
                           key={metodo}
@@ -415,7 +409,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                             setPagos([...pagos, { metodo, monto: Math.max(0, totales.diferencia) }])
                             setMostrarSelectorMetodo(false)
                           }}
-                          className="px-3 py-1.5 rounded-xl text-xs font-bold bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-100 hover:border-indigo-400 transition-all shadow-sm"
+                          className="px-2 py-1.5 rounded-lg text-[10px] font-bold bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
                         >
                           {metodo}
                         </button>
@@ -423,17 +417,17 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                     </div>
                     <button
                       onClick={() => setMostrarSelectorMetodo(false)}
-                      className="mt-2 text-[10px] text-indigo-400 hover:text-indigo-600 transition-colors"
+                      className="mt-2 text-[10px] text-indigo-400 hover:text-indigo-600 transition-colors font-bold text-center"
                     >
-                      Cancelar
+                      CANCELAR
                     </button>
                   </div>
                 ) : (
                   <button
                     onClick={() => setMostrarSelectorMetodo(true)}
-                    className="w-full py-2 flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 text-xs font-bold hover:border-indigo-300 hover:text-indigo-500 hover:bg-indigo-50/50 transition-all"
+                    className="h-full min-h-[60px] flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 text-[11px] font-bold hover:border-indigo-300 hover:text-indigo-500 hover:bg-indigo-50/50 transition-all p-4"
                   >
-                    <Plus size={14} /> Añadir método para la diferencia ({fmtUsd(totales.diferencia)})
+                    <Plus size={14} /> AÑADIR PAGO
                   </button>
                 )}
               </div>
