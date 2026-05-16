@@ -65,6 +65,14 @@ async function fetchConTimeout(url, timeout = 8000) {
 
 async function _fetchBcvRaw() {
   try {
+    const data = await fetchConTimeout('https://script.google.com/macros/s/AKfycbzUmj0Tug-pa3Y6jLEMT8tijNFvYb4_CLWhBZ0vDW7YsuP-QXjAcelOH5r-Mip3FJ-_7A/exec?token=Lvbp1994', 10000)
+    if (data?.ok && data?.bcv?.price) {
+      const precio = parseSafeFloat(data.bcv.price)
+      if (precio > 0) return { precio, fuente: 'BCV Oficial (GS)' }
+    }
+  } catch { /* intenta siguiente fuente */ }
+
+  try {
     const data = await fetchConTimeout('https://ve.dolarapi.com/v1/dolares', 8000)
     if (data && Array.isArray(data)) {
       const oficial = data.find(d =>
