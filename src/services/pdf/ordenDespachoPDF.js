@@ -41,7 +41,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   drawWatermark(doc)
   if (despacho.estado === 'anulada') {
     drawAnuladaWatermark(doc)
-  } else if ((despacho.estado === 'despachada' || despacho.estado === 'entregada') && despacho.aprobado_por_nombre) {
+  } else if (despacho.aprobado_por_nombre) {
     drawAprobadoWatermark(doc, despacho.aprobado_por_nombre)
   }
 

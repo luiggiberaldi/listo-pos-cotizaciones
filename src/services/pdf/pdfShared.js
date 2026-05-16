@@ -123,34 +123,49 @@ export function drawWatermark(doc) {
 /** Dibuja marca de agua "ANULADA" en rojo, diagonal, semitransparente */
 export function drawAnuladaWatermark(doc) {
   try {
+    // Obtenemos el centro real directamente de la instancia del documento
+    const pageWidth = doc.internal.pageSize.getWidth()
+    const pageHeight = doc.internal.pageSize.getHeight()
+    const cx = pageWidth / 2
+    const cy = pageHeight / 2
+    
     doc.saveGraphicsState()
-    const gState = new doc.GState({ opacity: 0.25 })
+    const gState = new doc.GState({ opacity: 0.16 }) 
     doc.setGState(gState)
+    
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(60)
-    doc.setTextColor(200, 0, 0)
-    const cx = PAGE_W / 2
-    const cy = PAGE_H / 2
-    doc.text('ANULADA', cx, cy, { align: 'center', angle: 45 })
+    doc.setFontSize(100)
+    doc.setTextColor(220, 0, 0)
+    
+    // Si el texto sale muy abajo es porque la rotación de jsPDF a veces interpreta 
+    // mal el punto de anclaje en milímetros. 
+    // Lo subiremos manualmente para forzar que cruce el centro visual.
+    const verticalOffset = -35 // Compensación manual bajada 1cm adicional
+    const horizontalOffset = 20 // Ajuste a la derecha solicitado (2cm)
+    doc.text('ANULADA', cx + horizontalOffset, cy + verticalOffset, { align: 'center', angle: 325 })
+    
     doc.restoreGraphicsState()
-  } catch (_) {}
+  } catch (err) {
+    console.error('Error en drawAnuladaWatermark:', err)
+  }
 }
 
 /** Dibuja marca de agua "APROBADO POR: [NOMBRE]" en verde, diagonal, semitransparente */
 export function drawAprobadoWatermark(doc, nombre) {
   try {
     doc.saveGraphicsState()
-    const gState = new doc.GState({ opacity: 0.18 })
+    const gState = new doc.GState({ opacity: 0.35 }) // Menos traslúcido
     doc.setGState(gState)
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(24)
+    doc.setFontSize(32) // Más grande
     doc.setTextColor(30, 80, 160)
-    const cx = PAGE_W / 2
-    const cy = (PAGE_H / 2) + 30
-    // Ajustado para que quede más centrado y pequeño
-    doc.text(`APROBADO POR:`, cx - 6, cy - 8, { align: 'center', angle: 35 })
-    doc.setFontSize(18)
-    doc.text(`${nombre}`.toUpperCase(), cx + 6, cy + 8, { align: 'center', angle: 35 })
+    const cx = (PAGE_W / 2) + 10 // Movido 1cm a la derecha
+    const cy = (PAGE_H / 2) + 40 // Movido 1cm abajo adicional
+    
+    // Ajustado para que quede más centrado y grande
+    doc.text(`APROBADO POR:`, cx - 8, cy - 10, { align: 'center', angle: 35 })
+    doc.setFontSize(28) // Nombre más grande
+    doc.text(`${nombre}`.toUpperCase(), cx + 8, cy + 10, { align: 'center', angle: 35 })
     doc.restoreGraphicsState()
   } catch (_) {}
 }

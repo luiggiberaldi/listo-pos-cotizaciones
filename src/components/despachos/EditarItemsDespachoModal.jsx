@@ -16,16 +16,49 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
   const editarItems = useEditarItemsDespacho()
   const { items, setItems, agregarItem, eliminarPorId, cambiarCantidad, setCantidadDirecta, cambiarPrecio, setStockMap } = useLineItems({ checkStock: true })
 
-  const [busqueda, setBusqueda] = useState('')
-  const [cargandoItems, setCargandoItems] = useState(false)
-  const [error, setError] = useState(null)
-
-  // Pagos
-  const [pagos, setPagos] = useState([])
-  const [mostrarSelectorMetodo, setMostrarSelectorMetodo] = useState(false)
-
-  // 1. Cargar items actuales del despacho
-  useEffect(() => {
+    const [busqueda, setBusqueda] = useState('')
+    const [cargandoItems, setCargandoItems] = useState(false)
+    const [error, setError] = useState(null)
+  
+    // Estado para producto manual
+    const [showManual, setShowManual] = useState(false)
+    const [manualNombre, setManualNombre] = useState('')
+    const [manualUnidad, setManualUnidad] = useState('und')
+    const [manualPrecio, setManualPrecio] = useState('')
+    const [manualCantidad, setManualCantidad] = useState(1)
+  
+    // Pagos
+    const [pagos, setPagos] = useState([])
+    const [mostrarSelectorMetodo, setMostrarSelectorMetodo] = useState(false)
+  
+    function handleAgregarManual(e) {
+      if (e) e.preventDefault()
+      if (!manualNombre.trim() || !manualPrecio || !manualCantidad) return
+  
+      const randomId = Math.floor(1000000 + Math.random() * 9000000)
+      const fakeProducto = {
+        id: `manual-${Date.now()}`, // ID temporal único
+        codigo: `EXT${randomId}`,
+        nombre: manualNombre.trim().toUpperCase(),
+        unidad: manualUnidad.trim().toUpperCase() || 'und',
+        precio_usd: Number(manualPrecio),
+        origen: 'externo',
+        cantidadManual: Number(manualCantidad) // para que el hook sepa cuánto agregar inicialmente
+      }
+  
+      agregarItem(fakeProducto)
+  
+      // Limpiar y cerrar
+      setShowManual(false)
+      setManualNombre('')
+      setManualUnidad('und')
+      setManualPrecio('')
+      setManualCantidad(1)
+      showToast('Producto manual agregado', 'success')
+    }
+  
+    // 1. Cargar items actuales del despacho
+    useEffect(() => {
     if (!isOpen || !despacho?.id) return
 
     async function fetchItems() {
@@ -118,18 +151,26 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
       showToast(`Los pagos no cuadran con el total. Diferencia: ${fmtUsd(totales.diferencia)}`, 'error')
       return
     }
-    const itemsApi = items.map((it, idx) => ({
-      producto_id: it.productoId,
-      codigo_snap: it.codigoSnap,
-      nombre_snap: it.nombreSnap,
-      unidad_snap: it.unidadSnap,
-      cantidad: it.cantidad,
-      precio_unit_usd: it.precioUnitUsd,
-      descuento_pct: it.descuentoPct || 0,
-      orden: idx
-    }))
+    const itemsApi = items.map((it, idx) => {
+      const esExterno = it.origen === 'externo' || !it.productoId || String(it.productoId).startsWith('manual-')
+      return {
+        producto_id: esExterno ? null : it.productoId,
+        codigo_snap: it.codigoSnap || null,
+        nombre_snap: it.nombreSnap,
+        unidad_snap: it.unidadSnap || 'und',
+        cantidad: Number(it.cantidad),
+        precio_unit_usd: Number(it.precioUnitUsd),
+        descuento_pct: Number(it.descuentoPct || 0),
+        orden: idx,
+        origen: esExterno ? 'externo' : (it.origen || 'inventario')
+      }
+    })
     try {
-      await editarItems.mutateAsync({ despachoId: despacho.id, items: itemsApi, pagos: JSON.stringify(pagos) })
+      await editarItems.mutateAsync({ 
+        despachoId: despacho.id, 
+        items: itemsApi, 
+        pagos: JSON.stringify(pagos)
+      })
       onClose()
     } catch {
       // El hook ya muestra el toast
@@ -169,17 +210,94 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
 
           {/* Columna Izquierda: Catálogo */}
           <div className="w-full md:w-5/12 border-r border-slate-100 flex flex-col bg-slate-50/50">
-            <div className="p-4 bg-white border-b border-slate-100">
-              <div className="relative">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Buscar producto..."
-                  value={busqueda}
-                  onChange={e => setBusqueda(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:bg-white text-sm transition-all"
-                />
+            <div className="p-4 bg-white border-b border-slate-100 space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Buscar producto..."
+                    value={busqueda}
+                    onChange={e => setBusqueda(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:bg-white text-sm transition-all"
+                  />
+                </div>
+                <button
+                  onClick={() => setShowManual(!showManual)}
+                  className={`shrink-0 p-2.5 rounded-xl border-2 transition-all active:scale-95 flex items-center justify-center ${showManual ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-indigo-100 text-indigo-600 hover:border-indigo-300'}`}
+                  title="Agregar producto manual"
+                >
+                  <Plus size={18} strokeWidth={3} />
+                </button>
               </div>
+
+              {/* Formulario de producto manual */}
+              {showManual && (
+                <div className="p-3 bg-indigo-50/50 border border-indigo-100 rounded-xl space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 bg-indigo-100 rounded-lg flex items-center justify-center">
+                      <Plus size={12} className="text-indigo-600" />
+                    </div>
+                    <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Nuevo Producto Manual</span>
+                  </div>
+                  
+                  <input
+                    type="text"
+                    placeholder="Nombre del producto *"
+                    value={manualNombre}
+                    onChange={e => setManualNombre(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs focus:outline-none focus:border-indigo-400"
+                    autoFocus
+                  />
+                  
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-slate-400 uppercase ml-1">Unidad</label>
+                      <input
+                        type="text"
+                        placeholder="und"
+                        value={manualUnidad}
+                        onChange={e => setManualUnidad(e.target.value)}
+                        className="w-full px-2 py-2 rounded-lg border border-slate-200 text-xs text-center focus:outline-none focus:border-indigo-400"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-slate-400 uppercase ml-1">Precio $ *</label>
+                      <input
+                        type="number"
+                        placeholder="0.00"
+                        value={manualPrecio}
+                        onChange={e => setManualPrecio(e.target.value)}
+                        className="w-full px-2 py-2 rounded-lg border border-slate-200 text-xs text-center focus:outline-none focus:border-indigo-400"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-slate-400 uppercase ml-1">Cant. *</label>
+                      <input
+                        type="number"
+                        value={manualCantidad}
+                        onChange={e => setManualCantidad(e.target.value)}
+                        className="w-full px-2 py-2 rounded-lg border border-slate-200 text-xs text-center focus:outline-none focus:border-indigo-400"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowManual(false)}
+                      className="flex-1 py-2 text-[10px] font-bold text-slate-400 hover:text-slate-600 transition-colors"
+                    >
+                      CANCELAR
+                    </button>
+                    <button
+                      onClick={handleAgregarManual}
+                      className="flex-1 py-2 bg-indigo-600 text-white text-[10px] font-black rounded-lg hover:bg-indigo-700 shadow-md shadow-indigo-100 transition-all active:scale-95"
+                    >
+                      AGREGAR
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
               {loadingInv ? (
@@ -248,13 +366,19 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                     {/* Nombre + eliminar */}
                     <div className="flex justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-sm font-bold text-slate-800 leading-tight">{it.nombreSnap}</p>
+                        <p className="text-sm font-bold text-slate-800 leading-tight">
+                          {it.nombreSnap}
+                          {(it.origen === 'externo' || !it.productoId) && (
+                            <span className="inline-block ml-1.5 align-middle text-[9px] uppercase font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">EXT</span>
+                          )}
+                        </p>
                         <p className="text-[10px] text-slate-400 font-mono">{it.codigoSnap || 'SIN CÓDIGO'}</p>
                       </div>
                       <button onClick={() => eliminarPorId(it.productoId)} className="text-slate-300 hover:text-red-500 p-0.5 transition-colors shrink-0 self-start">
                         <Trash2 size={14} />
                       </button>
                     </div>
+
                     {/* Controles en una sola fila compacta */}
                     <div className="flex items-center gap-2">
                       {/* Cantidad */}

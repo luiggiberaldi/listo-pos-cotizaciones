@@ -520,8 +520,8 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(13)
   doc.setTextColor(...C_WHITE)
-  doc.text('Total:', MARGIN + comboLeftW + 3, totTopY + 7)
-  doc.text(fmtTotal(totalFinal, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 3, totTopY + 7, { align: 'right' })
+  doc.text('Total:', MARGIN + comboLeftW + 3, totTopY + 5.8)
+  doc.text(fmtTotal(totalFinal, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 3, totTopY + 5.8, { align: 'right' })
 
   // ══════════════════════════════════════════════════════════════════════════
   // 5. DATOS DEL CHOFER Y VEHÍCULO — cuadrícula fija encima del slogan
