@@ -6,7 +6,7 @@ import {
   Zap, User, X, Plus, Minus, Package, ArrowLeft, ArrowRight, Loader2,
   Search, CheckCircle, ShoppingCart, DollarSign, Truck, CreditCard,
   AlertCircle, ChevronRight, ChevronLeft, UserPlus, ChevronUp, Hash, FileText, Trash2, Save,
-  Download, Printer, MessageCircle, Clock, Check
+  Download, Printer, MessageCircle, Clock, Check, Edit2
 } from 'lucide-react'
 import { compartirPorWhatsApp, generarMensaje } from '../utils/whatsapp'
 import { useClientes } from '../hooks/useClientes'
@@ -372,6 +372,7 @@ export default function VentaRapidaView() {
   const [productoBusqueda, setProductoBusqueda] = useState('')
   const [catActiva, setCatActiva] = useState('')
   const { items, setItems, agregarItem: _agregarItem, eliminarPorId: quitarItem, cambiarCantidad, setCantidadDirecta, cambiarPrecio, setStockMap } = useLineItems({ checkStock: true })
+  const [editItemIdx, setEditItemIdx] = useState(null)
 
   // Mantener stock map actualizado para validación de cantidades
   useEffect(() => {
@@ -731,6 +732,7 @@ export default function VentaRapidaView() {
             step1Valid={step1Valid}
             onSiguiente={() => setStep(1)}
             productos={productos}
+            setEditItemIdx={setEditItemIdx}
           />
         )}
 
@@ -811,6 +813,18 @@ export default function VentaRapidaView() {
           onClose={() => { setVentaExitosa(null); navigate('/despachos') }}
         />
       )}
+
+      <ModalEditarExterno 
+        isOpen={editItemIdx !== null}
+        item={editItemIdx !== null ? items[editItemIdx] : null}
+        onClose={() => setEditItemIdx(null)}
+        onSave={(idx, nuevosCampos) => {
+          setItems(prev => prev.map((it, i) => i === idx ? { ...it, ...nuevosCampos } : it))
+          setEditItemIdx(null)
+          showToast('Producto actualizado', 'success')
+        }}
+        idx={editItemIdx}
+      />
     </div>
   )
 }
@@ -907,6 +921,7 @@ function Step1Productos({
   step1Valid, onSiguiente,
   preciosMap = {},
   productos = [],
+  setEditItemIdx,
 }) {
   const [sheetState, setSheetState] = useState('closed')
   const sheetOpen = sheetState !== 'closed'
@@ -1234,8 +1249,15 @@ function Step1Productos({
                   <div key={it.productoId} className="py-2">
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <div className="flex-1 min-w-0">
-                        <p className="text-[12px] font-bold text-slate-700 leading-snug">{it.nombreSnap}</p>
-                        {it.cantidad > getStockHelper(it.productoId, productos) && (
+                        <p className="text-[12px] font-bold text-slate-700 leading-snug">
+                          {it.nombreSnap}
+                          {it.origen === 'externo' && (
+                            <span className="inline-block ml-1 align-middle text-[8px] uppercase tracking-wider font-bold bg-amber-100 text-amber-700 px-1 py-0.5 rounded">
+                              Ext - {it.codigoSnap}
+                            </span>
+                          )}
+                        </p>
+                        {it.origen !== 'externo' && it.cantidad > getStockHelper(it.productoId, productos) && (
                           <div className="flex items-center gap-1 text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-200 mt-0.5 w-fit">
                             <AlertCircle size={10} /> Stock insuficiente ({getStockHelper(it.productoId, productos)} disp.)
                           </div>
@@ -1271,6 +1293,12 @@ function Step1Productos({
                           <Plus size={12} strokeWidth={3} />
                         </button>
                       </div>
+                      {it.origen === 'externo' && (
+                        <button type="button" onClick={() => setEditItemIdx(items.findIndex(x => x.productoId === it.productoId))}
+                          className="w-7 h-7 rounded-md bg-amber-50 hover:bg-amber-100 flex items-center justify-center shrink-0 transition-colors active:scale-95 border border-amber-200">
+                          <Edit2 size={11} className="text-amber-600" />
+                        </button>
+                      )}
                       <button type="button" onClick={() => quitarItem(it.productoId)}
                         className="w-7 h-7 rounded-md bg-red-50 hover:bg-red-100 flex items-center justify-center shrink-0 transition-colors active:scale-95">
                         <Trash2 size={12} className="text-red-400" />
@@ -1428,8 +1456,15 @@ function Step1Productos({
                   <div key={it.productoId} className="py-2">
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <div className="flex-1 min-w-0">
-                        <p className="text-[12px] font-bold text-slate-700 leading-snug">{it.nombreSnap}</p>
-                        {it.cantidad > getStockHelper(it.productoId, productos) && (
+                        <p className="text-[12px] font-bold text-slate-700 leading-snug">
+                          {it.nombreSnap}
+                          {it.origen === 'externo' && (
+                            <span className="inline-block ml-1 align-middle text-[8px] uppercase tracking-wider font-bold bg-amber-100 text-amber-700 px-1 py-0.5 rounded">
+                              Ext - {it.codigoSnap}
+                            </span>
+                          )}
+                        </p>
+                        {it.origen !== 'externo' && it.cantidad > getStockHelper(it.productoId, productos) && (
                           <div className="flex items-center gap-1 text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-200 mt-0.5 w-fit">
                             <AlertCircle size={10} /> Stock insuficiente ({getStockHelper(it.productoId, productos)} disp.)
                           </div>
@@ -1456,6 +1491,12 @@ function Step1Productos({
                           <Plus size={12} strokeWidth={3} />
                         </button>
                       </div>
+                      {it.origen === 'externo' && (
+                        <button type="button" onClick={() => { setSheetOpen(false); setEditItemIdx(items.findIndex(x => x.productoId === it.productoId)) }}
+                          className="w-7 h-7 rounded-md bg-amber-50 hover:bg-amber-100 flex items-center justify-center shrink-0 transition-colors active:scale-95 border border-amber-200">
+                          <Edit2 size={11} className="text-amber-600" />
+                        </button>
+                      )}
                       <button type="button" onClick={() => quitarItem(it.productoId)}
                         className="w-7 h-7 rounded-md bg-red-50 hover:bg-red-100 flex items-center justify-center shrink-0 transition-colors active:scale-95">
                         <Trash2 size={12} className="text-red-400" />
@@ -1962,6 +2003,96 @@ function Step3Confirmar({
             <p className="text-sm text-slate-600">{notas}</p>
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+function ModalEditarExterno({ isOpen, item, onClose, onSave, idx }) {
+  const [nombre, setNombre] = useState('')
+  const [codigo, setCodigo] = useState('')
+  const [precio, setPrecio] = useState('')
+  const [unidad, setUnidad] = useState('')
+
+  useEffect(() => {
+    if (item && isOpen) {
+      setNombre(item.nombreSnap || '')
+      setCodigo(item.codigoSnap || '')
+      setPrecio(item.precioUnitUsd || '')
+      setUnidad(item.unidadSnap || '')
+    }
+  }, [item, isOpen])
+
+  if (!isOpen || !item) return null
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-sm p-5 space-y-4 animate-in zoom-in-95 duration-200">
+        <div className="flex items-center justify-between">
+          <h3 className="font-black text-slate-800 text-base flex items-center gap-2">
+            <Edit2 size={16} className="text-amber-500" /> Editar producto externo
+          </h3>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Nombre del producto</label>
+            <input 
+              type="text" 
+              value={nombre} 
+              onChange={e => setNombre(e.target.value.toUpperCase())}
+              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Código</label>
+              <input 
+                type="text" 
+                value={codigo} 
+                onChange={e => setCodigo(e.target.value.toUpperCase())}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Unidad</label>
+              <input 
+                type="text" 
+                value={unidad} 
+                onChange={e => setUnidad(e.target.value.toUpperCase())}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none"
+              />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Precio Unitario (USD)</label>
+            <div className="relative">
+              <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input 
+                type="number" 
+                step="0.01"
+                value={precio} 
+                onChange={e => setPrecio(e.target.value)}
+                className="w-full pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-bold text-slate-700"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex gap-3 pt-2">
+          <button onClick={onClose} className="flex-1 py-2.5 text-sm font-semibold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors">
+            Cancelar
+          </button>
+          <button 
+            onClick={() => onSave(idx, { nombreSnap: nombre, codigoSnap: codigo, precioUnitUsd: Number(precio), unidadSnap: unidad })}
+            className="flex-1 py-2.5 bg-primary text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 active:scale-95 transition-all"
+          >
+            Guardar cambios
+          </button>
+        </div>
       </div>
     </div>
   )

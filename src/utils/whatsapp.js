@@ -12,11 +12,29 @@ import { showToast } from '../components/ui/Toast'
  */
 export function formatearTelefono(telefono) {
   if (!telefono) return ''
+  // 1. Limpiar caracteres no numéricos excepto el + inicial
   let num = telefono.replace(/[\s\-\(\)\.]/g, '')
-  if (num.startsWith('+')) num = num.slice(1)
-  if (num.startsWith('0')) num = num.slice(1)
+  
+  // 2. Si empieza con +, es internacional explícito. Quitar + y devolver.
+  if (num.startsWith('+')) return num.slice(1)
+  
+  // 3. Si no empieza con +, pero tiene longitud de internacional (ej. > 10 dígitos)
+  // Intentamos ser inteligentes. Si empieza con 58 y tiene 12+ dígitos, ya tiene el código.
   if (num.startsWith('58') && num.length >= 12) return num
-  if (!num.startsWith('58')) num = '58' + num
+  
+  // 4. Si tiene 10-11 dígitos y empieza con 0, es probable que sea Venezuela sin código.
+  if (num.startsWith('0')) num = num.slice(1)
+  
+  // 5. Si después de limpiar tiene 10 dígitos (formato estándar VEN), añadir 58.
+  if (num.length === 10 && !num.startsWith('58')) {
+    return '58' + num
+  }
+  
+  // 6. Por defecto, si es corto, asumir Venezuela por retrocompatibilidad
+  if (num.length < 10 && !num.startsWith('58')) {
+    return '58' + num
+  }
+  
   return num
 }
 

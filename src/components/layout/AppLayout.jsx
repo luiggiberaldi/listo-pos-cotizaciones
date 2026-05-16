@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Settings, ArrowRightLeft,
   Menu, X, DollarSign, RefreshCw, PackageCheck, Bell, BellOff,
   AlertTriangle, Send, CheckCircle, Ban,
-  PanelLeftClose, PanelLeftOpen, BarChart3,
+  PanelLeftClose, PanelLeftOpen, BarChart3, BarChart2,
   Clock, AlertCircle, ScrollText, FlaskConical, UserX,
 } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
@@ -81,6 +81,7 @@ const NAV_TODOS = [
 ]
 
 const NAV_SUPERVISOR = [
+  { path: '/reporte-vendedores', label: 'Reporte Vendedores', icono: BarChart2, onlyRoles: ['supervisor', 'jefe', 'desarrollador'] },
   { path: '/reportes',      label: 'Reportes',      icono: BarChart3,   excludeRoles: ['supervisor'] },
   { path: '/configuracion', label: 'Configuración', icono: Settings, excludeRoles: ['vendedor', 'vendedor_sin_comision', 'logistica'] },
   { path: '/logs',          label: 'System Logs',   icono: ScrollText, onlyRoles: ['desarrollador'] },
@@ -461,7 +462,7 @@ export default function AppLayout() {
 
           <img src="/logo.png" alt="Construacero Carabobo"
             className={`object-contain transition-all duration-300 select-none pointer-events-none ${
-              collapsed ? 'h-[36px] w-[36px]' : 'h-[60px] md:h-[72px]'
+              collapsed ? 'h-[40px] w-[40px]' : 'h-[66px] md:h-[80px]'
             }`}
             style={{ filter: 'brightness(1.05) drop-shadow(0 0 12px rgba(184,134,11,0.2))' }}
             draggable={false}

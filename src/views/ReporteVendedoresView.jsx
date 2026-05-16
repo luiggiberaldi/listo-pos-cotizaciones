@@ -1,0 +1,389 @@
+// src/views/ReporteVendedoresView.jsx
+import { useState, useMemo, useCallback } from 'react'
+import { Users, Download, RefreshCw, TrendingUp, TrendingDown, ChevronDown, ChevronRight, BarChart3, Award, Target, DollarSign, Package, ShoppingBag } from 'lucide-react'
+import useAuthStore from '../store/useAuthStore'
+import { useReporteVendedores } from '../hooks/useReporteVendedores'
+import { useConfigNegocio } from '../hooks/useConfigNegocio'
+import PageHeader from '../components/ui/PageHeader'
+import Skeleton from '../components/ui/Skeleton'
+import { fmtUsdSimple as fmtUsd, fmtFecha } from '../utils/format'
+
+// ─── Helpers de rango ─────────────────────────────────────────────────────────
+function getRango(tipo) {
+  const hoy = new Date()
+  const iso = (d) => d.toISOString().split('T')[0]
+
+  if (tipo === 'semana') {
+    const dia = hoy.getDay() === 0 ? 6 : hoy.getDay() - 1
+    const lunes = new Date(hoy); lunes.setDate(hoy.getDate() - dia)
+    const prevLunes = new Date(lunes); prevLunes.setDate(lunes.getDate() - 7)
+    const prevDomingo = new Date(lunes); prevDomingo.setDate(lunes.getDate() - 1)
+    return { from: iso(lunes), to: iso(hoy), prevFrom: iso(prevLunes), prevTo: iso(prevDomingo), label: 'Esta semana' }
+  }
+  if (tipo === 'mes') {
+    const ini = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
+    const prevFin = new Date(ini); prevFin.setDate(0)
+    const prevIni = new Date(prevFin.getFullYear(), prevFin.getMonth(), 1)
+    return { from: iso(ini), to: iso(hoy), prevFrom: iso(prevIni), prevTo: iso(prevFin), label: 'Este mes' }
+  }
+  if (tipo === 'mes_anterior') {
+    const fin = new Date(hoy.getFullYear(), hoy.getMonth(), 0)
+    const ini = new Date(fin.getFullYear(), fin.getMonth(), 1)
+    const prevFin2 = new Date(ini); prevFin2.setDate(0)
+    const prevIni2 = new Date(prevFin2.getFullYear(), prevFin2.getMonth(), 1)
+    return { from: iso(ini), to: iso(fin), prevFrom: iso(prevIni2), prevTo: iso(prevFin2), label: 'Mes anterior' }
+  }
+  if (tipo === 'trimestre') {
+    const ini = new Date(hoy.getFullYear(), Math.floor(hoy.getMonth() / 3) * 3, 1)
+    const prevFin = new Date(ini); prevFin.setDate(0)
+    const prevIni = new Date(prevFin.getFullYear(), prevFin.getMonth() - 2, 1)
+    return { from: iso(ini), to: iso(hoy), prevFrom: iso(prevIni), prevTo: iso(prevFin), label: 'Este trimestre' }
+  }
+  return getRango('semana')
+}
+
+// ─── Utilidades UI ────────────────────────────────────────────────────────────
+function KpiCard({ label, value, sub, icon: Icon, color = '#3B82F6', variacion }) {
+  const trend = variacion !== null && variacion !== undefined
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col gap-1 shadow-sm">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-slate-400">{label}</span>
+        <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: color + '18' }}>
+          <Icon size={16} style={{ color }} />
+        </div>
+      </div>
+      <p className="text-xl font-black text-slate-800 leading-tight">{value}</p>
+      {sub && <p className="text-xs text-slate-400">{sub}</p>}
+      {trend && (
+        <p className={`text-[11px] font-semibold flex items-center gap-1 ${variacion >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+          {variacion >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+          {Math.abs(variacion).toFixed(1)}% vs período anterior
+        </p>
+      )}
+    </div>
+  )
+}
+
+function VendedorRow({ v, rank, isExpanded, onToggle }) {
+  const pctBar = v._maxVenta > 0 ? (v.totalUsd / v._maxVenta) * 100 : 0
+  const tasaColor = v.tasaCierre >= 60 ? '#059669' : v.tasaCierre >= 35 ? '#D97706' : '#DC2626'
+
+  return (
+    <>
+      <tr
+        onClick={onToggle}
+        className="cursor-pointer hover:bg-slate-50 transition-colors border-b border-slate-100"
+      >
+        <td className="py-3 pl-4 pr-2 w-8">
+          <span className="text-xs font-bold text-slate-400">#{rank}</span>
+        </td>
+        <td className="py-3 pr-4">
+          <div className="flex items-center gap-2.5">
+            <div className="w-3 h-3 rounded-full shrink-0" style={{ background: v.color }} />
+            <div>
+              <p className="text-sm font-bold text-slate-800">{v.nombre}</p>
+              <div className="w-32 h-1.5 bg-slate-100 rounded-full mt-1">
+                <div className="h-1.5 rounded-full" style={{ width: `${pctBar}%`, background: v.color }} />
+              </div>
+            </div>
+          </div>
+        </td>
+        <td className="py-3 pr-4 text-right">
+          <p className="text-sm font-black text-slate-800">{fmtUsd(v.totalUsd)}</p>
+          {v.variacionUsd !== null && (
+            <p className={`text-[10px] font-semibold ${v.variacionUsd >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+              {v.variacionUsd >= 0 ? '▲' : '▼'} {Math.abs(v.variacionUsd).toFixed(1)}%
+            </p>
+          )}
+        </td>
+        <td className="py-3 pr-4 text-right text-sm text-slate-600">{v.numDespachos}</td>
+        <td className="py-3 pr-4 text-right text-sm text-slate-600">{fmtUsd(v.ticketPromedio)}</td>
+        <td className="py-3 pr-4 text-right">
+          <span className="text-sm font-bold" style={{ color: tasaColor }}>{v.tasaCierre}%</span>
+        </td>
+        <td className="py-3 pr-4 text-right text-sm text-slate-600">{fmtUsd(v.comisionTotal)}</td>
+        <td className="py-3 pr-2 text-slate-400">
+          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </td>
+      </tr>
+      {isExpanded && (
+        <tr>
+          <td colSpan={8} className="p-0 bg-slate-50 border-b border-slate-200">
+            <VendedorDetalle v={v} />
+          </td>
+        </tr>
+      )}
+    </>
+  )
+}
+
+function VendedorDetalle({ v }) {
+  const estados = [
+    { key: 'enviada',   label: 'Enviadas',   color: '#3B82F6' },
+    { key: 'aceptada',  label: 'Aceptadas',  color: '#059669' },
+    { key: 'rechazada', label: 'Rechazadas', color: '#DC2626' },
+    { key: 'anulada',   label: 'Anuladas',   color: '#94A3B8' },
+  ]
+  const totalCots = v.cotizaciones?.total || 0
+
+  return (
+    <div className="px-6 py-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Cotizaciones */}
+      <div className="bg-white rounded-xl border border-slate-200 p-4">
+        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Cotizaciones ({totalCots})</p>
+        <div className="space-y-2">
+          {estados.map(e => {
+            const count = v.cotizaciones?.[e.key] || 0
+            const pct = totalCots > 0 ? ((count / totalCots) * 100).toFixed(0) : 0
+            return (
+              <div key={e.key} className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full shrink-0" style={{ background: e.color }} />
+                <span className="text-xs text-slate-600 w-20">{e.label}</span>
+                <div className="flex-1 h-1.5 bg-slate-100 rounded-full">
+                  <div className="h-1.5 rounded-full" style={{ width: `${pct}%`, background: e.color }} />
+                </div>
+                <span className="text-xs font-bold text-slate-700 w-8 text-right">{count}</span>
+              </div>
+            )
+          })}
+        </div>
+        <div className="mt-3 pt-3 border-t border-slate-100">
+          <p className="text-xs text-slate-400">Tasa de cierre</p>
+          <p className="text-lg font-black" style={{ color: v.tasaCierre >= 60 ? '#059669' : v.tasaCierre >= 35 ? '#D97706' : '#DC2626' }}>
+            {v.tasaCierre}%
+          </p>
+        </div>
+      </div>
+
+      {/* Top Clientes */}
+      <div className="bg-white rounded-xl border border-slate-200 p-4">
+        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Top Clientes</p>
+        {v.topClientes?.length > 0 ? (
+          <div className="space-y-2">
+            {v.topClientes.map((c, i) => (
+              <div key={c.id || i} className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-[10px] font-bold text-slate-400 shrink-0">#{i + 1}</span>
+                  <span className="text-xs text-slate-700 truncate">{c.nombre}</span>
+                </div>
+                <span className="text-xs font-bold text-slate-800 shrink-0">{fmtUsd(c.totalUsd)}</span>
+              </div>
+            ))}
+          </div>
+        ) : <p className="text-xs text-slate-400">Sin datos</p>}
+
+        <div className="mt-3 pt-3 border-t border-slate-100 space-y-1">
+          <div className="flex justify-between text-xs">
+            <span className="text-slate-400">Comisión pagada</span>
+            <span className="font-bold text-emerald-600">{fmtUsd(v.comisionPagada)}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span className="text-slate-400">Comisión pendiente</span>
+            <span className="font-bold text-amber-600">{fmtUsd(v.comisionPendiente)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Top Productos */}
+      <div className="bg-white rounded-xl border border-slate-200 p-4">
+        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Top Productos</p>
+        {v.topProductos?.length > 0 ? (
+          <div className="space-y-2">
+            {v.topProductos.map((p, i) => (
+              <div key={p.id || i} className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-[10px] font-bold text-slate-400 shrink-0">#{i + 1}</span>
+                  <div className="min-w-0">
+                    <p className="text-xs text-slate-700 truncate">{p.nombre}</p>
+                    <p className="text-[10px] text-slate-400">{p.unidades} und</p>
+                  </div>
+                </div>
+                <span className="text-xs font-bold text-slate-800 shrink-0">{fmtUsd(p.totalUsd)}</span>
+              </div>
+            ))}
+          </div>
+        ) : <p className="text-xs text-slate-400">Sin datos</p>}
+
+        {v.historial?.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-slate-100">
+            <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Último despacho</p>
+            <p className="text-xs text-slate-600 truncate">{v.historial[0]?.cliente}</p>
+            <p className="text-xs font-bold text-slate-800">{fmtUsd(v.historial[0]?.totalUsd)}</p>
+            <p className="text-[10px] text-slate-400">{fmtFecha(v.historial[0]?.fecha)}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Vista Principal ──────────────────────────────────────────────────────────
+const PERIODOS = [
+  { key: 'semana',       label: 'Esta semana' },
+  { key: 'mes',          label: 'Este mes' },
+  { key: 'mes_anterior', label: 'Mes anterior' },
+  { key: 'trimestre',    label: 'Trimestre' },
+]
+
+export default function ReporteVendedoresView() {
+  const { perfil } = useAuthStore()
+  const [periodo, setPeriodo] = useState('semana')
+  const [expandedId, setExpandedId] = useState(null)
+  const [pdfLoading, setPdfLoading] = useState(false)
+  const { data: config = {} } = useConfigNegocio()
+
+  const rango = useMemo(() => getRango(periodo), [periodo])
+
+  const { data, isLoading, isError, refetch } = useReporteVendedores({
+    from: rango.from,
+    to: rango.to,
+    prevFrom: rango.prevFrom,
+    prevTo: rango.prevTo,
+  })
+
+  const vendedores = useMemo(() => {
+    if (!data?.porVendedor) return []
+    const max = data.porVendedor[0]?.totalUsd ?? 1
+    return data.porVendedor.map(v => ({ ...v, _maxVenta: max }))
+  }, [data])
+
+  const handleToggle = useCallback((id) => {
+    setExpandedId(prev => prev === id ? null : id)
+  }, [])
+
+  const handleExportPDF = async () => {
+    if (!data) return
+    setPdfLoading(true)
+    try {
+      const { generarReporteVendedoresPDF } = await import('../services/pdf/reporteVendedoresPDF')
+      await generarReporteVendedoresPDF({
+        data,
+        config,
+        periodo: { from: rango.from, to: rango.to },
+      })
+    } catch (err) {
+      console.error('Error PDF:', err)
+    } finally {
+      setPdfLoading(false)
+    }
+  }
+
+  const kpis = data?.kpis
+
+  return (
+    <div className="p-3 sm:p-4 md:p-5 lg:p-6 space-y-4">
+      <PageHeader
+        icon={BarChart3}
+        title="Reporte de Vendedores"
+        subtitle={`${rango.label} · ${rango.from} → ${rango.to}`}
+        action={
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportPDF}
+              disabled={pdfLoading || isLoading || !data}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold border transition-all hover:shadow-sm disabled:opacity-50"
+              style={{ background: 'linear-gradient(135deg,rgba(27,54,93,.07),rgba(184,134,11,.07))', border:'1px solid rgba(27,54,93,.2)', color:'#1B365D' }}
+            >
+              {pdfLoading
+                ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                : <Download size={15} />}
+              Exportar PDF
+            </button>
+            <button onClick={() => refetch()} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
+              <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+            </button>
+          </div>
+        }
+      />
+
+      {/* Selector de período */}
+      <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
+        {PERIODOS.map(p => (
+          <button
+            key={p.key}
+            onClick={() => { setPeriodo(p.key); setExpandedId(null) }}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors border ${
+              periodo === p.key
+                ? 'bg-indigo-500 text-white border-indigo-500'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+
+      {/* KPIs globales */}
+      {isLoading ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="bg-white rounded-2xl border border-slate-200 p-4 space-y-2">
+              <Skeleton className="h-3 w-24 rounded" />
+              <Skeleton className="h-6 w-32 rounded-lg" />
+            </div>
+          ))}
+        </div>
+      ) : kpis && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <KpiCard label="Ventas del período" value={fmtUsd(kpis.totalVentas)} icon={DollarSign} color="#3B82F6" variacion={kpis.variacionGlobal} />
+          <KpiCard label="Despachos entregados" value={String(kpis.totalDespachos)} icon={ShoppingBag} color="#059669" sub={`${kpis.numVendedores} vendedor${kpis.numVendedores !== 1 ? 'es' : ''}`} />
+          <KpiCard label="Ticket promedio" value={fmtUsd(kpis.ticketPromedioGlobal)} icon={Target} color="#8B5CF6" />
+          <KpiCard label="Comisiones generadas" value={fmtUsd(kpis.totalComision)} icon={Award} color="#D97706" />
+        </div>
+      )}
+
+      {/* Tabla de vendedores */}
+      {isLoading ? (
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-8 w-full rounded-lg" />)}
+        </div>
+      ) : isError ? (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center text-red-700">
+          <p className="font-semibold">Error al cargar datos</p>
+          <button onClick={() => refetch()} className="mt-2 text-sm underline">Reintentar</button>
+        </div>
+      ) : vendedores.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
+          <Users size={40} className="text-slate-300 mx-auto mb-3" />
+          <p className="text-slate-500 font-semibold">Sin ventas en este período</p>
+          <p className="text-slate-400 text-sm mt-1">Cambia el período o verifica que haya despachos entregados</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="py-3 pl-4 pr-2 text-left text-xs font-bold text-slate-400">#</th>
+                  <th className="py-3 pr-4 text-left text-xs font-bold text-slate-400">Vendedor</th>
+                  <th className="py-3 pr-4 text-right text-xs font-bold text-slate-400">Ventas USD</th>
+                  <th className="py-3 pr-4 text-right text-xs font-bold text-slate-400"># Desp.</th>
+                  <th className="py-3 pr-4 text-right text-xs font-bold text-slate-400">Ticket Prom.</th>
+                  <th className="py-3 pr-4 text-right text-xs font-bold text-slate-400">Tasa Cierre</th>
+                  <th className="py-3 pr-4 text-right text-xs font-bold text-slate-400">Comisión</th>
+                  <th className="py-3 pr-2 w-6" />
+                </tr>
+              </thead>
+              <tbody>
+                {vendedores.map((v, idx) => (
+                  <VendedorRow
+                    key={v.id}
+                    v={v}
+                    rank={idx + 1}
+                    isExpanded={expandedId === v.id}
+                    onToggle={() => handleToggle(v.id)}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="px-4 py-2 border-t border-slate-100 text-xs text-slate-400 flex items-center gap-1">
+            <ChevronRight size={12} />
+            Haz click en un vendedor para ver su perfil detallado
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

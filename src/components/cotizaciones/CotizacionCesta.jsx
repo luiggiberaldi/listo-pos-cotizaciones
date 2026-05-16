@@ -1,7 +1,7 @@
 // src/components/cotizaciones/CotizacionCesta.jsx
 // Panel de cesta: FAB + bottom sheet en móvil, panel lateral en desktop
 import { useState, useRef, useEffect } from 'react'
-import { ShoppingCart, ArrowRight, ArrowLeft, Trash2, Minus, Plus, ChevronUp, X } from 'lucide-react'
+import { ShoppingCart, ArrowRight, ArrowLeft, Trash2, Minus, Plus, ChevronUp, X, Edit2 } from 'lucide-react'
 import { round2, mulR } from '../../utils/dinero'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../../utils/format'
 
@@ -21,7 +21,7 @@ export function SectionH3({ icon: Icon, children }) {
 
 // ─── Panel de cesta (lado derecho del paso 2) ────────────────────────────────
 // Inspirado en PreciosAlDia: FAB + bottom sheet en móvil, panel lateral en desktop
-export default function CestaPanel({ items, onCambiar, onEliminar, subtotal, tasa, onSiguiente, onAnterior, preciosMap = {}, stockMap = {} }) {
+export default function CestaPanel({ items, onCambiar, onEliminar, onEditar, subtotal, tasa, onSiguiente, onAnterior, preciosMap = {}, stockMap = {} }) {
   // 'closed' | 'normal' | 'expanded'
   const [sheetState, setSheetState] = useState('closed')
   const sheetOpen = sheetState !== 'closed'
@@ -147,8 +147,8 @@ export default function CestaPanel({ items, onCambiar, onEliminar, subtotal, tas
               </div>
               <span className="text-[11px] sm:text-xs font-black text-slate-800 shrink-0">{fmtUsd(linea)}</span>
             </div>
-            {/* Badge: stock insuficiente */}
-            {stockMap[it.productoId] !== undefined && it.cantidad > stockMap[it.productoId] && (
+            {/* Badge: stock insuficiente (solo para productos de inventario) */}
+            {it.origen !== 'externo' && stockMap[it.productoId] !== undefined && it.cantidad > stockMap[it.productoId] && (
               <div className="flex items-center gap-1 mb-1">
                 <span className="text-[10px] font-bold text-amber-700 bg-amber-100 border border-amber-300 rounded-full px-2 py-0.5 leading-none">
                   ⚠ Stock insuficiente — disponible: {stockMap[it.productoId]}
@@ -187,6 +187,12 @@ export default function CestaPanel({ items, onCambiar, onEliminar, subtotal, tas
                   <Plus size={12} strokeWidth={3} />
                 </button>
               </div>
+              {it.origen === 'externo' && (
+                <button type="button" onClick={() => onEditar(idx)}
+                  className="w-7 h-7 rounded-md bg-amber-50 hover:bg-amber-100 flex items-center justify-center shrink-0 transition-colors active:scale-95 border border-amber-200">
+                  <Edit2 size={11} className="text-amber-600" />
+                </button>
+              )}
               <button type="button" onClick={() => onEliminar(idx)}
                 className="w-7 h-7 rounded-md bg-red-50 hover:bg-red-100 flex items-center justify-center shrink-0 transition-colors active:scale-95">
                 <Trash2 size={12} className="text-red-400" />

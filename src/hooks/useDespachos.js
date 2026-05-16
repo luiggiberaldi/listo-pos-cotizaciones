@@ -115,6 +115,9 @@ export function useCrearDespacho() {
     onSuccess: async ({ id, numeroCotizacion, clienteNombre }) => {
       if (!id) return
 
+      const displayNum = numeroCotizacion ? (typeof numeroCotizacion === 'number' ? String(numeroCotizacion).padStart(5, '0') : String(numeroCotizacion).replace(/^(COT-|DES-)/i, '')) : '—'
+      const displayCliente = clienteNombre || 'cliente'
+
       qc.invalidateQueries({ queryKey: ['despachos'], exact: false })
       qc.invalidateQueries({ queryKey: ['inventario'], exact: false })
       qc.invalidateQueries({ queryKey: ['comisiones'], exact: false })
@@ -122,11 +125,11 @@ export function useCrearDespacho() {
       qc.invalidateQueries({ queryKey: ['stock_comprometido'] })
       qc.invalidateQueries({ queryKey: ['cuentas-cobrar'] })
       showToast('Nota de despacho creada', 'success')
-      notifyDespachoCreado(numeroCotizacion ?? '—', clienteNombre ?? 'cliente', usuarioNombre, rol)
+      notifyDespachoCreado(displayNum, displayCliente, usuarioNombre, rol)
       sendPushNotification({
         title: '🚚 Orden de Despacho Creada',
-        message: `Despacho para cotización #${numeroCotizacion ?? '—'} — ${clienteNombre ?? 'cliente'}`,
-        tag: `despacho-${numeroCotizacion}`,
+        message: `Despacho para cotización #${displayNum} — ${displayCliente}`,
+        tag: `despacho-${displayNum}`,
         url: '/despachos',
         targetRole: 'supervisor',
       })
@@ -184,8 +187,8 @@ export function useActualizarEstadoDespacho() {
     onSuccess: ({ nuevoEstado, numeroCotizacion, clienteNombre }) => {
       showToast(`Despacho marcado como ${ESTADO_LABELS[nuevoEstado] || nuevoEstado}`, 'success')
 
-      const num = numeroCotizacion ?? '—'
-      const cliente = clienteNombre ?? 'cliente'
+      const num = numeroCotizacion ? (typeof numeroCotizacion === 'number' ? String(numeroCotizacion).padStart(5, '0') : String(numeroCotizacion).replace(/^(COT-|DES-)/i, '')) : '—'
+      const cliente = clienteNombre || 'cliente'
 
       if (nuevoEstado === 'despachada') {
         notifyDespachoEnRuta(num, cliente, usuarioNombre, rol)

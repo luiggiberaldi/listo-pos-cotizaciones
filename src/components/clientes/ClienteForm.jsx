@@ -182,9 +182,16 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
 
     // Preparar campos finales: limpiar teléfono de espacios/guiones
     let telefonoFinal = campos.telefono.replace(/[\s\-]/g, '')
+    
+    // Solo añadir +58 si no tiene código (+) y parece ser un número local de Venezuela (10-11 dígitos)
     if (telefonoFinal && !telefonoFinal.startsWith('+')) {
-      if (telefonoFinal.startsWith('0')) telefonoFinal = telefonoFinal.slice(1)
-      telefonoFinal = `+58${telefonoFinal}`
+      if (telefonoFinal.startsWith('0')) {
+        telefonoFinal = `+58${telefonoFinal.slice(1)}`
+      } else if (telefonoFinal.length === 10) {
+        telefonoFinal = `+58${telefonoFinal}`
+      }
+      // Si tiene otra longitud (ej. 17164163205), lo dejamos pasar tal cual 
+      // para que PhoneInput/DB lo maneje, pero lo ideal es que tenga el +
     }
 
     const camposFinales = {

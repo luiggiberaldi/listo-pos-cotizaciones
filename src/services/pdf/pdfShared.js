@@ -115,7 +115,7 @@ export function drawWatermark(doc) {
     const gState = new doc.GState({ opacity: 0.06 })
     doc.setGState(gState)
     const wmSize = 140
-    doc.addImage(WATERMARK_LOGO, 'PNG', (PAGE_W - wmSize) / 2, (PAGE_H - wmSize) / 2, wmSize, wmSize)
+    doc.addImage(WATERMARK_LOGO, 'PNG', (PAGE_W - wmSize) / 2, (PAGE_H - wmSize) / 2, wmSize, wmSize, 'WATERMARK_LOGO', 'FAST')
     doc.setGState(new doc.GState({ opacity: 1 }))
   } catch (_) {}
 }
@@ -156,8 +156,9 @@ export function drawAprobadoWatermark(doc, nombre) {
 }
 
 /** Verifica si necesita salto de página, agrega nueva con watermark y ejecuta callback si existe */
-export function checkPage(doc, y, needed = 30, onPageAdd = null) {
-  if (y + needed > PAGE_H - 35) {
+export function checkPage(doc, y, needed = 30, onPageAdd = null, customBottomMargin = null) {
+  const bottomMargin = customBottomMargin !== null ? customBottomMargin : 35
+  if (y + needed > PAGE_H - bottomMargin) {
     doc.addPage()
     drawWatermark(doc)
     if (onPageAdd && typeof onPageAdd === 'function') {
@@ -181,16 +182,16 @@ export function drawSimplifiedHeader(doc, logoData, config, rightTitle = '') {
   doc.rect(0, 0, PAGE_W, SHDR_H, 'F')
 
   if (logoData) {
-    try { doc.addImage(logoData, 'PNG', MARGIN + 4, 1.5, 9, 9) } catch (_) {}
+    try { doc.addImage(logoData, 'PNG', MARGIN + 4, 0.75, 10.5, 10.5, 'HEADER_LOGO', 'FAST') } catch (_) {}
   }
 
   let n = config.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.'
   if (!n || n.trim().toUpperCase() === 'PRUEBA' || n.trim() === '') n = 'CONSTRUACERO CARABOBO C.A.'
   
   doc.setFont('times', 'bold')
-  doc.setFontSize(11)
+  doc.setFontSize(15.5)
   doc.setTextColor(...C_WHITE)
-  doc.text(n.toUpperCase(), MARGIN + 16, 8.5)
+  doc.text(n.toUpperCase(), PAGE_W / 2, 8.5, { align: 'center' })
 
   if (rightTitle) {
     doc.setFont('helvetica', 'normal')

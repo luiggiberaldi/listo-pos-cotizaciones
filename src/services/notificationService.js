@@ -338,7 +338,7 @@ export function notifyDespachoCreado(numero, clienteNombre, usuarioNombre, curre
   createNotification(
     NOTIF_TYPES.DESPACHO_CREADO,
     'Orden de Despacho Creada',
-    `Despacho para cotización #${numero} — ${clienteNombre} (por ${usuarioNombre})`,
+    `Despacho para cotización ${numero && numero !== '—' ? '#' + numero : 'borrador'} — ${clienteNombre} (por ${usuarioNombre})`,
     null,
     currentRole,
   )
@@ -348,7 +348,7 @@ export function notifyCotizacionAnulada(numero, usuarioNombre, currentRole = nul
   createNotification(
     NOTIF_TYPES.COTIZACION_ANULADA,
     'Cotización Anulada',
-    `Cotización #${numero} fue anulada por ${usuarioNombre}`,
+    `Cotización ${numero && numero !== '—' ? '#' + numero : 'borrador'} fue anulada por ${usuarioNombre}`,
     null,
     currentRole,
   )
@@ -373,7 +373,7 @@ export function notifyCotizacionAceptadaDespacho(numero, clienteNombre, usuarioN
 export function notifyDespachoEnRuta(numero, clienteNombre, usuarioNombre, currentRole = null) {
   createNotification(
     NOTIF_TYPES.DESPACHO_EN_RUTA,
-    `Despacho #${numero} en ruta`,
+    `Despacho ${numero && numero !== '—' ? '#' + numero : ''} en ruta`,
     `Pedido de ${clienteNombre} despachado por ${usuarioNombre}`,
     { numero, clienteNombre },
     currentRole,
@@ -386,7 +386,7 @@ export function notifyDespachoEnRuta(numero, clienteNombre, usuarioNombre, curre
 export function notifyDespachoEntregado(numero, clienteNombre, usuarioNombre, currentRole = null) {
   createNotification(
     NOTIF_TYPES.DESPACHO_ENTREGADO,
-    `Despacho #${numero} entregado`,
+    `Despacho ${numero && numero !== '—' ? '#' + numero : ''} entregado`,
     `Pedido de ${clienteNombre} marcado como entregado por ${usuarioNombre}`,
     { numero, clienteNombre },
     currentRole,
@@ -399,7 +399,7 @@ export function notifyDespachoEntregado(numero, clienteNombre, usuarioNombre, cu
 export function notifyDespachoCancelado(numero, clienteNombre, usuarioNombre, currentRole = null) {
   createNotification(
     NOTIF_TYPES.DESPACHO_CANCELADO,
-    `Despacho #${numero} cancelado`,
+    `Despacho ${numero && numero !== '—' ? '#' + numero : ''} cancelado`,
     `${clienteNombre} — Cancelado por ${usuarioNombre}`,
     { numero, clienteNombre },
     currentRole,

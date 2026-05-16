@@ -618,6 +618,8 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
     try {
       await crearDespacho.mutateAsync({
         cotizacionId: cotizacionADespachar.id,
+        numeroCotizacion: cotizacionADespachar.numero,
+        clienteNombre: cotizacionADespachar.cliente?.nombre,
         formaPago: formaPago || null,
         transportistaId: transportistaId || null,
         fleteUsd: fleteUsd || 0,

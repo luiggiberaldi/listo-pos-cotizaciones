@@ -132,9 +132,22 @@ export function useCotizacion(id) {
           ? supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', cot.vendedor_id).maybeSingle()
           : Promise.resolve({ data: null }),
       ])
+      const clienteRaw = lookups[0]?.[0] ?? null
+      let vendedorCliente = clienteRaw?.vendedor || null
+
+      // Si el cliente tiene vendedor_id pero no tiene teléfono en el objeto anidado, lo hidratamos
+      if (clienteRaw?.vendedor_id && !vendedorCliente?.telefono) {
+        const { data: vData } = await supabase
+          .from('usuarios')
+          .select('id, nombre, color, telefono')
+          .eq('id', clienteRaw.vendedor_id)
+          .maybeSingle()
+        if (vData) vendedorCliente = vData
+      }
+
       cot = {
         ...cot,
-        cliente: lookups[0]?.[0] ?? null,
+        cliente: clienteRaw ? { ...clienteRaw, vendedor: vendedorCliente } : null,
         vendedor: lookups[1]?.data ?? null,
       }
 

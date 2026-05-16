@@ -38,6 +38,7 @@ export function useCrearUsuario() {
     onSuccess: async () => {
       await qc.cancelQueries({ queryKey: KEY })
       qc.invalidateQueries({ queryKey: KEY, exact: false })
+      qc.invalidateQueries({ queryKey: ['vendedores'], exact: false })
     },
   })
 }
@@ -52,6 +53,7 @@ export function useActualizarUsuario() {
     },
     onSuccess: async (result) => {
       qc.invalidateQueries({ queryKey: KEY, exact: false })
+      qc.invalidateQueries({ queryKey: ['vendedores'], exact: false })
       if (result?.color !== undefined) {
         qc.invalidateQueries({ queryKey: ['cotizaciones'], exact: false })
         qc.invalidateQueries({ queryKey: ['clientes'], exact: false })
@@ -71,6 +73,7 @@ export function useEliminarUsuario() {
     onSuccess: async () => {
       await qc.cancelQueries({ queryKey: KEY })
       qc.invalidateQueries({ queryKey: KEY, exact: false })
+      qc.invalidateQueries({ queryKey: ['vendedores'], exact: false })
     },
   })
 }

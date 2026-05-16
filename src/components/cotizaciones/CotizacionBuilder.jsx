@@ -9,7 +9,7 @@ import {
   User, Truck, Plus, Trash2, UserPlus, ChevronDown, X,
   Save, Send, ArrowLeft, ArrowRight, Loader2, AlertCircle, AlertTriangle, DollarSign, RefreshCw,
   CheckCircle, MessageCircle, StickyNote, Tag, Hash, Phone, Mail, MapPin,
-  Eye, Package, Printer,
+  Eye, Package, Printer, Edit2,
 } from 'lucide-react'
 import { useClientes, useVendedores } from '../../hooks/useClientes'
 import { useInventario } from '../../hooks/useInventario'
@@ -501,6 +501,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
   const [printLoading, setPrintLoading] = useState(false)
   const [waLoading, setWaLoading]   = useState(false)
   const [showResumen, setShowResumen] = useState(false)
+  const [editItemIdx, setEditItemIdx] = useState(null)
 
   // ── Auto-guardado: restaurar borrador al montar ────────────────────────────
   const [showDraftBanner, setShowDraftBanner] = useState(false)
@@ -784,6 +785,13 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
   // ── Acciones post-envío (Paso 4) ─────────────────────────────────────────
   async function obtenerDatosParaPDF() {
     let cot, itms
+    
+    // Asegurar que el dueño del cliente tenga sus datos completos (tlf) desde la lista global
+    const dueño = vendedores.find(v => v.id === clienteSeleccionado?.vendedor_id)
+    const clienteHidratado = clienteSeleccionado 
+      ? { ...clienteSeleccionado, vendedor: dueño || clienteSeleccionado.vendedor } 
+      : null
+
     if (String(cotizacionId).startsWith('local_')) {
       const vendedor = esSupervisor ? vendedores.find(v => v.id === vendedorId) || perfil : perfil
       cot = {
@@ -791,7 +799,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
         transportista_id: transportistaId, estado: 'borrador', 
         subtotal_usd: subtotal, descuento_global_pct: descuentoGlobalPct, descuento_usd,
         costo_envio_usd: costoEnvioUsd, corte_usd: corteUsd, total_usd: totalUsd,
-        notas_cliente: notasCliente, cliente: clienteSeleccionado, vendedor
+        notas_cliente: notasCliente, cliente: clienteHidratado, vendedor
       }
       itms = items.map((it, i) => ({
         cantidad: it.cantidad, codigo_snap: it.codigoSnap, nombre_snap: it.nombreSnap,
@@ -808,7 +816,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
       if (cotRes.error) throw cotRes.error
       
       const vendedor = esSupervisor ? vendedores.find(v => v.id === vendedorId) || perfil : perfil
-      cot = { ...cotRes.data, cliente: clienteSeleccionado, vendedor }
+      cot = { ...cotRes.data, cliente: clienteHidratado, vendedor }
       itms = itemsRes.data ?? []
     }
     return { cot, itms }
@@ -1144,6 +1152,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                   items={items}
                   onCambiar={cambiarItem}
                   onEliminar={eliminarItem}
+                  onEditar={setEditItemIdx}
                   subtotal={subtotal}
                   tasa={tasaHook.tasaEfectiva}
                   onSiguiente={siguiente}
@@ -1607,8 +1616,108 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
         }}
         onCancelar={() => setShowModalDespachar(false)}
       />
+      <ModalEditarExterno 
+        isOpen={editItemIdx !== null}
+        item={editItemIdx !== null ? items[editItemIdx] : null}
+        onClose={() => setEditItemIdx(null)}
+        onSave={(idx, nuevosCampos) => {
+          setItems(prev => prev.map((it, i) => i === idx ? { ...it, ...nuevosCampos } : it))
+          setEditItemIdx(null)
+          showToast('Producto actualizado', 'success')
+        }}
+        idx={editItemIdx}
+      />
 
+    </div>
+  )
+}
 
+function ModalEditarExterno({ isOpen, item, onClose, onSave, idx }) {
+  const [nombre, setNombre] = useState('')
+  const [codigo, setCodigo] = useState('')
+  const [precio, setPrecio] = useState('')
+  const [unidad, setUnidad] = useState('')
+
+  useEffect(() => {
+    if (item && isOpen) {
+      setNombre(item.nombreSnap || '')
+      setCodigo(item.codigoSnap || '')
+      setPrecio(item.precioUnitUsd || '')
+      setUnidad(item.unidadSnap || '')
+    }
+  }, [item, isOpen])
+
+  if (!isOpen || !item) return null
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-sm p-5 space-y-4 animate-in zoom-in-95 duration-200">
+        <div className="flex items-center justify-between">
+          <h3 className="font-black text-slate-800 text-base flex items-center gap-2">
+            <Edit2 size={16} className="text-amber-500" /> Editar producto externo
+          </h3>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Nombre del producto</label>
+            <input 
+              type="text" 
+              value={nombre} 
+              onChange={e => setNombre(e.target.value.toUpperCase())}
+              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Código</label>
+              <input 
+                type="text" 
+                value={codigo} 
+                onChange={e => setCodigo(e.target.value.toUpperCase())}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Unidad</label>
+              <input 
+                type="text" 
+                value={unidad} 
+                onChange={e => setUnidad(e.target.value.toUpperCase())}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none"
+              />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Precio Unitario (USD)</label>
+            <div className="relative">
+              <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input 
+                type="number" 
+                step="0.01"
+                value={precio} 
+                onChange={e => setPrecio(e.target.value)}
+                className="w-full pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-bold text-slate-700"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex gap-3 pt-2">
+          <button onClick={onClose} className="flex-1 py-2.5 text-sm font-semibold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors">
+            Cancelar
+          </button>
+          <button 
+            onClick={() => onSave(idx, { nombreSnap: nombre, codigoSnap: codigo, precioUnitUsd: Number(precio), unidadSnap: unidad })}
+            className="flex-1 py-2.5 bg-primary text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 active:scale-95 transition-all"
+          >
+            Guardar cambios
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

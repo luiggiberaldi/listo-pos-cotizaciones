@@ -2,7 +2,7 @@
 // Genera PDF "Lista de Precios" para enviar a clientes — Construacero Carabobo
 import { jsPDF } from 'jspdf'
 import { cargarLogo } from './pdfLogo'
-import { WATERMARK_LOGO } from './watermarkBase64'
+import { WATERMARK_LOGO, HEADER_LOGO_WHITE } from './watermarkBase64'
 import { 
   PAGE_W, PAGE_H, MARGIN, CONTENT_W, 
   C_PRIMARY, C_DARK, C_WHITE, C_GRAY,
@@ -10,18 +10,105 @@ import {
 } from './pdfShared'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-const CATEGORY_GROUPS = [
-  'CONEXIONES',
-  'ELECTRICIDAD',
-  'LAMINAS',
-  'PERFILES',
-  'TUBOS ESTRUCTURALES',
-  'TUBOS GALVANIZADO',
-  'TUBOS PULIDO',
-  'TUBOS PVC',
-  'TUBOS',
-  'VIGAS',
-]
+function extraerDimensiones(nombre) {
+  if (!nombre) return []
+  let n = nombre.toUpperCase().replace(',', '.')
+  
+  // Manejar fracciones mixtas como "1 1/2" -> "1.5"
+  n = n.replace(/(\d+)\s+(\d+)\s*\/\s*(\d+)/g, (match, entero, num, den) => {
+    return (parseFloat(entero) + (parseFloat(num) / parseFloat(den))).toString()
+  })
+  
+  // Manejar fracciones simples como "1/2" -> "0.5"
+  n = n.replace(/(\d+)\s*\/\s*(\d+)/g, (match, num, den) => {
+    return (parseFloat(num) / parseFloat(den)).toString()
+  })
+  
+  const numeros = n.match(/(\d+(\.\d+)?)/g)
+  return numeros ? numeros.map(Number) : []
+}
+
+function corregirCategoriaCruzada(categoriaActual, nombre) {
+  const n = (nombre || '').toUpperCase()
+  const c = (categoriaActual || '').toUpperCase().trim()
+
+  // Definir palabras clave para detectar inconsistencias
+  const reglas = [
+    // 1. PRODUCTOS PRINCIPALES (Alta prioridad)
+    { key: 'LAMINA', target: 'LAMINAS' },
+    { key: 'VIGA', target: 'VIGAS' },
+    { key: 'PERFIL MARCO', target: 'PERFILES PARA MARCOS' },
+    { key: 'ANGULO', target: 'PERFILES ANGULOS' },
+    { key: 'PLETINA', target: 'PERFILES PLETINA' },
+    { key: 'PERFIL', target: 'PERFILES' },
+    { key: 'CABILLA', target: 'CABILLAS' },
+    { key: 'CEMENTO', target: 'CEMENTO' },
+    { key: 'ALAMBRE', target: 'ALAMBRES' },
+    { key: 'ALAMBRON', target: 'ALAMBRONES' },
+    { key: 'MALLA', target: 'MALLAS' },
+    { key: 'ZUNCHO', target: 'ZUNCHOS' },
+    { key: 'CERCHA', target: 'CERCHAS' },
+    { key: 'JUNTA', target: 'JUNTAS' },
+
+    // 2. EQUIPOS ELECTRICOS Y CAJAS
+    { key: 'CAJA', target: 'CAJAS Y TABLEROS' },
+    { key: 'CAJETIN', target: 'CAJAS Y TABLEROS' },
+    { key: 'TABLERO', target: 'CAJAS Y TABLEROS' },
+    { key: 'BREAKER', target: 'ELECTRICIDAD' },
+    { key: 'ARVIDAL', target: 'ARVIDAL' },
+    { key: 'CABLE', target: 'CABLES' },
+
+    // 3. FERRETERIA Y OTROS
+    { key: 'ELECTRODO', target: 'FERRETERIA' },
+    { key: 'DISCO', target: 'FERRETERIA' },
+    { key: 'TORNILLO', target: 'FERRETERIA' },
+    { key: 'FERRETERIA', target: 'FERRETERIA' },
+
+    // 4. TUBOS ESPECIFICOS
+    { key: 'TUBO ESTRUC. CUAD', target: 'TUBOS ESTRUCTURALES CUADRADO' },
+    { key: 'TUBO ESTRUC. RECT', target: 'TUBOS ESTRUCTURALES RECTANGULAR' },
+    { key: 'TUBO ELEC', target: 'TUBOS PVC ELECTRICOS' },
+    { key: 'TUBO PVC A.F', target: 'TUBOS PVC AGUA FRIAS' },
+    { key: 'TUBO PVC A/N', target: 'TUBOS PVC AGUAS NEGRAS' },
+    { key: 'TUBO PULIDO CUAD', target: 'TUBOS PULIDO CUADRADO' },
+    { key: 'TUBO PULIDO RECT', target: 'TUBOS PULIDO RECTANGULAR' },
+    { key: 'TUBO GALV', target: 'TUBOS GALVANIZADO' },
+    { key: 'TUBO VENT', target: 'TUBOS DE VENTILACION' },
+    { key: 'TUBO REDONDO', target: 'TUBOS REDONDOS' },
+    { key: 'TUBERIA', target: 'TUBOS' },
+    { key: 'TUBO', target: 'TUBOS' },
+
+    // 5. MATERIALES DE CONEXIONES (Modificadores)
+    { key: 'CPVC', target: 'CONEXIONES CPVC' },
+    { key: 'A.F', target: 'CONEXIONES PVC AGUA FRIA' },
+    { key: 'A.N', target: 'CONEXIONES PVC AGUAS NEGRAS' },
+    { key: 'EMT', target: 'CONEXIONES EMT' },
+    { key: 'CONDUIT', target: 'CONEXIONES CONDUIT' },
+    { key: 'HG', target: 'CONEXIONES GALVANIZADAS' },
+    { key: 'GALV', target: 'CONEXIONES GALVANIZADAS' },
+
+    // 6. TIPOS DE CONEXIONES (Fallback para las genéricas o de PVC básico)
+    { key: 'CODO', target: 'CODOS' },
+    { key: 'TEE', target: 'TEES' },
+    { key: 'UNION', target: 'UNIONES' },
+    { key: 'YEE', target: 'YEES' },
+    { key: 'REDUCCION', target: 'REDUCCIONES' },
+    { key: 'SIFON', target: 'SIFONES' },
+    { key: 'TAPON', target: 'TAPONES' },
+    { key: 'ANILLO', target: 'ANILLOS' },
+    { key: 'ADAPTADOR', target: 'ADAPTADORES' },
+    { key: 'CURVA', target: 'CURVAS' },
+    { key: 'NIPLE', target: 'NIPLES' },
+  ]
+
+  for (const regla of reglas) {
+    if (n.includes(regla.key)) {
+      return regla.target
+    }
+  }
+
+  return categoriaActual
+}
 
 function normalizarCategoria(cat) {
   if (!cat) return 'SIN CATEGORÍA'
@@ -40,11 +127,6 @@ function normalizarCategoria(cat) {
   if (upper.startsWith('PERFIL ')) upper = upper.replace('PERFIL ', 'PERFILES ')
   if (upper.startsWith('MALLA ')) upper = upper.replace('MALLA ', 'MALLAS ')
   if (upper.startsWith('CONEXION ')) upper = upper.replace('CONEXION ', 'CONEXIONES ')
-
-  // Agrupación fuerte (como hace la UI principal)
-  for (const prefix of CATEGORY_GROUPS) {
-    if (upper.startsWith(prefix)) return prefix
-  }
 
   return upper
 }
@@ -98,19 +180,19 @@ function drawHeader(doc, logoData, config, moneda, tasa) {
   for (let k = 0; k < 15; k++) doc.line(hazX + k*4, 0, hazX + k*4 - 8, 14)
 
   if (logoData) {
-    try { doc.addImage(logoData, 'PNG', MARGIN + 8, 3, 30, 30) } catch (_) {}
+    try { doc.addImage(logoData, 'PNG', MARGIN + 8, 3, 30, 30, 'MAIN_LOGO', 'FAST') } catch (_) {}
   }
 
-  const textCenterX = (MARGIN + 44 + PAGE_W - MARGIN - 40) / 2
+  const textCenterX = PAGE_W / 2
   doc.setFont('times', 'bold')
-  doc.setFontSize(18)
+  doc.setFontSize(20)
   doc.setTextColor(...C_WHITE)
   let n = config.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.'
   if (n.trim().toUpperCase() === 'PRUEBA' || n.trim() === '') n = 'CONSTRUACERO CARABOBO C.A.'
   const nombreNeg = n.split(' ')
   doc.text((nombreNeg[0] || '').toUpperCase(), textCenterX, 16, { align: 'center' })
   if (nombreNeg.length > 1) {
-    doc.setFontSize(12)
+    doc.setFontSize(14)
     doc.text(nombreNeg.slice(1).join(' ').toUpperCase(), textCenterX, 23, { align: 'center' })
   }
 
@@ -140,84 +222,99 @@ function drawFooter(doc, config) {
     doc.setPage(p)
     const ph = PAGE_H
 
-    // Franja negra superior con las diagonales
-    const hazardY = ph - 30
-    doc.setFillColor(...C_DARK)
-    doc.rect(0, hazardY, PAGE_W, 4, 'F')
+    if (p === 1) {
+      // Franja negra superior con las diagonales
+      const hazardY = ph - 30
+      doc.setFillColor(...C_DARK)
+      doc.rect(0, hazardY, PAGE_W, 4, 'F')
 
-    doc.setDrawColor(...C_PRIMARY)
-    doc.setLineWidth(0.8)
-    for(let k = 1; k < 20; k++) {
-      doc.line(k * 4, hazardY, k * 4 - 3, hazardY + 4)
-      doc.line(PAGE_W - k * 4, hazardY, PAGE_W - k * 4 + 3, hazardY + 4)
-    }
+      doc.setDrawColor(...C_PRIMARY)
+      doc.setLineWidth(0.8)
+      for(let k = 1; k < 20; k++) {
+        doc.line(k * 4, hazardY, k * 4 - 3, hazardY + 4)
+        doc.line(PAGE_W - k * 4, hazardY, PAGE_W - k * 4 + 3, hazardY + 4)
+      }
 
-    // Franja principal azul
-    doc.setFillColor(...C_PRIMARY)
-    doc.rect(0, ph - 29, PAGE_W, 29, 'F')
+      // Franja principal azul
+      doc.setFillColor(...C_PRIMARY)
+      doc.rect(0, ph - 29, PAGE_W, 29, 'F')
 
-    // ── Icono pin ubicación + dirección ──
-    doc.setFillColor(...C_WHITE)
-    doc.setDrawColor(...C_WHITE)
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8.5)
-    doc.setTextColor(...C_WHITE)
+      // ── Icono pin ubicación + dirección ──
+      doc.setFillColor(...C_WHITE)
+      doc.setDrawColor(...C_WHITE)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8.5)
+      doc.setTextColor(...C_WHITE)
 
-    const addr1 = 'Av. 76, (Calle S-3) Nro. 70-C-766, Local Galpón Nro. 3 Edificio Centro Industrial Massico II'
-    const addr2 = 'Parcela MB-6 y Mb7, Urb. Industrial Aeropuerto Vía Flor Amarillo, Valencia, Edo. Carabobo, Zona Postal 2003'
+      const addr1 = 'Av. 76, (Calle S-3) Nro. 70-C-766, Local Galpón Nro. 3 Edificio Centro Industrial Massico II'
+      const addr2 = 'Parcela MB-6 y Mb7, Urb. Industrial Aeropuerto Vía Flor Amarillo, Valencia, Edo. Carabobo, Zona Postal 2003'
 
-    const addr1W = doc.getTextWidth(addr1)
-    const addr1X = PAGE_W/2 - addr1W/2
-    const pinX = addr1X - 4
-    const pinY = ph - 21
-    doc.circle(pinX, pinY - 0.3, 1.4, 'F')
-    doc.triangle(pinX - 1.2, pinY, pinX + 1.2, pinY, pinX, pinY + 2.4, 'F')
+      const addr1W = doc.getTextWidth(addr1)
+      const addr1X = PAGE_W/2 - addr1W/2
+      const pinX = addr1X - 4
+      const pinY = ph - 21
+      doc.circle(pinX, pinY - 0.3, 1.4, 'F')
+      doc.triangle(pinX - 1.2, pinY, pinX + 1.2, pinY, pinX, pinY + 2.4, 'F')
 
-    doc.text(addr1, PAGE_W/2, ph - 19.5, { align: 'center' })
-    doc.setFont('helvetica', 'normal')
-    doc.text(addr2, PAGE_W/2, ph - 15, { align: 'center' })
+      doc.text(addr1, PAGE_W/2, ph - 19.5, { align: 'center' })
+      doc.setFont('helvetica', 'normal')
+      doc.text(addr2, PAGE_W/2, ph - 15, { align: 'center' })
 
-    const tel = fmtTelefono(config.telefono_negocio) || ''
-    const email = config.email_negocio || ''
-    if (tel || email) {
-      const parts = []
-      if (tel && tel !== '—') parts.push({ icon: 'phone', text: tel })
-      if (email) parts.push({ icon: 'mail', text: email })
+      const tel = fmtTelefono(config.telefono_negocio) || ''
+      const email = config.email_negocio || ''
+      if (tel || email) {
+        const parts = []
+        if (tel && tel !== '—') parts.push({ icon: 'phone', text: tel })
+        if (email) parts.push({ icon: 'mail', text: email })
+
+        doc.setFont('helvetica', 'normal')
+        const gap = 12
+        let totalW = 0
+        parts.forEach((p, i) => {
+          totalW += 5 + doc.getTextWidth(p.text)
+          if (i < parts.length - 1) totalW += gap
+        })
+
+        let cx = PAGE_W/2 - totalW/2
+        const cy = ph - 7
+
+        parts.forEach((p, i) => {
+          doc.setFillColor(...C_WHITE)
+          doc.setDrawColor(...C_WHITE)
+          if (p.icon === 'phone') {
+             doc.setLineWidth(0.4)
+             doc.roundedRect(cx, cy - 2.2, 1.6, 2.8, 0.3, 0.3, 'S')
+             doc.setLineWidth(0.3)
+             doc.line(cx + 0.3, cy + 0.2, cx + 1.3, cy + 0.2)
+          } else {
+             doc.setLineWidth(0.3)
+             doc.rect(cx, cy - 1.8, 2.4, 1.8, 'S')
+             doc.line(cx, cy - 1.8, cx + 1.2, cy - 0.6)
+             doc.line(cx + 2.4, cy - 1.8, cx + 1.2, cy - 0.6)
+          }
+          doc.setTextColor(...C_WHITE)
+          doc.text(p.text, cx + 4, cy)
+          cx += 5 + doc.getTextWidth(p.text) + gap
+        })
+      }
 
       doc.setFont('helvetica', 'normal')
-      const gap = 12
-      let totalW = 0
-      parts.forEach((p, i) => {
-        totalW += 5 + doc.getTextWidth(p.text)
-        if (i < parts.length - 1) totalW += gap
-      })
+      doc.setFontSize(6)
+      doc.text(`Página ${p} de ${totalPages}`, PAGE_W - 10, ph - 4, { align: 'right' })
+    } else {
+      // Footer simplificado para páginas > 1
+      const fHeight = 8
+      doc.setFillColor(...C_PRIMARY)
+      doc.rect(0, ph - fHeight, PAGE_W, fHeight, 'F')
+      
+      doc.setFillColor(...C_DARK)
+      doc.rect(0, ph - fHeight - 1.5, PAGE_W, 1.5, 'F')
 
-      let cx = PAGE_W/2 - totalW/2
-      const cy = ph - 7
-
-      parts.forEach((p, i) => {
-        doc.setFillColor(...C_WHITE)
-        doc.setDrawColor(...C_WHITE)
-        if (p.icon === 'phone') {
-           doc.setLineWidth(0.4)
-           doc.roundedRect(cx, cy - 2.2, 1.6, 2.8, 0.3, 0.3, 'S')
-           doc.setLineWidth(0.3)
-           doc.line(cx + 0.3, cy + 0.2, cx + 1.3, cy + 0.2)
-        } else {
-           doc.setLineWidth(0.3)
-           doc.rect(cx, cy - 1.8, 2.4, 1.8, 'S')
-           doc.line(cx, cy - 1.8, cx + 1.2, cy - 0.6)
-           doc.line(cx + 2.4, cy - 1.8, cx + 1.2, cy - 0.6)
-        }
-        doc.setTextColor(...C_WHITE)
-        doc.text(p.text, cx + 4, cy)
-        cx += 5 + doc.getTextWidth(p.text) + gap
-      })
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(6)
+      doc.setTextColor(...C_WHITE)
+      doc.text(`Página ${p} de ${totalPages}`, PAGE_W - 10, ph - 2.5, { align: 'right' })
     }
-
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(6)
-    doc.text(`Página ${p} de ${totalPages}`, PAGE_W - 10, ph - 4, { align: 'right' })
   }
 }
 
@@ -240,9 +337,45 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
   // Agrupar por categoría usando el normalizador para corregir errores de tipeo
   const grupos = {}
   productos.forEach(p => {
-    const cat = normalizarCategoria(p.categoria)
+    // 1. Corregir categoría basada en discrepancias con el nombre
+    const catCorregida = corregirCategoriaCruzada(p.categoria, p.nombre)
+    
+    // 2. Normalizar formato
+    const cat = normalizarCategoria(catCorregida)
+    
     if (!grupos[cat]) grupos[cat] = []
     grupos[cat].push(p)
+  })
+
+  // Ordenar productos dentro de cada categoría por tipo y luego por tamaño
+  Object.keys(grupos).forEach(cat => {
+    grupos[cat].sort((a, b) => {
+      const nombreA = (a.nombre || '').toUpperCase()
+      const nombreB = (b.nombre || '').toUpperCase()
+
+      // Si es Conexiones o Tubos, agrupar primero por el tipo (primera palabra relevante)
+      if (cat.includes('CONEXIONES')) {
+        const tipoA = nombreA.split(' ')[0]
+        const tipoB = nombreB.split(' ')[0]
+        if (tipoA !== tipoB) return tipoA.localeCompare(tipoB)
+      } else if (cat.includes('TUBOS')) {
+        // Para tubos usamos las 2 primeras palabras (ej: TUBO PULIDO, TUBO PVC)
+        const tipoA = nombreA.split(' ').slice(0, 2).join(' ')
+        const tipoB = nombreB.split(' ').slice(0, 2).join(' ')
+        if (tipoA !== tipoB) return tipoA.localeCompare(tipoB)
+      }
+
+      // Luego ordenar por dimensiones
+      const dimsA = extraerDimensiones(nombreA)
+      const dimsB = extraerDimensiones(nombreB)
+
+      const maxLen = Math.min(dimsA.length, dimsB.length)
+      for (let i = 0; i < maxLen; i++) {
+        if (dimsA[i] !== dimsB[i]) return dimsA[i] - dimsB[i]
+      }
+
+      return nombreA.localeCompare(nombreB)
+    })
   })
   const categoriasOrdenadas = Object.keys(grupos).sort()
 
@@ -261,7 +394,7 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
   cols.push(nombreCol)
 
   const rightCols = []
-  if (columnas.unidad !== false) rightCols.push({ key: 'unidad', label: 'UND', w: 14 })
+  if (columnas.unidad !== false) rightCols.push({ key: 'unidad', label: 'UND', w: 10 })
 
   const labelPrecio = (MONEDA_LABELS[moneda] || 'PRECIO DETAL USDT').toUpperCase()
   rightCols.push({ key: 'precio', label: labelPrecio, w: 32 })
@@ -285,11 +418,10 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
     cols.push(c)
   })
 
-  // ─── Función para dibujar cabecera de tabla ──────────────────────────────
   function drawTableHeader(yPos, isGrid) {
-    const TH_H = 5.5
+    const TH_H = 5.0
     if (isGrid) {
-      doc.setDrawColor(60, 60, 60)
+      doc.setDrawColor(180, 180, 180)
       doc.setLineWidth(0.3)
       doc.setFillColor(20, 20, 20)
       doc.rect(MARGIN, yPos, CONTENT_W, TH_H, 'FD')
@@ -339,20 +471,21 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
   // ─── Iterar por categoría ────────────────────────────────────────────────
   const isGrid = formato === 'cuadricula'
   let needsHeader = true
-  const ROW_H = 6.0
+  const ROW_H = 5.2
 
   categoriasOrdenadas.forEach(cat => {
     const items = grupos[cat]
 
     // Subtítulo de categoría
     let prevY = y
-      y = checkPage(doc, y, ROW_H, (d) => drawSimplifiedHeader(d, logoData, config, 'Lista de Precios (Cont.)'))
+    const bottomMargin = doc.internal.getNumberOfPages() === 1 ? 35 : 12
+    y = checkPage(doc, y, 15, (d) => drawSimplifiedHeader(d, HEADER_LOGO_WHITE || logoData, config, 'Lista de Precios (Cont.)'), bottomMargin)
     if (needsHeader || y < prevY) {
       y = drawTableHeader(y, isGrid)
       needsHeader = false
     }
 
-    const CAT_H = 5.5
+    const CAT_H = 5.0
     if (isGrid) {
       doc.setFillColor(200, 205, 210)
       doc.rect(MARGIN, y, CONTENT_W, CAT_H, 'F')
@@ -365,18 +498,19 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
     }
 
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
+    doc.setFontSize(7.5)
     doc.setTextColor(0, 0, 0)
     const indexStr = String(categoriasOrdenadas.indexOf(cat) + 1)
-    doc.text(indexStr, MARGIN + 2, y + 3.8)
-    doc.text(cat.toUpperCase(), MARGIN + 10, y + 3.8)
+    doc.text(indexStr, MARGIN + 2, y + 3.7)
+    doc.text(cat.toUpperCase(), MARGIN + 10, y + 3.7)
     y += (isGrid ? 5.5 : 6.0)
 
     // Filas de productos
     items.forEach((p, idx) => {
-      let prevY = y
-      y = checkPage(doc, y, ROW_H, (d) => drawSimplifiedHeader(d, logoData, config, 'Lista de Precios (Cont.)'))
-      if (y < prevY) {
+      let prevYItem = y
+      const bottomMarginItem = doc.internal.getNumberOfPages() === 1 ? 35 : 12
+      y = checkPage(doc, y, ROW_H, (d) => drawSimplifiedHeader(d, HEADER_LOGO_WHITE || logoData, config, 'Lista de Precios (Cont.)'), bottomMarginItem)
+      if (y < prevYItem) {
         y = drawTableHeader(y, isGrid)
         needsHeader = false
       }
@@ -399,7 +533,7 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
       }
 
       doc.setFont('helvetica', 'normal')
-      doc.setFontSize(7.5)
+      doc.setFontSize(7)
       doc.setTextColor(...C_DARK)
 
       cols.forEach(col => {
@@ -441,7 +575,7 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
             break
         }
 
-        const textY = y + 4.2
+        const textY = y + 3.8
         if (isGrid && ['precio', 'precio2', 'stock'].includes(col.key) && val !== '—') doc.setFont('helvetica', 'bold')
 
         doc.text(val, tx, textY, { align })

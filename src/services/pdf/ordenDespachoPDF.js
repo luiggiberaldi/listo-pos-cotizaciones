@@ -49,7 +49,10 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   // 2. DATOS DEL CLIENTE
   // ══════════════════════════════════════════════════════════════════════════
   const cliente = despacho.cliente_factura || despacho.cliente || {}
-  const vendedorTlf = despacho.vendedor?.telefono ? ` — ${fmtTelefono(despacho.vendedor.telefono)}` : ''
+  const vendedorResponsable = cliente.vendedor || despacho.vendedor
+  // Fallback de teléfono
+  const tlfVendedor = vendedorResponsable?.telefono || despacho.vendedor?.telefono
+  const vendedorTlf = tlfVendedor ? ` — ${fmtTelefono(tlfVendedor)}` : ''
 
   const diasSemana = ['DOMINGO', 'LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO']
   const fechaObj = despacho.creado_en ? new Date(despacho.creado_en) : new Date()
@@ -210,7 +213,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   doc.rect(MARGIN + tlfLblW + tlfValW + vendLblW, f6Y, vendValW, rowH, 'FD')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(9)
-  const vendStr = (despacho.vendedor?.nombre?.toUpperCase() || '—') + vendedorTlf
+  const vendStr = (vendedorResponsable?.nombre?.toUpperCase() || '—') + vendedorTlf
   const maxVendW = vendValW - 4
   let vStr = vendStr
   if (doc.getTextWidth(vStr) > maxVendW) {
@@ -331,7 +334,9 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
     doc.setTextColor(...C_DARK)
 
     const midY = y + ROW_H / 2 + 1.2
-    doc.text(String(item.cantidad), COLS[0].x + COLS[0].w / 2, midY, { align: 'center' })
+    const isFlete = (item.nombre_snap || '').toUpperCase().includes('FLETE') || (item.codigo_snap || '').startsWith('FTL')
+    const cantDisplay = item.cantidad ?? (isFlete ? 1 : '')
+    doc.text(String(cantDisplay), COLS[0].x + COLS[0].w / 2, midY, { align: 'center' })
     doc.setFontSize(6.5)
     doc.text(item.codigo_snap || '—', COLS[1].x + COLS[1].w / 2, midY, { align: 'center' })
     doc.setFontSize(9)

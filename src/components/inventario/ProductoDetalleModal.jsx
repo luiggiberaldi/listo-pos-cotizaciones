@@ -1,6 +1,8 @@
 // src/components/inventario/ProductoDetalleModal.jsx
 // Modal de ficha de producto — optimizado para captura de pantalla y envío a clientes
-import { X, Share2, Package } from 'lucide-react'
+import { X, Share2, Package, Loader2 } from 'lucide-react'
+import { useRef, useState } from 'react'
+import html2canvas from 'html2canvas'
 import { fmtBs, usdToBs } from '../../utils/format'
 
 function fmtUsd(n) {
@@ -9,31 +11,61 @@ function fmtUsd(n) {
 }
 
 export default function ProductoDetalleModal({ isOpen, onClose, producto, tasa = 0 }) {
+  const cardRef = useRef(null)
+  const [isSharing, setIsSharing] = useState(false)
+
   if (!isOpen || !producto) return null
 
   const stockActual = Number(producto.stock_actual) || 0
   const disponible = stockActual > 0
 
   async function handleShare() {
-    const texto = [
-      `📦 ${producto.nombre}`,
-      producto.codigo ? `Código: ${producto.codigo}` : '',
-      `Precio: ${fmtUsd(producto.precio_usd)}`,
-      tasa > 0 ? `Precio Bs: ${fmtBs(usdToBs(producto.precio_usd, tasa))}` : '',
-      producto.precio_2 != null ? `Precio Mayor: ${fmtUsd(producto.precio_2)}` : '',
-      producto.precio_3 != null ? `Precio Especial: ${fmtUsd(producto.precio_3)}` : '',
-      disponible ? `✅ Disponible` : `❌ Agotado`,
-      '',
-      '🏗️ Construacero Carabobo',
-    ].filter(Boolean).join('\n')
+    setIsSharing(true)
+    try {
+      const texto = [
+        `📦 ${producto.nombre}`,
+        producto.codigo ? `Código: ${producto.codigo}` : '',
+        `Precio: ${fmtUsd(producto.precio_usd)}`,
+        tasa > 0 ? `Precio Bs: ${fmtBs(usdToBs(producto.precio_usd, tasa))}` : '',
+        producto.precio_2 != null ? `Precio Mayor: ${fmtUsd(producto.precio_2)}` : '',
+        disponible ? `✅ Disponible` : `❌ Agotado`,
+        '',
+        '🏗️ Construacero Carabobo',
+      ].filter(Boolean).join('\n')
 
-    if (navigator.share) {
-      try {
+      // 1. Intentar captura de imagen si el navegador soporta compartir archivos
+      if (navigator.share && navigator.canShare && cardRef.current) {
+        const canvas = await html2canvas(cardRef.current, {
+          useCORS: true,
+          scale: 2,
+          backgroundColor: '#ffffff',
+          logging: false
+        })
+        
+        const blob = await new Promise(res => canvas.toBlob(res, 'image/png'))
+        const file = new File([blob], `ficha_${producto.codigo || 'prod'}.png`, { type: 'image/png' })
+
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: producto.nombre,
+            text: texto
+          })
+          return // Compartido con éxito
+        }
+      }
+
+      // 2. Fallback: Solo texto
+      if (navigator.share) {
         await navigator.share({ text: texto })
-      } catch { /* user cancelled */ }
-    } else {
-      await navigator.clipboard.writeText(texto)
-      alert('Texto copiado al portapapeles')
+      } else {
+        await navigator.clipboard.writeText(texto)
+        alert('Texto copiado al portapapeles')
+      }
+    } catch (error) {
+      console.error('Error sharing:', error)
+    } finally {
+      setIsSharing(false)
     }
   }
 
@@ -49,9 +81,17 @@ export default function ProductoDetalleModal({ isOpen, onClose, producto, tasa =
       >
         {/* Header con botones */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 shrink-0">
-          <button onClick={handleShare}
-            className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-xl hover:bg-emerald-100 transition-colors">
-            <Share2 size={14} /> Compartir
+          <button 
+            onClick={handleShare}
+            disabled={isSharing}
+            className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-xl hover:bg-emerald-100 transition-colors disabled:opacity-50"
+          >
+            {isSharing ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Share2 size={14} />
+            )} 
+            {isSharing ? 'Capturando...' : 'Compartir'}
           </button>
           <button onClick={onClose}
             className="p-2 rounded-xl bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
@@ -60,7 +100,7 @@ export default function ProductoDetalleModal({ isOpen, onClose, producto, tasa =
         </div>
 
         {/* Contenido — diseñado para screenshot limpio */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto" ref={cardRef}>
           <div className="px-5 pt-5 pb-6 space-y-5">
 
             {/* Logo */}

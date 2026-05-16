@@ -43,7 +43,7 @@ export function useCliente(id) {
           id, nombre, rif_cedula, telefono, email,
           direccion, estado, ciudad, notas, tipo_cliente, activo,
           vendedor_id, asignado_en, saldo_pendiente,
-          vendedor:usuarios!clientes_vendedor_id_fkey(id, nombre)
+          vendedor:usuarios!clientes_vendedor_id_fkey(id, nombre, telefono)
         `)
         .eq('id', id)
         .single()
@@ -248,7 +248,7 @@ export function useVendedores() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('usuarios')
-        .select('id, nombre, rol, color')
+        .select('id, nombre, rol, color, telefono')
         .eq('activo', true)
         .order('nombre', { ascending: true })
 

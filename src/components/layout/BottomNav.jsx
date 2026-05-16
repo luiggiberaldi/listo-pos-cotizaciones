@@ -3,7 +3,7 @@
 import { NavLink } from 'react-router-dom'
 import { LayoutDashboard, FileText, Users, Package, MoreHorizontal, Zap, ShoppingBag } from 'lucide-react'
 import { useState } from 'react'
-import { PackageCheck, Truck, DollarSign, BarChart3, Settings, AlertCircle, FlaskConical } from 'lucide-react'
+import { PackageCheck, Truck, DollarSign, BarChart3, BarChart2, Settings, AlertCircle, FlaskConical } from 'lucide-react'
 
 // Vendedor: Inicio, Cotizar, Despachos, Clientes + Más (4 fijos)
 // Otros roles ajustan según permisos
@@ -15,13 +15,14 @@ const BOTTOM_ITEMS = [
 ]
 
 const MORE_ITEMS = [
-  { path: '/venta-rapida', label: 'Venta rápida', icon: Zap, onlyRoles: ['vendedor', 'vendedor_sin_comision', 'supervisor'] },
-  { path: '/inventario', label: 'Inventario', icon: Package, excludeRoles: ['logistica'] },
-  { path: '/transportistas', label: 'Transportistas', icon: Truck, excludeRoles: ['administracion', 'logistica'] },
-  { path: '/comisiones', label: 'Comisiones', icon: DollarSign, excludeRoles: ['logistica'] },
-  { path: '/reportes', label: 'Reportes', icon: BarChart3, onlyRoles: ['administracion', 'desarrollador'] },
-  { path: '/configuracion', label: 'Configuración', icon: Settings, onlyRoles: ['supervisor', 'administracion', 'desarrollador'] },
-  { path: '/tester', label: 'Tester', icon: FlaskConical, onlyRoles: ['desarrollador'] },
+  { path: '/venta-rapida',        label: 'Venta rápida',       icon: Zap,       onlyRoles: ['vendedor', 'vendedor_sin_comision', 'supervisor'] },
+  { path: '/inventario',          label: 'Inventario',         icon: Package,   excludeRoles: ['logistica'] },
+  { path: '/transportistas',      label: 'Transportistas',     icon: Truck,     excludeRoles: ['administracion', 'logistica'] },
+  { path: '/comisiones',          label: 'Comisiones',         icon: DollarSign, excludeRoles: ['logistica'] },
+  { path: '/reporte-vendedores',  label: 'Rep. Vendedores',    icon: BarChart2, onlyRoles: ['supervisor', 'jefe', 'desarrollador'] },
+  { path: '/reportes',            label: 'Reportes',           icon: BarChart3, onlyRoles: ['administracion', 'desarrollador'] },
+  { path: '/configuracion',       label: 'Configuración',      icon: Settings,  onlyRoles: ['supervisor', 'administracion', 'desarrollador'] },
+  { path: '/tester',              label: 'Tester',             icon: FlaskConical, onlyRoles: ['desarrollador'] },
 ]
 
 export default function BottomNav({ esSupervisor, esAdministracion = false, rol: rolProp }) {

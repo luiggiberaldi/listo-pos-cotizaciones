@@ -135,7 +135,11 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   y += ROW_H_INFO
 
   // Fila 4: Vendedor (ancho completo, fondo gris)
-  const vendedorStr = (cotizacion.vendedor?.nombre?.toUpperCase() || '—') + (cotizacion.vendedor?.telefono ? ` — ${fmtTelefono(cotizacion.vendedor.telefono)}` : '')
+  // Priorizar el vendedor asignado al cliente (dueño de la cuenta)
+  const vendedorResponsable = cliente.vendedor || cotizacion.vendedor
+  // Fallback de teléfono: si el dueño no tiene tlf, mostrar el del que cotiza para que haya un contacto
+  const tlfVendedor = vendedorResponsable?.telefono || cotizacion.vendedor?.telefono
+  const vendedorStr = (vendedorResponsable?.nombre?.toUpperCase() || '—') + (tlfVendedor ? ` — ${fmtTelefono(tlfVendedor)}` : '')
   drawCell(MARGIN, y, CONTENT_W, 'Vendedor', vendedorStr, { fill: true })
   y += ROW_H_INFO
 
@@ -265,7 +269,10 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     doc.setFontSize(9)
     doc.setTextColor(...C_DARK)
 
-    doc.text(String(item.cantidad), COLS[0].x + COLS[0].w / 2, midY, { align: 'center' })
+    // Si es flete o falta la cantidad, mostrar 1 por defecto
+    const isFlete = (item.nombre_snap || '').toUpperCase().includes('FLETE') || (item.codigo_snap || '').startsWith('FTL')
+    const cantDisplay = item.cantidad ?? (isFlete ? 1 : '')
+    doc.text(String(cantDisplay), COLS[0].x + COLS[0].w / 2, midY, { align: 'center' })
     doc.setFontSize(6.5)
     doc.text(item.codigo_snap || '—', COLS[1].x + COLS[1].w / 2, midY, { align: 'center' })
     doc.setFontSize(9)

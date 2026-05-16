@@ -65,7 +65,8 @@ const UsuariosView      = lazyRetry(() => import('./views/UsuariosView'))
 const ConfiguracionView = lazyRetry(() => import('./views/ConfiguracionView'))
 const ComisionesView    = lazyRetry(() => import('./views/ComisionesView'))
 const ReportesView      = lazyRetry(() => import('./views/ReportesView'))
-const LogsView          = lazyRetry(() => import('./views/LogsView'))
+const LogsView              = lazyRetry(() => import('./views/LogsView'))
+const ReporteVendedoresView = lazyRetry(() => import('./views/ReporteVendedoresView'))
 const TesterView        = lazyRetry(() => import('./views/TesterView'))
 const TesterFlowView    = lazyRetry(() => import('./views/TesterFlowView'))
 
@@ -294,7 +295,8 @@ function AppRoutes() {
 
             {/* Rutas exclusivas de supervisor */}
             <Route element={<RutaSupervisor />}>
-              <Route path="/usuarios"      element={<UsuariosView />} />
+              <Route path="/usuarios"             element={<UsuariosView />} />
+              <Route path="/reporte-vendedores"   element={<ReporteVendedoresView />} />
             </Route>
 
             {/* Rutas exclusivas de desarrollador */}
