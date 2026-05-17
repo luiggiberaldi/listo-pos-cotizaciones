@@ -174,15 +174,8 @@ function TransportistaModal({ transportista = null, onClose }) {
 }
 
 // ─── Color determinista por nombre ────────────────────────────────────────────
-const PALETA_TRANSP = [
-  '#1B365D', '#065f46', '#7c3aed', '#be185d',
-  '#0f766e', '#b45309', '#1d4ed8', '#92400e',
-  '#0e7490', '#4f46e5', '#15803d', '#9a3412',
-]
-function colorTransportista(str = '') {
-  let h = 0
-  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) & 0xffff
-  return PALETA_TRANSP[h % PALETA_TRANSP.length]
+function colorTransportista() {
+  return '#1B365D' // Azul Oscuro Corporativo
 }
 
 // ─── Tarjeta ──────────────────────────────────────────────────────────────────
