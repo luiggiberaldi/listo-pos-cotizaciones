@@ -86,6 +86,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           const { data: prods } = await supabase.from('productos').select('id, stock_actual').in('id', ids)
           
           const faltantes = items.filter(it => {
+            const esExterno = it.origen === 'externo' || !it.producto_id || String(it.producto_id).startsWith('manual-') || String(it.codigo_snap).startsWith('EXT')
+            if (esExterno) return false
             const p = prods?.find(x => x.id === it.producto_id)
             return it.cantidad > (p?.stock_actual || 0)
           })

@@ -3,7 +3,7 @@
 import { NavLink } from 'react-router-dom'
 import { LayoutDashboard, FileText, Users, Package, MoreHorizontal, Zap, ShoppingBag } from 'lucide-react'
 import { useState } from 'react'
-import { PackageCheck, Truck, DollarSign, BarChart3, BarChart2, Settings, AlertCircle, FlaskConical } from 'lucide-react'
+import { PackageCheck, Truck, DollarSign, BarChart3, BarChart2, Settings, AlertCircle, FlaskConical, Shield } from 'lucide-react'
 
 // Vendedor: Inicio, Cotizar, Despachos, Clientes + Más (4 fijos)
 // Otros roles ajustan según permisos
@@ -23,6 +23,7 @@ const MORE_ITEMS = [
   { path: '/reportes',            label: 'Reportes',           icon: BarChart3, onlyRoles: ['administracion', 'desarrollador'] },
   { path: '/configuracion',       label: 'Configuración',      icon: Settings,  onlyRoles: ['supervisor', 'administracion', 'desarrollador'] },
   { path: '/tester',              label: 'Tester',             icon: FlaskConical, onlyRoles: ['desarrollador'] },
+  { path: '/auditoria',           label: 'Auditoría',          icon: Shield,    onlyRoles: ['desarrollador'] },
 ]
 
 export default function BottomNav({ esSupervisor, esAdministracion = false, rol: rolProp }) {

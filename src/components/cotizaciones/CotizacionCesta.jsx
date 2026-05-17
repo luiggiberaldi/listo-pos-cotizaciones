@@ -148,7 +148,10 @@ export default function CestaPanel({ items, onCambiar, onEliminar, onEditar, sub
               <span className="text-[11px] sm:text-xs font-black text-slate-800 shrink-0">{fmtUsd(linea)}</span>
             </div>
             {/* Badge: stock insuficiente (solo para productos de inventario) */}
-            {(it.origen !== 'externo' && it.productoId) && stockMap[it.productoId] !== undefined && it.cantidad > stockMap[it.productoId] && (
+            {(() => {
+              const esExterno = it.origen === 'externo' || !it.productoId || String(it.productoId).startsWith('manual-') || String(it.codigoSnap).startsWith('EXT')
+              return !esExterno && stockMap[it.productoId] !== undefined && it.cantidad > stockMap[it.productoId]
+            })() && (
               <div className="flex items-center gap-1 mb-1">
                 <span className="text-[10px] font-bold text-amber-700 bg-amber-100 border border-amber-300 rounded-full px-2 py-0.5 leading-none">
                   ⚠ Stock insuficiente — disponible: {stockMap[it.productoId]}

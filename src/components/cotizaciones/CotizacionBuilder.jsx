@@ -1609,7 +1609,11 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
       {/* Modal confirmación despacho con stock insuficiente */}
       <ModalConfirmarDespacho
         isOpen={showModalDespachar}
-        items={items.filter(it => stockMap[it.productoId] !== undefined && it.cantidad > stockMap[it.productoId])}
+        items={items.filter(it => {
+          const esExterno = it.origen === 'externo' || !it.productoId || String(it.productoId).startsWith('manual-') || String(it.codigoSnap).startsWith('EXT')
+          if (esExterno) return false
+          return stockMap[it.productoId] !== undefined && it.cantidad > stockMap[it.productoId]
+        })}
         stockMap={stockMap}
         onConfirmar={() => {
           setShowModalDespachar(false)

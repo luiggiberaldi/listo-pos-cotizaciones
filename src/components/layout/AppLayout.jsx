@@ -9,7 +9,7 @@ import {
   Menu, X, DollarSign, RefreshCw, PackageCheck, Bell, BellOff,
   AlertTriangle, Send, CheckCircle, Ban,
   PanelLeftClose, PanelLeftOpen, BarChart3, BarChart2,
-  Clock, AlertCircle, ScrollText, FlaskConical, UserX,
+  Clock, AlertCircle, ScrollText, FlaskConical, UserX, Shield,
 } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import LoginAvatar from '../auth/LoginAvatar'
@@ -86,6 +86,7 @@ const NAV_SUPERVISOR = [
   { path: '/configuracion', label: 'Configuración', icono: Settings, excludeRoles: ['vendedor', 'vendedor_sin_comision', 'logistica'] },
   { path: '/logs',          label: 'System Logs',   icono: ScrollText, onlyRoles: ['desarrollador'] },
   { path: '/tester',        label: 'Tester',        icono: FlaskConical, onlyRoles: ['desarrollador'] },
+  { path: '/auditoria',     label: 'Auditoría',     icono: Shield,       onlyRoles: ['desarrollador'] },
 ]
 
 // ─── Badge de rol ──────────────────────────────────────────────────────────────

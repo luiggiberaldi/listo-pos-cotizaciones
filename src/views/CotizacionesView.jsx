@@ -159,6 +159,8 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
   if (!cotizacion) return null
 
   const stockIssues = items.filter(i => {
+    const esExterno = i.origen === 'externo' || !i.producto_id || String(i.producto_id).startsWith('manual-') || String(i.codigo_snap).startsWith('EXT')
+    if (esExterno) return false
     const stock = stockMap[i.producto_id]
     return stock !== undefined && stock < Number(i.cantidad)
   })

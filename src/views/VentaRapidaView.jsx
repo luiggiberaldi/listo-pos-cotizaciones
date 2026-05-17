@@ -1257,7 +1257,10 @@ function Step1Productos({
                             </span>
                           )}
                         </p>
-                        {it.origen !== 'externo' && it.cantidad > getStockHelper(it.productoId, productos) && (
+                        {(() => {
+                          const esExterno = it.origen === 'externo' || !it.productoId || String(it.productoId).startsWith('manual-') || String(it.codigoSnap).startsWith('EXT')
+                          return !esExterno && it.cantidad > getStockHelper(it.productoId, productos)
+                        })() && (
                           <div className="flex items-center gap-1 text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-200 mt-0.5 w-fit">
                             <AlertCircle size={10} /> Stock insuficiente ({getStockHelper(it.productoId, productos)} disp.)
                           </div>
@@ -1464,7 +1467,10 @@ function Step1Productos({
                             </span>
                           )}
                         </p>
-                        {it.origen !== 'externo' && it.cantidad > getStockHelper(it.productoId, productos) && (
+                        {(() => {
+                          const esExterno = it.origen === 'externo' || !it.productoId || String(it.productoId).startsWith('manual-') || String(it.codigoSnap).startsWith('EXT')
+                          return !esExterno && it.cantidad > getStockHelper(it.productoId, productos)
+                        })() && (
                           <div className="flex items-center gap-1 text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-200 mt-0.5 w-fit">
                             <AlertCircle size={10} /> Stock insuficiente ({getStockHelper(it.productoId, productos)} disp.)
                           </div>

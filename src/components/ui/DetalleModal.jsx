@@ -21,7 +21,8 @@ function ItemRow({ item, descuento, fmt }) {
   const total    = Number(item.total_linea_usd || cant * precio)
   const descMonto = calcDescMonto(descuento, total, cant)
   const totalFinal = total - descMonto
-  const sinStock = !item.cotizacion_id && cant > (item.producto?.stock_actual || 0)
+  const esExterno = item.origen === 'externo' || !item.producto_id || String(item.producto_id).startsWith('manual-') || String(item.codigo_snap).startsWith('EXT')
+  const sinStock = !item.cotizacion_id && !esExterno && cant > (item.producto?.stock_actual || 0)
 
   return (
     <tr className={`border-b border-slate-100 last:border-0 ${descMonto > 0 ? 'bg-amber-50/70' : ''} ${sinStock ? 'bg-red-50/60' : ''}`}>
@@ -68,7 +69,8 @@ function ItemCard({ item, descuento, fmt }) {
   const total    = Number(item.total_linea_usd || cant * precio)
   const descMonto = calcDescMonto(descuento, total, cant)
   const totalFinal = total - descMonto
-  const sinStock = !item.cotizacion_id && cant > (item.producto?.stock_actual || 0)
+  const esExterno = item.origen === 'externo' || !item.producto_id || String(item.producto_id).startsWith('manual-') || String(item.codigo_snap).startsWith('EXT')
+  const sinStock = !item.cotizacion_id && !esExterno && cant > (item.producto?.stock_actual || 0)
 
   return (
     <div className={`py-3 border-b border-slate-100 last:border-0 ${descMonto > 0 ? 'bg-amber-50/70 -mx-3 px-3 rounded-lg' : ''} ${sinStock ? 'bg-red-50/60 -mx-3 px-3 rounded-lg' : ''}`}>
