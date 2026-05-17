@@ -437,12 +437,12 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
               className="ml-auto flex items-center gap-1 px-2.5 py-2 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 active:bg-slate-100 transition-colors">
               {moreActions[0].icon && (() => { const Icon = moreActions[0].icon; return <Icon size={13} />; })()} {moreActions[0].label}
             </button>
-          ) : (
+          ) : moreActions.length > 1 ? (
             <button onClick={() => setShowSheet(true)}
               className="ml-auto flex items-center gap-1 px-2.5 py-2 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 active:bg-slate-100 transition-colors">
               <MoreHorizontal size={13} /> Más
             </button>
-          )}
+          ) : null}
         </div>
 
         {/* Popover WhatsApp — fixed posicionado sobre el botón */}
@@ -600,7 +600,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
             className="ml-auto flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 transition-colors whitespace-nowrap">
             {moreActions[0].icon && (() => { const Icon = moreActions[0].icon; return <Icon size={12} />; })()} {moreActions[0].label}
           </button>
-        ) : (
+        ) : moreActions.length > 1 ? (
           <div className="relative ml-auto">
             <button onClick={() => setShowMoreMenu(v => !v)}
               onBlur={() => setTimeout(() => setShowMoreMenu(false), 200)}
@@ -622,7 +622,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
               </div>
             )}
           </div>
-        )}
+        ) : null}
       </div>
       )}
 
