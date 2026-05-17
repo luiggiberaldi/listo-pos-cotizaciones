@@ -183,7 +183,7 @@ let _realtimeChannel = null
 
 function _broadcastNotification({ type, title, body, meta, targetRole }) {
   try {
-    if (!_realtimeChannel) return // no hay canal activo, se pierde (push lo cubre)
+    if (!_realtimeChannel || _realtimeChannel.state !== 'joined') return // no hay canal activo o no está unido, se pierde (push lo cubre)
     _realtimeChannel.send({
       type: 'broadcast',
       event: 'new_notification',

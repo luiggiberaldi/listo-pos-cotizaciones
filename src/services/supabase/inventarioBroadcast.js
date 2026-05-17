@@ -16,7 +16,7 @@ export function setInventarioChannel(ch) {
 
 /** Emitir cambio a todos los dispositivos (llamado desde mutations onSuccess) */
 export function broadcastInventarioUpdate() {
-  if (!_ch) return
+  if (!_ch || _ch.state !== 'joined') return
   _ch.send({
     type:    'broadcast',
     event:   INVENTARIO_EV,

@@ -366,11 +366,13 @@ export function useTasaCambio() {
     guardarTasaEnBD(modo, modo === 'manual' ? tasaManual : '0')
     // Broadcast instantáneo como backup rápido
     try {
-      channelRef.current?.send({
-        type: 'broadcast',
-        event: 'tasa_change',
-        payload: { modoTasa: modo, tasaManual: modo === 'manual' ? tasaManual : null, ts: Date.now(), deviceId: deviceIdRef.current },
-      })
+      if (channelRef.current && channelRef.current.state === 'joined') {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'tasa_change',
+          payload: { modoTasa: modo, tasaManual: modo === 'manual' ? tasaManual : null, ts: Date.now(), deviceId: deviceIdRef.current },
+        })
+      }
     } catch { /* silencioso */ }
   }, [tasaManual, guardarTasaEnBD])
 
@@ -380,11 +382,13 @@ export function useTasaCambio() {
     guardarTasaEnBD('manual', val)
     // Broadcast instantáneo como backup rápido
     try {
-      channelRef.current?.send({
-        type: 'broadcast',
-        event: 'tasa_change',
-        payload: { modoTasa: 'manual', tasaManual: val, ts: Date.now(), deviceId: deviceIdRef.current },
-      })
+      if (channelRef.current && channelRef.current.state === 'joined') {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'tasa_change',
+          payload: { modoTasa: 'manual', tasaManual: val, ts: Date.now(), deviceId: deviceIdRef.current },
+        })
+      }
     } catch { /* silencioso */ }
   }, [guardarTasaEnBD])
 
