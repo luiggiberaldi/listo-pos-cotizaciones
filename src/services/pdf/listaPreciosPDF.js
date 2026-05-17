@@ -556,7 +556,7 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
             val = val.charAt(0).toUpperCase() + val.slice(1).toLowerCase()
             break
           case 'stock':
-            val = p.stock_actual != null ? String(p.stock_actual) : '—'
+            val = p.stock_actual != null ? Number(p.stock_actual).toLocaleString('es-VE') : '—'
             if (p.stock_actual <= 0) doc.setTextColor(185, 28, 28)
             break
           case 'precio':
