@@ -337,7 +337,7 @@ export default function ComisionesView() {
         <EmptyState icon={DollarSign} title="Sin resultados" description="No se encontraron comisiones con los filtros actuales." />
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
             {comisionesPorVendedor.map(g => (
               <VendedorCard key={g.id} vendedor={g.vendedor} comisiones={g.items} esSupervisor={puedePagarComisiones} onMarcarPagada={setComisionAPagar} marcando={marcar.isPending} onExportarPDF={exportarPDF} />
             ))}
