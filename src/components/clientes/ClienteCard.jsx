@@ -31,13 +31,23 @@ export default function ClienteCard({ cliente, onEditar, onReasignar, onCotizar,
   const color        = cliente.vendedor?.color || '#64748b'
 
   return (
-    <div className={`group bg-white rounded-2xl border border-slate-200 hover:shadow-lg transition-all duration-200 overflow-hidden flex flex-col ${!cliente.activo ? 'opacity-60 grayscale-[0.5]' : ''}`}
+    <div className={`relative group bg-white rounded-2xl border transition-all duration-200 overflow-hidden flex flex-col ${
+      !cliente.activo ? 'border-slate-200/80 bg-slate-50/40 hover:shadow-none' : 'border-slate-200 hover:shadow-lg'
+    }`}
       style={{ '--card-color': color }}>
 
+      {/* Badge Desactivado (Absolute top-right corner to avoid horizontal flex overflow) */}
+      {!cliente.activo && (
+        <span className="absolute top-2.5 right-2.5 z-20 text-[9px] font-black px-2 py-0.5 rounded-lg bg-rose-600 text-white border border-rose-500 shadow-md uppercase tracking-wider animate-pulse select-none">
+          DESACTIVADO
+        </span>
+      )}
+
       {/* ── Header strip con color del vendedor ── */}
-      <div className="relative h-16 shrink-0 flex items-end px-4 pb-2"
+      <div className="relative h-16 shrink-0 flex items-end px-4 pb-2 transition-all"
         style={{
           background: `linear-gradient(135deg, ${color}ee 0%, ${color}99 100%)`,
+          opacity: cliente.activo ? 1 : 0.65,
         }}>
         {/* Patrón de puntos sutil */}
         <div className="absolute inset-0 opacity-10"
@@ -65,17 +75,10 @@ export default function ClienteCard({ cliente, onEditar, onReasignar, onCotizar,
             {TIPO_LABELS[cliente.tipo_cliente] || cliente.tipo_cliente}
           </span>
         )}
-
-        {/* Badge Desactivado */}
-        {!cliente.activo && (
-          <span className="relative z-10 ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-white border border-slate-600">
-            DESACTIVADO
-          </span>
-        )}
       </div>
 
       {/* ── Nombre + RIF ── */}
-      <div className="px-4 pt-3 pb-1">
+      <div className={`px-4 pt-3 pb-1 transition-opacity ${!cliente.activo ? 'opacity-65' : ''}`}>
         <h3 className="font-bold text-slate-800 text-sm leading-tight truncate">{cliente.nombre}</h3>
         {cliente.rif_cedula && (
           <span className="flex items-center gap-1 text-xs text-slate-400 font-mono mt-0.5">
@@ -87,7 +90,7 @@ export default function ClienteCard({ cliente, onEditar, onReasignar, onCotizar,
 
       {/* ── Contacto ── */}
       {!esAdministracion && (
-        <div className="px-4 pb-3 space-y-1.5 mt-1">
+        <div className={`px-4 pb-3 space-y-1.5 mt-1 transition-opacity ${!cliente.activo ? 'opacity-60' : ''}`}>
           <Contacto icono={Phone} valor={cliente.telefono} />
           <Contacto icono={Mail}  valor={cliente.email} />
           <Contacto icono={MapPin} valor={[cliente.direccion, cliente.ciudad, cliente.estado].filter(Boolean).join(', ')} />
@@ -96,7 +99,7 @@ export default function ClienteCard({ cliente, onEditar, onReasignar, onCotizar,
 
       {/* ── Vendedor chip ── */}
       {!esAdministracion && cliente.vendedor && (
-        <div className="mx-4 mb-3 flex flex-col gap-1 border-t border-slate-100 pt-2.5">
+        <div className={`mx-4 mb-3 flex flex-col gap-1 border-t border-slate-100 pt-2.5 transition-opacity ${!cliente.activo ? 'opacity-60' : ''}`}>
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Vendedor Asignado</span>
           <div className="inline-flex items-center gap-2 self-start px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all"
             style={{
