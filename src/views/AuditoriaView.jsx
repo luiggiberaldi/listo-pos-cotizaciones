@@ -8,7 +8,7 @@ import {
   Send, Ban, CheckCircle, XCircle, PenLine, PlusCircle, Trash2,
   Eye, GitBranch, Clock, ChevronDown, ChevronUp, DollarSign,
   User, Calendar, Hash, Info, Loader2, Search, TrendingUp,
-  Activity, CalendarDays, X,
+  Activity, CalendarDays, X, Copy, Check
 } from 'lucide-react'
 import { useAuditoria }  from '../hooks/useAuditoria'
 import { useUsuarios }   from '../hooks/useUsuarios'
@@ -18,6 +18,7 @@ import { useTasaCambio } from '../hooks/useTasaCambio'
 import CustomSelect from '../components/ui/CustomSelect'
 import Skeleton from '../components/ui/Skeleton'
 import PageHeader from '../components/ui/PageHeader'
+import { showToast } from '../components/ui/Toast'
 
 // ─── Configuración de categorías ────────────────────────────────────────────
 const CATEGORIA_CONFIG = {
@@ -98,6 +99,31 @@ const ACCION_ICON = {
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
+const ROLE_CONFIG = {
+  desarrollador:  { label: 'Desarrollador', short: 'DEV', bg: 'bg-purple-100 text-purple-700 border border-purple-200' },
+  jefe:           { label: 'Jefe',          short: 'JEFE', bg: 'bg-amber-100 text-amber-700 border border-amber-200' },
+  supervisor:     { label: 'Jefe de Ventas',short: 'J.VENTAS', bg: 'bg-sky-100 text-sky-700 border border-sky-200' },
+  administracion: { label: 'Administración',short: 'ADMIN', bg: 'bg-blue-100 text-blue-700 border border-blue-200' },
+  logistica:      { label: 'Logística',     short: 'LOG', bg: 'bg-slate-100 text-slate-700 border border-slate-200' },
+  vendedor:       { label: 'Vendedor',      short: 'VEN', bg: 'bg-emerald-100 text-emerald-700 border border-emerald-200' },
+}
+
+function getRoleBadge(rol, isShort = false) {
+  if (!rol) return null
+  const cleanRol = String(rol).toLowerCase()
+  const conf = ROLE_CONFIG[cleanRol] || {
+    label: rol.toUpperCase(),
+    short: rol.substring(0, 3).toUpperCase(),
+    bg: 'bg-slate-100 text-slate-700 border border-slate-200'
+  }
+
+  return (
+    <span className={`${isShort ? 'text-[9px] px-1.5 py-0.5' : 'text-[10px] px-2 py-0.5'} font-bold rounded-full leading-none shrink-0 ${conf.bg}`}>
+      {isShort ? conf.short : conf.label}
+    </span>
+  )
+}
+
 function getCatKey(cat) {
   return (cat || 'sistema').toLowerCase()
 }
@@ -356,11 +382,7 @@ function DetalleEntidad({ tipo, id, tasa = 0 }) {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <span className="font-bold text-slate-800 text-xs">{data.nombre}</span>
-          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-            data.rol === 'supervisor' ? 'bg-sky-100 text-sky-600' : 'bg-emerald-100 text-emerald-600'
-          }`}>
-            {data.rol === 'supervisor' ? 'Jefe de ventas' : 'Vendedor'}
-          </span>
+          {getRoleBadge(data.rol, false)}
         </div>
         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${data.activo ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
           {data.activo ? 'Activo' : 'Inactivo'}
@@ -403,13 +425,7 @@ function ActividadCard({ registro, tasa }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-sm font-bold text-slate-800 truncate">{usuario}</span>
-            {rol && (
-              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none ${
-                rol === 'supervisor' ? 'bg-sky-50 text-sky-600' : 'bg-emerald-50 text-emerald-600'
-              }`}>
-                {rol === 'supervisor' ? 'J.VENTAS' : 'VEN'}
-              </span>
-            )}
+            {rol && getRoleBadge(rol, true)}
           </div>
           <div className="flex items-center gap-1.5 mt-0.5">
             <AccIcon size={11} className="text-slate-400 shrink-0" />
@@ -501,6 +517,7 @@ export default function AuditoriaView() {
   const [categoria,    setCategoria]    = useState('')
   const [busqueda,     setBusqueda]     = useState('')
   const [filtroFecha,  setFiltroFecha]  = useState('')
+  const [copiado,      setCopiado]      = useState(false)
 
   const { data, isLoading, isError, refetch } = useAuditoria({ pagina, porPagina: POR_PAGINA, usuarioId, categoria })
   const { data: usuarios = [] } = useUsuarios()
@@ -567,6 +584,33 @@ export default function AuditoriaView() {
     setPagina(0)
   }
 
+  const handleCopiarLogs = () => {
+    if (registrosFiltrados.length === 0) {
+      showToast('No hay registros para copiar', 'warning')
+      return
+    }
+
+    const texto = registrosFiltrados.map(r => {
+      const fecha = new Date(r.ts).toLocaleString('es-VE')
+      const usuario = r.usuario?.nombre ?? r.usuario_nombre ?? 'Sistema'
+      const rol = r.usuario?.rol ?? r.usuario_rol ?? 'SISTEMA'
+      const accion = ACCION_LABEL[r.accion] ?? r.accion?.replace(/_/g, ' ')
+      const desc = r.descripcion ? ` - Detalle: ${r.descripcion}` : ''
+      const metaStr = r.meta && Object.keys(r.meta).length > 0 ? ` - Meta: ${JSON.stringify(r.meta)}` : ''
+      return `[${fecha}] [${rol.toUpperCase()}] ${usuario}: ${accion}${desc}${metaStr}`
+    }).join('\n')
+
+    navigator.clipboard.writeText(texto)
+      .then(() => {
+        setCopiado(true)
+        showToast('Logs copiados al portapapeles', 'ok')
+        setTimeout(() => setCopiado(false), 2000)
+      })
+      .catch(() => {
+        showToast('Error al copiar logs', 'error')
+      })
+  }
+
   const hayFiltros = categoria || usuarioId || busqueda || filtroFecha
 
   return (
@@ -578,11 +622,19 @@ export default function AuditoriaView() {
         title="Auditoría"
         subtitle={isLoading ? 'Cargando...' : `${total.toLocaleString()} registros de actividad`}
         action={
-          <button onClick={() => refetch()}
-            className="p-2 rounded-xl transition-colors text-slate-400 hover:text-slate-700 hover:bg-slate-100"
-            title="Actualizar">
-            <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={handleCopiarLogs} disabled={isLoading || registrosFiltrados.length === 0}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none select-none"
+              title="Copiar logs al portapapeles">
+              {copiado ? <Check size={13} className="text-emerald-600 animate-scale-up" /> : <Copy size={13} className="text-slate-500" />}
+              <span>{copiado ? '¡Copiado!' : 'Copiar logs'}</span>
+            </button>
+            <button onClick={() => refetch()}
+              className="p-2 rounded-xl transition-colors text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+              title="Actualizar">
+              <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+            </button>
+          </div>
         }
       />
 
