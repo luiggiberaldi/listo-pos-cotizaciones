@@ -96,18 +96,20 @@ export default function ClienteCard({ cliente, onEditar, onReasignar, onCotizar,
 
       {/* ── Vendedor chip ── */}
       {!esAdministracion && cliente.vendedor && (
-        <div className="mx-4 mb-3 flex items-center justify-between">
-          <span className="text-xs text-slate-400">Vendedor</span>
-          <span className="text-xs font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5"
+        <div className="mx-4 mb-3 flex flex-col gap-1 border-t border-slate-100 pt-2.5">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Vendedor Asignado</span>
+          <div className="inline-flex items-center gap-2 self-start px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all"
             style={{
-              backgroundColor: color + '15',
+              backgroundColor: color + '10',
               color: color,
-              border: `1px solid ${color}30`,
+              borderColor: color + '25',
             }}>
             <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
-            {cliente.vendedor.nombre}
-            {esPropio && <span className="text-[9px] opacity-60 ml-0.5">(tú)</span>}
-          </span>
+            <span className="leading-tight">
+              {cliente.vendedor.nombre}
+              {esPropio && <span className="text-[10px] font-normal opacity-70 ml-1.5">(tú)</span>}
+            </span>
+          </div>
         </div>
       )}
 
