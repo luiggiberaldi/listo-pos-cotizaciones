@@ -519,7 +519,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
       {!esAdministracion && (
       <div className="hidden md:flex mt-auto border-t border-slate-100 px-3 py-2 items-center gap-1 flex-wrap">
         {/* Botón primario — si es WhatsApp, incluye dropdown de moneda */}
-        {primaryAction.key === 'whatsapp' ? (
+        {primaryAction?.key === 'whatsapp' ? (
           <div className="relative">
             <button onClick={() => setShowWhatsAppMenu(v => !v)}
               onBlur={() => setTimeout(() => setShowWhatsAppMenu(false), 200)}
@@ -539,7 +539,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
               </div>
             )}
           </div>
-        ) : primaryAction.key !== 'ver' ? (
+        ) : primaryAction ? (
           <button onClick={primaryAction.action}
             disabled={primaryAction.loading}
             className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all disabled:opacity-50 whitespace-nowrap ${pColors.bg} ${pColors.text} ${pColors.active}`}>
