@@ -49,6 +49,7 @@ export function useLineItems({ withDescuento = false, checkStock = false } = {})
         cantidad: Number(producto.cantidad_inicial ?? producto.cantidadinicial ?? 1),
         precioUnitUsd: Number(producto.precio_usd ?? producto.preciousd ?? 0),
         origen: producto.origen ?? 'inventario',
+        categoria: producto.categoria ?? '',
       }
       if (withDescuento) item.descuentoPct = 0
       return [...prev, item]

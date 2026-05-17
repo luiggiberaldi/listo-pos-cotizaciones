@@ -16,6 +16,7 @@ import DevolverAnularModal from './DevolverAnularModal'
 import { showToast } from '../ui/Toast'
 import { MessageCircle } from 'lucide-react'
 import { compartirPorWhatsApp, generarMensaje } from '../../utils/whatsapp'
+import { calcComisionEstimada } from '../../utils/comisionUtils'
 
 export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular, onReciclar, tasa = 0, config = {}, estadoCambiando = false }) {
   const { data: configNegocio } = useConfigNegocio()
@@ -78,6 +79,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
 
   // Verificar stock insuficiente para Admin
   const [itemsFaltantes, setItemsFaltantes] = useState([])
+  const [comisionEst, setComisionEst] = useState(null)
   const hayFaltaStock = itemsFaltantes.length > 0
   
   // Para mostrar items en modal de entrega
@@ -92,15 +94,34 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           const ids = items.map(it => it.producto_id).filter(Boolean)
           if (ids.length === 0) return
           
-          const { data: prods } = await supabase.from('productos').select('id, stock_actual').in('id', ids)
+          const { data: prods } = await supabase.from('productos').select('id, stock_actual, categoria').in('id', ids)
           
-          const faltantes = items.filter(it => {
+          // Mapear categorías y calcular faltantes
+          const itemsConCat = items.map(it => {
+            const esExterno = it.origen === 'externo' || !it.producto_id || String(it.producto_id).startsWith('manual-') || String(it.codigo_snap).startsWith('EXT')
+            let categoria = 'otros'
+            
+            if (!esExterno) {
+              const p = prods?.find(x => x.id === it.producto_id)
+              if (p?.categoria) categoria = p.categoria
+            } else if (it.nombre_snap && it.nombre_snap.toLowerCase().includes(catCabilla)) {
+              categoria = catCabilla
+            }
+            
+            return { ...it, categoria, total_linea_usd: Number(it.total_linea_usd) || (Number(it.cantidad) * Number(it.precio_unit_usd)) || 0 }
+          })
+
+          const faltantes = itemsConCat.filter(it => {
             const esExterno = it.origen === 'externo' || !it.producto_id || String(it.producto_id).startsWith('manual-') || String(it.codigo_snap).startsWith('EXT')
             if (esExterno) return false
             const p = prods?.find(x => x.id === it.producto_id)
             return it.cantidad > (p?.stock_actual || 0)
           })
           setItemsFaltantes(faltantes)
+          
+          // Calcular comisión usando la utilidad pura
+          const est = calcComisionEstimada(itemsConCat, configNegocio)
+          setComisionEst(est)
         } catch (err) {
           console.error('Error verificando stock:', err)
         }
@@ -108,8 +129,9 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       checkStock()
     } else {
       setItemsFaltantes([])
+      setComisionEst(null)
     }
-  }, [despacho.id, despacho.estado])
+  }, [despacho.id, despacho.estado, pctCabilla, pctOtros, catCabilla])
 
   useEffect(() => {
     if (accionPendiente?.estado === 'entregada') {
@@ -172,11 +194,14 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   async function fetchItemsDespacho() {
     const res = await supabase
       .from('notas_despacho_items')
-      .select('id, codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, total_linea_usd, orden')
+      .select('id, producto_id, codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, total_linea_usd, orden, productos(categoria)')
       .eq('despacho_id', despacho.id)
       .order('orden')
     if (res.error) throw new Error(res.error.message || 'Sin items en caché — conecta a internet al menos una vez para imprimir offline')
-    return res.data ?? []
+    return (res.data ?? []).map(item => ({
+      ...item,
+      categoria: item.productos?.categoria || ''
+    }))
   }
 
   async function descargarPDF() {
@@ -534,10 +559,14 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           <div className="flex flex-col">
             <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Total</span>
             {despacho.items_count?.[0] && (
-              <div className="flex items-center gap-1 text-[10px] font-bold text-indigo-500 mt-0.5">
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setShowDetalle(true); }}
+                className="flex items-center gap-1 text-[10px] font-bold text-indigo-500 mt-0.5 cursor-pointer hover:text-indigo-600 hover:underline transition-all"
+              >
                 <PackageCheck size={11} />
                 {despacho.items_count[0].count} {despacho.items_count[0].count === 1 ? 'Ítem' : 'Ítems'}
-              </div>
+              </button>
             )}
           </div>
           <div className="text-right">
@@ -852,14 +881,19 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
                   {(pctCabilla > 0 || pctOtros > 0) ? (
                     <>
                       <span className="text-slate-500">Comisión Est.:</span>
-                      <span className="font-medium text-slate-700 text-right">
-                        {fmtUsd(subtotalProductos * pctOtros / 100)}
-                        {' '}({pctOtros}%)
+                      <span className="font-medium text-emerald-600 text-right">
+                        {comisionEst ? fmtUsd(comisionEst.monto) : fmtUsd(subtotalProductos * pctOtros / 100)}
                       </span>
-                      {pctCabilla !== pctOtros && (
-                        <>
-                          <span className="text-slate-400 text-[10px] col-span-2 -mt-1">({catCabilla}: {pctCabilla}% · Otros: {pctOtros}%)</span>
-                        </>
+                      
+                      {comisionEst && (
+                        <div className="col-span-2 flex flex-col gap-1 mt-1 mb-2 bg-slate-50 p-2 rounded border border-slate-100">
+                          {comisionEst.detalle.map(d => (
+                            <div key={d.cat} className="flex justify-between text-[11px] text-slate-600">
+                              <span className="capitalize">{d.cat} ({d.pct}%):</span>
+                              <span className="font-semibold">{fmtUsd(d.comision)}</span>
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </>
                   ) : (

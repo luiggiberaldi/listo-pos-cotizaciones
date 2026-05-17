@@ -17,6 +17,7 @@ import { useLineItems } from '../hooks/useLineItems'
 import { useVentaRapida } from '../hooks/useVentaRapida'
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
+import { calcComisionEstimada } from '../utils/comisionUtils'
 import { useTransportistas, useCrearTransportista } from '../hooks/useTransportistas'
 import { useFormasPago } from '../hooks/useFormasPago'
 import CustomSelect from '../components/ui/CustomSelect'
@@ -373,6 +374,7 @@ export default function VentaRapidaView() {
   const [catActiva, setCatActiva] = useState('')
   const { items, setItems, agregarItem: _agregarItem, eliminarPorId: quitarItem, cambiarCantidad, setCantidadDirecta, cambiarPrecio, setStockMap } = useLineItems({ checkStock: true })
   const [editItemIdx, setEditItemIdx] = useState(null)
+  const comisionEstimada = useMemo(() => calcComisionEstimada(items, config), [items, config])
 
   // Mantener stock map actualizado para validación de cantidades
   useEffect(() => {
@@ -739,6 +741,8 @@ export default function VentaRapidaView() {
         {step === 1 && (
           <Step2Pago
             formasPago={formasPago}
+            comisionEstimada={comisionEstimada}
+            items={items}
             toggleForma={toggleForma}
             setMontoForma={setMontoForma}
             updateForma={updateForma}
@@ -1569,6 +1573,7 @@ function Step1Productos({
 // ─────────────────────────────────────────────────────────────────────────────
 function Step2Pago({
   formasPago, toggleForma, setMontoForma, updateForma, totalParaPago,
+  comisionEstimada, items = [],
   referenciaPago, setReferenciaPago,
   transportistas, transportistaId, setTransportistaId,
   fleteUsd, setFleteUsd, corteUsd, setCorteUsd, notas, setNotas,
@@ -1753,12 +1758,31 @@ function Step2Pago({
       </div>{/* ── Fin columna izquierda ── */}
 
       {/* ── Columna derecha: Resumen + Notas ── */}
-      <div className="lg:w-80 xl:w-96 shrink-0 flex flex-col gap-5">
-      {/* Resumen de totales */}
-      <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm mb-[-8px]">
-        <div className="space-y-2 text-[15px]">
-          <div className="flex justify-between items-center text-slate-500">
-            <span>Subtotal</span>
+      <div className="lg:w-80 xl:w-96 shrink-0 flex flex-col gap-4">
+        
+        {/* Lista de productos (Resumen) */}
+        <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
+          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+            Artículos ({items.length})
+          </h3>
+          <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+            {items.map(it => (
+              <div key={it.productoId || it._key} className="flex items-center justify-between text-xs py-1 border-b border-slate-50 last:border-0">
+                <div className="flex-1 min-w-0">
+                  <span className="text-slate-700 block font-medium truncate">{it.nombreSnap}</span>
+                  <span className="text-[11px] text-slate-400">{it.cantidad} × {fmtUsd(it.precioUnitUsd)}</span>
+                </div>
+                <span className="font-bold text-slate-700 shrink-0 ml-2">{fmtUsd(it.cantidad * it.precioUnitUsd)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Resumen de totales */}
+        <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm mb-[-8px]">
+          <div className="space-y-2 text-[15px]">
+            <div className="flex justify-between items-center text-slate-500">
+              <span>Subtotal</span>
             <span className="text-slate-700">${(totalParaPago - Math.max(0, Number(corteUsd) || 0)).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
           {Number(fleteUsd) > 0 && (
@@ -1782,6 +1806,26 @@ function Step2Pago({
               )}
             </div>
           </div>
+
+          {comisionEstimada && comisionEstimada.monto > 0 && (
+            <div className="mt-1 pt-2 border-t border-slate-100">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-emerald-600 font-semibold">
+                  Comisión est. {comisionEstimada.mixto ? '(tasas mixtas)' : comisionEstimada.pct ? `(${comisionEstimada.pct}%)` : ''}
+                </span>
+                <span className="text-xs font-bold text-emerald-600">
+                  ${comisionEstimada.monto.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+              {comisionEstimada.detalle.length > 1 && (
+                <div className="text-[10px] text-slate-400 mt-0.5 flex flex-wrap gap-x-2">
+                  {comisionEstimada.detalle.map(d => (
+                    <span key={d.cat} className="capitalize">{d.cat}: {d.pct}%</span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

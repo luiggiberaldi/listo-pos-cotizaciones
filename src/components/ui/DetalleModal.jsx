@@ -6,6 +6,8 @@ import { apiUrl } from '../../services/apiBase'
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs } from '../../utils/format'
 import useAuthStore from '../../store/useAuthStore'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
+import { useConfigNegocio } from '../../hooks/useConfigNegocio'
+import { getComisionPctForItem } from '../../utils/comisionUtils'
 
 function calcDescMonto(desc, totalLinea, cantidad) {
   if (!desc) return 0
@@ -15,7 +17,7 @@ function calcDescMonto(desc, totalLinea, cantidad) {
   return Math.round(Math.min(v * Number(cantidad), totalLinea) * 10000) / 10000
 }
 
-function ItemRow({ item, descuento, fmt }) {
+function ItemRow({ item, descuento, fmt, config, tipo, perfil }) {
   const cant     = Number(item.cantidad || 1)
   const precio   = Number(item.precio_unit_usd || 0)
   const total    = Number(item.total_linea_usd || cant * precio)
@@ -24,11 +26,21 @@ function ItemRow({ item, descuento, fmt }) {
   const esExterno = item.origen === 'externo' || !item.producto_id || String(item.producto_id).startsWith('manual-') || String(item.codigo_snap).startsWith('EXT')
   const sinStock = !item.cotizacion_id && !esExterno && cant > (item.producto?.stock_actual || 0)
 
+  const showComision = tipo === 'despacho' && ['administracion', 'jefe', 'desarrollador', 'vendedor'].includes(perfil?.rol)
+  const pct = showComision ? getComisionPctForItem(item, config) : 0
+
   return (
     <tr className={`border-b border-slate-100 last:border-0 ${descMonto > 0 ? 'bg-amber-50/70' : ''} ${sinStock ? 'bg-red-50/60' : ''}`}>
       <td className="py-3 pr-3">
         <p className="text-sm font-medium text-slate-800 leading-tight">{item.nombre_snap}</p>
-        {item.codigo_snap && <p className="text-[11px] text-slate-400 font-mono mt-0.5">{item.codigo_snap}</p>}
+        <div className="flex items-center gap-2 mt-0.5">
+          {item.codigo_snap && <p className="text-[11px] text-slate-400 font-mono">{item.codigo_snap}</p>}
+          {showComision && (
+            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded flex items-center gap-0.5" title="Comisión estimada">
+              <DollarSign size={10} className="text-emerald-500" />{pct}%
+            </span>
+          )}
+        </div>
         {descMonto > 0 && (
           <p className="text-[11px] text-amber-600 mt-0.5 font-medium">
             Desc: {descuento.tipo === 'porcentaje' ? `${descuento.valor}%` : `${fmt(descuento.valor)}/u`} = -{fmt(descMonto)}
@@ -63,7 +75,7 @@ function ItemRow({ item, descuento, fmt }) {
   )
 }
 
-function ItemCard({ item, descuento, fmt }) {
+function ItemCard({ item, descuento, fmt, config, tipo, perfil }) {
   const cant     = Number(item.cantidad || 1)
   const precio   = Number(item.precio_unit_usd || 0)
   const total    = Number(item.total_linea_usd || cant * precio)
@@ -72,12 +84,22 @@ function ItemCard({ item, descuento, fmt }) {
   const esExterno = item.origen === 'externo' || !item.producto_id || String(item.producto_id).startsWith('manual-') || String(item.codigo_snap).startsWith('EXT')
   const sinStock = !item.cotizacion_id && !esExterno && cant > (item.producto?.stock_actual || 0)
 
+  const showComision = tipo === 'despacho' && ['administracion', 'jefe', 'desarrollador', 'vendedor'].includes(perfil?.rol)
+  const pct = showComision ? getComisionPctForItem(item, config) : 0
+
   return (
     <div className={`py-3 border-b border-slate-100 last:border-0 ${descMonto > 0 ? 'bg-amber-50/70 -mx-3 px-3 rounded-lg' : ''} ${sinStock ? 'bg-red-50/60 -mx-3 px-3 rounded-lg' : ''}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-slate-800 leading-tight">{item.nombre_snap}</p>
-          {item.codigo_snap && <p className="text-[11px] text-slate-400 font-mono mt-0.5">{item.codigo_snap}</p>}
+          <div className="flex items-center gap-2 mt-0.5">
+            {item.codigo_snap && <p className="text-[11px] text-slate-400 font-mono">{item.codigo_snap}</p>}
+            {showComision && (
+              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded flex items-center gap-0.5" title="Comisión estimada">
+                <DollarSign size={10} className="text-emerald-500" />{pct}%
+              </span>
+            )}
+          </div>
           {sinStock && (
             <p className="text-[10px] text-red-600 font-black mt-1 flex items-center gap-1">
               <AlertTriangle size={10} /> Stock insuficiente ({item.producto?.stock_actual || 0} disp.)
@@ -113,6 +135,7 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
   const [descuentos, setDescuentos] = useState({}) // { item_id: { tipo, valor } }
   const { perfil } = useAuthStore()
   const { tasaBcv, tasaUsdt } = useTasaCambio()
+  const { data: config = {} } = useConfigNegocio()
 
   // Leer moneda seleccionada del PDF (compartida via localStorage)
   const monedaPdf = typeof window !== 'undefined'
@@ -142,7 +165,7 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
       try {
         const { data, error } = await supabase
           .from(tableName)
-          .select('*, producto:productos(id, stock_actual)')
+          .select('*, producto:productos(id, stock_actual, categoria)')
           .eq(filterCol, registro.id)
           .order('orden')
 
@@ -347,13 +370,13 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
                     </tr>
                   </thead>
                   <tbody>
-                    {items.map(it => <ItemRow key={it.id} item={it} descuento={descuentos[it.id]} fmt={fmt} />)}
+                    {items.map(it => <ItemRow key={it.id} item={it} descuento={descuentos[it.id]} fmt={fmt} config={config} tipo={tipo} perfil={perfil} />)}
                   </tbody>
                 </table>
               </div>
               {/* Mobile card layout */}
               <div className="sm:hidden">
-                {items.map(it => <ItemCard key={it.id} item={it} descuento={descuentos[it.id]} fmt={fmt} />)}
+                {items.map(it => <ItemCard key={it.id} item={it} descuento={descuentos[it.id]} fmt={fmt} config={config} tipo={tipo} perfil={perfil} />)}
               </div>
             </>
           )}

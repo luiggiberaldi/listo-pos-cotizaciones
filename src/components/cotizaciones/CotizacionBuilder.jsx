@@ -23,6 +23,7 @@ import { round2, mulR } from '../../utils/dinero'
 import { calcTotales } from '../../utils/calcTotales'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs, fmtTelefono } from '../../utils/format'
 import { showToast } from '../ui/Toast'
+import { calcComisionEstimada } from '../../utils/comisionUtils'
 
 import supabase from '../../services/supabase/client'
 import CustomSelect from '../ui/CustomSelect'
@@ -564,6 +565,11 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
   const { subtotal, descuentoUsd, totalUsd } = calcTotales(items, descuentoGlobalPct, costoEnvioUsd, corteUsd)
   const totalBs = tasaHook.tasaEfectiva > 0 ? mulR(totalUsd, tasaHook.tasaEfectiva) : 0
 
+  const comisionEstimada = useMemo(
+    () => calcComisionEstimada(items, config),
+    [items, config]
+  )
+
   // Conversión visual según moneda seleccionada
   const factorBcv = tasaHook.tasaBcv?.precio > 0 && tasaHook.tasaUsdt?.precio > 0
     ? tasaHook.tasaUsdt.precio / tasaHook.tasaBcv.precio
@@ -622,6 +628,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
         origen:        p.origen || 'inventario',
         codigoSnap:    p.codigo ?? '',
         nombreSnap:    p.nombre,
+        categoria:     p.categoria || '',
         unidadSnap:    p.unidad ?? 'und',
         cantidad:      isExterno ? (p.cantidadExterna || 1) : 1,
         precioUnitUsd: Number(p.precio_usd),
@@ -649,6 +656,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
             origen:        'inventario',
             codigoSnap:    producto.codigo ?? '',
             nombreSnap:    producto.nombre,
+            categoria:     producto.categoria || '',
             unidadSnap:    producto.unidad ?? 'und',
             cantidad:      qty,
             precioUnitUsd: Number(producto.precio_usd),
@@ -1404,14 +1412,25 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                 )}
 
                 {/* Comisión estimada (solo vendedor) */}
-                {!esSupervisor && totalUsd > 0 && config.comision_pct > 0 && (
-                  <div className="flex items-center justify-between pt-2 border-t border-slate-50 mt-2">
-                    <span className="text-[11px] text-emerald-600 font-semibold">
-                      Comisión estimada
-                    </span>
-                    <span className="text-[11px] font-bold text-emerald-600">
-                      ~{fmtUsd(round2(totalUsd * (config.comision_pct / 100)))}
-                    </span>
+                {comisionEstimada.monto > 0 && (
+                  <div className="mt-1 pt-2 border-t border-slate-50">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-emerald-600 font-semibold">
+                        Comisión est.
+                      </span>
+                      <span className="text-[11px] font-bold text-emerald-600">
+                        ~{fmtUsd(comisionEstimada.monto)}{' '}
+                        {comisionEstimada.mixto ? '(tasas mixtas)' : `(${comisionEstimada.pct}%)`}
+                      </span>
+                    </div>
+                    {/* Tooltip de desglose cuando hay tasas mixtas */}
+                    {comisionEstimada.mixto && (
+                      <p className="text-[10px] text-slate-400 mt-0.5 text-right">
+                        {comisionEstimada.detalle
+                          .map(d => `${d.cat}: ${d.pct}%`)
+                          .join(' · ')}
+                      </p>
+                    )}
                   </div>
                 )}
               </div>

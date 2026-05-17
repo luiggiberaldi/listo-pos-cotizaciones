@@ -2,6 +2,7 @@
 // Configuración del negocio para header del PDF y ajustes globales
 // — select explícito SIN gate_password_hash
 // — gate se valida server-side vía RPCs SECURITY DEFINER
+import { useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
 import { apiUrl } from '../services/apiBase'
@@ -9,9 +10,31 @@ import { apiUrl } from '../services/apiBase'
 const KEY = ['config_negocio']
 
 // Columnas seguras (excluye gate_password_hash)
-const CONFIG_COLUMNS = 'id, nombre_negocio, rif_negocio, telefono_negocio, direccion_negocio, email_negocio, logo_url, moneda_principal, pie_pagina_pdf, tasa_bcv_manual, iva_pct, gate_email, comision_pct_cabilla, comision_pct_otros, comision_categoria_cabilla, creado_en, actualizado_en'
+const CONFIG_COLUMNS = 'id, nombre_negocio, rif_negocio, telefono_negocio, direccion_negocio, email_negocio, logo_url, moneda_principal, pie_pagina_pdf, tasa_bcv_manual, iva_pct, gate_email, comision_pct_cabilla, comision_pct_otros, comision_categoria_cabilla, _comision_extras, creado_en, actualizado_en'
 
 export function useConfigNegocio() {
+  const qc = useQueryClient()
+
+  useEffect(() => {
+    const channelName = `config_negocio_changes_${Date.now()}_${Math.random()}`
+    const sub = supabase.channel(channelName)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'configuracion_negocio' },
+        (payload) => {
+          if (payload.new) {
+            qc.setQueryData(KEY, (old) => {
+              if (!old) return payload.new
+              return { ...old, ...payload.new }
+            })
+          }
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(sub) }
+  }, [qc])
+
   return useQuery({
     queryKey: KEY,
     queryFn: async () => {

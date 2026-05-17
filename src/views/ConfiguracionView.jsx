@@ -284,6 +284,7 @@ export default function ConfiguracionView() {
     comision_pct_cabilla:         2,
     comision_pct_otros:           3,
     comision_categoria_cabilla:   'Cabilla',
+    _comision_extras:             [],
   })
   const [gatePassword, setGatePassword] = useState('')
 
@@ -301,6 +302,7 @@ export default function ConfiguracionView() {
         comision_pct_cabilla:       config.comision_pct_cabilla       ?? 2,
         comision_pct_otros:         config.comision_pct_otros         ?? 3,
         comision_categoria_cabilla: config.comision_categoria_cabilla ?? 'Cabilla',
+        _comision_extras:           config._comision_extras           ?? [],
       })
     }
   }, [config])

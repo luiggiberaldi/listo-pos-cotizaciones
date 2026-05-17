@@ -332,10 +332,14 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         <div className="flex flex-col">
           <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Total</span>
           {cotizacion.items_count?.[0] && (
-            <div className="flex items-center gap-1 text-[10px] font-bold text-indigo-500 mt-0.5">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setShowDetalle(true); }}
+              className="flex items-center gap-1 text-[10px] font-bold text-indigo-500 mt-0.5 cursor-pointer hover:text-indigo-600 hover:underline transition-all"
+            >
               <PackageCheck size={11} />
               {cotizacion.items_count[0].count} {cotizacion.items_count[0].count === 1 ? 'Ítem' : 'Ítems'}
-            </div>
+            </button>
           )}
         </div>
         <div className="text-right">
