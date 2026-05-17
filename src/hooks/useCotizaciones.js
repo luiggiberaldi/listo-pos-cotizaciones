@@ -215,7 +215,7 @@ export function useGuardarBorrador() {
         descuento_pct:   0,
         total_linea_usd: round2(it.cantidad * it.precioUnitUsd),
         orden:           idx,
-        origen:          it.producto_id ? (it.origen || 'inventario') : 'externo',
+        origen:          it.productoId ? (it.origen || 'inventario') : 'externo', // Fix: usar productoId (camelCase)
       }))
 
       const payload = { cotizacionId, headerData, items: itemRows }
