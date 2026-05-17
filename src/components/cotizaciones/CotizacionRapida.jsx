@@ -794,19 +794,20 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
       {confirmAjeno && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onClick={() => setConfirmAjeno(null)}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-[calc(100vw-1.5rem)] sm:max-w-sm w-full p-6 space-y-4" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
-                <AlertCircle size={20} className="text-amber-600" />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-800 text-sm">Cliente de otro vendedor</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  <strong>{confirmAjeno.nombre}</strong> está asignado a <strong>{confirmAjeno.vendedor?.nombre || 'otro vendedor'}</strong>
-                </p>
-              </div>
+            <p className="text-sm font-medium text-amber-700 flex items-center gap-2">
+              <AlertCircle size={16} /> Cliente de otro vendedor
+            </p>
+            <div className="space-y-1">
+              <p className="text-sm font-bold text-slate-800">{confirmAjeno.nombre}</p>
+              <p className="text-xs text-slate-500">
+                Pertenece a: <span className="font-medium text-slate-700">{confirmAjeno.vendedor?.nombre || 'otro vendedor'}</span>
+              </p>
+              <p className="text-xs text-amber-600 font-medium">
+                La comisión se le asignará a él.
+              </p>
             </div>
             <p className="text-sm text-slate-600">
-              Puedes usar este cliente, pero se notificará al supervisor. ¿Deseas continuar?
+              Puedes usar este cliente. ¿Deseas continuar?
             </p>
             <div className="flex gap-2">
               <button onClick={() => setConfirmAjeno(null)}

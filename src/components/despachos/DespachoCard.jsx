@@ -8,6 +8,7 @@ import { getDespachoAction, PRIMARY_ACTION_COLORS } from '../../utils/despachoAc
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtFechaHora, fmtBs, usdToBs } from '../../utils/format'
 import supabase from '../../services/supabase/client'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
+import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import DetalleModal from '../ui/DetalleModal'
 import DescuentoModal from './DescuentoModal'
 import EditDespachoModal from './EditDespachoModal'
@@ -17,6 +18,10 @@ import { MessageCircle } from 'lucide-react'
 import { compartirPorWhatsApp, generarMensaje } from '../../utils/whatsapp'
 
 export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular, onReciclar, tasa = 0, config = {}, estadoCambiando = false }) {
+  const { data: configNegocio } = useConfigNegocio()
+  const pctCabilla = Number(configNegocio?.comision_pct_cabilla ?? 0)
+  const pctOtros   = Number(configNegocio?.comision_pct_otros   ?? 0)
+  const catCabilla = (configNegocio?.comision_categoria_cabilla || 'Cabilla').toLowerCase()
   const { perfil } = useAuthStore()
   const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
   const esDesarrollador = perfil?.rol === 'desarrollador'
@@ -74,6 +79,10 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   // Verificar stock insuficiente para Admin
   const [itemsFaltantes, setItemsFaltantes] = useState([])
   const hayFaltaStock = itemsFaltantes.length > 0
+  
+  // Para mostrar items en modal de entrega
+  const [itemsDespacho, setItemsDespacho] = useState([])
+  const [loadingItems, setLoadingItems] = useState(false)
 
   useEffect(() => {
     if (['pendiente', 'despachada'].includes(despacho.estado) && esPrivilegiado) {
@@ -101,6 +110,16 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       setItemsFaltantes([])
     }
   }, [despacho.id, despacho.estado])
+
+  useEffect(() => {
+    if (accionPendiente?.estado === 'entregada') {
+      setLoadingItems(true)
+      fetchItemsDespacho()
+        .then(data => setItemsDespacho(data))
+        .catch(err => console.error('Error fetching items:', err))
+        .finally(() => setLoadingItems(false))
+    }
+  }, [accionPendiente])
 
   const numDisplay = despacho.cotizacion
     ? `DES-${String(despacho.cotizacion.numero).padStart(5, '0')}`
@@ -825,11 +844,80 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
                     </>
                   )}
 
+                  <span className="text-slate-500">Condición:</span>
+                  <span className={`font-semibold text-right ${isCtaPorCobrar ? 'text-amber-600' : 'text-emerald-600'}`}>
+                    {isCtaPorCobrar ? 'Crédito (CxC)' : 'Contado'}
+                  </span>
+
+                  {(pctCabilla > 0 || pctOtros > 0) ? (
+                    <>
+                      <span className="text-slate-500">Comisión Est.:</span>
+                      <span className="font-medium text-slate-700 text-right">
+                        {fmtUsd(subtotalProductos * pctOtros / 100)}
+                        {' '}({pctOtros}%)
+                      </span>
+                      {pctCabilla !== pctOtros && (
+                        <>
+                          <span className="text-slate-400 text-[10px] col-span-2 -mt-1">({catCabilla}: {pctCabilla}% · Otros: {pctOtros}%)</span>
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-slate-500">Comisión:</span>
+                      <span className="text-slate-400 text-right text-[11px]">Sin % configurado</span>
+                    </>
+                  )}
+
                   <span className="col-span-2 border-t border-slate-200 my-0.5"></span>
 
                   <span className="font-bold text-slate-700 text-[13px] pt-0.5">Total USD:</span>
                   <span className="font-black text-slate-800 text-right text-[14px]">{fmtUsd(totalFinal)}</span>
                 </div>
+              </div>
+            )}
+
+            {accionPendiente?.estado === 'entregada' && (
+              <div className="w-full text-left bg-slate-50 p-3 rounded-xl text-sm border border-slate-200 mt-2 shadow-sm">
+                <h4 className="font-bold text-slate-700 border-b border-slate-200 pb-1.5 mb-2">Advertencias antes de entregar</h4>
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-start gap-2">
+                    <PackageCheck size={14} className="text-amber-500 shrink-0 mt-0.5" />
+                    <p className="text-slate-600"><strong>Inventario:</strong> Los productos se descontarán definitivamente del stock.</p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <DollarSign size={14} className="text-emerald-500 shrink-0 mt-0.5" />
+                    <p className="text-slate-600"><strong>Comisiones:</strong> La comisión del vendedor se consolidará para pago.</p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle size={14} className="text-red-500 shrink-0 mt-0.5" />
+                    <p className="text-slate-600"><strong>Irreversible:</strong> No se podrán hacer cambios después de entregar.</p>
+                  </div>
+                </div>
+                
+                <h4 className="font-bold text-slate-700 border-b border-slate-200 pb-1.5 mb-2 mt-4">Productos a Descontar</h4>
+                {loadingItems ? (
+                  <p className="text-xs text-slate-400">Cargando ítems...</p>
+                ) : (
+                  <div className="max-h-32 overflow-y-auto space-y-1">
+                    {itemsDespacho.map((it, idx) => (
+                      <div key={idx} className="flex justify-between text-xs text-slate-600">
+                        <span className="truncate max-w-[200px]">{it.nombre_snap}</span>
+                        <span className="font-bold">{it.cantidad} {it.unidad_snap || 'und'}</span>
+                      </div>
+                    ))}
+                    {itemsDespacho.length === 0 && (
+                      <p className="text-xs text-slate-400">No hay ítems registrados.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {isCtaPorCobrar && accionPendiente?.estado === 'despachada' && (
+              <div className="w-full p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 font-bold text-xs flex items-center gap-2 mt-1">
+                <AlertTriangle size={14} className="shrink-0" />
+                <span className="text-left">Este despacho generará una Cuenta por Cobrar.</span>
               </div>
             )}
 

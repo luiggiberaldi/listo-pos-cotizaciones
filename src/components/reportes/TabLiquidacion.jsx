@@ -1,4 +1,6 @@
 // src/components/reportes/TabLiquidacion.jsx
+// [DEPRECATED] Este archivo pertenece al sistema de comisiones v1 y NO se usa en v2.
+// Se conserva solo por referencia histórica. No editar ni importar en código nuevo.
 // Liquidación 2.0 — Vista unificada de Ventas + Comisiones sincronizada con el backend atómico
 import { useState, useMemo } from 'react'
 import {

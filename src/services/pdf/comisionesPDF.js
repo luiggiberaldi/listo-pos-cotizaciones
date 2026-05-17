@@ -121,11 +121,20 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
   // ══════════════════════════════════════════════════════════════════════════
   // 3. RESUMEN
   // ══════════════════════════════════════════════════════════════════════════
-  const pendientes = comisionesNorm.filter(c => c.estado !== 'pagada')
+  const pends = comisionesNorm.filter(c => c.estado === 'pendiente')
+  const cxc = comisionesNorm.filter(c => c.estado === 'cta_cobrar')
   const pagadas = comisionesNorm.filter(c => c.estado === 'pagada')
-  const totalPendiente = pendientes.reduce((s, c) => s + c.totalcomision, 0)
-  const totalPagado = pagadas.reduce((s, c) => s + c.montopagado, 0)
-  const totalGeneral = totalPendiente + totalPagado
+  
+  // 1) "Saldo Pendiente": sum( max(totalcomision - montopagado, 0) ) para estados pendiente y cta_cobrar
+  const totalPendiente = comisionesNorm
+    .filter(c => ['pendiente', 'cta_cobrar'].includes(c.estado))
+    .reduce((s, c) => s + Math.max(c.totalcomision - (c.montopagado || 0), 0), 0)
+    
+  // 2) "Total Pagado": sum(COALESCE(montopagado, 0)) de todas
+  const totalPagado = comisionesNorm.reduce((s, c) => s + (c.montopagado || 0), 0)
+  
+  // 3) "Generado Histórico": sum(totalcomision) de todas
+  const totalGeneral = comisionesNorm.reduce((s, c) => s + c.totalcomision, 0)
 
   // Cuadro resumen
   const boxH = 18
@@ -133,7 +142,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
   const boxes = [
     { label: 'Generado Histórico', value: fmtUsd(totalGeneral), count: `${comisionesNorm.length} comisiones`, color: C_PRIMARY },
     { label: 'Total Pagado', value: fmtUsd(totalPagado), count: `${pagadas.length} pagadas`, color: C_EMERALD },
-    { label: 'Saldo Pendiente', value: fmtUsd(totalPendiente), count: `${pendientes.length} por pagar`, color: C_AMBER },
+    { label: 'Saldo Pendiente', value: fmtUsd(totalPendiente), count: `${pends.length} pend / ${cxc.length} cxc`, color: C_AMBER },
   ]
 
   boxes.forEach((box, i) => {
@@ -258,8 +267,16 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
 
     const tasa = c.tasa_snapshot
     const comBs = tasa > 0 ? c.totalcomision * tasa : 0
-    const esPend = c.estado !== 'pagada'
-    const textoEstado = esPend ? 'Pendiente' : 'Pagada'
+    
+    let textoEstado = 'Pendiente'
+    let colorEstado = C_AMBER
+    if (c.estado === 'pagada') {
+      textoEstado = 'Pagada'
+      colorEstado = C_EMERALD
+    } else if (c.estado === 'cta_cobrar') {
+      textoEstado = 'Cta. por cobrar'
+      colorEstado = C_GRAY || [148, 163, 184]
+    }
 
     // Sumar a totales
     sumCabillaUsd += c.comisioncabilla
@@ -286,20 +303,21 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
         doc.text(fmtUsd(c.totalcomision), cols[5].x + cols[5].w - 2, y + 3, { align: 'right' })
         
         doc.setFont('helvetica', 'normal')
-        doc.text(`Bs ${tasa}`, cols[6].x + cols[6].w - 2, y + 3, { align: 'right' })
+        doc.text(tasa > 0 ? `Bs ${tasa}` : 'N/D', cols[6].x + cols[6].w - 2, y + 3, { align: 'right' })
         
         doc.setFont('helvetica', 'bold')
-        doc.text(fmtBs(comBs), cols[7].x + cols[7].w - 2, y + 3, { align: 'right' })
+        doc.text(tasa > 0 ? fmtBs(comBs) : 'N/D', cols[7].x + cols[7].w - 2, y + 3, { align: 'right' })
 
         // Estado
         doc.setFontSize(6)
-        doc.setTextColor(...(esPend ? C_AMBER : C_EMERALD))
+        doc.setTextColor(...colorEstado)
         doc.text(textoEstado, cols[8].x + (cols[8].w / 2), y + 3, { align: 'center' })
         doc.setFontSize(6.5)
       } else {
         doc.setFont('helvetica', 'bold')
-        const vName = (c.vendedornombre || c.vendedor?.nombre || '—').split(' ').slice(0, 2).join(' ')
-        doc.text(vName, cols[0].x + 1, y + 3)
+        const vName = c.vendedor?.nombre || 'Sin vendedor asignado'
+        const vNameLines = doc.splitTextToSize(vName, cols[0].w - 2)
+        doc.text(vNameLines[0], cols[0].x + 1, y + 3)
         
         doc.setFont('helvetica', 'normal')
         doc.text(`#${c.despachonumero}`, cols[1].x + 1, y + 3)
@@ -317,13 +335,13 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
         doc.text(fmtUsd(c.totalcomision), cols[5].x + cols[5].w - 2, y + 3, { align: 'right' })
         
         doc.setFont('helvetica', 'normal')
-        doc.text(`Bs ${tasa}`, cols[6].x + cols[6].w - 2, y + 3, { align: 'right' })
+        doc.text(tasa > 0 ? `Bs ${tasa}` : 'N/D', cols[6].x + cols[6].w - 2, y + 3, { align: 'right' })
         
         doc.setFont('helvetica', 'bold')
-        doc.text(fmtBs(comBs), cols[7].x + cols[7].w - 2, y + 3, { align: 'right' })
+        doc.text(tasa > 0 ? fmtBs(comBs) : 'N/D', cols[7].x + cols[7].w - 2, y + 3, { align: 'right' })
 
         doc.setFontSize(6)
-        doc.setTextColor(...(esPend ? C_AMBER : C_EMERALD))
+        doc.setTextColor(...colorEstado)
         doc.text(textoEstado, cols[8].x + (cols[8].w / 2), y + 3, { align: 'center' })
         doc.setFontSize(6.5)
       }
@@ -341,21 +359,22 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
         doc.setFont('helvetica', 'normal')
         doc.text(c.montopagado > 0 ? fmtUsd(c.montopagado) : '—', cols[5].x + cols[5].w - 2, y + 3, { align: 'right' })
         
-        doc.text(`Bs ${tasa}`, cols[6].x + cols[6].w - 2, y + 3, { align: 'right' })
+        doc.text(tasa > 0 ? `Bs ${tasa}` : 'N/D', cols[6].x + cols[6].w - 2, y + 3, { align: 'right' })
         
         doc.setFont('helvetica', 'bold')
-        doc.text(fmtBs(comBs), cols[7].x + cols[7].w - 2, y + 3, { align: 'right' })
+        doc.text(tasa > 0 ? fmtBs(comBs) : 'N/D', cols[7].x + cols[7].w - 2, y + 3, { align: 'right' })
 
         // Estado
         doc.setFontSize(6)
-        doc.setTextColor(...(esPend ? C_AMBER : C_EMERALD))
+        doc.setTextColor(...colorEstado)
         doc.text(textoEstado, cols[8].x + (cols[8].w / 2), y + 3, { align: 'center' })
         doc.setFontSize(6.5)
       } else {
         // General
         doc.setFont('helvetica', 'bold')
-        const vName = (c.vendedornombre || c.vendedor?.nombre || '—').split(' ').slice(0, 2).join(' ')
-        doc.text(vName, cols[0].x + 1, y + 3)
+        const vName = c.vendedor?.nombre || 'Sin vendedor asignado'
+        const vNameLines = doc.splitTextToSize(vName, cols[0].w - 2)
+        doc.text(vNameLines[0], cols[0].x + 1, y + 3)
         
         doc.setFont('helvetica', 'normal')
         doc.text(fmtFechaCorta(c.creadoen), cols[1].x + 1, y + 3)
@@ -367,14 +386,14 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
         doc.setFont('helvetica', 'normal')
         doc.text(c.montopagado > 0 ? fmtUsd(c.montopagado) : '—', cols[4].x + cols[4].w - 2, y + 3, { align: 'right' })
         
-        doc.text(`Bs ${tasa}`, cols[5].x + cols[5].w - 2, y + 3, { align: 'right' })
+        doc.text(tasa > 0 ? `Bs ${tasa}` : 'N/D', cols[5].x + cols[5].w - 2, y + 3, { align: 'right' })
         
         doc.setFont('helvetica', 'bold')
-        doc.text(fmtBs(comBs), cols[6].x + cols[6].w - 2, y + 3, { align: 'right' })
+        doc.text(tasa > 0 ? fmtBs(comBs) : 'N/D', cols[6].x + cols[6].w - 2, y + 3, { align: 'right' })
 
         // Estado
         doc.setFontSize(6)
-        doc.setTextColor(...(esPend ? C_AMBER : C_EMERALD))
+        doc.setTextColor(...colorEstado)
         doc.text(textoEstado, cols[7].x + (cols[7].w / 2), y + 3, { align: 'center' })
         doc.setFontSize(6.5)
       }

@@ -195,9 +195,9 @@ export async function handleEditarPagoDespacho(request, env) {
       await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}`, {
         method: 'DELETE', headers: h,
       });
-      await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcular_comision_despacho`, {
+      await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcularcomisiondespacho`, {
         method: 'POST', headers: { ...h, Prefer: 'return=representation' },
-        body: JSON.stringify({ p_despacho_id: despachoId }),
+        body: JSON.stringify({ p_despachoid: despachoId }),
       });
     }
   }
@@ -668,9 +668,9 @@ export async function handleEditarItemsDespacho(request, env) {
         await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}`, {
           method: 'DELETE', headers,
         });
-        await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcular_comision_despacho`, {
+        await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcularcomisiondespacho`, {
           method: 'POST', headers: { ...headers, Prefer: 'return=representation' },
-          body: JSON.stringify({ p_despacho_id: despachoId }),
+          body: JSON.stringify({ p_despachoid: despachoId }),
         });
       }
     }
@@ -831,9 +831,9 @@ export async function handleGuardarDescuentos(request, env) {
             method: 'DELETE', headers,
           });
           // Recalcular comisión con descuentos aplicados
-          await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcular_comision_despacho`, {
+          await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcularcomisiondespacho`, {
             method: 'POST', headers: { ...headers, Prefer: 'return=representation' },
-            body: JSON.stringify({ p_despacho_id: despachoId }),
+            body: JSON.stringify({ p_despachoid: despachoId }),
           });
         }
       }

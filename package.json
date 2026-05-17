@@ -16,6 +16,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@honcho-ai/sdk": "^2.1.1",
     "@supabase/supabase-js": "^2.97.0",
     "@tanstack/react-query": "^5.80.2",
     "@tanstack/react-query-persist-client": "^5.99.2",

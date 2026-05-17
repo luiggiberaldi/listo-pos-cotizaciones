@@ -741,6 +741,7 @@ export default function VentaRapidaView() {
             formasPago={formasPago}
             toggleForma={toggleForma}
             setMontoForma={setMontoForma}
+            updateForma={updateForma}
             totalParaPago={totalParaPago}
             referenciaPago={referenciaPago}
             setReferenciaPago={setReferenciaPago}
@@ -1068,8 +1069,16 @@ function Step1Productos({
             <p className="text-sm font-medium text-amber-700 flex items-center gap-2">
               <AlertCircle size={16} /> Este cliente pertenece a otro vendedor
             </p>
-            <p className="text-sm text-slate-600">{confirmAjeno.nombre}</p>
-            <div className="flex gap-2">
+            <div className="space-y-1">
+              <p className="text-sm font-bold text-slate-800">{confirmAjeno.nombre}</p>
+              <p className="text-xs text-slate-500">
+                Pertenece a: <span className="font-medium text-slate-700">{confirmAjeno.vendedor?.nombre || 'Otro vendedor'}</span>
+              </p>
+              <p className="text-xs text-amber-600 font-medium">
+                La comisión se le asignará a él.
+              </p>
+            </div>
+            <div className="flex gap-2 mt-2">
               <button onClick={() => setConfirmAjeno(null)} className="flex-1 py-2 rounded-lg text-sm bg-slate-100 hover:bg-slate-200">Cancelar</button>
               <button onClick={() => { setClienteId(confirmAjeno.id); setConfirmAjeno(null); setClienteOpen(false) }}
                 className="flex-1 py-2 rounded-lg text-sm bg-amber-500 text-white hover:bg-amber-600">Continuar</button>
@@ -1559,7 +1568,7 @@ function Step1Productos({
 // Step 2: Pago y Envío
 // ─────────────────────────────────────────────────────────────────────────────
 function Step2Pago({
-  formasPago, toggleForma, setMontoForma, totalParaPago,
+  formasPago, toggleForma, setMontoForma, updateForma, totalParaPago,
   referenciaPago, setReferenciaPago,
   transportistas, transportistaId, setTransportistaId,
   fleteUsd, setFleteUsd, corteUsd, setCorteUsd, notas, setNotas,
@@ -1691,9 +1700,16 @@ function Step2Pago({
                   <Clock size={12} className="text-amber-500 shrink-0" />
                   <span className="text-[11px] font-medium text-amber-700 whitespace-nowrap">Días de vencimiento (opcional):</span>
                   <input
-                    type="number" min="0" step="1"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     value={fp.diasVencimiento ?? ''}
-                    onChange={e => updateForma(fp.metodo, { diasVencimiento: e.target.value ? parseInt(e.target.value) : null })}
+                    onChange={e => {
+                      const val = e.target.value;
+                      if (val === '' || /^[0-9]+$/.test(val)) {
+                        updateForma(fp.metodo, { diasVencimiento: val ? parseInt(val, 10) : null });
+                      }
+                    }}
                     placeholder="Ej. 15"
                     className="w-16 px-2 py-1 rounded text-[11px] font-semibold border border-amber-200 bg-white focus:outline-none focus:ring-1 focus:ring-amber-400 text-slate-700 text-center"
                   />
@@ -1982,6 +1998,11 @@ function Step3Confirmar({
               <div className="flex items-center gap-2">
                 <CreditCard size={12} className="text-slate-400" />
                 <span className="text-slate-700">{fp.metodo}</span>
+                {fp.metodo === 'Cta por cobrar' && fp.diasVencimiento && (
+                  <span className="text-[10px] text-amber-600 font-bold bg-amber-50 px-1.5 py-0.5 rounded ml-1 border border-amber-200">
+                    {fp.diasVencimiento} días
+                  </span>
+                )}
               </div>
               <span className="font-semibold text-slate-800">{fmtUsd(Number(fp.monto) || 0)}</span>
             </div>

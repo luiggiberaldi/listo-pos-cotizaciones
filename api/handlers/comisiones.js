@@ -5,7 +5,7 @@ import { registrarAuditoria } from '../lib/audit.js'
 
 async function obtenerVendedoresConRol(env, headers, cuentaId, roles) {
   const res = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/usuarios?cuenta_id=eq.${cuentaId}&rol=in.(${roles.join(',')})&activo=eq.true&select=id`,
+    `${env.SUPABASE_URL}/rest/v1/usuarios?cuenta_id=eq.${cuentaId}&rol=in.(${roles.join(',')})&select=id`,
     { headers }
   );
   if (!res.ok) return '00000000-0000-0000-0000-000000000000';
@@ -69,9 +69,9 @@ export async function handleMarcarComisionPagada(request, env) {
   if (v.error) return v.error;
   const { operador, headers, ip } = v;
 
-  const ROLES_PAGO = ['supervisor', 'administracion', 'jefe'];
+  const ROLES_PAGO = ['administracion', 'jefe', 'desarrollador'];
   if (!ROLES_PAGO.includes(operador.rol)) {
-    return jsonError('Solo supervisor o administracion pueden registrar pagos de comisiones', 403, request);
+    return jsonError('Solo administración, jefe o desarrollador pueden registrar pagos de comisiones', 403, request);
   }
 
   let body;
@@ -132,9 +132,9 @@ export async function handleActualizarEstadoComision(request, env) {
   if (v.error) return v.error;
   const { operador, headers, ip } = v;
 
-  const ROLES_ESTADO = ['supervisor', 'administracion', 'jefe'];
+  const ROLES_ESTADO = ['administracion', 'jefe', 'desarrollador'];
   if (!ROLES_ESTADO.includes(operador.rol)) {
-    return jsonError('Solo supervisor o administracion pueden cambiar el estado de comisiones', 403, request);
+    return jsonError('Solo administración, jefe o desarrollador pueden cambiar el estado de comisiones', 403, request);
   }
 
   let body;
@@ -203,8 +203,7 @@ export async function handleGetComisiones(request, env) {
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  const vendedorIds = await obtenerVendedoresConRol(env, headers, user.id, ['vendedor', 'supervisor']);
-  let baseUrl = `${env.SUPABASE_URL}/rest/v1/comisiones?vendedorid=in.(${vendedorIds})&select=id,despachoid,vendedorid,cotizacionid,cuentaid,totalcomision,comisioncabilla,comisionotros,pctcabilla,pctotros,montopagado,estado,pagadaen,pagadapor,creadoen,actualizadoen&order=creadoen.desc`
+  let baseUrl = `${env.SUPABASE_URL}/rest/v1/comisiones?select=id,despachoid,vendedorid,cotizacionid,cuentaid,totalcomision,comisioncabilla,comisionotros,pctcabilla,pctotros,montopagado,estado,pagadaen,pagadapor,creadoen,actualizadoen&order=creadoen.desc`
   
   const userContext = { ...user, operator_rol: operador.rol, operator_id: operador.id };
   let query = aplicarFiltrosComisiones(baseUrl, url.searchParams, userContext)
@@ -245,7 +244,7 @@ export async function handleGetComisiones(request, env) {
       pagadaen: c.pagadaen,
       pagadapor: c.pagadapor,
       creadoen: c.creadoen,
-      vendedor: vendedores[c.vendedorid] || null,
+      vendedor: vendedores[c.vendedorid] || { id: null, nombre: 'Sin vendedor asignado', color: '#94a3b8' },
       despacho: despacho ? { id: despacho.id, numero: despacho.numero, totalusd: despacho.total_usd, tasa_snapshot: despacho.tasa_snapshot } : null,
       cotizacion: cotizaciones[c.cotizacionid] || null
     }
@@ -276,37 +275,47 @@ export async function handleGetComisionesResumen(request, env) {
       apikey: env.SUPABASE_SERVICE_KEY,
       Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
     };
-    const vendedorIds = await obtenerVendedoresConRol(env, headers, user.id, ['vendedor', 'supervisor']);
-    let query = `${env.SUPABASE_URL}/rest/v1/comisiones?vendedorid=in.(${vendedorIds})&select=totalcomision,montopagado,estado`
-    const userContext = { ...user, operator_rol: operador.rol, operator_id: operador.id }
-    query = aplicarFiltrosComisiones(query, url.searchParams, userContext)
+    const vendedorId = url.searchParams.get('vendedorId');
+    const estado = url.searchParams.get('estado');
+    const desde = url.searchParams.get('desde');
+    const hasta = url.searchParams.get('hasta');
 
-    const res = await fetch(query, {
+    const esSupervisor = ['supervisor', 'administracion', 'desarrollador', 'jefe'].includes(operador.rol);
+    const filtroVendedor = esSupervisor ? (vendedorId || null) : operador.id;
+
+    const rpcBody = {
+      p_cuenta_id: user.id,
+      p_vendedor_id: filtroVendedor,
+      p_estado: estado,
+      p_fecha_inicio: desde ? `${desde}T00:00:00-04:00` : null,
+      p_fecha_fin: hasta ? `${hasta}T23:59:59-04:00` : null
+    };
+
+    const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/obtener_resumen_comisiones_v2`, {
+      method: 'POST',
       headers: {
         apikey: env.SUPABASE_SERVICE_KEY,
-        Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`
-      }
-    })
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(rpcBody)
+    });
 
     if (!res.ok) {
-      const err = await res.text()
-      return jsonError(`Error al obtener resumen de comisiones: ${err}`, 500, request)
+      const err = await res.text();
+      return jsonError(`Error al obtener resumen de comisiones: ${err}`, 500, request);
     }
 
-    const rows = await res.json()
-    const totalAcumulado = rows.reduce((sum, c) => sum + Number(c.totalcomision || 0), 0)
-    const pendientes = rows.filter(c => ['pendiente', 'cta_cobrar'].includes(c.estado))
-    const pagadas = rows.filter(c => c.estado === 'pagada')
-    const pendientePago = pendientes.reduce((sum, c) => sum + Number(c.totalcomision || 0), 0)
-    const yaPagado = pagadas.reduce((sum, c) => sum + Number(c.montopagado || 0), 0)
+    const rows = await res.json();
+    const r = rows[0] || {};
 
     return json({
-      totalAcumulado,
-      pendientePago,
-      yaPagado,
-      numPendientes: pendientes.length,
-      numPagadas: pagadas.length,
-      total: rows.length,
+      totalAcumulado: Number(r.totalacumulado || 0),
+      pendientePago: Number(r.pendientepago || 0),
+      yaPagado: Number(r.yapagado || 0),
+      numPendientes: Number(r.numpendientes || 0),
+      numPagadas: Number(r.numpagadas || 0),
+      total: Number(r.total || 0),
     }, 200, request);
 
   } catch (e) {
