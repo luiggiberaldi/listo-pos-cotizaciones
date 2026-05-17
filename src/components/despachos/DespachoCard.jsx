@@ -430,23 +430,22 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       const cfg = getDespachoAction('reciclar', rol)
       return { key: 'reciclar', label: cfg.label || 'Reutilizar', icon: RefreshCcw, action: () => onReciclar(despacho) }
     }
-    return { key: 'ver', label: 'Ver detalle', icon: Eye, action: () => setShowDetalle(true) }
+    return null
   }
 
   const primaryAction = getPrimaryAction()
-  const pColors = PRIMARY_ACTION_COLORS[primaryAction.key] || PRIMARY_ACTION_COLORS.ver
+  const pColors = primaryAction ? PRIMARY_ACTION_COLORS[primaryAction.key] || PRIMARY_ACTION_COLORS.ver : {}
 
   // ── Acciones para Más (bottom sheet móvil + dropdown desktop) ──
   function getMoreActions() {
     const actions = []
-    actions.push({ label: 'Ver detalle', icon: Eye, onClick: () => setShowDetalle(true) })
     // if (canDescuento)
     //   actions.push({ label: `Descuento${descuentoTotal > 0 ? ' ✓' : ''}`, icon: Tag, onClick: () => setShowDescuento(true), textColor: 'text-amber-600' })
-    if (canDespachar && primaryAction.key !== 'despachar') {
+    if (canDespachar && primaryAction?.key !== 'despachar') {
       const cfg = getDespachoAction('despachar', rol)
       actions.push({ label: cfg.label || 'Aprobar despacho', icon: Truck, onClick: () => setAccionPendiente({ id: despacho.id, estado: 'despachada', actionConfig: cfg }), textColor: 'text-blue-600' })
     }
-    if (canEntregar && primaryAction.key !== 'entregar') {
+    if (canEntregar && primaryAction?.key !== 'entregar') {
       const cfg = getDespachoAction('entregar', rol)
       actions.push({ label: cfg?.label || 'Marcar entregada', icon: CheckCircle, onClick: () => setAccionPendiente({ id: despacho.id, estado: 'entregada', actionConfig: cfg || { label: 'Marcar entregada', confirm: '¿Confirmar entrega realizada?', color: 'emerald' } }), textColor: 'text-emerald-600' })
     }
@@ -601,17 +600,19 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       {/* ══════════ MOBILE ACTIONS (< md) ══════════ */}
       <div className="md:hidden mt-auto border-t border-slate-100 p-2.5">
         {/* Botón primario — full width */}
-        <button
-          onClick={primaryAction.action}
-          disabled={estadoCambiando}
-          className={`w-full flex items-center justify-center gap-2 min-h-[44px] rounded-xl text-sm font-bold transition-all active:scale-[0.98] disabled:opacity-50 ${pColors.bg} ${pColors.text} ${pColors.active}`}
-        >
-          {estadoCambiando
-            ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-            : <primaryAction.icon size={16} />
-          }
-          {primaryAction.label}
-        </button>
+        {primaryAction && (
+          <button
+            onClick={primaryAction.action}
+            disabled={estadoCambiando}
+            className={`w-full flex items-center justify-center gap-2 min-h-[44px] rounded-xl text-sm font-bold transition-all active:scale-[0.98] disabled:opacity-50 ${pColors.bg} ${pColors.text} ${pColors.active}`}
+          >
+            {estadoCambiando
+              ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+              : <primaryAction.icon size={16} />
+            }
+            {primaryAction.label}
+          </button>
+        )}
 
         {/* Fila de acciones: Imprimir + Descargar + Editar + Más */}
         <div className="flex items-center gap-0.5 mt-2 flex-wrap -mx-1 px-1">

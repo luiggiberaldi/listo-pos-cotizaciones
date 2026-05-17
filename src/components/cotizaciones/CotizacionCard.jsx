@@ -222,24 +222,23 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
       return { key: 'whatsapp', label: 'WhatsApp', icon: MessageCircle, action: handleWhatsApp, loading: waLoading }
     if (canReciclar)
       return { key: 'reciclar', label: getAction('reciclar', rol).label || 'Reutilizar', icon: RefreshCw, action: () => onReciclar(cotizacion) }
-    return { key: 'ver', label: 'Ver detalle', icon: Eye, action: () => setShowDetalle(true) }
+    return null
   }
 
   const primaryAction = getPrimaryAction()
-  const pColors = PRIMARY_ACTION_COLORS[primaryAction.key] || PRIMARY_ACTION_COLORS.ver
+  const pColors = primaryAction ? PRIMARY_ACTION_COLORS[primaryAction.key] || PRIMARY_ACTION_COLORS.ver : {}
   const moreActions = getMoreActions()
 
   // ── Acciones para Más (móvil bottom sheet + desktop dropdown) ──
   function getMoreActions() {
     const actions = []
-    actions.push({ label: 'Ver detalle', icon: Eye, onClick: () => setShowDetalle(true) })
-    if (canEdit && primaryAction.key !== 'editar')
+    if (canEdit && primaryAction?.key !== 'editar')
       actions.push({ label: getAction('editar', rol).label || 'Editar', icon: Pencil, onClick: () => onEditar(cotizacion), textColor: 'text-sky-600' })
-    if (canWhatsApp && primaryAction.key !== 'whatsapp')
+    if (canWhatsApp && primaryAction?.key !== 'whatsapp')
       actions.push({ label: 'WhatsApp', icon: MessageCircle, onClick: handleWhatsApp, disabled: waLoading, textColor: 'text-emerald-600' })
-    if (canDespachar && primaryAction.key !== 'despachar')
+    if (canDespachar && primaryAction?.key !== 'despachar')
       actions.push({ label: getAction('despachar', rol).label || 'Despachar', icon: Truck, onClick: () => onDespachar(cotizacion), textColor: 'text-indigo-600' })
-    if (canReciclar && primaryAction.key !== 'reciclar')
+    if (canReciclar && primaryAction?.key !== 'reciclar')
       actions.push({ label: getAction('reciclar', rol).label || 'Reutilizar', icon: RefreshCw, onClick: () => onReciclar(cotizacion), textColor: 'text-teal-600' })
     if (canAnular)
       actions.push({ label: getAction('anular', rol).label || 'Anular', icon: Ban, onClick: () => onAnular(cotizacion), danger: true })
@@ -382,7 +381,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
       {!esAdministracion && (
       <div className="md:hidden mt-auto border-t border-slate-100 p-2.5">
         {/* Botón primario — si es WhatsApp, incluye dropdown de moneda */}
-        {primaryAction.key === 'whatsapp' ? (
+        {primaryAction?.key === 'whatsapp' ? (
           <div className="relative">
             <button
               ref={whatsappBtnRef}
@@ -397,7 +396,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
               WhatsApp <ChevronDown size={11} />
             </button>
           </div>
-        ) : (
+        ) : primaryAction ? (
           <button
             onClick={primaryAction.action}
             disabled={primaryAction.loading}
@@ -409,7 +408,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
             }
             {primaryAction.label}
           </button>
-        )}
+        ) : null}
 
         {/* Fila: Imprimir + Descargar + Más */}
         <div className="flex items-center gap-1 mt-2">
