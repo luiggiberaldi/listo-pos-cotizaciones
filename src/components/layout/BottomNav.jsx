@@ -34,7 +34,7 @@ export default function BottomNav({ esSupervisor, esAdministracion = false, rol:
 
   const moreItemsFiltrados = MORE_ITEMS.filter(item => {
     if (esDesarrollador) return true
-    if (item.onlyRoles?.includes('desarrollador')) return false
+    if (item.onlyRoles?.length === 1 && item.onlyRoles[0] === 'desarrollador') return false
     if (esJefe) return true
     if (item.excludeRoles && item.excludeRoles.includes(rol)) return false
     if (item.onlyRoles && !item.onlyRoles.includes(rol)) return false
@@ -87,7 +87,7 @@ export default function BottomNav({ esSupervisor, esAdministracion = false, rol:
           {BOTTOM_ITEMS
             .filter(item => {
               if (esDesarrollador) return true
-              if (item.onlyRoles?.includes('desarrollador')) return false
+              if (item.onlyRoles?.length === 1 && item.onlyRoles[0] === 'desarrollador') return false
               if (esJefe) return true
               if (item.excludeRoles && item.excludeRoles.includes(rol)) return false
               if (item.onlyRoles && !item.onlyRoles.includes(rol)) return false

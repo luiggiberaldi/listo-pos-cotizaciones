@@ -483,7 +483,7 @@ export default function AppLayout() {
           {NAV_TODOS
             .filter(item => {
               if (perfil?.rol === 'desarrollador') return true;
-              if (item.onlyRoles?.includes('desarrollador')) return false;
+              if (item.onlyRoles?.length === 1 && item.onlyRoles[0] === 'desarrollador') return false;
               if (perfil?.rol === 'jefe') return true;
               return (!item.excludeRoles || !item.excludeRoles.includes(perfil?.rol)) && (!item.onlyRoles || item.onlyRoles.includes(perfil?.rol));
             })
@@ -503,7 +503,7 @@ export default function AppLayout() {
               {NAV_SUPERVISOR
                 .filter(item => {
                   if (perfil?.rol === 'desarrollador') return true;
-                  if (item.onlyRoles?.includes('desarrollador')) return false;
+                  if (item.onlyRoles?.length === 1 && item.onlyRoles[0] === 'desarrollador') return false;
                   if (perfil?.rol === 'jefe') return true;
                   return (!item.excludeRoles || !item.excludeRoles.includes(perfil?.rol)) && (!item.onlyRoles || item.onlyRoles.includes(perfil?.rol));
                 })
