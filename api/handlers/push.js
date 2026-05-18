@@ -96,10 +96,15 @@ export async function handlePush(request, env, url) {
       // Enviar solo a un usuario específico
       subsUrl += `&usuario_id=eq.${targetUserId}`;
     } else if (targetRole) {
-      // Enviar solo a usuarios con un rol específico (supervisor/vendedor)
-      // Primero obtener IDs de usuarios con ese rol
+      // Enviar solo a usuarios con roles específicos (ej: supervisor,administracion,jefe)
+      const isMultiRole = targetRole.includes(',') || Array.isArray(targetRole);
+      const roleFilter = isMultiRole
+        ? `in.(${Array.isArray(targetRole) ? targetRole.join(',') : targetRole})`
+        : `eq.${targetRole}`;
+
+      // Primero obtener IDs de usuarios con esos roles
       const usersRes = await fetch(
-        `${env.SUPABASE_URL}/rest/v1/usuarios?select=id&rol=eq.${targetRole}`,
+        `${env.SUPABASE_URL}/rest/v1/usuarios?select=id&rol=${roleFilter}`,
         {
           headers: {
             apikey: env.SUPABASE_SERVICE_KEY,

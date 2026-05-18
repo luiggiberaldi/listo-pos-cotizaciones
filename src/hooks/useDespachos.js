@@ -125,13 +125,21 @@ export function useCrearDespacho() {
 
       const despachoId = result.id
 
-      return { id: despachoId, numeroCotizacion, clienteNombre }
+      return {
+        id: despachoId,
+        numeroCotizacion: result.numeroCotizacion || numeroCotizacion,
+        clienteNombre: result.clienteNombre || clienteNombre
+      }
     },
-    onSuccess: async ({ id, numeroCotizacion, clienteNombre }) => {
+    onSuccess: async (data, variables) => {
+      const id = data?.id
       if (!id) return
 
-      const displayNum = numeroCotizacion ? (typeof numeroCotizacion === 'number' ? String(numeroCotizacion).padStart(5, '0') : String(numeroCotizacion).replace(/^(COT-|DES-)/i, '')) : '—'
-      const displayCliente = clienteNombre || 'cliente'
+      const numCot = data?.numeroCotizacion || variables?.numeroCotizacion
+      const cliNom = data?.clienteNombre || variables?.clienteNombre
+
+      const displayNum = numCot ? (typeof numCot === 'number' ? String(numCot).padStart(5, '0') : String(numCot).replace(/^(COT-|DES-)/i, '')) : '—'
+      const displayCliente = cliNom || 'cliente'
 
       qc.invalidateQueries({ queryKey: ['despachos'], exact: false })
       qc.invalidateQueries({ queryKey: ['inventario'], exact: false })
@@ -146,7 +154,7 @@ export function useCrearDespacho() {
         message: `Despacho para cotización #${displayNum} — ${displayCliente}`,
         tag: `despacho-${displayNum}`,
         url: '/despachos',
-        targetRole: 'supervisor',
+        targetRole: 'supervisor,administracion,jefe',
       })
     },
   })
@@ -212,7 +220,7 @@ export function useActualizarEstadoDespacho() {
           message: `Despacho #${num} — ${cliente} despachado por ${usuarioNombre}`,
           tag: `despacho-ruta-${num}`,
           url: '/despachos',
-          targetRole: 'vendedor',
+          targetRole: 'vendedor,logistica',
         })
       } else if (nuevoEstado === 'entregada') {
         notifyDespachoEntregado(num, cliente, usuarioNombre, rol)

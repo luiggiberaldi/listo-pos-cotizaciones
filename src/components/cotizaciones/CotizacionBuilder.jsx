@@ -1578,7 +1578,12 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                         if (insuficientes.length > 0) {
                           setShowModalDespachar(true)
                         } else {
-                          onDespachar({ id: cotizacionId, numero: numDisplay.replace('COT-', '').replace(/^0+/, ''), total_usd: totalUsd })
+                          onDespachar({
+                            id: cotizacionId,
+                            numero: numDisplay.replace('COT-', '').replace(/^0+/, ''),
+                            total_usd: totalUsd,
+                            cliente: { nombre: clienteSeleccionado?.nombre }
+                          })
                         }
                       }}
                         className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs rounded-xl transition-all active:scale-[0.98]">
@@ -1636,7 +1641,12 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
         stockMap={stockMap}
         onConfirmar={() => {
           setShowModalDespachar(false)
-          onDespachar?.({ id: cotizacionId, numero: numDisplay.replace('COT-', '').replace(/^0+/, ''), total_usd: totalUsd })
+          onDespachar?.({
+            id: cotizacionId,
+            numero: numDisplay.replace('COT-', '').replace(/^0+/, ''),
+            total_usd: totalUsd,
+            cliente: { nombre: clienteSeleccionado?.nombre }
+          })
         }}
         onCancelar={() => setShowModalDespachar(false)}
       />

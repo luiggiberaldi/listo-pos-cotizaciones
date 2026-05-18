@@ -195,6 +195,33 @@ export default function AppLayout() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // Escuchar navegación desde notificaciones nativas de Windows/PC
+  useEffect(() => {
+    const handleNavigate = (e) => {
+      const target = e.detail
+      if (target) navigate(target)
+    }
+    window.addEventListener('navigate-to', handleNavigate)
+    return () => window.removeEventListener('navigate-to', handleNavigate)
+  }, [navigate])
+
+  const [urgentNotif, setUrgentNotif] = useState(null)
+
+  // Escuchar notificaciones urgentes para modal overlay
+  useEffect(() => {
+    const handleNotif = (e) => {
+      const notif = e.detail
+      if (notif && ['despacho_creado', 'despacho_cancelado', 'stock_critico'].includes(notif.type)) {
+        const esPermitido = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe' || perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador')
+        if (esPermitido) {
+          setUrgentNotif(notif)
+        }
+      }
+    }
+    window.addEventListener('construacero-notification', handleNotif)
+    return () => window.removeEventListener('construacero-notification', handleNotif)
+  }, [perfil?.rol])
+
   const esDesarrollador = perfil?.rol === 'desarrollador'
   const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe') || esDesarrollador
   const esAdministracion = perfil?.rol === 'administracion'
@@ -576,6 +603,81 @@ export default function AppLayout() {
 
       {/* ── FAB Cotización Rápida — solo móvil, no para administracion ── */}
       {!esAdministracion && <QuickQuoteFAB />}
+
+      {/* ── Glassmorphic Urgent Notification Overlay Modal ── */}
+      {urgentNotif && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="relative overflow-hidden bg-slate-900/95 border border-slate-700/50 rounded-3xl p-6 max-w-md w-full shadow-[0_20px_50px_rgba(0,0,0,0.5)] animate-in zoom-in-95 duration-200">
+            
+            {/* Animated breathing pulse background glow */}
+            <div className="absolute -top-12 -left-12 w-32 h-32 bg-amber-500/10 rounded-full blur-3xl pointer-events-none animate-pulse" />
+            <div className="absolute -bottom-12 -right-12 w-32 h-32 bg-rose-500/10 rounded-full blur-3xl pointer-events-none animate-pulse" />
+            
+            <div className="flex flex-col items-center text-center">
+              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-4 animate-bounce ${
+                urgentNotif.type === 'despacho_cancelado' || urgentNotif.type === 'stock_critico'
+                  ? 'bg-rose-500/10 border border-rose-500/20'
+                  : 'bg-amber-500/10 border border-amber-500/20'
+              }`}>
+                {urgentNotif.type === 'despacho_cancelado' || urgentNotif.type === 'stock_critico' ? (
+                  <AlertCircle size={32} className="text-rose-400" />
+                ) : (
+                  <Truck size={32} className="text-amber-400" />
+                )}
+              </div>
+              
+              <span className={`text-[10px] font-black tracking-[0.2em] uppercase px-3 py-1 rounded-full mb-3 select-none ${
+                urgentNotif.type === 'despacho_cancelado' || urgentNotif.type === 'stock_critico'
+                  ? 'text-rose-400 bg-rose-500/10 border border-rose-500/20'
+                  : 'text-amber-400 bg-amber-500/10 border border-amber-500/20'
+              }`}>
+                {urgentNotif.type === 'despacho_cancelado' ? '🚨 DESPACHO CANCELADO 🚨' : urgentNotif.type === 'stock_critico' ? '⚠️ SIN STOCK CRÍTICO ⚠️' : '🚨 NUEVO DESPACHO URGENTE 🚨'}
+              </span>
+              
+              <h3 className="text-lg font-black text-white mb-2 leading-tight">
+                {urgentNotif.title}
+              </h3>
+              
+              <p className="text-sm text-slate-400 mb-6 leading-relaxed">
+                {urgentNotif.body}
+              </p>
+              
+              <div className="flex flex-col sm:flex-row gap-3 w-full">
+                <button
+                  onClick={() => {
+                    setUrgentNotif(null)
+                    // Navegar al módulo adecuado
+                    const navTarget = {
+                      'stock_critico': '/inventario?filtro=stock_bajo',
+                      'despacho_creado': '/despachos',
+                      'despacho_cancelado': '/despachos',
+                    }[urgentNotif.type] || '/despachos'
+                    navigate(navTarget)
+                  }}
+                  className="flex-1 px-5 py-3 rounded-xl text-sm font-black text-slate-900 transition-all select-none hover:scale-[1.02] active:scale-[0.98]"
+                  style={{
+                    background: urgentNotif.type === 'despacho_cancelado' || urgentNotif.type === 'stock_critico'
+                      ? 'linear-gradient(135deg, #f43f5e 0%, #be123c 100%)'
+                      : 'linear-gradient(135deg, #fbbf24 0%, #d97706 100%)',
+                    color: urgentNotif.type === 'despacho_cancelado' || urgentNotif.type === 'stock_critico' ? '#ffffff' : '#0f172a',
+                    boxShadow: urgentNotif.type === 'despacho_cancelado' || urgentNotif.type === 'stock_critico'
+                      ? '0 4px 15px rgba(244, 63, 94, 0.4)'
+                      : '0 4px 15px rgba(217, 119, 6, 0.4)',
+                  }}
+                >
+                  Verificar Ahora
+                </button>
+                <button
+                  onClick={() => setUrgentNotif(null)}
+                  className="flex-1 px-5 py-3 rounded-xl text-sm font-bold bg-slate-800/80 hover:bg-slate-800 border border-slate-700/50 text-slate-300 transition-all select-none hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  Entendido
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   )

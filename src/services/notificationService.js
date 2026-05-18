@@ -15,6 +15,7 @@ let _notifUrgentAudio = null
 // Tipos que usan sonido urgente (triple beep agudo)
 const URGENT_TYPES = new Set([
   'stock_critico',
+  'despacho_creado',
   'despacho_cancelado',
   'compromiso_alto',
 ])
@@ -80,27 +81,24 @@ const STATE_TYPES = new Set([
 
 const EVENT_DEBOUNCE_MS = 30_000 // 30 segundos
 
-// Qué rol ve cada tipo de notificación en la campanita local
-// null = ambos roles ven la notificación local
-// 'supervisor'/'vendedor' = solo ese rol la ve localmente
+// Qué roles ven cada tipo de notificación localmente en la campanita
+// Cada tipo mapea a una lista de roles permitidos para recibirla localmente y por realtime.
 const NOTIF_TARGET_ROLE = {
-  [NOTIF_TYPES.STOCK_BAJO]:                   'supervisor',
-  [NOTIF_TYPES.STOCK_CRITICO]:                'supervisor',   // solo admin/supervisor
-  [NOTIF_TYPES.STOCK_REABASTECIDO]:           'supervisor',
-  [NOTIF_TYPES.COTIZACION_ENVIADA]:           'supervisor',   // vendedor ya sabe que envió
-  [NOTIF_TYPES.COTIZACION_ACEPTADA]:          'vendedor',     // supervisor ya sabe que aceptó
-  [NOTIF_TYPES.COTIZACION_ACEPTADA_DESPACHO]: 'supervisor',   // lista para despacho
-  [NOTIF_TYPES.DESPACHO_CREADO]:              null,
-  [NOTIF_TYPES.DESPACHO_EN_RUTA]:             'vendedor',     // vendedor se entera
-  [NOTIF_TYPES.DESPACHO_ENTREGADO]:           'vendedor',     // vendedor se entera
-  [NOTIF_TYPES.DESPACHO_CANCELADO]:           null,           // ambos
-  [NOTIF_TYPES.DESPACHO_PENDIENTE_MUCHO]:     'supervisor',
-  [NOTIF_TYPES.COTIZACION_ANULADA]:           null,
-  [NOTIF_TYPES.COTIZACION_SIN_RESPUESTA]:     null,
-  [NOTIF_TYPES.COMPROMISO_ALTO]:              'supervisor',
-  [NOTIF_TYPES.CLIENTE_AJENO]:                'supervisor',
-  [NOTIF_TYPES.DESPACHO_CLIENTE_AJENO]:       'supervisor',
-  [NOTIF_TYPES.FACTURACION_CLIENTE_AJENO]:    'supervisor',
+  [NOTIF_TYPES.STOCK_BAJO]:                   ['supervisor', 'jefe', 'desarrollador'],
+  [NOTIF_TYPES.STOCK_CRITICO]:                ['supervisor', 'jefe', 'desarrollador', 'administracion'],
+  [NOTIF_TYPES.STOCK_REABASTECIDO]:           ['supervisor', 'jefe', 'desarrollador'],
+  [NOTIF_TYPES.COTIZACION_ACEPTADA]:          ['vendedor'],
+  [NOTIF_TYPES.COTIZACION_ACEPTADA_DESPACHO]: ['supervisor', 'jefe', 'desarrollador'],
+  [NOTIF_TYPES.DESPACHO_CREADO]:              ['supervisor', 'administracion', 'jefe', 'desarrollador'],
+  [NOTIF_TYPES.DESPACHO_EN_RUTA]:             ['logistica', 'vendedor'],
+  [NOTIF_TYPES.DESPACHO_ENTREGADO]:           ['vendedor', 'supervisor', 'jefe', 'desarrollador'],
+  [NOTIF_TYPES.DESPACHO_CANCELADO]:           ['supervisor', 'administracion', 'jefe', 'desarrollador'],
+  [NOTIF_TYPES.DESPACHO_PENDIENTE_MUCHO]:     ['supervisor', 'jefe', 'desarrollador'],
+  [NOTIF_TYPES.COTIZACION_ANULADA]:           ['vendedor', 'supervisor', 'jefe', 'desarrollador'],
+  [NOTIF_TYPES.COMPROMISO_ALTO]:              ['supervisor', 'jefe', 'desarrollador'],
+  [NOTIF_TYPES.CLIENTE_AJENO]:                ['supervisor', 'jefe', 'desarrollador'],
+  [NOTIF_TYPES.DESPACHO_CLIENTE_AJENO]:       ['supervisor', 'jefe', 'desarrollador', 'administracion'],
+  [NOTIF_TYPES.FACTURACION_CLIENTE_AJENO]:    ['supervisor', 'jefe', 'desarrollador', 'administracion'],
 }
 
 function readNotifs() {
@@ -125,19 +123,36 @@ function saveNotifs(notifs) {
  * @param {string} title
  * @param {string|null} body
  * @param {object|null} meta
- * @param {string|null} currentRole - Rol del usuario actual ('supervisor'|'vendedor')
+ * @param {string|null} currentRole - Rol del usuario actual ('supervisor'|'vendedor'|'administracion'|'logistica')
  */
 export function createNotification(type, title, body, meta = null, currentRole = null) {
-  const targetRole = NOTIF_TARGET_ROLE[type]
-
-  // Notificación para un rol específico diferente al actual → solo broadcast
-  if (targetRole && currentRole && targetRole !== currentRole) {
-    _broadcastNotification({ type, title, body, meta, targetRole })
+  // Desactivar notificaciones redundantes de cotización
+  if (type === NOTIF_TYPES.COTIZACION_ENVIADA || type === NOTIF_TYPES.COTIZACION_SIN_RESPUESTA) {
     return null
   }
 
-  // Notificación para ambos roles (null) → crear local + broadcast al otro rol
-  if (!targetRole && currentRole) {
+  const targetRoles = NOTIF_TARGET_ROLE[type]
+
+  if (targetRoles) {
+    // Verificar si el rol actual está incluido en el target
+    const hasRole = currentRole && targetRoles.includes(currentRole)
+
+    if (currentRole) {
+      // Re-transmitir realtime broadcast a todos los otros roles target
+      const otherRoles = targetRoles.filter(r => r !== currentRole)
+      if (otherRoles.length > 0) {
+        _broadcastNotification({ type, title, body, meta, targetRole: otherRoles.join(',') })
+      }
+    }
+
+    if (hasRole) {
+      return _insertLocalNotification(type, title, body, meta)
+    }
+    return null
+  }
+
+  // Comportamiento por defecto
+  if (currentRole) {
     const otherRole = currentRole === 'supervisor' ? 'vendedor' : 'supervisor'
     _broadcastNotification({ type, title, body, meta, targetRole: otherRole })
   }
@@ -203,8 +218,11 @@ export function startRealtimeNotifications(currentRole) {
     .channel('notificaciones')
     .on('broadcast', { event: 'new_notification' }, ({ payload }) => {
       if (!payload) return
-      // Solo crear localmente si la notificación es para mi rol (o para todos)
-      if (payload.targetRole && payload.targetRole !== currentRole) return
+      // targetRole puede contener múltiples roles separados por comas
+      if (payload.targetRole) {
+        const roles = payload.targetRole.split(',')
+        if (!roles.includes(currentRole)) return
+      }
       _insertLocalNotification(payload.type, payload.title, payload.body, payload.meta)
     })
     .subscribe()

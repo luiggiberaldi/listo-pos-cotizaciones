@@ -113,6 +113,18 @@ export async function handleCrearDespacho(request, env) {
         body: JSON.stringify(despItems),
       });
     }
+    // Fetch cliente name if needed
+    let clienteNombre = 'cliente';
+    if (cot.cliente_id) {
+      const cliRes = await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${cot.cliente_id}&select=nombre`, { headers });
+      if (cliRes.ok) {
+        const cliData = await cliRes.json();
+        if (cliData && cliData.length > 0) {
+          clienteNombre = cliData[0].nombre;
+        }
+      }
+    }
+
     // Auditoría (fire-and-forget)
     registrarAuditoria(env, headers, {
       usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: 'supervisor',
@@ -121,7 +133,12 @@ export async function handleCrearDespacho(request, env) {
       meta: { cotizacion_id: cotizacionId, total_usd: cot.total_usd }, ip,
     }).catch(() => {});
 
-    return json({ id: despacho.id, numero: despacho.numero }, 200, request);
+    return json({
+      id: despacho.id,
+      numero: despacho.numero,
+      numeroCotizacion: cot.numero,
+      clienteNombre: clienteNombre
+    }, 200, request);
   } catch (e) {
     return jsonError(e.message || 'Error al crear despacho', 500, request);
   }
