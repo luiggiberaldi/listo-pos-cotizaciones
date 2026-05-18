@@ -12,7 +12,7 @@ import { STOCK_COMPROMETIDO_KEY } from './useStockComprometido'
 import { CXC_KEY } from './useCuentasCobrar'
 import { showToast } from '../components/ui/Toast'
 import { sendPushNotification } from './usePushNotifications'
-import { notifyClienteAjeno, notifyDespachoClienteAjeno } from '../services/notificationService'
+import { notifyClienteAjeno, notifyDespachoClienteAjeno, notifyDespachoCreado } from '../services/notificationService'
 import { enqueue } from '../lib/mutationQueue'
 
 export function useVentaRapida() {
@@ -112,12 +112,14 @@ export function useVentaRapida() {
       qc.invalidateQueries({ queryKey: STOCK_COMPROMETIDO_KEY })
       qc.invalidateQueries({ queryKey: CXC_KEY })
       showToast(`Venta rápida #${numero ?? '—'} creada`, 'success')
+      const displayNum = String(numero || '').padStart(5, '0')
+      notifyDespachoCreado(displayNum, clienteNombre || 'cliente', perfil?.nombre || 'vendedor', rol)
       sendPushNotification({
         title: 'Venta Rápida Creada',
         message: `Despacho #${numero ?? '—'} — ${clienteNombre ?? 'cliente'}`,
         tag: `venta-rapida-${numero}`,
         url: '/despachos',
-        targetRole: 'supervisor',
+        targetRole: 'supervisor,administracion,jefe',
       })
       if (esClienteAjeno) {
         const vendedorNombre = perfil?.nombre || 'vendedor'

@@ -142,7 +142,16 @@ self.addEventListener('push', (event) => {
   }
 
   event.waitUntil(
-    self.registration.showNotification(payload.title || 'Construacero', options)
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // Si la app ya está abierta y enfocada (en primer plano), silenciar la push
+      // para evitar notificaciones duplicadas (el frontend en vivo ya la procesa).
+      const hasFocusedClient = clientList.some(client => client.focused)
+      if (hasFocusedClient) {
+        console.log('[SW] Push ignorada porque la app está activa en primer plano.')
+        return
+      }
+      return self.registration.showNotification(payload.title || 'Construacero', options)
+    })
   )
 })
 

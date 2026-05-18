@@ -24,6 +24,7 @@ export function usePushNotifications() {
 
   // Convertir base64url a Uint8Array (necesario para applicationServerKey)
   function urlBase64ToUint8Array(base64String) {
+    if (!base64String) return new Uint8Array()
     const padding = '='.repeat((4 - base64String.length % 4) % 4)
     const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
     const rawData = atob(base64)
@@ -57,13 +58,20 @@ export function usePushNotifications() {
       const reg = await navigator.serviceWorker.register(SW_PATH, { scope: '/' })
       await navigator.serviceWorker.ready
 
-      // Obtener clave VAPID
-      const vapidKey = await getVapidKey()
+      // Obtener clave VAPID con fallback robusto
+      let vapidKey = null
+      try {
+        vapidKey = await getVapidKey()
+      } catch (e) {
+        console.warn('No se pudo cargar VAPID del backend, usando fallback:', e)
+      }
+
+      const keyToUse = vapidKey || 'BBtDi5JNFg-JiIwE3ImrimyyiwcRY0-H8K7Q8PnvnOOHTAGBU5gpnU6SXjHN6MVg6tai7cmiGhpjHOsgFMWs5mc'
 
       // Crear suscripción push
       const subscription = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+        applicationServerKey: urlBase64ToUint8Array(keyToUse),
       })
 
       // Obtener token de sesión para autenticar la petición

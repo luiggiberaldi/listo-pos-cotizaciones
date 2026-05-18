@@ -47,6 +47,9 @@ export async function sendWebPush(endpoint, p256dhBase64, authBase64, payload, e
   const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce }, encryptionKey, padded);
 
   // JWT VAPID
+  if (!env.VAPID_PRIVATE_KEY || !env.VAPID_PUBLIC_KEY) {
+    throw new Error('VAPID keys are not configured in the Cloudflare production environment variables.');
+  }
   const vapidJwt = await createVapidJwt(endpoint, env.VAPID_PRIVATE_KEY, env.VAPID_PUBLIC_KEY);
 
   // Hacer la petición al push service

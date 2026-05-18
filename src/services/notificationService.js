@@ -16,7 +16,6 @@ let _notifUrgentAudio = null
 const URGENT_TYPES = new Set([
   'stock_critico',
   'despacho_creado',
-  'despacho_cancelado',
   'compromiso_alto',
 ])
 

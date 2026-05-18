@@ -211,7 +211,7 @@ export default function AppLayout() {
   useEffect(() => {
     const handleNotif = (e) => {
       const notif = e.detail
-      if (notif && ['despacho_creado', 'despacho_cancelado', 'stock_critico'].includes(notif.type)) {
+      if (notif && ['despacho_creado', 'stock_critico'].includes(notif.type)) {
         const esPermitido = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe' || perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador')
         if (esPermitido) {
           setUrgentNotif(notif)
