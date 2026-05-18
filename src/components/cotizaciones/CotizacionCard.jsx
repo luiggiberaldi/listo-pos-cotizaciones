@@ -1,7 +1,7 @@
 // src/components/cotizaciones/CotizacionCard.jsx
 import { useState, useRef, memo, Fragment } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FileText, User, Calendar, Pencil, Ban, XCircle, FileDown, MessageCircle, Loader2, Truck, ChevronDown, DollarSign, RefreshCw, Eye, Clock, PackageCheck, MoreHorizontal, AlertTriangle, Printer, Check, Download } from 'lucide-react'
+import { FileText, User, Calendar, Pencil, Ban, XCircle, FileDown, MessageCircle, Loader2, Truck, ChevronDown, DollarSign, RefreshCw, Eye, Clock, PackageCheck, MoreHorizontal, MoreVertical, AlertTriangle, Printer, Check, Download } from 'lucide-react'
 import EstadoBadge from './EstadoBadge'
 import MobileActionSheet from './MobileActionSheet'
 import useAuthStore from '../../store/useAuthStore'

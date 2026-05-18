@@ -323,7 +323,6 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                   const fpData = formasPago.find(f => f.metodo === fp)
                   if (fpData) {
                     const restante = totalConFlete - formasPago.reduce((s, f) => s + (Number(f.monto) || 0), 0)
-                    const mostrarResto = formasPago.length > 1 && (!fpData.monto || Number(fpData.monto) === 0) && restante > 0.01
                     return (
                       <div key={fp} className="flex flex-col gap-1">
                         <div className="flex items-center gap-0 rounded-lg border border-indigo-300 bg-indigo-50 overflow-hidden">
@@ -339,12 +338,12 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                               placeholder="0"
                               className="w-16 pl-4 pr-1 py-1.5 text-xs font-semibold text-indigo-800 bg-transparent focus:outline-none focus:bg-white/60"
                               disabled={cargando} />
-                            {mostrarResto && (
+                            {restante > 0.01 && (
                               <button type="button"
-                                onClick={() => setMontoForma(fp, Number(restante.toFixed(2)))}
+                                onClick={() => setMontoForma(fp, Number(((Number(fpData.monto) || 0) + restante).toFixed(2)))}
                                 className="mr-1 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded transition-colors shrink-0"
-                                title={`Asignar $${restante.toFixed(2)} restante`}>
-                                Resto
+                                title={`Completar con $${restante.toFixed(2)} restante`}>
+                                Restante
                               </button>
                             )}
                           </div>

@@ -1669,7 +1669,6 @@ function Step2Pago({
         <div className="space-y-2 mb-3">
           {formasPago.map(fp => {
             const restante = totalConFlete - formasPago.reduce((s, f) => s + (Number(f.monto) || 0), 0)
-            const mostrarResto = formasPago.length > 1 && (!fp.monto || Number(fp.monto) === 0) && restante > 0.01
             return (
             <div key={fp.metodo} className="space-y-2">
               <div className="flex items-center gap-2 bg-sky-50 border border-sky-300 rounded-xl px-3 py-2">
@@ -1684,12 +1683,12 @@ function Step2Pago({
                     placeholder="0.00"
                     className="w-full pl-6 pr-2 py-1.5 rounded-lg text-sm font-semibold border border-sky-200 bg-white focus:outline-none focus:ring-2 focus:ring-sky-300 text-slate-800"
                   />
-                  {mostrarResto && (
+                  {restante > 0.01 && (
                     <button type="button"
-                      onClick={() => setMontoForma(fp.metodo, Number(restante.toFixed(2)))}
-                      className="ml-1 px-2 py-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition-colors shrink-0"
-                      title={`Asignar $${restante.toFixed(2)} restante`}>
-                      Resto
+                      onClick={() => setMontoForma(fp.metodo, Number(((Number(fp.monto) || 0) + restante).toFixed(2)))}
+                      className="ml-1.5 px-2 py-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition-colors shrink-0"
+                      title={`Completar con $${restante.toFixed(2)} restante`}>
+                      Restante
                     </button>
                   )}
                 </div>

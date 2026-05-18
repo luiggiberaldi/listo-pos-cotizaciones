@@ -16,12 +16,12 @@ const ESTILOS = {
 
 const ESTADOS_DESPACHO = ['pendiente', 'despachada', 'entregada', 'anulada']
 
-export default function EstadoBadge({ estado, rol }) {
+export default function EstadoBadge({ estado, rol, className = '' }) {
   const esDespacho = ESTADOS_DESPACHO.includes(estado)
   const label = esDespacho && rol ? getDespachoLabel(estado, rol) : (esDespacho ? getDespachoLabel(estado) : getCotizacionLabel(estado))
 
   return (
-    <span className={`inline-flex items-center text-xs font-semibold px-2.5 py-0.5 rounded-full border ${ESTILOS[estado] ?? ESTILOS.borrador}`}>
+    <span className={`inline-flex items-center shrink-0 text-xs font-semibold px-2.5 py-0.5 rounded-full border ${ESTILOS[estado] ?? ESTILOS.borrador} ${className}`}>
       {label}
     </span>
   )

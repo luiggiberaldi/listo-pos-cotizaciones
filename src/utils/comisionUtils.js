@@ -7,13 +7,18 @@ import { round2 } from './dinero'
  *
  * @param {Array}  items  - [{categoria, total_linea_usd}]
  * @param {Object} config - Objeto de configuracion_negocio
-/**
- * Devuelve el porcentaje de comisión para un solo ítem.
  */
 export function getComisionPctForItem(item, config = {}) {
   const pctCabilla = Number(config.comision_pct_cabilla || 0)
   const pctOtros   = Number(config.comision_pct_otros   || 0)
   const catCabilla = (config.comision_categoria_cabilla || 'Cabilla').toLowerCase().trim()
+
+  const nombre = (item.nombreSnap || item.nombre_snap || item.nombre || '').toLowerCase()
+  const origen = item.origen || item.producto?.origen || 'inventario'
+  
+  if (origen === 'externo' && nombre.includes('corte')) {
+    return 0
+  }
 
   let extras = []
   try {
@@ -24,7 +29,6 @@ export function getComisionPctForItem(item, config = {}) {
   } catch { extras = [] }
 
   let cat = (item.categoria || item.producto?.categoria || 'otros').toLowerCase().trim()
-  const nombre = (item.nombreSnap || item.nombre_snap || item.nombre || '').toLowerCase()
   
   if ((cat === 'otros' || !cat) && nombre.includes(catCabilla)) {
     cat = catCabilla
@@ -74,8 +78,13 @@ export function calcComisionEstimada(items = [], config = {}) {
     const monto = Number(item.total_linea_usd) || Number(item.total) || (Number(item.cantidad) * Number(item.precioUnitUsd || item.precio_unit_usd)) || 0
     if (monto <= 0) continue
 
+    const origen = item.origen || item.producto?.origen || 'inventario'
+
     let pct
-    if (cat === catCabilla) {
+    if (origen === 'externo' && nombre.includes('corte')) {
+      pct = 0
+      cat = 'externo_corte'
+    } else if (cat === catCabilla) {
       pct = pctCabilla
     } else {
       const extra = extras.find(e => (e.cat || '').toLowerCase().trim() === cat)
@@ -93,19 +102,21 @@ export function calcComisionEstimada(items = [], config = {}) {
   }
 
   // Redondear al final (no por ítem → evita error de centavo acumulado)
-  const detalle = Object.values(acum).map(d => ({
-    ...d,
-    monto:    round2(d.monto),
-    comision: round2(d.comision),
-  }))
+  const detalle = Object.values(acum)
+    .filter(d => d.pct > 0)
+    .map(d => ({
+      ...d,
+      monto:    round2(d.monto),
+      comision: round2(d.comision),
+    }))
 
   const totalComision = round2(detalle.reduce((s, d) => s + d.comision, 0))
   const pctsUnicos    = [...new Set(detalle.map(d => d.pct))]
 
   return {
     monto:  totalComision,
-    pct:    pctsUnicos.length === 1 ? pctsUnicos[0] : null,
+    pct:    pctsUnicos.length === 1 ? pctsUnicos[0] : (pctsUnicos.length === 0 ? 0 : null),
     mixto:  pctsUnicos.length > 1,
-    detalle, // máx N líneas donde N = número de categorías distintas
+    detalle, // máx N líneas donde N = número de categorías distintas con comisión > 0
   }
 }

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, memo, Fragment } from 'react'
-import { FileText, Calendar, Truck, CheckCircle, Ban, RefreshCcw, RefreshCw, Download, Loader2, Eye, MoreHorizontal, ChevronDown, Printer, Tag, Pencil, RotateCcw, AlertTriangle, Clock, CreditCard, DollarSign, Check, PackageCheck } from 'lucide-react'
+import { FileText, Calendar, Truck, CheckCircle, Ban, RefreshCcw, RefreshCw, Download, Loader2, Eye, MoreHorizontal, MoreVertical, ChevronDown, Printer, Tag, Pencil, RotateCcw, AlertTriangle, Clock, CreditCard, DollarSign, Check, PackageCheck } from 'lucide-react'
 import EstadoBadge from '../cotizaciones/EstadoBadge'
 import MobileActionSheet from '../cotizaciones/MobileActionSheet'
 import ConfirmModal from '../ui/ConfirmModal'
@@ -39,9 +39,11 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const [showPrintMenu, setShowPrintMenu] = useState(false)
   const [showDownloadMenu, setShowDownloadMenu] = useState(false)
   const [showMoreMenu, setShowMoreMenu] = useState(false)
+  const [showAdminMenu, setShowAdminMenu] = useState(false)
   const [accionPendiente, setAccionPendiente] = useState(null) // { id, estado, actionConfig }
   const printBtnRef = useRef(null)
   const downloadBtnRef = useRef(null)
+  const adminBtnRef = useRef(null)
   const [monedaPdf, setMonedaPdf] = useState(() => localStorage.getItem('construacero_moneda_pdf') || '$')
   const { tasaBcv, tasaUsdt } = useTasaCambio()
 
@@ -155,9 +157,9 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const canDespachar = (esAdministracion || esDesarrollador) && despacho.estado === 'pendiente'
   const canEntregar = (perfil?.rol === 'logistica' || esDesarrollador) && despacho.estado === 'despachada'
   const esVendedorPropio = perfil?.id === despacho.vendedor_id
-  const canAnular = ((esAdministracion || esDesarrollador || esSupervisor) && (despacho.estado === 'pendiente' || despacho.estado === 'despachada'))
-    || (esVendedorPropio && despacho.estado === 'pendiente')
-  const canDevolver = (esAdministracion || esSupervisor || esDesarrollador || perfil?.rol === 'logistica') && despacho.estado === 'despachada'
+  const canAnular = (esDesarrollador && (despacho.estado === 'pendiente' || despacho.estado === 'despachada'))
+    || ((esAdministracion || esSupervisor || esVendedorPropio) && despacho.estado === 'pendiente')
+  const canDevolver = (perfil?.rol === 'jefe' || esDesarrollador || perfil?.rol === 'logistica') && despacho.estado === 'despachada'
   const canReciclar = ((esSupervisor || esDesarrollador) && despacho.estado === 'anulada' && onReciclar)
     || (rol === 'vendedor' && despacho.estado === 'anulada' && esVendedorPropio && onReciclar)
   const canDescuento = (esAdministracion || esDesarrollador) && ['pendiente', 'despachada'].includes(despacho.estado)
@@ -453,18 +455,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       const cfg = getDespachoAction('devolver', rol)
       actions.push({ label: cfg.label || 'No entregado', icon: RotateCcw, onClick: () => setAccionPendiente({ id: despacho.id, estado: 'pendiente', isDevolver: true, actionConfig: cfg }), textColor: 'text-amber-600' })
     }
-    if (canReciclar && primaryAction.key !== 'reciclar')
+    if (canReciclar && primaryAction?.key !== 'reciclar')
       actions.push({ label: getDespachoAction('reciclar', rol).label || 'Reutilizar', icon: RefreshCcw, onClick: () => onReciclar(despacho), textColor: 'text-teal-600' })
-    if (canAnular) {
-      const cfg = getDespachoAction('anular', rol)
-      actions.push({ label: cfg.label || 'Anular', icon: Ban, onClick: () => {
-        if (despacho.estado === 'despachada') {
-          setAccionPendiente({ id: despacho.id, estado: 'anulada', isAnular: true, actionConfig: cfg })
-        } else {
-          onAnular(despacho)
-        }
-      }, danger: true })
-    }
     return actions
   }
 
@@ -477,7 +469,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     <div className="group bg-white rounded-2xl border border-slate-200 hover:shadow-lg transition-all duration-200 flex flex-col">
 
       {/* ── Header strip con color del vendedor ── */}
-      <div className="relative shrink-0 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-3 py-2 rounded-t-2xl overflow-hidden"
+      <div className="relative shrink-0 flex flex-col gap-1.5 px-3 py-2 rounded-t-2xl overflow-hidden"
         title={despacho.vendedor?.nombre ? `Vendedor: ${despacho.vendedor.nombre}` : undefined}
         style={{ background: `linear-gradient(135deg, ${vendedorColor}ee 0%, ${vendedorColor}99 100%)` }}>
         <div className="absolute inset-0 opacity-10"
@@ -485,10 +477,26 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)',
             backgroundSize: '12px 12px',
           }} />
-        <div className="relative z-10">
-          <p className="font-black text-white font-mono leading-tight drop-shadow text-base">{numDisplay}</p>
+        
+        {/* Fila 1: ID y Kebab */}
+        <div className="relative z-10 flex items-center justify-between">
+          <p className="font-black text-white font-mono leading-none drop-shadow text-sm sm:text-base">{numDisplay}</p>
+          {/* Kebab ⋮ — acciones secundarias */}
+          {(moreActions.length > 0 || canAnular) && (
+            <button
+              ref={adminBtnRef}
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setShowAdminMenu(v => !v) }}
+              className="flex items-center justify-center w-7 h-7 rounded-full bg-white/25 hover:bg-white/40 text-white shadow-sm border border-white/10 transition-all active:scale-95 hover:shadow shrink-0"
+              title="Más opciones"
+            >
+              <MoreVertical size={16} className="drop-shadow-sm font-bold" />
+            </button>
+          )}
         </div>
-        <div className="relative z-10 shrink-0">
+
+        {/* Fila 2: EstadoBadge */}
+        <div className="relative z-10 flex items-center">
           <EstadoBadge estado={despacho.estado} rol={rol} />
         </div>
       </div>
@@ -1006,6 +1014,55 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         onClose={() => setShowEdit(false)}
         despacho={despacho}
       />
+
+      {/* ── Menú kebab ⋮ — nivel raíz, fixed para escapar overflow:hidden ── */}
+      {showAdminMenu && (moreActions.length > 0 || canAnular) && (() => {
+        const r = adminBtnRef.current?.getBoundingClientRect()
+        const style = r
+          ? { position: 'fixed', right: window.innerWidth - r.right, top: r.bottom + 6, zIndex: 9999 }
+          : { position: 'fixed', right: 16, top: 60, zIndex: 9999 }
+        return <>
+          <div className="fixed inset-0 z-[9998]" onClick={() => setShowAdminMenu(false)} />
+          <div style={style} className="w-52 bg-white rounded-xl shadow-xl border border-slate-200 py-1">
+            {moreActions.map((act, i) => (
+              <Fragment key={i}>
+                {act.danger && <div className="border-t border-slate-100 my-1" />}
+                <button
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={() => { act.onClick(); setShowAdminMenu(false) }}
+                  className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm text-left ${
+                    act.danger ? 'text-red-500 hover:bg-red-50' :
+                    act.textColor ? `${act.textColor} hover:bg-slate-50` :
+                    'text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  {act.icon && <act.icon size={14} />} {act.label}
+                </button>
+              </Fragment>
+            ))}
+            {canAnular && (
+              <>
+                {moreActions.length > 0 && <div className="border-t border-slate-100 my-1" />}
+                <button
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={() => {
+                    setShowAdminMenu(false)
+                    if (despacho.estado === 'despachada') {
+                      const cfg = getDespachoAction('anular', rol)
+                      setAccionPendiente({ id: despacho.id, estado: 'anulada', isAnular: true, actionConfig: cfg })
+                    } else {
+                      onAnular(despacho)
+                    }
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-red-500 hover:bg-red-50 text-left"
+                >
+                  <Ban size={14} /> Anular despacho
+                </button>
+              </>
+            )}
+          </div>
+        </>
+      })()}
     </div>
   )
 })
