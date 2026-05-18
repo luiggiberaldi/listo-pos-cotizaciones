@@ -118,7 +118,7 @@ export default function ClienteSelector({ clientes, clienteId, onSelect }) {
                 type="text"
                 value={busqueda}
                 onChange={e => setBusqueda(e.target.value)}
-                placeholder="Buscar por nombre, RIF o teléfono..."
+                placeholder="Buscar por nombre, RIF, código o teléfono..."
                 className="w-full pl-8 pr-3 py-2 text-sm border border-slate-100 rounded-lg bg-slate-50 focus:outline-none focus:ring-1 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400"
                 autoFocus
               />
@@ -152,7 +152,7 @@ export default function ClienteSelector({ clientes, clienteId, onSelect }) {
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-slate-800 text-sm truncate">{c.nombre}</p>
                     <p className="text-xs text-slate-400 truncate">
-                      {[c.rif_cedula, c.telefono].filter(Boolean).join(' · ') || 'Sin datos adicionales'}
+                      {[c.codigo_cliente, c.rif_cedula, c.telefono].filter(Boolean).join(' · ') || 'Sin datos adicionales'}
                     </p>
                   </div>
                   {esAjeno && c.vendedor && (

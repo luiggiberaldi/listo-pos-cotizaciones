@@ -106,7 +106,7 @@ export default function ClienteFacturaBuscador({ clientes = [], clienteId, onSel
                 type="text"
                 value={busqueda}
                 onChange={e => setBusqueda(e.target.value)}
-                placeholder="Buscar por nombre, RIF, teléfono..."
+                placeholder="Buscar por nombre, RIF, código o teléfono..."
                 className="w-full pl-9 pr-9 py-2.5 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300 placeholder:text-slate-400"
               />
               {busqueda && (
@@ -138,7 +138,7 @@ export default function ClienteFacturaBuscador({ clientes = [], clienteId, onSel
                       <div className="flex-1 min-w-0">
                         <p className={`font-medium text-sm truncate ${isSelected ? 'text-violet-700' : 'text-slate-700'}`}>{c.nombre}</p>
                         <p className="text-xs text-slate-400 truncate">
-                          {[c.rif_cedula, c.telefono].filter(Boolean).join(' · ')}
+                          {[c.codigo_cliente, c.rif_cedula, c.telefono].filter(Boolean).join(' · ')}
                         </p>
                       </div>
                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${TIPO_BADGE[c.tipo_cliente]?.cls ?? TIPO_BADGE.natural.cls}`}>

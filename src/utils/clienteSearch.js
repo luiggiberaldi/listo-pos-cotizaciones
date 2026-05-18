@@ -24,6 +24,7 @@ function calcularScore(cliente, termino) {
   const campos = [
     { valor: normalizar(cliente.nombre),     peso: 10 },
     { valor: normalizar(cliente.rif_cedula).replace(/\s+/g, ''), peso: 8  },
+    { valor: normalizar(cliente.codigo_cliente).replace(/\s+/g, ''), peso: 8  },
     { valor: normalizar(cliente.telefono).replace(/\s+/g, ''),   peso: 6  },
     { valor: normalizar(cliente.email),      peso: 4  },
     { valor: normalizar(cliente.ciudad),     peso: 3  },

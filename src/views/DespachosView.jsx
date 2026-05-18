@@ -177,6 +177,7 @@ export default function DespachosView() {
         const clienteNombre = (d.cliente?.nombre || '').toLowerCase()
         const clienteRif = (d.cliente?.rif_cedula || '').toLowerCase()
         const clienteRifClean = clienteRif.replace(/[\.\-\s]/g, '')
+        const clienteCodigo = (d.cliente?.codigo_cliente || '').toLowerCase()
         const totalStr = String(d.cotizacion?.total_usd || 0)
         
         return numCotStr.includes(q) ||
@@ -185,6 +186,7 @@ export default function DespachosView() {
                String(d.cotizacion?.numero || '').includes(q) ||
                clienteNombre.includes(q) || 
                clienteRif.includes(q) ||
+               clienteCodigo.includes(q) ||
                (qClean.length > 2 && clienteRifClean.includes(qClean)) ||
                totalStr.includes(q)
       })
@@ -262,7 +264,7 @@ export default function DespachosView() {
         <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
         <input 
           type="text"
-          placeholder="Buscar por cliente, cédula/RIF, Nº despacho/cotización o monto..."
+          placeholder="Buscar por cliente, cédula/RIF, código, Nº despacho/cotización o monto..."
           value={busquedaGlobal}
           onChange={e => setBusquedaGlobal(e.target.value)}
           className="w-full pl-11 pr-10 py-3 rounded-2xl border-2 border-slate-200 bg-white text-sm focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all shadow-sm"

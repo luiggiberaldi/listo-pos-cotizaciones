@@ -559,12 +559,14 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
         const clienteNombre = (c.cliente?.nombre || '').toLowerCase()
         const clienteRif = (c.cliente?.rif_cedula || '').toLowerCase()
         const clienteRifClean = clienteRif.replace(/[\.\-\s]/g, '')
+        const clienteCodigo = (c.cliente?.codigo_cliente || '').toLowerCase()
         const totalStr = String(c.total_usd)
         
         return numStr.includes(q) || 
                String(c.numero).includes(q) ||
                clienteNombre.includes(q) || 
                clienteRif.includes(q) ||
+               clienteCodigo.includes(q) ||
                (qClean.length > 2 && clienteRifClean.includes(qClean)) ||
                totalStr.includes(q)
       })
@@ -704,7 +706,7 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
         <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
         <input 
           type="text"
-          placeholder="Buscar por cliente, cédula/RIF, Nº cotización o monto..."
+          placeholder="Buscar por cliente, cédula/RIF, código, Nº cotización o monto..."
           value={busquedaGlobal}
           onChange={e => setBusquedaGlobal(e.target.value)}
           className="w-full pl-11 pr-10 py-3 rounded-2xl border-2 border-slate-200 bg-white text-sm focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all shadow-sm"
