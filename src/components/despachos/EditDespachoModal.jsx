@@ -246,7 +246,6 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
               <div className="space-y-2 mt-2">
                 {formasPago.map(fp => {
                   const restante = totalConFlete - formasPago.reduce((s, f) => s + (Number(f.monto) || 0), 0)
-                  const mostrarResto = formasPago.length > 1 && (!fp.monto || Number(fp.monto) === 0) && restante > 0.01
                   return (
                   <div key={fp.metodo} className="flex flex-col gap-2">
                     <div className="flex items-center gap-2">
@@ -264,11 +263,11 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
                           className="w-full pl-7 pr-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/20 focus:bg-white"
                           disabled={cargando}
                         />
-                        {mostrarResto && (
+                        {restante > 0.01 && (
                           <button type="button"
-                            onClick={() => setMontoForma(fp.metodo, Number(restante.toFixed(2)))}
-                            className="ml-1 px-2 py-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition-colors shrink-0"
-                            title={`Asignar $${restante.toFixed(2)} restante`}>
+                            onClick={() => setMontoForma(fp.metodo, Number(((Number(fp.monto) || 0) + restante).toFixed(2)))}
+                            className="ml-1 px-2.5 py-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition-colors shrink-0 whitespace-nowrap"
+                            title={`Sumar $${restante.toFixed(2)} restante`}>
                             Resto
                           </button>
                         )}

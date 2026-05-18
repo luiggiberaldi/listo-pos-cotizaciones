@@ -130,6 +130,7 @@ function ItemCard({ item, descuento, fmt, config, tipo, perfil }) {
 
 export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', registro, tasa = 0 }) {
   const [items, setItems]       = useState([])
+  const [corteDesdeItems, setCorteDesdeItems] = useState(0) // suma de items tipo 'corte'
   const [showEditItems, setShowEditItems] = useState(false)
   const [cargando, setCargando] = useState(false)
   const [descuentos, setDescuentos] = useState({}) // { item_id: { tipo, valor } }
@@ -170,7 +171,12 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
           .order('orden')
 
         if (error) throw error
-        setItems(data || [])
+        const allItems = data || []
+        // Separar ítems de corte para mostrarlos aparte (como flete)
+        const esCorte = (it) => it.nombre_snap?.toLowerCase().startsWith('corte')
+        const sumaCorte = allItems.filter(esCorte).reduce((s, it) => s + (Number(it.total_linea_usd) || 0), 0)
+        setCorteDesdeItems(sumaCorte)
+        setItems(allItems.filter(it => !esCorte(it)))
       } catch (err) {
         console.error('Error fetching items:', err)
       } finally {
@@ -425,7 +431,8 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
         )}
         {!esCot && (() => {
           const flete = Number(registro.flete_usd || 0)
-          const corteDesc = Number(registro.corte_usd || 0)
+          // Usar corte_usd del registro si existe, o sumar ítems detectados como corte
+          const corteDesc = Number(registro.corte_usd || 0) || corteDesdeItems
           const descuento = Number(registro.descuento_total_usd || 0)
           const totalConServicios = total // total_usd ya incluye el flete y corte
           const subtotal = total - flete - corteDesc // total de productos sin flete ni corte

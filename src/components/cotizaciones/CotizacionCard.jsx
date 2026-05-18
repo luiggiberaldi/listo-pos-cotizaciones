@@ -3,7 +3,7 @@ import { useState, useRef, memo, Fragment } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FileText, User, Calendar, Pencil, Ban, XCircle, FileDown, MessageCircle, Loader2, Truck, ChevronDown, DollarSign, RefreshCw, Eye, Clock, PackageCheck, MoreHorizontal, MoreVertical, AlertTriangle, Printer, Check, Download } from 'lucide-react'
 import EstadoBadge from './EstadoBadge'
-import MobileActionSheet from './MobileActionSheet'
+
 import useAuthStore from '../../store/useAuthStore'
 import supabase from '../../services/supabase/client'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
@@ -29,12 +29,13 @@ async function fetchClienteViaAPI(clienteId) {
     const data = await res.json()
     const clienteRaw = data?.[0] ?? null
     
-    // Si el cliente tiene vendedor_id pero no tiene teléfono en el objeto anidado, lo hidratamos
-    if (clienteRaw?.vendedor_id && !clienteRaw?.vendedor?.telefono) {
+    // Si el cliente tiene vendedor pero no tiene teléfono en el objeto anidado, lo hidratamos
+    const vId = clienteRaw?.vendedor_id || clienteRaw?.vendedor?.id
+    if (vId && !clienteRaw?.vendedor?.telefono) {
       const { data: vData } = await supabase
         .from('usuarios')
-        .select('id, nombre, color, telefono')
-        .eq('id', clienteRaw.vendedor_id)
+        .select('id, nombre, color, telefono, rol')
+        .eq('id', vId)
         .maybeSingle()
       if (vData) clienteRaw.vendedor = vData
     }
@@ -54,17 +55,17 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
   const [printLoading, setPrintLoading] = useState(false)
   const [waLoading, setWaLoading]     = useState(false)
   const [showDetalle, setShowDetalle] = useState(false)
-  const [showSheet, setShowSheet]     = useState(false)
   const [showPrintMenu, setShowPrintMenu] = useState(false)
   const [showDownloadMenu, setShowDownloadMenu] = useState(false)
-  const [showMoreMenu, setShowMoreMenu] = useState(false)
   const [showWhatsAppMenu, setShowWhatsAppMenu] = useState(false)
+  const [showAdminMenu, setShowAdminMenu] = useState(false)
   const [monedaPdf, setMonedaPdf] = useState(() => localStorage.getItem('construacero_moneda_pdf') || '$')
   const { data: config = {} } = useConfigNegocio()
   const { tasaBcv, tasaUsdt } = useTasaCambio()
   const printBtnRef = useRef(null)
   const downloadBtnRef = useRef(null)
   const whatsappBtnRef = useRef(null)
+  const adminBtnRef = useRef(null)
 
   const numDisplay = `COT-${String(cotizacion.numero).padStart(5, '0')}`
 
@@ -275,8 +276,23 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
             backgroundSize: '12px 12px',
           }} />
         <div className="relative z-10 space-y-1">
-          <p className="font-black text-white font-mono leading-tight drop-shadow text-base">{numDisplay}</p>
-          <div className="flex items-center justify-end gap-1.5 flex-wrap">
+          {/* Fila 1: ID y Kebab */}
+          <div className="flex items-center justify-between">
+            <p className="font-black text-white font-mono leading-none drop-shadow text-base">{numDisplay}</p>
+            {moreActions.length > 0 && (
+              <button
+                ref={adminBtnRef}
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setShowAdminMenu(v => !v) }}
+                className="flex items-center justify-center w-8 h-8 rounded-full bg-white/80 hover:bg-white text-slate-800 shadow-md border border-white/20 transition-all active:scale-95 hover:shadow-lg shrink-0"
+                title="Más opciones"
+              >
+                <MoreVertical size={18} className="drop-shadow-sm font-bold" />
+              </button>
+            )}
+          </div>
+          {/* Fila 2: Badges */}
+          <div className="flex items-center justify-end gap-1.5 flex-wrap pt-0.5">
             <EstadoBadge estado={cotizacion.estado} />
             {despacho && (
               <button
@@ -410,7 +426,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
           </button>
         ) : null}
 
-        {/* Fila: Imprimir + Descargar + Más */}
+        {/* Fila: Imprimir + Descargar */}
         <div className="flex items-center gap-1 mt-2">
           {canPdf && (
             <>
@@ -431,18 +447,6 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
               </button>
             </>
           )}
-
-          {moreActions.length === 1 ? (
-            <button onClick={moreActions[0].onClick}
-              className="ml-auto flex items-center gap-1 px-2.5 py-2 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 active:bg-slate-100 transition-colors">
-              {moreActions[0].icon && (() => { const Icon = moreActions[0].icon; return <Icon size={13} />; })()} {moreActions[0].label}
-            </button>
-          ) : moreActions.length > 1 ? (
-            <button onClick={() => setShowSheet(true)}
-              className="ml-auto flex items-center gap-1 px-2.5 py-2 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 active:bg-slate-100 transition-colors">
-              <MoreHorizontal size={13} /> Más
-            </button>
-          ) : null}
         </div>
 
         {/* Popover WhatsApp — fixed posicionado sobre el botón */}
@@ -505,13 +509,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
           </>
         })()}
 
-        {moreActions.length > 1 && (
-          <MobileActionSheet
-            isOpen={showSheet}
-            onClose={() => setShowSheet(false)}
-            actions={moreActions}
-          />
-        )}
+
       </div>
       )}
 
@@ -594,35 +592,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
           </>
         )}
 
-        {/* Más (···) dropdown desktop — o botón directo si solo hay 1 acción */}
-        {moreActions.length === 1 ? (
-          <button onClick={moreActions[0].onClick}
-            className="ml-auto flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 transition-colors whitespace-nowrap">
-            {moreActions[0].icon && (() => { const Icon = moreActions[0].icon; return <Icon size={12} />; })()} {moreActions[0].label}
-          </button>
-        ) : moreActions.length > 1 ? (
-          <div className="relative ml-auto">
-            <button onClick={() => setShowMoreMenu(v => !v)}
-              onBlur={() => setTimeout(() => setShowMoreMenu(false), 200)}
-              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 transition-colors whitespace-nowrap">
-              <MoreHorizontal size={12} /> Más
-            </button>
-            {showMoreMenu && (
-              <div className="absolute right-0 bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
-                onMouseDown={e => e.preventDefault()}>
-                {moreActions.map((act, i) => (
-                  <Fragment key={i}>
-                    {act.danger && <div className="border-t border-slate-100 my-1" />}
-                    <button onClick={() => { act.onClick(); setShowMoreMenu(false) }}
-                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left ${act.danger ? 'text-red-500 hover:bg-red-50' : act.textColor ? `${act.textColor} hover:bg-slate-50` : 'text-slate-700 hover:bg-slate-50'}`}>
-                      {act.icon && <act.icon size={14} />} {act.label}
-                    </button>
-                  </Fragment>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : null}
+
       </div>
       )}
 
@@ -633,6 +603,35 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         registro={cotizacion}
         tasa={tasa}
       />
+
+      {/* ── Menú kebab ⋮ — nivel raíz, fixed para escapar overflow:hidden ── */}
+      {showAdminMenu && moreActions.length > 0 && (() => {
+        const r = adminBtnRef.current?.getBoundingClientRect()
+        const style = r
+          ? { position: 'fixed', right: window.innerWidth - r.right, top: r.bottom + 6, zIndex: 9999 }
+          : { position: 'fixed', right: 16, top: 60, zIndex: 9999 }
+        return <>
+          <div className="fixed inset-0 z-[9998]" onClick={() => setShowAdminMenu(false)} />
+          <div style={style} className="w-52 bg-white rounded-xl shadow-xl border border-slate-200 py-1">
+            {moreActions.map((act, i) => (
+              <Fragment key={i}>
+                {act.danger && <div className="border-t border-slate-100 my-1" />}
+                <button
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={() => { act.onClick(); setShowAdminMenu(false) }}
+                  className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm text-left ${
+                    act.danger ? 'text-red-500 hover:bg-red-50' :
+                    act.textColor ? `${act.textColor} hover:bg-slate-50` :
+                    'text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  {act.icon && <act.icon size={14} />} {act.label}
+                </button>
+              </Fragment>
+            ))}
+          </div>
+        </>
+      })()}
     </div>
   )
 })

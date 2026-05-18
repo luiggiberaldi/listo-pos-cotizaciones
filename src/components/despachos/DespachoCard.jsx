@@ -82,6 +82,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   // Verificar stock insuficiente para Admin
   const [itemsFaltantes, setItemsFaltantes] = useState([])
   const [comisionEst, setComisionEst] = useState(null)
+  const [corteUsdDesdeItems, setCorteUsdDesdeItems] = useState(0) // corte como items (cuando corte_usd=0)
   const hayFaltaStock = itemsFaltantes.length > 0
   
   // Para mostrar items en modal de entrega
@@ -113,7 +114,15 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             return { ...it, categoria, total_linea_usd: Number(it.total_linea_usd) || (Number(it.cantidad) * Number(it.precio_unit_usd)) || 0 }
           })
 
-          const faltantes = itemsConCat.filter(it => {
+          // Separar cortes del resto para que NO entren en la base de comisión
+          const esCorteItem = (it) => it.nombre_snap?.toLowerCase().startsWith('corte')
+          const itemsSinCorte = itemsConCat.filter(it => !esCorteItem(it))
+          const sumaCorteItems = itemsConCat
+            .filter(esCorteItem)
+            .reduce((s, it) => s + (Number(it.total_linea_usd) || 0), 0)
+          setCorteUsdDesdeItems(sumaCorteItems)
+
+          const faltantes = itemsSinCorte.filter(it => {
             const esExterno = it.origen === 'externo' || !it.producto_id || String(it.producto_id).startsWith('manual-') || String(it.codigo_snap).startsWith('EXT')
             if (esExterno) return false
             const p = prods?.find(x => x.id === it.producto_id)
@@ -121,8 +130,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           })
           setItemsFaltantes(faltantes)
           
-          // Calcular comisión usando la utilidad pura
-          const est = calcComisionEstimada(itemsConCat, configNegocio)
+          // Calcular comisión solo sobre productos reales (sin cortes)
+          const est = calcComisionEstimada(itemsSinCorte, configNegocio)
           setComisionEst(est)
         } catch (err) {
           console.error('Error verificando stock:', err)
@@ -132,6 +141,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     } else {
       setItemsFaltantes([])
       setComisionEst(null)
+      setCorteUsdDesdeItems(0)
     }
   }, [despacho.id, despacho.estado, pctCabilla, pctOtros, catCabilla])
 
@@ -139,7 +149,16 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     if (accionPendiente?.estado === 'entregada') {
       setLoadingItems(true)
       fetchItemsDespacho()
-        .then(data => setItemsDespacho(data))
+        .then(data => {
+          // Excluir cortes, fletes y servicios que no forman parte del inventario físico
+          const itemsFiltrados = (data ?? []).filter(it => {
+            const esCorte = it.nombre_snap?.toLowerCase().includes('corte') || it.codigo_snap?.toUpperCase().startsWith('CRT')
+            const esFlete = it.nombre_snap?.toLowerCase().includes('flete') || it.codigo_snap?.toUpperCase().startsWith('FTL')
+            const esExterno = !it.producto_id || String(it.producto_id).startsWith('manual-') || String(it.codigo_snap).startsWith('EXT')
+            return !esCorte && !esFlete && !esExterno
+          })
+          setItemsDespacho(itemsFiltrados)
+        })
         .catch(err => console.error('Error fetching items:', err))
         .finally(() => setLoadingItems(false))
     }
@@ -149,6 +168,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     ? `DES-${String(despacho.cotizacion.numero).padStart(5, '0')}`
     : `DES-${String(despacho.numero).padStart(5, '0')}`
   const vendedorColor = despacho.vendedor?.color || '#64748b'
+  const esVendedorSinComision = (despacho.cliente_factura || despacho.cliente)?.vendedor?.rol === 'vendedor_sin_comision'
 
   const cotNum = despacho.cotizacion
     ? `COT-${String(despacho.cotizacion.numero).padStart(5, '0')}`
@@ -166,7 +186,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const canEditar = despacho.estado === 'pendiente' && (esPrivilegiado || despacho.vendedor_id === perfil?.id)
   const descuentoTotal = Number(despacho.descuento_total_usd || 0)
   const fleteUsd = Number(despacho.flete_usd || 0)
-  const corteUsd = Number(despacho.corte_usd || 0)
+  // corteUsd: usa el campo del despacho si está seteado, sino suma los ítems detectados como corte
+  const corteUsd = Number(despacho.corte_usd || 0) || corteUsdDesdeItems
   const totalBruto = Number(despacho.total_usd || 0) // ya incluye flete y corte
   const subtotalProductos = totalBruto - fleteUsd - corteUsd // solo productos sin servicios
   const totalFinal = totalBruto - descuentoTotal // total con flete+corte, menos descuento
@@ -487,10 +508,10 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
               ref={adminBtnRef}
               type="button"
               onClick={(e) => { e.stopPropagation(); setShowAdminMenu(v => !v) }}
-              className="flex items-center justify-center w-7 h-7 rounded-full bg-white/25 hover:bg-white/40 text-white shadow-sm border border-white/10 transition-all active:scale-95 hover:shadow shrink-0"
+              className="flex items-center justify-center w-8 h-8 rounded-full bg-white/80 hover:bg-white text-slate-800 shadow-md border border-white/20 transition-all active:scale-95 hover:shadow-lg shrink-0"
               title="Más opciones"
             >
-              <MoreVertical size={16} className="drop-shadow-sm font-bold" />
+              <MoreVertical size={18} className="drop-shadow-sm font-bold" />
             </button>
           )}
         </div>
@@ -837,17 +858,41 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         title={confirmConfig.confirmTitle || (accionPendiente?.estado === 'despachada' ? '¿Marcar como despachada?' : '¿Marcar como entregada?')}
         message={
           <div className="flex flex-col items-center gap-3 w-full">
-            <p className="text-center">{confirmConfig.confirmMessage || `El despacho ${numDisplay} cambiará de estado.`}</p>
+            <p className="text-center font-medium">
+              {esVendedorSinComision ? (
+                <span className="inline-flex items-center justify-center gap-1.5 bg-slate-100/70 border border-slate-200 px-3 py-1 rounded-full text-[11px] font-bold text-slate-500 shadow-sm">
+                  🏢 Venta directa de la empresa. No genera comisiones.
+                </span>
+              ) : (
+                confirmConfig.confirmMessage || `El despacho ${numDisplay} cambiará de estado.`
+              )}
+            </p>
             
             {accionPendiente?.estado === 'despachada' && (
               <div className="w-full text-left bg-slate-50 p-3 rounded-xl text-sm border border-slate-200 mt-2 shadow-sm">
                 <h4 className="font-bold text-slate-700 border-b border-slate-200 pb-1.5 mb-2">Resumen de la Operación</h4>
                 <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs">
                   <span className="text-slate-500">Cliente:</span>
-                  <span className="font-semibold text-slate-800 text-right line-clamp-2">{(despacho.cliente_factura || despacho.cliente)?.nombre || 'N/A'}</span>
+                  <span className="font-bold text-right line-clamp-2"
+                    style={{ color: (despacho.cliente_factura || despacho.cliente)?.vendedor?.color || '#334155' }}>
+                    {(despacho.cliente_factura || despacho.cliente)?.nombre || 'N/A'}
+                  </span>
                   
                   <span className="text-slate-500">Vendedor:</span>
-                  <span className="font-semibold text-slate-800 text-right truncate">{despacho.vendedor?.nombre || 'N/A'}</span>
+                  <span className="font-semibold text-right truncate"
+                    style={{ color: despacho.vendedor?.color || '#334155' }}>
+                    {despacho.vendedor?.nombre || 'N/A'}
+                  </span>
+
+                  {despacho.cliente?.vendedor?.nombre && (
+                    <>
+                      <span className="text-slate-500">Comisión para:</span>
+                      <span className="font-bold text-right truncate"
+                        style={{ color: despacho.cliente.vendedor.color || '#10b981' }}>
+                        {despacho.cliente.vendedor.nombre}
+                      </span>
+                    </>
+                  )}
 
                   {despacho.transportista?.nombre && (
                     <>
@@ -887,7 +932,14 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
                     {isCtaPorCobrar ? 'Crédito (CxC)' : 'Contado'}
                   </span>
 
-                  {(pctCabilla > 0 || pctOtros > 0) ? (
+                  {esVendedorSinComision ? (
+                    <>
+                      <span className="text-slate-500">Comisión Est.:</span>
+                      <span className="font-bold text-slate-400 text-right text-xs">
+                        $0,00 (Exento)
+                      </span>
+                    </>
+                  ) : (pctCabilla > 0 || pctOtros > 0) ? (
                     <>
                       <span className="text-slate-500">Comisión Est.:</span>
                       <span className="font-medium text-emerald-600 text-right">

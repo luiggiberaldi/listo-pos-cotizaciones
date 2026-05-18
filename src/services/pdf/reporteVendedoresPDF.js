@@ -36,8 +36,11 @@ function drawTableHeader(doc, cols, y) {
 }
 
 // ─── Función principal ─────────────────────────────────────────────────────────
-export async function generarReporteVendedoresPDF({ data, config = {}, periodo = {} }) {
-  const { porVendedor = [], kpis = {} } = data
+export async function generarReporteVendedoresPDF({ data, config = {}, periodo = {}, tipo = 'completo', vendedorId = null }) {
+  let { porVendedor = [], kpis = {} } = data
+  if (tipo === 'individual' && vendedorId) {
+    porVendedor = porVendedor.filter(v => v.id === vendedorId)
+  }
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
   const logoData = await cargarLogo(config.logo_url)
   let y = 0
@@ -89,7 +92,8 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
   y = HDR_H + 6
   drawWatermark(doc)
 
-  // ═══ KPIs GLOBALES ══════════════════════════════════════════════════════════
+  if (tipo === 'completo' || tipo === 'general') {
+    // ═══ KPIs GLOBALES ══════════════════════════════════════════════════════════
   const kpiBoxW = CONTENT_W / 4
   const kpiBoxH = 18
   const kpiData = [
@@ -113,8 +117,9 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
       const variacion = kpis.variacionGlobal
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(6)
+      const arrow = variacion >= 0 ? '+' : ''
       doc.text(
-        `${variacion >= 0 ? '▲' : '▼'} ${Math.abs(variacion).toFixed(1)}% vs período anterior`,
+        `${arrow}${variacion.toFixed(1)}% vs periodo anterior`,
         bx + 4, y + 16.5
       )
     }
@@ -196,7 +201,9 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
     y += 8
   })
   y += 6
+  } // Fin if general/completo
 
+  if (tipo === 'completo' || tipo === 'individual') {
   // ═══ PERFIL DETALLADO POR VENDEDOR ══════════════════════════════════════════
   porVendedor.forEach((v) => {
     y = checkPage(doc, y, 60, null, 20)
@@ -212,8 +219,9 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
     doc.text(v.nombre || 'Sin nombre', MARGIN + 5, y + 7)
 
     // Variación vs período anterior
-    if (v.variacionUsd !== null) {
-      const varText = `${v.variacionUsd >= 0 ? '▲' : '▼'} ${Math.abs(v.variacionUsd).toFixed(1)}% vs período anterior`
+    if (v.variacionUsd !== null && v.variacionUsd !== undefined) {
+      const arrow = v.variacionUsd >= 0 ? '+' : ''
+      const varText = `${arrow}${Math.abs(v.variacionUsd).toFixed(1)}% vs periodo anterior`
       doc.setFontSize(7)
       doc.setFont('helvetica', 'normal')
       doc.text(varText, PAGE_W - MARGIN, y + 6, { align: 'right' })
@@ -395,6 +403,7 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
 
     y += 12
   })
+  } // Fin if individual/completo
 
   // ═══ FOOTER EN TODAS LAS PÁGINAS ════════════════════════════════════════════
   const totalPages = doc.internal.getNumberOfPages()
@@ -411,6 +420,12 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
     doc.text(`Página ${p} de ${totalPages}`, PAGE_W - MARGIN, PAGE_H - 10, { align: 'right' })
   }
 
-  const safeName = `Reporte_Vendedores_${periodo.from ?? ''}_${periodo.to ?? ''}.pdf`
+  let safeName = `Reporte_Vendedores_${periodo.from ?? ''}_${periodo.to ?? ''}.pdf`
+  if (tipo === 'individual' && porVendedor.length > 0) {
+    const nombreVend = porVendedor[0].nombre?.replace(/\s+/g, '_') || 'Vendedor'
+    safeName = `Reporte_${nombreVend}_${periodo.from ?? ''}_${periodo.to ?? ''}.pdf`
+  } else if (tipo === 'general') {
+    safeName = `Reporte_General_${periodo.from ?? ''}_${periodo.to ?? ''}.pdf`
+  }
   doc.save(safeName)
 }

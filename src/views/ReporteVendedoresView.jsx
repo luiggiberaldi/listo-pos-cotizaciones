@@ -65,7 +65,7 @@ function KpiCard({ label, value, sub, icon: Icon, color = '#3B82F6', variacion }
   )
 }
 
-function VendedorRow({ v, rank, isExpanded, onToggle }) {
+function VendedorRow({ v, rank, isExpanded, onToggle, onExport, isExporting }) {
   const pctBar = v._maxVenta > 0 ? (v.totalUsd / v._maxVenta) * 100 : 0
   const tasaColor = v.tasaCierre >= 60 ? '#059669' : v.tasaCierre >= 35 ? '#D97706' : '#DC2626'
 
@@ -110,7 +110,7 @@ function VendedorRow({ v, rank, isExpanded, onToggle }) {
       {isExpanded && (
         <tr>
           <td colSpan={8} className="p-0 bg-slate-50 border-b border-slate-200">
-            <VendedorDetalle v={v} />
+            <VendedorDetalle v={v} onExport={() => onExport('individual', v.id)} isExporting={isExporting} />
           </td>
         </tr>
       )}
@@ -118,7 +118,7 @@ function VendedorRow({ v, rank, isExpanded, onToggle }) {
   )
 }
 
-function VendedorDetalle({ v }) {
+function VendedorDetalle({ v, onExport, isExporting }) {
   const estados = [
     { key: 'enviada',   label: 'Enviadas',   color: '#3B82F6' },
     { key: 'aceptada',  label: 'Aceptadas',  color: '#059669' },
@@ -128,7 +128,14 @@ function VendedorDetalle({ v }) {
   const totalCots = v.cotizaciones?.total || 0
 
   return (
-    <div className="px-6 py-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div className="px-6 py-5 grid grid-cols-1 md:grid-cols-3 gap-4 relative">
+      <div className="absolute top-4 right-6 z-10 md:static md:col-span-3 flex justify-end">
+         <button onClick={onExport} disabled={isExporting} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-white border border-slate-200 rounded-lg text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200 shadow-sm transition-all disabled:opacity-50">
+            {isExporting ? <RefreshCw size={13} className="animate-spin" /> : <Download size={13} />}
+            Descargar Reporte Detallado
+         </button>
+      </div>
+
       {/* Cotizaciones */}
       <div className="bg-white rounded-xl border border-slate-200 p-4">
         <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Cotizaciones ({totalCots})</p>
@@ -230,7 +237,7 @@ export default function ReporteVendedoresView() {
   const { perfil } = useAuthStore()
   const [periodo, setPeriodo] = useState('semana')
   const [expandedId, setExpandedId] = useState(null)
-  const [pdfLoading, setPdfLoading] = useState(false)
+  const [pdfLoading, setPdfLoading] = useState(null)
   const { data: config = {} } = useConfigNegocio()
 
   const rango = useMemo(() => getRango(periodo), [periodo])
@@ -252,20 +259,22 @@ export default function ReporteVendedoresView() {
     setExpandedId(prev => prev === id ? null : id)
   }, [])
 
-  const handleExportPDF = async () => {
+  const handleExportPDF = async (tipo = 'general', vendedorId = null) => {
     if (!data) return
-    setPdfLoading(true)
+    setPdfLoading(vendedorId || 'general')
     try {
       const { generarReporteVendedoresPDF } = await import('../services/pdf/reporteVendedoresPDF')
       await generarReporteVendedoresPDF({
         data,
         config,
         periodo: { from: rango.from, to: rango.to },
+        tipo,
+        vendedorId
       })
     } catch (err) {
       console.error('Error PDF:', err)
     } finally {
-      setPdfLoading(false)
+      setPdfLoading(null)
     }
   }
 
@@ -280,15 +289,15 @@ export default function ReporteVendedoresView() {
         action={
           <div className="flex items-center gap-2">
             <button
-              onClick={handleExportPDF}
-              disabled={pdfLoading || isLoading || !data}
+              onClick={() => handleExportPDF('general')}
+              disabled={pdfLoading !== null || isLoading || !data}
               className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold border transition-all hover:shadow-sm disabled:opacity-50"
               style={{ background: 'linear-gradient(135deg,rgba(27,54,93,.07),rgba(184,134,11,.07))', border:'1px solid rgba(27,54,93,.2)', color:'#1B365D' }}
             >
-              {pdfLoading
+              {pdfLoading === 'general'
                 ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                 : <Download size={15} />}
-              Exportar PDF
+              Exportar General
             </button>
             <button onClick={() => refetch()} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
               <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
@@ -373,6 +382,8 @@ export default function ReporteVendedoresView() {
                     rank={idx + 1}
                     isExpanded={expandedId === v.id}
                     onToggle={() => handleToggle(v.id)}
+                    onExport={handleExportPDF}
+                    isExporting={pdfLoading === v.id}
                   />
                 ))}
               </tbody>

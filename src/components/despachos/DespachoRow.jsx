@@ -58,10 +58,13 @@ export default memo(function DespachoRow({ despacho, onVer, onEditar, tasa = 0 }
           {fmtFechaHora(despacho.actualizado_en || despacho.creado_en)}
         </div>
 
-        {/* Total + Flete */}
+        {/* Total + Flete + Corte */}
         <div className="text-right shrink-0">
           {Number(despacho.flete_usd || 0) > 0 && (
-            <div className="text-[10px] text-slate-400">Flete: {fmtUsd(despacho.flete_usd)}</div>
+            <div className="text-[10px] text-slate-400">Flete: +{fmtUsd(despacho.flete_usd)}</div>
+          )}
+          {Number(despacho.corte_usd || 0) > 0 && (
+            <div className="text-[10px] text-slate-400">Corte: +{fmtUsd(despacho.corte_usd)}</div>
           )}
           <span className="font-bold text-slate-800 text-sm">{fmtUsd(despacho.total_usd)}</span>
           {tasa > 0 && despacho.total_usd > 0 && (

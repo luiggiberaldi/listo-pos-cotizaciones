@@ -11,7 +11,7 @@ import {
 
 // ─── Generar Reporte de Comisiones ───────────────────────────────────────────
 // ─── Generar Reporte de Comisiones ───────────────────────────────────────────
-export async function generarComisionesPDF({ comisiones, vendedor = null, resumen = null, config = {} }) {
+export async function generarComisionesPDF({ comisiones, vendedor = null, resumen = null, rango = null, config = {} }) {
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
   let y = 0
 
@@ -19,29 +19,30 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
 
   // NORMALIZAR: unificar naming antes de procesar (soporte para Worker API y RPC)
   function normalizarComision(c) {
-    const rawEstado = (c.estado || c.estado_comision || 'pendiente').toLowerCase()
+    const rawEstado = (c.estado_comision || c.estado || 'pendiente').toLowerCase()
     
     return {
       ...c,
+      vendedor: c.vendedor || (c.asesor ? { nombre: c.asesor, color: c.asesor_color || '#1B365D' } : null),
       // Totales (Prioridad a RPC si existen, luego Worker, luego default)
-      totalcomision: Number(c.total_com || c.totalcomision || c.despacho_comision_total || 0),
-      comisioncabilla: Number(c.comisioncabilla || 0),
-      comisionotros: Number(c.comisionotros || 0),
+      totalcomision: Number(c.total_com ?? c.totalcomision ?? c.despacho_comision_total ?? 0),
+      comisioncabilla: Number(c.comisioncabilla ?? 0),
+      comisionotros: Number(c.comisionotros ?? 0),
       // Valor del item (si aplica)
-      valor: Number(c.total || 0),
-      pct: Number(c.comision_pct || c.pct || 0),
+      valor: Number(c.total ?? 0),
+      pct: Number(c.comision_pct ?? c.pct ?? 0),
       // Producto
       codigo: c.codigo || '',
       descripcion: (c.descripcion || c.nombre_snap || '').toUpperCase(),
       // Número de despacho
       despachonumero: c.despacho_numero || c.despachonumero || c.despacho?.numero || '---',
-      montopagado: Number(c.despacho_comision_liberada || c.montopagado || 0),
+      montopagado: Number(c.despacho_comision_liberada ?? c.montopagado ?? 0),
       // Tasa
       tasa_snapshot: Number(
-        c.tasa ||
-        c.tasa_snapshot || 
-        c.despacho?.tasa_snapshot || 
-        c.cotizacion?.tasa_bcv_snapshot || 
+        c.tasa ??
+        c.tasa_snapshot ?? 
+        c.despacho?.tasa_snapshot ?? 
+        c.cotizacion?.tasa_bcv_snapshot ?? 
         0
       ),
       // Mapeo de estados: 'pagada' es el único estado que suma al pagado, resto son pendientes
@@ -97,7 +98,11 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
   doc.text('Reporte de Comisiones', PAGE_W - MARGIN, HDR_H - 8, { align: 'right' })
   doc.setFontSize(8)
   doc.setFont('helvetica', 'normal')
-  doc.text(fmtFecha(new Date().toISOString(), 'short-month'), PAGE_W - MARGIN, HDR_H - 3, { align: 'right' })
+  let subHeaderDate = fmtFecha(new Date().toISOString(), 'short-month')
+  if (rango && (rango.from || rango.to)) {
+    subHeaderDate = `Periodo: ${rango.from ? fmtFechaCorta(rango.from) : 'Inicio'} al ${rango.to ? fmtFechaCorta(rango.to) : 'Fin'}`
+  }
+  doc.text(subHeaderDate, PAGE_W - MARGIN, HDR_H - 3, { align: 'right' })
 
   y = HDR_H + 6
 

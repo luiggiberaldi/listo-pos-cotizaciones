@@ -391,32 +391,36 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
     try {
       const { generarComisionesPDF } = await import('../services/pdf/comisionesPDF')
 
-      // Obtener el reporte detallado desde la RPC para que calcule bien los montos
-      let { data: detalleVendedor, error } = await supabase.rpc('obtener_reporte_ventas_comisiones', {
+      if (!detalle || detalle.length === 0) {
+        alert(`🔍 SIN DATOS: No hay comisiones para ${vendedor?.nombre || 'este vendedor'} en el periodo seleccionado.`)
+        return
+      }
+
+      // Los IDs de despacho visibles en la UI (fuente de verdad)
+      const despachoIds = new Set(detalle.map(c => c.despachoid).filter(Boolean))
+
+      // Llamar al RPC para obtener detalle por artículo
+      let comisionesParaPDF = detalle // fallback por defecto
+      const { data: itemsRPC, error } = await supabase.rpc('obtener_reporte_ventas_comisiones', {
         p_fecha_inicio: rango?.from ? `${rango.from}T00:00:00-04:00` : null,
         p_fecha_fin: rango?.to ? `${rango.to}T23:59:59-04:00` : null,
         p_vendedor_id: vendedor?.id
       })
 
-      if (error) console.error('Error RPC:', error)
-
-      // FALLBACK: Si la RPC no devuelve nada pero tenemos datos en la tabla local, usarlos.
-      // Esto evita el error de "No hay datos" cuando el usuario sí los ve en pantalla.
-      if ((!detalleVendedor || detalleVendedor.length === 0) && detalle.length > 0) {
-        console.log('Usando datos locales para PDF (Fallback)');
-        detalleVendedor = detalle;
-      }
-
-      if (!detalleVendedor || detalleVendedor.length === 0) {
-        // Mensaje mejorado en lugar de alert simple
-        const msg = `No se encontraron registros detallados para ${vendedor?.nombre || 'este vendedor'} entre ${rango?.from} y ${rango?.to}.`;
-        alert(`🔍 SIN DATOS: ${msg}`);
-        return
+      if (error) {
+        console.error('Error RPC detalle artículos:', error)
+      } else if (itemsRPC && itemsRPC.length > 0) {
+        // Filtrar SOLO los ítems que pertenecen a los despachos visibles en la UI
+        const itemsFiltrados = itemsRPC.filter(item => despachoIds.has(item.despacho_id))
+        if (itemsFiltrados.length > 0) {
+          comisionesParaPDF = itemsFiltrados
+        }
       }
 
       await generarComisionesPDF({
-        comisiones: detalleVendedor,
+        comisiones: comisionesParaPDF,
         vendedor: { nombre: vendedor?.nombre, color: vendedor?.color },
+        rango,
         config: configNeg ?? {}
       })
     } catch (e) {
@@ -598,6 +602,58 @@ function TabComisiones({ configNeg }) {
     }
   }
 
+  async function exportarPDF() {
+    setExportando(true)
+    try {
+      const { generarComisionesPDF } = await import('../services/pdf/comisionesPDF')
+
+      let { data: detalleCompleto, error } = await supabase.rpc('obtener_reporte_ventas_comisiones', {
+        p_fecha_inicio: rango.from ? `${rango.from}T00:00:00-04:00` : null,
+        p_fecha_fin: rango.to ? `${rango.to}T23:59:59-04:00` : null,
+        p_vendedor_id: filtroVendedor || null
+      })
+
+      if (error) console.error('Error RPC General:', error)
+
+      // Fallback a datos cargados en el hook useComisiones
+      if ((!detalleCompleto || detalleCompleto.length === 0) && comisiones.length > 0) {
+        detalleCompleto = comisiones;
+      }
+
+      // Los IDs de despacho visibles en la UI (fuente de verdad)
+      if (comisiones.length > 0) {
+        const despachoIds = new Set(comisiones.map(c => c.despachoid).filter(Boolean))
+        if (detalleCompleto && detalleCompleto.length > 0) {
+          const itemsFiltrados = detalleCompleto.filter(item => despachoIds.has(item.despacho_id))
+          if (itemsFiltrados.length > 0) {
+            detalleCompleto = itemsFiltrados
+          }
+        }
+      }
+
+      if (!detalleCompleto || detalleCompleto.length === 0) {
+        alert(`🔍 SIN DATOS: No hay comisiones registradas entre ${rango.from} y ${rango.to}.`);
+        return;
+      }
+
+      const vendedorInfo = filtroVendedor
+        ? vendedoresAgrupados.find(v => v.id === filtroVendedor)
+        : null
+
+      await generarComisionesPDF({
+        comisiones: detalleCompleto || [],
+        vendedor: vendedorInfo ? { nombre: vendedorInfo.nombre, color: vendedorInfo.color } : null,
+        rango,
+        config: configNeg ?? {}
+      })
+    } catch (e) {
+      console.error('Error generando PDF general:', e)
+      alert('❌ Error al generar reporte general: ' + e.message)
+    } finally {
+      setExportando(false)
+    }
+  }
+
   async function exportarIndividualPDF(vendedor) {
     setExportando(true)
     try {
@@ -616,6 +672,18 @@ function TabComisiones({ configNeg }) {
         detalleVendedor = comisiones.filter(c => (c.vendedor?.id || c.vendedor_id) === vendedor.id);
       }
 
+      // Los IDs de despacho del vendedor visibles en la UI (fuente de verdad)
+      const comisionesVendedorUI = comisiones.filter(c => (c.vendedor?.id || c.vendedor_id) === vendedor.id)
+      if (comisionesVendedorUI.length > 0) {
+        const despachoIds = new Set(comisionesVendedorUI.map(c => c.despachoid).filter(Boolean))
+        if (detalleVendedor && detalleVendedor.length > 0) {
+          const itemsFiltrados = detalleVendedor.filter(item => despachoIds.has(item.despacho_id))
+          if (itemsFiltrados.length > 0) {
+            detalleVendedor = itemsFiltrados
+          }
+        }
+      }
+
       if (!detalleVendedor || detalleVendedor.length === 0) {
         alert(`🔍 SIN DATOS: No hay registros para ${vendedor.nombre} en este rango.`);
         return;
@@ -624,6 +692,7 @@ function TabComisiones({ configNeg }) {
       await generarComisionesPDF({
         comisiones: detalleVendedor || [],
         vendedor: { nombre: vendedor.nombre, color: vendedor.color },
+        rango,
         config: configNeg ?? {}
       })
     } catch (e) {

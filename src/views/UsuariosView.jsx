@@ -47,12 +47,6 @@ const ROL_CONFIG = {
     text:   'text-teal-700',
     border: 'border-teal-200',
   },
-  trabajador: {
-    label:  'Trabajador',
-    bg:     'bg-orange-50',
-    text:   'text-orange-600',
-    border: 'border-orange-200',
-  },
   desarrollador: {
     label:  'Desarrollador',
     bg:     'bg-violet-50',
@@ -165,9 +159,7 @@ function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
           { value: 'administracion', label: 'Administración' },
           { value: 'logistica', label: 'Logística' },
           { value: 'supervisor', label: 'Supervisor' },
-          { value: 'trabajador', label: 'Trabajador' },
           { value: 'jefe', label: 'Jefe' },
-
         ]}
         placeholder="Seleccionar rol..."
         disabled={cargando}
@@ -297,9 +289,7 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando, coloresUsados = 
           { value: 'administracion', label: 'Administración' },
           { value: 'logistica', label: 'Logística' },
           { value: 'supervisor', label: 'Supervisor' },
-          { value: 'trabajador', label: 'Trabajador' },
           { value: 'jefe', label: 'Jefe' },
-
         ]}
         placeholder="Seleccionar rol..."
         disabled={cargando}
@@ -750,7 +740,7 @@ export default function UsuariosView() {
     }
   }
 
-  const ROL_ORDEN = { jefe: 0, logistica: 1, administracion: 1, supervisor: 2, vendedor: 3, vendedor_sin_comision: 4, trabajador: 5 }
+  const ROL_ORDEN = { jefe: 0, logistica: 1, administracion: 1, supervisor: 2, vendedor: 3, vendedor_sin_comision: 4 }
   const sortUsuarios = (arr) => [...arr].sort((a, b) => {
     const oa = ROL_ORDEN[a.rol] ?? 9
     const ob = ROL_ORDEN[b.rol] ?? 9

@@ -75,13 +75,17 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
 
         const mapped = (data || []).map(it => ({
           _key: `existing-${it.id}`,
-          productoId: it.producto_id,
+          // Los ítems externos tienen producto_id = null → asignamos ID temporal único
+          // para que las funciones del hook (cambiarCantidad, cambiarPrecio, eliminarPorId)
+          // puedan identificarlos correctamente por productoId
+          productoId: it.producto_id ?? `ext-${it.id}`,
           codigoSnap: it.codigo_snap,
           nombreSnap: it.nombre_snap,
           unidadSnap: it.unidad_snap,
           cantidad: Number(it.cantidad),
           precioUnitUsd: Number(it.precio_unit_usd),
           descuentoPct: Number(it.descuento_pct || 0),
+          origen: it.origen ?? 'inventario',
           orden: it.orden
         }))
         setItems(mapped)
@@ -152,7 +156,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
       return
     }
     const itemsApi = items.map((it, idx) => {
-      const esExterno = it.origen === 'externo' || !it.productoId || String(it.productoId).startsWith('manual-')
+      const esExterno = it.origen === 'externo' || !it.productoId || String(it.productoId).startsWith('manual-') || String(it.productoId).startsWith('ext-')
       return {
         producto_id: esExterno ? null : it.productoId,
         codigo_snap: it.codigoSnap || null,

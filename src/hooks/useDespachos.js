@@ -74,20 +74,21 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false } = {}
       // 2. Extraer todos los IDs de vendedores (de los despachos Y de los clientes)
       const allVendedorIds = [...new Set([
         ...data.map(r => r.vendedor_id),
-        ...clientesData.map(c => c.vendedor_id)
+        ...clientesData.map(c => c.vendedor_id || c.vendedor?.id)
       ].filter(Boolean))]
 
       // 3. Cargar todos los vendedores necesarios (incluyendo teléfonos)
       const vendedoresRes = allVendedorIds.length
-        ? await supabase.from('usuarios').select('id, nombre, color, telefono').in('id', allVendedorIds)
+        ? await supabase.from('usuarios').select('id, nombre, color, telefono, rol').in('id', allVendedorIds)
         : { data: [] }
 
       const vendedoresMap = Object.fromEntries((vendedoresRes.error ? [] : vendedoresRes.data ?? []).map(v => [v.id, v]))
 
       // 4. Hidratar el vendedor dentro de cada cliente
       const clientesMap = Object.fromEntries((clientesData ?? []).map(c => {
-        if (c.vendedor_id && !c.vendedor?.telefono) {
-          c.vendedor = vendedoresMap[c.vendedor_id] || c.vendedor
+        const vId = c.vendedor_id || c.vendedor?.id
+        if (vId) {
+          c.vendedor = vendedoresMap[vId] || c.vendedor
         }
         return [c.id, c]
       }))

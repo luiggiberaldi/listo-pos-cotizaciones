@@ -99,9 +99,8 @@ function BadgeRol({ rol }) {
     logistica:       'bg-purple-500/20 text-purple-300 border border-purple-500/30',
     desarrollador:   'bg-violet-500/20 text-violet-300 border border-violet-500/30',
     jefe:            'bg-amber-600/20 text-amber-400 border border-amber-600/30',
-    trabajador:      'bg-orange-500/20 text-orange-300 border border-orange-500/30',
   }
-  const textos = { supervisor: 'Supervisor', vendedor: 'Vendedor', vendedor_sin_comision: 'Vendedor', administracion: 'Administración', logistica: 'Logística', desarrollador: 'Dev', jefe: 'Jefe', trabajador: 'Trabajador' }
+  const textos = { supervisor: 'Supervisor', vendedor: 'Vendedor', vendedor_sin_comision: 'Vendedor', administracion: 'Administración', logistica: 'Logística', desarrollador: 'Dev', jefe: 'Jefe' }
   return (
     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${estilos[rol] ?? 'bg-white/10 text-white/50'}`}>
       {textos[rol] ?? rol}

@@ -44,7 +44,7 @@ export async function handleListarClientes(request, env) {
   // Fetch ALL active clients — filtrado en el Worker (in-memory, rápido)
   // limit=10000 evita el tope de 1000 filas de PostgREST
   // Fetch ALL clients (incluyendo inactivos) — filtrado en el Worker
-  const baseUrl = `${env.SUPABASE_URL}/rest/v1/clientes?cuenta_id=eq.${user.id}&order=nombre.asc&limit=10000&select=id,nombre,rif_cedula,telefono,email,direccion,estado,ciudad,notas,tipo_cliente,activo,vendedor_id,saldo_pendiente,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color)`;
+  const baseUrl = `${env.SUPABASE_URL}/rest/v1/clientes?cuenta_id=eq.${user.id}&order=nombre.asc&limit=10000&select=id,nombre,rif_cedula,telefono,email,direccion,estado,ciudad,notas,tipo_cliente,activo,vendedor_id,saldo_pendiente,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color,rol)`;
 
   const supaHeaders = {
     apikey: env.SUPABASE_SERVICE_KEY,
@@ -93,7 +93,7 @@ export async function handleClientesLookup(request, env) {
     return jsonError('ids debe ser un array de 1-200 UUIDs', 400, request);
   }
 
-  const queryUrl = `${env.SUPABASE_URL}/rest/v1/clientes?id=in.(${ids.map(encodeURIComponent).join(',')})&cuenta_id=eq.${user.id}&select=id,nombre,rif_cedula,telefono,email,direccion,estado,ciudad,tipo_cliente,vendedor_id,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color)`;
+  const queryUrl = `${env.SUPABASE_URL}/rest/v1/clientes?id=in.(${ids.map(encodeURIComponent).join(',')})&cuenta_id=eq.${user.id}&select=id,nombre,rif_cedula,telefono,email,direccion,estado,ciudad,tipo_cliente,vendedor_id,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color,rol)`;
 
   const res = await fetch(queryUrl, {
     headers: {

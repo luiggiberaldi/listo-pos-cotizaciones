@@ -103,7 +103,13 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
             .from('cotizacion_items')
             .select('producto_id, nombre_snap, codigo_snap, cantidad, precio_unit_usd, total_linea_usd, cotizacion_id')
             .in('cotizacion_id', batch)
-          if (!error && data) items = items.concat(data)
+          if (!error && data) {
+            // Excluir servicios de corte del Top Productos (mismo criterio que el RPC)
+            const filtrados = data.filter(it =>
+              !it.nombre_snap || !it.nombre_snap.toLowerCase().trimStart().startsWith('corte')
+            )
+            items = items.concat(filtrados)
+          }
         }
       }
 
@@ -116,10 +122,14 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
       const ventaNeta = (d) =>
         Number(d.total_usd || 0) - Number(d.flete_usd || 0) - Number(d.descuento_total_usd || 0)
 
-      // Obtener lista única de vendedores que aparecen en despachos/cotizaciones
+      // Obtener lista única de todos los vendedores involucrados (actuales, previos y comisiones)
       const vendedorIds = [...new Set([
         ...despachos.map(d => d.vendedor_id),
+        ...prevDespachos.map(d => d.vendedor_id),
         ...cotizaciones.map(c => c.vendedor_id),
+        ...prevCotizaciones.map(c => c.vendedor_id),
+        ...comisiones.map(c => c.vendedorid),
+        ...prevComisiones.map(c => c.vendedorid),
       ].filter(Boolean))]
 
       // Fetch datos de todos los vendedores involucrados
@@ -127,7 +137,7 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
       if (vendedorIds.length > 0) {
         const { data: vData } = await supabase
           .from('usuarios')
-          .select('id, nombre, color, activo')
+          .select('id, nombre, color, activo, rol')
           .in('id', vendedorIds)
         ;(vData ?? []).forEach(v => { vendedoresInfo[v.id] = v })
       }
@@ -142,6 +152,7 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
             nombre: info.nombre ?? 'Sin nombre',
             color: info.color ?? '#64748b',
             activo: info.activo ?? true,
+            rol: info.rol ?? 'vendedor',
             // Ventas
             totalUsd: 0,
             prevTotalUsd: 0,
@@ -208,13 +219,23 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
       })
 
       // Comisiones actuales
+      // Las comisiones están asociadas al dueño del cliente (vendedorid en comisiones).
+      // Las mostramos en el vendedor que las generó (vendedorid), que puede diferir del
+      // vendedor que ejecutó el despacho (nd.vendedor_id).
       comisiones.forEach(c => {
-        if (!vendedorMap[c.vendedorid]) return
-        const v = vendedorMap[c.vendedorid]
+        // Asegurarse que el vendedor de la comisión tenga una entrada en el mapa
+        const v = getOrCreate(c.vendedorid)
         const monto = Number(c.totalcomision || 0)
         v.comisionTotal += monto
-        if (c.estado === 'pagada') v.comisionPagada += monto
-        else v.comisionPendiente += monto
+        if (c.estado === 'pagada') {
+          v.comisionPagada += monto
+        } else if (c.estado === 'cta_cobrar') {
+          // En cuenta por cobrar: no pagada aún, va a pendiente
+          v.comisionPendiente += monto
+        } else {
+          // estado === 'pendiente'
+          v.comisionPendiente += monto
+        }
       })
 
       // Items de despachos → Top productos por vendedor
@@ -237,7 +258,10 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
       })
 
       // ── 6. Post-proceso: calcular métricas derivadas ─────────────────────
-      const porVendedor = Object.values(vendedorMap).map(v => {
+      const porVendedor = Object.values(vendedorMap)
+        // Excluir vendedores sin comisión del reporte (EMPRESA, roles sin comisión)
+        .filter(v => v.rol !== 'vendedor_sin_comision')
+        .map(v => {
         const enviadas = v.cotizaciones.enviada + v.cotizaciones.aceptada + v.cotizaciones.rechazada
         return {
           ...v,

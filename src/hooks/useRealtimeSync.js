@@ -79,7 +79,7 @@ export function useRealtimeSync() {
     function createDbChannel() {
       if (dbCh.current) { supabase.removeChannel(dbCh.current); dbCh.current = null }
 
-      const name = `db-changes-${++_chSeq}`
+      const name = `db-changes-${++_chSeq}-${Math.random().toString(36).substring(2, 9)}`
       const ch   = supabase.channel(name)
 
       for (const { tabla, keys, debounceMs } of TABLAS_LAZY) {
@@ -92,6 +92,7 @@ export function useRealtimeSync() {
       }
 
       ch.subscribe((status) => {
+        if (ch !== dbCh.current) return // Ignorar status de canales descartados
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
           scheduleReconnect('db', createDbChannel)
         }
@@ -108,7 +109,7 @@ export function useRealtimeSync() {
         invCh.current = null
       }
 
-      const name = `inventario-realtime-${++_chSeq}`
+      const name = `inventario-realtime-${++_chSeq}-${Math.random().toString(36).substring(2, 9)}`
       const ch   = supabase
         .channel(name)
         .on('broadcast', { event: INVENTARIO_EV }, () => {
@@ -116,6 +117,7 @@ export function useRealtimeSync() {
           qc.invalidateQueries({ queryKey: INVENTARIO_KEY, refetchType: 'active' })
         })
         .subscribe((status) => {
+          if (ch !== invCh.current) return // Ignorar status de canales descartados
           if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
             setInventarioChannel(null)
             scheduleReconnect('inv', createInventarioChannel)

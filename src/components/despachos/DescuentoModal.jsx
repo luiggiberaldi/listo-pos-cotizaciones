@@ -141,7 +141,7 @@ function ItemRow({ item, desc, montoDesc, soloLectura, editandoId, onEdit, onUpd
 }
 
 /* ─── Pantalla de confirmación ─────────────────────────────────────────── */
-function Confirmacion({ items, descLocal, calc, flete, subtotalProductos, totalDespacho, totalFinal, onConfirmar, onVolver, guardando }) {
+function Confirmacion({ items, descLocal, calc, flete, corte, subtotalProductos, totalDespacho, totalFinal, onConfirmar, onVolver, guardando }) {
   const itemsConDesc = items.filter(i => calc.porItem[i.id] > 0)
   const itemsSinDesc = items.filter(i => !calc.porItem[i.id])
 
@@ -244,7 +244,14 @@ function Confirmacion({ items, descLocal, calc, flete, subtotalProductos, totalD
             {flete > 0 && (
               <div className="flex justify-between text-[12px] text-slate-500">
                 <span className="flex items-center gap-1"><Truck size={11} /> Flete</span>
-                <span className="tabular-nums">{fmtUsd(flete)}</span>
+                <span className="tabular-nums">+{fmtUsd(flete)}</span>
+              </div>
+            )}
+
+            {corte > 0 && (
+              <div className="flex justify-between text-[12px] text-slate-500">
+                <span>Corte</span>
+                <span className="tabular-nums">+{fmtUsd(corte)}</span>
               </div>
             )}
 
@@ -346,7 +353,8 @@ export default function DescuentoModal({ isOpen, onClose, despacho }) {
 
   const subtotalProductos = items.reduce((s, i) => s + Number(i.total_linea_usd || 0), 0)
   const flete = Number(despacho?.flete_usd || 0)
-  const totalDespacho = Number(despacho?.total_usd || (subtotalProductos + flete))
+  const corte = Number(despacho?.corte_usd || 0)
+  const totalDespacho = Number(despacho?.total_usd || (subtotalProductos + flete + corte))
   const totalFinal = totalDespacho - calc.total
   const tieneErrores = items.some(i => { const d = descLocal[i.id]; return d && getError(d, i) })
 
@@ -400,7 +408,7 @@ export default function DescuentoModal({ isOpen, onClose, despacho }) {
         {confirmando ? (
           <Confirmacion
             items={items} descLocal={descLocal} calc={calc}
-            flete={flete} subtotalProductos={subtotalProductos}
+            flete={flete} corte={corte} subtotalProductos={subtotalProductos}
             totalDespacho={totalDespacho} totalFinal={totalFinal}
             onConfirmar={handleConfirmar}
             onVolver={() => setConfirmando(false)}
@@ -455,7 +463,13 @@ export default function DescuentoModal({ isOpen, onClose, despacho }) {
                   {flete > 0 && (
                     <div className="flex justify-between text-[12px] text-slate-400">
                       <span className="flex items-center gap-1"><Truck size={11} /> Flete</span>
-                      <span className="tabular-nums">{fmtUsd(flete)}</span>
+                      <span className="tabular-nums">+{fmtUsd(flete)}</span>
+                    </div>
+                  )}
+                  {corte > 0 && (
+                    <div className="flex justify-between text-[12px] text-slate-400">
+                      <span>Corte</span>
+                      <span className="tabular-nums">+{fmtUsd(corte)}</span>
                     </div>
                   )}
                   {calc.total > 0 && (

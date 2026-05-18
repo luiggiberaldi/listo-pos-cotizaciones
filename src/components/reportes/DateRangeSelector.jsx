@@ -1,5 +1,5 @@
 // src/components/reportes/DateRangeSelector.jsx
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Calendar } from 'lucide-react'
 import { getDayRange, getWeekRange, getMonthRange, getLocalISODate } from '../../utils/dateHelpers'
 
@@ -18,11 +18,25 @@ function mismoRango(a, b) {
 
 export default function DateRangeSelector({ value, onChange }) {
   const [showCustom, setShowCustom] = useState(false)
-  const activePreset = PRESETS.find(p => mismoRango(value, p.getRango()))?.id || ''
-  const customActivo = showCustom || !activePreset
+  const [activePresetId, setActivePresetId] = useState(() => {
+    return PRESETS.find(p => mismoRango(value, p.getRango()))?.id || ''
+  })
+
+  // Sincronizar el estado si el valor cambia externamente o no coincide
+  useEffect(() => {
+    const currentPreset = PRESETS.find(p => p.id === activePresetId)
+    if (currentPreset && mismoRango(value, currentPreset.getRango())) {
+      return
+    }
+    const matching = PRESETS.find(p => mismoRango(value, p.getRango()))
+    setActivePresetId(matching ? matching.id : '')
+  }, [value, activePresetId])
+
+  const customActivo = showCustom || !activePresetId
 
   function selectPreset(preset) {
     setShowCustom(false)
+    setActivePresetId(preset.id)
     const rango = preset.getRango()
     const prev = preset.getPrev()
     onChange({ from: rango.from, to: rango.to, prevFrom: prev.from, prevTo: prev.to })
@@ -51,7 +65,7 @@ export default function DateRangeSelector({ value, onChange }) {
           <button key={p.id}
             onClick={() => selectPreset(p)}
             className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold transition-colors border whitespace-nowrap shrink-0 ${
-              activePreset === p.id && !showCustom
+              activePresetId === p.id && !showCustom
                 ? 'bg-primary text-white border-primary'
                 : 'bg-white text-slate-600 border-slate-200 hover:border-primary-focus'
             }`}>

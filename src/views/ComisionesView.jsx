@@ -188,7 +188,7 @@ export default function ComisionesView() {
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
   const switchOut = useAuthStore(s => s.switchOut)
   const puedeGestionarPagos = ['administracion', 'supervisor', 'jefe', 'desarrollador'].includes(perfil?.rol)
-  const puedePagarComisiones = ['administracion', 'supervisor'].includes(perfil?.rol)
+  const puedePagarComisiones = ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)
 
   const [filtroEstado,   setFiltroEstado]   = useState('')
   const [filtroVendedor, setFiltroVendedor] = useState('')
@@ -240,10 +240,20 @@ export default function ComisionesView() {
   async function exportarPDF(vendedorFiltro = null) {
     setExportando(true)
     try {
-      const items = vendedorFiltro
-        ? comisiones.filter(c => (c.vendedorid || '00000000-0000-0000-0000-000000000000') === vendedorFiltro.id)
+      const activeVendedor = vendedorFiltro || (filtroVendedor ? vendedores.find(v => v.id === filtroVendedor) : null)
+      
+      const items = activeVendedor
+        ? comisiones.filter(c => (c.vendedorid || '00000000-0000-0000-0000-000000000000') === activeVendedor.id)
         : comisiones
-      await generarComisionesPDF({ comisiones: items, vendedor: vendedorFiltro, config: configNeg })
+        
+      const rango = { from: fechaDesde, to: fechaHasta }
+      
+      await generarComisionesPDF({ 
+        comisiones: items, 
+        vendedor: activeVendedor ? { id: activeVendedor.id, nombre: activeVendedor.nombre, color: activeVendedor.color } : null, 
+        rango, 
+        config: configNeg ?? {} 
+      })
     } catch (e) { console.error('Error PDF:', e) }
     setExportando(false)
   }
@@ -339,7 +349,15 @@ export default function ComisionesView() {
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
             {comisionesPorVendedor.map(g => (
-              <VendedorCard key={g.id} vendedor={g.vendedor} comisiones={g.items} esSupervisor={puedePagarComisiones} onMarcarPagada={setComisionAPagar} marcando={marcar.isPending} onExportarPDF={exportarPDF} />
+              <VendedorCard 
+                key={g.id} 
+                vendedor={{ id: g.id, ...g.vendedor }} 
+                comisiones={g.items} 
+                esSupervisor={puedePagarComisiones} 
+                onMarcarPagada={setComisionAPagar} 
+                marcando={marcar.isPending} 
+                onExportarPDF={exportarPDF} 
+              />
             ))}
           </div>
 

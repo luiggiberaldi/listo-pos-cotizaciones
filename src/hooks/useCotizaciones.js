@@ -72,20 +72,21 @@ export function useCotizaciones({ estado = '', clienteId = '', veTodos = false }
       // 2. Extraer todos los IDs de vendedores (de las cotizaciones Y de los clientes)
       const allVendedorIds = [...new Set([
         ...rows.map(r => r.vendedor_id),
-        ...clientesData.map(c => c.vendedor_id)
+        ...clientesData.map(c => c.vendedor_id || c.vendedor?.id)
       ].filter(Boolean))]
 
       // 3. Cargar todos los vendedores necesarios (incluyendo teléfonos)
       const vendedoresRes = allVendedorIds.length
-        ? await supabase.from('usuarios').select('id, nombre, color, telefono').in('id', allVendedorIds)
+        ? await supabase.from('usuarios').select('id, nombre, color, telefono, rol').in('id', allVendedorIds)
         : { data: [] }
 
       const vendedoresMap = Object.fromEntries((vendedoresRes.error ? [] : vendedoresRes.data ?? []).map(v => [v.id, v]))
 
       // 4. Hidratar el vendedor dentro de cada cliente
       const clientesMap = Object.fromEntries((clientesData ?? []).map(c => {
-        if (c.vendedor_id && !c.vendedor?.telefono) {
-          c.vendedor = vendedoresMap[c.vendedor_id] || c.vendedor
+        const vId = c.vendedor_id || c.vendedor?.id
+        if (vId) {
+          c.vendedor = vendedoresMap[vId] || c.vendedor
         }
         return [c.id, c]
       }))
@@ -143,18 +144,19 @@ export function useCotizacion(id) {
             }).then(r => r.ok ? r.json() : [])
           : [],
         cot.vendedor_id
-          ? supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', cot.vendedor_id).maybeSingle()
+          ? supabase.from('usuarios').select('id, nombre, color, telefono, rol').eq('id', cot.vendedor_id).maybeSingle()
           : Promise.resolve({ data: null }),
       ])
       const clienteRaw = lookups[0]?.[0] ?? null
       let vendedorCliente = clienteRaw?.vendedor || null
 
-      // Si el cliente tiene vendedor_id pero no tiene teléfono en el objeto anidado, lo hidratamos
-      if (clienteRaw?.vendedor_id && !vendedorCliente?.telefono) {
+      // Si el cliente tiene vendedor pero no tiene teléfono/rol en el objeto anidado, lo hidratamos
+      const vId = clienteRaw?.vendedor_id || clienteRaw?.vendedor?.id
+      if (vId && !vendedorCliente?.telefono) {
         const { data: vData } = await supabase
           .from('usuarios')
-          .select('id, nombre, color, telefono')
-          .eq('id', clienteRaw.vendedor_id)
+          .select('id, nombre, color, telefono, rol')
+          .eq('id', vId)
           .maybeSingle()
         if (vData) vendedorCliente = vData
       }
