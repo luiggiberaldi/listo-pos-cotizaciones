@@ -291,23 +291,22 @@ function TabVentas({ configNeg }) {
 
   const { kpis, porVendedor, porCliente, porProducto, porCategoria, porFormaPago, despachos } = reporte
   const rangoLabel = `${new Date(`${rango.from}T00:00:00`).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })} - ${new Date(`${rango.to}T00:00:00`).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}`
-  const ventasNetas = despachos.slice(0, 12).map(d => {
-    const neto = Number(d.total_usd || 0) - Number(d.flete_usd || 0) - Number(d.descuento_total_usd || 0)
-    return [
-      { content: <span className="font-mono font-bold text-slate-700">{d.numero || '—'}</span> },
-      { content: d.cliente?.nombre || 'Sin cliente', className: 'font-semibold text-slate-700' },
-      {
-        content: (
-          <span className="inline-flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: d.vendedor?.color || '#64748b' }} />
-            <span>{d.vendedor?.nombre || 'Sin vendedor'}</span>
-          </span>
-        )
-      },
-      { content: d.entregada_en ? new Date(d.entregada_en).toLocaleDateString('es-VE') : '—', className: 'text-center text-slate-500' },
-      { content: fmtUsd(neto), className: 'text-right font-black text-slate-800' },
-    ]
-  })
+
+  const METODO_PAGOS_STYLES = {
+    'Efectivo': 'bg-emerald-50 text-emerald-700 border-emerald-100',
+    'Zelle': 'bg-blue-50 text-blue-700 border-blue-100',
+    'Pago Móvil': 'bg-purple-50 text-purple-700 border-purple-100',
+    'USDT': 'bg-amber-50 text-amber-700 border-amber-100',
+    'Punto de Venta': 'bg-cyan-50 text-cyan-700 border-cyan-100',
+    'Sin especificar': 'bg-slate-50 text-slate-600 border-slate-100',
+  }
+
+  const ESTADO_STYLES = {
+    despachada: 'bg-blue-100 text-blue-700',
+    entregada: 'bg-emerald-100 text-emerald-700',
+    pagada: 'bg-emerald-100 text-emerald-700',
+    pendiente: 'bg-amber-100 text-amber-700',
+  }
 
   return (
     <div className="space-y-4">
@@ -330,7 +329,7 @@ function TabVentas({ configNeg }) {
       </div>
 
       {despachos.length === 0 ? (
-        <EmptyState icon={BarChart3} title="Sin ventas entregadas" description="No hay despachos entregados en el periodo seleccionado." />
+        <EmptyState icon={BarChart3} title="Sin ventas procesadas" description="No hay despachos aprobados o entregados en el periodo seleccionado." />
       ) : (
         <>
           <KpiCards kpis={kpis} />
@@ -345,19 +344,104 @@ function TabVentas({ configNeg }) {
             <TablaClientes data={porCliente} />
           </div>
 
-          <AdminTable
-            icon={FileText}
-            iconColor="text-slate-500"
-            title="Últimas ventas entregadas"
-            headers={[
-              { label: 'Despacho' },
-              { label: 'Cliente' },
-              { label: 'Vendedor' },
-              { label: 'Fecha', align: 'text-center' },
-              { label: 'Venta neta', align: 'text-right' },
-            ]}
-            rows={ventasNetas}
-          />
+          {/* Tabla de Despachos Premium */}
+          <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+            <div className="px-3 sm:px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileText size={16} className="text-slate-500" />
+                <h3 className="text-sm font-black text-slate-800">Últimos despachos procesados</h3>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs sm:text-sm">
+                <thead>
+                  <tr className="text-[10px] sm:text-xs text-slate-400 uppercase bg-slate-50 border-b border-slate-100">
+                    <th className="px-3 py-2.5 font-semibold text-center w-12">#</th>
+                    <th className="px-3 py-2.5 font-semibold text-center w-24">Estado</th>
+                    <th className="px-3 py-2.5 font-semibold text-left">Cliente</th>
+                    <th className="px-3 py-2.5 font-semibold text-left">Asesor</th>
+                    <th className="px-3 py-2.5 font-semibold text-center">Fecha</th>
+                    <th className="px-3 py-2.5 font-semibold text-left">Forma de Pago</th>
+                    <th className="px-3 py-2.5 font-semibold text-right">Total USD</th>
+                    <th className="px-3 py-2.5 font-semibold text-right">Total Bs</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {despachos.slice(0, 15).map((d, i) => (
+                    <tr key={i} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                      <td className="px-3 py-2.5 text-center">
+                        <span className="inline-block px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded-md font-mono font-bold text-[11px]">
+                          {d.despacho_numero || '—'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-bold ${ESTADO_STYLES[d.estado] || 'bg-slate-100 text-slate-600'}`}>
+                          {d.estado === 'despachada' ? 'Aprobada' : d.estado === 'entregada' ? 'Entregada' : d.estado}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 font-bold text-slate-800 truncate max-w-[150px]">
+                        {d.cliente_nombre || 'Sin cliente'}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: d.asesor_color || '#64748b' }} />
+                          <span className="font-semibold text-slate-600 truncate max-w-[100px]">{d.asesor_nombre || 'Sin asesor'}</span>
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-center font-medium text-slate-500">
+                        {d.fecha ? new Date(d.fecha).toLocaleDateString('es-VE', { day: '2-digit', month: 'short' }) : '—'}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        {Array.isArray(d.forma_pago) && d.forma_pago.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {d.forma_pago.map((fp, idx) => (
+                              <span key={idx} className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border ${METODO_PAGOS_STYLES[fp.metodo] || METODO_PAGOS_STYLES['Sin especificar']}`}>
+                                {fp.metodo}: ${Number(fp.monto).toLocaleString('es-VE', { maximumFractionDigits: 2 })}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-[10px] font-semibold text-slate-400">Pendiente</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-black text-slate-800">
+                        {fmtUsd(d.venta_neta_usd)}
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-bold text-indigo-600 text-xs">
+                        {fmtBs(d.total_bs)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            
+            {/* Resumen de totales inferior */}
+            <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 flex flex-wrap items-center gap-3 sm:gap-4 text-xs font-semibold text-slate-500 shadow-inner">
+              <div className="flex items-center gap-1.5">
+                <span>Total procesados:</span>
+                <span className="px-1.5 py-0.5 rounded-md bg-slate-200 text-slate-700 font-bold">{despachos.length}</span>
+              </div>
+              <div className="w-1 h-1 rounded-full bg-slate-300 hidden sm:block" />
+              <div className="flex items-center gap-1.5">
+                <span>Aprobados:</span>
+                <span className="px-1.5 py-0.5 rounded-md bg-blue-100 text-blue-700 font-bold">
+                  {despachos.filter(d => d.estado === 'despachada').length}
+                </span>
+              </div>
+              <div className="w-1 h-1 rounded-full bg-slate-300 hidden sm:block" />
+              <div className="flex items-center gap-1.5">
+                <span>Entregados:</span>
+                <span className="px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-700 font-bold">
+                  {despachos.filter(d => d.estado === 'entregada').length}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 sm:ml-auto mt-1 sm:mt-0">
+                <span className="uppercase tracking-wider text-[10px] font-bold text-slate-400">Facturado Neto:</span>
+                <span className="text-sm font-black text-slate-800">{fmtUsd(kpis.totalVentas)}</span>
+              </div>
+            </div>
+          </div>
         </>
       )}
     </div>

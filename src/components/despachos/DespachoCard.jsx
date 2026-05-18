@@ -193,10 +193,13 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const totalFinal = totalBruto - descuentoTotal // total con flete+corte, menos descuento
 
   let isCtaPorCobrar = false
+  let isMixtoCxc = false
   let textVencimiento = null
+  let numMetodos = 0
   try {
     const fp = typeof despacho.forma_pago === 'string' ? JSON.parse(despacho.forma_pago) : (despacho.forma_pago || [])
     if (Array.isArray(fp)) {
+      numMetodos = fp.length
       const cta = fp.find(f => f.metodo === 'Cta por cobrar')
       if (cta && cta.diasVencimiento > 0) {
         isCtaPorCobrar = true
@@ -208,6 +211,9 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         textVencimiento = `${cta.diasVencimiento} días (${vencido ? `Vencido hace ${Math.abs(restantes)}d` : `${restantes}d restantes`})`
       } else if (cta) {
         isCtaPorCobrar = true
+      }
+      if (isCtaPorCobrar && numMetodos > 1) {
+        isMixtoCxc = true
       }
     }
   } catch (e) {
@@ -929,7 +935,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
 
                   <span className="text-slate-500">Condición:</span>
                   <span className={`font-semibold text-right ${isCtaPorCobrar ? 'text-amber-600' : 'text-emerald-600'}`}>
-                    {isCtaPorCobrar ? 'Crédito (CxC)' : 'Contado'}
+                    {isMixtoCxc ? 'Mixto (Contado + CxC)' : isCtaPorCobrar ? 'Crédito (CxC)' : 'Contado'}
                   </span>
 
                   {esVendedorSinComision ? (

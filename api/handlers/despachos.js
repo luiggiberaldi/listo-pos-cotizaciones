@@ -191,7 +191,7 @@ export async function handleEditarPagoDespacho(request, env) {
     const [vendRol2] = await vendRolRes2.json();
     console.log('[COMISION][EDITAR_PAGO] rol vendedor:', vendRol2?.rol);
 
-    if (!['vendedor_sin_comision', 'jefe'].includes(vendRol2?.rol)) {
+    if (!['vendedor_sin_comision', 'jefe', 'logistica', 'administracion', 'desarrollador'].includes(vendRol2?.rol)) {
       await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}`, {
         method: 'DELETE', headers: h,
       });
@@ -430,7 +430,7 @@ export async function handleActualizarEstadoDespacho(request, env) {
         const [vendRol] = await vendRolRes.json();
         console.log('[COMISION] rol vendedor:', vendRol?.rol);
 
-        if (!['vendedor_sin_comision', 'jefe'].includes(vendRol?.rol)) {
+        if (!['vendedor_sin_comision', 'jefe', 'logistica', 'administracion', 'desarrollador'].includes(vendRol?.rol)) {
           const comRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcularcomisiondespacho`, {
             method: 'POST', headers,
             body: JSON.stringify({ p_despachoid: despachoId }),
@@ -664,7 +664,7 @@ export async function handleEditarItemsDespacho(request, env) {
       const [vendRol4] = await vendRolRes4.json();
       console.log('[COMISION][EDITAR_ITEMS] rol vendedor:', vendRol4?.rol);
 
-      if (!['vendedor_sin_comision', 'jefe'].includes(vendRol4?.rol)) {
+      if (!['vendedor_sin_comision', 'jefe', 'logistica', 'administracion', 'desarrollador'].includes(vendRol4?.rol)) {
         await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}`, {
           method: 'DELETE', headers,
         });

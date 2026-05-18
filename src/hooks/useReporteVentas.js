@@ -8,7 +8,7 @@ import useAuthStore from '../store/useAuthStore'
 export const REPORTE_KEY = ['reporte-ventas']
 
 /**
- * Obtiene datos de ventas (despachos entregados) en un rango de fechas,
+ * Obtiene datos de ventas (despachos aprobados y entregados) en un rango de fechas,
  * con desglose por vendedor, cliente, producto y categoría.
  */
 export function useReporteVentas({ from, to, prevFrom, prevTo }) {
@@ -18,30 +18,15 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
   return useQuery({
     queryKey: [...REPORTE_KEY, from, to, prevFrom, prevTo, esPrivilegiado, perfil?.id],
     queryFn: async () => {
-      // ── 1. Despachos entregados período actual + anterior en paralelo ──
-      // Construir offset de zona horaria local para filtros correctos
-      // getTimezoneOffset() devuelve minutos de diferencia UTC-local (positivo = zona negativa)
-      // Ej: Venezuela UTC-4 → offset = 240 → tzStr = '-04:00'
-      const rawOffset = new Date().getTimezoneOffset()
-      const sign = rawOffset <= 0 ? '+' : '-'
-      const absOffset = Math.abs(rawOffset)
-      const tzStr = `${sign}${String(Math.floor(absOffset / 60)).padStart(2, '0')}:${String(absOffset % 60).padStart(2, '0')}`
-
-      const buildQuery = (f, t) => {
-        let q = supabase
-          .from('notas_despacho')
-          .select(`
-            id, numero, cotizacion_id, total_usd, flete_usd, descuento_total_usd, forma_pago,
-            vendedor_id, cliente_id, entregada_en,
-            vendedor:usuarios!notas_despacho_vendedor_id_fkey(id, nombre, color),
-            cliente:clientes!notas_despacho_cliente_id_fkey(id, nombre)
-          `)
-          .eq('estado', 'entregada')
-          .gte('entregada_en', `${f}T00:00:00${tzStr}`)
-          .lte('entregada_en', `${t}T23:59:59${tzStr}`)
-          .order('entregada_en', { ascending: false })
-        if (!esPrivilegiado) q = q.eq('vendedor_id', perfil.id)
-        return q
+      // ── 1. Despachos entregados y en entrega (vía RPC) ──
+      const fetchDespachos = async (f, t) => {
+        const { data, error } = await supabase.rpc('obtener_reporte_ventas_operaciones', {
+          p_fecha_inicio: f,
+          p_fecha_fin: t,
+          p_vendedor_id: esPrivilegiado ? null : perfil?.id
+        })
+        if (error) throw error
+        return data ?? []
       }
 
       // Queries al Worker para comisiones (v2) — evita RLS directo y usa nombres v2
@@ -58,19 +43,12 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
         return json?.data ?? []
       }
 
-      const [despachosRes, prevDespachosRes, comisionesData, prevComisionesData] = await Promise.all([
-        buildQuery(from, to),
-        buildQuery(prevFrom, prevTo),
+      const [despachos, prevDespachos, comisiones, prevComisiones] = await Promise.all([
+        fetchDespachos(from, to),
+        fetchDespachos(prevFrom, prevTo),
         fetchComisionesWorker(from, to),
         fetchComisionesWorker(prevFrom, prevTo),
       ])
-
-      if (despachosRes.error) throw despachosRes.error
-      if (prevDespachosRes.error) throw prevDespachosRes.error
-      const despachos = despachosRes.data ?? []
-      const prevDespachos = prevDespachosRes.data ?? []
-      const comisiones = comisionesData   // ya es array v2 directo del Worker
-      const prevComisiones = prevComisionesData
 
       // ── 2. Items de las cotizaciones de los despachos ──
       const cotIds = [...new Set(despachos.map(d => d.cotizacion_id).filter(Boolean))]
@@ -93,19 +71,19 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
 
       // ── 3. Agregaciones ──
 
-      // KPIs actuales (restando flete y descuentos)
-      const ventaNeta = (d) => Number(d.total_usd || 0) - Number(d.flete_usd || 0) - Number(d.descuento_total_usd || 0)
+      // KPIs actuales
+      const ventaNeta = (d) => Number(d.venta_neta_usd || 0)
       const totalVentas = despachos.reduce((s, d) => s + ventaNeta(d), 0)
       const totalFlete = despachos.reduce((s, d) => s + Number(d.flete_usd || 0), 0)
-      const totalDescuentos = despachos.reduce((s, d) => s + Number(d.descuento_total_usd || 0), 0)
+      const totalDescuentos = despachos.reduce((s, d) => s + Number(d.descuento_usd || 0), 0)
       const numDespachos = despachos.length
       const ticketPromedio = numDespachos > 0 ? totalVentas / numDespachos : 0
       const totalComisiones = comisiones.reduce((s, c) => s + Number(c.totalcomision || 0), 0)
       const comisionesPagadas = comisiones.filter(c => c.estado === 'pagada').reduce((s, c) => s + Number(c.totalcomision || 0), 0)
       const comisionesPendientes = comisiones.filter(c => c.estado === 'pendiente').reduce((s, c) => s + Number(c.totalcomision || 0), 0)
 
-      // KPIs anteriores (para comparativo, también sin flete ni descuentos)
-      const prevTotalVentas = prevDespachos.reduce((s, d) => s + (Number(d.total_usd || 0) - Number(d.flete_usd || 0) - Number(d.descuento_total_usd || 0)), 0)
+      // KPIs anteriores (para comparativo)
+      const prevTotalVentas = prevDespachos.reduce((s, d) => s + Number(d.venta_neta_usd || 0), 0)
       const prevNumDespachos = prevDespachos.length
       const prevTicketPromedio = prevNumDespachos > 0 ? prevTotalVentas / prevNumDespachos : 0
       const prevTotalComisiones = prevComisiones.reduce((s, c) => s + Number(c.totalcomision || 0), 0)
@@ -113,12 +91,12 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
       // Por vendedor
       const vendedorMap = {}
       despachos.forEach(d => {
-        const vid = d.vendedor_id
+        const vid = d.asesor_id || 'unassigned'
         if (!vendedorMap[vid]) {
           vendedorMap[vid] = {
             id: vid,
-            nombre: d.vendedor?.nombre ?? 'Sin nombre',
-            color: d.vendedor?.color ?? '#64748b',
+            nombre: d.asesor_nombre ?? 'Sin nombre',
+            color: d.asesor_color ?? '#64748b',
             despachos: 0,
             totalUsd: 0,
             comision: 0,
@@ -128,26 +106,35 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
         vendedorMap[vid].totalUsd += ventaNeta(d)
       })
       comisiones.forEach(c => {
-        if (vendedorMap[c.vendedorid]) {
-          vendedorMap[c.vendedorid].comision += Number(c.totalcomision || 0)
+        const vid = c.vendedorid || c.vendedor_id || 'unassigned'
+        if (!vendedorMap[vid]) {
+          vendedorMap[vid] = {
+            id: vid,
+            nombre: c.vendedor?.nombre || c.vendedornombre || 'Sin nombre',
+            color: c.vendedor?.color || c.vendedorcolor || '#64748b',
+            despachos: 0,
+            totalUsd: 0,
+            comision: 0,
+          }
         }
+        vendedorMap[vid].comision += Number(c.totalcomision || 0)
       })
       const porVendedor = Object.values(vendedorMap).sort((a, b) => b.totalUsd - a.totalUsd)
 
       // Por cliente
       const clienteMap = {}
       despachos.forEach(d => {
-        const cid = d.cliente_id
-        if (!clienteMap[cid]) {
-          clienteMap[cid] = {
-            id: cid,
-            nombre: d.cliente?.nombre ?? 'Sin nombre',
+        const cnombre = d.cliente_nombre || 'Sin cliente'
+        if (!clienteMap[cnombre]) {
+          clienteMap[cnombre] = {
+            id: cnombre,
+            nombre: cnombre,
             despachos: 0,
             totalUsd: 0,
           }
         }
-        clienteMap[cid].despachos++
-        clienteMap[cid].totalUsd += ventaNeta(d)
+        clienteMap[cnombre].despachos++
+        clienteMap[cnombre].totalUsd += ventaNeta(d)
       })
       const porCliente = Object.values(clienteMap).sort((a, b) => b.totalUsd - a.totalUsd).slice(0, 10)
 
@@ -191,21 +178,21 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
       // Forma de pago
       const formaPagoMap = {}
       despachos.forEach(d => {
-        let formas = []
-        try {
-          const parsed = typeof d.forma_pago === 'string' ? JSON.parse(d.forma_pago) : d.forma_pago
-          if (Array.isArray(parsed)) formas = parsed
-          else formas = [{ metodo: d.forma_pago || 'Sin especificar', monto: ventaNeta(d) }]
-        } catch {
-          formas = [{ metodo: d.forma_pago || 'Sin especificar', monto: ventaNeta(d) }]
+        const formas = Array.isArray(d.forma_pago) ? d.forma_pago : []
+        if (formas.length === 0) {
+          const fallback = 'Pendiente'
+          if (!formaPagoMap[fallback]) formaPagoMap[fallback] = { formaPago: fallback, count: 0, totalUsd: 0 }
+          formaPagoMap[fallback].count++
+          formaPagoMap[fallback].totalUsd += ventaNeta(d)
+        } else {
+          formas.forEach(f => {
+            const nombre = f.metodo || 'Sin especificar'
+            const monto = Number(f.monto) || 0
+            if (!formaPagoMap[nombre]) formaPagoMap[nombre] = { formaPago: nombre, count: 0, totalUsd: 0 }
+            formaPagoMap[nombre].count++
+            formaPagoMap[nombre].totalUsd += monto
+          })
         }
-        formas.forEach(f => {
-          const nombre = f.metodo || 'Sin especificar'
-          const monto = Number(f.monto) || 0
-          if (!formaPagoMap[nombre]) formaPagoMap[nombre] = { formaPago: nombre, count: 0, totalUsd: 0 }
-          formaPagoMap[nombre].count++
-          formaPagoMap[nombre].totalUsd += monto
-        })
       })
       const porFormaPago = Object.values(formaPagoMap).sort((a, b) => b.totalUsd - a.totalUsd)
 
