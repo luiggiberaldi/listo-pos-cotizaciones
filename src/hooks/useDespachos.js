@@ -243,6 +243,8 @@ export function useActualizarEstadoDespacho() {
         qc.invalidateQueries({ queryKey: ['stock_comprometido'] })
         qc.invalidateQueries({ queryKey: ['reporte-ventas'] })
         qc.invalidateQueries({ queryKey: ['dashboard_metrics'] })
+        qc.invalidateQueries({ queryKey: ['clientes'], exact: false })
+        qc.invalidateQueries({ queryKey: ['cuentas-cobrar'], exact: false })
       }, 400)
     },
   })
@@ -269,6 +271,8 @@ export function useEditarDespacho() {
       qc.invalidateQueries({ queryKey: ['stock_comprometido'] })
       qc.invalidateQueries({ queryKey: ['reporte-ventas'] })
       qc.invalidateQueries({ queryKey: ['dashboard_metrics'] })
+      qc.invalidateQueries({ queryKey: ['clientes'], exact: false })
+      qc.invalidateQueries({ queryKey: ['cuentas-cobrar'], exact: false })
     },
     onError: (error) => {
       showToast(error.message || 'Error al editar despacho', 'error')
@@ -297,6 +301,8 @@ export function useEditarItemsDespacho() {
       qc.invalidateQueries({ queryKey: ['inventario'], exact: false })
       qc.invalidateQueries({ queryKey: ['stock_comprometido'] })
       qc.invalidateQueries({ queryKey: ['dashboard_metrics'] })
+      qc.invalidateQueries({ queryKey: ['clientes'], exact: false })
+      qc.invalidateQueries({ queryKey: ['cuentas-cobrar'], exact: false })
     },
     onError: (error) => {
       showToast(error.message || 'Error al editar ítems', 'error')
