@@ -237,6 +237,16 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
     <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
 
 
+      {/* Código del cliente (Solo en edición) */}
+      {esEdicion && cliente?.codigo_cliente && (
+        <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 flex items-center justify-between text-sm">
+          <span className="text-slate-500 font-semibold">Código Único del Cliente:</span>
+          <span className="font-mono font-black text-slate-800 bg-white border border-slate-200 rounded px-2 py-0.5 shadow-sm">
+            #{cliente.codigo_cliente}
+          </span>
+        </div>
+      )}
+
       {/* Nombre */}
       <Campo label="Nombre *" icono={User} error={errores.nombre}>
         <input

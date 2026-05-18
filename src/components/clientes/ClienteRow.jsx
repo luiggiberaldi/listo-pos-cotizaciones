@@ -30,6 +30,11 @@ export default function ClienteRow({ cliente, onEditar, onReasignar, onCotizar, 
       <div className="min-w-0 flex-1 px-4 py-3">
         <div className="flex items-center gap-2 flex-wrap">
           <h3 className="font-bold text-slate-800 text-sm truncate">{cliente.nombre}</h3>
+          {cliente.codigo_cliente && (
+            <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded shrink-0">
+              #{cliente.codigo_cliente}
+            </span>
+          )}
           {cliente.rif_cedula && (
             <span className="flex items-center gap-1 text-xs text-slate-400">
               <Hash size={10} />{cliente.rif_cedula}

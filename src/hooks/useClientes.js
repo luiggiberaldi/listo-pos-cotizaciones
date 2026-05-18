@@ -40,7 +40,7 @@ export function useCliente(id) {
       const { data, error } = await supabase
         .from('clientes')
         .select(`
-          id, nombre, rif_cedula, telefono, email,
+          id, codigo_cliente, nombre, rif_cedula, telefono, email,
           direccion, estado, ciudad, notas, tipo_cliente, activo,
           vendedor_id, asignado_en, saldo_pendiente,
           vendedor:usuarios!clientes_vendedor_id_fkey(id, nombre, telefono)

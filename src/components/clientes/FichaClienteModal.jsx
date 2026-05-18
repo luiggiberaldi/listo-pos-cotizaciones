@@ -291,7 +291,14 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
                 {cliente.nombre?.slice(0, 2).toUpperCase()}
               </div>
               <div className="min-w-0">
-                <h2 className="font-black text-white text-base leading-tight truncate">{cliente.nombre}</h2>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="font-black text-white text-base leading-tight truncate">{cliente.nombre}</h2>
+                  {cliente.codigo_cliente && (
+                    <span className="bg-white/20 text-white font-mono font-bold text-[10px] px-1.5 py-0.5 rounded border border-white/30 shrink-0">
+                      #{cliente.codigo_cliente}
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center gap-3 mt-0.5">
                   {cliente.rif_cedula && (
                     <span className="flex items-center gap-1 text-xs text-white/70"><Hash size={10} />{cliente.rif_cedula}</span>

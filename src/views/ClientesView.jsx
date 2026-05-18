@@ -283,7 +283,7 @@ export default function ClientesView() {
             type="text"
             value={textoBusqueda}
             onChange={e => setTextoBusqueda(e.target.value)}
-            placeholder="Buscar por nombre o RIF/cédula..."
+            placeholder="Buscar por nombre, código o RIF..."
             className="w-full pl-9 pr-9 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400"
           />
           {textoBusqueda && (

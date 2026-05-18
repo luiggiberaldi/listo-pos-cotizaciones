@@ -79,7 +79,14 @@ export default function ClienteCard({ cliente, onEditar, onReasignar, onCotizar,
 
       {/* ── Nombre + RIF ── */}
       <div className={`px-4 pt-3 pb-1 transition-opacity ${!cliente.activo ? 'opacity-65' : ''}`}>
-        <h3 className="font-bold text-slate-800 text-sm leading-tight truncate">{cliente.nombre}</h3>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <h3 className="font-bold text-slate-800 text-sm leading-tight truncate">{cliente.nombre}</h3>
+          {cliente.codigo_cliente && (
+            <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded shrink-0">
+              #{cliente.codigo_cliente}
+            </span>
+          )}
+        </div>
         {cliente.rif_cedula && (
           <span className="flex items-center gap-1 text-xs text-slate-400 font-mono mt-0.5">
             <Hash size={10} />
