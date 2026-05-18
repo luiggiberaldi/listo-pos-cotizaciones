@@ -177,6 +177,27 @@ function ComisionesTab({ campos, cambiar, isLoading, cargando }) {
             )
           })}
 
+          {/* Tarjeta "Productos externos" */}
+          <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-xl border border-indigo-200 p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
+              <span className="text-xs font-bold text-indigo-700 uppercase tracking-wider">Productos externos</span>
+            </div>
+            <p className="text-[11px] text-indigo-400">Aplica a productos no pertenecientes al inventario físico.</p>
+            <div className="flex items-baseline gap-2">
+              <input type="number" min="0" max="100" step="0.01"
+                value={campos.comision_pct_externos}
+                onFocus={selectOnFocus}
+                onChange={e => cambiar('comision_pct_externos', Math.max(0, Math.min(100, Number(e.target.value))))}
+                className="w-20 px-3 py-2.5 rounded-xl border border-indigo-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300 text-right font-bold"
+                disabled={disabled} />
+              <span className="text-lg font-bold text-indigo-500">%</span>
+            </div>
+            <p className="text-xs text-indigo-600">
+              $1,000 → <strong>{fmtUsd(1000 * (campos.comision_pct_externos ?? 3) / 100)}</strong>
+            </p>
+          </div>
+
           {/* Tarjeta "Demás categorías" (siempre al final) */}
           <div className="bg-gradient-to-br from-slate-50 to-blue-50 rounded-xl border border-slate-200 p-4 space-y-3">
             <div className="flex items-center gap-2">
@@ -283,6 +304,7 @@ export default function ConfiguracionView() {
     gate_email:              '',
     comision_pct_cabilla:         2,
     comision_pct_otros:           3,
+    comision_pct_externos:        3,
     comision_categoria_cabilla:   'Cabilla',
     _comision_extras:             [],
   })
@@ -301,6 +323,7 @@ export default function ConfiguracionView() {
         gate_email:              config.gate_email              ?? '',
         comision_pct_cabilla:       config.comision_pct_cabilla       ?? 2,
         comision_pct_otros:         config.comision_pct_otros         ?? 3,
+        comision_pct_externos:      config.comision_pct_externos      ?? 3,
         comision_categoria_cabilla: config.comision_categoria_cabilla ?? 'Cabilla',
         _comision_extras:           config._comision_extras           ?? [],
       })

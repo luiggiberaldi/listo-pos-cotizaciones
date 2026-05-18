@@ -423,7 +423,7 @@ export async function handleGetConfig(request, env) {
   const user = await verifyAuth(request, env);
   if (!user?.id) return jsonError('No autenticado', 401, request);
 
-  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/configuracion_negocio?cuenta_id=eq.${user.id}&limit=1&select=id,nombre_negocio,rif_negocio,telefono_negocio,direccion_negocio,email_negocio,logo_url,moneda_principal,pie_pagina_pdf,tasa_bcv_manual,iva_pct,gate_email,comision_pct_cabilla,comision_pct_otros,comision_categoria_cabilla,creado_en,actualizado_en`, {
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/configuracion_negocio?cuenta_id=eq.${user.id}&limit=1&select=id,nombre_negocio,rif_negocio,telefono_negocio,direccion_negocio,email_negocio,logo_url,moneda_principal,pie_pagina_pdf,tasa_bcv_manual,iva_pct,gate_email,comision_pct_cabilla,comision_pct_otros,comision_pct_externos,comision_categoria_cabilla,creado_en,actualizado_en`, {
     headers: {
       apikey: env.SUPABASE_SERVICE_KEY,
       Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
