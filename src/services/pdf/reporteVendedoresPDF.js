@@ -379,7 +379,10 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
 
       const hCols = [
         { label: 'Fecha',   x: MARGIN + 2,  align: 'left' },
-        { label: 'Cliente', x: MARGIN + 30, align: 'left' },
+        { label: 'Nº Desp.', x: MARGIN + 22,  align: 'left' },
+        { label: 'Cliente', x: MARGIN + 42,  align: 'left' },
+        { label: 'Estado',  x: MARGIN + 105, align: 'left' },
+        { label: 'Pago',    x: MARGIN + 128, align: 'left' },
         { label: 'Total',   x: CONTENT_W + MARGIN - 2, align: 'right' },
       ]
       y = drawTableHeader(doc, hCols, y)
@@ -394,7 +397,25 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
         doc.setFontSize(5.5)
         doc.setTextColor(...C_DARK)
         doc.text(fmtFecha(h.fecha, 'short'), MARGIN + 2, y + 3)
-        doc.text((h.cliente || '—').substring(0, 40), MARGIN + 30, y + 3)
+
+        const numStr = h.numero ? String(h.numero).padStart(5, '0') : '—'
+        doc.text(numStr, MARGIN + 22, y + 3)
+
+        doc.text((h.cliente || '—').substring(0, 30), MARGIN + 42, y + 3)
+
+        const estStr = h.estado === 'despachada' ? 'Aprobado' : h.estado === 'entregada' ? 'Entregado' : (h.estado || '—')
+        const estColor = h.estado === 'entregada' ? C_EMERALD : [58, 99, 168]
+        doc.setTextColor(estColor[0], estColor[1], estColor[2])
+        doc.setFont('helvetica', 'bold')
+        doc.text(estStr, MARGIN + 105, y + 3)
+
+        doc.setTextColor(...C_DARK)
+        doc.setFont('helvetica', 'normal')
+        const pagoStr = Array.isArray(h.formaPago) && h.formaPago.length > 0
+          ? [...new Set(h.formaPago.map(fp => fp.metodo || '—'))].join('+')
+          : '—'
+        doc.text(pagoStr.substring(0, 18), MARGIN + 128, y + 3)
+
         doc.setFont('helvetica', 'bold')
         doc.text(fmtUsd(h.totalUsd), CONTENT_W + MARGIN - 2, y + 3, { align: 'right' })
         y += 5.5
