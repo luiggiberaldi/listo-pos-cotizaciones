@@ -5,7 +5,7 @@
 import { useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
-import { apiUrl } from '../services/apiBase'
+import { apiUrl, getAuthHeaders } from '../services/apiBase'
 
 const KEY = ['config_negocio']
 
@@ -61,15 +61,10 @@ export function useActualizarConfig() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (campos) => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.access_token) throw new Error('No autenticado')
-
+      const headers = await getAuthHeaders()
       const res = await fetch(apiUrl('/api/admin/config'), {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
+        headers,
         body: JSON.stringify(campos),
       })
       if (!res.ok) {

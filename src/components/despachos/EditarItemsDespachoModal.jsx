@@ -1,6 +1,6 @@
 // src/components/despachos/EditarItemsDespachoModal.jsx
 import { useState, useEffect, useMemo } from 'react'
-import { X, Search, Plus, Minus, Trash2, Loader2, Package, Save, AlertCircle, CreditCard, CheckCircle } from 'lucide-react'
+import { X, Search, Plus, Minus, Trash2, Loader2, Package, Save, AlertCircle, CreditCard, CheckCircle, Edit2, DollarSign } from 'lucide-react'
 import { useLineItems } from '../../hooks/useLineItems'
 import { useInventario } from '../../hooks/useInventario'
 import { useProductSearch } from '../../hooks/useProductSearch'
@@ -30,6 +30,9 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
     // Pagos
     const [pagos, setPagos] = useState([])
     const [mostrarSelectorMetodo, setMostrarSelectorMetodo] = useState(false)
+  
+    // Edición de producto externo
+    const [editItemIdx, setEditItemIdx] = useState(null)
   
     function handleAgregarManual(e) {
       if (e) e.preventDefault()
@@ -378,9 +381,16 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                         </p>
                         <p className="text-[10px] text-slate-400 font-mono">{it.codigoSnap || 'SIN CÓDIGO'}</p>
                       </div>
-                      <button onClick={() => eliminarPorId(it.productoId)} className="text-slate-300 hover:text-red-500 p-0.5 transition-colors shrink-0 self-start">
-                        <Trash2 size={14} />
-                      </button>
+                      <div className="flex gap-1.5 shrink-0 self-start">
+                        {(it.origen === 'externo' || !it.productoId || String(it.productoId).startsWith('manual-')) && (
+                          <button onClick={() => setEditItemIdx(items.findIndex(x => x.productoId === it.productoId))} className="text-amber-400 hover:text-amber-500 p-0.5 transition-colors shrink-0" title="Editar detalles">
+                            <Edit2 size={14} />
+                          </button>
+                        )}
+                        <button onClick={() => eliminarPorId(it.productoId)} className="text-slate-300 hover:text-red-500 p-0.5 transition-colors shrink-0">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </div>
 
                     {/* Controles en una sola fila compacta */}
@@ -590,7 +600,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                 disabled={editarItems.isPending}
                 className="px-5 py-3 rounded-2xl border border-slate-300 text-slate-600 font-bold text-sm hover:bg-slate-50 active:scale-[0.98] transition-all disabled:opacity-50"
               >
-                Descartar
+                Cancelar
               </button>
               <button
                 onClick={handleSave}
@@ -603,7 +613,109 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
             </div>
           </div>
         </div>
+      </div>
 
+      {/* Modal editar externo */}
+      <ModalEditarExterno
+        isOpen={editItemIdx !== null}
+        item={editItemIdx !== null ? items[editItemIdx] : null}
+        idx={editItemIdx}
+        onClose={() => setEditItemIdx(null)}
+        onSave={(idx, updates) => {
+          setItems(prev => prev.map((x, i) => i === idx ? { ...x, ...updates } : x))
+          setEditItemIdx(null)
+          showToast('Producto actualizado', 'success')
+        }}
+      />
+    </div>
+  )
+}
+
+function ModalEditarExterno({ isOpen, item, onClose, onSave, idx }) {
+  const [nombre, setNombre] = useState('')
+  const [codigo, setCodigo] = useState('')
+  const [precio, setPrecio] = useState('')
+  const [unidad, setUnidad] = useState('')
+
+  useEffect(() => {
+    if (item && isOpen) {
+      setNombre(item.nombreSnap || '')
+      setCodigo(item.codigoSnap || '')
+      setPrecio(item.precioUnitUsd || '')
+      setUnidad(item.unidadSnap || '')
+    }
+  }, [item, isOpen])
+
+  if (!isOpen || !item) return null
+
+  return (
+    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-sm p-5 space-y-4 animate-in zoom-in-95 duration-200">
+        <div className="flex items-center justify-between">
+          <h3 className="font-black text-slate-800 text-base flex items-center gap-2">
+            <Edit2 size={16} className="text-amber-500" /> Editar producto externo
+          </h3>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Nombre del producto</label>
+            <input 
+              type="text" 
+              value={nombre} 
+              onChange={e => setNombre(e.target.value.toUpperCase())}
+              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 focus:outline-none"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Código</label>
+              <input 
+                type="text" 
+                value={codigo} 
+                onChange={e => setCodigo(e.target.value.toUpperCase())}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 focus:outline-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Unidad</label>
+              <input 
+                type="text" 
+                value={unidad} 
+                onChange={e => setUnidad(e.target.value.toUpperCase())}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 focus:outline-none"
+              />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Precio Unitario (USD)</label>
+            <div className="relative">
+              <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input 
+                type="number" 
+                step="0.01"
+                value={precio} 
+                onChange={e => setPrecio(e.target.value)}
+                className="w-full pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 focus:outline-none font-bold text-slate-700"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex gap-3 pt-2">
+          <button onClick={onClose} className="flex-1 py-2.5 text-sm font-semibold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors">
+            Cancelar
+          </button>
+          <button 
+            onClick={() => onSave(idx, { nombreSnap: nombre, codigoSnap: codigo, precioUnitUsd: Number(precio), unidadSnap: unidad })}
+            className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 active:scale-95 transition-all"
+          >
+            Guardar cambios
+          </button>
+        </div>
       </div>
     </div>
   )
