@@ -410,6 +410,38 @@ export async function handleActualizarEstadoDespacho(request, env) {
       updateData.motivo_anulacion = body.motivo_anulacion;
     }
 
+    // 4b. Revertir CxC si se devuelve o anula desde despachada
+    if (['pendiente', 'anulada'].includes(nuevoEstado) && desp.estado === 'despachada') {
+      try {
+        const cxcRevRes = await fetch(
+          `${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?despacho_id=eq.${despachoId}&tipo=eq.cargo&select=id,monto_usd,cliente_id`,
+          { headers }
+        );
+        const [cxcCargo] = await cxcRevRes.json();
+        if (cxcCargo) {
+          const saldoRevRes = await fetch(
+            `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${cxcCargo.cliente_id}&select=saldo_pendiente`,
+            { headers }
+          );
+          const [clienteRev] = await saldoRevRes.json();
+          if (clienteRev) {
+            const saldoRevertido = Math.max(0, Number(clienteRev.saldo_pendiente || 0) - Number(cxcCargo.monto_usd));
+            await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${cxcCargo.cliente_id}`, {
+              method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
+              body: JSON.stringify({ saldo_pendiente: saldoRevertido }),
+            });
+          }
+          await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?id=eq.${cxcCargo.id}`, {
+            method: 'DELETE', headers,
+          });
+          console.log('[CXC] Cargo CxC revertido por devolución/anulación. Monto:', cxcCargo.monto_usd);
+        }
+      } catch (cxcRevErr) {
+        console.error('[CXC] Error al revertir CxC:', cxcRevErr?.message);
+        /* no crítico — no bloquear operación por error CxC */
+      }
+    }
+
     const patchRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}`, {
       method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
       body: JSON.stringify(updateData),
@@ -420,7 +452,84 @@ export async function handleActualizarEstadoDespacho(request, env) {
       return jsonError(`Error BD al actualizar despacho: ${err}`, 500, request);
     }
 
-    // 5. Calcular comisión solo al confirmar entrega
+    // 5. Al aprobar (despachada): registrar cargo CxC si hay saldo a crédito
+    if (nuevoEstado === 'despachada') {
+      try {
+        const fpRaw = desp.forma_pago_cliente || desp.forma_pago || '[]';
+        let montoCxC = 0;
+        let diasVencimiento = null;
+        try {
+          const fps = JSON.parse(fpRaw);
+          if (Array.isArray(fps)) {
+            const cxc = fps.find(f => f.metodo === 'Cta por cobrar');
+            if (cxc) {
+              montoCxC = Number(cxc.monto) || 0;
+              if (cxc.diasVencimiento) {
+                diasVencimiento = parseInt(cxc.diasVencimiento, 10);
+              }
+            }
+          }
+        } catch { if (fpRaw === 'Cta por cobrar') montoCxC = Number(desp.total_usd) || 0; }
+
+        if (montoCxC > 0) {
+          // Verificar si ya existe un cargo CxC para este despacho (idempotente)
+          const cxcExistRes = await fetch(
+            `${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?despacho_id=eq.${despachoId}&tipo=eq.cargo&select=id`,
+            { headers }
+          );
+          const cxcExist = await cxcExistRes.json();
+          if (!Array.isArray(cxcExist) || cxcExist.length === 0) {
+            const cotRes = await fetch(
+              `${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${desp.cotizacion_id}&select=cliente_id,numero`,
+              { headers }
+            );
+            const [cot] = await cotRes.json();
+            if (cot) {
+              const clienteCxCId = desp.cliente_factura_id || cot.cliente_id;
+              const saldoRes = await fetch(
+                `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteCxCId}&select=saldo_pendiente`,
+                { headers }
+              );
+              const [clienteSaldo] = await saldoRes.json();
+              const saldoActual = Number(clienteSaldo?.saldo_pendiente || 0);
+              const nuevoSaldo = saldoActual + montoCxC;
+
+              let fecha_vencimiento = null;
+              if (diasVencimiento && !isNaN(diasVencimiento)) {
+                const date = new Date();
+                date.setDate(date.getDate() + diasVencimiento);
+                fecha_vencimiento = date.toISOString().split('T')[0];
+              }
+
+              await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
+                method: 'POST', headers,
+                body: JSON.stringify({
+                  cliente_id: clienteCxCId,
+                  despacho_id: despachoId,
+                  tipo: 'cargo',
+                  monto_usd: montoCxC,
+                  saldo_usd: nuevoSaldo,
+                  descripcion: `Orden de despacho #${cot.numero}`,
+                  registrado_por: user.operator_id,
+                  fecha_vencimiento: fecha_vencimiento
+                }),
+              });
+
+              await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteCxCId}`, {
+                method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
+                body: JSON.stringify({ saldo_pendiente: nuevoSaldo }),
+              });
+              console.log('[CXC] Cargo CxC registrado al aprobar. Monto:', montoCxC);
+            }
+          }
+        }
+      } catch (cxcErr) {
+        console.error('[CXC] Error al registrar CxC al aprobar:', cxcErr?.message);
+        /* no crítico — no bloquear aprobación por error CxC */
+      }
+    }
+
+    // 5b. Calcular comisión solo al confirmar entrega
     if (nuevoEstado === 'entregada') {
       try {
         const vendRolRes = await fetch(
@@ -448,70 +557,6 @@ export async function handleActualizarEstadoDespacho(request, env) {
       } catch (comEx) {
         console.error('[COMISION] Error al calcular:', comEx?.message);
       }
-
-      // Registrar cargo CxC al confirmar entrega
-      try {
-        const fpRaw = desp.forma_pago_cliente || desp.forma_pago || '[]';
-        let montoCxC = 0;
-        let diasVencimiento = null;
-        try {
-          const fps = JSON.parse(fpRaw);
-          if (Array.isArray(fps)) {
-            const cxc = fps.find(f => f.metodo === 'Cta por cobrar');
-            if (cxc) {
-              montoCxC = Number(cxc.monto) || 0;
-              if (cxc.diasVencimiento) {
-                diasVencimiento = parseInt(cxc.diasVencimiento, 10);
-              }
-            }
-          }
-        } catch { if (fpRaw === 'Cta por cobrar') montoCxC = Number(desp.total_usd) || 0; }
-
-        if (montoCxC > 0) {
-          const cotRes = await fetch(
-            `${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${desp.cotizacion_id}&select=cliente_id,numero`,
-            { headers }
-          );
-          const [cot] = await cotRes.json();
-          if (cot) {
-            // Usar cliente_factura_id si existe, si no el cliente de la cotización
-            const clienteCxCId = desp.cliente_factura_id || cot.cliente_id;
-            const saldoRes = await fetch(
-              `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteCxCId}&select=saldo_pendiente`,
-              { headers }
-            );
-            const [clienteSaldo] = await saldoRes.json();
-            const saldoActual = Number(clienteSaldo?.saldo_pendiente || 0);
-            const nuevoSaldo = saldoActual + montoCxC;
-
-            let fecha_vencimiento = null;
-            if (diasVencimiento && !isNaN(diasVencimiento)) {
-              const date = new Date();
-              date.setDate(date.getDate() + diasVencimiento);
-              fecha_vencimiento = date.toISOString().split('T')[0]; // Format YYYY-MM-DD
-            }
-
-            await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
-              method: 'POST', headers,
-              body: JSON.stringify({
-                cliente_id: clienteCxCId,
-                despacho_id: despachoId,
-                tipo: 'cargo',
-                monto_usd: montoCxC,
-                saldo_usd: nuevoSaldo,
-                descripcion: `Orden de despacho #${cot.numero}`,
-                registrado_por: user.operator_id,
-                fecha_vencimiento: fecha_vencimiento
-              }),
-            });
-
-            await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteCxCId}`, {
-              method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
-              body: JSON.stringify({ saldo_pendiente: nuevoSaldo }),
-            });
-          }
-        }
-      } catch { /* no crítico — no bloquear entrega por error CxC */ }
     }
 
     // 6. Auditoría
