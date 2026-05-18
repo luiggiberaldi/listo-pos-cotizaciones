@@ -257,7 +257,7 @@ export default function AppLayout() {
         <div className="flex-1" />
 
         {/* Widget BCV — supervisor puede configurar, vendedor solo ve la tasa */}
-        <BcvWidget soloLectura={!esSupervisor} />
+        <BcvWidget soloLectura={!esPrivilegiado} />
 
         {/* Badge de cola offline — solo para roles que pueden hacer ventas */}
         {(perfil?.rol === 'vendedor' || perfil?.rol === 'supervisor' || perfil?.rol === 'desarrollador' || perfil?.rol === 'jefe') && (
