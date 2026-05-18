@@ -168,8 +168,14 @@ function _insertLocalNotification(type, title, body, meta) {
     // STATE: eliminar todas las previas del mismo tipo (solo queda la nueva)
     notifs = notifs.filter(n => n.type !== type)
   } else {
-    // EVENT: ignorar si ya existe una del mismo tipo en los últimos 30s
-    const reciente = notifs.find(n => n.type === type && (Date.now() - n.ts) < EVENT_DEBOUNCE_MS)
+    // EVENT: ignorar si ya existe una exactamente idéntica (tipo, título y cuerpo) en los últimos 30s
+    // Esto evita duplicar clicks accidentales pero permite acumular eventos distintos (ej. dos despachos diferentes)
+    const reciente = notifs.find(n => 
+      n.type === type && 
+      n.title === title && 
+      n.body === body && 
+      (Date.now() - n.ts) < EVENT_DEBOUNCE_MS
+    )
     if (reciente) return null
   }
 
