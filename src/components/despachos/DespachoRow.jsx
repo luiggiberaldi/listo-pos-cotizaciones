@@ -11,7 +11,7 @@ export default memo(function DespachoRow({ despacho, onVer, onEditar, tasa = 0 }
   const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
   const esPrivilegiado = esSupervisor || perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador'
   const vendedorColor = despacho.vendedor?.color || '#64748b'
-  const canEditar = despacho.estado === 'pendiente' && (esPrivilegiado || despacho.vendedor_id === perfil?.id)
+  const canEditar = despacho.estado === 'pendiente' && (esPrivilegiado || perfil?.rol === 'logistica' || despacho.vendedor_id === perfil?.id)
 
   const numDisplay = despacho.cotizacion
     ? `DES-${String(despacho.cotizacion.numero).padStart(5, '0')}`

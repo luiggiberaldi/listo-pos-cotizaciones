@@ -16,7 +16,7 @@ export function useDashboardMetrics() {
     queryFn: async () => {
       const result = {}
 
-      if (rol === 'vendedor') {
+      if (rol === 'vendedor' || rol === 'vendedor_sin_comision') {
         // Despachos pendientes de aprobación (propios)
         const { count } = await supabase
           .from('notas_despacho')

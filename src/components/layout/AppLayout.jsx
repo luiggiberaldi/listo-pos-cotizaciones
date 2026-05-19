@@ -287,7 +287,7 @@ export default function AppLayout() {
         <BcvWidget soloLectura={!esPrivilegiado} />
 
         {/* Badge de cola offline — solo para roles que pueden hacer ventas */}
-        {(perfil?.rol === 'vendedor' || perfil?.rol === 'supervisor' || perfil?.rol === 'desarrollador' || perfil?.rol === 'jefe') && (
+        {(perfil?.rol === 'vendedor' || perfil?.rol === 'vendedor_sin_comision' || perfil?.rol === 'supervisor' || perfil?.rol === 'desarrollador' || perfil?.rol === 'jefe') && (
           <PendingQueueBadge />
         )}
 

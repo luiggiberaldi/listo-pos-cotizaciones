@@ -162,7 +162,7 @@ export async function handleEditarPagoDespacho(request, env) {
   const despacho = despachos[0];
   if (despacho.estado !== 'pendiente') return jsonError('Solo se puede editar un despacho en estado "Por Aprobar"', 400, request);
 
-  const esAdmin = ['supervisor', 'administracion', 'jefe', 'desarrollador'].includes(operador.rol);
+  const esAdmin = ['supervisor', 'administracion', 'jefe', 'desarrollador', 'logistica'].includes(operador.rol);
   const esVendedorDueno = despacho.vendedor_id === operador.id;
   if (!esAdmin && !esVendedorDueno) return jsonError('No tienes permiso para editar este despacho', 403, request);
 
@@ -257,7 +257,8 @@ export async function handleActualizarEstadoDespacho(request, env) {
 
     // 2. Validar transición
     const valid = (desp.estado === 'pendiente' && ['despachada', 'entregada', 'anulada'].includes(nuevoEstado))
-      || (desp.estado === 'despachada' && ['entregada', 'anulada', 'pendiente'].includes(nuevoEstado));
+      || (desp.estado === 'despachada' && ['entregada', 'pendiente'].includes(nuevoEstado))
+      || (desp.estado === 'entregada' && ['pendiente', 'despachada'].includes(nuevoEstado));
     if (!valid) {
       return jsonError(`No se puede pasar de "${desp.estado}" a "${nuevoEstado}"`, 400, request);
     }
@@ -279,28 +280,31 @@ export async function handleActualizarEstadoDespacho(request, env) {
 
     // 2d. Anular: administración, supervisor, desarrollador, o vendedor dueño si está pendiente.
     if (nuevoEstado === 'anulada') {
-      const esVendedorPropio = rolOp === 'vendedor' && desp.vendedor_id === operador.id && desp.estado === 'pendiente';
+      const esVendedorPropio = ['vendedor', 'vendedor_sin_comision'].includes(rolOp) && desp.vendedor_id === operador.id && desp.estado === 'pendiente';
       if (!['administracion', 'supervisor', 'jefe', 'desarrollador'].includes(rolOp) && !esVendedorPropio) {
         return jsonError('No tiene permiso para anular despachos', 403, request);
       }
-      if (desp.estado === 'despachada') {
-        if (rolOp === 'vendedor') return jsonError('El vendedor no puede anular un despacho ya despachado', 403, request);
-        const motivoAnulacion = body.motivo_anulacion || '';
-        if (motivoAnulacion.trim().length < 10) return jsonError('Debe proporcionar un motivo de anulación de al menos 10 caracteres', 400, request);
+    }
+
+    // 2e. Devolver (despachada/entregada→pendiente): logistica, jefe, desarrollador
+    if (['despachada', 'entregada'].includes(desp.estado) && nuevoEstado === 'pendiente') {
+      const rolesPermitidos = ['logistica', 'jefe', 'desarrollador'];
+      if (!rolesPermitidos.includes(rolOp)) {
+        return jsonError('No tiene permiso para devolver este despacho a pendiente', 403, request);
+      }
+      if (!body.motivo_devolucion || body.motivo_devolucion.trim() === '') {
+        return jsonError('Debe proporcionar el motivo de devolución', 400, request);
       }
     }
 
-    // 2e. Devolver (despachada→pendiente): logistica, administracion, supervisor, desarrollador
-    if (desp.estado === 'despachada' && nuevoEstado === 'pendiente') {
-      if (!['logistica', 'administracion', 'supervisor', 'jefe', 'desarrollador'].includes(rolOp)) {
-        return jsonError('No tiene permiso para devolver un despacho a pendiente', 403, request);
-      }
-      if (!body.motivo_devolucion || body.motivo_devolucion.trim() === '') {
-        return jsonError('Debe proporcionar el motivo_devolucion', 400, request);
+    // 2f. Revertir entrega (entregada→despachada): administración, supervisor, desarrollador
+    if (desp.estado === 'entregada' && nuevoEstado === 'despachada') {
+      if (!['administracion', 'supervisor', 'jefe', 'desarrollador'].includes(rolOp)) {
+        return jsonError('Solo un supervisor o administración puede revertir un despacho entregado', 403, request);
       }
     }
-    // Solo restaurar stock si ya había sido entregada (stock ya descontado)
-    if (nuevoEstado === 'anulada' && desp.entregada_en) {
+    // Solo restaurar stock si ya había sido entregada (stock ya descontado) y se anula o revierte
+    if (desp.estado === 'entregada' && ['pendiente', 'despachada', 'anulada'].includes(nuevoEstado)) {
       const ciRes = await fetch(
         `${env.SUPABASE_URL}/rest/v1/notas_despacho_items?despacho_id=eq.${despachoId}&producto_id=not.is.null&origen=eq.inventario&select=producto_id,cantidad,nombre_snap`,
         { headers }
@@ -321,7 +325,9 @@ export async function handleActualizarEstadoDespacho(request, env) {
           movimientos.push({
             lote_id: loteId,
             tipo: 'ingreso',
-            motivo: `Anulación de despacho #${desp.numero}`,
+            motivo: nuevoEstado === 'anulada'
+              ? `Anulación de despacho #${desp.numero}`
+              : `Reversión de despacho #${desp.numero} a ${nuevoEstado === 'pendiente' ? 'pendiente' : 'aprobado'}`,
             motivo_tipo: 'venta',
             producto_id: item.producto_id,
             producto_nombre: item.nombre_snap || prod.nombre,
@@ -420,15 +426,19 @@ export async function handleActualizarEstadoDespacho(request, env) {
       // Guardar tasa del momento de entrega
       if (tasaBcv && Number(tasaBcv) > 0) updateData.tasa_snapshot = Number(tasaBcv);
     }
-    if (nuevoEstado === 'pendiente' && desp.estado === 'despachada') {
+    if (nuevoEstado === 'pendiente' && (desp.estado === 'despachada' || desp.estado === 'entregada')) {
       updateData.motivo_devolucion = body.motivo_devolucion;
+      updateData.entregada_en = null;
     }
-    if (nuevoEstado === 'anulada' && desp.estado === 'despachada') {
+    if (nuevoEstado === 'anulada' && (desp.estado === 'despachada' || desp.estado === 'entregada')) {
       updateData.motivo_anulacion = body.motivo_anulacion;
     }
+    if (nuevoEstado === 'despachada' && desp.estado === 'entregada') {
+      updateData.entregada_en = null;
+    }
 
-    // 4b. Revertir CxC si se devuelve o anula desde despachada
-    if (['pendiente', 'anulada'].includes(nuevoEstado) && desp.estado === 'despachada') {
+    // 4b. Revertir CxC si se devuelve o anula desde despachada o entregada
+    if (['pendiente', 'anulada'].includes(nuevoEstado) && (desp.estado === 'despachada' || desp.estado === 'entregada')) {
       try {
         const cxcRevRes = await fetch(
           `${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?despacho_id=eq.${despachoId}&tipo=eq.cargo&select=id,monto_usd,cliente_id`,
@@ -456,6 +466,18 @@ export async function handleActualizarEstadoDespacho(request, env) {
       } catch (cxcRevErr) {
         console.error('[CXC] Error al revertir CxC:', cxcRevErr?.message);
         /* no crítico — no bloquear operación por error CxC */
+      }
+    }
+
+    // 4c. Revertir/Eliminar comisión si pasa de entregada a cualquier otro estado
+    if (desp.estado === 'entregada' && ['pendiente', 'despachada', 'anulada'].includes(nuevoEstado)) {
+      try {
+        await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}`, {
+          method: 'DELETE', headers,
+        });
+        console.log('[COMISION] Comisión eliminada por reversión de entrega.');
+      } catch (comRevErr) {
+        console.error('[COMISION] Error al revertir comisión:', comRevErr?.message);
       }
     }
 
@@ -608,7 +630,7 @@ export async function handleReciclarDespacho(request, env) {
     if (desp.estado !== 'anulada') return jsonError('Solo se pueden reciclar despachos anulados', 400, request);
 
     const rolOp = operador.rol;
-    const esVendedorPropio = rolOp === 'vendedor' && desp.vendedor_id === operador.id;
+    const esVendedorPropio = ['vendedor', 'vendedor_sin_comision'].includes(rolOp) && desp.vendedor_id === operador.id;
     if (!['administracion', 'supervisor', 'jefe', 'desarrollador'].includes(rolOp) && !esVendedorPropio) {
       return jsonError('No tiene permiso para reciclar despachos', 403, request);
     }

@@ -171,7 +171,35 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
           .order('orden')
 
         if (error) throw error
-        const allItems = data || []
+        let allItems = data || []
+
+        // Si el usuario tiene RLS restrictivo (vendedor), obtener el stock real mediante la RPC segura
+        const productIds = allItems.map(it => it.producto_id).filter(Boolean)
+        if (productIds.length > 0) {
+          try {
+            const { data: stockData } = await supabase.rpc('obtener_stock_productos', { p_ids: productIds })
+            if (stockData) {
+              const stockMap = {}
+              stockData.forEach(s => { stockMap[s.id] = Number(s.stock_actual) })
+              allItems = allItems.map(it => {
+                if (it.producto_id && stockMap[it.producto_id] !== undefined) {
+                  return {
+                    ...it,
+                    producto: {
+                      ...it.producto,
+                      id: it.producto_id,
+                      stock_actual: stockMap[it.producto_id]
+                    }
+                  }
+                }
+                return it
+              })
+            }
+          } catch (err) {
+            console.error('Error fetching stock via RPC:', err)
+          }
+        }
+
         // Separar ítems de corte para mostrarlos aparte (como flete)
         const esCorte = (it) => it.nombre_snap?.toLowerCase().startsWith('corte')
         const sumaCorte = allItems.filter(esCorte).reduce((s, it) => s + (Number(it.total_linea_usd) || 0), 0)

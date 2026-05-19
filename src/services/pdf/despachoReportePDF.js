@@ -22,6 +22,10 @@ const FP_COLORS = {
   'Zelle':            [59, 130, 246],
   'Pago Móvil':       [139, 92, 246],
   'USDT':             [245, 158, 11],
+  'Punto de Venta':   [6, 182, 212],
+  'Transferencia':    [20, 184, 166],
+  'Cruce':            [236, 72, 153],
+  'Cta por cobrar':   [239, 68, 68],
   'Sin especificar':  [148, 163, 184],
 }
 

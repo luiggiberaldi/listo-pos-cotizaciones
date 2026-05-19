@@ -55,9 +55,10 @@ export const ACCIONES = {
 
 // Obtener la config de una acción para un rol específico
 export function getAction(key, rol) {
+  const normalizedRol = rol === 'vendedor_sin_comision' ? 'vendedor' : rol
   const action = ACCIONES[key]
   if (!action) return {}
-  return action[rol] || action.default || {}
+  return action[normalizedRol] || action.default || {}
 }
 
 // Colores para el botón primario móvil según tipo de acción

@@ -177,13 +177,12 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const canDespachar = (esAdministracion || esDesarrollador) && despacho.estado === 'pendiente'
   const canEntregar = (perfil?.rol === 'logistica' || esDesarrollador) && despacho.estado === 'despachada'
   const esVendedorPropio = perfil?.id === despacho.vendedor_id
-  const canAnular = (esDesarrollador && (despacho.estado === 'pendiente' || despacho.estado === 'despachada'))
-    || ((esAdministracion || esSupervisor || esVendedorPropio) && despacho.estado === 'pendiente')
-  const canDevolver = (perfil?.rol === 'jefe' || esDesarrollador || perfil?.rol === 'logistica') && despacho.estado === 'despachada'
+  const canAnular = despacho.estado === 'pendiente' && (esDesarrollador || esAdministracion || esSupervisor || esVendedorPropio)
+  const canDevolver = (despacho.estado === 'despachada' || despacho.estado === 'entregada') && ['logistica', 'jefe', 'desarrollador'].includes(perfil?.rol)
   const canReciclar = ((esSupervisor || esDesarrollador) && despacho.estado === 'anulada' && onReciclar)
-    || (rol === 'vendedor' && despacho.estado === 'anulada' && esVendedorPropio && onReciclar)
+    || (['vendedor', 'vendedor_sin_comision'].includes(rol) && despacho.estado === 'anulada' && esVendedorPropio && onReciclar)
   const canDescuento = (esAdministracion || esDesarrollador) && ['pendiente', 'despachada'].includes(despacho.estado)
-  const canEditar = despacho.estado === 'pendiente' && (esPrivilegiado || despacho.vendedor_id === perfil?.id)
+  const canEditar = despacho.estado === 'pendiente' && (esPrivilegiado || perfil?.rol === 'logistica' || despacho.vendedor_id === perfil?.id)
   const descuentoTotal = Number(despacho.descuento_total_usd || 0)
   const fleteUsd = Number(despacho.flete_usd || 0)
   // corteUsd: usa el campo del despacho si está seteado, sino suma los ítems detectados como corte
@@ -479,7 +478,15 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       actions.push({ label: cfg?.label || 'Marcar entregada', icon: CheckCircle, onClick: () => setAccionPendiente({ id: despacho.id, estado: 'entregada', actionConfig: cfg || { label: 'Marcar entregada', confirm: '¿Confirmar entrega realizada?', color: 'emerald' } }), textColor: 'text-emerald-600' })
     }
     if (canDevolver) {
-      const cfg = getDespachoAction('devolver', rol)
+      const baseCfg = getDespachoAction('devolver', rol)
+      const cfg = despacho.estado === 'entregada' ? {
+        ...baseCfg,
+        label: 'Reabrir despacho',
+        confirmTitle: '¿Reabrir despacho entregado?',
+        confirmMessage: 'El despacho regresará al estado "Por Aprobar" (pendiente) y se reversarán el stock, comisiones y CxC.',
+        confirmDetails: 'Deberás proporcionar el motivo de la reapertura.',
+        confirmText: 'Sí, reabrir despacho',
+      } : baseCfg
       actions.push({ label: cfg.label || 'No entregado', icon: RotateCcw, onClick: () => setAccionPendiente({ id: despacho.id, estado: 'pendiente', isDevolver: true, actionConfig: cfg }), textColor: 'text-amber-600' })
     }
     if (canReciclar && primaryAction?.key !== 'reciclar')
@@ -488,6 +495,11 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   }
 
   const moreActions = getMoreActions()
+  const bottomActions = moreActions.filter(act => 
+    act.label !== 'Reabrir despacho' && 
+    act.label !== 'No entregado' && 
+    act.label !== 'No entregado / Devolver'
+  )
 
   // Resolver config del confirm modal
   const confirmConfig = accionPendiente?.actionConfig || {}
@@ -674,12 +686,12 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             </button>
           )}
 
-          {moreActions.length === 1 ? (
-            <button onClick={moreActions[0].onClick}
+          {bottomActions.length === 1 ? (
+            <button onClick={bottomActions[0].onClick}
               className="ml-auto flex items-center gap-1 px-2 py-2 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 active:bg-slate-100 transition-colors shrink-0">
-              {moreActions[0].icon && (() => { const Icon = moreActions[0].icon; return <Icon size={13} />; })()} {moreActions[0].label}
+              {bottomActions[0].icon && (() => { const Icon = bottomActions[0].icon; return <Icon size={13} />; })()} {bottomActions[0].label}
             </button>
-          ) : moreActions.length > 1 ? (
+          ) : bottomActions.length > 1 ? (
             <button onClick={() => setShowSheet(true)}
               className="ml-auto flex items-center gap-1 px-2 py-2 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 active:bg-slate-100 transition-colors shrink-0">
               <MoreHorizontal size={13} /> Más
@@ -739,11 +751,11 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           </>
         })()}
 
-        {moreActions.length > 1 && (
+        {bottomActions.length > 1 && (
         <MobileActionSheet
           isOpen={showSheet}
           onClose={() => setShowSheet(false)}
-          actions={moreActions}
+          actions={bottomActions}
         />
         )}
       </div>
@@ -830,12 +842,12 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         )}
 
         {/* Más (···) dropdown desktop — o botón directo si solo hay 1 acción */}
-        {moreActions.length === 1 ? (
-          <button onClick={moreActions[0].onClick}
+        {bottomActions.length === 1 ? (
+          <button onClick={bottomActions[0].onClick}
             className="ml-auto flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-50 transition-colors whitespace-nowrap">
-            {moreActions[0].icon && (() => { const Icon = moreActions[0].icon; return <Icon size={12} />; })()} {moreActions[0].label}
+            {bottomActions[0].icon && (() => { const Icon = bottomActions[0].icon; return <Icon size={12} />; })()} {bottomActions[0].label}
           </button>
-        ) : moreActions.length > 1 ? (
+        ) : bottomActions.length > 1 ? (
           <div className="relative ml-auto">
             <button onClick={() => setShowMoreMenu(v => !v)}
               onBlur={() => setTimeout(() => setShowMoreMenu(false), 200)}
@@ -845,7 +857,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             {showMoreMenu && (
               <div className="absolute right-0 bottom-full mb-1 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
                 onMouseDown={e => e.preventDefault()}>
-                {moreActions.map((act, i) => (
+                {bottomActions.map((act, i) => (
                   <Fragment key={i}>
                     {act.danger && <div className="border-t border-slate-100 my-1" />}
                     <button onClick={() => { act.onClick(); setShowMoreMenu(false) }}
@@ -1113,12 +1125,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
                   onMouseDown={e => e.preventDefault()}
                   onClick={() => {
                     setShowAdminMenu(false)
-                    if (despacho.estado === 'despachada') {
-                      const cfg = getDespachoAction('anular', rol)
-                      setAccionPendiente({ id: despacho.id, estado: 'anulada', isAnular: true, actionConfig: cfg })
-                    } else {
-                      onAnular(despacho)
-                    }
+                    onAnular(despacho)
                   }}
                   className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-red-500 hover:bg-red-50 text-left"
                 >

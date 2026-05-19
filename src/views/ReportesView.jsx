@@ -76,7 +76,17 @@ function KpiCard({ icon: Icon, label, value, sub, gradient, border }) {
 function FormaPagoSection({ data = [], kpis }) {
   if (data.length === 0) return null
   const total = data.reduce((s, fp) => s + fp.totalUsd, 0)
-  const COLORS = { 'Efectivo': '#10b981', 'Zelle': '#3b82f6', 'Pago Móvil': '#8b5cf6', 'USDT': '#f59e0b', 'Punto de Venta': '#06b6d4', 'Sin especificar': '#94a3b8' }
+  const COLORS = {
+    'Efectivo': '#10b981',
+    'Zelle': '#3b82f6',
+    'Pago Móvil': '#8b5cf6',
+    'USDT': '#f59e0b',
+    'Punto de Venta': '#06b6d4',
+    'Transferencia': '#14b8a6',
+    'Cruce': '#ec4899',
+    'Cta por cobrar': '#ef4444',
+    'Sin especificar': '#94a3b8'
+  }
 
   return (
     <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 overflow-hidden">
@@ -333,6 +343,9 @@ function TabVentas({ configNeg }) {
     'Pago Móvil': 'bg-purple-50 text-purple-700 border-purple-100',
     'USDT': 'bg-amber-50 text-amber-700 border-amber-100',
     'Punto de Venta': 'bg-cyan-50 text-cyan-700 border-cyan-100',
+    'Transferencia': 'bg-teal-50 text-teal-700 border-teal-100',
+    'Cruce': 'bg-pink-50 text-pink-700 border-pink-100',
+    'Cta por cobrar': 'bg-red-50 text-red-700 border-red-100',
     'Sin especificar': 'bg-slate-50 text-slate-600 border-slate-100',
   }
 

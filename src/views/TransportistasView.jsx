@@ -279,7 +279,7 @@ const purificar  = (s) => (s || '').replace(/[^a-z0-9]/gi, '').toLowerCase()
 export default function TransportistasView() {
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
   const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
-  const puedeCrear = esSupervisor || perfil?.rol === 'vendedor'
+  const puedeCrear = esSupervisor || ['vendedor', 'vendedor_sin_comision'].includes(perfil?.rol)
 
   const [modalAbierto,          setModalAbierto]          = useState(false)
   const [editando,              setEditando]              = useState(null)

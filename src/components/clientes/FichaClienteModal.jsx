@@ -15,7 +15,7 @@ function fmtFecha(iso) {
     ' ' + d.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })
 }
 
-const METODOS = ['Efectivo', 'Zelle', 'Pago Móvil', 'Punto de Venta', 'USDT', 'Transferencia']
+const METODOS = ['Efectivo', 'Zelle', 'Pago Móvil', 'Punto de Venta', 'USDT', 'Transferencia', 'Cruce']
 
 function FormAbono({ clienteId, saldo, onSuccess }) {
   // Cada línea de pago: { metodo, monto, referencia }

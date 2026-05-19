@@ -480,7 +480,8 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
       doc.setLineWidth(0.3)
     }
 
-    const monto = fp.monto != null && fp.monto !== '' ? ` $${Number(fp.monto).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''
+    const montoVal = fp.monto != null && fp.monto !== '' ? Number(fp.monto) : null
+    const monto = montoVal != null ? ` ${fmtTotal(montoVal, monedaPDF, tasa, factorBcv)}` : ''
     const txt = nombre + monto
     // Label
     doc.setFont('helvetica', 'bold')

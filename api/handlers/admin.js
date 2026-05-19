@@ -1027,7 +1027,7 @@ export async function handleCrearTransportista(request, env) {
   const { user, operador, error } = await validateOperator(request, env);
   if (error) return error;
 
-  const ROLES_AUTORIZADOS = ['administracion', 'desarrollador', 'supervisor', 'jefe', 'vendedor', 'logistica'];
+  const ROLES_AUTORIZADOS = ['administracion', 'desarrollador', 'supervisor', 'jefe', 'vendedor', 'vendedor_sin_comision', 'logistica'];
   if (!ROLES_AUTORIZADOS.includes(operador.rol)) {
     return jsonError('Acceso denegado: solo personal autorizado puede crear transportistas', 403, request);
   }
@@ -1066,7 +1066,7 @@ export async function handleActualizarTransportista(request, env) {
   const { user, operador, error } = await validateOperator(request, env);
   if (error) return error;
 
-  const ROLES_AUTORIZADOS = ['administracion', 'desarrollador', 'supervisor', 'jefe', 'vendedor', 'logistica'];
+  const ROLES_AUTORIZADOS = ['administracion', 'desarrollador', 'supervisor', 'jefe', 'vendedor', 'vendedor_sin_comision', 'logistica'];
   if (!ROLES_AUTORIZADOS.includes(operador.rol)) {
     return jsonError('Acceso denegado: solo personal autorizado', 403, request);
   }

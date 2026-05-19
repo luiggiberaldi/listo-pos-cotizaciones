@@ -1,1 +1,2 @@
-export const FORMAS_PAGO = ['Efectivo', 'Zelle', 'Pago Móvil', 'Punto de Venta', 'USDT', 'Transferencia', 'Cta por cobrar']
+export const FORMAS_PAGO = ['Efectivo', 'Zelle', 'Pago Móvil', 'Punto de Venta', 'USDT', 'Transferencia', 'Cruce', 'Cta por cobrar']
+
