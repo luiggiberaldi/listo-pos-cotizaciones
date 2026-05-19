@@ -46,7 +46,7 @@ function transformarReporte(raw, esPrivilegiado) {
   // Por categoría
   const catMap = {}
   items.forEach(i => {
-    const cat = i.categoria || 'Sin categoría'
+    const cat = i.categoria || 'PRODUCTOS EXTERIOR'
     if (!catMap[cat]) catMap[cat] = { categoria: cat, count: 0, stockTotal: 0, valorVenta: 0, valorCosto: 0 }
     catMap[cat].count++
     catMap[cat].stockTotal += Number(i.stock_actual)

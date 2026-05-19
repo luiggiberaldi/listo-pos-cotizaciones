@@ -37,7 +37,7 @@ function KpiCard({ icon: Icon, label, value, sub, badge, gradient, border }) {
         </div>
       </div>
       <p className="text-xl sm:text-2xl font-black leading-tight text-white relative z-10">{value}</p>
-      {sub && <p className="text-[10px] sm:text-[11px] relative z-10" style={{ color: 'rgba(255,255,255,0.4)' }}>{sub}</p>}
+      {sub && <div className="text-[10px] sm:text-[11px] relative z-10" style={{ color: 'rgba(255,255,255,0.4)' }}>{sub}</div>}
     </div>
   )
 }
@@ -53,9 +53,9 @@ export default function KpiCards({ kpis }) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       <KpiCard
-        icon={DollarSign} label="Ventas totales"
+        icon={DollarSign} label="Ventas Netas (Sin Flete)"
         value={fmtUsd(kpis.totalVentas)}
-        sub={`Anterior: ${fmtUsd(kpis.prevTotalVentas)}`}
+        sub="Excluye costos de flete/envío"
         badge={<Badge pct={varVentas} />}
         gradient="linear-gradient(135deg, #1B365D 0%, #0d1f3c 100%)"
         border="rgba(255,255,255,0.07)"
@@ -79,9 +79,20 @@ export default function KpiCards({ kpis }) {
       <KpiCard
         icon={Percent} label="Comisiones generadas"
         value={fmtUsd(kpis.totalComisiones)}
-        sub={kpis.comisionesPagadas > 0 || kpis.comisionesPendientes > 0
-          ? `Pagadas: ${fmtUsd(kpis.comisionesPagadas)} · Pendientes: ${fmtUsd(kpis.comisionesPendientes)}`
-          : `Anterior: ${fmtUsd(kpis.prevTotalComisiones)}`}
+        sub={
+          <div className="flex flex-col gap-0.5">
+            <span>
+              {kpis.comisionesPagadas > 0 || kpis.comisionesPendientes > 0
+                ? `Pagadas: ${fmtUsd(kpis.comisionesPagadas)} · Pendientes: ${fmtUsd(kpis.comisionesPendientes)}`
+                : `Anterior: ${fmtUsd(kpis.prevTotalComisiones)}`}
+            </span>
+            {kpis.totalComisiones > 0 && (
+              <span className="opacity-90">
+                2%: {fmtUsd((kpis.comisionCabilla2 || 0) + (kpis.comisionCabilla3 || 0))} · 3%: {fmtUsd(kpis.comisionOtros || 0)}
+              </span>
+            )}
+          </div>
+        }
         badge={<Badge pct={varComisiones} />}
         gradient="linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)"
         border="rgba(255,255,255,0.10)"

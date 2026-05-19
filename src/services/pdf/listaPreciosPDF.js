@@ -111,7 +111,7 @@ function corregirCategoriaCruzada(categoriaActual, nombre) {
 }
 
 function normalizarCategoria(cat) {
-  if (!cat) return 'SIN CATEGORÍA'
+  if (!cat) return 'PRODUCTOS EXTERIOR'
   let upper = cat.toUpperCase().trim()
   
   // Limpieza inicial

@@ -123,6 +123,14 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
         bx + 4, y + 16.5
       )
     }
+    if (i === 3) {
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(5.5)
+      doc.text(
+        `2%: ${fmtUsd((kpis.totalComisionCabilla2 || 0) + (kpis.totalComisionCabilla3 || 0))} | 3%: ${fmtUsd(kpis.totalComisionOtros || 0)}`,
+        bx + 4, y + 16.5
+      )
+    }
   })
   y += kpiBoxH + 10
 
@@ -260,7 +268,7 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
 
     // Bloque izquierdo: Cotizaciones por estado
     doc.setFillColor(250, 251, 255)
-    doc.roundedRect(MARGIN, y, col2W, 26, 1.5, 1.5, 'F')
+    doc.roundedRect(MARGIN, y, col2W, 34, 1.5, 1.5, 'F')
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(7)
     doc.setTextColor(...C_DARK)
@@ -295,7 +303,7 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
     // Bloque derecho: Comisiones
     const bx2 = MARGIN + col2W + 4
     doc.setFillColor(250, 251, 255)
-    doc.roundedRect(bx2, y, col2W, 26, 1.5, 1.5, 'F')
+    doc.roundedRect(bx2, y, col2W, 34, 1.5, 1.5, 'F')
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(7)
     doc.setTextColor(...C_DARK)
@@ -304,9 +312,11 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
       { label: 'Total generado', value: fmtUsd(v.comisionTotal), color: C_DARK },
       { label: 'Pagado',         value: fmtUsd(v.comisionPagada), color: C_EMERALD },
       { label: 'Pendiente',      value: fmtUsd(v.comisionPendiente), color: C_AMBER },
+      { label: 'Comisión 2%', value: fmtUsd((v.comisionCabilla2 || 0) + (v.comisionCabilla3 || 0)), color: C_DARK },
+      { label: 'Comisión 3%', value: fmtUsd(v.comisionOtros || 0), color: C_DARK },
     ]
     comData.forEach((c, ci) => {
-      const cy = y + 11 + ci * 5
+      const cy = y + 10 + ci * 4.5
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(5.5)
       doc.setTextColor(100, 110, 125)
@@ -316,7 +326,7 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
       doc.setTextColor(c.color[0], c.color[1], c.color[2])
       doc.text(c.value, bx2 + col2W - 3, cy, { align: 'right' })
     })
-    y += 30
+    y += 38
 
     // ── Top Clientes + Top Productos ──────────────────────────────────────────
     const col3W = (CONTENT_W - 4) / 2
@@ -336,7 +346,7 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
         doc.setFont('helvetica', 'normal')
         doc.setFontSize(5.5)
         doc.setTextColor(...C_DARK)
-        doc.text(`${ci + 1}. ${(c.nombre || '—').substring(0, 28)}`, MARGIN + 2, y + 3)
+        doc.text(`${ci + 1}. ${(c.nombre || '—').toUpperCase().substring(0, 28)}`, MARGIN + 2, y + 3)
         doc.setFont('helvetica', 'bold')
         doc.text(fmtUsd(c.totalUsd), MARGIN + col3W - 2, y + 3, { align: 'right' })
         y += 5
@@ -401,7 +411,7 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
         const numStr = h.numero ? String(h.numero).padStart(5, '0') : '—'
         doc.text(numStr, MARGIN + 22, y + 3)
 
-        doc.text((h.cliente || '—').substring(0, 30), MARGIN + 42, y + 3)
+        doc.text((h.cliente || '—').toUpperCase().substring(0, 30), MARGIN + 42, y + 3)
 
         const estStr = h.estado === 'despachada' ? 'Aprobado' : h.estado === 'entregada' ? 'Entregado' : (h.estado || '—')
         const estColor = h.estado === 'entregada' ? C_EMERALD : [58, 99, 168]

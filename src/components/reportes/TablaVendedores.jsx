@@ -57,9 +57,28 @@ export default function TablaVendedores({ data = [] }) {
               </tr>
             ))}
           </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-slate-200 bg-slate-50/80 font-bold">
+              <td className="px-4 py-3 text-slate-400"></td>
+              <td className="px-4 py-3 text-slate-800 font-bold">TOTAL</td>
+              <td className="px-4 py-3 text-center text-slate-800 font-bold">{data.reduce((s, v) => s + (v.despachos || 0), 0)}</td>
+              <td className="px-4 py-3 text-right font-black text-slate-900">{fmtUsd(data.reduce((s, v) => s + (v.totalUsd || 0), 0))}</td>
+              <td className="px-4 py-3 text-right text-slate-500 font-semibold">
+                {fmtUsd(
+                  data.reduce((s, v) => s + (v.despachos || 0), 0) > 0
+                    ? data.reduce((s, v) => s + (v.totalUsd || 0), 0) / data.reduce((s, v) => s + (v.despachos || 0), 0)
+                    : 0
+                )}
+              </td>
+              <td className="px-4 py-3 text-right text-emerald-700 font-black">
+                {fmtUsd(data.reduce((s, v) => s + (v.comision || 0), 0))}
+              </td>
+              <td className="px-4 py-3"></td>
+            </tr>
+          </tfoot>
         </table>
       </div>
-
+ 
       {/* Mobile cards */}
       <div className="sm:hidden divide-y divide-slate-100">
         {data.map((v, i) => (
@@ -82,6 +101,16 @@ export default function TablaVendedores({ data = [] }) {
             <div className="ml-12"><Barra pct={(v.totalUsd / maxUsd) * 100} color={v.color} /></div>
           </div>
         ))}
+        <div className="bg-slate-50 px-4 py-3.5 space-y-2 border-t border-slate-200">
+          <div className="flex items-center justify-between font-bold">
+            <span className="text-slate-800 text-sm">TOTAL</span>
+            <span className="text-slate-900 font-black text-sm">{fmtUsd(data.reduce((s, v) => s + (v.totalUsd || 0), 0))}</span>
+          </div>
+          <div className="flex items-center justify-between text-xs text-slate-500 ml-1">
+            <span>{data.reduce((s, v) => s + (v.despachos || 0), 0)} despacho{data.reduce((s, v) => s + (v.despachos || 0), 0) !== 1 ? 's' : ''}</span>
+            <span>Comisión: <span className="text-emerald-700 font-bold">{fmtUsd(data.reduce((s, v) => s + (v.comision || 0), 0))}</span></span>
+          </div>
+        </div>
       </div>
     </div>
   )

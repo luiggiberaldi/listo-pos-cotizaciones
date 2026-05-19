@@ -189,6 +189,14 @@ function VendedorDetalle({ v, onExport, isExporting }) {
             <span className="text-slate-400">Comisión pendiente</span>
             <span className="font-bold text-amber-600">{fmtUsd(v.comisionPendiente)}</span>
           </div>
+          <div className="flex justify-between text-[11px] pt-1 border-t border-dashed border-slate-100">
+            <span className="text-slate-400">Cabillas al 2%</span>
+            <span className="font-bold text-slate-700">{fmtUsd(v.comisionCabilla2 || 0)}</span>
+          </div>
+          <div className="flex justify-between text-[11px]">
+            <span className="text-slate-400">Cabillas al 3%</span>
+            <span className="font-bold text-slate-700">{fmtUsd(v.comisionCabilla3 || 0)}</span>
+          </div>
         </div>
       </div>
 
@@ -338,7 +346,13 @@ export default function ReporteVendedoresView() {
           <KpiCard label="Ventas del período" value={fmtUsd(kpis.totalVentas)} icon={DollarSign} color="#3B82F6" variacion={kpis.variacionGlobal} />
           <KpiCard label="Despachos entregados" value={String(kpis.totalDespachos)} icon={ShoppingBag} color="#059669" sub={`${kpis.numVendedores} vendedor${kpis.numVendedores !== 1 ? 'es' : ''}`} />
           <KpiCard label="Ticket promedio" value={fmtUsd(kpis.ticketPromedioGlobal)} icon={Target} color="#8B5CF6" />
-          <KpiCard label="Comisiones generadas" value={fmtUsd(kpis.totalComision)} icon={Award} color="#D97706" />
+          <KpiCard
+            label="Comisiones generadas"
+            value={fmtUsd(kpis.totalComision)}
+            icon={Award}
+            color="#D97706"
+            sub={`Cabillas 2%: ${fmtUsd(kpis.totalComisionCabilla2 || 0)} | 3%: ${fmtUsd(kpis.totalComisionCabilla3 || 0)}`}
+          />
         </div>
       )}
 

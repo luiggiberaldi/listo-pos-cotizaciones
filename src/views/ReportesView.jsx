@@ -73,7 +73,7 @@ function KpiCard({ icon: Icon, label, value, sub, gradient, border }) {
 }
 
 // ─── Forma de Pago Section ────────────────────────────────────────────────
-function FormaPagoSection({ data = [] }) {
+function FormaPagoSection({ data = [], kpis }) {
   if (data.length === 0) return null
   const total = data.reduce((s, fp) => s + fp.totalUsd, 0)
   const COLORS = { 'Efectivo': '#10b981', 'Zelle': '#3b82f6', 'Pago Móvil': '#8b5cf6', 'USDT': '#f59e0b', 'Punto de Venta': '#06b6d4', 'Sin especificar': '#94a3b8' }
@@ -107,6 +107,41 @@ function FormaPagoSection({ data = [] }) {
             </div>
           )
         })}
+
+        {/* Fila de Total */}
+        <div className="pt-2.5 border-t border-slate-200 mt-2 flex items-center justify-between text-xs sm:text-sm font-bold text-slate-800">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <span className="font-extrabold">TOTAL RECAUDADO</span>
+            <span className="text-[10px] sm:text-xs text-slate-500 font-bold">({data.reduce((s, fp) => s + (fp.count || 0), 0)} desp.)</span>
+          </div>
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <span className="text-[10px] sm:text-xs text-slate-500">100%</span>
+            <span className="font-black text-slate-900 text-xs sm:text-sm">{fmtUsd(total)}</span>
+          </div>
+        </div>
+
+        {/* Desglose explicativo */}
+        {kpis && (
+          <div className="mt-3 pt-3 border-t border-dashed border-slate-200 space-y-1.5 text-[10px] sm:text-xs text-slate-500 bg-slate-50 p-2.5 rounded-xl">
+            <p className="font-extrabold text-slate-700 uppercase tracking-wider text-[8px] sm:text-[9px] mb-1">
+              Desglose de la Diferencia (Flete):
+            </p>
+            <div className="flex justify-between items-center">
+              <span>Ventas Netas (Mercancía)</span>
+              <span className="font-bold text-slate-700">{fmtUsd(kpis.totalVentas)}</span>
+            </div>
+            {kpis.totalFlete > 0 && (
+              <div className="flex justify-between items-center">
+                <span>Fletes / Envío Cobrado</span>
+                <span className="font-bold text-emerald-600">+{fmtUsd(kpis.totalFlete)}</span>
+              </div>
+            )}
+            <div className="border-t border-slate-200 pt-1 mt-1 flex justify-between items-center font-black text-slate-800 text-[11px] sm:text-xs">
+              <span>Total Recaudado</span>
+              <span>{fmtUsd(total)}</span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -336,7 +371,7 @@ function TabVentas({ configNeg }) {
 
           <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)] gap-4">
             <TablaVendedores data={porVendedor} />
-            <FormaPagoSection data={porFormaPago} />
+            <FormaPagoSection data={porFormaPago} kpis={kpis} />
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">

@@ -81,6 +81,9 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
       const totalComisiones = comisiones.reduce((s, c) => s + Number(c.totalcomision || 0), 0)
       const comisionesPagadas = comisiones.filter(c => c.estado === 'pagada').reduce((s, c) => s + Number(c.totalcomision || 0), 0)
       const comisionesPendientes = comisiones.filter(c => c.estado === 'pendiente').reduce((s, c) => s + Number(c.totalcomision || 0), 0)
+      const comisionCabilla2 = comisiones.filter(c => Math.round(Number(c.pctcabilla || 0)) === 2).reduce((s, c) => s + Number(c.comisioncabilla || 0), 0)
+      const comisionCabilla3 = comisiones.filter(c => Math.round(Number(c.pctcabilla || 0)) === 3).reduce((s, c) => s + Number(c.comisioncabilla || 0), 0)
+      const comisionOtros = comisiones.reduce((s, c) => s + Number(c.comisionotros || 0), 0)
 
       // KPIs anteriores (para comparativo)
       const prevTotalVentas = prevDespachos.reduce((s, d) => s + Number(d.venta_neta_usd || 0), 0)
@@ -115,10 +118,25 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
             despachos: 0,
             totalUsd: 0,
             comision: 0,
+            comisionCabilla2: 0,
+            comisionCabilla3: 0,
+            comisionOtros: 0,
           }
         }
         vendedorMap[vid].comision += Number(c.totalcomision || 0)
+        const pctCab = Math.round(Number(c.pctcabilla || 0))
+        const montoCab = Number(c.comisioncabilla || 0)
+        if (pctCab === 2) {
+          vendedorMap[vid].comisionCabilla2 = (vendedorMap[vid].comisionCabilla2 || 0) + montoCab
+        } else if (pctCab === 3) {
+          vendedorMap[vid].comisionCabilla3 = (vendedorMap[vid].comisionCabilla3 || 0) + montoCab
+        }
+        const montoOtros = Number(c.comisionotros || 0)
+        vendedorMap[vid].comisionOtros = (vendedorMap[vid].comisionOtros || 0) + montoOtros
       })
+      if (comisiones.length > 0) {
+        console.log('[DEBUG] First comision from worker:', comisiones[0])
+      }
       const porVendedor = Object.values(vendedorMap).sort((a, b) => b.totalUsd - a.totalUsd)
 
       // Por cliente
@@ -131,12 +149,14 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
             nombre: cnombre,
             despachos: 0,
             totalUsd: 0,
+            vendedor: d.asesor_nombre || '—',
           }
         }
         clienteMap[cnombre].despachos++
         clienteMap[cnombre].totalUsd += ventaNeta(d)
       })
       const porCliente = Object.values(clienteMap).sort((a, b) => b.totalUsd - a.totalUsd).slice(0, 10)
+      console.log('[DEBUG] Top Clientes generated:', porCliente)
 
       // Por producto
       const productoMap = {}
@@ -164,10 +184,10 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
         for (let i = 0; i < productoIds.length; i += 50) {
           const batch = productoIds.slice(i, i + 50)
           const { data } = await supabase.from('productos').select('id, categoria').in('id', batch)
-          if (data) data.forEach(p => { cats[p.id] = p.categoria || 'Sin categoría' })
+          if (data) data.forEach(p => { cats[p.id] = p.categoria || 'PRODUCTOS EXTERIOR' })
         }
         items.forEach(it => {
-          const cat = cats[it.producto_id] || 'Sin categoría'
+          const cat = cats[it.producto_id] || 'PRODUCTOS EXTERIOR'
           if (!categoriaMap[cat]) categoriaMap[cat] = { categoria: cat, unidades: 0, totalUsd: 0 }
           categoriaMap[cat].unidades += Number(it.cantidad || 0)
           categoriaMap[cat].totalUsd += Number(it.total_linea_usd || 0)
@@ -199,7 +219,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
       return {
         kpis: {
           totalVentas, totalFlete, totalDescuentos, numDespachos, ticketPromedio, totalComisiones,
-          comisionesPagadas, comisionesPendientes,
+          comisionesPagadas, comisionesPendientes, comisionCabilla2, comisionCabilla3, comisionOtros,
           prevTotalVentas, prevNumDespachos, prevTicketPromedio, prevTotalComisiones,
         },
         porVendedor,

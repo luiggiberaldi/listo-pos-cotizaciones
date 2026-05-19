@@ -11,13 +11,22 @@ import { round2 } from './dinero'
 export function getComisionPctForItem(item, config = {}) {
   const pctCabilla = Number(config.comision_pct_cabilla || 0)
   const pctOtros   = Number(config.comision_pct_otros   || 0)
+  const pctExternos = Number(config.comision_pct_externos ?? 3)
   const catCabilla = (config.comision_categoria_cabilla || 'Cabilla').toLowerCase().trim()
 
   const nombre = (item.nombreSnap || item.nombre_snap || item.nombre || '').toLowerCase()
+  const prodId = item.producto_id || item.productoId || item.producto?.id || ''
+  const codSnap = item.codigo_snap || item.codigoSnap || item.codigo || ''
   const origen = item.origen || item.producto?.origen || 'inventario'
-  
-  if (origen === 'externo' && nombre.includes('corte')) {
-    return 0
+
+  const esProductoExterno = origen === 'externo' || 
+                            String(prodId).startsWith('manual-') || 
+                            String(prodId).startsWith('ext-') || 
+                            String(codSnap).startsWith('EXT')
+
+  if (esProductoExterno) {
+    if (nombre.includes('corte')) return 0
+    return pctExternos
   }
 
   let extras = []
@@ -53,6 +62,7 @@ export function getComisionPctForItem(item, config = {}) {
 export function calcComisionEstimada(items = [], config = {}) {
   const pctCabilla = Number(config.comision_pct_cabilla || 0)
   const pctOtros   = Number(config.comision_pct_otros   || 0)
+  const pctExternos = Number(config.comision_pct_externos ?? 3)
   const catCabilla = (config.comision_categoria_cabilla || 'Cabilla').toLowerCase().trim()
 
   // Parsear extras de forma segura
@@ -71,28 +81,42 @@ export function calcComisionEstimada(items = [], config = {}) {
     let cat = (item.categoria || 'otros').toLowerCase().trim()
     const nombre = (item.nombreSnap || item.nombre_snap || item.nombre || '').toLowerCase()
     
-    if ((cat === 'otros' || !cat) && nombre.includes(catCabilla)) {
-      cat = catCabilla
-    }
+    const prodId = item.producto_id || item.productoId || item.producto?.id || ''
+    const codSnap = item.codigo_snap || item.codigoSnap || item.codigo || ''
+    const origen = item.origen || item.producto?.origen || 'inventario'
+
+    const esProductoExterno = origen === 'externo' || 
+                              String(prodId).startsWith('manual-') || 
+                              String(prodId).startsWith('ext-') || 
+                              String(codSnap).startsWith('EXT')
     
     const monto = Number(item.total_linea_usd) || Number(item.total) || (Number(item.cantidad) * Number(item.precioUnitUsd || item.precio_unit_usd)) || 0
     if (monto <= 0) continue
 
-    const origen = item.origen || item.producto?.origen || 'inventario'
-
     let pct
-    if (origen === 'externo' && nombre.includes('corte')) {
-      pct = 0
-      cat = 'externo_corte'
-    } else if (cat === catCabilla) {
-      pct = pctCabilla
-    } else {
-      const extra = extras.find(e => (e.cat || '').toLowerCase().trim() === cat)
-      if (extra) {
-        pct = Number(extra.pct)
+    if (esProductoExterno) {
+      if (nombre.includes('corte')) {
+        pct = 0
+        cat = 'externo_corte'
       } else {
-        pct = pctOtros
-        cat = 'otros'
+        pct = pctExternos
+        cat = 'externo'
+      }
+    } else {
+      if ((cat === 'otros' || !cat) && nombre.includes(catCabilla)) {
+        cat = catCabilla
+      }
+
+      if (cat === catCabilla) {
+        pct = pctCabilla
+      } else {
+        const extra = extras.find(e => (e.cat || '').toLowerCase().trim() === cat)
+        if (extra) {
+          pct = Number(extra.pct)
+        } else {
+          pct = pctOtros
+          cat = 'otros'
+        }
       }
     }
 

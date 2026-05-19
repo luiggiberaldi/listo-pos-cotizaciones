@@ -1582,6 +1582,8 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                             id: cotizacionId,
                             numero: numDisplay.replace('COT-', '').replace(/^0+/, ''),
                             total_usd: totalUsd,
+                            costo_envio_usd: Number(costoEnvioUsd) || 0,
+                            corte_usd: Number(corteUsd) || 0,
                             cliente: { nombre: clienteSeleccionado?.nombre }
                           })
                         }
@@ -1645,6 +1647,8 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
             id: cotizacionId,
             numero: numDisplay.replace('COT-', '').replace(/^0+/, ''),
             total_usd: totalUsd,
+            costo_envio_usd: Number(costoEnvioUsd) || 0,
+            corte_usd: Number(corteUsd) || 0,
             cliente: { nombre: clienteSeleccionado?.nombre }
           })
         }}

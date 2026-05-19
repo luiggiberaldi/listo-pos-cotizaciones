@@ -146,6 +146,8 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
             prevCotizaciones: { total: 0, enviada: 0 },
             tasaCierre: 0,
             comisionTotal: 0, comisionPagada: 0, comisionPendiente: 0,
+            comisionCabilla2: 0,
+            comisionCabilla3: 0,
             clienteMap: {},
             productoMap: {},
             historial: [],
@@ -209,6 +211,17 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
         } else {
           v.comisionPendiente += monto
         }
+
+        // Acumular comisiones de cabillas al 2% y 3%
+        const pctCab = Math.round(Number(c.pctcabilla || 0))
+        const montoCab = Number(c.comisioncabilla || 0)
+        if (pctCab === 2) {
+          v.comisionCabilla2 += montoCab
+        } else if (pctCab === 3) {
+          v.comisionCabilla3 += montoCab
+        }
+        
+        v.comisionOtros = (v.comisionOtros || 0) + Number(c.comisionotros || 0)
       })
 
       // Items → Top productos por vendedor
@@ -246,6 +259,9 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
       const totalVentasGlobal = porVendedor.reduce((s, v) => s + v.totalUsd, 0)
       const totalDespachosGlobal = porVendedor.reduce((s, v) => s + v.numDespachos, 0)
       const totalComisionGlobal = comisiones.reduce((s, c) => s + Number(c.totalcomision || 0), 0)
+      const totalComisionCabilla2Global = porVendedor.reduce((s, v) => s + (v.comisionCabilla2 || 0), 0)
+      const totalComisionCabilla3Global = porVendedor.reduce((s, v) => s + (v.comisionCabilla3 || 0), 0)
+      const totalComisionOtrosGlobal = porVendedor.reduce((s, v) => s + (v.comisionOtros || 0), 0)
       const prevTotalGlobal = prevDespachos.reduce((s, d) => s + ventaNeta(d), 0)
 
       return {
@@ -254,6 +270,9 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
           totalVentas: totalVentasGlobal,
           totalDespachos: totalDespachosGlobal,
           totalComision: totalComisionGlobal,
+          totalComisionCabilla2: totalComisionCabilla2Global,
+          totalComisionCabilla3: totalComisionCabilla3Global,
+          totalComisionOtros: totalComisionOtrosGlobal,
           prevTotalVentas: prevTotalGlobal,
           ticketPromedioGlobal: totalDespachosGlobal > 0 ? totalVentasGlobal / totalDespachosGlobal : 0,
           variacionGlobal: prevTotalGlobal > 0
