@@ -160,11 +160,24 @@ export async function handleEditarPagoDespacho(request, env) {
   const despachos = await checkRes.json();
   if (!despachos.length) return jsonError('Despacho no encontrado', 404, request);
   const despacho = despachos[0];
-  if (despacho.estado !== 'pendiente') return jsonError('Solo se puede editar un despacho en estado "Por Aprobar"', 400, request);
-
+  
   const esAdmin = ['supervisor', 'administracion', 'jefe', 'desarrollador', 'logistica'].includes(operador.rol);
   const esVendedorDueno = despacho.vendedor_id === operador.id;
   if (!esAdmin && !esVendedorDueno) return jsonError('No tienes permiso para editar este despacho', 403, request);
+
+  if (despacho.estado === 'entregada') {
+    return jsonError('No se pueden editar despachos en estado entregado', 400, request);
+  }
+
+  if (despacho.estado !== 'pendiente') {
+    const tieneCamposFinancierosRestringidos = formaPago !== undefined || formaPagoCliente !== undefined || referenciaPago !== undefined || corteUsd !== undefined || clienteId !== undefined;
+    if (tieneCamposFinancierosRestringidos) {
+      return jsonError('No se pueden editar datos financieros en un despacho aprobado', 400, request);
+    }
+    if (transportistaId === undefined && fleteUsd === undefined && notas === undefined) {
+      return jsonError('No hay campos editables para este estado', 400, request);
+    }
+  }
 
   // Actualizar campos
   const campos = {};

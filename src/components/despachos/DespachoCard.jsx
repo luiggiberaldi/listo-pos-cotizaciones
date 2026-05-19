@@ -13,6 +13,7 @@ import DetalleModal from '../ui/DetalleModal'
 import DescuentoModal from './DescuentoModal'
 import EditDespachoModal from './EditDespachoModal'
 import DevolverAnularModal from './DevolverAnularModal'
+import CambiarTransportistaModal from './CambiarTransportistaModal'
 import { showToast } from '../ui/Toast'
 import { MessageCircle } from 'lucide-react'
 import { compartirPorWhatsApp, generarMensaje } from '../../utils/whatsapp'
@@ -45,7 +46,14 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const downloadBtnRef = useRef(null)
   const adminBtnRef = useRef(null)
   const [monedaPdf, setMonedaPdf] = useState(() => localStorage.getItem('construacero_moneda_pdf') || '$')
+  const [tasaPersonalizada, setTasaPersonalizada] = useState('')
+  const [showCambiarTransportista, setShowCambiarTransportista] = useState(false)
+  const esLogistica = perfil?.rol === 'logistica' || perfil?.rol === 'jefe' || perfil?.rol === 'desarrollador'
   const { tasaBcv, tasaUsdt } = useTasaCambio()
+
+  const tasaImpresion = (esLogistica && (monedaPdf === 'bs' || monedaPdf === 'bcv') && Number(tasaPersonalizada) > 0)
+    ? Number(tasaPersonalizada)
+    : tasa
 
   function seleccionarMoneda(moneda) {
     setMonedaPdf(moneda)
@@ -58,7 +66,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     { key: 'bs', icon: <span className="text-sm font-bold text-blue-500 w-[14px] text-center">Bs</span>, label: 'Bolívares' },
   ]
 
-  function MonedaSelector() {
+  function renderMonedaSelector() {
     return (
       <div className="border-b border-slate-100 pb-1 mb-1">
         {MONEDA_OPTIONS.map(opt => (
@@ -68,6 +76,19 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             {monedaPdf === opt.key && <Check size={14} className="ml-auto text-emerald-500" />}
           </button>
         ))}
+        {esLogistica && (monedaPdf === 'bs' || monedaPdf === 'bcv') && (
+          <div className="px-3 py-2 bg-slate-50 border-t border-slate-100 flex flex-col gap-1 mt-1">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Tasa PDF (Bs/$)</span>
+            <input
+              type="number"
+              step="0.01"
+              value={tasaPersonalizada}
+              placeholder={tasa > 0 ? String(tasa) : "Tasa..."}
+              onChange={e => setTasaPersonalizada(e.target.value)}
+              className="w-full text-xs px-2 py-1 border border-slate-200 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+            />
+          </div>
+        )}
       </div>
     )
   }
@@ -242,7 +263,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       await generarDespachoPDF({
         despacho, items: itemsFinal, config,
         formaPago: despacho.forma_pago || '',
-        monedaPDF: monedaPdf, tasa,
+        monedaPDF: monedaPdf, tasa: tasaImpresion,
         tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio,
       })
     } catch (err) {
@@ -262,7 +283,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       await generarOrdenDespachoPDF({
         despacho, items: itemsFinal, config,
         formaPago: despacho.forma_pago || '',
-        monedaPDF: monedaPdf, tasa,
+        monedaPDF: monedaPdf, tasa: tasaImpresion,
         tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio,
       })
     } catch (err) {
@@ -315,7 +336,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       const { blob, filename } = await generarDespachoPDF({
         despacho, items: itemsFinal, config,
         formaPago: despacho.forma_pago || '',
-        monedaPDF: monedaPdf, tasa,
+        monedaPDF: monedaPdf, tasa: tasaImpresion,
         tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio,
         returnBlob: true,
       })
@@ -338,7 +359,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       const { blob, filename } = await generarDespachoPDF({
         despacho, items: itemsFinal, config,
         formaPago: despacho.forma_pago || '',
-        monedaPDF: 'bs', tasa,
+        monedaPDF: 'bs', tasa: tasaImpresion,
         tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio,
         returnBlob: true,
       })
@@ -385,7 +406,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       const { blob, filename } = await generarOrdenDespachoPDF({
         despacho, items: itemsFinal, config,
         formaPago: despacho.forma_pago || '',
-        monedaPDF: monedaPdf, tasa,
+        monedaPDF: monedaPdf, tasa: tasaImpresion,
         tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio,
         returnBlob: true,
       })
@@ -408,7 +429,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       const { blob, filename } = await generarOrdenDespachoPDF({
         despacho, items: itemsFinal, config,
         formaPago: despacho.forma_pago || '',
-        monedaPDF: monedaPdf, tasa,
+        monedaPDF: monedaPdf, tasa: tasaImpresion,
         tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio,
         returnBlob: true,
       })
@@ -491,6 +512,17 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     }
     if (canReciclar && primaryAction?.key !== 'reciclar')
       actions.push({ label: getDespachoAction('reciclar', rol).label || 'Reutilizar', icon: RefreshCcw, onClick: () => onReciclar(despacho), textColor: 'text-teal-600' })
+    
+    const canCambiarTransportista = esLogistica && ['pendiente', 'despachada'].includes(despacho.estado)
+    if (canCambiarTransportista) {
+      const tieneTransportista = !!despacho?.transportista_id
+      actions.push({
+        label: tieneTransportista ? 'Cambiar Transportista' : 'Agregar Transportista',
+        icon: Truck,
+        onClick: () => setShowCambiarTransportista(true),
+        textColor: 'text-indigo-600'
+      })
+    }
     return actions
   }
 
@@ -498,7 +530,9 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const bottomActions = moreActions.filter(act => 
     act.label !== 'Reabrir despacho' && 
     act.label !== 'No entregado' && 
-    act.label !== 'No entregado / Devolver'
+    act.label !== 'No entregado / Devolver' &&
+    act.label !== 'Cambiar Transportista' &&
+    act.label !== 'Agregar Transportista'
   )
 
   // Resolver config del confirm modal
@@ -706,7 +740,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           return <>
             <div className="fixed inset-0 z-40" onClick={() => setShowPrintMenu(false)} />
             <div style={style} className="w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1">
-              <MonedaSelector />
+              {renderMonedaSelector()}
               <button onClick={imprimirDespacho}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 active:bg-slate-100 text-left">
                 <Printer size={14} className="text-slate-400" /> Nota de Entrega
@@ -732,7 +766,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           return <>
             <div className="fixed inset-0 z-40" onClick={() => setShowDownloadMenu(false)} />
             <div style={style} className="w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1">
-              <MonedaSelector />
+              {renderMonedaSelector()}
               <button onClick={() => { descargarPDF(); setShowDownloadMenu(false) }}
                 className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-700 active:bg-slate-100 text-left">
                 <Download size={14} /> Nota de Entrega
@@ -774,63 +808,65 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
 
         {/* Imprimir dropdown */}
         <div className="relative">
-          <button onClick={() => setShowPrintMenu(v => !v)}
-            onBlur={() => setTimeout(() => setShowPrintMenu(false), 200)}
+          <button onClick={() => { setShowPrintMenu(v => !v); setShowDownloadMenu(false) }}
             disabled={printLoading}
             className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-50 whitespace-nowrap">
             {printLoading ? <Loader2 size={12} className="animate-spin" /> : <Printer size={12} />}
             Imprimir <ChevronDown size={9} />
           </button>
           {showPrintMenu && (
-            <div className="absolute left-0 bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
-              onMouseDown={e => e.preventDefault()}>
-              <MonedaSelector />
-              <button onClick={imprimirDespacho}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
-                <Printer size={14} className="text-slate-400" /> Nota de Entrega
-                <span className={`ml-auto text-[9px] font-bold px-1 py-0.5 rounded leading-none ${monedaPdf === 'bs' ? 'text-blue-600 bg-blue-50 border border-blue-200' : monedaPdf === 'bcv' ? 'text-teal-600 bg-teal-50 border border-teal-200' : 'text-emerald-600 bg-emerald-50 border border-emerald-200'}`}>
-                  {monedaPdf === 'bs' ? 'Bs' : monedaPdf === 'bcv' ? 'BCV' : '$'}
-                </span>
-              </button>
-              <button onClick={imprimirOrdenDespacho}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
-                <Printer size={14} className="text-slate-400" /> Orden de Despacho
-                <span className={`ml-auto text-[9px] font-bold px-1 py-0.5 rounded leading-none ${monedaPdf === 'bs' ? 'text-blue-600 bg-blue-50 border border-blue-200' : monedaPdf === 'bcv' ? 'text-teal-600 bg-teal-50 border border-teal-200' : 'text-emerald-600 bg-emerald-50 border border-emerald-200'}`}>
-                  {monedaPdf === 'bs' ? 'Bs' : monedaPdf === 'bcv' ? 'BCV' : '$'}
-                </span>
-              </button>
-            </div>
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowPrintMenu(false)} />
+              <div className="absolute left-0 bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20">
+                {renderMonedaSelector()}
+                <button onClick={imprimirDespacho}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
+                  <Printer size={14} className="text-slate-400" /> Nota de Entrega
+                  <span className={`ml-auto text-[9px] font-bold px-1 py-0.5 rounded leading-none ${monedaPdf === 'bs' ? 'text-blue-600 bg-blue-50 border border-blue-200' : monedaPdf === 'bcv' ? 'text-teal-600 bg-teal-50 border border-teal-200' : 'text-emerald-600 bg-emerald-50 border border-emerald-200'}`}>
+                    {monedaPdf === 'bs' ? 'Bs' : monedaPdf === 'bcv' ? 'BCV' : '$'}
+                  </span>
+                </button>
+                <button onClick={imprimirOrdenDespacho}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
+                  <Printer size={14} className="text-slate-400" /> Orden de Despacho
+                  <span className={`ml-auto text-[9px] font-bold px-1 py-0.5 rounded leading-none ${monedaPdf === 'bs' ? 'text-blue-600 bg-blue-50 border border-blue-200' : monedaPdf === 'bcv' ? 'text-teal-600 bg-teal-50 border border-teal-200' : 'text-emerald-600 bg-emerald-50 border border-emerald-200'}`}>
+                    {monedaPdf === 'bs' ? 'Bs' : monedaPdf === 'bcv' ? 'BCV' : '$'}
+                  </span>
+                </button>
+              </div>
+            </>
           )}
         </div>
 
         {/* Descargar dropdown */}
         <div className="relative">
-          <button onClick={() => setShowDownloadMenu(v => !v)}
-            onBlur={() => setTimeout(() => setShowDownloadMenu(false), 200)}
+          <button onClick={() => { setShowDownloadMenu(v => !v); setShowPrintMenu(false) }}
             disabled={pdfLoading || ordenLoading}
             className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-50 whitespace-nowrap">
             {(pdfLoading || ordenLoading) ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
             Descargar <ChevronDown size={9} />
           </button>
           {showDownloadMenu && (
-            <div className="absolute left-0 bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20"
-              onMouseDown={e => e.preventDefault()}>
-              <MonedaSelector />
-              <button onClick={() => { descargarPDF(); setShowDownloadMenu(false) }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
-                <Download size={14} /> Nota de Entrega
-                <span className={`ml-auto text-[9px] font-bold px-1 py-0.5 rounded leading-none ${monedaPdf === 'bs' ? 'text-blue-600 bg-blue-50 border border-blue-200' : monedaPdf === 'bcv' ? 'text-teal-600 bg-teal-50 border border-teal-200' : 'text-emerald-600 bg-emerald-50 border border-emerald-200'}`}>
-                  {monedaPdf === 'bs' ? 'Bs' : monedaPdf === 'bcv' ? 'BCV' : '$'}
-                </span>
-              </button>
-              <button onClick={() => { descargarOrdenDespacho(); setShowDownloadMenu(false) }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
-                <Download size={14} /> Orden de Despacho
-                <span className={`ml-auto text-[9px] font-bold px-1 py-0.5 rounded leading-none ${monedaPdf === 'bs' ? 'text-blue-600 bg-blue-50 border border-blue-200' : monedaPdf === 'bcv' ? 'text-teal-600 bg-teal-50 border border-teal-200' : 'text-emerald-600 bg-emerald-50 border border-emerald-200'}`}>
-                  {monedaPdf === 'bs' ? 'Bs' : monedaPdf === 'bcv' ? 'BCV' : '$'}
-                </span>
-              </button>
-            </div>
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowDownloadMenu(false)} />
+              <div className="absolute left-0 bottom-full mb-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20">
+                {renderMonedaSelector()}
+                <button onClick={() => { descargarPDF(); setShowDownloadMenu(false) }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
+                  <Download size={14} /> Nota de Entrega
+                  <span className={`ml-auto text-[9px] font-bold px-1 py-0.5 rounded leading-none ${monedaPdf === 'bs' ? 'text-blue-600 bg-blue-50 border border-blue-200' : monedaPdf === 'bcv' ? 'text-teal-600 bg-teal-50 border border-teal-200' : 'text-emerald-600 bg-emerald-50 border border-emerald-200'}`}>
+                    {monedaPdf === 'bs' ? 'Bs' : monedaPdf === 'bcv' ? 'BCV' : '$'}
+                  </span>
+                </button>
+                <button onClick={() => { descargarOrdenDespacho(); setShowDownloadMenu(false) }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
+                  <Download size={14} /> Orden de Despacho
+                  <span className={`ml-auto text-[9px] font-bold px-1 py-0.5 rounded leading-none ${monedaPdf === 'bs' ? 'text-blue-600 bg-blue-50 border border-blue-200' : monedaPdf === 'bcv' ? 'text-teal-600 bg-teal-50 border border-teal-200' : 'text-emerald-600 bg-emerald-50 border border-emerald-200'}`}>
+                    {monedaPdf === 'bs' ? 'Bs' : monedaPdf === 'bcv' ? 'BCV' : '$'}
+                  </span>
+                </button>
+              </div>
+            </>
           )}
         </div>
 
@@ -1090,6 +1126,12 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       <EditDespachoModal
         isOpen={showEdit}
         onClose={() => setShowEdit(false)}
+        despacho={despacho}
+      />
+
+      <CambiarTransportistaModal
+        isOpen={showCambiarTransportista}
+        onClose={() => setShowCambiarTransportista(false)}
         despacho={despacho}
       />
 
