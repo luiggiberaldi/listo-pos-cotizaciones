@@ -263,7 +263,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       await generarOrdenDespachoPDF({
         despacho, items: itemsFinal, config,
         formaPago: despacho.forma_pago || '',
-        monedaPDF: '$', tasa,
+        monedaPDF: monedaPdf, tasa,
         tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio,
       })
     } catch (err) {
@@ -386,7 +386,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       const { blob, filename } = await generarOrdenDespachoPDF({
         despacho, items: itemsFinal, config,
         formaPago: despacho.forma_pago || '',
-        monedaPDF: '$', tasa,
+        monedaPDF: monedaPdf, tasa,
         tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio,
         returnBlob: true,
       })
@@ -409,7 +409,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       const { blob, filename } = await generarOrdenDespachoPDF({
         despacho, items: itemsFinal, config,
         formaPago: despacho.forma_pago || '',
-        monedaPDF: '$', tasa,
+        monedaPDF: monedaPdf, tasa,
         tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio,
         returnBlob: true,
       })
@@ -705,7 +705,9 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
               <button onClick={imprimirOrdenDespacho}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 active:bg-slate-100 text-left">
                 <Printer size={14} className="text-slate-400" /> Orden de Despacho
-                <span className="ml-auto text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-1 py-0.5 rounded leading-none">USD</span>
+                <span className={`ml-auto text-[9px] font-bold px-1 py-0.5 rounded leading-none ${monedaPdf === 'bs' ? 'text-blue-600 bg-blue-50 border border-blue-200' : monedaPdf === 'bcv' ? 'text-teal-600 bg-teal-50 border border-teal-200' : 'text-emerald-600 bg-emerald-50 border border-emerald-200'}`}>
+                  {monedaPdf === 'bs' ? 'Bs' : monedaPdf === 'bcv' ? 'BCV' : '$'}
+                </span>
               </button>
             </div>
           </>
@@ -729,7 +731,9 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
               <button onClick={() => { descargarOrdenDespacho(); setShowDownloadMenu(false) }}
                 className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-700 active:bg-slate-100 text-left">
                 <Download size={14} /> Orden de Despacho
-                <span className="ml-auto text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-1 py-0.5 rounded leading-none">USD</span>
+                <span className={`ml-auto text-[9px] font-bold px-1 py-0.5 rounded leading-none ${monedaPdf === 'bs' ? 'text-blue-600 bg-blue-50 border border-blue-200' : monedaPdf === 'bcv' ? 'text-teal-600 bg-teal-50 border border-teal-200' : 'text-emerald-600 bg-emerald-50 border border-emerald-200'}`}>
+                  {monedaPdf === 'bs' ? 'Bs' : monedaPdf === 'bcv' ? 'BCV' : '$'}
+                </span>
               </button>
             </div>
           </>
@@ -779,7 +783,9 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
               <button onClick={imprimirOrdenDespacho}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
                 <Printer size={14} className="text-slate-400" /> Orden de Despacho
-                <span className="ml-auto text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-1 py-0.5 rounded leading-none">USD</span>
+                <span className={`ml-auto text-[9px] font-bold px-1 py-0.5 rounded leading-none ${monedaPdf === 'bs' ? 'text-blue-600 bg-blue-50 border border-blue-200' : monedaPdf === 'bcv' ? 'text-teal-600 bg-teal-50 border border-teal-200' : 'text-emerald-600 bg-emerald-50 border border-emerald-200'}`}>
+                  {monedaPdf === 'bs' ? 'Bs' : monedaPdf === 'bcv' ? 'BCV' : '$'}
+                </span>
               </button>
             </div>
           )}
@@ -808,7 +814,9 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
               <button onClick={() => { descargarOrdenDespacho(); setShowDownloadMenu(false) }}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
                 <Download size={14} /> Orden de Despacho
-                <span className="ml-auto text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-1 py-0.5 rounded leading-none">USD</span>
+                <span className={`ml-auto text-[9px] font-bold px-1 py-0.5 rounded leading-none ${monedaPdf === 'bs' ? 'text-blue-600 bg-blue-50 border border-blue-200' : monedaPdf === 'bcv' ? 'text-teal-600 bg-teal-50 border border-teal-200' : 'text-emerald-600 bg-emerald-50 border border-emerald-200'}`}>
+                  {monedaPdf === 'bs' ? 'Bs' : monedaPdf === 'bcv' ? 'BCV' : '$'}
+                </span>
               </button>
             </div>
           )}

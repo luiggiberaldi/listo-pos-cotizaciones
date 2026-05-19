@@ -202,11 +202,13 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   const comboLeftW = Math.round(CONTENT_W * 0.62)
   const comboRightW = CONTENT_W - comboLeftW
   const ivaPct = Number(config.iva_pct) || 16
+  const mostrarIva = config.nota_entrega_mostrar_iva !== false  // default true
 
-  const leftLabels = ['8 DÍAS DE CRÉDITO CONTINUO', '', '']
-  const rightLabels = ['Base', `IVA ${ivaPct}%`, 'Flete (E)']
+  const leftLabels = ['8 DÍAS DE CRÉDITO CONTINUO', '', ...(mostrarIva ? [''] : [])]
+  const rightLabels = mostrarIva ? ['Base', `IVA ${ivaPct}%`, 'Flete (E)'] : ['Base', 'Flete (E)']
+  const comboRowsActual = mostrarIva ? 3 : 2
 
-  for (let r = 0; r < comboRows; r++) {
+  for (let r = 0; r < comboRowsActual; r++) {
     const ry = comboTop + r * dataRowH
 
     // Celda izquierda
@@ -227,7 +229,7 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   }
 
   // Barra TOTAL (fondo blanco, borde, alineada con cuadrícula derecha)
-  const totTopY = comboTop + comboRows * dataRowH
+  const totTopY = comboTop + comboRowsActual * dataRowH
   doc.setDrawColor(160, 160, 160)
   doc.setLineWidth(0.15)
   doc.rect(MARGIN + comboLeftW, totTopY, comboRightW, totalBarH, 'S')

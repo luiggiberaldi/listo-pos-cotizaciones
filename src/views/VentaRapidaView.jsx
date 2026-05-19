@@ -127,7 +127,7 @@ function ModalVentaExitosa({ data, onClose, config }) {
     setPdfLoading(true)
     try {
       const { generarFn, despachoObj, items: pdfItems } = await fetchDespachoData(tipo)
-      await generarFn({ despacho: despachoObj, items: pdfItems, config, formaPago: despachoObj.forma_pago || '', monedaPDF: tipo === 'orden' ? '$' : monedaPdf, tasa: data.tasa, tasaUsdt: data.tasaUsdt || 0, tasaBcv: data.tasaBcv || 0 })
+      await generarFn({ despacho: despachoObj, items: pdfItems, config, formaPago: despachoObj.forma_pago || '', monedaPDF: monedaPdf, tasa: data.tasa, tasaUsdt: data.tasaUsdt || 0, tasaBcv: data.tasaBcv || 0 })
     } catch (err) {
       showToast('Error al generar PDF: ' + (err.message || 'Error'), 'error')
     } finally { setPdfLoading(false) }
@@ -138,7 +138,7 @@ function ModalVentaExitosa({ data, onClose, config }) {
     setPdfLoading(true)
     try {
       const { generarFn, despachoObj, items: pdfItems } = await fetchDespachoData(tipo)
-      const { blob, filename } = await generarFn({ despacho: despachoObj, items: pdfItems, config, formaPago: despachoObj.forma_pago || '', monedaPDF: tipo === 'orden' ? '$' : monedaPdf, tasa: data.tasa, tasaUsdt: data.tasaUsdt || 0, tasaBcv: data.tasaBcv || 0, returnBlob: true })
+      const { blob, filename } = await generarFn({ despacho: despachoObj, items: pdfItems, config, formaPago: despachoObj.forma_pago || '', monedaPDF: monedaPdf, tasa: data.tasa, tasaUsdt: data.tasaUsdt || 0, tasaBcv: data.tasaBcv || 0, returnBlob: true })
       
       const msg = generarMensaje({
         nombreNegocio: config.nombre_negocio,
@@ -173,7 +173,7 @@ function ModalVentaExitosa({ data, onClose, config }) {
     setPrintLoading(true)
     try {
       const { generarFn, despachoObj, items: pdfItems } = await fetchDespachoData(tipo)
-      const { blob, filename } = await generarFn({ despacho: despachoObj, items: pdfItems, config, formaPago: despachoObj.forma_pago || '', monedaPDF: tipo === 'orden' ? '$' : monedaPdf, tasa: data.tasa, tasaUsdt: data.tasaUsdt || 0, tasaBcv: data.tasaBcv || 0, returnBlob: true })
+      const { blob, filename } = await generarFn({ despacho: despachoObj, items: pdfItems, config, formaPago: despachoObj.forma_pago || '', monedaPDF: monedaPdf, tasa: data.tasa, tasaUsdt: data.tasaUsdt || 0, tasaBcv: data.tasaBcv || 0, returnBlob: true })
       printOrDownloadPdf(blob, filename)
     } catch (err) {
       showToast('Error al imprimir: ' + (err.message || 'Error'), 'error')
@@ -275,7 +275,9 @@ function ModalVentaExitosa({ data, onClose, config }) {
                     </button>
                     <button onClick={() => handleDescargar('orden')} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 text-slate-700 flex items-center justify-between border-b border-slate-100">
                       <span><Package size={12} className="inline mr-1.5 text-slate-400" />Orden de Despacho</span>
-                      <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1 rounded">USD</span>
+                      <span className={`text-[9px] font-bold px-1 rounded ${monedaPdf === 'bs' ? 'text-blue-600 bg-blue-50' : monedaPdf === 'bcv' ? 'text-teal-600 bg-teal-50' : 'text-emerald-600 bg-emerald-50'}`}>
+                        {monedaPdf === 'bs' ? 'Bs' : monedaPdf === 'bcv' ? 'BCV' : '$'}
+                      </span>
                     </button>
                   </div>
                 )}
@@ -299,7 +301,9 @@ function ModalVentaExitosa({ data, onClose, config }) {
                     </button>
                     <button onClick={() => handleImprimir('orden')} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 text-slate-700 flex items-center justify-between border-t border-slate-100">
                       <span><Package size={12} className="inline mr-1.5 text-slate-400" />Orden de despacho</span>
-                      <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1 rounded">USD</span>
+                      <span className={`text-[9px] font-bold px-1 rounded ${monedaPdf === 'bs' ? 'text-blue-600 bg-blue-50' : monedaPdf === 'bcv' ? 'text-teal-600 bg-teal-50' : 'text-emerald-600 bg-emerald-50'}`}>
+                        {monedaPdf === 'bs' ? 'Bs' : monedaPdf === 'bcv' ? 'BCV' : '$'}
+                      </span>
                     </button>
                   </div>
                 )}

@@ -454,10 +454,12 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   // 4. BLOQUE COMBINADO: Crédito + Transporte (izq) | Desglose (der) + TOTAL
   // ══════════════════════════════════════════════════════════════════════════
   // Columna derecha: desglose
-  const rightItems = [
-    { label: 'Base', value: fmtTotal(baseImponible, monedaPDF, tasa, factorBcv) },
-    { label: `IVA ${ivaPct}%`, value: fmtTotal(ivaAmount, monedaPDF, tasa, factorBcv) },
-  ]
+  const mostrarIva = config.nota_entrega_mostrar_iva !== false  // default true
+  const rightItems = []
+  if (mostrarIva) {
+    rightItems.push({ label: 'Base', value: fmtTotal(baseImponible, monedaPDF, tasa, factorBcv) })
+    rightItems.push({ label: `IVA ${ivaPct}%`, value: fmtTotal(ivaAmount, monedaPDF, tasa, factorBcv) })
+  }
   if (hasExento) rightItems.push({ label: 'Monto Exento', value: fmtTotal(montoExento, monedaPDF, tasa, factorBcv) })
   if (hasDescuento) rightItems.push({ label: 'Descuento', value: '-' + fmtTotal(descuentoTotal, monedaPDF, tasa, factorBcv), color: [180, 100, 0] })
   if (refPago) rightItems.push({ label: 'Ref:', value: refPago })

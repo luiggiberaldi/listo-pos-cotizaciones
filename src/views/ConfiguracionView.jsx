@@ -245,6 +245,34 @@ function ComisionesTab({ campos, cambiar, isLoading, cargando }) {
           disabled={disabled} />
         <span className="text-lg font-bold text-blue-500">%</span>
       </div>
+
+      {/* Toggle mostrar IVA en nota de entrega */}
+      <div className="flex items-center justify-between bg-slate-50 rounded-xl border border-slate-200 px-4 py-3">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-sm font-semibold text-slate-700">Mostrar IVA en nota de entrega</span>
+          <span className="text-xs text-slate-400">
+            {campos.nota_entrega_mostrar_iva
+              ? 'La nota de entrega muestra el desglose de IVA.'
+              : 'La nota de entrega NO muestra el desglose de IVA.'}
+          </span>
+        </div>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => cambiar('nota_entrega_mostrar_iva', !campos.nota_entrega_mostrar_iva)}
+          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+            campos.nota_entrega_mostrar_iva ? 'bg-blue-500' : 'bg-slate-300'
+          }`}
+          aria-checked={campos.nota_entrega_mostrar_iva}
+          role="switch"
+        >
+          <span
+            className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform duration-200 ${
+              campos.nota_entrega_mostrar_iva ? 'translate-x-5' : 'translate-x-0'
+            }`}
+          />
+        </button>
+      </div>
     </div>
     </div>
   )
@@ -301,6 +329,7 @@ export default function ConfiguracionView() {
     direccion_negocio:       '',
     pie_pagina_pdf:          '',
     iva_pct:                 0,
+    nota_entrega_mostrar_iva: true,
     gate_email:              '',
     comision_pct_cabilla:         2,
     comision_pct_otros:           3,
@@ -320,6 +349,7 @@ export default function ConfiguracionView() {
         direccion_negocio:       config.direccion_negocio       ?? '',
         pie_pagina_pdf:          config.pie_pagina_pdf          ?? '',
         iva_pct:                 config.iva_pct                 ?? 0,
+        nota_entrega_mostrar_iva: config.nota_entrega_mostrar_iva ?? true,
         gate_email:              config.gate_email              ?? '',
         comision_pct_cabilla:       config.comision_pct_cabilla       ?? 2,
         comision_pct_otros:         config.comision_pct_otros         ?? 3,
