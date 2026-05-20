@@ -503,20 +503,16 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   // ══════════════════════════════════════════════════════════════════════════
   // 4. BLOQUE COMBINADO: Crédito + Transporte (izq) | Desglose (der) + TOTAL
   // ══════════════════════════════════════════════════════════════════════════
-  // Columna derecha: desglose (estructura dinámica y compacta)
+  // Columna derecha: desglose (estructura fija de totales)
+  const mostrarIva = config.nota_entrega_mostrar_iva !== false
   const rightItems = [
-    { label: 'SubTotal:', value: fmtTotal(total, monedaPDF, tasa, factorBcv) }
+    { label: 'SubTotal:', value: fmtTotal(total, monedaPDF, tasa, factorBcv) },
+    { label: 'Descuento:', value: fmtTotal(descuentoTotal, monedaPDF, tasa, factorBcv) },
+    { label: 'Fletes:', value: fmtTotal(0, monedaPDF, tasa, factorBcv) },
+    { label: 'Exento:', value: fmtTotal(montoExento, monedaPDF, tasa, factorBcv) },
+    { label: 'Gravable:', value: fmtTotal(montoGravado, monedaPDF, tasa, factorBcv) },
+    { label: `Impuesto ${ivaPct}%:`, value: fmtTotal(mostrarIva ? ivaAmount : 0, monedaPDF, tasa, factorBcv) }
   ]
-  
-  if (descuentoTotal > 0) {
-    rightItems.push({ label: 'Descuento:', value: fmtTotal(descuentoTotal, monedaPDF, tasa, factorBcv) })
-  }
-  if (montoExento > 0) {
-    rightItems.push({ label: 'Exento:', value: fmtTotal(montoExento, monedaPDF, tasa, factorBcv) })
-  }
-  
-  rightItems.push({ label: 'Gravable:', value: fmtTotal(montoGravado, monedaPDF, tasa, factorBcv) })
-  rightItems.push({ label: `Impuesto ${ivaPct}%:`, value: fmtTotal(ivaAmount, monedaPDF, tasa, factorBcv) })
 
   if (refPago) {
     rightItems.push({ label: 'Ref:', value: refPago })
