@@ -760,16 +760,54 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {} }) {
     y += 8
 
     const fpTotal = porFormaPago.reduce((s, fp) => s + fp.totalUsd, 0)
-    porFormaPago.forEach((fp, idx) => {
-      y = checkPage(doc, y, 11)
+    porFormaPago.forEach((fp) => {
       const pct = fpTotal > 0 ? ((fp.totalUsd / fpTotal) * 100).toFixed(1) : '0.0'
-      doc.setFont('helvetica', 'normal')
+
+      // 1. Cabecera: nombre del metodo (se previene cabecera huerfana controlando el espacio minimo reqH)
+      const reqH = Array.isArray(fp.pagos) && fp.pagos.length > 0 ? 32 : 20
+      y = checkPage(doc, y, reqH)
+      doc.setFont('helvetica', 'bold')
       doc.setFontSize(9.5)
       doc.setTextColor(...C_DARK)
       doc.text(`${fp.formaPago} (${fp.count} desp.)`, MARGIN + 2, y + 4)
-      doc.text(`${pct}%`, MARGIN + 80, y + 4)
+      y += 8
+
+      // 2. Desglose de transacciones
+      if (Array.isArray(fp.pagos) && fp.pagos.length > 0) {
+        fp.pagos.forEach(p => {
+          y = checkPage(doc, y, 9)
+          doc.setFontSize(8.5)
+          doc.setTextColor(110, 120, 130)
+
+          const numDoc = p.numero ? `#${p.numero}` : 'S/N'
+          const cliente = p.cliente ? String(p.cliente).toUpperCase().substring(0, 48) : 'CLIENTE SIN NOMBRE'
+          const labelText = `    • Doc ${numDoc}  ·  ${cliente}  ·  `
+
+          doc.setFont('helvetica', 'normal')
+          doc.text(labelText, MARGIN + 2, y + 2)
+
+          const labelW = doc.getTextWidth(labelText)
+          doc.setFont('helvetica', 'bold')
+          doc.setTextColor(...C_DARK)
+          doc.text(fmtUsd(p.monto), MARGIN + 2 + labelW, y + 2)
+          y += 7.5
+        })
+      }
+
+      // 3. Total del metodo + % + barra (al final del grupo)
+      y = checkPage(doc, y, 11)
+      if (Array.isArray(fp.pagos) && fp.pagos.length > 0) {
+        doc.setDrawColor(220, 224, 230)
+        doc.setLineWidth(0.35)
+        doc.line(MARGIN + 2, y + 0.5, MARGIN + CONTENT_W - 2, y + 0.5)
+        y += 3
+      }
       doc.setFont('helvetica', 'bold')
-      doc.text(fmtUsd(fp.totalUsd), MARGIN + 100, y + 4)
+      doc.setFontSize(9.5)
+      doc.setTextColor(...C_DARK)
+      doc.text(fmtUsd(fp.totalUsd), MARGIN + 80, y + 4)
+      doc.setFont('helvetica', 'normal')
+      doc.text(`${pct}%`, MARGIN + 110, y + 4)
 
       // Mini barra
       const barX = MARGIN + 130
@@ -782,29 +820,7 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {} }) {
         doc.roundedRect(barX, y + 0.5, Math.max(fillW, 2), 4, 1, 1, 'F')
       }
       y += 8.5
-
-      // Detalle de los pagos asociados
-      if (Array.isArray(fp.pagos) && fp.pagos.length > 0) {
-        fp.pagos.forEach(p => {
-          y = checkPage(doc, y, 9)
-          doc.setFontSize(8.5)
-          doc.setTextColor(110, 120, 130)
-          
-          const numDoc = p.numero ? `#${p.numero}` : 'S/N'
-          const cliente = p.cliente ? String(p.cliente).toUpperCase().substring(0, 48) : 'CLIENTE SIN NOMBRE'
-          const labelText = `    • Doc ${numDoc}  ·  ${cliente}  ·  `
-          
-          doc.setFont('helvetica', 'normal')
-          doc.text(labelText, MARGIN + 2, y + 2)
-          
-          const labelW = doc.getTextWidth(labelText)
-          doc.setFont('helvetica', 'bold')
-          doc.setTextColor(...C_DARK)
-          doc.text(fmtUsd(p.monto), MARGIN + 2 + labelW, y + 2)
-          y += 7.5
-        })
-      }
-      y += 2
+      y += 4
     })
 
     // Fila de Total
@@ -822,8 +838,9 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {} }) {
     doc.setFontSize(10)
     doc.setTextColor(...C_DARK)
     doc.text(`TOTAL RECAUDADO (${totalFpDespachos} desp.)`, MARGIN + 2, y + 5)
-    doc.text('100.0%', MARGIN + 80, y + 5)
-    doc.text(fmtUsd(fpTotal), MARGIN + 100, y + 5)
+    doc.text(fmtUsd(fpTotal), MARGIN + 80, y + 5)
+    doc.setFont('helvetica', 'normal')
+    doc.text('100.0%', MARGIN + 110, y + 5)
 
     doc.line(MARGIN, y + 8, MARGIN + CONTENT_W, y + 8)
     y += 12
