@@ -155,8 +155,15 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
 
   doc.rect(MARGIN + clienteLblW + clienteValW + rifLblW, f4Y, rifValW, rowH, 'S')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
-  doc.text(cliente.rif_cedula || '—', MARGIN + clienteLblW + clienteValW + rifLblW + rifValW / 2, f4Y + rowH / 2 + 1, { align: 'center' })
+  let rifValFontSize = 10
+  doc.setFontSize(rifValFontSize)
+  const rifText = cliente.rif_cedula || '—'
+  const maxRifW = rifValW - 4
+  while (doc.getTextWidth(rifText) > maxRifW && rifValFontSize > 6.5) {
+    rifValFontSize -= 0.5
+    doc.setFontSize(rifValFontSize)
+  }
+  doc.text(rifText, MARGIN + clienteLblW + clienteValW + rifLblW + rifValW / 2, f4Y + rowH / 2 + 1, { align: 'center' })
 
   // ── Fila 5: DIRECCIÓN (altura dinámica para texto largo) ──
   const f5Y = f4Y + rowH
@@ -201,8 +208,15 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
 
   doc.rect(MARGIN + tlfLblW, f6Y, tlfValW, rowH, 'S')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
-  doc.text(fmtTelefono(cliente.telefono) || '—', MARGIN + tlfLblW + 2, f6Y + rowH / 2 + 1)
+  let tlfFontSize = 10
+  doc.setFontSize(tlfFontSize)
+  const tlfText = fmtTelefono(cliente.telefono) || '—'
+  const maxTlfW = tlfValW - 4
+  while (doc.getTextWidth(tlfText) > maxTlfW && tlfFontSize > 6.5) {
+    tlfFontSize -= 0.5
+    doc.setFontSize(tlfFontSize)
+  }
+  doc.text(tlfText, MARGIN + tlfLblW + 2, f6Y + rowH / 2 + 1)
 
   doc.rect(MARGIN + tlfLblW + tlfValW, f6Y, vendLblW, rowH, 'S')
   doc.setFont('helvetica', 'normal')
@@ -336,18 +350,43 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
     const midY = y + ROW_H / 2 + 1.2
     const isFlete = (item.nombre_snap || '').toUpperCase().includes('FLETE') || (item.codigo_snap || '').startsWith('FTL')
     const cantDisplay = item.cantidad ?? (isFlete ? 1 : '')
-    doc.text(String(cantDisplay), COLS[0].x + COLS[0].w / 2, midY, { align: 'center' })
-    doc.setFontSize(6.5)
-    doc.text(item.codigo_snap || '—', COLS[1].x + COLS[1].w / 2, midY, { align: 'center' })
-    doc.setFontSize(9)
+    let cantSize = 9
+    doc.setFontSize(cantSize)
+    const cantText = String(cantDisplay)
+    const maxCantW = COLS[0].w - 1.5
+    while (doc.getTextWidth(cantText) > maxCantW && cantSize > 6) {
+      cantSize -= 0.5
+      doc.setFontSize(cantSize)
+    }
+    doc.text(cantText, COLS[0].x + COLS[0].w / 2, midY, { align: 'center' })
+
+    let codSize = 6.5
+    doc.setFontSize(codSize)
+    const codText = item.codigo_snap || '—'
+    const maxCodW = COLS[1].w - 2
+    while (doc.getTextWidth(codText) > maxCodW && codSize > 4.5) {
+      codSize -= 0.5
+      doc.setFontSize(codSize)
+    }
+    doc.text(codText, COLS[1].x + COLS[1].w / 2, midY, { align: 'center' })
 
     // Render all lines of the description
-    const descStartY = y + (ROW_H - descLines.length * lineH) / 2 + lineH
+    const descStartY = y + (ROW_H - descLines.length * lineH) / 2 + lineH - 0.5
     descLines.forEach((line, idx) => {
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9)
       doc.text(line, COLS[2].x + 2, descStartY + idx * lineH)
     })
 
-    doc.text((item.unidad_snap || '-').toUpperCase(), COLS[3].x + COLS[3].w / 2, midY, { align: 'center' })
+    let uniSize = 9
+    doc.setFontSize(uniSize)
+    const uniText = (item.unidad_snap || '-').toUpperCase()
+    const maxUniW = COLS[3].w - 1.5
+    while (doc.getTextWidth(uniText) > maxUniW && uniSize > 6) {
+      uniSize -= 0.5
+      doc.setFontSize(uniSize)
+    }
+    doc.text(uniText, COLS[3].x + COLS[3].w / 2, midY, { align: 'center' })
 
     const precioText = fmtPrecio(item.precio_unit_usd, monedaPDF, tasa, factorBcv)
     const totalText = fmtPrecio(item.total_linea_usd, monedaPDF, tasa, factorBcv)
@@ -569,44 +608,63 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   doc.setTextColor(...C_DARK)
   doc.text('DATOS DEL CHOFER Y DEL VEHÍCULO', MARGIN + 2, choferY + 4)
 
-  // Grid: fila 1 = 3 cols, fila 2 = 4 cols
+  // Grid: fila 1 y 2 alineadas con 4 columnas simétricas
   const ROW_H = 7
   const row1Y = choferY + 6
   const row2Y = row1Y + ROW_H
-  const col3W = CONTENT_W / 3
   const col4W = CONTENT_W / 4
-  const BLANK = ''
   const row1Fields = [
-    { label: 'CHOFER', val: (transportista?.nombre || '').toUpperCase() },
-    { label: 'C.I.', val: (transportista?.rif || '').toUpperCase() },
-    { label: 'COLOR', val: (transportista?.color || '').toUpperCase() },
+    { label: 'CHOFER', val: (transportista?.nombre || '').toUpperCase(), w: col4W * 2 },
+    { label: 'C.I.',   val: (transportista?.rif    || '').toUpperCase(), w: col4W },
+    { label: 'COLOR',  val: (transportista?.color  || '').toUpperCase(), w: col4W },
   ]
   const row2Fields = [
-    { label: 'VEHÍCULO', val: (transportista?.vehiculo || '').toUpperCase() },
+    { label: 'VEHÍCULO',    val: (transportista?.vehiculo    || '').toUpperCase(), w: col4W },
+    { label: 'PLACA CHUTO', val: (transportista?.placa_chuto || '').toUpperCase(), w: col4W },
+    { label: 'PLACA BATEA', val: (transportista?.placa_batea || '').toUpperCase(), w: col4W },
+    { label: 'FLETE',       val: hasFleteReal ? 'EN TABLA' : '—',                 w: col4W },
   ]
-  row2Fields.push({ label: 'PLACA CHUTO', val: (transportista?.placa_chuto || '').toUpperCase() })
-  row2Fields.push({ label: 'PLACA BATEA', val: (transportista?.placa_batea || '').toUpperCase() })
-  if (!hasExentoReal) {
-    row2Fields.push({ label: 'FLETE', val: '' })
-  }
-  function drawRow(fields, ry, colW) {
-    fields.forEach((f, i) => {
-      const fx = MARGIN + i * colW
+  function drawRow(fields, ry) {
+    let currentX = MARGIN
+    fields.forEach((f) => {
+      const cellW = f.w
       doc.setDrawColor(120, 120, 120)
       doc.setLineWidth(0.3)
-      doc.rect(fx, ry, colW, ROW_H, 'S')
+      doc.rect(currentX, ry, cellW, ROW_H, 'S')
+
+      const maxTextW = cellW - 3
+
+      // Label (con auto-encogimiento dinámico)
       doc.setFont('helvetica', 'bold')
-      doc.setFontSize(6.5)
+      let lblSize = 6.5
+      doc.setFontSize(lblSize)
       doc.setTextColor(100, 100, 100)
-      doc.text(f.label, fx + 2, ry + 2.5)
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(8)
-      doc.setTextColor(0, 0, 0)
-      if (f.val) doc.text(f.val, fx + 2, ry + 5.8)
+      const labelText = (f.label || '').toUpperCase()
+      while (doc.getTextWidth(labelText) > maxTextW && lblSize > 4.5) {
+        lblSize -= 0.5
+        doc.setFontSize(lblSize)
+      }
+      doc.text(labelText, currentX + 1.5, ry + 2.3)
+
+      // Valor (con auto-encogimiento dinámico)
+      if (f.val) {
+        doc.setFont('helvetica', 'bold')
+        let valSize = 8
+        doc.setFontSize(valSize)
+        doc.setTextColor(0, 0, 0)
+        const valText = String(f.val).toUpperCase()
+        while (doc.getTextWidth(valText) > maxTextW && valSize > 5.5) {
+          valSize -= 0.5
+          doc.setFontSize(valSize)
+        }
+        doc.text(valText, currentX + 1.5, ry + 5.5)
+      }
+
+      currentX += cellW
     })
   }
-  drawRow(row1Fields, row1Y, col3W)
-  drawRow(row2Fields, row2Y, !hasFleteReal ? col4W : col3W)
+  drawRow(row1Fields, row1Y)
+  drawRow(row2Fields, row2Y)
 
   // ── NO cuentas, NO slogan, NO condiciones ──
 

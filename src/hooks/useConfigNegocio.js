@@ -9,9 +9,6 @@ import { apiUrl, getAuthHeaders } from '../services/apiBase'
 
 const KEY = ['config_negocio']
 
-// Columnas seguras (excluye gate_password_hash)
-const CONFIG_COLUMNS = 'id, nombre_negocio, rif_negocio, telefono_negocio, direccion_negocio, email_negocio, logo_url, moneda_principal, pie_pagina_pdf, tasa_bcv_manual, iva_pct, nota_entrega_mostrar_iva, gate_email, comision_pct_cabilla, comision_pct_otros, comision_pct_externos, comision_categoria_cabilla, _comision_extras, creado_en, actualizado_en'
-
 export function useConfigNegocio() {
   const qc = useQueryClient()
 
@@ -38,16 +35,12 @@ export function useConfigNegocio() {
   return useQuery({
     queryKey: KEY,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('configuracion_negocio')
-        .select(CONFIG_COLUMNS)
-        .limit(1)
-        .maybeSingle()
-
-      if (error) {
-        if (error.code === 'PGRST116') return {}
-        throw error
+      const headers = await getAuthHeaders()
+      const res = await fetch(apiUrl('/api/config'), { headers })
+      if (!res.ok) {
+        throw new Error('Error al obtener la configuración')
       }
+      const data = await res.json()
       return data ?? {}
     },
     retry: 1,

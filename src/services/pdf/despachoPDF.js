@@ -21,27 +21,34 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   let pageNum = 1
   // isLargeDoc se definirá después de calcular itemsToRender (con flete/corte)
 
+  const esMembrete = config.nota_entrega_plantilla === 'membrete'
+
   const drawHeader = (doc, num) => {
     const HDR_H = 20
-    try { doc.addImage(LOGO_DESPACHO, 'PNG', MARGIN - 2, 6, 22, 22) } catch (_) {}
-    const centerX = PAGE_W / 2
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(17)
-    doc.setTextColor(...C_DARK)
-    doc.text('CONSTRUACERO CARABOBO, C.A.', centerX, 16, { align: 'center' })
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(10)
-    doc.text('RIF.: J-50115913-0', centerX, 22, { align: 'center' })
-    doc.setLineWidth(0.8)
-    doc.setDrawColor(...C_DARK)
-    doc.line(MARGIN, HDR_H + 10, PAGE_W - MARGIN, HDR_H + 10)
-    return HDR_H + 17
+    if (!esMembrete) {
+      try { doc.addImage(LOGO_DESPACHO, 'PNG', MARGIN - 2, 6, 22, 22) } catch (_) {}
+      const centerX = PAGE_W / 2
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(17)
+      doc.setTextColor(...C_DARK)
+      doc.text('CONSTRUACERO CARABOBO, C.A.', centerX, 16, { align: 'center' })
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(10)
+      doc.text('RIF.: J-50115913-0', centerX, 22, { align: 'center' })
+      doc.setLineWidth(0.8)
+      doc.setDrawColor(...C_DARK)
+      doc.line(MARGIN, HDR_H + 10, PAGE_W - MARGIN, HDR_H + 10)
+      return HDR_H + 17
+    }
+    return HDR_H + 17 + 20 // Bajar 2 cm (20mm) para hoja pre-impresa
   }
 
   y = drawHeader(doc, numDes)
 
   // ── Marca de agua central ──
-  drawWatermark(doc)
+  if (!esMembrete) {
+    drawWatermark(doc)
+  }
   if (despacho.estado === 'anulada') drawAnuladaWatermark(doc)
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -112,7 +119,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
 
   // ── Fila 1-3: Header con título y datos de correlativo/fecha ──
   const gY = y - 4    // inicio de la cuadrícula
-  const rowH = 6       // altura de cada fila pequeña
+  const rowH = 5       // altura de cada fila pequeña (optimizado)
   const leftColW = 38  // "DEPARTAMENTO DE VENTAS"
   const rightLblW = 22 // columna label derecha (ODC, DIA, FECHA)
   const rightValW = 38 // columna valor derecha
@@ -126,8 +133,8 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8)
   doc.setTextColor(...C_DARK)
-  doc.text('DEPARTAMENTO', MARGIN + leftColW / 2, gY + tripleH / 2 - 2, { align: 'center' })
-  doc.text('DE VENTAS', MARGIN + leftColW / 2, gY + tripleH / 2 + 3, { align: 'center' })
+  doc.text('DEPARTAMENTO', MARGIN + leftColW / 2, gY + tripleH / 2 - 1.5, { align: 'center' })
+  doc.text('DE VENTAS', MARGIN + leftColW / 2, gY + tripleH / 2 + 2.5, { align: 'center' })
 
   // Celda central (3 filas de alto): NOTA DE ENTREGA
   doc.rect(MARGIN + leftColW, gY, centerW, tripleH, 'S')
@@ -144,33 +151,33 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7)
   doc.setTextColor(...C_DARK)
-  doc.text('ODC', rLblX + rightLblW / 2, gY + rowH / 2 + 1, { align: 'center' })
+  doc.text('ODC', rLblX + rightLblW / 2, gY + rowH / 2 + 0.8, { align: 'center' })
   doc.rect(rValX, gY, rightValW, rowH, 'S')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
-  doc.text(numDes, rValX + rightValW / 2, gY + rowH / 2 + 1, { align: 'center' })
+  doc.setFontSize(9.5)
+  doc.text(numDes, rValX + rightValW / 2, gY + rowH / 2 + 0.8, { align: 'center' })
 
   // Fila 2: DIA
   const f2Y = gY + rowH
   doc.rect(rLblX, f2Y, rightLblW, rowH, 'S')
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7)
-  doc.text('DIA', rLblX + rightLblW / 2, f2Y + rowH / 2 + 1, { align: 'center' })
+  doc.text('DIA', rLblX + rightLblW / 2, f2Y + rowH / 2 + 0.8, { align: 'center' })
   doc.rect(rValX, f2Y, rightValW, rowH, 'S')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
-  doc.text(diaNombre, rValX + rightValW / 2, f2Y + rowH / 2 + 1, { align: 'center' })
+  doc.setFontSize(9.5)
+  doc.text(diaNombre, rValX + rightValW / 2, f2Y + rowH / 2 + 0.8, { align: 'center' })
 
   // Fila 3: FECHA
   const f3Y = gY + rowH * 2
   doc.rect(rLblX, f3Y, rightLblW, rowH, 'S')
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7)
-  doc.text('FECHA:', rLblX + rightLblW / 2, f3Y + rowH / 2 + 1, { align: 'center' })
+  doc.text('FECHA:', rLblX + rightLblW / 2, f3Y + rowH / 2 + 0.8, { align: 'center' })
   doc.rect(rValX, f3Y, rightValW, rowH, 'S')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
-  doc.text(fmtFecha(despacho.creado_en), rValX + rightValW / 2, f3Y + rowH / 2 + 1, { align: 'center' })
+  doc.setFontSize(9.5)
+  doc.text(fmtFecha(despacho.creado_en), rValX + rightValW / 2, f3Y + rowH / 2 + 0.8, { align: 'center' })
 
   // ── Fila 4: CLIENTE + R.I.F / Cédula ──
   const f4Y = gY + tripleH
@@ -181,14 +188,14 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7)
-  doc.text('CLIENTE:', MARGIN + 2, f4Y + rowH / 2 + 1)
+  doc.text('CLIENTE:', MARGIN + 2, f4Y + rowH / 2 + 0.8)
   doc.setDrawColor(120, 120, 120)
   doc.setLineWidth(0.2)
   doc.rect(MARGIN, f4Y, clienteLblW, rowH, 'S')
 
   doc.rect(MARGIN + clienteLblW, f4Y, clienteValW, rowH, 'S')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
+  doc.setFontSize(9.5)
   const clienteNombre = (cliente.nombre || '—').toUpperCase()
   const maxClienteW = clienteValW - 4
   let cNombre = clienteNombre
@@ -196,28 +203,35 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     while (cNombre.length > 1 && doc.getTextWidth(cNombre + '…') > maxClienteW) cNombre = cNombre.slice(0, -1)
     cNombre += '…'
   }
-  doc.text(cNombre, MARGIN + clienteLblW + 2, f4Y + rowH / 2 + 1)
+  doc.text(cNombre, MARGIN + clienteLblW + 2, f4Y + rowH / 2 + 0.8)
 
   doc.rect(MARGIN + clienteLblW + clienteValW, f4Y, rifLblW, rowH, 'S')
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7)
-  doc.text('R.I.F.,C.I.', MARGIN + clienteLblW + clienteValW + rifLblW / 2, f4Y + rowH / 2 + 1, { align: 'center' })
+  doc.text('R.I.F.,C.I.', MARGIN + clienteLblW + clienteValW + rifLblW / 2, f4Y + rowH / 2 + 0.8, { align: 'center' })
 
   doc.rect(MARGIN + clienteLblW + clienteValW + rifLblW, f4Y, rifValW, rowH, 'S')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
-  doc.text(cliente.rif_cedula || '—', MARGIN + clienteLblW + clienteValW + rifLblW + rifValW / 2, f4Y + rowH / 2 + 1, { align: 'center' })
+  let rifValFontSize = 9.5
+  doc.setFontSize(rifValFontSize)
+  const rifText = cliente.rif_cedula || '—'
+  const maxRifW = rifValW - 4
+  while (doc.getTextWidth(rifText) > maxRifW && rifValFontSize > 6) {
+    rifValFontSize -= 0.5
+    doc.setFontSize(rifValFontSize)
+  }
+  doc.text(rifText, MARGIN + clienteLblW + clienteValW + rifLblW + rifValW / 2, f4Y + rowH / 2 + 0.8, { align: 'center' })
 
   // ── Fila 5: DIRECCIÓN (altura dinámica para texto largo) ──
   const f5Y = f4Y + rowH
   const dirLblW = 25
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9)
+  doc.setFontSize(8.5)
   const dirStr = [cliente.direccion, cliente.ciudad, cliente.estado].filter(Boolean).join(', ').toUpperCase() || '—'
   const maxDirW = CONTENT_W - dirLblW - 4
   const dirLines = doc.splitTextToSize(dirStr, maxDirW)
-  const dirLineH = 4.5
-  const dirRowH = Math.max(rowH, dirLines.length * dirLineH + 2.5)
+  const dirLineH = 3.8
+  const dirRowH = Math.max(rowH, dirLines.length * dirLineH + 2.0)
 
   // Celda label DIRECCIÓN
   doc.setFont('helvetica', 'normal')
@@ -226,13 +240,13 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.setLineWidth(gridLW)
   doc.rect(MARGIN, f5Y, dirLblW, dirRowH, 'S')
   doc.setTextColor(...C_DARK)
-  doc.text('DIRECCIÓN:', MARGIN + 2, f5Y + dirRowH / 2 + 1)
+  doc.text('DIRECCIÓN:', MARGIN + 2, f5Y + dirRowH / 2 + 0.8)
 
   // Celda valor DIRECCIÓN — con wrap
   doc.rect(MARGIN + dirLblW, f5Y, CONTENT_W - dirLblW, dirRowH, 'S')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9)
-  const dirTextStartY = f5Y + (dirRowH - dirLines.length * dirLineH) / 2 + dirLineH - 1
+  doc.setFontSize(8.5)
+  const dirTextStartY = f5Y + (dirRowH - dirLines.length * dirLineH) / 2 + dirLineH - 0.8
   dirLines.forEach((line, idx) => {
     doc.text(line, MARGIN + dirLblW + 2, dirTextStartY + idx * dirLineH)
   })
@@ -247,22 +261,29 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.rect(MARGIN, f6Y, tlfLblW, rowH, 'S')
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7)
-  doc.text('TELÉFONO:', MARGIN + 2, f6Y + rowH / 2 + 1)
+  doc.text('TELÉFONO:', MARGIN + 2, f6Y + rowH / 2 + 0.8)
 
   doc.rect(MARGIN + tlfLblW, f6Y, tlfValW, rowH, 'S')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
-  doc.text(fmtTelefono(cliente.telefono) || '—', MARGIN + tlfLblW + 2, f6Y + rowH / 2 + 1)
+  let tlfFontSize = 9.5
+  doc.setFontSize(tlfFontSize)
+  const tlfText = fmtTelefono(cliente.telefono) || '—'
+  const maxTlfW = tlfValW - 4
+  while (doc.getTextWidth(tlfText) > maxTlfW && tlfFontSize > 6) {
+    tlfFontSize -= 0.5
+    doc.setFontSize(tlfFontSize)
+  }
+  doc.text(tlfText, MARGIN + tlfLblW + 2, f6Y + rowH / 2 + 0.8)
 
   doc.rect(MARGIN + tlfLblW + tlfValW, f6Y, vendLblW, rowH, 'S')
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7)
-  doc.text('VENDEDOR:', MARGIN + tlfLblW + tlfValW + 2, f6Y + rowH / 2 + 1)
+  doc.text('VENDEDOR:', MARGIN + tlfLblW + tlfValW + 2, f6Y + rowH / 2 + 0.8)
 
   doc.setFillColor(235, 235, 240)
   doc.rect(MARGIN + tlfLblW + tlfValW + vendLblW, f6Y, vendValW, rowH, 'FD')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9)
+  doc.setFontSize(8.5)
   const vendStr = (vendedorResponsable?.nombre?.toUpperCase() || '—') + vendedorTlf
   const maxVendW = vendValW - 4
   let vStr = vendStr
@@ -270,7 +291,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     while (vStr.length > 1 && doc.getTextWidth(vStr + '…') > maxVendW) vStr = vStr.slice(0, -1)
     vStr += '…'
   }
-  doc.text(vStr, MARGIN + tlfLblW + tlfValW + vendLblW + 2, f6Y + rowH / 2 + 1)
+  doc.text(vStr, MARGIN + tlfLblW + tlfValW + vendLblW + 2, f6Y + rowH / 2 + 0.8)
 
   y = f6Y + rowH + 2
 
@@ -287,11 +308,11 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     { label: precioLabel,    x: MARGIN + 129,  w: 27,  align: 'center' },
     { label: totalLabel,     x: MARGIN + 156,  w: 32,  align: 'right'  },
   ]
-  const ROW_H_BASE = 6.0
+  const ROW_H_BASE = 5.2
 
-  // Cabecera tabla
+  // Cabecera tabla (optimizado a 7.5 mm)
   doc.setFillColor(60, 60, 60)
-  doc.rect(MARGIN, y, CONTENT_W, 9, 'F')
+  doc.rect(MARGIN, y, CONTENT_W, 7.5, 'F')
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8.5)
@@ -300,9 +321,9 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     let tx = col.x + 2
     if (col.align === 'center') tx = col.x + col.w/2
     else if (col.align === 'right') tx = col.x + col.w - 2
-    doc.text(col.label, tx, y + 6.5, { align: col.align })
+    doc.text(col.label, tx, y + 5.3, { align: col.align })
   })
-  y += 9
+  y += 7.5
 
   // Items
   doc.setLineWidth(0.2)
@@ -338,12 +359,12 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const isLargeDoc = itemsToRender.length >= 23
 
   itemsToRender.forEach((item) => {
-    // Calcular cuántas líneas necesita la descripción
+    // Calcular cuántas líneas necesita la descripción (optimizado lineH = 3.6)
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
     const descLines = doc.splitTextToSize((item.nombre_snap || '').toUpperCase(), COLS[2].w - 4)
-    const lineH = 4.0
-    const ROW_H = Math.max(ROW_H_BASE, descLines.length * lineH + 2)
+    const lineH = 3.6
+    const ROW_H = Math.max(ROW_H_BASE, descLines.length * lineH + 1.2)
 
     let limitY = PAGE_H - 40 // Margen de seguridad para el footer
     
@@ -356,9 +377,9 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
       doc.addPage()
       pageNum++
       y = drawHeader(doc, numDes)
-      // Redraw table header on new page
+      // Redraw table header on new page (optimizado a 7.5 mm)
       doc.setFillColor(60, 60, 60)
-      doc.rect(MARGIN, y, CONTENT_W, 9, 'F')
+      doc.rect(MARGIN, y, CONTENT_W, 7.5, 'F')
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(8.5)
       doc.setTextColor(...C_WHITE)
@@ -366,9 +387,9 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
         let tx = col.x + 2
         if (col.align === 'center') tx = col.x + col.w / 2
         else if (col.align === 'right') tx = col.x + col.w - 2
-        doc.text(col.label, tx, y + 6.5, { align: col.align })
+        doc.text(col.label, tx, y + 5.3, { align: col.align })
       })
-      y += 9
+      y += 7.5
     }
 
     doc.setLineWidth(0.2)
@@ -385,21 +406,46 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     doc.setFontSize(9)
     doc.setTextColor(...C_DARK)
 
-    const midY = y + ROW_H / 2 + 1.2
+    const midY = y + ROW_H / 2 + 1.0
     const isFlete = (item.nombre_snap || '').toUpperCase().includes('FLETE') || (item.codigo_snap || '').startsWith('FTL')
     const cantDisplay = item.cantidad ?? (isFlete ? 1 : '')
-    doc.text(String(cantDisplay), COLS[0].x + COLS[0].w / 2, midY, { align: 'center' })
-    doc.setFontSize(6.5)
-    doc.text(item.codigo_snap || '—', COLS[1].x + COLS[1].w / 2, midY, { align: 'center' })
-    doc.setFontSize(9)
+    let cantSize = 9
+    doc.setFontSize(cantSize)
+    const cantText = String(cantDisplay)
+    const maxCantW = COLS[0].w - 1.5
+    while (doc.getTextWidth(cantText) > maxCantW && cantSize > 6) {
+      cantSize -= 0.5
+      doc.setFontSize(cantSize)
+    }
+    doc.text(cantText, COLS[0].x + COLS[0].w / 2, midY, { align: 'center' })
 
-    // Render all lines of the description
-    const descStartY = y + (ROW_H - descLines.length * lineH) / 2 + lineH
+    let codSize = 6.5
+    doc.setFontSize(codSize)
+    const codText = item.codigo_snap || '—'
+    const maxCodW = COLS[1].w - 2
+    while (doc.getTextWidth(codText) > maxCodW && codSize > 4.5) {
+      codSize -= 0.5
+      doc.setFontSize(codSize)
+    }
+    doc.text(codText, COLS[1].x + COLS[1].w / 2, midY, { align: 'center' })
+
+    // Render all lines of the description (ajustado de forma vertical)
+    const descStartY = y + (ROW_H - descLines.length * lineH) / 2 + lineH - 0.8
     descLines.forEach((line, idx) => {
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9)
       doc.text(line, COLS[2].x + 2, descStartY + idx * lineH)
     })
 
-    doc.text((item.unidad_snap || '-').toUpperCase(), COLS[3].x + COLS[3].w / 2, midY, { align: 'center' })
+    let uniSize = 9
+    doc.setFontSize(uniSize)
+    const uniText = (item.unidad_snap || '-').toUpperCase()
+    const maxUniW = COLS[3].w - 1.5
+    while (doc.getTextWidth(uniText) > maxUniW && uniSize > 6) {
+      uniSize -= 0.5
+      doc.setFontSize(uniSize)
+    }
+    doc.text(uniText, COLS[3].x + COLS[3].w / 2, midY, { align: 'center' })
 
     const precioText = fmtPrecio(item.precio_unit_usd, monedaPDF, tasa, factorBcv)
     const totalText = fmtPrecio(item.total_linea_usd, monedaPDF, tasa, factorBcv)
@@ -466,14 +512,16 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     rightItems.push({ label: 'Ref:', value: refPago })
   }
 
+
   const numComboRows = rightItems.length
-  const totalBarH = 8
-  const CREDIT_ROW_H = 6
-  const CHOFER_H = 20  // header(6) + fila1(7) + fila2(7)
-  const creditRowY = sloganY - 5 - CHOFER_H - CREDIT_ROW_H
+  const totalBarH = 6.5
+  const CREDIT_ROW_H = 5
+  const CHOFER_ROW_H = 6.8
+  const CHOFER_H = 5 + CHOFER_ROW_H * 2  // header(5) + 2 filas
+  const creditRowY = sloganY - 4 - CHOFER_H - CREDIT_ROW_H
   const choferGridY = creditRowY + CREDIT_ROW_H
   const comboBottom = creditRowY - 2
-  const dataRowH = 5
+  const dataRowH = 4.2
   const comboTop = comboBottom - totalBarH - numComboRows * dataRowH
 
   // Notas Adicionales — ancladas 2mm sobre el bloque de totales
@@ -481,18 +529,18 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
     const notasLineas = doc.splitTextToSize(despacho.notas.trim(), CONTENT_W)
-    const notasH = 5 + notasLineas.length * 5
+    const notasH = 3 + notasLineas.length * 4.5
     const notasStartY = comboTop - 2 - notasH
 
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9.5)
+    doc.setFontSize(9)
     doc.setTextColor(...C_DARK)
-    doc.text('NOTAS:', MARGIN, notasStartY + 4)
+    doc.text('NOTAS:', MARGIN, notasStartY + 3)
 
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(9)
+    doc.setFontSize(8.5)
     notasLineas.forEach((lin, i) => {
-      doc.text(lin, MARGIN, notasStartY + 4 + 5 + i * 5)
+      doc.text(lin, MARGIN, notasStartY + 3 + 4.5 + i * 4.5)
     })
   }
 
@@ -510,11 +558,11 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     
     const item = rightItems[r]
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(9)
+    doc.setFontSize(8.2)
     if (item.color) doc.setTextColor(...item.color)
     else doc.setTextColor(...C_DARK)
-    doc.text(item.label, MARGIN + comboLeftW + 3, ry + dataRowH / 2 + 1)
-    doc.text(item.value, MARGIN + CONTENT_W - 3, ry + dataRowH / 2 + 1, { align: 'right' })
+    doc.text(item.label, MARGIN + comboLeftW + 3, ry + dataRowH / 2 + 0.8)
+    doc.text(item.value, MARGIN + CONTENT_W - 3, ry + dataRowH / 2 + 0.8, { align: 'right' })
   }
 
   // Barra TOTAL (alineada con cuadrícula derecha)
@@ -522,10 +570,10 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.setFillColor(60, 60, 60)
   doc.rect(MARGIN + comboLeftW, totTopY, comboRightW, totalBarH, 'F')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(13)
+  doc.setFontSize(11)
   doc.setTextColor(...C_WHITE)
-  doc.text('Total:', MARGIN + comboLeftW + 3, totTopY + 5.8)
-  doc.text(fmtTotal(totalFinal, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 3, totTopY + 5.8, { align: 'right' })
+  doc.text('Total:', MARGIN + comboLeftW + 3, totTopY + 4.8)
+  doc.text(fmtTotal(totalFinal, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 3, totTopY + 4.8, { align: 'right' })
 
   // ══════════════════════════════════════════════════════════════════════════
   // 5. DATOS DEL CHOFER Y VEHÍCULO — cuadrícula fija encima del slogan
@@ -536,63 +584,88 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.setLineWidth(0.3)
   doc.rect(MARGIN, creditRowY, CONTENT_W, CREDIT_ROW_H, 'S')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9)
+  doc.setFontSize(8.5)
   doc.setTextColor(...C_DARK)
-  doc.text('8 DÍAS DE CRÉDITO CONTINUO', MARGIN + 3, creditRowY + CREDIT_ROW_H / 2 + 1.5)
+  doc.text('8 DÍAS DE CRÉDITO CONTINUO', MARGIN + 3, creditRowY + CREDIT_ROW_H / 2 + 1.0)
 
   // Grid del chofer
   doc.setFillColor(240, 240, 240)
-  doc.rect(MARGIN, choferGridY, CONTENT_W, 6, 'F')
+  doc.rect(MARGIN, choferGridY, CONTENT_W, 5, 'F')
   doc.setDrawColor(120, 120, 120)
   doc.setLineWidth(0.3)
-  doc.rect(MARGIN, choferGridY, CONTENT_W, 6, 'S')
+  doc.rect(MARGIN, choferGridY, CONTENT_W, 5, 'S')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8)
+  doc.setFontSize(7.5)
   doc.setTextColor(...C_DARK)
-  doc.text('DATOS DEL CHOFER Y DEL VEHÍCULO', MARGIN + 2, choferGridY + 4)
+  doc.text('DATOS DEL CHOFER Y DEL VEHÍCULO', MARGIN + 2, choferGridY + 3.5)
 
-  const CHOFER_ROW_H = 7
-  const choferRow1Y = choferGridY + 6
+  const choferRow1Y = choferGridY + 5
   const choferRow2Y = choferRow1Y + CHOFER_ROW_H
-  const col3W = CONTENT_W / 3
   const col4W = CONTENT_W / 4
+
   const choferRow1Fields = [
-    { label: 'CHOFER',  val: (transportista?.nombre      || '').toUpperCase() },
-    { label: 'C.I.',   val: (transportista?.rif          || '').toUpperCase() },
-    { label: 'COLOR',  val: (transportista?.color        || '').toUpperCase() },
+    { label: 'CHOFER', val: (transportista?.nombre || '').toUpperCase(), w: col4W * 2 },
+    { label: 'C.I.',   val: (transportista?.rif    || '').toUpperCase(), w: col4W },
+    { label: 'COLOR',  val: (transportista?.color  || '').toUpperCase(), w: col4W },
   ]
   const choferRow2Fields = [
-    { label: 'VEHÍCULO',    val: (transportista?.vehiculo    || '').toUpperCase() },
-    { label: 'PLACA CHUTO', val: (transportista?.placa_chuto || '').toUpperCase() },
-    { label: 'PLACA BATEA', val: (transportista?.placa_batea || '').toUpperCase() },
+    { label: 'VEHÍCULO',    val: (transportista?.vehiculo    || '').toUpperCase(), w: col4W },
+    { label: 'PLACA CHUTO', val: (transportista?.placa_chuto || '').toUpperCase(), w: col4W },
+    { label: 'PLACA BATEA', val: (transportista?.placa_batea || '').toUpperCase(), w: col4W },
+    { label: 'FLETE',       val: hasFlete ? 'EN TABLA' : '—',                     w: col4W },
   ]
-  if (!hasFlete) choferRow2Fields.push({ label: 'FLETE', val: '' })
 
-  function drawChoferRow(fields, ry, colW) {
-    fields.forEach((f, i) => {
-      const fx = MARGIN + i * colW
+  function drawChoferRow(fields, ry) {
+    let currentX = MARGIN
+    fields.forEach((f) => {
+      const cellW = f.w
       doc.setDrawColor(120, 120, 120)
       doc.setLineWidth(0.3)
-      doc.rect(fx, ry, colW, CHOFER_ROW_H, 'S')
+      doc.rect(currentX, ry, cellW, CHOFER_ROW_H, 'S')
+
+      const maxTextW = cellW - 3
+
+      // Label (con auto-encogimiento dinámico)
       doc.setFont('helvetica', 'bold')
-      doc.setFontSize(6.5)
+      let lblSize = 6.5
+      doc.setFontSize(lblSize)
       doc.setTextColor(100, 100, 100)
-      doc.text(f.label, fx + 2, ry + 2.5)
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(8)
-      doc.setTextColor(0, 0, 0)
-      if (f.val) doc.text(f.val, fx + 2, ry + 5.8)
+      const labelText = (f.label || '').toUpperCase()
+      while (doc.getTextWidth(labelText) > maxTextW && lblSize > 4.5) {
+        lblSize -= 0.5
+        doc.setFontSize(lblSize)
+      }
+      doc.text(labelText, currentX + 1.5, ry + 2.3)
+
+      // Valor (con auto-encogimiento dinámico)
+      if (f.val) {
+        doc.setFont('helvetica', 'bold')
+        let valSize = 8.0
+        doc.setFontSize(valSize)
+        doc.setTextColor(0, 0, 0)
+        const valText = String(f.val).toUpperCase()
+        while (doc.getTextWidth(valText) > maxTextW && valSize > 5.5) {
+          valSize -= 0.5
+          doc.setFontSize(valSize)
+        }
+        doc.text(valText, currentX + 1.5, ry + 5.5)
+      }
+
+      currentX += cellW
     })
   }
-  drawChoferRow(choferRow1Fields, choferRow1Y, col3W)
-  drawChoferRow(choferRow2Fields, choferRow2Y, !hasFlete ? col4W : col3W)
+
+  drawChoferRow(choferRow1Fields, choferRow1Y)
+  drawChoferRow(choferRow2Fields, choferRow2Y)
 
   // ── Slogan ──
   if (y < sloganY) {
-    doc.setFont('helvetica', 'bolditalic')
-    doc.setFontSize(12)
-    doc.setTextColor(...C_DARK)
-    doc.text('"Todo lo puedo en Cristo que me fortalece" — Filipenses 4:13', PAGE_W / 2, sloganY, { align: 'center' })
+    if (!esMembrete) {
+      doc.setFont('helvetica', 'bolditalic')
+      doc.setFontSize(12)
+      doc.setTextColor(...C_DARK)
+      doc.text('"Todo lo puedo en Cristo que me fortalece" — Filipenses 4:13', PAGE_W / 2, sloganY, { align: 'center' })
+    }
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -602,35 +675,35 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const totalPages = doc.internal.getNumberOfPages()
   for (let p = 1; p <= totalPages; p++) {
     doc.setPage(p)
-  const ph = PAGE_H
-  {
+    const ph = PAGE_H
+    if (!esMembrete) {
+      // Línea separadora
+      const footerY = ph - 28
+      doc.setLineWidth(0.8)
+      doc.setDrawColor(...C_DARK)
+      doc.line(MARGIN, footerY, PAGE_W - MARGIN, footerY)
 
-    // Línea separadora
-    const footerY = ph - 28
-    doc.setLineWidth(0.8)
-    doc.setDrawColor(...C_DARK)
-    doc.line(MARGIN, footerY, PAGE_W - MARGIN, footerY)
+      // Dirección
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(7)
+      doc.setTextColor(...C_DARK)
 
-    // Dirección
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7)
-    doc.setTextColor(...C_DARK)
+      const addr1 = 'Av. 76, (Calle S-3) Nro. 70-C-766, Local Galpón Nro. 3 Edificio Centro Industrial Massico II'
+      const addr2 = 'Parcela MB-6 y Mb7, Urb. Industrial Aeropuerto Vía Flor Amarillo, Valencia, Edo. Carabobo, Zona Postal 2003'
 
-    const addr1 = 'Av. 76, (Calle S-3) Nro. 70-C-766, Local Galpón Nro. 3 Edificio Centro Industrial Massico II'
-    const addr2 = 'Parcela MB-6 y Mb7, Urb. Industrial Aeropuerto Vía Flor Amarillo, Valencia, Edo. Carabobo, Zona Postal 2003'
-
-    doc.text(addr1, PAGE_W / 2, footerY + 5, { align: 'center' })
-    doc.setFont('helvetica', 'normal')
-    doc.text(addr2, PAGE_W / 2, footerY + 9, { align: 'center' })
-
-    // Teléfono y correo
-    doc.setFontSize(8)
-    const tel = fmtTelefono(config.telefono_negocio) || ''
-    const email = config.email_negocio || ''
-    const contactLine = [tel, email].filter(Boolean).join('     |     ')
-    if (contactLine) {
+      doc.text(addr1, PAGE_W / 2, footerY + 5, { align: 'center' })
       doc.setFont('helvetica', 'normal')
-      doc.text(contactLine, PAGE_W / 2, footerY + 15, { align: 'center' })
+      doc.text(addr2, PAGE_W / 2, footerY + 9, { align: 'center' })
+
+      // Teléfono y correo
+      doc.setFontSize(8)
+      const tel = fmtTelefono(config.telefono_negocio) || ''
+      const email = config.email_negocio || ''
+      const contactLine = [tel, email].filter(Boolean).join('     |     ')
+      if (contactLine) {
+        doc.setFont('helvetica', 'normal')
+        doc.text(contactLine, PAGE_W / 2, footerY + 15, { align: 'center' })
+      }
     }
   }
 
@@ -641,5 +714,4 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   if (returnBlob) return { blob: doc.output('blob'), filename }
   doc.save(filename)
   return { filename }
-}
 }

@@ -274,6 +274,50 @@ function ComisionesTab({ campos, cambiar, isLoading, cargando }) {
         </button>
       </div>
     </div>
+
+    {/* ── Plantilla de Nota de Entrega ─────────────────────────────────── */}
+    <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+      <SectionHeader icon={FileText}>Plantilla de Nota de Entrega</SectionHeader>
+      <p className="text-xs text-slate-500 -mt-2">
+        Selecciona el diseño del PDF generado para las notas de entrega de los despachos.
+      </p>
+      
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Opción Estándar */}
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => cambiar('nota_entrega_plantilla', 'estandar')}
+          className={`flex flex-col text-left p-4 rounded-xl border transition-all ${
+            (campos.nota_entrega_plantilla || 'estandar') === 'estandar'
+              ? 'border-blue-500 bg-blue-50/50 ring-2 ring-blue-200'
+              : 'border-slate-200 bg-white hover:bg-slate-50'
+          }`}
+        >
+          <span className="text-sm font-bold text-slate-800">Estándar (Con Membrete Digital)</span>
+          <span className="text-xs text-slate-500 mt-1">
+            Incluye el logo, datos de contacto del negocio y pie de página en el PDF generado.
+          </span>
+        </button>
+
+        {/* Opción Membrete Pre-Impreso */}
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => cambiar('nota_entrega_plantilla', 'membrete')}
+          className={`flex flex-col text-left p-4 rounded-xl border transition-all ${
+            campos.nota_entrega_plantilla === 'membrete'
+              ? 'border-blue-500 bg-blue-50/50 ring-2 ring-blue-200'
+              : 'border-slate-200 bg-white hover:bg-slate-50'
+          }`}
+        >
+          <span className="text-sm font-bold text-slate-800">Hoja Pre-Impresa (Sin Membrete)</span>
+          <span className="text-xs text-slate-500 mt-1">
+            Omite el logo, membrete y pie de página digital. Ideal para imprimir directamente sobre hojas membretadas físicas.
+          </span>
+        </button>
+      </div>
+    </div>
     </div>
   )
 }
@@ -330,6 +374,7 @@ export default function ConfiguracionView() {
     pie_pagina_pdf:          '',
     iva_pct:                 0,
     nota_entrega_mostrar_iva: true,
+    nota_entrega_plantilla:  'estandar',
     gate_email:              '',
     comision_pct_cabilla:         2,
     comision_pct_otros:           3,
@@ -350,6 +395,7 @@ export default function ConfiguracionView() {
         pie_pagina_pdf:          config.pie_pagina_pdf          ?? '',
         iva_pct:                 config.iva_pct                 ?? 0,
         nota_entrega_mostrar_iva: config.nota_entrega_mostrar_iva ?? true,
+        nota_entrega_plantilla:  config.nota_entrega_plantilla  ?? 'estandar',
         gate_email:              config.gate_email              ?? '',
         comision_pct_cabilla:       config.comision_pct_cabilla       ?? 2,
         comision_pct_otros:         config.comision_pct_otros         ?? 3,

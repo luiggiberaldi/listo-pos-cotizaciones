@@ -390,7 +390,7 @@ export async function handleSaveConfig(request, env) {
   }
 
   const campos = await request.json();
-  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/configuracion_negocio?on_conflict=cuenta_id`, {
+  let res = await fetch(`${env.SUPABASE_URL}/rest/v1/configuracion_negocio?on_conflict=cuenta_id`, {
     method: 'POST',
     headers: {
       apikey: env.SUPABASE_SERVICE_KEY,
@@ -400,6 +400,20 @@ export async function handleSaveConfig(request, env) {
     },
     body: JSON.stringify({ cuenta_id: user.id, ...campos }),
   });
+  if (!res.ok) {
+    // Fallback: si falla por columna nota_entrega_plantilla inexistente, reintentamos sin ella
+    const { nota_entrega_plantilla, ...camposFallback } = campos;
+    res = await fetch(`${env.SUPABASE_URL}/rest/v1/configuracion_negocio?on_conflict=cuenta_id`, {
+      method: 'POST',
+      headers: {
+        apikey: env.SUPABASE_SERVICE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates',
+      },
+      body: JSON.stringify({ cuenta_id: user.id, ...camposFallback }),
+    });
+  }
   if (!res.ok) {
     const text = await res.text();
     return jsonError(text || `Error ${res.status}`, res.status, request);
@@ -423,12 +437,21 @@ export async function handleGetConfig(request, env) {
   const user = await verifyAuth(request, env);
   if (!user?.id) return jsonError('No autenticado', 401, request);
 
-  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/configuracion_negocio?cuenta_id=eq.${user.id}&limit=1&select=id,nombre_negocio,rif_negocio,telefono_negocio,direccion_negocio,email_negocio,logo_url,moneda_principal,pie_pagina_pdf,tasa_bcv_manual,iva_pct,gate_email,comision_pct_cabilla,comision_pct_otros,comision_pct_externos,comision_categoria_cabilla,creado_en,actualizado_en`, {
+  let res = await fetch(`${env.SUPABASE_URL}/rest/v1/configuracion_negocio?cuenta_id=eq.${user.id}&limit=1&select=id,nombre_negocio,rif_negocio,telefono_negocio,direccion_negocio,email_negocio,logo_url,moneda_principal,pie_pagina_pdf,tasa_bcv_manual,iva_pct,nota_entrega_mostrar_iva,nota_entrega_plantilla,gate_email,comision_pct_cabilla,comision_pct_otros,comision_pct_externos,comision_categoria_cabilla,creado_en,actualizado_en`, {
     headers: {
       apikey: env.SUPABASE_SERVICE_KEY,
       Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
     },
   });
+  if (!res.ok) {
+    // Fallback sin nota_entrega_plantilla
+    res = await fetch(`${env.SUPABASE_URL}/rest/v1/configuracion_negocio?cuenta_id=eq.${user.id}&limit=1&select=id,nombre_negocio,rif_negocio,telefono_negocio,direccion_negocio,email_negocio,logo_url,moneda_principal,pie_pagina_pdf,tasa_bcv_manual,iva_pct,nota_entrega_mostrar_iva,gate_email,comision_pct_cabilla,comision_pct_otros,comision_pct_externos,comision_categoria_cabilla,creado_en,actualizado_en`, {
+      headers: {
+        apikey: env.SUPABASE_SERVICE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+      },
+    });
+  }
   if (!res.ok) return jsonError('Error al leer configuración', res.status, request);
   const rows = await res.json();
   return json(rows[0] || {}, 200, request);
