@@ -499,29 +499,34 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   // ══════════════════════════════════════════════════════════════════════════
   // 4. BLOQUE COMBINADO: Crédito + Transporte (izq) | Desglose (der) + TOTAL
   // ══════════════════════════════════════════════════════════════════════════
-  // Columna derecha: desglose (estructura fija de totales)
+  // Columna derecha: desglose (estructura dinámica y compacta)
   const rightItems = [
-    { label: 'SubTotal:', value: fmtTotal(total, monedaPDF, tasa, factorBcv) },
-    { label: 'Descuento:', value: fmtTotal(0, monedaPDF, tasa, factorBcv) },
-    { label: 'Fletes:', value: fmtTotal(0, monedaPDF, tasa, factorBcv) },
-    { label: 'Exento:', value: fmtTotal(montoExento, monedaPDF, tasa, factorBcv) },
-    { label: 'Gravable:', value: fmtTotal(total - montoExento, monedaPDF, tasa, factorBcv) },
-    { label: 'Impuesto 16%:', value: fmtTotal(0, monedaPDF, tasa, factorBcv) },
+    { label: 'SubTotal:', value: fmtTotal(total, monedaPDF, tasa, factorBcv) }
   ]
+  
+  if (descuentoTotal > 0) {
+    rightItems.push({ label: 'Descuento:', value: fmtTotal(descuentoTotal, monedaPDF, tasa, factorBcv) })
+  }
+  if (montoExento > 0) {
+    rightItems.push({ label: 'Exento:', value: fmtTotal(montoExento, monedaPDF, tasa, factorBcv) })
+  }
+  
+  rightItems.push({ label: 'Gravable:', value: fmtTotal(montoGravado, monedaPDF, tasa, factorBcv) })
+  rightItems.push({ label: `Impuesto ${ivaPct}%:`, value: fmtTotal(ivaAmount, monedaPDF, tasa, factorBcv) })
+
   if (refPago) {
     rightItems.push({ label: 'Ref:', value: refPago })
   }
 
-
   const numComboRows = rightItems.length
-  const totalBarH = 6.5
-  const CREDIT_ROW_H = 5
-  const CHOFER_ROW_H = 6.8
-  const CHOFER_H = 5 + CHOFER_ROW_H * 2  // header(5) + 2 filas
+  const totalBarH = 5.5
+  const CREDIT_ROW_H = 4.5
+  const CHOFER_ROW_H = 6.0
+  const CHOFER_H = 4.5 + CHOFER_ROW_H * 2  // header(4.5) + 2 filas
   const creditRowY = sloganY - 4 - CHOFER_H - CREDIT_ROW_H
   const choferGridY = creditRowY + CREDIT_ROW_H
   const comboBottom = creditRowY - 2
-  const dataRowH = 4.2
+  const dataRowH = 3.6
   const comboTop = comboBottom - totalBarH - numComboRows * dataRowH
 
   // Notas Adicionales — ancladas 2mm sobre el bloque de totales

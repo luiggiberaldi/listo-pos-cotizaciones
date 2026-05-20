@@ -9,7 +9,7 @@ import {
   Menu, X, DollarSign, RefreshCw, PackageCheck, Bell, BellOff,
   AlertTriangle, Send, CheckCircle, Ban,
   PanelLeftClose, PanelLeftOpen, BarChart3, BarChart2,
-  Clock, AlertCircle, ScrollText, FlaskConical, UserX, Shield,
+  Clock, AlertCircle, ScrollText, FlaskConical, UserX, Shield, ShoppingCart,
 } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import LoginAvatar from '../auth/LoginAvatar'
@@ -82,6 +82,7 @@ const NAV_TODOS = [
 
 const NAV_SUPERVISOR = [
   { path: '/reporte-vendedores', label: 'Reporte Vendedores', icono: BarChart2, onlyRoles: ['supervisor', 'jefe', 'desarrollador'] },
+  { path: '/orden-compra',        label: 'Orden de Compra',   icono: ShoppingCart, onlyRoles: ['supervisor', 'jefe', 'desarrollador'] },
   { path: '/reportes',      label: 'Reportes',      icono: BarChart3,   excludeRoles: ['supervisor'] },
   { path: '/configuracion', label: 'Configuración', icono: Settings, excludeRoles: ['vendedor', 'vendedor_sin_comision', 'logistica'] },
   { path: '/logs',          label: 'System Logs',   icono: ScrollText, onlyRoles: ['desarrollador'] },

@@ -3,7 +3,7 @@
 import { NavLink } from 'react-router-dom'
 import { LayoutDashboard, FileText, Users, Package, MoreHorizontal, Zap, ShoppingBag } from 'lucide-react'
 import { useState } from 'react'
-import { PackageCheck, Truck, DollarSign, BarChart3, BarChart2, Settings, AlertCircle, FlaskConical, Shield } from 'lucide-react'
+import { PackageCheck, Truck, DollarSign, BarChart3, BarChart2, Settings, AlertCircle, FlaskConical, Shield, ShoppingCart } from 'lucide-react'
 
 // Vendedor: Inicio, Cotizar, Despachos, Clientes + Más (4 fijos)
 // Otros roles ajustan según permisos
@@ -16,6 +16,7 @@ const BOTTOM_ITEMS = [
 
 const MORE_ITEMS = [
   { path: '/venta-rapida',        label: 'Venta rápida',       icon: Zap,       onlyRoles: ['vendedor', 'vendedor_sin_comision', 'supervisor'] },
+  { path: '/orden-compra',        label: 'Orden de Compra',    icon: ShoppingCart, onlyRoles: ['supervisor', 'jefe', 'desarrollador'] },
   { path: '/inventario',          label: 'Inventario',         icon: Package,   excludeRoles: ['logistica'] },
   { path: '/transportistas',      label: 'Transportistas',     icon: Truck,     excludeRoles: ['administracion', 'logistica'] },
   { path: '/comisiones',          label: 'Comisiones',         icon: DollarSign, excludeRoles: ['logistica'] },

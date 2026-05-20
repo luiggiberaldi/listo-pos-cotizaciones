@@ -71,7 +71,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
         unidad: manualUnidad.trim().toUpperCase() || 'und',
         precio_usd: Number(manualPrecio),
         origen: 'externo',
-        cantidadManual: Number(manualCantidad) // para que el hook sepa cuánto agregar inicialmente
+        cantidad_inicial: Number(manualCantidad) // para que el hook sepa cuánto agregar inicialmente
       }
   
       agregarItem(fakeProducto)

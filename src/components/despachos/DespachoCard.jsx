@@ -220,10 +220,12 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   let numMetodos = 0
   let isCodUnpaid = false
   let isCodPaid = false
+  let metodosPagoList = []
   try {
     const fp = typeof despacho.forma_pago === 'string' ? JSON.parse(despacho.forma_pago) : (despacho.forma_pago || [])
     if (Array.isArray(fp)) {
       numMetodos = fp.length
+      metodosPagoList = fp.map(f => f.metodo === 'Cta por cobrar' ? 'Cta. por cobrar' : f.metodo)
       const cta = fp.find(f => f.metodo === 'Cta por cobrar')
       if (cta && cta.diasVencimiento > 0) {
         isCtaPorCobrar = true
@@ -248,9 +250,19 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           isCodPaid = true
         }
       }
+    } else if (typeof despacho.forma_pago === 'string' && despacho.forma_pago) {
+      metodosPagoList = [despacho.forma_pago === 'Cta por cobrar' ? 'Cta. por cobrar' : despacho.forma_pago]
+      if (despacho.forma_pago === 'Cta por cobrar') {
+        isCtaPorCobrar = true
+      }
     }
   } catch (e) {
-    // ignore
+    if (typeof despacho.forma_pago === 'string' && despacho.forma_pago) {
+      metodosPagoList = [despacho.forma_pago === 'Cta por cobrar' ? 'Cta. por cobrar' : despacho.forma_pago]
+      if (despacho.forma_pago === 'Cta por cobrar') {
+        isCtaPorCobrar = true
+      }
+    }
   }
   // Helper: fetch notas_despacho_items con fallback offline
   async function fetchItemsDespacho() {
@@ -674,7 +686,13 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         {isCtaPorCobrar && (
           <div className="flex items-center gap-1.5 text-[11px] text-amber-600 font-medium mt-0.5">
             <CreditCard size={11} className="shrink-0" />
-            <span>Cta. por cobrar {textVencimiento ? `- ${textVencimiento}` : ''}</span>
+            <span>
+              {isMixtoCxc 
+                ? `Mixto (${metodosPagoList.join(' + ')})` 
+                : 'Cta. por cobrar'
+              }
+              {textVencimiento ? ` - ${textVencimiento}` : ''}
+            </span>
           </div>
         )}
       </div>

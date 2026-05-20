@@ -201,25 +201,55 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                 <div className="w-5 h-5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
               </div>
             ) : (
-              <div className="space-y-0">
+              <div className="space-y-2">
                 {/* Header resumen */}
-                <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
-                  <span className="text-[11px] font-semibold text-slate-400">{items.length} producto{items.length > 1 ? 's' : ''}</span>
-                  <span className="text-[11px] font-bold text-slate-500">{fmtUsd(totalSinFlete)}</span>
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{items.length} producto{items.length > 1 ? 's' : ''}</span>
+                  <span className="text-xs font-black text-slate-600">{fmtUsd(totalSinFlete)}</span>
                 </div>
                 {/* Items */}
-                {items.map((item, i) => {
-                  const cant = Number(item.cantidad)
-                  return (
-                    <div key={item.id || i} className="flex items-baseline gap-2 py-1 border-b border-slate-50">
-                      <span className="flex-1 min-w-0 text-xs text-slate-700 font-medium">{item.nombre_snap}</span>
-                      {cant > 1 && (
-                        <span className="text-[10px] text-slate-400 whitespace-nowrap shrink-0">{cant.toLocaleString('es-VE')} × {fmtUsd(item.precio_unit_usd)}</span>
-                      )}
-                      <span className="text-xs font-bold text-slate-700 shrink-0">{fmtUsd(item.total_linea_usd)}</span>
-                    </div>
-                  )
-                })}
+                <div className="space-y-2 mt-2">
+                  {items.map((item, i) => {
+                    const cant = Number(item.cantidad)
+                    const stock = stockMap[item.producto_id]
+                    const hasStockIssue = stock !== undefined && stock < cant && !(item.origen === 'externo' || !item.producto_id || String(item.producto_id).startsWith('manual-') || String(item.codigo_snap).startsWith('EXT'))
+                    return (
+                      <div
+                        key={item.id || i}
+                        className={`flex flex-col gap-1.5 p-3 rounded-xl border transition-all duration-200 ${
+                          hasStockIssue
+                            ? 'bg-rose-50/60 border-rose-100/75 hover:bg-rose-50 hover:border-rose-200 shadow-sm shadow-rose-100/20'
+                            : 'bg-slate-50/50 border-slate-100 hover:bg-slate-50 hover:border-slate-200/80 shadow-sm shadow-slate-100/10'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <span className={`text-xs font-bold text-slate-700 leading-snug break-words ${hasStockIssue ? 'text-rose-950 font-black' : ''}`}>
+                            {item.nombre_snap}
+                          </span>
+                          <span className={`text-xs font-black shrink-0 select-none ${hasStockIssue ? 'text-rose-700' : 'text-slate-800'}`}>
+                            {fmtUsd(item.total_linea_usd)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 text-[10px]">
+                          <span className={`font-semibold ${hasStockIssue ? 'text-rose-500' : 'text-slate-400'}`}>
+                            {cant.toLocaleString('es-VE')} u. × {fmtUsd(item.precio_unit_usd)}
+                          </span>
+                          {hasStockIssue ? (
+                            <span className="text-[9px] text-rose-600 font-bold bg-rose-100/80 px-1.5 py-0.5 rounded-md shrink-0 border border-rose-200/40">
+                              Stock disp: {stock ?? 0}
+                            </span>
+                          ) : (
+                            stock !== undefined && (
+                              <span className="text-slate-400 font-medium shrink-0 bg-slate-100/50 px-1.5 py-0.5 rounded-md">
+                                Stock disp: {stock}
+                              </span>
+                            )
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             )}
 
@@ -271,7 +301,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
           </div>
 
           {/* ── Columna derecha: configuración del despacho ── */}
-          <div className="lg:w-96 xl:w-[450px] min-h-0 overflow-y-auto lg:overflow-visible p-4 lg:p-5 lg:pb-24 space-y-3">
+          <div className="lg:w-[380px] xl:w-[410px] shrink-0 min-h-0 overflow-y-auto lg:overflow-visible p-4 lg:p-5 lg:pb-24 space-y-3">
 
             {/* Transportista + Flete en una fila */}
             <div className="space-y-1.5">
@@ -312,6 +342,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                   <Plus size={13} className="text-emerald-600" />
                 </button>
               </div>
+            </div>
 
 
             {/* Formas de pago — chips con input integrado */}
@@ -652,7 +683,6 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
         </div>
       )}
     </div>
-  </div>
   )
 }
 

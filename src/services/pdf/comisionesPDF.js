@@ -639,9 +639,15 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {} }) {
     
     // Sub text (slate-400 / C_GRAY)
     if (kpi.sub) {
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(6.5)
-      doc.setTextColor(...C_GRAY)
+      if (kpi.label === 'Comisiones') {
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(7.5)
+        doc.setTextColor(71, 85, 105) // Slate-600 (darker and more visible)
+      } else {
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(6.5)
+        doc.setTextColor(...C_GRAY)
+      }
       doc.text(kpi.sub, bx + 3.5, y + 19)
     }
   })
@@ -691,8 +697,9 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {} }) {
       doc.text(fmtUsd(v.comision), MARGIN + 125, y + 4.5)
       
       if (v.comision > 0) {
-        doc.setFontSize(6.5)
-        doc.setTextColor(120, 130, 140)
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(7.5) // Un poco más grande
+        doc.setTextColor(71, 85, 105) // Slate-600 (más visible)
         const totalCabilla = (v.comisionCabilla2 || 0) + (v.comisionCabilla3 || 0)
         doc.text(`2%: ${fmtUsd(totalCabilla)} | 3%: ${fmtUsd(v.comisionOtros || 0)}`, MARGIN + 125, y + 8.5)
       }
@@ -726,8 +733,9 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {} }) {
     doc.text(fmtUsd(totalComisiones), MARGIN + 125, y + 4.5)
     
     if (totalComisiones > 0) {
-      doc.setFontSize(7)
-      doc.setTextColor(90, 100, 110)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8) // Un poco más grande
+      doc.setTextColor(51, 65, 85) // Slate-700
       doc.text(`2%: ${fmtUsd(totalCabilla)} | 3%: ${fmtUsd(totalOtros)}`, MARGIN + 125, y + 9)
     }
 

@@ -250,40 +250,42 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
 
       {/* Dropdown clientes */}
       {clienteOpen && clienteBusqueda.trim() && !showNuevoCliente && (
-        <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-xl shadow-slate-200/60 max-h-56 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-150">
-          {clientesFiltrados.map(c => (
-            <button key={c.id} type="button"
-              onClick={() => elegirCliente(c)}
-              className="w-full flex items-center gap-2.5 sm:gap-3 px-3 sm:px-4 py-2.5 text-left hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0">
-              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
-                <User size={13} className="text-slate-400" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <p className="text-sm font-semibold truncate" style={{ color: c.vendedor?.color || '#334155' }}>{c.nombre}</p>
-                  {!esSupervisor && c.vendedor_id && c.vendedor_id !== perfil?.id && c.vendedor && (
-                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200 shrink-0 whitespace-nowrap">
-                      {c.vendedor.nombre}
-                    </span>
-                  )}
+        <div className="absolute z-50 top-full mt-1.5 left-0 right-0 bg-white border border-slate-200 rounded-2xl shadow-xl shadow-slate-200/50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+          <div className="max-h-56 overflow-y-auto p-1.5 space-y-0.5 scrollbar-thin">
+            {clientesFiltrados.map(c => (
+              <button key={c.id} type="button"
+                onClick={() => elegirCliente(c)}
+                className="w-full flex items-center gap-2.5 sm:gap-3 px-3 py-2 text-left hover:bg-slate-50 rounded-xl transition-all group">
+                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                  <User size={13} className="text-slate-400" />
                 </div>
-                <p className="text-[10px] sm:text-[11px] text-slate-400">{[c.rif_cedula, c.ciudad].filter(Boolean).join(' · ')}</p>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-semibold truncate group-hover:text-primary transition-colors" style={{ color: c.vendedor?.color || '#334155' }}>{c.nombre}</p>
+                    {!esSupervisor && c.vendedor_id && c.vendedor_id !== perfil?.id && c.vendedor && (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200 shrink-0 whitespace-nowrap">
+                        {c.vendedor.nombre}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] sm:text-[11px] text-slate-400 font-mono">{[c.rif_cedula, c.ciudad].filter(Boolean).join(' · ')}</p>
+                </div>
+              </button>
+            ))}
+            <button type="button"
+              onClick={() => { setShowNuevoCliente(true); setClienteOpen(false) }}
+              className="w-full flex items-center gap-2.5 sm:gap-3 px-3 py-2.5 text-left hover:bg-emerald-50/50 text-emerald-700 bg-emerald-50/20 rounded-xl transition-colors border border-emerald-100/50 mt-1">
+              <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
+                <UserPlus size={13} className="text-emerald-500" />
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-bold text-emerald-600">Crear nuevo cliente</p>
+                <p className="text-[10px] text-slate-400/80">
+                  {clienteBusqueda.trim() ? `"${clienteBusqueda.trim()}" no encontrado` : 'Agregar un cliente nuevo'}
+                </p>
               </div>
             </button>
-          ))}
-          <button type="button"
-            onClick={() => { setShowNuevoCliente(true); setClienteOpen(false) }}
-            className="w-full flex items-center gap-2.5 sm:gap-3 px-3 sm:px-4 py-3 text-left hover:bg-emerald-50 transition-colors border-t border-slate-100">
-            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
-              <UserPlus size={13} className="text-emerald-500" />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-bold text-emerald-600">Crear nuevo cliente</p>
-              <p className="text-[10px] text-slate-400">
-                {clienteBusqueda.trim() ? `"${clienteBusqueda.trim()}" no encontrado` : 'Agregar un cliente nuevo'}
-              </p>
-            </div>
-          </button>
+          </div>
         </div>
       )}
 

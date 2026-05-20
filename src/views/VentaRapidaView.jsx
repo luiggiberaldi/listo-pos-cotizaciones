@@ -1144,15 +1144,17 @@ function Step1Productos({
                   className="w-full pl-9 pr-3 py-2 rounded-xl border border-sky-100 bg-sky-50/50 text-sm focus:ring-1 focus:ring-sky-400/50 focus:border-sky-400 outline-none transition-all"
                 />
                 {clienteOpen && clientesFiltrados.length > 0 && (
-                  <div className="absolute z-30 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-auto">
-                    {clientesFiltrados.map(c => (
-                      <button key={c.id} onClick={() => elegirCliente(c)}
-                        className="w-full text-left px-3 py-2 hover:bg-sky-50 text-sm flex items-center gap-2 border-b border-slate-50 last:border-0">
-                        <User size={14} className="shrink-0" style={{ color: c.vendedor?.color || '#94a3b8' }} />
-                        <span className="truncate font-medium" style={{ color: c.vendedor?.color || '#334155' }}>{c.nombre}</span>
-                        {c.rif_cedula && <span className="text-xs text-slate-400 shrink-0">{c.rif_cedula}</span>}
-                      </button>
-                    ))}
+                  <div className="absolute z-30 mt-1.5 w-full bg-white border border-slate-200 rounded-2xl shadow-xl shadow-slate-200/50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+                    <div className="max-h-56 overflow-y-auto p-1.5 space-y-0.5 scrollbar-thin">
+                      {clientesFiltrados.map(c => (
+                        <button key={c.id} onClick={() => elegirCliente(c)}
+                          className="w-full text-left px-3.5 py-2 hover:bg-sky-50 rounded-xl text-sm flex items-center gap-2 transition-all group">
+                          <User size={14} className="shrink-0 group-hover:scale-105 transition-transform" style={{ color: c.vendedor?.color || '#94a3b8' }} />
+                          <span className="truncate font-medium flex-1 group-hover:text-primary transition-colors" style={{ color: c.vendedor?.color || '#334155' }}>{c.nombre}</span>
+                          {c.rif_cedula && <span className="text-xs text-slate-400 shrink-0 font-mono">{c.rif_cedula}</span>}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>

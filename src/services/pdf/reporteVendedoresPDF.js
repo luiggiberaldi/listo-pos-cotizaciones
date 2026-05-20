@@ -124,8 +124,8 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
       )
     }
     if (i === 3) {
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(5.5)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(7.5)
       doc.text(
         `2%: ${fmtUsd((kpis.totalComisionCabilla2 || 0) + (kpis.totalComisionCabilla3 || 0))} | 3%: ${fmtUsd(kpis.totalComisionOtros || 0)}`,
         bx + 4, y + 16.5
