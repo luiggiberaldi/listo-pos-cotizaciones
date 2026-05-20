@@ -468,12 +468,18 @@ export default function VentaRapidaView() {
       const codItem = d.formasPago.find(f => f.metodo === 'Cobro a destino');
       if (codItem) {
         setEsCod(true);
-        setFormas(Array.isArray(codItem.metodo_propuesto) ? codItem.metodo_propuesto : []);
+        setPropuestaCod(Array.isArray(codItem.metodo_propuesto) ? codItem.metodo_propuesto : []);
+        setPagosInmediatos(d.formasPago.filter(f => f.metodo !== 'Cobro a destino'));
       } else {
-        setFormas(d.formasPago);
+        setEsCod(false);
+        setPagosInmediatos(d.formasPago);
+        setPropuestaCod([]);
       }
     }
-    else if (d.formaPago) setFormas([{ metodo: d.formaPago, monto: 0 }])
+    else if (d.formaPago) {
+      setPagosInmediatos([{ metodo: d.formaPago, monto: 0 }]);
+      setPropuestaCod([]);
+    }
     if (d.referenciaPago) setReferenciaPago(d.referenciaPago)
     if (d.transportistaId) setTransportistaId(d.transportistaId)
     if (d.fleteUsd) setFleteUsd(d.fleteUsd)
@@ -500,20 +506,70 @@ export default function VentaRapidaView() {
   const totalParaPago = round2(totalUsd + corte)
 
   const {
-    formasPago, setFormas, toggleForma, setMontoForma, updateForma, resetFormas,
-    totalAsignado: montoAsignadoVR, pagoCuadrado: pagoCuadradoVR
+    formasPago: pagosInmediatos,
+    setFormas: setPagosInmediatos,
+    toggleForma: togglePagoInmediato,
+    setMontoForma: setMontoPagoInmediato,
+    updateForma: updatePagoInmediato,
+    resetFormas: resetPagosInmediatos,
+    totalAsignado: totalInmediato,
+    pagoCuadrado: pagoInmediatoCuadrado,
   } = useFormasPago(totalConFlete)
+
+  // El monto COD requerido es el total restante
+  const montoCodRequerido = Math.max(0, round2(totalConFlete - totalInmediato))
+
+  const {
+    formasPago: propuestaCod,
+    setFormas: setPropuestaCod,
+    toggleForma: togglePropuestaCod,
+    setMontoForma: setMontoPropuestaCod,
+    updateForma: updatePropuestaCod,
+    resetFormas: resetPropuestaCod,
+    totalAsignado: totalPropuestaCod,
+    pagoCuadrado: propuestaCodCuadrado,
+  } = useFormasPago(montoCodRequerido)
+
+  const formasPagoFinales = useMemo(() => {
+    if (esCod) {
+      return [
+        ...pagosInmediatos,
+        {
+          metodo: "Cobro a destino",
+          monto: montoCodRequerido,
+          diasVencimiento: 0,
+          cobro_destino_pagado: false,
+          metodo_propuesto: propuestaCod
+        }
+      ]
+    } else {
+      return pagosInmediatos
+    }
+  }, [esCod, pagosInmediatos, propuestaCod, totalConFlete, totalInmediato, montoCodRequerido])
+
+  const handleToggleCod = () => {
+    setEsCod(prev => {
+      const next = !prev;
+      if (!next) {
+        resetPropuestaCod();
+      } else {
+        resetPagosInmediatos();
+        resetPropuestaCod();
+      }
+      return next;
+    });
+  };
 
   // Auto-guardado debounced 1.5s
   useEffect(() => {
     if (ventaRapida.isPending) return
     const timer = setTimeout(() => {
       if (items.length > 0 || clienteId) {
-        saveDraft({ step, clienteId, items, formasPago, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, esCod }, perfil?.id)
+        saveDraft({ step, clienteId, items, formasPago: formasPagoFinales, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, esCod }, perfil?.id)
       }
     }, 1500)
     return () => clearTimeout(timer)
-  }, [step, clienteId, items, formasPago, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, esCod, ventaRapida.isPending])
+  }, [step, clienteId, items, formasPagoFinales, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, esCod, ventaRapida.isPending])
 
   const idsAgregados = new Set(items.map(it => it.productoId))
   const clienteSeleccionado = clientes.find(c => c.id === clienteId)
@@ -532,7 +588,9 @@ export default function VentaRapidaView() {
 
   // Validaciones
   const step1Valid = !!clienteId && items.length > 0
-  const step2Valid = pagoCuadradoVR
+  const step2Valid = esCod
+    ? (pagoInmediatoCuadrado || (montoCodRequerido > 0.015 && propuestaCodCuadrado))
+    : pagoInmediatoCuadrado
 
   // Close cliente dropdown on outside click
   useEffect(() => {
@@ -586,17 +644,7 @@ export default function VentaRapidaView() {
 
   async function handleSubmit() {
     if (!step1Valid || !step2Valid) return
-    let finalFormasPago = formasPago
-    if (esCod) {
-      finalFormasPago = [{
-        metodo: "Cobro a destino",
-        monto: totalConFlete,
-        diasVencimiento: 0,
-        cobro_destino_pagado: false,
-        metodo_propuesto: formasPago
-      }]
-    }
-    const fpJson = JSON.stringify(finalFormasPago)
+    const fpJson = JSON.stringify(formasPagoFinales)
     ventaRapida.mutate({
       clienteId,
       clienteNombre: clienteSeleccionado?.nombre,
@@ -642,14 +690,16 @@ export default function VentaRapidaView() {
           tasa,
           tasaUsdt: tasaHook.tasaUsdt?.precio || 0,
           tasaBcv: tasaHook.tasaBcv?.precio || 0,
-          formasPago,
+          formasPago: formasPagoFinales,
           notas,
         })
         // Reset form
         setStep(0)
         setClienteId('')
         setItems([])
-        resetFormas()
+        resetPagosInmediatos()
+        resetPropuestaCod()
+        setEsCod(false)
         setReferenciaPago('')
         setTransportistaId('')
         setFleteUsd('')
@@ -764,12 +814,23 @@ export default function VentaRapidaView() {
 
         {step === 1 && (
           <Step2Pago
-            formasPago={formasPago}
+            pagosInmediatos={pagosInmediatos}
+            propuestaCod={propuestaCod}
+            togglePagoInmediato={togglePagoInmediato}
+            setMontoPagoInmediato={setMontoPagoInmediato}
+            updatePagoInmediato={updatePagoInmediato}
+            resetPagosInmediatos={resetPagosInmediatos}
+            togglePropuestaCod={togglePropuestaCod}
+            setMontoPropuestaCod={setMontoPropuestaCod}
+            updatePropuestaCod={updatePropuestaCod}
+            resetPropuestaCod={resetPropuestaCod}
+            totalInmediato={totalInmediato}
+            totalPropuestaCod={totalPropuestaCod}
+            montoCodRequerido={montoCodRequerido}
+            pagoInmediatoCuadrado={pagoInmediatoCuadrado}
+            propuestaCodCuadrado={propuestaCodCuadrado}
             comisionEstimada={comisionEstimada}
             items={items}
-            toggleForma={toggleForma}
-            setMontoForma={setMontoForma}
-            updateForma={updateForma}
             totalParaPago={totalParaPago}
             referenciaPago={referenciaPago}
             setReferenciaPago={setReferenciaPago}
@@ -783,11 +844,8 @@ export default function VentaRapidaView() {
             notas={notas}
             setNotas={setNotas}
             tasa={tasa}
-            montoAsignado={montoAsignadoVR}
-            pagoCuadrado={pagoCuadradoVR}
             esCod={esCod}
-            setEsCod={setEsCod}
-            resetFormas={resetFormas}
+            setEsCod={handleToggleCod}
           />
         )}
 
@@ -802,7 +860,7 @@ export default function VentaRapidaView() {
             totalConFlete={totalConFlete}
             totalBs={totalBs}
             tasa={tasa}
-            formasPago={formasPago}
+            formasPago={formasPagoFinales}
             referenciaPago={referenciaPago}
             transportistaSeleccionado={transportistaSeleccionado}
             notas={notas}
@@ -1602,21 +1660,21 @@ function Step1Productos({
 // Step 2: Pago y Envío
 // ─────────────────────────────────────────────────────────────────────────────
 function Step2Pago({
-  formasPago, toggleForma, setMontoForma, updateForma, totalParaPago,
-  comisionEstimada, items = [],
+  pagosInmediatos, togglePagoInmediato, setMontoPagoInmediato, updatePagoInmediato, resetPagosInmediatos,
+  propuestaCod, togglePropuestaCod, setMontoPropuestaCod, updatePropuestaCod, resetPropuestaCod,
+  totalInmediato, totalPropuestaCod, montoCodRequerido,
+  pagoInmediatoCuadrado, propuestaCodCuadrado,
+  totalParaPago, comisionEstimada, items = [],
   referenciaPago, setReferenciaPago,
   transportistas, transportistaId, setTransportistaId,
   fleteUsd, setFleteUsd, corteUsd, setCorteUsd, notas, setNotas,
-  tasa, montoAsignado, pagoCuadrado,
-  esCod, setEsCod, resetFormas
+  tasa, esCod, setEsCod
 }) {
   const [showNuevoTransp, setShowNuevoTransp] = useState(false)
   const crearTransp = useCrearTransportista()
   const [transpError, setTranspError] = useState('')
 
   const totalConFlete = totalParaPago + Math.max(0, Number(fleteUsd) || 0)
-  const diferencia = montoAsignado - totalConFlete
-
 
   async function handleCrearTransportista(campos) {
     setTranspError('')
@@ -1689,262 +1747,250 @@ function Step2Pago({
 
       {/* ── 2. Formas de pago (izq) + Resumen + Notas (der) ── */}
       <div className="flex flex-col lg:flex-row lg:gap-6">
-      {/* Columna izquierda: Formas de pago */}
-      <div className="flex-1 min-w-0">
-      <div className="mb-2">
-        {/* Toggle Cobro a destino (COD) */}
-        <div className="mb-4 flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl p-3 shadow-sm max-w-md">
-          <div className="flex items-center gap-2">
-            <span className="p-1.5 rounded-lg bg-rose-100 text-rose-600">
-              <Truck size={16} />
-            </span>
-            <div>
-              <span className="text-xs font-bold text-slate-700 block">¿Cobro a destino (COD)?</span>
-              <span className="text-[10px] text-slate-400">El cliente pagará al recibir la mercancía</span>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              setEsCod(!esCod);
-              resetFormas();
-            }}
-            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-              esCod ? 'bg-rose-500' : 'bg-slate-200'
-            }`}
-          >
-            <span
-              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                esCod ? 'translate-x-5' : 'translate-x-0'
-              }`}
-            />
-          </button>
-        </div>
-
-        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 block">
-          {esCod ? 'Métodos de pago sugeridos al recibir (COD) *' : 'Formas de pago *'}
-        </label>
-
-        {/* Métodos activos — fila con monto inline */}
-        <div className="space-y-2 mb-3">
-          {formasPago.map(fp => {
-            const restante = totalConFlete - formasPago.reduce((s, f) => s + (Number(f.monto) || 0), 0)
-            return (
-            <div key={fp.metodo} className="space-y-2">
-              <div className="flex items-center gap-2 bg-sky-50 border border-sky-300 rounded-xl px-3 py-2">
-                <span className="text-sm font-bold text-sky-700 w-32 shrink-0 truncate">{fp.metodo}</span>
-                <div className="relative flex-1 flex items-center">
-                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">$</span>
-                  <input
-                    type="number" min="0" step="0.01"
-                    value={fp.monto}
-                    onChange={e => setMontoForma(fp.metodo, e.target.value)}
-                    onFocus={e => e.target.select()}
-                    placeholder="0.00"
-                    className="w-full pl-6 pr-2 py-1.5 rounded-lg text-sm font-semibold border border-sky-200 bg-white focus:outline-none focus:ring-2 focus:ring-sky-300 text-slate-800"
-                  />
-                  {restante > 0.01 && (
-                    <button type="button"
-                      onClick={() => setMontoForma(fp.metodo, Number(((Number(fp.monto) || 0) + restante).toFixed(2)))}
-                      className="ml-1.5 px-2 py-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition-colors shrink-0"
-                      title={`Completar con $${restante.toFixed(2)} restante`}>
-                      Restante
-                    </button>
-                  )}
+        {/* Columna izquierda: Formas de pago */}
+        <div className="flex-1 min-w-0">
+          <div className="mb-2">
+            {/* Toggle Cobro a destino (COD) */}
+            <div className="mb-4 flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl p-3 shadow-sm max-w-md">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-lg bg-rose-100 text-rose-600">
+                  <Truck size={16} />
+                </span>
+                <div>
+                  <span className="text-xs font-bold text-slate-700 block">¿Cobro a destino (COD)?</span>
+                  <span className="text-[10px] text-slate-400">El cliente pagará al recibir la mercancía</span>
                 </div>
-                <button onClick={() => toggleForma(fp.metodo)}
-                  className="p-1 rounded-lg hover:bg-sky-100 text-sky-400 hover:text-sky-600 transition-colors shrink-0">
-                  <X size={14} />
-                </button>
               </div>
-              
-              {/* Opción de días de vencimiento para CxC */}
-              {fp.metodo === 'Cta por cobrar' && (
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50/50 border border-amber-200/50 rounded-lg ml-6">
-                  <Clock size={12} className="text-amber-500 shrink-0" />
-                  <span className="text-[11px] font-medium text-amber-700 whitespace-nowrap">Días de vencimiento (opcional):</span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={fp.diasVencimiento ?? ''}
-                    onChange={e => {
-                      const val = e.target.value;
-                      if (val === '' || /^[0-9]+$/.test(val)) {
-                        updateForma(fp.metodo, { diasVencimiento: val ? parseInt(val, 10) : null });
-                      }
-                    }}
-                    placeholder="Ej. 15"
-                    className="w-16 px-2 py-1 rounded text-[11px] font-semibold border border-amber-200 bg-white focus:outline-none focus:ring-1 focus:ring-amber-400 text-slate-700 text-center"
-                  />
+              <button
+                type="button"
+                onClick={setEsCod}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  esCod ? 'bg-rose-500' : 'bg-slate-200'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    esCod ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* SECCIÓN 1: PAGO INMEDIATO (ADELANTO) */}
+            <div className="space-y-3">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+                {esCod ? 'Pago Inmediato (Adelanto / Seña)' : 'Formas de pago *'}
+              </label>
+
+              {/* Métodos activos — fila con monto inline */}
+              <div className="space-y-2">
+                {pagosInmediatos.map(fp => {
+                  const restante = totalConFlete - totalInmediato
+                  return (
+                    <div key={fp.metodo} className="space-y-2">
+                      <div className="flex items-center gap-2 bg-sky-50 border border-sky-300 rounded-xl px-3 py-2">
+                        <span className="text-sm font-bold text-sky-700 w-32 shrink-0 truncate">{fp.metodo}</span>
+                        <div className="relative flex-1 flex items-center">
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">$</span>
+                          <input
+                            type="number" min="0" step="0.01"
+                            value={fp.monto}
+                            onChange={e => setMontoPagoInmediato(fp.metodo, e.target.value)}
+                            onFocus={e => e.target.select()}
+                            placeholder="0.00"
+                            className="w-full pl-6 pr-2 py-1.5 rounded-lg text-sm font-semibold border border-sky-200 bg-white focus:outline-none focus:ring-2 focus:ring-sky-300 text-slate-800"
+                          />
+                          {restante > 0.01 && (
+                            <button type="button"
+                              onClick={() => setMontoPagoInmediato(fp.metodo, Number(((Number(fp.monto) || 0) + restante).toFixed(2)))}
+                              className="ml-1.5 px-2 py-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition-colors shrink-0"
+                              title={`Completar con $${restante.toFixed(2)} restante`}>
+                              Restante
+                            </button>
+                          )}
+                        </div>
+                        <button type="button" onClick={() => togglePagoInmediato(fp.metodo)}
+                          className="p-1 rounded-lg hover:bg-sky-100 text-sky-400 hover:text-sky-600 transition-colors shrink-0">
+                          <X size={14} />
+                        </button>
+                      </div>
+
+                      {/* Opción de días de vencimiento para CxC */}
+                      {fp.metodo === 'Cta por cobrar' && (
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50/50 border border-amber-200/50 rounded-lg ml-6">
+                          <Clock size={12} className="text-amber-500 shrink-0" />
+                          <span className="text-[11px] font-medium text-amber-700 whitespace-nowrap">Días de vencimiento (opcional):</span>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            value={fp.diasVencimiento ?? ''}
+                            onChange={e => {
+                              const val = e.target.value;
+                              if (val === '' || /^[0-9]+$/.test(val)) {
+                                updatePagoInmediato(fp.metodo, { diasVencimiento: val ? parseInt(val, 10) : null });
+                              }
+                            }}
+                            placeholder="Ej. 15"
+                            className="w-16 px-2 py-1 rounded border border-amber-200 bg-white focus:outline-none focus:ring-2 focus:ring-amber-300 text-slate-800 text-center font-bold text-xs"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Chips para agregar métodos de pago inmediato */}
+              {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && (!esCod || m !== 'Cta por cobrar'))
+                .some(m => !pagosInmediatos.some(f => f.metodo === m)) && (
+                <div className="flex flex-wrap gap-2">
+                  {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && (!esCod || m !== 'Cta por cobrar'))
+                    .filter(m => !pagosInmediatos.some(f => f.metodo === m))
+                    .map(m => (
+                      <button key={m} type="button" onClick={() => togglePagoInmediato(m)}
+                        className="px-3.5 py-1.5 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:text-sky-600 transition-all duration-200 shadow-sm active:scale-95">
+                        {m}
+                      </button>
+                    ))}
                 </div>
               )}
 
-              {/* Opción de días de vencimiento y propuesta para Cobro a destino */}
-              {fp.metodo === 'Cobro a destino' && (
-                <div className="flex flex-col gap-2 p-3 bg-rose-50/40 border border-rose-200/40 rounded-xl ml-6 mt-1 space-y-1 w-full max-w-md">
-                  <div className="flex items-center gap-2">
-                    <Clock size={12} className="text-rose-500 shrink-0" />
-                    <span className="text-[11px] font-medium text-rose-700 whitespace-nowrap">Días de vencimiento (opcional):</span>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      value={fp.diasVencimiento ?? ''}
-                      onChange={e => {
-                        const val = e.target.value;
-                        if (val === '' || /^[0-9]+$/.test(val)) {
-                          updateForma(fp.metodo, { diasVencimiento: val ? parseInt(val, 10) : null });
-                        }
-                      }}
-                      placeholder="Ej. 0"
-                      className="w-16 px-2 py-1 rounded text-[11px] font-semibold border border-rose-200 bg-white focus:outline-none focus:ring-1 focus:ring-rose-400 text-slate-700 text-center"
-                    />
-                  </div>
-                  
-                  {/* Propuesta de métodos de pago */}
-                  <div className="border-t border-rose-100/60 pt-2">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[10px] font-bold text-rose-800 uppercase tracking-wider">
-                        ¿Cómo pagará al recibir? (Propuesta):
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const props = Array.isArray(fp.metodo_propuesto) ? fp.metodo_propuesto : [];
-                          const totalProp = props.reduce((s, p) => s + (Number(p.monto) || 0), 0);
-                          const restoProp = Math.max(0, (Number(fp.monto) || 0) - totalProp);
-                          updateForma(fp.metodo, {
-                            metodo_propuesto: [
-                              ...props,
-                              { metodo: 'Efectivo', monto: restoProp > 0 ? Number(restoProp.toFixed(2)) : '' }
-                            ]
-                          });
-                        }}
-                        className="text-[10px] font-bold text-rose-600 hover:text-rose-800 flex items-center gap-0.5"
-                      >
-                        + Agregar método
-                      </button>
-                    </div>
-                    
-                    {/* Lista de propuestas */}
-                    <div className="space-y-1.5">
-                      {(() => {
-                        const props = Array.isArray(fp.metodo_propuesto) ? fp.metodo_propuesto : [];
-                        if (props.length === 0 && Number(fp.monto) > 0) {
-                          setTimeout(() => {
-                            updateForma(fp.metodo, {
-                              metodo_propuesto: [{ metodo: 'Efectivo', monto: Number(fp.monto) }]
-                            });
-                          }, 0);
-                        }
-                        
-                        return props.map((prop, pIdx) => {
-                          const metodosDisponibles = FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && m !== 'Cta por cobrar');
-                          return (
-                            <div key={pIdx} className="flex items-center gap-1.5">
-                              <select
-                                value={prop.metodo}
-                                onChange={e => {
-                                  const newProps = [...props];
-                                  newProps[pIdx] = { ...newProps[pIdx], metodo: e.target.value };
-                                  updateForma(fp.metodo, { metodo_propuesto: newProps });
-                                }}
-                                className="px-1.5 py-1 rounded text-[11px] font-semibold border border-rose-200 bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-rose-400 max-w-[120px]"
-                              >
-                                {metodosDisponibles.map(m => (
-                                  <option key={m} value={m}>{m}</option>
-                                ))}
-                              </select>
-                              
-                              <div className="relative flex items-center">
-                                <span className="absolute left-1.5 text-[11px] font-bold text-slate-400">$</span>
+              {esCod && pagosInmediatos.length === 0 && (
+                <p className="text-xs text-slate-400 italic">No se registraron adelantos inmediatos.</p>
+              )}
+            </div>
+
+            {/* SECCIÓN 2: PAGO AL RECIBIR (COD) */}
+            {esCod && (
+              <div className="mt-5 p-4 bg-rose-50/40 border border-rose-200/50 rounded-2xl space-y-4">
+                <div className="flex items-center justify-between text-xs font-bold text-rose-800">
+                  <span>Monto a cobrar al recibir:</span>
+                  <span className="text-sm font-black text-rose-600">${montoCodRequerido.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+
+                {montoCodRequerido > 0.015 ? (
+                  <div className="space-y-3 border-t border-rose-100/50 pt-3">
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                      ¿Cómo pagará al recibir? (Propuesta) *
+                    </label>
+
+                    {/* Métodos propuestos activos */}
+                    <div className="space-y-2">
+                      {propuestaCod.map(fp => {
+                        const restanteCod = Math.max(0, round2(montoCodRequerido - totalPropuestaCod))
+                        return (
+                          <div key={fp.metodo} className="space-y-2">
+                            <div className="flex items-center gap-2 bg-rose-50/60 border border-rose-200/80 rounded-xl px-3 py-2">
+                              <span className="text-sm font-bold text-rose-700 w-32 shrink-0 truncate">{fp.metodo}</span>
+                              <div className="relative flex-1 flex items-center">
+                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-rose-405 text-sm font-medium">$</span>
                                 <input
-                                  type="number"
-                                  step="0.01"
-                                  value={prop.monto ?? ''}
-                                  onChange={e => {
-                                    const val = e.target.value === '' ? '' : parseFloat(e.target.value);
-                                    const newProps = [...props];
-                                    newProps[pIdx] = { ...newProps[pIdx], monto: val };
-                                    updateForma(fp.metodo, { metodo_propuesto: newProps });
-                                  }}
-                                  className="w-20 pl-4 pr-1.5 py-1 rounded text-[11px] font-semibold border border-rose-200 bg-white focus:outline-none focus:ring-1 focus:ring-rose-400 text-slate-700"
+                                  type="number" min="0" step="0.01"
+                                  value={fp.monto}
+                                  onChange={e => setMontoPropuestaCod(fp.metodo, e.target.value)}
+                                  onFocus={e => e.target.select()}
                                   placeholder="0.00"
+                                  className="w-full pl-6 pr-2 py-1.5 rounded-lg text-sm font-semibold border border-rose-200 bg-white focus:outline-none focus:ring-2 focus:ring-rose-300 text-slate-800"
                                 />
+                                {restanteCod > 0.01 && (
+                                  <button type="button"
+                                    onClick={() => setMontoPropuestaCod(fp.metodo, Number(((Number(fp.monto) || 0) + restanteCod).toFixed(2)))}
+                                    className="ml-1.5 px-2 py-1 text-[10px] font-bold text-rose-700 bg-rose-100 hover:bg-rose-200 rounded-lg transition-colors shrink-0"
+                                    title={`Completar con $${restanteCod.toFixed(2)} restante`}>
+                                    Restante
+                                  </button>
+                                )}
                               </div>
-                              
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const newProps = props.filter((_, i) => i !== pIdx);
-                                  updateForma(fp.metodo, { metodo_propuesto: newProps });
-                                }}
-                                className="p-1 rounded text-rose-400 hover:text-rose-600 hover:bg-rose-100 transition-colors"
-                              >
-                                <X size={12} />
+                              <button type="button" onClick={() => togglePropuestaCod(fp.metodo)}
+                                className="p-1 rounded-lg hover:bg-rose-100 text-rose-400 hover:text-rose-600 transition-colors shrink-0">
+                                <X size={14} />
                               </button>
                             </div>
-                          );
-                        });
-                      })()}
-                    </div>
-                    
-                    {/* Validador de suma de propuestas */}
-                    {(() => {
-                      const props = Array.isArray(fp.metodo_propuesto) ? fp.metodo_propuesto : [];
-                      const sumProp = props.reduce((s, p) => s + (Number(p.monto) || 0), 0);
-                      const diffProp = Math.abs(sumProp - (Number(fp.monto) || 0));
-                      if (diffProp > 0.02) {
-                        return (
-                          <div className="text-[10px] text-rose-600 font-bold mt-1.5 bg-rose-100/50 p-1 px-1.5 rounded border border-rose-200/50">
-                            La suma de propuestas (${sumProp.toFixed(2)}) no coincide con el total COD (${Number(fp.monto).toFixed(2)})
                           </div>
                         );
-                      }
-                      return null;
-                    })()}
+                      })}
+                    </div>
+
+                    {/* Chips de propuestaCod */}
+                    {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && m !== 'Cta por cobrar')
+                      .some(m => !propuestaCod.some(f => f.metodo === m)) && (
+                      <div className="flex flex-wrap gap-2">
+                        {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && m !== 'Cta por cobrar')
+                          .filter(m => !propuestaCod.some(f => f.metodo === m))
+                          .map(m => (
+                            <button key={m} type="button" onClick={() => togglePropuestaCod(m)}
+                              className="px-3.5 py-1.5 rounded-xl text-xs font-bold border border-rose-200 bg-white text-rose-600 hover:border-rose-300 hover:text-rose-700 transition-all duration-200 shadow-sm active:scale-95">
+                              {m}
+                            </button>
+                          ))}
+                      </div>
+                    )}
+
+                    {/* Validador de propuesta COD */}
+                    <div className={`flex items-center justify-between px-3 py-2 rounded-xl text-sm font-semibold border ${
+                      propuestaCodCuadrado
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : (totalPropuestaCod - montoCodRequerido > 0.02)
+                          ? 'bg-amber-50 text-amber-700 border-amber-200'
+                          : 'bg-rose-50 text-rose-700 border-rose-200'
+                    }`}>
+                      <span>Asignado COD: ${totalPropuestaCod.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      {propuestaCodCuadrado ? (
+                        <CheckCircle size={16} className="text-emerald-500" />
+                      ) : (totalPropuestaCod - montoCodRequerido > 0.02) ? (
+                        <span className="text-xs font-bold text-amber-600">Sobran ${(totalPropuestaCod - montoCodRequerido).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      ) : (
+                        <span className="text-xs font-bold text-rose-600">Faltan ${Math.abs(totalPropuestaCod - montoCodRequerido).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-            )
-          })}
-        </div>
-
-        {/* Métodos inactivos — chips para agregar */}
-        {FORMAS_PAGO.some(m => !formasPago.find(f => f.metodo === m)) && (
-          <div className="flex flex-wrap gap-1.5">
-            {FORMAS_PAGO.filter(m => !formasPago.find(f => f.metodo === m))
-              .filter(m => m !== 'Cobro a destino' && (!esCod || m !== 'Cta por cobrar'))
-              .map(m => (
-                <button key={m} onClick={() => toggleForma(m)}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all active:scale-95">
-                  <Plus size={11} strokeWidth={2.5} />{m}
-                </button>
-              ))}
+                ) : (
+                  <p className="text-xs text-amber-600 font-medium bg-amber-50 border border-amber-200 p-2.5 rounded-xl">
+                    El monto asignado en pagos inmediatos ya cubre el total.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
-        )}
 
-        {/* Barra de totales */}
-        <div className={`flex items-center justify-between mt-3 mb-2 px-3 py-2 rounded-xl text-sm font-semibold ${
-          pagoCuadrado ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-          : (montoAsignado - totalConFlete > 0.02) ? 'bg-amber-50 text-amber-700 border border-amber-200'
-          : formasPago.length === 0 ? 'bg-slate-50 text-slate-700 border border-slate-200'
-          : 'bg-red-50 text-red-700 border border-red-200'
-        }`}>
-          <span>Asignado: ${montoAsignado.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-          <span>Total (con flete): ${totalConFlete.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-          {pagoCuadrado
-            ? <CheckCircle size={16} className="text-emerald-500" />
-            : (montoAsignado - totalConFlete > 0.02)
-              ? <span className="text-xs font-bold text-amber-600">Sobran ${(montoAsignado - totalConFlete).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-              : <span className="text-xs font-bold text-red-600">Faltan ${Math.abs(montoAsignado - totalConFlete).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-          }
-        </div>
-      </div>
-
-      </div>{/* ── Fin columna izquierda ── */}
+          {/* Banner de total general (Inmediato + COD) */}
+          <div className="mt-4">
+            {!esCod ? (
+              pagosInmediatos.length > 0 && (
+                <div className={`flex items-center justify-between px-3 py-2 rounded-xl text-sm font-semibold border ${
+                  pagoInmediatoCuadrado
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : (totalInmediato - totalConFlete > 0.02)
+                      ? 'bg-amber-50 text-amber-700 border-amber-200'
+                      : 'bg-red-50 text-red-700 border-red-200'
+                }`}>
+                  <span>Asignado: ${totalInmediato.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span>Total: ${totalConFlete.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  {pagoInmediatoCuadrado ? (
+                    <CheckCircle size={16} className="text-emerald-500" />
+                  ) : (totalInmediato - totalConFlete > 0.02) ? (
+                    <span className="text-xs font-bold text-amber-600">Sobran ${(totalInmediato - totalConFlete).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  ) : (
+                    <span className="text-xs font-bold text-red-600">Faltan ${Math.abs(totalInmediato - totalConFlete).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  )}
+                </div>
+              )
+            ) : (
+              /* En caso de COD, mostramos un resumen global consolidado */
+              <div className="bg-slate-50 border border-slate-200 p-3 rounded-2xl flex items-center justify-between text-xs font-semibold text-slate-700">
+                <div className="flex flex-col gap-0.5">
+                  <span>Adelanto: <b className="text-slate-900">${totalInmediato.toFixed(2)}</b></span>
+                  <span>Al recibir (COD): <b className="text-rose-600">${montoCodRequerido.toFixed(2)}</b></span>
+                </div>
+                <div className="text-right">
+                  <span className="block text-slate-500 font-medium">Total Despacho</span>
+                  <span className="text-sm font-extrabold text-slate-900">${totalConFlete.toFixed(2)}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>{/* Fin columna izquierda */}
 
       {/* ── Columna derecha: Resumen + Notas ── */}
       <div className="lg:w-80 xl:w-96 shrink-0 flex flex-col gap-4">

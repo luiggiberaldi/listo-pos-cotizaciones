@@ -1,12 +1,13 @@
 // src/components/despachos/EditDespachoModal.jsx
 // Modal para editar forma de pago, transportista y notas de un despacho pendiente
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { X, Pencil, Loader2, Truck, ChevronDown, StickyNote, Plus, User, Clock } from 'lucide-react'
 import { useTransportistas, useCrearTransportista } from '../../hooks/useTransportistas'
 import { useEditarDespacho } from '../../hooks/useDespachos'
 import { useClientes } from '../../hooks/useClientes'
 import { useFormasPago } from '../../hooks/useFormasPago'
 import { fmtUsdSimple as fmtUsd } from '../../utils/format'
+import { round2 } from '../../utils/dinero'
 import CustomSelect from '../ui/CustomSelect'
 import TransportistaFormCompact from '../transportistas/TransportistaFormCompact'
 import ClienteForm from '../clientes/ClienteForm'
@@ -40,9 +41,59 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
 
   // 2. Hook de formas de pago
   const {
-    formasPago, setFormas, toggleForma, setMontoForma, updateForma,
-    totalAsignado, pagoCuadrado, diferencia, hayVuelto, faltante
+    formasPago: pagosInmediatos,
+    setFormas: setPagosInmediatos,
+    toggleForma: togglePagoInmediato,
+    setMontoForma: setMontoPagoInmediato,
+    updateForma: updatePagoInmediato,
+    resetFormas: resetPagosInmediatos,
+    totalAsignado: totalInmediato,
+    pagoCuadrado: pagoInmediatoCuadrado,
   } = useFormasPago(totalConFlete)
+
+  // El monto COD requerido es el total restante
+  const montoCodRequerido = Math.max(0, round2(totalConFlete - totalInmediato))
+
+  const {
+    formasPago: propuestaCod,
+    setFormas: setPropuestaCod,
+    toggleForma: togglePropuestaCod,
+    setMontoForma: setMontoPropuestaCod,
+    updateForma: updatePropuestaCod,
+    resetFormas: resetPropuestaCod,
+    totalAsignado: totalPropuestaCod,
+    pagoCuadrado: propuestaCodCuadrado,
+  } = useFormasPago(montoCodRequerido)
+
+  const formasPagoFinales = useMemo(() => {
+    if (esCod) {
+      return [
+        ...pagosInmediatos,
+        {
+          metodo: "Cobro a destino",
+          monto: montoCodRequerido,
+          diasVencimiento: 0,
+          cobro_destino_pagado: false,
+          metodo_propuesto: propuestaCod
+        }
+      ]
+    } else {
+      return pagosInmediatos
+    }
+  }, [esCod, pagosInmediatos, propuestaCod, totalConFlete, totalInmediato, montoCodRequerido])
+
+  const handleToggleCod = () => {
+    setEsCod(prev => {
+      const next = !prev;
+      if (!next) {
+        resetPropuestaCod();
+      } else {
+        resetPagosInmediatos();
+        resetPropuestaCod();
+      }
+      return next;
+    });
+  };
 
   // 3. Inicializar valores del despacho actual
   useEffect(() => {
@@ -54,22 +105,28 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
         const codItem = fp.find(f => f.metodo === 'Cobro a destino')
         if (codItem) {
           setEsCod(true)
-          setFormas(Array.isArray(codItem.metodo_propuesto) ? codItem.metodo_propuesto : [])
+          setPropuestaCod(Array.isArray(codItem.metodo_propuesto) ? codItem.metodo_propuesto : [])
+          setPagosInmediatos(fp.filter(f => f.metodo !== 'Cobro a destino'))
         } else {
           setEsCod(false)
-          setFormas(fp)
+          setPagosInmediatos(fp)
+          setPropuestaCod([])
         }
       } else {
-        setFormas([])
+        setPagosInmediatos([])
+        setPropuestaCod([])
       }
-    } catch { setFormas([]) }
+    } catch { 
+      setPagosInmediatos([])
+      setPropuestaCod([])
+    }
     setReferenciaPago(despacho.referencia_pago || '')
     setTransportistaId(despacho.transportista_id || '')
     setFleteUsd(despacho.flete_usd ? String(Number(despacho.flete_usd)) : '')
     setCorteUsd(despacho.corte_usd ? String(Number(despacho.corte_usd)) : '')
     setNotas(despacho.notas || '')
     setClienteId(despacho.cliente_id || '')
-  }, [despacho, isOpen, setFormas])
+  }, [despacho, isOpen, setPagosInmediatos, setPropuestaCod])
 
   if (!isOpen || !despacho) return null
 
@@ -79,17 +136,7 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
 
 
   async function handleGuardar() {
-    let finalFormasPago = formasPago
-    if (esCod) {
-      finalFormasPago = [{
-        metodo: "Cobro a destino",
-        monto: totalConFlete,
-        diasVencimiento: 0,
-        cobro_destino_pagado: false,
-        metodo_propuesto: formasPago
-      }]
-    }
-    const fpJson = JSON.stringify(finalFormasPago)
+    const fpJson = JSON.stringify(formasPagoFinales)
     await editarDespacho.mutateAsync({
       despachoId: despacho.id,
       formaPago: fpJson,
@@ -255,10 +302,7 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  setEsCod(!esCod);
-                  setFormas([]);
-                }}
+                onClick={handleToggleCod}
                 disabled={cargando}
                 className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                   esCod ? 'bg-rose-500' : 'bg-slate-200'
@@ -272,98 +316,196 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
               </button>
             </div>
 
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              {esCod ? 'Métodos de pago sugeridos al recibir (COD) *' : 'Formas de pago *'}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {FORMAS_PAGO
-                .filter(fp => fp !== 'Cobro a destino' && (!esCod || fp !== 'Cta por cobrar'))
-                .map(fp => {
-                  const activo = formasPago.some(f => f.metodo === fp)
-                return (
-                  <button key={fp} type="button"
-                    onClick={() => toggleForma(fp)}
-                    disabled={cargando}
-                    className={`px-4 py-2.5 rounded-lg text-sm font-semibold border transition-all min-h-[44px] ${
-                      activo
-                        ? 'bg-indigo-500 text-white border-indigo-500 shadow-sm'
-                        : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600'
-                    }`}>
-                    {fp}
-                  </button>
-                )
-              })}
-            </div>
+            {/* SECCIÓN 1: PAGO INMEDIATO (ADELANTO) */}
+            <div className="space-y-2.5">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                {esCod ? 'Pago Inmediato (Adelanto / Seña)' : 'Formas de pago *'}
+              </p>
 
-            {formasPago.length > 0 && (
-              <div className="space-y-2 mt-2">
-                {formasPago.map(fp => {
-                  const restante = totalConFlete - formasPago.reduce((s, f) => s + (Number(f.monto) || 0), 0)
+              {/* Métodos activos de pagosInmediatos */}
+              <div className="space-y-2">
+                {pagosInmediatos.map(fp => {
+                  const restante = totalConFlete - totalInmediato
                   return (
-                  <div key={fp.metodo} className="flex flex-col gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-slate-600 w-28 truncate">{fp.metodo}</span>
-                      <div className="relative flex-1 flex items-center">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={fp.monto}
-                          onChange={e => setMontoForma(fp.metodo, e.target.value)}
-                          onFocus={e => e.target.select()}
-                          placeholder="0.00"
-                          className="w-full pl-7 pr-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/20 focus:bg-white"
-                          disabled={cargando}
-                        />
-                        {restante > 0.01 && (
-                          <button type="button"
-                            onClick={() => setMontoForma(fp.metodo, Number(((Number(fp.monto) || 0) + restante).toFixed(2)))}
-                            className="ml-1 px-2.5 py-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition-colors shrink-0 whitespace-nowrap"
-                            title={`Sumar $${restante.toFixed(2)} restante`}>
-                            Resto
-                          </button>
-                        )}
+                    <div key={fp.metodo} className="flex flex-col gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-slate-600 w-28 truncate">{fp.metodo}</span>
+                        <div className="relative flex-1 flex items-center">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={fp.monto}
+                            onChange={e => setMontoPagoInmediato(fp.metodo, e.target.value)}
+                            onFocus={e => e.target.select()}
+                            placeholder="0.00"
+                            className="w-full pl-7 pr-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/20 focus:bg-white"
+                            disabled={cargando}
+                          />
+                          {restante > 0.01 && (
+                            <button type="button"
+                              onClick={() => setMontoPagoInmediato(fp.metodo, Number(((Number(fp.monto) || 0) + restante).toFixed(2)))}
+                              className="ml-1 px-2.5 py-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition-colors shrink-0 whitespace-nowrap"
+                              title={`Sumar $${restante.toFixed(2)} restante`}>
+                              Resto
+                            </button>
+                          )}
+                        </div>
                       </div>
+                      {fp.metodo === 'Cta por cobrar' && (
+                        <div className="flex items-center gap-2 pl-28">
+                          <span className="text-xs text-slate-500 font-medium">Días venc.:</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={fp.diasVencimiento ?? ''}
+                            onChange={e => updatePagoInmediato(fp.metodo, { diasVencimiento: e.target.value ? parseInt(e.target.value) : null })}
+                            placeholder="Opcional"
+                            className="w-24 px-2 py-1.5 rounded-lg text-xs border border-slate-200 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:bg-white"
+                            disabled={cargando}
+                          />
+                        </div>
+                      )}
                     </div>
-                    {fp.metodo === 'Cta por cobrar' && (
-                      <div className="flex items-center gap-2 pl-28">
-                        <span className="text-xs text-slate-500 font-medium">Días venc.:</span>
-                        <input
-                          type="number"
-                          min="0"
-                          step="1"
-                          value={fp.diasVencimiento ?? ''}
-                          onChange={e => updateForma(fp.metodo, { diasVencimiento: e.target.value ? parseInt(e.target.value) : null })}
-                          placeholder="Opcional"
-                          className="w-24 px-2 py-1.5 rounded-lg text-xs border border-slate-200 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:bg-white"
-                          disabled={cargando}
-                        />
-                      </div>
-                    )}
-                  </div>
-                  )
+                  );
                 })}
+              </div>
+
+              {/* Chips para agregar métodos inmediatos */}
+              {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && (!esCod || m !== 'Cta por cobrar'))
+                .some(m => !pagosInmediatos.some(f => f.metodo === m)) && (
+                <div className="flex flex-wrap gap-2">
+                  {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && (!esCod || m !== 'Cta por cobrar'))
+                    .filter(m => !pagosInmediatos.some(f => f.metodo === m))
+                    .map(m => (
+                      <button key={m} type="button"
+                        onClick={() => togglePagoInmediato(m)}
+                        disabled={cargando}
+                        className="px-4 py-2.5 rounded-lg text-sm font-semibold border bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600 transition-all min-h-[44px]">
+                        {m}
+                      </button>
+                    ))}
+                </div>
+              )}
+
+              {esCod && pagosInmediatos.length === 0 && (
+                <p className="text-xs text-slate-400 italic">No se registraron adelantos inmediatos.</p>
+              )}
+
+              {!esCod && pagosInmediatos.length > 0 && (
                 <div className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm font-semibold ${
-                  pagoCuadrado
+                  pagoInmediatoCuadrado
                     ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                    : hayVuelto
+                    : (totalInmediato - totalConFlete > 0.02)
                       ? 'bg-amber-50 text-amber-700 border border-amber-200'
                       : 'bg-red-50 text-red-600 border border-red-200'
                 }`}>
-                  <span>Asignado: ${totalAsignado.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span>Asignado: ${totalInmediato.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   <span>Total (con flete): ${totalConFlete.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                  {pagoCuadrado
-                    ? <span className="text-emerald-500">✓</span>
-                    : hayVuelto
-                      ? <span className="text-amber-600">Sobran ${diferencia.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                      : <span className="text-red-400">Faltan ${Math.abs(diferencia).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                  }
+                  {pagoInmediatoCuadrado ? (
+                    <span className="text-emerald-500">✓</span>
+                  ) : (totalInmediato - totalConFlete > 0.02) ? (
+                    <span className="text-amber-600">Sobran ${(totalInmediato - totalConFlete).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  ) : (
+                    <span className="text-red-400">Faltan ${Math.abs(totalInmediato - totalConFlete).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  )}
                 </div>
+              )}
+            </div>
+
+            {/* SECCIÓN 2: COBRO AL RECIBIR (COD) */}
+            {esCod && (
+              <div className="mt-4 p-3.5 bg-rose-50/50 border border-rose-200 rounded-xl space-y-3">
+                <div className="flex items-center justify-between text-xs font-semibold text-rose-800">
+                  <span>Monto a cobrar al recibir:</span>
+                  <span className="text-sm font-extrabold text-rose-600">${montoCodRequerido.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+
+                {montoCodRequerido > 0.015 ? (
+                  <div className="space-y-3 border-t border-rose-100 pt-3">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                      ¿Cómo pagará al recibir? (Propuesta) *
+                    </label>
+
+                    {/* Métodos activos de propuestaCod */}
+                    <div className="space-y-2">
+                      {propuestaCod.map(fp => {
+                        const restanteCod = Math.max(0, round2(montoCodRequerido - totalPropuestaCod));
+                        return (
+                          <div key={fp.metodo} className="flex flex-col gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-semibold text-rose-700 w-28 truncate">{fp.metodo}</span>
+                              <div className="relative flex-1 flex items-center">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-rose-400 text-sm">$</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={fp.monto}
+                                  onChange={e => setMontoPropuestaCod(fp.metodo, e.target.value)}
+                                  onFocus={e => e.target.select()}
+                                  placeholder="0.00"
+                                  className="w-full pl-7 pr-3 py-2 rounded-lg text-sm border border-rose-200 bg-white focus:outline-none focus:border-rose-400 focus:ring-1 focus:ring-rose-400/20"
+                                  disabled={cargando}
+                                />
+                                {restanteCod > 0.01 && (
+                                  <button type="button"
+                                    onClick={() => setMontoPropuestaCod(fp.metodo, Number(((Number(fp.monto) || 0) + restanteCod).toFixed(2)))}
+                                    className="ml-1 px-2.5 py-1 text-[10px] font-bold text-rose-700 bg-rose-100 hover:bg-rose-200 rounded-lg transition-colors shrink-0 whitespace-nowrap"
+                                    title={`Sumar $${restanteCod.toFixed(2)} restante`}>
+                                    Resto
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Chips de propuestaCod */}
+                    {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && m !== 'Cta por cobrar')
+                      .some(m => !propuestaCod.some(f => f.metodo === m)) && (
+                      <div className="flex flex-wrap gap-2">
+                        {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && m !== 'Cta por cobrar')
+                          .filter(m => !propuestaCod.some(f => f.metodo === m))
+                          .map(m => (
+                            <button key={m} type="button"
+                              onClick={() => togglePropuestaCod(m)}
+                              disabled={cargando}
+                              className="px-4 py-2.5 rounded-lg text-sm font-semibold border bg-white text-rose-600 border-rose-200 hover:border-rose-300 hover:text-rose-700 transition-all min-h-[44px]">
+                              {m}
+                            </button>
+                          ))}
+                      </div>
+                    )}
+
+                    {/* Validador de suma de propuestas */}
+                    <div className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm font-semibold ${
+                      propuestaCodCuadrado
+                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                        : (totalPropuestaCod - montoCodRequerido > 0.02)
+                          ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                          : 'bg-rose-50 text-rose-700 border border-rose-200'
+                    }`}>
+                      <span>Asignado COD: ${totalPropuestaCod.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      {propuestaCodCuadrado ? (
+                        <span className="text-emerald-500">✓</span>
+                      ) : (totalPropuestaCod - montoCodRequerido > 0.02) ? (
+                        <span className="text-amber-600">Sobran ${(totalPropuestaCod - montoCodRequerido).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      ) : (
+                        <span className="text-rose-700 font-bold">Faltan ${Math.abs(totalPropuestaCod - montoCodRequerido).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-amber-600 font-medium bg-amber-50 border border-amber-200 p-2 rounded-lg">
+                    El monto asignado en pagos inmediatos ya cubre el total.
+                  </p>
+                )}
               </div>
-            )}
-            {formasPago.length === 0 && (
-              <p className="text-xs text-slate-400">Selecciona al menos una forma de pago</p>
             )}
           </div>
 
@@ -391,8 +533,8 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
             className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-700 font-semibold text-base hover:bg-slate-50 transition-colors disabled:opacity-50">
             Cancelar
           </button>
-          <button onClick={handleGuardar} disabled={cargando || !pagoCuadrado}
-            title={formasPago.length === 0 ? 'Selecciona forma de pago' : !pagoCuadrado ? 'Los montos no cuadran con el total' : undefined}
+          <button onClick={handleGuardar} disabled={cargando || !(esCod ? (montoCodRequerido > 0.015 && propuestaCodCuadrado) : pagoInmediatoCuadrado)}
+            title={esCod ? (!propuestaCodCuadrado ? 'La propuesta COD no está cuadrada' : undefined) : (!pagoInmediatoCuadrado ? 'Los montos no cuadran con el total' : undefined)}
             className="flex-1 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-base transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20">
             {cargando
               ? <><Loader2 size={16} className="animate-spin" />Guardando...</>

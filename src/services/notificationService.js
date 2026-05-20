@@ -238,6 +238,9 @@ export function startRealtimeNotifications(currentRole) {
       // Ignorar si el broadcast fue originado por mí mismo
       if (payload.meta && payload.meta.creadorId && payload.meta.creadorId === _currentUserId) return
 
+      // Si el rol es 'vendedor' y la notif tiene vendedorId, solo mostrarla al dueño del despacho
+      if (currentRole === 'vendedor' && payload.meta?.vendedorId && payload.meta.vendedorId !== _currentUserId) return
+
       _insertLocalNotification(payload.type, payload.title, payload.body, payload.meta)
     })
     .subscribe()
@@ -404,12 +407,12 @@ export function notifyCotizacionAceptadaDespacho(numero, clienteNombre, usuarioN
 /**
  * Despacho marcado como "despachada" (en ruta al cliente).
  */
-export function notifyDespachoEnRuta(numero, clienteNombre, usuarioNombre, currentRole = null, creadorId = null) {
+export function notifyDespachoEnRuta(numero, clienteNombre, usuarioNombre, currentRole = null, creadorId = null, vendedorId = null) {
   createNotification(
     NOTIF_TYPES.DESPACHO_EN_RUTA,
     `Despacho ${numero && numero !== '—' ? '#' + numero : ''} en ruta`,
     `Pedido de ${clienteNombre} despachado por ${usuarioNombre}`,
-    { numero, clienteNombre, creadorNombre: usuarioNombre, creadorId },
+    { numero, clienteNombre, creadorNombre: usuarioNombre, creadorId, vendedorId },
     currentRole,
   )
 }
@@ -417,12 +420,12 @@ export function notifyDespachoEnRuta(numero, clienteNombre, usuarioNombre, curre
 /**
  * Despacho marcado como "entregada".
  */
-export function notifyDespachoEntregado(numero, clienteNombre, usuarioNombre, currentRole = null, creadorId = null) {
+export function notifyDespachoEntregado(numero, clienteNombre, usuarioNombre, currentRole = null, creadorId = null, vendedorId = null) {
   createNotification(
     NOTIF_TYPES.DESPACHO_ENTREGADO,
     `Despacho ${numero && numero !== '—' ? '#' + numero : ''} entregado`,
     `Pedido de ${clienteNombre} marcado como entregado por ${usuarioNombre}`,
-    { numero, clienteNombre, creadorNombre: usuarioNombre, creadorId },
+    { numero, clienteNombre, creadorNombre: usuarioNombre, creadorId, vendedorId },
     currentRole,
   )
 }

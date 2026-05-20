@@ -373,19 +373,19 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
             <Eye size={13} /> Ver
           </button>
           {despacho.estado === 'pendiente' && (
-            <button onClick={() => onCambiarEstadoDespacho(despacho.id, 'despachada', cotizacion.numero, cotizacion.cliente_nombre || cotizacion.cliente?.nombre)}
+            <button onClick={() => onCambiarEstadoDespacho(despacho.id, 'despachada', cotizacion.numero, cotizacion.cliente_nombre || cotizacion.cliente?.nombre, cotizacion.vendedor_id)}
               className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold text-white bg-blue-500 hover:bg-blue-600 active:bg-blue-700 transition-colors ml-auto">
               <Check size={13} /> Aprobar despacho
             </button>
           )}
           {despacho.estado === 'despachada' && (perfil?.rol === 'logistica' || perfil?.rol === 'desarrollador') && (
-            <button onClick={() => onCambiarEstadoDespacho(despacho.id, 'entregada', cotizacion.numero, cotizacion.cliente_nombre || cotizacion.cliente?.nombre)}
+            <button onClick={() => onCambiarEstadoDespacho(despacho.id, 'entregada', cotizacion.numero, cotizacion.cliente_nombre || cotizacion.cliente?.nombre, cotizacion.vendedor_id)}
               className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 transition-colors ml-auto">
               <PackageCheck size={13} /> Marcar entregada
             </button>
           )}
           {['pendiente', 'despachada'].includes(despacho.estado) && (
-            <button onClick={() => onCambiarEstadoDespacho(despacho.id, 'anulada', cotizacion.numero, cotizacion.cliente_nombre || cotizacion.cliente?.nombre)}
+            <button onClick={() => onCambiarEstadoDespacho(despacho.id, 'anulada', cotizacion.numero, cotizacion.cliente_nombre || cotizacion.cliente?.nombre, cotizacion.vendedor_id)}
               className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 transition-colors">
               <Ban size={13} /> Anular
             </button>

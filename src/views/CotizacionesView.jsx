@@ -29,6 +29,7 @@ import VendedorFilterPill from '../components/ui/VendedorFilterPill'
 import ToggleVistaPersonal from '../components/ui/ToggleVistaPersonal'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../utils/format'
 import { showToast } from '../components/ui/Toast'
+import { round2 } from '../utils/dinero'
 import { notifyFacturacionClienteAjeno } from '../services/notificationService'
 import PageHeader from '../components/ui/PageHeader'
 import Pagination from '../components/ui/Pagination'
@@ -148,12 +149,63 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
   const totalConFlete = totalSinFlete + Number(fleteUsd || 0) + Number(corteUsd || 0)
 
   const {
-    formasPago, toggleForma, setMontoForma, updateForma, resetFormas,
-    totalAsignado, pagoCuadrado, diferencia, hayVuelto, faltante
+    formasPago: pagosInmediatos,
+    setFormas: setPagosInmediatos,
+    toggleForma: togglePagoInmediato,
+    setMontoForma: setMontoPagoInmediato,
+    updateForma: updatePagoInmediato,
+    resetFormas: resetPagosInmediatos,
+    totalAsignado: totalInmediato,
+    pagoCuadrado: pagoInmediatoCuadrado,
   } = useFormasPago(totalConFlete)
 
+  // El monto COD requerido es el total restante
+  const montoCodRequerido = Math.max(0, round2(totalConFlete - totalInmediato))
+
+  const {
+    formasPago: propuestaCod,
+    setFormas: setPropuestaCod,
+    toggleForma: togglePropuestaCod,
+    setMontoForma: setMontoPropuestaCod,
+    updateForma: updatePropuestaCod,
+    resetFormas: resetPropuestaCod,
+    totalAsignado: totalPropuestaCod,
+    pagoCuadrado: propuestaCodCuadrado,
+  } = useFormasPago(montoCodRequerido)
+
+  const formasPagoFinales = useMemo(() => {
+    if (esCod) {
+      return [
+        ...pagosInmediatos,
+        {
+          metodo: "Cobro a destino",
+          monto: montoCodRequerido,
+          diasVencimiento: 0,
+          cobro_destino_pagado: false,
+          metodo_propuesto: propuestaCod
+        }
+      ]
+    } else {
+      return pagosInmediatos
+    }
+  }, [esCod, pagosInmediatos, propuestaCod, totalConFlete, totalInmediato, montoCodRequerido])
+
+  const handleToggleCod = () => {
+    setEsCod(prev => {
+      const next = !prev;
+      if (!next) {
+        resetPropuestaCod();
+      } else {
+        resetPagosInmediatos();
+        resetPropuestaCod();
+      }
+      return next;
+    });
+  };
+
   const handleCerrar = () => {
-    resetFormas()
+    resetPagosInmediatos()
+    resetPropuestaCod()
     onCancel()
   }
 
@@ -301,7 +353,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
           </div>
 
           {/* ── Columna derecha: configuración del despacho ── */}
-          <div className="lg:w-[380px] xl:w-[410px] shrink-0 min-h-0 overflow-y-auto lg:overflow-visible p-4 lg:p-5 lg:pb-24 space-y-3">
+          <div className="lg:w-[380px] xl:w-[410px] shrink-0 min-h-0 overflow-y-auto p-4 lg:p-5 space-y-3 pb-6">
 
             {/* Transportista + Flete en una fila */}
             <div className="space-y-1.5">
@@ -360,10 +412,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                 </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    setEsCod(!esCod);
-                    resetFormas();
-                  }}
+                  onClick={handleToggleCod}
                   className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                     esCod ? 'bg-rose-500' : 'bg-slate-200'
                   }`}
@@ -376,34 +425,34 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                 </button>
               </div>
 
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                {esCod ? 'Métodos de pago sugeridos al recibir (COD) *' : 'Formas de pago *'}
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {FORMAS_PAGO
-                  .filter(fp => fp !== 'Cobro a destino' && (!esCod || fp !== 'Cta por cobrar'))
-                  .map(fp => {
-                    const fpData = formasPago.find(f => f.metodo === fp)
-                  if (fpData) {
-                    const restante = totalConFlete - formasPago.reduce((s, f) => s + (Number(f.monto) || 0), 0)
+              {/* SECCIÓN 1: PAGO INMEDIATO (ADELANTO) */}
+              <div className="space-y-2.5">
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  {esCod ? 'Pago Inmediato (Adelanto / Seña)' : 'Formas de pago *'}
+                </p>
+
+                {/* Métodos activos de pagosInmediatos */}
+                <div className="space-y-1.5">
+                  {pagosInmediatos.map(fp => {
+                    const restante = totalConFlete - totalInmediato
                     return (
-                      <div key={fp} className="flex flex-col gap-1">
+                      <div key={fp.metodo} className="flex flex-col gap-1">
                         <div className="flex items-center gap-0 rounded-lg border border-indigo-300 bg-indigo-50 overflow-hidden">
-                          <button type="button" onClick={() => toggleForma(fp)}
+                          <button type="button" onClick={() => togglePagoInmediato(fp.metodo)}
                             className="flex items-center gap-0.5 px-2 py-1.5 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100 transition-colors shrink-0 border-r border-indigo-200">
-                            {fp} <X size={9} className="ml-0.5" />
+                            {fp.metodo} <X size={9} className="ml-0.5" />
                           </button>
                           <div className="relative flex items-center">
                             <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-indigo-400 text-[10px]">$</span>
-                            <input type="number" min="0" step="0.01" value={fpData.monto}
-                              onChange={e => setMontoForma(fp, e.target.value)}
+                            <input type="number" min="0" step="0.01" value={fp.monto}
+                              onChange={e => setMontoPagoInmediato(fp.metodo, e.target.value)}
                               onFocus={e => e.target.select()}
                               placeholder="0"
                               className="w-16 pl-4 pr-1 py-1.5 text-xs font-semibold text-indigo-800 bg-transparent focus:outline-none focus:bg-white/60"
                               disabled={cargando} />
                             {restante > 0.01 && (
                               <button type="button"
-                                onClick={() => setMontoForma(fp, Number(((Number(fpData.monto) || 0) + restante).toFixed(2)))}
+                                onClick={() => setMontoPagoInmediato(fp.metodo, Number(((Number(fp.monto) || 0) + restante).toFixed(2)))}
                                 className="mr-1 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded transition-colors shrink-0"
                                 title={`Completar con $${restante.toFixed(2)} restante`}>
                                 Restante
@@ -411,141 +460,116 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                             )}
                           </div>
                         </div>
+
                         {/* Opción de días de vencimiento para CxC */}
-                        {fp === 'Cta por cobrar' && (
+                        {fp.metodo === 'Cta por cobrar' && (
                           <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 border border-amber-200 rounded-lg ml-2">
                             <Clock size={10} className="text-amber-500 shrink-0" />
                             <span className="text-[10px] font-medium text-amber-700 whitespace-nowrap">Días:</span>
                             <input
                               type="number" min="0" step="1"
-                              value={fpData.diasVencimiento ?? ''}
-                              onChange={e => updateForma(fp, { diasVencimiento: e.target.value ? parseInt(e.target.value) : null })}
+                              value={fp.diasVencimiento ?? ''}
+                              onChange={e => updatePagoInmediato(fp.metodo, { diasVencimiento: e.target.value ? parseInt(e.target.value) : null })}
                               placeholder="Ej. 15"
                               className="w-12 px-1 py-0.5 rounded text-[10px] font-semibold border border-amber-200 bg-white focus:outline-none focus:ring-1 focus:ring-amber-400 text-slate-700 text-center"
                             />
                           </div>
                         )}
-
-                        {/* Opción de días de vencimiento y propuesta para Cobro a destino */}
-                        {fp === 'Cobro a destino' && (
-                          <div className="flex flex-col gap-1.5 p-2 bg-rose-50/40 border border-rose-200/40 rounded-xl ml-2 w-full max-w-xs mt-1">
-                            <div className="flex items-center gap-1.5">
-                              <Clock size={10} className="text-rose-500 shrink-0" />
-                              <span className="text-[10px] font-medium text-rose-700 whitespace-nowrap">Días:</span>
-                              <input
-                                type="number" min="0" step="1"
-                                value={fpData.diasVencimiento ?? ''}
-                                onChange={e => updateForma(fp, { diasVencimiento: e.target.value ? parseInt(e.target.value) : null })}
-                                placeholder="Ej. 0"
-                                className="w-12 px-1 py-0.5 rounded text-[10px] font-semibold border border-rose-200 bg-white focus:outline-none focus:ring-1 focus:ring-rose-400 text-slate-700 text-center"
-                              />
-                            </div>
-                            <div className="border-t border-rose-100/60 pt-1.5">
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="text-[9px] font-bold text-rose-800 uppercase tracking-wider">Propuesta al recibir:</span>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const props = Array.isArray(fpData.metodo_propuesto) ? fpData.metodo_propuesto : [];
-                                    const totalProp = props.reduce((s, p) => s + (Number(p.monto) || 0), 0);
-                                    const restoProp = Math.max(0, (Number(fpData.monto) || 0) - totalProp);
-                                    updateForma(fp, {
-                                      metodo_propuesto: [
-                                        ...props,
-                                        { metodo: 'Efectivo', monto: restoProp > 0 ? Number(restoProp.toFixed(2)) : '' }
-                                      ]
-                                    });
-                                  }}
-                                  className="text-[9px] font-bold text-rose-600 hover:text-rose-800"
-                                >
-                                  + Agregar
-                                </button>
-                              </div>
-                              <div className="space-y-1">
-                                {(() => {
-                                  const props = Array.isArray(fpData.metodo_propuesto) ? fpData.metodo_propuesto : [];
-                                  if (props.length === 0 && Number(fpData.monto) > 0) {
-                                    setTimeout(() => {
-                                      updateForma(fp, {
-                                        metodo_propuesto: [{ metodo: 'Efectivo', monto: Number(fpData.monto) }]
-                                      });
-                                    }, 0);
-                                  }
-                                  return props.map((prop, pIdx) => {
-                                    const metodosDisponibles = FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && m !== 'Cta por cobrar');
-                                    return (
-                                      <div key={pIdx} className="flex items-center gap-1">
-                                        <select
-                                          value={prop.metodo}
-                                          onChange={e => {
-                                            const newProps = [...props];
-                                            newProps[pIdx] = { ...newProps[pIdx], metodo: e.target.value };
-                                            updateForma(fp, { metodo_propuesto: newProps });
-                                          }}
-                                          className="px-1 py-0.5 rounded text-[10px] font-semibold border border-rose-200 bg-white text-slate-700 focus:outline-none max-w-[85px]"
-                                        >
-                                          {metodosDisponibles.map(m => (
-                                            <option key={m} value={m}>{m}</option>
-                                          ))}
-                                        </select>
-                                        <div className="relative flex items-center">
-                                          <span className="absolute left-1 text-[10px] font-bold text-slate-400">$</span>
-                                          <input
-                                            type="number" step="0.01"
-                                            value={prop.monto ?? ''}
-                                            onChange={e => {
-                                              const val = e.target.value === '' ? '' : parseFloat(e.target.value);
-                                              const newProps = [...props];
-                                              newProps[pIdx] = { ...newProps[pIdx], monto: val };
-                                              updateForma(fp, { metodo_propuesto: newProps });
-                                            }}
-                                            className="w-16 pl-3 pr-1 py-0.5 rounded text-[10px] font-semibold border border-rose-200 bg-white focus:outline-none text-slate-700"
-                                            placeholder="0.00"
-                                          />
-                                        </div>
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            const newProps = props.filter((_, i) => i !== pIdx);
-                                            updateForma(fp, { metodo_propuesto: newProps });
-                                          }}
-                                          className="text-rose-400 hover:text-rose-600"
-                                        >
-                                          <X size={10} />
-                                        </button>
-                                      </div>
-                                    );
-                                  });
-                                })()}
-                              </div>
-                              {(() => {
-                                const props = Array.isArray(fpData.metodo_propuesto) ? fpData.metodo_propuesto : [];
-                                const sumProp = props.reduce((s, p) => s + (Number(p.monto) || 0), 0);
-                                const diffProp = Math.abs(sumProp - (Number(fpData.monto) || 0));
-                                if (diffProp > 0.02) {
-                                  return (
-                                    <div className="text-[9px] text-rose-600 font-bold mt-1 bg-rose-100/50 p-0.5 px-1 rounded border border-rose-200/50">
-                                      Suma no coincide: ${sumProp.toFixed(2)} vs ${Number(fpData.monto).toFixed(2)}
-                                    </div>
-                                  );
-                                }
-                                return null;
-                              })()}
-                            </div>
-                          </div>
-                        )}
                       </div>
-                    )
-                  }
-                  return (
-                    <button key={fp} type="button" onClick={() => toggleForma(fp)}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:text-indigo-600 transition-all">
-                      {fp}
-                    </button>
-                  )
-                })}
+                    );
+                  })}
+                </div>
+
+                {/* Chips para agregar métodos inmediatos */}
+                {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && (!esCod || m !== 'Cta por cobrar'))
+                  .some(m => !pagosInmediatos.some(f => f.metodo === m)) && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && (!esCod || m !== 'Cta por cobrar'))
+                      .filter(m => !pagosInmediatos.some(f => f.metodo === m))
+                      .map(m => (
+                        <button key={m} type="button" onClick={() => togglePagoInmediato(m)}
+                          className="px-2.5 py-1 rounded-lg text-[11px] font-semibold border border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:text-indigo-600 transition-all active:scale-95">
+                          {m}
+                        </button>
+                      ))}
+                  </div>
+                )}
+
+                {esCod && pagosInmediatos.length === 0 && (
+                  <p className="text-[11px] text-slate-400 italic">No se registraron adelantos inmediatos.</p>
+                )}
               </div>
-              {formasPago.length === 0 && <p className="text-xs text-slate-400">Selecciona al menos una forma de pago</p>}
+
+              {/* SECCIÓN 2: COBRO AL RECIBIR (COD) */}
+              {esCod && (
+                <div className="mt-3 p-3 bg-rose-50/50 border border-rose-200 rounded-xl space-y-3">
+                  <div className="flex items-center justify-between text-xs font-semibold text-rose-800">
+                    <span>Monto a cobrar al recibir:</span>
+                    <span className="text-sm font-extrabold text-rose-600">${montoCodRequerido.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+
+                  {montoCodRequerido > 0.015 ? (
+                    <div className="space-y-2.5 border-t border-rose-100 pt-2.5">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                        ¿Cómo pagará al recibir? (Propuesta) *
+                      </label>
+
+                      {/* Métodos activos de propuestaCod */}
+                      <div className="space-y-1.5">
+                        {propuestaCod.map(fp => {
+                          const restanteCod = Math.max(0, round2(montoCodRequerido - totalPropuestaCod));
+                          return (
+                            <div key={fp.metodo} className="flex flex-col gap-1">
+                              <div className="flex items-center gap-0 rounded-lg border border-rose-300 bg-rose-50/50 overflow-hidden">
+                                <button type="button" onClick={() => togglePropuestaCod(fp.metodo)}
+                                  className="flex items-center gap-0.5 px-2 py-1.5 text-[11px] font-bold text-rose-700 hover:bg-rose-100 transition-colors shrink-0 border-r border-rose-200">
+                                  {fp.metodo} <X size={9} className="ml-0.5" />
+                                </button>
+                                <div className="relative flex items-center">
+                                  <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-rose-400 text-[10px]">$</span>
+                                  <input type="number" min="0" step="0.01" value={fp.monto}
+                                    onChange={e => setMontoPropuestaCod(fp.metodo, e.target.value)}
+                                    onFocus={e => e.target.select()}
+                                    placeholder="0"
+                                    className="w-16 pl-4 pr-1 py-1.5 text-xs font-semibold text-rose-800 bg-transparent focus:outline-none focus:bg-white/60"
+                                    disabled={cargando} />
+                                  {restanteCod > 0.01 && (
+                                    <button type="button"
+                                      onClick={() => setMontoPropuestaCod(fp.metodo, Number(((Number(fp.monto) || 0) + restanteCod).toFixed(2)))}
+                                      className="mr-1 px-1.5 py-0.5 text-[9px] font-bold text-rose-700 bg-rose-100 hover:bg-rose-200 rounded transition-colors shrink-0"
+                                      title={`Completar con $${restanteCod.toFixed(2)} restante`}>
+                                      Restante
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Chips de propuestaCod */}
+                      {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && m !== 'Cta por cobrar')
+                        .some(m => !propuestaCod.some(f => f.metodo === m)) && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && m !== 'Cta por cobrar')
+                            .filter(m => !propuestaCod.some(f => f.metodo === m))
+                            .map(m => (
+                              <button key={m} type="button" onClick={() => togglePropuestaCod(m)}
+                                className="px-2.5 py-1 rounded-lg text-[11px] font-semibold border border-rose-200 bg-white text-rose-600 hover:bg-rose-50 hover:border-rose-300 transition-all active:scale-95">
+                                {m}
+                              </button>
+                            ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-amber-600 font-medium bg-amber-50 border border-amber-200 p-2 rounded-lg">
+                      El monto asignado en pagos inmediatos ya cubre el total.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* FEATURE_CORTE_HIDDEN: Oculto temporalmente a petición del usuario. Cambiar a true para reactivar. */}
@@ -599,15 +623,27 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
 
         {/* ── Footer — validación + botones ─────────────────────── */}
         <div className="border-t border-slate-100 shrink-0">
-          {formasPago.length > 0 && (
+          {!esCod ? (
+            pagosInmediatos.length > 0 && (
+              <div className={`flex items-center justify-between px-5 py-1.5 text-xs font-semibold ${
+                pagoInmediatoCuadrado ? 'bg-emerald-50 text-emerald-700'
+                : (totalInmediato - totalConFlete > 0.02) ? 'bg-amber-50 text-amber-700'
+                : 'bg-red-50 text-red-600'
+              }`}>
+                <span>Asignado: {fmtUsd(totalInmediato)}</span>
+                <span>Total: {fmtUsd(totalConFlete)}</span>
+                {pagoInmediatoCuadrado ? <span>✓</span> : (totalInmediato - totalConFlete > 0.02) ? <span>Sobran {fmtUsd(totalInmediato - totalConFlete)}</span> : <span>Faltan {fmtUsd(Math.abs(totalInmediato - totalConFlete))}</span>}
+              </div>
+            )
+          ) : (
             <div className={`flex items-center justify-between px-5 py-1.5 text-xs font-semibold ${
-              pagoCuadrado ? 'bg-emerald-50 text-emerald-700'
-              : hayVuelto ? 'bg-amber-50 text-amber-700'
+              propuestaCodCuadrado ? 'bg-emerald-50 text-emerald-700'
+              : (totalPropuestaCod - montoCodRequerido > 0.02) ? 'bg-amber-50 text-amber-700'
               : 'bg-red-50 text-red-600'
             }`}>
-              <span>Asignado: {fmtUsd(totalAsignado)}</span>
-              <span>Total: {fmtUsd(totalConFlete)}</span>
-              {pagoCuadrado ? <span>✓</span> : hayVuelto ? <span>Sobran {fmtUsd(diferencia)}</span> : <span>Faltan {fmtUsd(Math.abs(diferencia))}</span>}
+              <span>Asignado COD: {fmtUsd(totalPropuestaCod)}</span>
+              <span>Requerido COD: {fmtUsd(montoCodRequerido)}</span>
+              {propuestaCodCuadrado ? <span>✓</span> : (totalPropuestaCod - montoCodRequerido > 0.02) ? <span>Sobran {fmtUsd(totalPropuestaCod - montoCodRequerido)}</span> : <span>Faltan {fmtUsd(Math.abs(totalPropuestaCod - montoCodRequerido))}</span>}
             </div>
           )}
           <div className="flex gap-3 px-5 py-3">
@@ -616,20 +652,10 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
               Cancelar
             </button>
             <button onClick={() => {
-                let finalFormasPago = formasPago
-                if (esCod) {
-                  finalFormasPago = [{
-                    metodo: "Cobro a destino",
-                    monto: totalConFlete,
-                    diasVencimiento: 0,
-                    cobro_destino_pagado: false,
-                    metodo_propuesto: formasPago
-                  }]
-                }
-                const fpJson = JSON.stringify(finalFormasPago)
+                const fpJson = JSON.stringify(formasPagoFinales)
                 onConfirm(fpJson, transportistaId || null, Number(fleteUsd) || 0, Number(corteUsd) || 0, referenciaPago, fpJson, notas, clienteFacturaId || null)
-              }} disabled={cargando || items.length === 0 || !pagoCuadrado}
-              title={formasPago.length === 0 ? 'Selecciona forma de pago' : !pagoCuadrado ? 'Los montos no cuadran con el total' : undefined}
+              }} disabled={cargando || items.length === 0 || !(esCod ? (montoCodRequerido > 0.015 && propuestaCodCuadrado) : pagoInmediatoCuadrado)}
+              title={esCod ? (!propuestaCodCuadrado ? 'La propuesta COD no está cuadrada' : undefined) : (!pagoInmediatoCuadrado ? 'Los montos no cuadran con el total' : undefined)}
               className="flex-1 px-4 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-semibold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 whitespace-nowrap">
               {cargando
                 ? <><Loader2 size={15} className="animate-spin" />Procesando...</>
@@ -787,8 +813,8 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
   const reciclar      = useReciclarCotizacion()
   const cambiarEstadoDespacho = useActualizarEstadoDespacho()
 
-  function handleCambiarEstadoDespacho(despachoId, nuevoEstado, numeroCotizacion, clienteNombre) {
-    cambiarEstadoDespacho.mutate({ despachoId, nuevoEstado, numeroCotizacion, clienteNombre })
+  function handleCambiarEstadoDespacho(despachoId, nuevoEstado, numeroCotizacion, clienteNombre, vendedorId = null) {
+    cambiarEstadoDespacho.mutate({ despachoId, nuevoEstado, numeroCotizacion, clienteNombre, vendedorId })
   }
 
   async function confirmarAnular() {

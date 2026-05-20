@@ -388,7 +388,7 @@ export default function DespachosView() {
               <DespachoCard
                 key={d.id}
                 despacho={d}
-                onCambiarEstado={(id, estado, motivoDev, motivoAnu) => cambiarEstado.mutateAsync({ despachoId: id, nuevoEstado: estado, numeroCotizacion: d.cotizacion?.numero || d.numero, clienteNombre: d.cliente?.nombre, motivoDevolucion: motivoDev, motivoAnulacion: motivoAnu, ...(estado === 'entregada' ? { tasaBcv: tasaEfectiva } : {}) })}
+                onCambiarEstado={(id, estado, motivoDev, motivoAnu) => cambiarEstado.mutateAsync({ despachoId: id, nuevoEstado: estado, numeroCotizacion: d.cotizacion?.numero || d.numero, clienteNombre: d.cliente?.nombre, vendedorId: d.vendedor_id, motivoDevolucion: motivoDev, motivoAnulacion: motivoAnu, ...(estado === 'entregada' ? { tasaBcv: tasaEfectiva } : {}) })}
                 onAnular={setDespachoAAnular}
                 onReciclar={setDespachoAReciclar}
                 tasa={tasaEfectiva}
