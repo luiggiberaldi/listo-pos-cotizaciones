@@ -37,12 +37,13 @@ function ResumenCard({ icon: Icon, label, value, sub, gradient, border }) {
 }
 
 // ─── Tarjeta agrupada por vendedor ──────────────────────────────────────────
-function VendedorCard({ vendedor, comisiones, esSupervisor, onMarcarPagada, marcando, onExportarPDF }) {
+function VendedorCard({ vendedor, comisiones, esSupervisor, onMarcarPagada, onPagarTodo, marcando, onExportarPDF }) {
   const [abierto, setAbierto] = useState(false)
 
   // Cálculos locales para la tarjeta
   const totalGeneral = useMemo(() => comisiones.reduce((s, c) => s + Number(c.totalcomision || 0), 0), [comisiones])
-  const montoPendiente = useMemo(() => comisiones.filter(c => c.estado !== 'pagada').reduce((s, c) => s + Math.max(0, Number(c.totalcomision || 0) - Number(c.montopagado || 0)), 0), [comisiones])
+  const pendientes = useMemo(() => comisiones.filter(c => ['pendiente', 'cta_cobrar'].includes(c.estado) && Math.max(0, Number(c.totalcomision || 0) - Number(c.montopagado || 0)) > 0), [comisiones])
+  const montoPendiente = useMemo(() => pendientes.reduce((s, c) => s + Math.max(0, Number(c.totalcomision || 0) - Number(c.montopagado || 0)), 0), [pendientes])
   const montoPagado = useMemo(() => comisiones.reduce((s, c) => s + Number(c.montopagado || 0), 0), [comisiones])
   
   const estadoBadge = (estado) => {
@@ -76,6 +77,15 @@ function VendedorCard({ vendedor, comisiones, esSupervisor, onMarcarPagada, marc
             )}
           </div>
           <p className="text-xs text-slate-400 font-medium">{comisiones.length} operaciones</p>
+          {esSupervisor && pendientes.length > 1 && montoPendiente > 0 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onPagarTodo({ vendedor, pendientes, montoPendiente }); }}
+              disabled={marcando}
+              className="mt-1 inline-flex items-center gap-1.5 bg-emerald-500 text-white hover:bg-emerald-600 font-bold px-3 py-1.5 rounded-lg text-[11px] transition-all disabled:opacity-50 shadow-sm active:scale-95"
+            >
+              <CheckCircle size={12} /> Pagar Todo ({fmtUsd(montoPendiente)})
+            </button>
+          )}
         </div>
 
         <div className="text-right shrink-0 flex flex-col items-end">
@@ -198,6 +208,8 @@ export default function ComisionesView() {
   const pageSize = 48 // Agrupamos de a 48 para que la cuadrícula sea simétrica (3 col x 16 filas)
 
   const [comisionAPagar, setComisionAPagar] = useState(null)
+  const [pagoMasivoData, setPagoMasivoData] = useState(null)
+  const [pagandoMasivo, setPagandoMasivo] = useState(false)
 
   // Reset de página al cambiar filtros
   useEffect(() => { setPage(1) }, [filtroEstado, filtroVendedor, fechaDesde, fechaHasta])
@@ -355,7 +367,8 @@ export default function ComisionesView() {
                 comisiones={g.items} 
                 esSupervisor={puedePagarComisiones} 
                 onMarcarPagada={setComisionAPagar} 
-                marcando={marcar.isPending} 
+                onPagarTodo={setPagoMasivoData}
+                marcando={marcar.isPending || pagandoMasivo} 
                 onExportarPDF={exportarPDF} 
               />
             ))}
@@ -388,6 +401,32 @@ export default function ComisionesView() {
         title="Registrar Pago de Comisión"
         message={comisionAPagar ? `Se registrará el pago de ${fmtUsd(Math.max(0, Number(comisionAPagar.totalcomision || 0) - Number(comisionAPagar.montopagado || 0)))}. Esta acción es atómica y final.` : ''}
         confirmText="Confirmar Pago"
+        variant="success"
+      />
+
+      <ConfirmModal
+        isOpen={!!pagoMasivoData}
+        onConfirm={async () => {
+          if (!pagoMasivoData) return
+          setPagandoMasivo(true)
+          const { pendientes: items } = pagoMasivoData
+          for (const c of items) {
+            const saldo = Math.max(0, Number(c.totalcomision || 0) - Number(c.montopagado || 0))
+            if (saldo > 0) {
+              try {
+                await marcar.mutateAsync({ comisionid: c.id, montopagado: saldo })
+              } catch (e) {
+                console.error('Error pagando comisión', c.id, e)
+              }
+            }
+          }
+          setPagandoMasivo(false)
+          setPagoMasivoData(null)
+        }}
+        onClose={() => setPagoMasivoData(null)}
+        title="Pagar Todas las Comisiones"
+        message={pagoMasivoData ? `Se registrará el pago de ${pagoMasivoData.pendientes.length} comisiones pendientes de ${pagoMasivoData.vendedor?.nombre || 'este vendedor'} por un total de ${fmtUsd(pagoMasivoData.montoPendiente)}. Esta acción es secuencial y final.` : ''}
+        confirmText="Confirmar Pago Total"
         variant="success"
       />
     </div>
