@@ -55,7 +55,7 @@ export default memo(function DespachoRow({ despacho, onVer, onEditar, tasa = 0 }
         {/* Fecha */}
         <div className="hidden sm:flex items-center gap-1 text-xs text-slate-400 shrink-0">
           <Calendar size={11} />
-          {fmtFechaHora(despacho.actualizado_en || despacho.creado_en)}
+          {fmtFechaHora(despacho.creado_en)}
         </div>
 
         {/* Total + Flete + Corte */}

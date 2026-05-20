@@ -17,6 +17,7 @@ const URGENT_TYPES = new Set([
   'stock_critico',
   'despacho_creado',
   'compromiso_alto',
+  'despacho_en_ruta',
 ])
 
 function playNotifSound(type) {

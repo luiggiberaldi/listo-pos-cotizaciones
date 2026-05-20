@@ -1,6 +1,7 @@
 // src/components/layout/AppLayout.jsx
 // Layout principal: sidebar fijo en desktop, drawer en móvil
 import { useState, useRef, useEffect, memo, useCallback } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import {
   Users, FileText, Package, Truck, Zap,
@@ -140,6 +141,7 @@ const NavItem = memo(function NavItem({ path, label, Icono, onClick, collapsed }
 
 // ─── Layout principal ──────────────────────────────────────────────────────────
 export default function AppLayout() {
+  const queryClient = useQueryClient()
   // Selectores granulares: NO suscribirse a 'user' (TOKEN_REFRESHED lo actualiza frecuentemente)
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
   const switchOut = useAuthStore(s => s.switchOut)
@@ -208,12 +210,24 @@ export default function AppLayout() {
 
   const [urgentNotif, setUrgentNotif] = useState(null)
 
-  // Escuchar notificaciones urgentes para modal overlay
+  // Escuchar notificaciones urgentes para modal overlay e invalidar caché
   useEffect(() => {
     const handleNotif = (e) => {
       const notif = e.detail
-      if (notif && ['despacho_creado', 'stock_critico'].includes(notif.type)) {
+      if (!notif) return
+
+      // Invalida inmediatamente la caché de despachos al recibir una notificación de despacho
+      if (['despacho_creado', 'despacho_en_ruta'].includes(notif.type)) {
+        queryClient.invalidateQueries({ queryKey: ['despachos'], refetchType: 'active' })
+      }
+
+      if (['despacho_creado', 'stock_critico'].includes(notif.type)) {
         const esPermitido = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe' || perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador')
+        if (esPermitido) {
+          setUrgentNotif(notif)
+        }
+      } else if (notif.type === 'despacho_en_ruta') {
+        const esPermitido = (perfil?.rol === 'logistica' || perfil?.rol === 'vendedor' || perfil?.rol === 'supervisor' || perfil?.rol === 'jefe' || perfil?.rol === 'desarrollador')
         if (esPermitido) {
           setUrgentNotif(notif)
         }
@@ -221,7 +235,7 @@ export default function AppLayout() {
     }
     window.addEventListener('construacero-notification', handleNotif)
     return () => window.removeEventListener('construacero-notification', handleNotif)
-  }, [perfil?.rol])
+  }, [perfil?.rol, queryClient])
 
   const esDesarrollador = perfil?.rol === 'desarrollador'
   const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe') || esDesarrollador
@@ -611,28 +625,47 @@ export default function AppLayout() {
           <div className="relative overflow-hidden bg-slate-900/95 border border-slate-700/50 rounded-3xl p-6 max-w-md w-full shadow-[0_20px_50px_rgba(0,0,0,0.5)] animate-in zoom-in-95 duration-200">
             
             {/* Animated breathing pulse background glow */}
-            <div className="absolute -top-12 -left-12 w-32 h-32 bg-amber-500/10 rounded-full blur-3xl pointer-events-none animate-pulse" />
-            <div className="absolute -bottom-12 -right-12 w-32 h-32 bg-rose-500/10 rounded-full blur-3xl pointer-events-none animate-pulse" />
+            {urgentNotif.type === 'despacho_en_ruta' ? (
+              <>
+                <div className="absolute -top-12 -left-12 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none animate-pulse" />
+                <div className="absolute -bottom-12 -right-12 w-32 h-32 bg-teal-500/10 rounded-full blur-3xl pointer-events-none animate-pulse" />
+              </>
+            ) : (
+              <>
+                <div className="absolute -top-12 -left-12 w-32 h-32 bg-amber-500/10 rounded-full blur-3xl pointer-events-none animate-pulse" />
+                <div className="absolute -bottom-12 -right-12 w-32 h-32 bg-rose-500/10 rounded-full blur-3xl pointer-events-none animate-pulse" />
+              </>
+            )}
             
             <div className="flex flex-col items-center text-center">
               <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-4 animate-bounce ${
-                urgentNotif.type === 'despacho_cancelado' || urgentNotif.type === 'stock_critico'
+                urgentNotif.type === 'stock_critico'
                   ? 'bg-rose-500/10 border border-rose-500/20'
+                  : urgentNotif.type === 'despacho_en_ruta'
+                  ? 'bg-emerald-500/10 border border-emerald-500/20'
                   : 'bg-amber-500/10 border border-amber-500/20'
               }`}>
-                {urgentNotif.type === 'despacho_cancelado' || urgentNotif.type === 'stock_critico' ? (
+                {urgentNotif.type === 'stock_critico' ? (
                   <AlertCircle size={32} className="text-rose-400" />
+                ) : urgentNotif.type === 'despacho_en_ruta' ? (
+                  <Truck size={32} className="text-emerald-400" />
                 ) : (
                   <Truck size={32} className="text-amber-400" />
                 )}
               </div>
               
               <span className={`text-[10px] font-black tracking-[0.2em] uppercase px-3 py-1 rounded-full mb-3 select-none ${
-                urgentNotif.type === 'despacho_cancelado' || urgentNotif.type === 'stock_critico'
+                urgentNotif.type === 'stock_critico'
                   ? 'text-rose-400 bg-rose-500/10 border border-rose-500/20'
+                  : urgentNotif.type === 'despacho_en_ruta'
+                  ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20'
                   : 'text-amber-400 bg-amber-500/10 border border-amber-500/20'
               }`}>
-                {urgentNotif.type === 'despacho_cancelado' ? '🚨 DESPACHO CANCELADO 🚨' : urgentNotif.type === 'stock_critico' ? '⚠️ SIN STOCK CRÍTICO ⚠️' : '🚨 NUEVO DESPACHO URGENTE 🚨'}
+                {urgentNotif.type === 'stock_critico' 
+                  ? '⚠️ SIN STOCK CRÍTICO ⚠️' 
+                  : urgentNotif.type === 'despacho_en_ruta' 
+                  ? '🚚 DESPACHO APROBADO 🚚' 
+                  : '🚨 NUEVO DESPACHO URGENTE 🚨'}
               </span>
               
               <h3 className="text-lg font-black text-white mb-2 leading-tight">
@@ -651,18 +684,22 @@ export default function AppLayout() {
                     const navTarget = {
                       'stock_critico': '/inventario?filtro=stock_bajo',
                       'despacho_creado': '/despachos',
-                      'despacho_cancelado': '/despachos',
+                      'despacho_en_ruta': '/despachos',
                     }[urgentNotif.type] || '/despachos'
                     navigate(navTarget)
                   }}
                   className="flex-1 px-5 py-3 rounded-xl text-sm font-black text-slate-900 transition-all select-none hover:scale-[1.02] active:scale-[0.98]"
                   style={{
-                    background: urgentNotif.type === 'despacho_cancelado' || urgentNotif.type === 'stock_critico'
+                    background: urgentNotif.type === 'stock_critico'
                       ? 'linear-gradient(135deg, #f43f5e 0%, #be123c 100%)'
+                      : urgentNotif.type === 'despacho_en_ruta'
+                      ? 'linear-gradient(135deg, #10b981 0%, #047857 100%)'
                       : 'linear-gradient(135deg, #fbbf24 0%, #d97706 100%)',
-                    color: urgentNotif.type === 'despacho_cancelado' || urgentNotif.type === 'stock_critico' ? '#ffffff' : '#0f172a',
-                    boxShadow: urgentNotif.type === 'despacho_cancelado' || urgentNotif.type === 'stock_critico'
+                    color: urgentNotif.type === 'stock_critico' ? '#ffffff' : urgentNotif.type === 'despacho_en_ruta' ? '#ffffff' : '#0f172a',
+                    boxShadow: urgentNotif.type === 'stock_critico'
                       ? '0 4px 15px rgba(244, 63, 94, 0.4)'
+                      : urgentNotif.type === 'despacho_en_ruta'
+                      ? '0 4px 15px rgba(16, 185, 129, 0.4)'
                       : '0 4px 15px rgba(217, 119, 6, 0.4)',
                   }}
                 >

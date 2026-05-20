@@ -13,32 +13,37 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
 
   let y = 0
+  const esMembrete = config.nota_entrega_plantilla === 'membrete'
 
   // ══════════════════════════════════════════════════════════════════════════
   // 1. CABECERA
   // ══════════════════════════════════════════════════════════════════════════
-  const HDR_H = 20
+  const drawHeader = () => {
+    if (esMembrete) {
+      return 50 // Margen superior 5cm para hoja pre-impresa
+    }
+    const HDR_H = 20
+    try { doc.addImage(LOGO_DESPACHO, 'PNG', MARGIN - 2, 6, 22, 22) } catch (_) {}
+    const centerX = PAGE_W / 2
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(17)
+    doc.setTextColor(...C_DARK)
+    doc.text('CONSTRUACERO CARABOBO, C.A.', centerX, 16, { align: 'center' })
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(10)
+    doc.text('RIF.: J-50115913-0', centerX, 22, { align: 'center' })
+    doc.setLineWidth(0.8)
+    doc.setDrawColor(...C_DARK)
+    doc.line(MARGIN, HDR_H + 10, PAGE_W - MARGIN, HDR_H + 10)
+    return HDR_H + 17
+  }
 
-  try { doc.addImage(LOGO_DESPACHO, 'PNG', MARGIN - 2, 6, 22, 22) } catch (_) {}
-
-  const centerX = PAGE_W / 2
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(17)
-  doc.setTextColor(...C_DARK)
-  doc.text('CONSTRUACERO CARABOBO, C.A.', centerX, 16, { align: 'center' })
-
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(10)
-  doc.text('RIF.: J-50115913-0', centerX, 22, { align: 'center' })
-
-  doc.setLineWidth(0.8)
-  doc.setDrawColor(...C_DARK)
-  doc.line(MARGIN, HDR_H + 10, PAGE_W - MARGIN, HDR_H + 10)
-
-  y = HDR_H + 17
+  y = drawHeader()
 
   // Marca de agua
-  drawWatermark(doc)
+  if (!esMembrete) {
+    drawWatermark(doc)
+  }
 
   // ══════════════════════════════════════════════════════════════════════════
   // 2. DATOS DEL CLIENTE — cuadrícula vacía
@@ -54,14 +59,14 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   const rightValW = 38
   const centerW = CONTENT_W - leftColW - rightLblW - rightValW
 
-  // Celda izquierda: DEPARTAMENTO DE VENTAS
+  // Celda izquierda: DEPARTAMENTO DE LOGÍSTICA
   const tripleH = rowH * 3
   doc.rect(MARGIN, gY, leftColW, tripleH, 'S')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8)
   doc.setTextColor(...C_DARK)
   doc.text('DEPARTAMENTO', MARGIN + leftColW / 2, gY + tripleH / 2 - 2, { align: 'center' })
-  doc.text('DE VENTAS', MARGIN + leftColW / 2, gY + tripleH / 2 + 3, { align: 'center' })
+  doc.text('DE LOGÍSTICA', MARGIN + leftColW / 2, gY + tripleH / 2 + 3, { align: 'center' })
 
   // Celda central: NOTA DE ENTREGA
   doc.rect(MARGIN + leftColW, gY, centerW, tripleH, 'S')
@@ -171,7 +176,7 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   // ══════════════════════════════════════════════════════════════════════════
   // 4. CONDICIONES (izq) + CUENTAS BANCARIAS (der)
   // ══════════════════════════════════════════════════════════════════════════
-  const sloganY = PAGE_H - 33
+  const sloganY = esMembrete ? PAGE_H - 25 : PAGE_H - 33
 
   // Calcular posiciones desde abajo
   const TRANS_H = 24
@@ -286,32 +291,36 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   // ══════════════════════════════════════════════════════════════════════════
   // 7. SLOGAN
   // ══════════════════════════════════════════════════════════════════════════
-  doc.setFont('helvetica', 'bolditalic')
-  doc.setFontSize(12)
-  doc.setTextColor(...C_DARK)
-  doc.text('"Todo lo puedo en Cristo que me fortalece" — Filipenses 4:13', PAGE_W / 2, sloganY, { align: 'center' })
+  if (!esMembrete) {
+    doc.setFont('helvetica', 'bolditalic')
+    doc.setFontSize(12)
+    doc.setTextColor(...C_DARK)
+    doc.text('"Todo lo puedo en Cristo que me fortalece" — Filipenses 4:13', PAGE_W / 2, sloganY, { align: 'center' })
+  }
 
   // ══════════════════════════════════════════════════════════════════════════
   // 8. FOOTER
   // ══════════════════════════════════════════════════════════════════════════
-  const footerY = PAGE_H - 28
-  doc.setLineWidth(0.8)
-  doc.setDrawColor(...C_DARK)
-  doc.line(MARGIN, footerY, PAGE_W - MARGIN, footerY)
+  if (!esMembrete) {
+    const footerY = PAGE_H - 28
+    doc.setLineWidth(0.8)
+    doc.setDrawColor(...C_DARK)
+    doc.line(MARGIN, footerY, PAGE_W - MARGIN, footerY)
 
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7)
-  doc.setTextColor(...C_DARK)
-  doc.text('Av. 76, (Calle S-3) Nro. 70-C-766, Local Galpón Nro. 3 Edificio Centro Industrial Massico II', PAGE_W / 2, footerY + 5, { align: 'center' })
-  doc.setFont('helvetica', 'normal')
-  doc.text('Parcela MB-6 y Mb7, Urb. Industrial Aeropuerto Vía Flor Amarillo, Valencia, Edo. Carabobo, Zona Postal 2003', PAGE_W / 2, footerY + 9, { align: 'center' })
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7)
+    doc.setTextColor(...C_DARK)
+    doc.text('Av. 76, (Calle S-3) Nro. 70-C-766, Local Galpón Nro. 3 Edificio Centro Industrial Massico II', PAGE_W / 2, footerY + 5, { align: 'center' })
+    doc.setFont('helvetica', 'normal')
+    doc.text('Parcela MB-6 y Mb7, Urb. Industrial Aeropuerto Vía Flor Amarillo, Valencia, Edo. Carabobo, Zona Postal 2003', PAGE_W / 2, footerY + 9, { align: 'center' })
 
-  const tel = fmtTelefono(config.telefono_negocio) || ''
-  const email = config.email_negocio || ''
-  const contactLine = [tel, email].filter(Boolean).join('     |     ')
-  if (contactLine) {
-    doc.setFontSize(8)
-    doc.text(contactLine, PAGE_W / 2, footerY + 15, { align: 'center' })
+    const tel = fmtTelefono(config.telefono_negocio) || ''
+    const email = config.email_negocio || ''
+    const contactLine = [tel, email].filter(Boolean).join('     |     ')
+    if (contactLine) {
+      doc.setFontSize(8)
+      doc.text(contactLine, PAGE_W / 2, footerY + 15, { align: 'center' })
+    }
   }
 
   doc.save('plantilla_nota_entrega.pdf')

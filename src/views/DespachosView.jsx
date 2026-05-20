@@ -134,7 +134,7 @@ export default function DespachosView() {
   const { tasaEfectiva } = useTasaCambio()
   const { data: config = {} } = useConfigNegocio()
   const { data: vendedores = [] } = useVendedores()
-  const [estadoFiltro, setEstadoFiltro] = useState('')
+  const [estadoFiltro, setEstadoFiltro] = useState('hoy')
   const [vendedorFiltro, setVendedorFiltro] = useState('')
   const [busquedaGlobal, setBusquedaGlobal] = useState('')
   const [verTodos, setVerTodos] = useState(false)
@@ -149,7 +149,7 @@ export default function DespachosView() {
   const [despachoDetalle, setDespachoDetalle] = useState(null)
   const [despachoEditar, setDespachoEditar] = useState(null)
 
-  const { data: despachos = [], isLoading, isError, refetch } = useDespachos({ estado: estadoFiltro, veTodos: verTodos })
+  const { data: despachos = [], isLoading, isError, refetch } = useDespachos({ estado: estadoFiltro === 'hoy' ? '' : estadoFiltro, veTodos: verTodos })
   const cambiarEstado = useActualizarEstadoDespacho()
   const reciclar = useReciclarDespacho()
 
@@ -157,13 +157,31 @@ export default function DespachosView() {
   const despachosFiltrados = useMemo(() => {
     let lista = vendedorFiltro ? despachos.filter(d => d.vendedor_id === vendedorFiltro) : despachos
     
-    // Filtro local de seguridad (por si el optimistic update o caché están desincronizados)
-    if (estadoFiltro) {
+    // Filtro por estado o por fecha "Hoy"
+    if (estadoFiltro === 'hoy') {
+      const today = new Date()
+      lista = lista.filter(d => {
+        if (!d.creado_en) return false
+        const dateObj = new Date(d.creado_en)
+        return (
+          dateObj.getDate() === today.getDate() &&
+          dateObj.getMonth() === today.getMonth() &&
+          dateObj.getFullYear() === today.getFullYear()
+        )
+      })
+    } else if (estadoFiltro) {
       lista = lista.filter(d => d.estado === estadoFiltro)
     }
 
-    // Ordenar siempre por fecha de actualización descendente (lo más nuevo arriba)
+    // Ordenar:
+    // 1. Los anulados siempre de último ("los anulados de ultimo")
+    // 2. Por fecha de actualización descendente (lo más nuevo arriba)
     lista = [...lista].sort((a, b) => {
+      const isAnuladoA = a.estado === 'anulada'
+      const isAnuladoB = b.estado === 'anulada'
+      if (isAnuladoA && !isAnuladoB) return 1
+      if (!isAnuladoA && isAnuladoB) return -1
+      
       const dateA = new Date(a.actualizado_en || a.creado_en || 0).getTime()
       const dateB = new Date(b.actualizado_en || b.creado_en || 0).getTime()
       return dateB - dateA

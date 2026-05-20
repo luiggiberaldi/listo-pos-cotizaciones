@@ -24,23 +24,23 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const esMembrete = config.nota_entrega_plantilla === 'membrete'
 
   const drawHeader = (doc, num) => {
-    const HDR_H = 20
-    if (!esMembrete) {
-      try { doc.addImage(LOGO_DESPACHO, 'PNG', MARGIN - 2, 6, 22, 22) } catch (_) {}
-      const centerX = PAGE_W / 2
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(17)
-      doc.setTextColor(...C_DARK)
-      doc.text('CONSTRUACERO CARABOBO, C.A.', centerX, 16, { align: 'center' })
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(10)
-      doc.text('RIF.: J-50115913-0', centerX, 22, { align: 'center' })
-      doc.setLineWidth(0.8)
-      doc.setDrawColor(...C_DARK)
-      doc.line(MARGIN, HDR_H + 10, PAGE_W - MARGIN, HDR_H + 10)
-      return HDR_H + 17
+    if (esMembrete) {
+      return 50 // Margen superior 5cm para hoja pre-impresa
     }
-    return HDR_H + 17 + 20 // Bajar 2 cm (20mm) para hoja pre-impresa
+    const HDR_H = 20
+    try { doc.addImage(LOGO_DESPACHO, 'PNG', MARGIN - 2, 6, 22, 22) } catch (_) {}
+    const centerX = PAGE_W / 2
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(17)
+    doc.setTextColor(...C_DARK)
+    doc.text('CONSTRUACERO CARABOBO, C.A.', centerX, 16, { align: 'center' })
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(10)
+    doc.text('RIF.: J-50115913-0', centerX, 22, { align: 'center' })
+    doc.setLineWidth(0.8)
+    doc.setDrawColor(...C_DARK)
+    doc.line(MARGIN, HDR_H + 10, PAGE_W - MARGIN, HDR_H + 10)
+    return HDR_H + 17
   }
 
   y = drawHeader(doc, numDes)
@@ -122,12 +122,12 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   // ── Fila 1-3: Header con título y datos de correlativo/fecha ──
   const gY = y - 4    // inicio de la cuadrícula
   const rowH = 5       // altura de cada fila pequeña (optimizado)
-  const leftColW = 38  // "DEPARTAMENTO DE VENTAS"
+  const leftColW = 38  // "DEPARTAMENTO DE LOGÍSTICA"
   const rightLblW = 22 // columna label derecha (ODC, DIA, FECHA)
   const rightValW = 38 // columna valor derecha
   const centerW = CONTENT_W - leftColW - rightLblW - rightValW // columna central
 
-  // Celda izquierda (3 filas de alto): DEPARTAMENTO DE VENTAS
+  // Celda izquierda (3 filas de alto): DEPARTAMENTO DE LOGÍSTICA
   const tripleH = rowH * 3
   doc.setDrawColor(120, 120, 120)
   doc.setLineWidth(gridLW)
@@ -136,7 +136,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.setFontSize(8)
   doc.setTextColor(...C_DARK)
   doc.text('DEPARTAMENTO', MARGIN + leftColW / 2, gY + tripleH / 2 - 1.5, { align: 'center' })
-  doc.text('DE VENTAS', MARGIN + leftColW / 2, gY + tripleH / 2 + 2.5, { align: 'center' })
+  doc.text('DE LOGÍSTICA', MARGIN + leftColW / 2, gY + tripleH / 2 + 2.5, { align: 'center' })
 
   // Celda central (3 filas de alto): NOTA DE ENTREGA
   doc.rect(MARGIN + leftColW, gY, centerW, tripleH, 'S')
@@ -480,7 +480,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   // No forzar salto de página artificial, el limitY ya se encarga de dejar espacio
   y = y + 2
 
-  const sloganY = PAGE_H - 33
+  const sloganY = esMembrete ? PAGE_H - 21 : PAGE_H - 33
 
   const total = Number(despacho.total_usd || 0)
   const flete = Number(despacho.flete_usd || 0)
@@ -506,7 +506,6 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const rightItems = [
     { label: 'SubTotal:', value: fmtTotal(total, monedaPDF, tasa, factorBcv) },
     { label: 'Descuento:', value: fmtTotal(descuentoTotal, monedaPDF, tasa, factorBcv) },
-    { label: 'Fletes:', value: fmtTotal(0, monedaPDF, tasa, factorBcv) },
     { label: 'Exento:', value: fmtTotal(montoExento, monedaPDF, tasa, factorBcv) },
     { label: 'Gravable:', value: fmtTotal(montoGravado, monedaPDF, tasa, factorBcv) },
     { label: `Impuesto ${ivaPct}%:`, value: fmtTotal(mostrarIva ? ivaAmount : 0, monedaPDF, tasa, factorBcv) }

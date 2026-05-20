@@ -15,6 +15,7 @@ import EditDespachoModal from './EditDespachoModal'
 import DevolverAnularModal from './DevolverAnularModal'
 import CambiarTransportistaModal from './CambiarTransportistaModal'
 import ConciliarCodModal from './ConciliarCodModal'
+import FacturaModal from './FacturaModal'
 import { showToast } from '../ui/Toast'
 import { MessageCircle } from 'lucide-react'
 import { compartirPorWhatsApp, generarMensaje } from '../../utils/whatsapp'
@@ -33,6 +34,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const rol = perfil?.rol || 'vendedor'
   const [pdfLoading, setPdfLoading]   = useState(false)
   const [ordenLoading, setOrdenLoading] = useState(false)
+  const [guiaLoading, setGuiaLoading]   = useState(false)
   const [printLoading, setPrintLoading] = useState(false)
   const [showDetalle, setShowDetalle] = useState(false)
   const [showDescuento, setShowDescuento] = useState(false)
@@ -50,6 +52,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const [tasaPersonalizada, setTasaPersonalizada] = useState('')
   const [showCambiarTransportista, setShowCambiarTransportista] = useState(false)
   const [showConciliarCod, setShowConciliarCod] = useState(false)
+  const [showFacturaModal, setShowFacturaModal] = useState(false)
+  const [facturaActionType, setFacturaActionType] = useState('download')
   const esLogistica = perfil?.rol === 'logistica' || perfil?.rol === 'jefe' || perfil?.rol === 'desarrollador'
   const { tasaBcv, tasaUsdt } = useTasaCambio()
 
@@ -318,6 +322,23 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     }
   }
 
+  async function descargarGuiaDespacho() {
+    setGuiaLoading(true)
+    try {
+      const [{ generarGuiaDespachoPDF }, itemsFinal] = await Promise.all([
+        import('../../services/pdf/guiaDespachoPDF'),
+        fetchItemsDespacho(),
+      ])
+      await generarGuiaDespachoPDF({
+        despacho, items: itemsFinal, config
+      })
+    } catch (err) {
+      showToast('Error al generar Guía de Despacho: ' + (err.message || 'Error desconocido'), 'error')
+    } finally {
+      setGuiaLoading(false)
+    }
+  }
+
   // Helper: imprimir PDF blob (abre diálogo de impresión en PC y móvil)
   function printOrDownloadPdf(blob, filename) {
     const url = URL.createObjectURL(blob)
@@ -347,6 +368,51 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         try { iframe.contentWindow.print() } catch { window.open(url) }
         setTimeout(() => { document.body.removeChild(iframe); URL.revokeObjectURL(url) }, 60000)
       }
+    }
+  }
+
+  function abrirFacturaModal(type) {
+    setFacturaActionType(type)
+    setShowFacturaModal(true)
+  }
+
+  async function generarFacturaConDatos(nroFactura, nroControl) {
+    setShowFacturaModal(false)
+    if (facturaActionType === 'print') {
+      setPrintLoading(true)
+    } else {
+      setPdfLoading(true)
+    }
+    try {
+      const [{ generarFacturaPDF }, itemsFinal] = await Promise.all([
+        import('../../services/pdf/facturaPDF'),
+        fetchItemsDespacho(),
+      ])
+      const { blob, filename } = await generarFacturaPDF({
+        despacho, items: itemsFinal, config,
+        formaPago: despacho.forma_pago || '',
+        monedaPDF: monedaPdf, tasa: tasaImpresion,
+        tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio,
+        returnBlob: true,
+        nroFactura, nroControl
+      })
+      if (facturaActionType === 'print') {
+        printOrDownloadPdf(blob, filename)
+      } else {
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = filename
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+      }
+    } catch (err) {
+      showToast('Error al generar factura: ' + (err.message || 'Error desconocido'), 'error')
+    } finally {
+      setPrintLoading(false)
+      setPdfLoading(false)
     }
   }
 
@@ -438,6 +504,26 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       printOrDownloadPdf(blob, filename)
     } catch (err) {
       showToast('Error al imprimir orden: ' + (err.message || 'Error desconocido'), 'error')
+    } finally {
+      setPrintLoading(false)
+    }
+  }
+
+  async function imprimirGuiaDespacho() {
+    setPrintLoading(true)
+    setShowPrintMenu(false)
+    try {
+      const [{ generarGuiaDespachoPDF }, itemsFinal] = await Promise.all([
+        import('../../services/pdf/guiaDespachoPDF'),
+        fetchItemsDespacho(),
+      ])
+      const { blob, filename } = await generarGuiaDespachoPDF({
+        despacho, items: itemsFinal, config,
+        returnBlob: true,
+      })
+      printOrDownloadPdf(blob, filename)
+    } catch (err) {
+      showToast('Error al imprimir Guía de Despacho: ' + (err.message || 'Error desconocido'), 'error')
     } finally {
       setPrintLoading(false)
     }
@@ -660,7 +746,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             ? <span className="text-teal-500 font-medium">Entregada {fmtFechaHora(despacho.entregada_en)}</span>
             : despacho.estado === 'despachada' && despacho.despachada_en
               ? <span className="text-indigo-400 font-medium">Despachada {fmtFechaHora(despacho.despachada_en)}</span>
-              : <span>{fmtFechaHora(despacho.actualizado_en || despacho.creado_en)}</span>
+              : <span>{fmtFechaHora(despacho.creado_en)}</span>
           }
         </div>
         {(despacho.cliente_factura || despacho.cliente)?.nombre && (
@@ -791,9 +877,9 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
 
           {/* Descargar */}
           <button ref={downloadBtnRef} onClick={() => { setShowDownloadMenu(v => !v); setShowPrintMenu(false) }}
-            disabled={pdfLoading || ordenLoading}
+            disabled={pdfLoading || ordenLoading || guiaLoading}
             className="flex items-center gap-1 px-2 py-2 rounded-lg text-[11px] font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-40 shrink-0">
-            {(pdfLoading || ordenLoading) ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Download size={13} />}
+            {(pdfLoading || ordenLoading || guiaLoading) ? <div className="w-3 h-3 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Download size={13} />}
             Descargar <ChevronDown size={9} />
           </button>
 
@@ -839,6 +925,21 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
                   {monedaPdf === 'bs' ? 'Bs' : monedaPdf === 'bcv' ? 'BCV' : '$'}
                 </span>
               </button>
+              {esLogistica && (
+                <>
+                  <button onClick={() => { setShowPrintMenu(false); abrirFacturaModal('print') }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 active:bg-slate-100 text-left border-t border-slate-100">
+                    <Printer size={14} className="text-slate-400" /> Factura
+                    <span className={`ml-auto text-[9px] font-bold px-1 py-0.5 rounded leading-none ${monedaPdf === 'bs' ? 'text-blue-600 bg-blue-50 border border-blue-200' : monedaPdf === 'bcv' ? 'text-teal-600 bg-teal-50 border border-teal-200' : 'text-emerald-600 bg-emerald-50 border border-emerald-200'}`}>
+                      {monedaPdf === 'bs' ? 'Bs' : monedaPdf === 'bcv' ? 'BCV' : '$'}
+                    </span>
+                  </button>
+                  <button onClick={imprimirGuiaDespacho}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 active:bg-slate-100 text-left border-t border-slate-100">
+                    <Printer size={14} className="text-slate-400" /> Guía de Despacho
+                  </button>
+                </>
+              )}
             </div>
           </>
         })()}
@@ -865,6 +966,21 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
                   {monedaPdf === 'bs' ? 'Bs' : monedaPdf === 'bcv' ? 'BCV' : '$'}
                 </span>
               </button>
+              {esLogistica && (
+                <>
+                  <button onClick={() => { setShowDownloadMenu(false); abrirFacturaModal('download') }}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-700 active:bg-slate-100 text-left border-t border-slate-100">
+                    <Download size={14} /> Factura
+                    <span className={`ml-auto text-[9px] font-bold px-1 py-0.5 rounded leading-none ${monedaPdf === 'bs' ? 'text-blue-600 bg-blue-50 border border-blue-200' : monedaPdf === 'bcv' ? 'text-teal-600 bg-teal-50 border border-teal-200' : 'text-emerald-600 bg-emerald-50 border border-emerald-200'}`}>
+                      {monedaPdf === 'bs' ? 'Bs' : monedaPdf === 'bcv' ? 'BCV' : '$'}
+                    </span>
+                  </button>
+                  <button onClick={() => { descargarGuiaDespacho(); setShowDownloadMenu(false) }}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-700 active:bg-slate-100 text-left border-t border-slate-100">
+                    <Download size={14} /> Guía de Despacho
+                  </button>
+                </>
+              )}
             </div>
           </>
         })()}
@@ -917,6 +1033,21 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
                     {monedaPdf === 'bs' ? 'Bs' : monedaPdf === 'bcv' ? 'BCV' : '$'}
                   </span>
                 </button>
+                {esLogistica && (
+                  <>
+                    <button onClick={() => { setShowPrintMenu(false); abrirFacturaModal('print') }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left border-t border-slate-100">
+                      <Printer size={14} className="text-slate-400" /> Factura
+                      <span className={`ml-auto text-[9px] font-bold px-1 py-0.5 rounded leading-none ${monedaPdf === 'bs' ? 'text-blue-600 bg-blue-50 border border-blue-200' : monedaPdf === 'bcv' ? 'text-teal-600 bg-teal-50 border border-teal-200' : 'text-emerald-600 bg-emerald-50 border border-emerald-200'}`}>
+                        {monedaPdf === 'bs' ? 'Bs' : monedaPdf === 'bcv' ? 'BCV' : '$'}
+                      </span>
+                    </button>
+                    <button onClick={imprimirGuiaDespacho}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left border-t border-slate-100">
+                      <Printer size={14} className="text-slate-400" /> Guía de Despacho
+                    </button>
+                  </>
+                )}
               </div>
             </>
           )}
@@ -925,9 +1056,9 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         {/* Descargar dropdown */}
         <div className="relative">
           <button onClick={() => { setShowDownloadMenu(v => !v); setShowPrintMenu(false) }}
-            disabled={pdfLoading || ordenLoading}
+            disabled={pdfLoading || ordenLoading || guiaLoading}
             className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-50 whitespace-nowrap">
-            {(pdfLoading || ordenLoading) ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+            {(pdfLoading || ordenLoading || guiaLoading) ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
             Descargar <ChevronDown size={9} />
           </button>
           {showDownloadMenu && (
@@ -949,6 +1080,21 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
                     {monedaPdf === 'bs' ? 'Bs' : monedaPdf === 'bcv' ? 'BCV' : '$'}
                   </span>
                 </button>
+                {esLogistica && (
+                  <>
+                    <button onClick={() => { setShowDownloadMenu(false); abrirFacturaModal('download') }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left border-t border-slate-100">
+                      <Download size={14} /> Factura
+                      <span className={`ml-auto text-[9px] font-bold px-1 py-0.5 rounded leading-none ${monedaPdf === 'bs' ? 'text-blue-600 bg-blue-50 border border-blue-200' : monedaPdf === 'bcv' ? 'text-teal-600 bg-teal-50 border border-teal-200' : 'text-emerald-600 bg-emerald-50 border border-emerald-200'}`}>
+                        {monedaPdf === 'bs' ? 'Bs' : monedaPdf === 'bcv' ? 'BCV' : '$'}
+                      </span>
+                    </button>
+                    <button onClick={() => { descargarGuiaDespacho(); setShowDownloadMenu(false) }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left border-t border-slate-100">
+                      <Download size={14} /> Guía de Despacho
+                    </button>
+                  </>
+                )}
               </div>
             </>
           )}
@@ -1223,6 +1369,14 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         isOpen={showConciliarCod}
         onClose={() => setShowConciliarCod(false)}
         despacho={despacho}
+      />
+
+      <FacturaModal
+        isOpen={showFacturaModal}
+        onClose={() => setShowFacturaModal(false)}
+        onConfirm={generarFacturaConDatos}
+        actionType={facturaActionType}
+        loading={pdfLoading || printLoading}
       />
 
       {/* ── Menú kebab ⋮ — nivel raíz, fixed para escapar overflow:hidden ── */}
