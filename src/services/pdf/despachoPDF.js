@@ -5,8 +5,8 @@ import { LOGO_DESPACHO } from './logoDespachoBase64'
 import {
   PAGE_W, PAGE_H, MARGIN, CONTENT_W,
   C_DARK, C_WHITE,
-  fmtUsd, fmtBs, fmtBcvUsd, fmtPrecio, fmtTotal, fmtFecha, fmtTelefono,
-  hexToRgb, drawCheck, drawWatermark, drawAnuladaWatermark, drawAprobadoWatermark,
+  fmtPrecio, fmtTotal, fmtFecha, fmtTelefono,
+  drawWatermark, drawAnuladaWatermark,
 } from './pdfShared'
 
 export async function generarDespachoPDF({ despacho, items = [], config = {}, formaPago = '', monedaPDF = '$', tasa = 0, tasaUsdt = 0, tasaBcv = 0, returnBlob = false }) {
@@ -51,8 +51,6 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   }
   if (despacho.estado === 'anulada') {
     drawAnuladaWatermark(doc)
-  } else if (despacho.aprobado_por_nombre) {
-    drawAprobadoWatermark(doc, despacho.aprobado_por_nombre)
   }
 
   // ══════════════════════════════════════════════════════════════════════════
