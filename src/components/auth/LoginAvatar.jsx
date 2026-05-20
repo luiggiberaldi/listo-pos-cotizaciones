@@ -39,10 +39,10 @@ export default function LoginAvatar({ user, size = 'lg', className = '' }) {
 
   const v = esPlateado 
     ? {
-        background: 'linear-gradient(145deg, #f1f5f9 0%, #94a3b8 45%, #334155 100%)',
-        border: 'rgba(203,213,225,0.7)',
-        shadow: '#1e293b',
-        shadowGlow: 'rgba(148,163,184,0.35)',
+        background: 'linear-gradient(135deg, #E8ECF1 0%, #C0C7D0 25%, #A8B2BE 45%, #D6DCE3 60%, #8A95A3 80%, #6B7785 100%)',
+        border: 'rgba(192,199,208,0.8)',
+        shadow: '#4a5568',
+        shadowGlow: 'rgba(160,174,192,0.45)',
         accent: '#CBD5E1',
         darkText: true,
       }
