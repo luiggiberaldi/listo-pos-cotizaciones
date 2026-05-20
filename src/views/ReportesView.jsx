@@ -10,7 +10,7 @@ import { useReporteVentas } from '../hooks/useReporteVentas'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import { useComisiones, useComisionesResumen } from '../hooks/useComisiones'
 import { useResumenCxC } from '../hooks/useCuentasCobrar'
-import { getWeekRange, getMonthRange } from '../utils/dateHelpers'
+import { getDayRange, getWeekRange, getMonthRange } from '../utils/dateHelpers'
 import { fmtUsd, fmtBs } from '../utils/format'
 import useAuthStore from '../store/useAuthStore'
 import Skeleton from '../components/ui/Skeleton'
@@ -114,6 +114,16 @@ function FormaPagoSection({ data = [], kpis }) {
               <div className="h-2 sm:h-2.5 rounded-full bg-slate-100 overflow-hidden">
                 <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: color }} />
               </div>
+              {Array.isArray(fp.pagos) && fp.pagos.length > 0 && (
+                <div className="pl-4 pt-1 space-y-0.5">
+                  {fp.pagos.map((p, pIdx) => (
+                    <div key={pIdx} className="flex justify-between text-[9px] sm:text-[10px] text-slate-500 font-medium bg-slate-50/50 hover:bg-slate-50 px-1.5 py-0.5 rounded border border-transparent hover:border-slate-100">
+                      <span className="truncate max-w-[200px] sm:max-w-[280px]">Doc #{p.numero || 'S/N'} · {p.cliente}</span>
+                      <span className="font-bold text-slate-700 shrink-0">{fmtUsd(p.monto)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )
         })}
@@ -290,8 +300,8 @@ function AgingSection({ title, data, countLabel }) {
 // ─── Tab Ventas ───────────────────────────────────────────────────────────────
 function TabVentas({ configNeg }) {
   const [rango, setRango] = useState(() => {
-    const actual = getWeekRange(0)
-    const anterior = getWeekRange(-1)
+    const actual = getDayRange(0)
+    const anterior = getDayRange(-1)
     return { from: actual.from, to: actual.to, prevFrom: anterior.from, prevTo: anterior.to }
   })
   const [exportando, setExportando] = useState(false)

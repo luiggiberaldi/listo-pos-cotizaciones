@@ -43,12 +43,46 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
         return json?.data ?? []
       }
 
-      const [despachos, prevDespachos, comisiones, prevComisiones] = await Promise.all([
+      const [despachosRaw, prevDespachosRaw, comisiones, prevComisiones] = await Promise.all([
         fetchDespachos(from, to),
         fetchDespachos(prevFrom, prevTo),
         fetchComisionesWorker(from, to),
         fetchComisionesWorker(prevFrom, prevTo),
       ])
+
+      const normalizarFormaPagoDespacho = (d) => {
+        const formas = Array.isArray(d.forma_pago) ? d.forma_pago : []
+        const processedFormas = []
+        if (formas.length > 0) {
+          formas.forEach(f => {
+            if (f.metodo === 'Cobro a destino') {
+              if (f.cobro_destino_pagado) {
+                const metodosDefinitivos = Array.isArray(f.metodos_pagados) ? f.metodos_pagados : (Array.isArray(f.metodo_propuesto) ? f.metodo_propuesto : []);
+                if (metodosDefinitivos.length > 0) {
+                  metodosDefinitivos.forEach(p => {
+                    processedFormas.push({ metodo: p.metodo || 'Efectivo', monto: Number(p.monto) || 0 })
+                  })
+                } else {
+                  processedFormas.push({ metodo: 'Efectivo', monto: Number(f.monto) || 0 })
+                }
+              } else {
+                processedFormas.push({ metodo: 'Cta por cobrar', monto: Number(f.monto) || 0 })
+              }
+            } else {
+              processedFormas.push(f)
+            }
+          })
+        } else {
+          // Si no tiene formas de pago, no hacer nada o dejar vacío
+        }
+        return {
+          ...d,
+          forma_pago: processedFormas
+        }
+      }
+
+      const despachos = despachosRaw.map(normalizarFormaPagoDespacho)
+      const prevDespachos = prevDespachosRaw.map(normalizarFormaPagoDespacho)
 
       // ── 2. Items de las cotizaciones de los despachos ──
       const cotIds = [...new Set(despachos.map(d => d.cotizacion_id).filter(Boolean))]
@@ -184,10 +218,10 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
         for (let i = 0; i < productoIds.length; i += 50) {
           const batch = productoIds.slice(i, i + 50)
           const { data } = await supabase.from('productos').select('id, categoria').in('id', batch)
-          if (data) data.forEach(p => { cats[p.id] = p.categoria || 'PRODUCTOS EXTERIOR' })
+          if (data) data.forEach(p => { cats[p.id] = p.categoria || 'PRODUCTOS EXTERNOS' })
         }
         items.forEach(it => {
-          const cat = cats[it.producto_id] || 'PRODUCTOS EXTERIOR'
+          const cat = cats[it.producto_id] || 'PRODUCTOS EXTERNOS'
           if (!categoriaMap[cat]) categoriaMap[cat] = { categoria: cat, unidades: 0, totalUsd: 0 }
           categoriaMap[cat].unidades += Number(it.cantidad || 0)
           categoriaMap[cat].totalUsd += Number(it.total_linea_usd || 0)
@@ -201,16 +235,26 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
         const formas = Array.isArray(d.forma_pago) ? d.forma_pago : []
         if (formas.length === 0) {
           const fallback = 'Pendiente'
-          if (!formaPagoMap[fallback]) formaPagoMap[fallback] = { formaPago: fallback, count: 0, totalUsd: 0 }
+          if (!formaPagoMap[fallback]) formaPagoMap[fallback] = { formaPago: fallback, count: 0, totalUsd: 0, pagos: [] }
           formaPagoMap[fallback].count++
           formaPagoMap[fallback].totalUsd += ventaNeta(d)
+          formaPagoMap[fallback].pagos.push({
+            cliente: d.cliente_nombre || 'Sin cliente',
+            numero: d.despacho_numero || d.despacho_id?.slice(0, 8),
+            monto: ventaNeta(d)
+          })
         } else {
           formas.forEach(f => {
             const nombre = f.metodo || 'Sin especificar'
             const monto = Number(f.monto) || 0
-            if (!formaPagoMap[nombre]) formaPagoMap[nombre] = { formaPago: nombre, count: 0, totalUsd: 0 }
+            if (!formaPagoMap[nombre]) formaPagoMap[nombre] = { formaPago: nombre, count: 0, totalUsd: 0, pagos: [] }
             formaPagoMap[nombre].count++
             formaPagoMap[nombre].totalUsd += monto
+            formaPagoMap[nombre].pagos.push({
+              cliente: d.cliente_nombre || 'Sin cliente',
+              numero: d.despacho_numero || d.despacho_id?.slice(0, 8),
+              monto: monto
+            })
           })
         }
       })

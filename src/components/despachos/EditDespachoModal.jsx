@@ -31,6 +31,7 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
   const [showNuevoTransp, setShowNuevoTransp] = useState(false)
   const [showNuevoCliente, setShowNuevoCliente] = useState(false)
   const [nuevoError, setNuevoError] = useState('')
+  const [esCod, setEsCod] = useState(false)
 
   // 1. Cálculos derivados (necesarios para el hook)
   const totalBase = Number(despacho?.total_usd || 0) - Number(despacho?.flete_usd || 0) - Number(despacho?.corte_usd || 0)
@@ -49,8 +50,18 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
     // Parsear forma de pago
     try {
       const fp = typeof despacho.forma_pago === 'string' ? JSON.parse(despacho.forma_pago) : despacho.forma_pago
-      if (Array.isArray(fp)) setFormas(fp)
-      else setFormas([])
+      if (Array.isArray(fp)) {
+        const codItem = fp.find(f => f.metodo === 'Cobro a destino')
+        if (codItem) {
+          setEsCod(true)
+          setFormas(Array.isArray(codItem.metodo_propuesto) ? codItem.metodo_propuesto : [])
+        } else {
+          setEsCod(false)
+          setFormas(fp)
+        }
+      } else {
+        setFormas([])
+      }
     } catch { setFormas([]) }
     setReferenciaPago(despacho.referencia_pago || '')
     setTransportistaId(despacho.transportista_id || '')
@@ -68,7 +79,17 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
 
 
   async function handleGuardar() {
-    const fpJson = JSON.stringify(formasPago)
+    let finalFormasPago = formasPago
+    if (esCod) {
+      finalFormasPago = [{
+        metodo: "Cobro a destino",
+        monto: totalConFlete,
+        diasVencimiento: 0,
+        cobro_destino_pagado: false,
+        metodo_propuesto: formasPago
+      }]
+    }
+    const fpJson = JSON.stringify(finalFormasPago)
     await editarDespacho.mutateAsync({
       despachoId: despacho.id,
       formaPago: fpJson,
@@ -221,12 +242,44 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
 
           {/* ── 3. Forma de pago ── */}
           <div className="space-y-2">
+            {/* Toggle Cobro a destino (COD) */}
+            <div className="mb-3 flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl p-2.5 shadow-sm max-w-sm">
+              <div className="flex items-center gap-2">
+                <span className="p-1 rounded-lg bg-rose-100 text-rose-600">
+                  <Truck size={14} />
+                </span>
+                <div>
+                  <span className="text-[11px] font-bold text-slate-700 block">¿Cobro a destino (COD)?</span>
+                  <span className="text-[9px] text-slate-400">El cliente pagará al recibir</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setEsCod(!esCod);
+                  setFormas([]);
+                }}
+                disabled={cargando}
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  esCod ? 'bg-rose-500' : 'bg-slate-200'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    esCod ? 'translate-x-4' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              Formas de pago <span className="text-red-500">*</span>
+              {esCod ? 'Métodos de pago sugeridos al recibir (COD) *' : 'Formas de pago *'}
             </p>
             <div className="flex flex-wrap gap-2">
-              {FORMAS_PAGO.map(fp => {
-                const activo = formasPago.some(f => f.metodo === fp)
+              {FORMAS_PAGO
+                .filter(fp => fp !== 'Cobro a destino' && (!esCod || fp !== 'Cta por cobrar'))
+                .map(fp => {
+                  const activo = formasPago.some(f => f.metodo === fp)
                 return (
                   <button key={fp} type="button"
                     onClick={() => toggleForma(fp)}

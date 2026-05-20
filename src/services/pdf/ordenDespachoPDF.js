@@ -419,7 +419,26 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   const fpRaw = formaPago || despacho.forma_pago || ''
   try {
     const parsed = JSON.parse(fpRaw)
-    if (Array.isArray(parsed)) formasPagoArr = parsed
+    if (Array.isArray(parsed)) {
+      parsed.forEach(f => {
+        if (f.metodo === 'Cobro a destino') {
+          if (f.cobro_destino_pagado) {
+            const metodosDefinitivos = Array.isArray(f.metodos_pagados) ? f.metodos_pagados : (Array.isArray(f.metodo_propuesto) ? f.metodo_propuesto : []);
+            if (metodosDefinitivos.length > 0) {
+              metodosDefinitivos.forEach(p => {
+                formasPagoArr.push({ metodo: p.metodo, monto: p.monto })
+              })
+            } else {
+              formasPagoArr.push({ metodo: 'Efectivo', monto: f.monto })
+            }
+          } else {
+            formasPagoArr.push({ metodo: 'Cobro a destino (COD)', monto: f.monto })
+          }
+        } else {
+          formasPagoArr.push(f)
+        }
+      })
+    }
   } catch {
     if (fpRaw) formasPagoArr = [{ metodo: fpRaw, monto: null }]
   }

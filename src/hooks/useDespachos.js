@@ -141,6 +141,14 @@ export function useCrearDespacho() {
       const displayNum = numCot ? (typeof numCot === 'number' ? String(numCot).padStart(5, '0') : String(numCot).replace(/^(COT-|DES-)/i, '')) : '—'
       const displayCliente = cliNom || 'cliente'
 
+      let esCod = false
+      try {
+        const fp = typeof variables?.formaPago === 'string' ? JSON.parse(variables.formaPago) : (variables?.formaPago || [])
+        if (Array.isArray(fp)) {
+          esCod = fp.some(f => f.metodo === 'Cobro a destino')
+        }
+      } catch {}
+
       qc.invalidateQueries({ queryKey: ['despachos'], exact: false })
       qc.invalidateQueries({ queryKey: ['inventario'], exact: false })
       qc.invalidateQueries({ queryKey: ['comisiones'], exact: false })
@@ -148,10 +156,10 @@ export function useCrearDespacho() {
       qc.invalidateQueries({ queryKey: ['stock_comprometido'] })
       qc.invalidateQueries({ queryKey: ['cuentas-cobrar'] })
       showToast('Nota de despacho creada', 'success')
-      notifyDespachoCreado(displayNum, displayCliente, usuarioNombre, rol)
+      notifyDespachoCreado(displayNum, displayCliente, usuarioNombre, rol, perfil?.id, esCod)
       sendPushNotification({
-        title: '🚚 Orden de Despacho Creada',
-        message: `Despacho para cotización #${displayNum} — ${displayCliente}`,
+        title: `🚚 Orden de Despacho Creada${esCod ? ' [COD]' : ''}`,
+        message: `Despacho para cotización #${displayNum} — ${displayCliente}${esCod ? ' (Cobro a Destino)' : ''}`,
         tag: `despacho-${displayNum}`,
         url: '/despachos',
         targetRole: 'supervisor,administracion,jefe',
@@ -214,7 +222,7 @@ export function useActualizarEstadoDespacho() {
       const cliente = clienteNombre || 'cliente'
 
       if (nuevoEstado === 'despachada') {
-        notifyDespachoEnRuta(num, cliente, usuarioNombre, rol)
+        notifyDespachoEnRuta(num, cliente, usuarioNombre, rol, perfil?.id)
         sendPushNotification({
           title: '🚚 Despacho en Ruta',
           message: `Despacho #${num} — ${cliente} despachado por ${usuarioNombre}`,
@@ -223,7 +231,7 @@ export function useActualizarEstadoDespacho() {
           targetRole: 'vendedor,logistica',
         })
       } else if (nuevoEstado === 'entregada') {
-        notifyDespachoEntregado(num, cliente, usuarioNombre, rol)
+        notifyDespachoEntregado(num, cliente, usuarioNombre, rol, perfil?.id)
         sendPushNotification({
           title: '✅ Despacho Entregado',
           message: `Despacho #${num} — ${cliente} entregado (marcado por ${usuarioNombre})`,
@@ -232,7 +240,7 @@ export function useActualizarEstadoDespacho() {
           targetRole: 'vendedor',
         })
       } else if (nuevoEstado === 'anulada') {
-        notifyDespachoCancelado(num, cliente, usuarioNombre, rol)
+        notifyDespachoCancelado(num, cliente, usuarioNombre, rol, perfil?.id)
         sendPushNotification({
           title: '❌ Despacho Cancelado',
           message: `Despacho #${num} — ${cliente} cancelado por ${usuarioNombre}`,

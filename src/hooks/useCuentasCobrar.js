@@ -160,11 +160,18 @@ export function useRegistrarAbono() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ clienteId, monto, formaPago, referencia, descripcion }) => {
+    mutationFn: async ({ clienteId, monto, formaPago, referencia, descripcion, despachoId }) => {
       const res = await authFetch('/api/cxc/abono', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clienteId, monto, formaPago: formaPago || null, referencia: referencia || null, descripcion: descripcion || 'Abono recibido' }),
+        body: JSON.stringify({
+          clienteId,
+          monto,
+          formaPago: formaPago || null,
+          referencia: referencia || null,
+          descripcion: descripcion || 'Abono recibido',
+          despachoId: despachoId || null
+        }),
       })
       const result = await res.json()
       if (!res.ok) throw new Error(result.error || 'Error al registrar abono')
@@ -173,6 +180,7 @@ export function useRegistrarAbono() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: CXC_KEY })
       qc.invalidateQueries({ queryKey: CLIENTES_KEY })
+      qc.invalidateQueries({ queryKey: ['despachos'] })
       showToast('Abono registrado exitosamente', 'success')
     },
   })

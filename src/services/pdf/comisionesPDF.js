@@ -605,7 +605,7 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {} }) {
   // 2. KPIs
   // ══════════════════════════════════════════════════════════════════════════
   const kpiBoxW = CONTENT_W / 4
-  const kpiBoxH = 18
+  const kpiBoxH = 22
   const kpiData = [
     { label: 'Ventas Netas (Sin Flete)', value: fmtUsd(kpis.totalVentas), sub: '(Solo mercancía)' },
     { label: 'Despachos', value: String(kpis.numDespachos || 0) },
@@ -615,20 +615,34 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {} }) {
 
   kpiData.forEach((kpi, i) => {
     const bx = MARGIN + i * kpiBoxW
-    doc.setFillColor(...C_PRIMARY)
-    doc.roundedRect(bx + 1, y, kpiBoxW - 2, kpiBoxH, 2, 2, 'F')
+    
+    // Draw background (light gray/slate-50)
+    doc.setFillColor(248, 250, 252)
+    // Draw border (slate-200)
+    doc.setDrawColor(226, 232, 240)
+    doc.setLineWidth(0.3)
+    
+    // FD means Fill and Stroke (Draw)
+    doc.roundedRect(bx + 1, y, kpiBoxW - 2, kpiBoxH, 2, 2, 'FD')
+    
+    // Label text (dark gray / slate-600)
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(6)
-    doc.setTextColor(...C_WHITE)
-    doc.text(kpi.label, bx + 3, y + 5)
+    doc.setFontSize(7.5)
+    doc.setTextColor(71, 85, 105)
+    doc.text(kpi.label, bx + 3.5, y + 6)
+    
+    // Value text (midnight blue / C_DARK)
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(10)
-    doc.text(kpi.value, bx + 3, y + 11.5)
+    doc.setFontSize(12.5)
+    doc.setTextColor(...C_DARK)
+    doc.text(kpi.value, bx + 3.5, y + 13.5)
+    
+    // Sub text (slate-400 / C_GRAY)
     if (kpi.sub) {
       doc.setFont('helvetica', 'normal')
-      doc.setFontSize(5.5)
-      doc.setTextColor(200, 210, 220)
-      doc.text(kpi.sub, bx + 3, y + 15.5)
+      doc.setFontSize(6.5)
+      doc.setTextColor(...C_GRAY)
+      doc.text(kpi.sub, bx + 3.5, y + 19)
     }
   })
   y += kpiBoxH + 8
@@ -639,24 +653,24 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {} }) {
   const porVendedor = reporte.porVendedor || []
   if (porVendedor.length > 0) {
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
+    doc.setFontSize(9.5)
     doc.setTextColor(...C_DARK)
     doc.text('Ventas por Vendedor', MARGIN, y + 4)
     y += 8
 
     doc.setFillColor(240, 242, 245)
-    doc.rect(MARGIN, y, CONTENT_W, 6, 'F')
+    doc.rect(MARGIN, y, CONTENT_W, 7, 'F')
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(6.5)
+    doc.setFontSize(8)
     doc.setTextColor(80, 90, 110)
-    doc.text('Vendedor', MARGIN + 2, y + 4)
-    doc.text('Despachos', MARGIN + 55, y + 4)
-    doc.text('Ventas USD', MARGIN + 85, y + 4)
-    doc.text('Comisiones', MARGIN + 125, y + 4)
-    y += 8
+    doc.text('Vendedor', MARGIN + 2, y + 4.5)
+    doc.text('Despachos', MARGIN + 55, y + 4.5)
+    doc.text('Ventas USD', MARGIN + 85, y + 4.5)
+    doc.text('Comisiones', MARGIN + 125, y + 4.5)
+    y += 9
 
     porVendedor.forEach((v, idx) => {
-      const rowH = (v.comision > 0) ? 9 : 6;
+      const rowH = (v.comision > 0) ? 11 : 8;
       y = checkPage(doc, y, rowH + 1)
       if (idx % 2 === 0) {
         doc.setFillColor(252, 252, 253)
@@ -665,31 +679,31 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {} }) {
       if (v.vendedorColor) {
         const vc = hexToRgb(v.vendedorColor)
         doc.setFillColor(vc[0], vc[1], vc[2])
-        doc.circle(MARGIN + 3, y + 2, 1.5, 'F')
+        doc.circle(MARGIN + 3, y + 3.5, 1.8, 'F')
       }
       doc.setFont('helvetica', 'bold')
-      doc.setFontSize(7)
+      doc.setFontSize(8.5)
       doc.setTextColor(...C_DARK)
-      doc.text(v.vendedor || '—', MARGIN + 7, y + 3)
+      doc.text(v.vendedor || '—', MARGIN + 7, y + 4.5)
       doc.setFont('helvetica', 'normal')
-      doc.text(String(v.count || 0), MARGIN + 58, y + 3)
-      doc.text(fmtUsd(v.totalUsd), MARGIN + 85, y + 3)
-      doc.text(fmtUsd(v.comision), MARGIN + 125, y + 3)
+      doc.text(String(v.count || 0), MARGIN + 58, y + 4.5)
+      doc.text(fmtUsd(v.totalUsd), MARGIN + 85, y + 4.5)
+      doc.text(fmtUsd(v.comision), MARGIN + 125, y + 4.5)
       
       if (v.comision > 0) {
-        doc.setFontSize(5.5)
+        doc.setFontSize(6.5)
         doc.setTextColor(120, 130, 140)
         const totalCabilla = (v.comisionCabilla2 || 0) + (v.comisionCabilla3 || 0)
-        doc.text(`2%: ${fmtUsd(totalCabilla)} | 3%: ${fmtUsd(v.comisionOtros || 0)}`, MARGIN + 125, y + 6.5)
+        doc.text(`2%: ${fmtUsd(totalCabilla)} | 3%: ${fmtUsd(v.comisionOtros || 0)}`, MARGIN + 125, y + 8.5)
       }
       
       y += rowH
     })
 
     // Fila de Total
-    y = checkPage(doc, y, 10)
+    y = checkPage(doc, y, 12)
     doc.setFillColor(245, 247, 250)
-    doc.rect(MARGIN, y - 1, CONTENT_W, 8.5, 'F')
+    doc.rect(MARGIN, y - 1, CONTENT_W, 11, 'F')
 
     doc.setDrawColor(200, 204, 210)
     doc.setLineWidth(0.4)
@@ -702,24 +716,23 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {} }) {
     const totalOtros = porVendedor.reduce((s, v) => s + (v.comisionOtros || 0), 0)
 
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7.5)
+    doc.setFontSize(9)
     doc.setTextColor(...C_DARK)
-    doc.text('TOTAL', MARGIN + 7, y + 3.5)
+    doc.text('TOTAL', MARGIN + 7, y + 4.5)
     
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7.5)
-    doc.text(String(totalDespachos), MARGIN + 58, y + 3.5)
-    doc.text(fmtUsd(totalVentasUsd), MARGIN + 85, y + 3.5)
-    doc.text(fmtUsd(totalComisiones), MARGIN + 125, y + 3.5)
+    doc.text(String(totalDespachos), MARGIN + 58, y + 4.5)
+    doc.text(fmtUsd(totalVentasUsd), MARGIN + 85, y + 4.5)
+    doc.text(fmtUsd(totalComisiones), MARGIN + 125, y + 4.5)
     
     if (totalComisiones > 0) {
-      doc.setFontSize(5.5)
+      doc.setFontSize(7)
       doc.setTextColor(90, 100, 110)
-      doc.text(`2%: ${fmtUsd(totalCabilla)} | 3%: ${fmtUsd(totalOtros)}`, MARGIN + 125, y + 6.8)
+      doc.text(`2%: ${fmtUsd(totalCabilla)} | 3%: ${fmtUsd(totalOtros)}`, MARGIN + 125, y + 9)
     }
 
-    doc.line(MARGIN, y + 7.5, MARGIN + CONTENT_W, y + 7.5)
-    y += 11.5
+    doc.line(MARGIN, y + 10, MARGIN + CONTENT_W, y + 10)
+    y += 14
     y += 6
   }
 
@@ -730,43 +743,43 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {} }) {
   if (porCliente.length > 0) {
     y = checkPage(doc, y, 15)
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
+    doc.setFontSize(9.5)
     doc.setTextColor(...C_DARK)
     doc.text('Top Clientes', MARGIN, y + 4)
     y += 8
 
     doc.setFillColor(240, 242, 245)
-    doc.rect(MARGIN, y, CONTENT_W, 6, 'F')
+    doc.rect(MARGIN, y, CONTENT_W, 7, 'F')
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(6.5)
+    doc.setFontSize(8)
     doc.setTextColor(80, 90, 110)
-    doc.text('Cliente', MARGIN + 2, y + 4)
-    doc.text('Vendedor', MARGIN + 70, y + 4)
-    doc.text('Compras', MARGIN + 125, y + 4)
-    doc.text('Total USD', MARGIN + 155, y + 4)
-    y += 8
+    doc.text('Cliente', MARGIN + 2, y + 4.5)
+    doc.text('Vendedor', MARGIN + 70, y + 4.5)
+    doc.text('Compras', MARGIN + 125, y + 4.5)
+    doc.text('Total USD', MARGIN + 155, y + 4.5)
+    y += 9
 
     porCliente.slice(0, 10).forEach((c, idx) => {
-      y = checkPage(doc, y, 7)
+      y = checkPage(doc, y, 9)
       if (idx % 2 === 0) {
         doc.setFillColor(252, 252, 253)
-        doc.rect(MARGIN, y - 1, CONTENT_W, 6, 'F')
+        doc.rect(MARGIN, y - 1, CONTENT_W, 8, 'F')
       }
       doc.setFont('helvetica', 'normal')
-      doc.setFontSize(7)
+      doc.setFontSize(8.5)
       doc.setTextColor(...C_DARK)
-      doc.text((c.cliente || '—').toUpperCase().substring(0, 32), MARGIN + 2, y + 3)
-      doc.text((c.vendedor || '—').substring(0, 22), MARGIN + 70, y + 3)
-      doc.text(String(c.count || 0), MARGIN + 130, y + 3)
+      doc.text((c.cliente || '—').toUpperCase().substring(0, 32), MARGIN + 2, y + 4.5)
+      doc.text((c.vendedor || '—').substring(0, 22), MARGIN + 70, y + 4.5)
+      doc.text(String(c.count || 0), MARGIN + 130, y + 4.5)
       doc.setFont('helvetica', 'bold')
-      doc.text(fmtUsd(c.totalUsd), MARGIN + 155, y + 3)
-      y += 6
+      doc.text(fmtUsd(c.totalUsd), MARGIN + 155, y + 4.5)
+      y += 8
     })
 
     // Fila de Total
     y = checkPage(doc, y, 10)
     doc.setFillColor(245, 247, 250)
-    doc.rect(MARGIN, y - 1, CONTENT_W, 6.5, 'F')
+    doc.rect(MARGIN, y - 1, CONTENT_W, 9, 'F')
 
     doc.setDrawColor(200, 204, 210)
     doc.setLineWidth(0.4)
@@ -776,16 +789,16 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {} }) {
     const totalUsdClientes = porCliente.slice(0, 10).reduce((s, c) => s + (c.totalUsd || 0), 0)
 
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7.5)
+    doc.setFontSize(9)
     doc.setTextColor(...C_DARK)
-    doc.text('TOTAL (TOP 10)', MARGIN + 2, y + 3.5)
+    doc.text('TOTAL (TOP 10)', MARGIN + 2, y + 5)
 
     doc.setFont('helvetica', 'bold')
-    doc.text(String(totalComprasClientes), MARGIN + 130, y + 3.5)
-    doc.text(fmtUsd(totalUsdClientes), MARGIN + 155, y + 3.5)
+    doc.text(String(totalComprasClientes), MARGIN + 130, y + 5)
+    doc.text(fmtUsd(totalUsdClientes), MARGIN + 155, y + 5)
 
-    doc.line(MARGIN, y + 5.5, MARGIN + CONTENT_W, y + 5.5)
-    y += 9.5
+    doc.line(MARGIN, y + 8, MARGIN + CONTENT_W, y + 8)
+    y += 12
     y += 6
   }
 
@@ -796,34 +809,34 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {} }) {
   if (porCategoria.length > 0) {
     y = checkPage(doc, y, 15)
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
+    doc.setFontSize(9.5)
     doc.setTextColor(...C_DARK)
     doc.text('Ventas por Categoría', MARGIN, y + 4)
     y += 8
 
     const catTotal = porCategoria.reduce((s, c) => s + c.totalUsd, 0)
     porCategoria.forEach((cat, idx) => {
-      y = checkPage(doc, y, 10)
+      y = checkPage(doc, y, 11)
       const pct = catTotal > 0 ? ((cat.totalUsd / catTotal) * 100).toFixed(1) : '0.0'
       doc.setFont('helvetica', 'normal')
-      doc.setFontSize(7)
+      doc.setFontSize(8.5)
       doc.setTextColor(...C_DARK)
-      doc.text(`${(cat.categoria || '—').substring(0, 25)} (${cat.unidades || 0} uds.)`, MARGIN + 2, y + 3)
-      doc.text(`${pct}%`, MARGIN + 80, y + 3)
+      doc.text(`${(cat.categoria || '—').substring(0, 25)} (${cat.unidades || 0} uds.)`, MARGIN + 2, y + 4)
+      doc.text(`${pct}%`, MARGIN + 80, y + 4)
       doc.setFont('helvetica', 'bold')
-      doc.text(fmtUsd(cat.totalUsd), MARGIN + 100, y + 3)
+      doc.text(fmtUsd(cat.totalUsd), MARGIN + 100, y + 4)
 
       // Mini barra
       const barX = MARGIN + 130
       const barW = CONTENT_W - 130
       doc.setFillColor(230, 233, 240)
-      doc.roundedRect(barX, y, barW, 3, 1, 1, 'F')
+      doc.roundedRect(barX, y + 1, barW, 4, 1, 1, 'F')
       const fillW = barW * (Number(pct) / 100)
       if (fillW > 0) {
         doc.setFillColor(...C_PRIMARY)
-        doc.roundedRect(barX, y, Math.max(fillW, 2), 3, 1, 1, 'F')
+        doc.roundedRect(barX, y + 1, Math.max(fillW, 2), 4, 1, 1, 'F')
       }
-      y += 7
+      y += 9
     })
     y += 4
   }
@@ -835,40 +848,58 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {} }) {
   if (porFormaPago.length > 0) {
     y = checkPage(doc, y, 15)
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
+    doc.setFontSize(9.5)
     doc.setTextColor(...C_DARK)
     doc.text('Formas de Pago', MARGIN, y + 4)
     y += 8
 
     const fpTotal = porFormaPago.reduce((s, fp) => s + fp.totalUsd, 0)
     porFormaPago.forEach((fp, idx) => {
-      y = checkPage(doc, y, 10)
+      y = checkPage(doc, y, 11)
       const pct = fpTotal > 0 ? ((fp.totalUsd / fpTotal) * 100).toFixed(1) : '0.0'
       doc.setFont('helvetica', 'normal')
-      doc.setFontSize(7)
+      doc.setFontSize(8.5)
       doc.setTextColor(...C_DARK)
-      doc.text(`${fp.formaPago} (${fp.count} desp.)`, MARGIN + 2, y + 3)
-      doc.text(`${pct}%`, MARGIN + 80, y + 3)
+      doc.text(`${fp.formaPago} (${fp.count} desp.)`, MARGIN + 2, y + 4)
+      doc.text(`${pct}%`, MARGIN + 80, y + 4)
       doc.setFont('helvetica', 'bold')
-      doc.text(fmtUsd(fp.totalUsd), MARGIN + 100, y + 3)
+      doc.text(fmtUsd(fp.totalUsd), MARGIN + 100, y + 4)
 
       // Mini barra
       const barX = MARGIN + 130
       const barW = CONTENT_W - 130
       doc.setFillColor(230, 233, 240)
-      doc.roundedRect(barX, y, barW, 3, 1, 1, 'F')
+      doc.roundedRect(barX, y + 0.5, barW, 4, 1, 1, 'F')
       const fillW = barW * (Number(pct) / 100)
       if (fillW > 0) {
         doc.setFillColor(...C_PRIMARY)
-        doc.roundedRect(barX, y, Math.max(fillW, 2), 3, 1, 1, 'F')
+        doc.roundedRect(barX, y + 0.5, Math.max(fillW, 2), 4, 1, 1, 'F')
       }
-      y += 7
+      y += 8.5
+
+      // Detalle de los pagos asociados
+      if (Array.isArray(fp.pagos) && fp.pagos.length > 0) {
+        fp.pagos.forEach(p => {
+          y = checkPage(doc, y, 9)
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(7.5)
+          doc.setTextColor(110, 120, 130)
+          
+          const numDoc = p.numero ? `#${p.numero}` : 'S/N'
+          const cliente = p.cliente ? String(p.cliente).toUpperCase().substring(0, 48) : 'CLIENTE SIN NOMBRE'
+          const detailText = `    • Doc ${numDoc}  ·  ${cliente}  ·  ${fmtUsd(p.monto)}`
+          
+          doc.text(detailText, MARGIN + 2, y + 2)
+          y += 7.5
+        })
+      }
+      y += 2
     })
 
     // Fila de Total
     y = checkPage(doc, y, 10)
     doc.setFillColor(245, 247, 250)
-    doc.rect(MARGIN, y - 1, CONTENT_W, 6.5, 'F')
+    doc.rect(MARGIN, y - 1, CONTENT_W, 9, 'F')
 
     doc.setDrawColor(200, 204, 210)
     doc.setLineWidth(0.4)
@@ -877,37 +908,37 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {} }) {
     const totalFpDespachos = porFormaPago.reduce((s, fp) => s + (fp.count || 0), 0)
 
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7.5)
+    doc.setFontSize(9)
     doc.setTextColor(...C_DARK)
-    doc.text(`TOTAL RECAUDADO (${totalFpDespachos} desp.)`, MARGIN + 2, y + 3.5)
-    doc.text('100.0%', MARGIN + 80, y + 3.5)
-    doc.text(fmtUsd(fpTotal), MARGIN + 100, y + 3.5)
+    doc.text(`TOTAL RECAUDADO (${totalFpDespachos} desp.)`, MARGIN + 2, y + 5)
+    doc.text('100.0%', MARGIN + 80, y + 5)
+    doc.text(fmtUsd(fpTotal), MARGIN + 100, y + 5)
 
-    doc.line(MARGIN, y + 5.5, MARGIN + CONTENT_W, y + 5.5)
-    y += 9.5
+    doc.line(MARGIN, y + 8, MARGIN + CONTENT_W, y + 8)
+    y += 12
 
     // Bloque de Desglose de Flete / Diferencia
-    y = checkPage(doc, y, 15)
+    y = checkPage(doc, y, 18)
     doc.setFillColor(250, 252, 255)
     doc.setDrawColor(210, 225, 245)
     doc.setLineWidth(0.3)
-    doc.roundedRect(MARGIN, y, CONTENT_W, 11, 1.5, 1.5, 'FD')
+    doc.roundedRect(MARGIN, y, CONTENT_W, 14, 1.5, 1.5, 'FD')
 
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(6.5)
+    doc.setFontSize(8)
     doc.setTextColor(...C_PRIMARY)
-    doc.text('DESGLOSE DE LA DIFERENCIA (RECAUDACIÓN VS VENTAS NETAS):', MARGIN + 3.5, y + 4)
+    doc.text('DESGLOSE DE LA DIFERENCIA (RECAUDACIÓN VS VENTAS NETAS):', MARGIN + 3.5, y + 5.5)
 
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(6)
+    doc.setFontSize(7.5)
     doc.setTextColor(...C_DARK)
 
     const txtVentasNetas = `Ventas Netas (Mercancía): ${fmtUsd(kpis.totalVentas || 0)}`
     const txtFlete = `Flete/Envío Recaudado: ${fmtUsd(kpis.totalFlete || 0)}`
     const txtTotalRec = `Total Recaudado: ${fmtUsd(fpTotal)}`
 
-    doc.text(`${txtVentasNetas}    |    ${txtFlete}    |    ${txtTotalRec}`, MARGIN + 3.5, y + 8)
-    y += 16
+    doc.text(`${txtVentasNetas}    |    ${txtFlete}    |    ${txtTotalRec}`, MARGIN + 3.5, y + 10.5)
+    y += 18
   }
 
   // ══════════════════════════════════════════════════════════════════════════

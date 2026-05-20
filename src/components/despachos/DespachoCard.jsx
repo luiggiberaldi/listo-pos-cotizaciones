@@ -14,6 +14,7 @@ import DescuentoModal from './DescuentoModal'
 import EditDespachoModal from './EditDespachoModal'
 import DevolverAnularModal from './DevolverAnularModal'
 import CambiarTransportistaModal from './CambiarTransportistaModal'
+import ConciliarCodModal from './ConciliarCodModal'
 import { showToast } from '../ui/Toast'
 import { MessageCircle } from 'lucide-react'
 import { compartirPorWhatsApp, generarMensaje } from '../../utils/whatsapp'
@@ -48,6 +49,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const [monedaPdf, setMonedaPdf] = useState(() => localStorage.getItem('construacero_moneda_pdf') || '$')
   const [tasaPersonalizada, setTasaPersonalizada] = useState('')
   const [showCambiarTransportista, setShowCambiarTransportista] = useState(false)
+  const [showConciliarCod, setShowConciliarCod] = useState(false)
   const esLogistica = perfil?.rol === 'logistica' || perfil?.rol === 'jefe' || perfil?.rol === 'desarrollador'
   const { tasaBcv, tasaUsdt } = useTasaCambio()
 
@@ -216,6 +218,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   let isMixtoCxc = false
   let textVencimiento = null
   let numMetodos = 0
+  let isCodUnpaid = false
+  let isCodPaid = false
   try {
     const fp = typeof despacho.forma_pago === 'string' ? JSON.parse(despacho.forma_pago) : (despacho.forma_pago || [])
     if (Array.isArray(fp)) {
@@ -234,6 +238,15 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       }
       if (isCtaPorCobrar && numMetodos > 1) {
         isMixtoCxc = true
+      }
+
+      const cod = fp.find(f => f.metodo === 'Cobro a destino')
+      if (cod) {
+        if (!cod.cobro_destino_pagado) {
+          isCodUnpaid = true
+        } else {
+          isCodPaid = true
+        }
       }
     }
   } catch (e) {
@@ -523,6 +536,20 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         textColor: 'text-indigo-600'
       })
     }
+
+    // Conciliación de Cobro a destino (solo Admin o Dev)
+
+    const esAdminConciliador = ['administracion', 'desarrollador', 'supervisor', 'jefe'].includes(rol)
+    const canConciliarCod = esAdminConciliador && isCodUnpaid && ['despachada', 'entregada'].includes(despacho.estado)
+    if (canConciliarCod) {
+      actions.push({
+        label: 'Marcar COD como pagado',
+        icon: DollarSign,
+        onClick: () => setShowConciliarCod(true),
+        textColor: 'text-rose-600 font-bold'
+      })
+    }
+
     return actions
   }
 
@@ -532,7 +559,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     act.label !== 'No entregado' && 
     act.label !== 'No entregado / Devolver' &&
     act.label !== 'Cambiar Transportista' &&
-    act.label !== 'Agregar Transportista'
+    act.label !== 'Agregar Transportista' &&
+    act.label !== 'Marcar COD como pagado'
   )
 
   // Resolver config del confirm modal
@@ -553,7 +581,19 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         
         {/* Fila 1: ID y Kebab */}
         <div className="relative z-10 flex items-center justify-between">
-          <p className="font-black text-white font-mono leading-none drop-shadow text-sm sm:text-base">{numDisplay}</p>
+          <div className="flex items-center gap-2">
+            <p className="font-black text-white font-mono leading-none drop-shadow text-sm sm:text-base">{numDisplay}</p>
+            {isCodUnpaid && (
+              <span className="bg-rose-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded border border-rose-400/50 shadow-sm uppercase tracking-wider animate-pulse leading-none shrink-0 select-none">
+                COD
+              </span>
+            )}
+            {isCodPaid && (
+              <span className="bg-emerald-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded border border-emerald-400/50 shadow-sm uppercase tracking-wider leading-none shrink-0 select-none">
+                COD ✓
+              </span>
+            )}
+          </div>
           {/* Kebab ⋮ — acciones secundarias */}
           {(moreActions.length > 0 || canAnular) && (
             <button
@@ -573,6 +613,32 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           <EstadoBadge estado={despacho.estado} rol={rol} />
         </div>
       </div>
+
+      {/* Banner de Cobro a destino (Pendiente) */}
+      {isCodUnpaid && (
+        <div className="bg-rose-50/90 border-b border-rose-100 px-3 py-2 flex items-center justify-between animate-fade-in duration-200">
+          <div className="flex items-center gap-1.5 text-rose-600 font-extrabold text-[11px] uppercase tracking-wider">
+            <Truck size={14} className="shrink-0 text-rose-500 animate-bounce" style={{ animationDuration: '2s' }} />
+            <span>Cobro a Destino (Pendiente)</span>
+          </div>
+          <span className="text-[9px] bg-rose-500 text-white font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider shadow-sm shadow-rose-500/10">
+            COD
+          </span>
+        </div>
+      )}
+
+      {/* Banner de Cobro a destino (Pagado) */}
+      {isCodPaid && (
+        <div className="bg-emerald-50/95 border-b border-emerald-100 px-3 py-2 flex items-center justify-between animate-fade-in duration-200">
+          <div className="flex items-center gap-1.5 text-emerald-600 font-extrabold text-[11px] uppercase tracking-wider">
+            <CheckCircle size={14} className="shrink-0 text-emerald-500" />
+            <span>Cobro a Destino (Pagado ✓)</span>
+          </div>
+          <span className="text-[9px] bg-emerald-500 text-white font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider shadow-sm shadow-emerald-500/10">
+            PAGADO
+          </span>
+        </div>
+      )}
 
       {/* ── Fecha relevante + Cliente ── */}
       <div className="px-3 pt-2 pb-1.5 space-y-1">
@@ -1132,6 +1198,12 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       <CambiarTransportistaModal
         isOpen={showCambiarTransportista}
         onClose={() => setShowCambiarTransportista(false)}
+        despacho={despacho}
+      />
+
+      <ConciliarCodModal
+        isOpen={showConciliarCod}
+        onClose={() => setShowConciliarCod(false)}
         despacho={despacho}
       />
 

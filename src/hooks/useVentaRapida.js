@@ -88,7 +88,7 @@ export function useVentaRapida() {
 
       return { ...result, clienteNombre, esClienteAjeno, clienteVendedorNombre }
     },
-    onSuccess: async ({ id, numero, clienteNombre, esClienteAjeno, clienteVendedorNombre, _queued }) => {
+    onSuccess: async ({ id, numero, clienteNombre, esClienteAjeno, clienteVendedorNombre, _queued }, variables) => {
       // ─── Caso offline: venta encolada (stock NO se descuenta localmente) ──
       if (_queued) {
         showToast(
@@ -103,6 +103,14 @@ export function useVentaRapida() {
       // Guard: si no hay ID, algo falló en la persistencia real (evitar Ghost Toast)
       if (!id) return
 
+      let esCod = false
+      try {
+        const fp = typeof variables?.formaPago === 'string' ? JSON.parse(variables.formaPago) : (variables?.formaPago || [])
+        if (Array.isArray(fp)) {
+          esCod = fp.some(f => f.metodo === 'Cobro a destino')
+        }
+      } catch {}
+
       await qc.cancelQueries({ queryKey: DESPACHOS_KEY })
       await qc.cancelQueries({ queryKey: COTIZACIONES_KEY })
       qc.invalidateQueries({ queryKey: DESPACHOS_KEY, exact: false })
@@ -113,10 +121,10 @@ export function useVentaRapida() {
       qc.invalidateQueries({ queryKey: CXC_KEY })
       showToast(`Venta rápida #${numero ?? '—'} creada`, 'success')
       const displayNum = String(numero || '').padStart(5, '0')
-      notifyDespachoCreado(displayNum, clienteNombre || 'cliente', perfil?.nombre || 'vendedor', rol)
+      notifyDespachoCreado(displayNum, clienteNombre || 'cliente', perfil?.nombre || 'vendedor', rol, perfil?.id, esCod)
       sendPushNotification({
-        title: 'Venta Rápida Creada',
-        message: `Despacho #${numero ?? '—'} — ${clienteNombre ?? 'cliente'}`,
+        title: `Venta Rápida Creada${esCod ? ' [COD]' : ''}`,
+        message: `Despacho #${numero ?? '—'} — ${clienteNombre ?? 'cliente'}${esCod ? ' (Cobro a Destino)' : ''}`,
         tag: `venta-rapida-${numero}`,
         url: '/despachos',
         targetRole: 'supervisor,administracion,jefe',

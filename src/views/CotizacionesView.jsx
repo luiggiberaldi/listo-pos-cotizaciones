@@ -128,6 +128,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
   const crearTransp = useCrearTransportista()
   const [showNuevoTransp, setShowNuevoTransp] = useState(false)
   const [transpError, setTranspError] = useState('')
+  const [esCod, setEsCod] = useState(false)
 
   const items = detalle?.items ?? []
 
@@ -315,12 +316,43 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
 
             {/* Formas de pago — chips con input integrado */}
             <div className="space-y-2">
+              {/* Toggle Cobro a destino (COD) */}
+              <div className="mb-3 flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl p-2.5 shadow-sm max-w-sm">
+                <div className="flex items-center gap-2">
+                  <span className="p-1 rounded-lg bg-rose-100 text-rose-600">
+                    <Truck size={14} />
+                  </span>
+                  <div>
+                    <span className="text-[11px] font-bold text-slate-700 block">¿Cobro a destino (COD)?</span>
+                    <span className="text-[9px] text-slate-400">El cliente pagará al recibir</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEsCod(!esCod);
+                    resetFormas();
+                  }}
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    esCod ? 'bg-rose-500' : 'bg-slate-200'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      esCod ? 'translate-x-4' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                Formas de pago <span className="text-red-500">*</span>
+                {esCod ? 'Métodos de pago sugeridos al recibir (COD) *' : 'Formas de pago *'}
               </p>
               <div className="flex flex-wrap gap-1.5">
-                {FORMAS_PAGO.map(fp => {
-                  const fpData = formasPago.find(f => f.metodo === fp)
+                {FORMAS_PAGO
+                  .filter(fp => fp !== 'Cobro a destino' && (!esCod || fp !== 'Cta por cobrar'))
+                  .map(fp => {
+                    const fpData = formasPago.find(f => f.metodo === fp)
                   if (fpData) {
                     const restante = totalConFlete - formasPago.reduce((s, f) => s + (Number(f.monto) || 0), 0)
                     return (
@@ -360,6 +392,115 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                               placeholder="Ej. 15"
                               className="w-12 px-1 py-0.5 rounded text-[10px] font-semibold border border-amber-200 bg-white focus:outline-none focus:ring-1 focus:ring-amber-400 text-slate-700 text-center"
                             />
+                          </div>
+                        )}
+
+                        {/* Opción de días de vencimiento y propuesta para Cobro a destino */}
+                        {fp === 'Cobro a destino' && (
+                          <div className="flex flex-col gap-1.5 p-2 bg-rose-50/40 border border-rose-200/40 rounded-xl ml-2 w-full max-w-xs mt-1">
+                            <div className="flex items-center gap-1.5">
+                              <Clock size={10} className="text-rose-500 shrink-0" />
+                              <span className="text-[10px] font-medium text-rose-700 whitespace-nowrap">Días:</span>
+                              <input
+                                type="number" min="0" step="1"
+                                value={fpData.diasVencimiento ?? ''}
+                                onChange={e => updateForma(fp, { diasVencimiento: e.target.value ? parseInt(e.target.value) : null })}
+                                placeholder="Ej. 0"
+                                className="w-12 px-1 py-0.5 rounded text-[10px] font-semibold border border-rose-200 bg-white focus:outline-none focus:ring-1 focus:ring-rose-400 text-slate-700 text-center"
+                              />
+                            </div>
+                            <div className="border-t border-rose-100/60 pt-1.5">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-[9px] font-bold text-rose-800 uppercase tracking-wider">Propuesta al recibir:</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const props = Array.isArray(fpData.metodo_propuesto) ? fpData.metodo_propuesto : [];
+                                    const totalProp = props.reduce((s, p) => s + (Number(p.monto) || 0), 0);
+                                    const restoProp = Math.max(0, (Number(fpData.monto) || 0) - totalProp);
+                                    updateForma(fp, {
+                                      metodo_propuesto: [
+                                        ...props,
+                                        { metodo: 'Efectivo', monto: restoProp > 0 ? Number(restoProp.toFixed(2)) : '' }
+                                      ]
+                                    });
+                                  }}
+                                  className="text-[9px] font-bold text-rose-600 hover:text-rose-800"
+                                >
+                                  + Agregar
+                                </button>
+                              </div>
+                              <div className="space-y-1">
+                                {(() => {
+                                  const props = Array.isArray(fpData.metodo_propuesto) ? fpData.metodo_propuesto : [];
+                                  if (props.length === 0 && Number(fpData.monto) > 0) {
+                                    setTimeout(() => {
+                                      updateForma(fp, {
+                                        metodo_propuesto: [{ metodo: 'Efectivo', monto: Number(fpData.monto) }]
+                                      });
+                                    }, 0);
+                                  }
+                                  return props.map((prop, pIdx) => {
+                                    const metodosDisponibles = FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && m !== 'Cta por cobrar');
+                                    return (
+                                      <div key={pIdx} className="flex items-center gap-1">
+                                        <select
+                                          value={prop.metodo}
+                                          onChange={e => {
+                                            const newProps = [...props];
+                                            newProps[pIdx] = { ...newProps[pIdx], metodo: e.target.value };
+                                            updateForma(fp, { metodo_propuesto: newProps });
+                                          }}
+                                          className="px-1 py-0.5 rounded text-[10px] font-semibold border border-rose-200 bg-white text-slate-700 focus:outline-none max-w-[85px]"
+                                        >
+                                          {metodosDisponibles.map(m => (
+                                            <option key={m} value={m}>{m}</option>
+                                          ))}
+                                        </select>
+                                        <div className="relative flex items-center">
+                                          <span className="absolute left-1 text-[10px] font-bold text-slate-400">$</span>
+                                          <input
+                                            type="number" step="0.01"
+                                            value={prop.monto ?? ''}
+                                            onChange={e => {
+                                              const val = e.target.value === '' ? '' : parseFloat(e.target.value);
+                                              const newProps = [...props];
+                                              newProps[pIdx] = { ...newProps[pIdx], monto: val };
+                                              updateForma(fp, { metodo_propuesto: newProps });
+                                            }}
+                                            className="w-16 pl-3 pr-1 py-0.5 rounded text-[10px] font-semibold border border-rose-200 bg-white focus:outline-none text-slate-700"
+                                            placeholder="0.00"
+                                          />
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const newProps = props.filter((_, i) => i !== pIdx);
+                                            updateForma(fp, { metodo_propuesto: newProps });
+                                          }}
+                                          className="text-rose-400 hover:text-rose-600"
+                                        >
+                                          <X size={10} />
+                                        </button>
+                                      </div>
+                                    );
+                                  });
+                                })()}
+                              </div>
+                              {(() => {
+                                const props = Array.isArray(fpData.metodo_propuesto) ? fpData.metodo_propuesto : [];
+                                const sumProp = props.reduce((s, p) => s + (Number(p.monto) || 0), 0);
+                                const diffProp = Math.abs(sumProp - (Number(fpData.monto) || 0));
+                                if (diffProp > 0.02) {
+                                  return (
+                                    <div className="text-[9px] text-rose-600 font-bold mt-1 bg-rose-100/50 p-0.5 px-1 rounded border border-rose-200/50">
+                                      Suma no coincide: ${sumProp.toFixed(2)} vs ${Number(fpData.monto).toFixed(2)}
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              })()}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -444,7 +585,17 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
               Cancelar
             </button>
             <button onClick={() => {
-                const fpJson = JSON.stringify(formasPago)
+                let finalFormasPago = formasPago
+                if (esCod) {
+                  finalFormasPago = [{
+                    metodo: "Cobro a destino",
+                    monto: totalConFlete,
+                    diasVencimiento: 0,
+                    cobro_destino_pagado: false,
+                    metodo_propuesto: formasPago
+                  }]
+                }
+                const fpJson = JSON.stringify(finalFormasPago)
                 onConfirm(fpJson, transportistaId || null, Number(fleteUsd) || 0, Number(corteUsd) || 0, referenciaPago, fpJson, notas, clienteFacturaId || null)
               }} disabled={cargando || items.length === 0 || !pagoCuadrado}
               title={formasPago.length === 0 ? 'Selecciona forma de pago' : !pagoCuadrado ? 'Los montos no cuadran con el total' : undefined}

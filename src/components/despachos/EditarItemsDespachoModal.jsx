@@ -1,6 +1,6 @@
 // src/components/despachos/EditarItemsDespachoModal.jsx
 import { useState, useEffect, useMemo } from 'react'
-import { X, Search, Plus, Minus, Trash2, Loader2, Package, Save, AlertCircle, CreditCard, CheckCircle, Edit2, DollarSign } from 'lucide-react'
+import { X, Search, Plus, Minus, Trash2, Loader2, Package, Save, AlertCircle, CreditCard, CheckCircle, Edit2, DollarSign, Copy } from 'lucide-react'
 import { useLineItems } from '../../hooks/useLineItems'
 import { useInventario } from '../../hooks/useInventario'
 import { useProductSearch } from '../../hooks/useProductSearch'
@@ -9,8 +9,12 @@ import { fmtUsdSimple as fmtUsd } from '../../utils/format'
 import { round4 } from '../../utils/dinero'
 import { showToast } from '../ui/Toast'
 import { FORMAS_PAGO } from '../../constants/formasPago'
+import useAuthStore from '../../store/useAuthStore'
 
 export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) {
+  const { perfil } = useAuthStore()
+  const esDesarrollador = perfil?.rol === 'desarrollador'
+
   const { data: inventarioData, isLoading: loadingInv } = useInventario({ pageSize: 1000 })
   const productos = inventarioData?.productos ?? inventarioData ?? []
   const editarItems = useEditarItemsDespacho()
@@ -34,6 +38,27 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
     // Edición de producto externo
     const [editItemIdx, setEditItemIdx] = useState(null)
   
+    function agregarComoExterno(p) {
+      const randomId = Math.floor(1000000 + Math.random() * 9000000)
+      const nombre = p.nombre || p.nombreSnap || ''
+      const unidad = p.unidad || p.unidadSnap || 'und'
+      const precio = p.precio_usd ?? p.precioUnitUsd ?? 0
+      const cantidad = p.cantidad ?? 1
+
+      const fakeProducto = {
+        id: `manual-${Date.now()}-${Math.floor(Math.random() * 1000)}`, // ID temporal único
+        codigo: `EXT${randomId}`,
+        nombre: nombre.toUpperCase(),
+        unidad: unidad.toUpperCase(),
+        precio_usd: Number(precio),
+        origen: 'externo',
+        cantidad_inicial: Number(cantidad)
+      }
+
+      agregarItem(fakeProducto)
+      showToast('Copia externa agregada a la cesta', 'success')
+    }
+
     function handleAgregarManual(e) {
       if (e) e.preventDefault()
       if (!manualNombre.trim() || !manualPrecio || !manualCantidad) return
@@ -333,9 +358,23 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                       </div>
                       <div className="flex justify-between items-center text-[10px]">
                         <span className="font-mono text-slate-400 uppercase">{p.codigo || 'S/C'}</span>
-                        <span className={`font-bold ${stock > 5 ? 'text-emerald-500' : stock > 0 ? 'text-amber-500' : 'text-red-500'}`}>
-                          Stock: {stock} {p.unidad || 'und'}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          {esDesarrollador && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                agregarComoExterno(p);
+                              }}
+                              className="px-1.5 py-0.5 bg-amber-100 hover:bg-amber-200 text-amber-800 text-[9px] font-black rounded uppercase transition-colors"
+                              title="Agregar copia como externo"
+                            >
+                              + Ext
+                            </button>
+                          )}
+                          <span className={`font-bold ${stock > 5 ? 'text-emerald-500' : stock > 0 ? 'text-amber-500' : 'text-red-500'}`}>
+                            Stock: {stock} {p.unidad || 'und'}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   )
@@ -382,6 +421,15 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                         <p className="text-[10px] text-slate-400 font-mono">{it.codigoSnap || 'SIN CÓDIGO'}</p>
                       </div>
                       <div className="flex gap-1.5 shrink-0 self-start">
+                        {esDesarrollador && (
+                          <button
+                            onClick={() => agregarComoExterno(it)}
+                            className="text-slate-400 hover:text-indigo-600 p-0.5 transition-colors shrink-0"
+                            title="Duplicar como externo"
+                          >
+                            <Copy size={13} />
+                          </button>
+                        )}
                         {(it.origen === 'externo' || !it.productoId || String(it.productoId).startsWith('manual-')) && (
                           <button onClick={() => setEditItemIdx(items.findIndex(x => x.productoId === it.productoId))} className="text-amber-400 hover:text-amber-500 p-0.5 transition-colors shrink-0" title="Editar detalles">
                             <Edit2 size={14} />

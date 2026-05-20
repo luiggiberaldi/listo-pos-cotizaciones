@@ -438,6 +438,7 @@ export default function VentaRapidaView() {
   const [fleteUsd, setFleteUsd] = useState('')
   const [corteUsd, setCorteUsd] = useState('')
   const [notas, setNotas] = useState('')
+  const [esCod, setEsCod] = useState(false)
 
   const clienteRef = useRef(null)
   const productoInputRef = useRef(null)
@@ -462,7 +463,16 @@ export default function VentaRapidaView() {
     if (!d) return
     if (d.clienteId) setClienteId(d.clienteId)
     if (d.items?.length > 0) setItems(d.items)
-    if (d.formasPago?.length > 0) setFormas(d.formasPago)
+    if (d.esCod !== undefined) setEsCod(d.esCod)
+    if (d.formasPago?.length > 0) {
+      const codItem = d.formasPago.find(f => f.metodo === 'Cobro a destino');
+      if (codItem) {
+        setEsCod(true);
+        setFormas(Array.isArray(codItem.metodo_propuesto) ? codItem.metodo_propuesto : []);
+      } else {
+        setFormas(d.formasPago);
+      }
+    }
     else if (d.formaPago) setFormas([{ metodo: d.formaPago, monto: 0 }])
     if (d.referenciaPago) setReferenciaPago(d.referenciaPago)
     if (d.transportistaId) setTransportistaId(d.transportistaId)
@@ -499,11 +509,11 @@ export default function VentaRapidaView() {
     if (ventaRapida.isPending) return
     const timer = setTimeout(() => {
       if (items.length > 0 || clienteId) {
-        saveDraft({ step, clienteId, items, formasPago, referenciaPago, transportistaId, fleteUsd, corteUsd, notas }, perfil?.id)
+        saveDraft({ step, clienteId, items, formasPago, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, esCod }, perfil?.id)
       }
     }, 1500)
     return () => clearTimeout(timer)
-  }, [step, clienteId, items, formasPago, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, ventaRapida.isPending])
+  }, [step, clienteId, items, formasPago, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, esCod, ventaRapida.isPending])
 
   const idsAgregados = new Set(items.map(it => it.productoId))
   const clienteSeleccionado = clientes.find(c => c.id === clienteId)
@@ -576,7 +586,17 @@ export default function VentaRapidaView() {
 
   async function handleSubmit() {
     if (!step1Valid || !step2Valid) return
-    const fpJson = JSON.stringify(formasPago)
+    let finalFormasPago = formasPago
+    if (esCod) {
+      finalFormasPago = [{
+        metodo: "Cobro a destino",
+        monto: totalConFlete,
+        diasVencimiento: 0,
+        cobro_destino_pagado: false,
+        metodo_propuesto: formasPago
+      }]
+    }
+    const fpJson = JSON.stringify(finalFormasPago)
     ventaRapida.mutate({
       clienteId,
       clienteNombre: clienteSeleccionado?.nombre,
@@ -765,6 +785,9 @@ export default function VentaRapidaView() {
             tasa={tasa}
             montoAsignado={montoAsignadoVR}
             pagoCuadrado={pagoCuadradoVR}
+            esCod={esCod}
+            setEsCod={setEsCod}
+            resetFormas={resetFormas}
           />
         )}
 
@@ -783,6 +806,7 @@ export default function VentaRapidaView() {
             referenciaPago={referenciaPago}
             transportistaSeleccionado={transportistaSeleccionado}
             notas={notas}
+            esCod={esCod}
           />
         )}
       </div>
@@ -1581,7 +1605,8 @@ function Step2Pago({
   referenciaPago, setReferenciaPago,
   transportistas, transportistaId, setTransportistaId,
   fleteUsd, setFleteUsd, corteUsd, setCorteUsd, notas, setNotas,
-  tasa, montoAsignado, pagoCuadrado
+  tasa, montoAsignado, pagoCuadrado,
+  esCod, setEsCod, resetFormas
 }) {
   const [showNuevoTransp, setShowNuevoTransp] = useState(false)
   const crearTransp = useCrearTransportista()
@@ -1665,8 +1690,37 @@ function Step2Pago({
       {/* Columna izquierda: Formas de pago */}
       <div className="flex-1 min-w-0">
       <div className="mb-2">
+        {/* Toggle Cobro a destino (COD) */}
+        <div className="mb-4 flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl p-3 shadow-sm max-w-md">
+          <div className="flex items-center gap-2">
+            <span className="p-1.5 rounded-lg bg-rose-100 text-rose-600">
+              <Truck size={16} />
+            </span>
+            <div>
+              <span className="text-xs font-bold text-slate-700 block">¿Cobro a destino (COD)?</span>
+              <span className="text-[10px] text-slate-400">El cliente pagará al recibir la mercancía</span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setEsCod(!esCod);
+              resetFormas();
+            }}
+            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+              esCod ? 'bg-rose-500' : 'bg-slate-200'
+            }`}
+          >
+            <span
+              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                esCod ? 'translate-x-5' : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </div>
+
         <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 block">
-          Formas de pago <span className="text-red-400">*</span>
+          {esCod ? 'Métodos de pago sugeridos al recibir (COD) *' : 'Formas de pago *'}
         </label>
 
         {/* Métodos activos — fila con monto inline */}
@@ -1723,6 +1777,134 @@ function Step2Pago({
                   />
                 </div>
               )}
+
+              {/* Opción de días de vencimiento y propuesta para Cobro a destino */}
+              {fp.metodo === 'Cobro a destino' && (
+                <div className="flex flex-col gap-2 p-3 bg-rose-50/40 border border-rose-200/40 rounded-xl ml-6 mt-1 space-y-1 w-full max-w-md">
+                  <div className="flex items-center gap-2">
+                    <Clock size={12} className="text-rose-500 shrink-0" />
+                    <span className="text-[11px] font-medium text-rose-700 whitespace-nowrap">Días de vencimiento (opcional):</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={fp.diasVencimiento ?? ''}
+                      onChange={e => {
+                        const val = e.target.value;
+                        if (val === '' || /^[0-9]+$/.test(val)) {
+                          updateForma(fp.metodo, { diasVencimiento: val ? parseInt(val, 10) : null });
+                        }
+                      }}
+                      placeholder="Ej. 0"
+                      className="w-16 px-2 py-1 rounded text-[11px] font-semibold border border-rose-200 bg-white focus:outline-none focus:ring-1 focus:ring-rose-400 text-slate-700 text-center"
+                    />
+                  </div>
+                  
+                  {/* Propuesta de métodos de pago */}
+                  <div className="border-t border-rose-100/60 pt-2">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[10px] font-bold text-rose-800 uppercase tracking-wider">
+                        ¿Cómo pagará al recibir? (Propuesta):
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const props = Array.isArray(fp.metodo_propuesto) ? fp.metodo_propuesto : [];
+                          const totalProp = props.reduce((s, p) => s + (Number(p.monto) || 0), 0);
+                          const restoProp = Math.max(0, (Number(fp.monto) || 0) - totalProp);
+                          updateForma(fp.metodo, {
+                            metodo_propuesto: [
+                              ...props,
+                              { metodo: 'Efectivo', monto: restoProp > 0 ? Number(restoProp.toFixed(2)) : '' }
+                            ]
+                          });
+                        }}
+                        className="text-[10px] font-bold text-rose-600 hover:text-rose-800 flex items-center gap-0.5"
+                      >
+                        + Agregar método
+                      </button>
+                    </div>
+                    
+                    {/* Lista de propuestas */}
+                    <div className="space-y-1.5">
+                      {(() => {
+                        const props = Array.isArray(fp.metodo_propuesto) ? fp.metodo_propuesto : [];
+                        if (props.length === 0 && Number(fp.monto) > 0) {
+                          setTimeout(() => {
+                            updateForma(fp.metodo, {
+                              metodo_propuesto: [{ metodo: 'Efectivo', monto: Number(fp.monto) }]
+                            });
+                          }, 0);
+                        }
+                        
+                        return props.map((prop, pIdx) => {
+                          const metodosDisponibles = FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && m !== 'Cta por cobrar');
+                          return (
+                            <div key={pIdx} className="flex items-center gap-1.5">
+                              <select
+                                value={prop.metodo}
+                                onChange={e => {
+                                  const newProps = [...props];
+                                  newProps[pIdx] = { ...newProps[pIdx], metodo: e.target.value };
+                                  updateForma(fp.metodo, { metodo_propuesto: newProps });
+                                }}
+                                className="px-1.5 py-1 rounded text-[11px] font-semibold border border-rose-200 bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-rose-400 max-w-[120px]"
+                              >
+                                {metodosDisponibles.map(m => (
+                                  <option key={m} value={m}>{m}</option>
+                                ))}
+                              </select>
+                              
+                              <div className="relative flex items-center">
+                                <span className="absolute left-1.5 text-[11px] font-bold text-slate-400">$</span>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={prop.monto ?? ''}
+                                  onChange={e => {
+                                    const val = e.target.value === '' ? '' : parseFloat(e.target.value);
+                                    const newProps = [...props];
+                                    newProps[pIdx] = { ...newProps[pIdx], monto: val };
+                                    updateForma(fp.metodo, { metodo_propuesto: newProps });
+                                  }}
+                                  className="w-20 pl-4 pr-1.5 py-1 rounded text-[11px] font-semibold border border-rose-200 bg-white focus:outline-none focus:ring-1 focus:ring-rose-400 text-slate-700"
+                                  placeholder="0.00"
+                                />
+                              </div>
+                              
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newProps = props.filter((_, i) => i !== pIdx);
+                                  updateForma(fp.metodo, { metodo_propuesto: newProps });
+                                }}
+                                className="p-1 rounded text-rose-400 hover:text-rose-600 hover:bg-rose-100 transition-colors"
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                    
+                    {/* Validador de suma de propuestas */}
+                    {(() => {
+                      const props = Array.isArray(fp.metodo_propuesto) ? fp.metodo_propuesto : [];
+                      const sumProp = props.reduce((s, p) => s + (Number(p.monto) || 0), 0);
+                      const diffProp = Math.abs(sumProp - (Number(fp.monto) || 0));
+                      if (diffProp > 0.02) {
+                        return (
+                          <div className="text-[10px] text-rose-600 font-bold mt-1.5 bg-rose-100/50 p-1 px-1.5 rounded border border-rose-200/50">
+                            La suma de propuestas (${sumProp.toFixed(2)}) no coincide con el total COD (${Number(fp.monto).toFixed(2)})
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </div>
+                </div>
+              )}
             </div>
             )
           })}
@@ -1731,12 +1913,14 @@ function Step2Pago({
         {/* Métodos inactivos — chips para agregar */}
         {FORMAS_PAGO.some(m => !formasPago.find(f => f.metodo === m)) && (
           <div className="flex flex-wrap gap-1.5">
-            {FORMAS_PAGO.filter(m => !formasPago.find(f => f.metodo === m)).map(m => (
-              <button key={m} onClick={() => toggleForma(m)}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all active:scale-95">
-                <Plus size={11} strokeWidth={2.5} />{m}
-              </button>
-            ))}
+            {FORMAS_PAGO.filter(m => !formasPago.find(f => f.metodo === m))
+              .filter(m => m !== 'Cobro a destino' && (!esCod || m !== 'Cta por cobrar'))
+              .map(m => (
+                <button key={m} onClick={() => toggleForma(m)}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all active:scale-95">
+                  <Plus size={11} strokeWidth={2.5} />{m}
+                </button>
+              ))}
           </div>
         )}
 
@@ -1972,6 +2156,7 @@ function TransportistaFormCompact({ onGuardar, onCancelar, cargando }) {
 function Step3Confirmar({
   clienteSeleccionado, items, subtotal, totalUsd, flete, corte, totalConFlete,
   totalBs, tasa, formasPago, referenciaPago, transportistaSeleccionado, notas,
+  esCod,
 }) {
   return (
     <div className="flex-1 min-h-0 flex flex-col lg:flex-row lg:gap-4 p-4 pb-28 lg:pb-4 overflow-y-auto">
@@ -2039,7 +2224,15 @@ function Step3Confirmar({
 
         {/* Pago */}
         <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-1.5">
-          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Pago</h3>
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Pago</h3>
+            {esCod && (
+              <span className="text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                Cobro a destino (COD)
+              </span>
+            )}
+          </div>
           {formasPago.map(fp => (
             <div key={fp.metodo} className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2">

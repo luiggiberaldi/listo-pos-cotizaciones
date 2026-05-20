@@ -137,14 +137,15 @@ export function createNotification(type, title, body, meta = null, currentRole =
     const hasRole = currentRole && targetRoles.includes(currentRole)
 
     if (currentRole) {
-      // Re-transmitir realtime broadcast a todos los otros roles target
-      const otherRoles = targetRoles.filter(r => r !== currentRole)
-      if (otherRoles.length > 0) {
-        _broadcastNotification({ type, title, body, meta, targetRole: otherRoles.join(',') })
-      }
+      // Re-transmitir realtime broadcast a todos los roles target (sin filtrar por currentRole,
+      // para que a los otros con el mismo rol sí les llegue en tiempo real)
+      _broadcastNotification({ type, title, body, meta, targetRole: targetRoles.join(',') })
     }
 
-    if (hasRole) {
+    // Evitar auto-alertas si esta acción fue originada por mí mismo
+    const esMiPropiaAccion = meta && meta.creadorId && meta.creadorId === _currentUserId
+
+    if (hasRole && !esMiPropiaAccion) {
       return _insertLocalNotification(type, title, body, meta)
     }
     return null
@@ -156,7 +157,11 @@ export function createNotification(type, title, body, meta = null, currentRole =
     _broadcastNotification({ type, title, body, meta, targetRole: otherRole })
   }
 
-  return _insertLocalNotification(type, title, body, meta)
+  const esMiPropiaAccion = meta && meta.creadorId && meta.creadorId === _currentUserId
+  if (!esMiPropiaAccion) {
+    return _insertLocalNotification(type, title, body, meta)
+  }
+  return null
 }
 
 // Crea la notificación localmente (localStorage + evento + sonido)
@@ -228,6 +233,10 @@ export function startRealtimeNotifications(currentRole) {
         const roles = payload.targetRole.split(',')
         if (!roles.includes(currentRole)) return
       }
+
+      // Ignorar si el broadcast fue originado por mí mismo
+      if (payload.meta && payload.meta.creadorId && payload.meta.creadorId === _currentUserId) return
+
       _insertLocalNotification(payload.type, payload.title, payload.body, payload.meta)
     })
     .subscribe()
@@ -357,12 +366,13 @@ export function notifyCotizacionEnviada(numero, clienteNombre, vendedorNombre, t
   )
 }
 
-export function notifyDespachoCreado(numero, clienteNombre, usuarioNombre, currentRole = null) {
+export function notifyDespachoCreado(numero, clienteNombre, usuarioNombre, currentRole = null, creadorId = null, esCod = false) {
+  const isCodText = esCod ? ' [COBRO A DESTINO]' : ''
   createNotification(
     NOTIF_TYPES.DESPACHO_CREADO,
-    'Orden de Despacho Creada',
-    `Despacho para cotización ${numero && numero !== '—' ? '#' + numero : 'borrador'} — ${clienteNombre} (por ${usuarioNombre})`,
-    null,
+    `Orden de Despacho Creada${isCodText}`,
+    `Despacho para cotización ${numero && numero !== '—' ? '#' + numero : 'borrador'} — ${clienteNombre} (por ${usuarioNombre})${esCod ? ' · Modalidad Cobro a Destino (COD) 🚚' : ''}`,
+    { creadorNombre: usuarioNombre, creadorId, esCod },
     currentRole,
   )
 }
@@ -393,12 +403,12 @@ export function notifyCotizacionAceptadaDespacho(numero, clienteNombre, usuarioN
 /**
  * Despacho marcado como "despachada" (en ruta al cliente).
  */
-export function notifyDespachoEnRuta(numero, clienteNombre, usuarioNombre, currentRole = null) {
+export function notifyDespachoEnRuta(numero, clienteNombre, usuarioNombre, currentRole = null, creadorId = null) {
   createNotification(
     NOTIF_TYPES.DESPACHO_EN_RUTA,
     `Despacho ${numero && numero !== '—' ? '#' + numero : ''} en ruta`,
     `Pedido de ${clienteNombre} despachado por ${usuarioNombre}`,
-    { numero, clienteNombre },
+    { numero, clienteNombre, creadorNombre: usuarioNombre, creadorId },
     currentRole,
   )
 }
@@ -406,12 +416,12 @@ export function notifyDespachoEnRuta(numero, clienteNombre, usuarioNombre, curre
 /**
  * Despacho marcado como "entregada".
  */
-export function notifyDespachoEntregado(numero, clienteNombre, usuarioNombre, currentRole = null) {
+export function notifyDespachoEntregado(numero, clienteNombre, usuarioNombre, currentRole = null, creadorId = null) {
   createNotification(
     NOTIF_TYPES.DESPACHO_ENTREGADO,
     `Despacho ${numero && numero !== '—' ? '#' + numero : ''} entregado`,
     `Pedido de ${clienteNombre} marcado como entregado por ${usuarioNombre}`,
-    { numero, clienteNombre },
+    { numero, clienteNombre, creadorNombre: usuarioNombre, creadorId },
     currentRole,
   )
 }
@@ -419,12 +429,12 @@ export function notifyDespachoEntregado(numero, clienteNombre, usuarioNombre, cu
 /**
  * Despacho cancelado — stock restaurado.
  */
-export function notifyDespachoCancelado(numero, clienteNombre, usuarioNombre, currentRole = null) {
+export function notifyDespachoCancelado(numero, clienteNombre, usuarioNombre, currentRole = null, creadorId = null) {
   createNotification(
     NOTIF_TYPES.DESPACHO_CANCELADO,
     `Despacho ${numero && numero !== '—' ? '#' + numero : ''} cancelado`,
     `${clienteNombre} — Cancelado por ${usuarioNombre}`,
-    { numero, clienteNombre },
+    { numero, clienteNombre, creadorNombre: usuarioNombre, creadorId },
     currentRole,
   )
 }

@@ -136,9 +136,9 @@ export default function ClientesView() {
   const borrarCliente = useBorrarCliente()
   const activarCliente = useActivarCliente()
 
-  // Filtrado local
+  // Filtrado local y ordenamiento (clientes con deuda primero)
   const clientesFiltrados = useMemo(() => {
-    return clientes.filter(c => {
+    const list = clientes.filter(c => {
       // Supervisor/dev con toggle en "Mis datos": solo ver propios
       if (mostrarToggle && !verTodos && c.vendedor_id !== perfil?.id) return false
       if (filtroTipo     && c.tipo_cliente !== filtroTipo)               return false
@@ -149,6 +149,19 @@ export default function ClientesView() {
       if (filtroEstado === 'desactivados' && c.activo) return false
       
       return true
+    })
+
+    // Ordenar: Clientes con deuda primero (de mayor a menor), luego orden alfabético
+    return [...list].sort((a, b) => {
+      const deudaA = Number(a.saldo_pendiente || 0)
+      const deudaB = Number(b.saldo_pendiente || 0)
+
+      if (deudaA > 0 && deudaB === 0) return -1
+      if (deudaB > 0 && deudaA === 0) return 1
+      if (deudaA > 0 && deudaB > 0) {
+        return deudaB - deudaA // De mayor a menor deuda
+      }
+      return (a.nombre || '').localeCompare(b.nombre || '')
     })
   }, [clientes, filtroTipo, filtroVendedor, filtroConDeuda, filtroEstado, mostrarToggle, verTodos, perfil?.id])
 
