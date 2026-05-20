@@ -25,6 +25,25 @@ function fmtTotalFac(n, moneda, tasa, factorBcv) {
   return fmtUsd(n)
 }
 
+function formatTlfDash(raw) {
+  if (!raw) return ''
+  let cleaned = String(raw).trim()
+  if (cleaned.startsWith('+58')) {
+    cleaned = cleaned.slice(3)
+  } else if (cleaned.startsWith('58') && cleaned.length > 10) {
+    cleaned = cleaned.slice(2)
+  }
+  const digits = cleaned.replace(/[^\d]/g, '')
+  let finalDigits = digits
+  if (digits.length === 10 && (digits.startsWith('4') || digits.startsWith('2'))) {
+    finalDigits = '0' + digits
+  }
+  if (finalDigits.length === 11) {
+    return `${finalDigits.slice(0, 4)}-${finalDigits.slice(4)}`
+  }
+  return fmtTelefono(raw)
+}
+
 export async function generarFacturaPDF({ despacho, items = [], config = {}, formaPago = '', monedaPDF = '$', tasa = 0, tasaUsdt = 0, tasaBcv = 0, returnBlob = false, nroFactura = '', nroControl = '' }) {
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
 
@@ -81,317 +100,161 @@ export async function generarFacturaPDF({ despacho, items = [], config = {}, for
   const cliente = despacho.cliente_factura || despacho.cliente || {}
   const vendedorResponsable = cliente.vendedor || despacho.vendedor
   const tlfVendedor = vendedorResponsable?.telefono || despacho.vendedor?.telefono
-  const vendedorTlf = tlfVendedor ? ` — ${fmtTelefono(tlfVendedor)}` : ''
 
-  // Helper para dibujar una celda con borde
-  const gridLW = 0.3
-  doc.setDrawColor(120, 120, 120)
-  doc.setLineWidth(gridLW)
+  // Formateadores de RIF y Teléfono con espacios simples
+  const rawRif = (cliente.rif_cedula || cliente.rif || '—').toUpperCase()
+  let formattedRif = rawRif
+  const cleanRif = rawRif.replace(/[-.\s]/g, '')
+  if (cleanRif.length === 10 && /^[VJGVEV]\d{9}$/i.test(cleanRif)) {
+    formattedRif = `${cleanRif[0]} ${cleanRif.slice(1, 4)} ${cleanRif.slice(4, 7)} ${cleanRif.slice(7)}`
+  } else {
+    formattedRif = rawRif.replace(/-/g, ' ')
+  }
 
-  // ── Fila 1-3: Header con título y datos de factura/fecha ──
-  const gY = y - 4    // inicio de la cuadrícula
-  const rowH = 5      // altura de cada fila pequeña
-  const rightLblW = 22 // columna label derecha (CONTROL, FECHA)
-  const rightValW = 38 // columna valor derecha
-  const titleW = CONTENT_W - rightLblW - rightValW // columna de título fusionada (totalmente izquierda + centro)
+  const formattedClienteTlf = cliente.telefono ? formatTlfDash(cliente.telefono) : '—'
+  const formattedSellerTlf = tlfVendedor ? formatTlfDash(tlfVendedor) : ''
+  const sellerTlfStr = formattedSellerTlf ? ` ${formattedSellerTlf}` : ''
+  const vNombre = (vendedorResponsable?.nombre || despacho.vendedor?.nombre || '').toUpperCase()
+  const displaySeller = `${vNombre}${sellerTlfStr}`.trim() || '—'
 
-  const col1W = 62
-  const col2W = titleW - col1W // 130 - 62 = 68mm
+  let displayDate = '—'
+  if (despacho.creado_en) {
+    const dateObj = new Date(despacho.creado_en + (String(despacho.creado_en).includes('T') ? '' : 'T12:00:00'))
+    const day = dateObj.getDate()
+    const month = dateObj.getMonth() + 1
+    const year = dateObj.getFullYear()
+    displayDate = `${day}/${month}/${year}`
+  }
+
+  const displayInvoice = String(nroFactura).padStart(7, '0')
+  const displayControlPadded = String(nroControl).toUpperCase().padStart(7, '0')
+
+  const gY = esMembrete ? 50 : 36
   
-  // Dividimos la dirección en líneas para ver cuántas son
+  // Calcular las líneas de la dirección fiscal con antelación para expandir la cabecera dinámicamente si es necesario
   const dirStr = [cliente.direccion, cliente.ciudad, cliente.estado].filter(Boolean).join(', ').toUpperCase() || '—'
-  const maxDirW = col2W - 6 // dejar 3mm de margen en cada lado
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7.5)
-  const dirLines = doc.splitTextToSize(dirStr, maxDirW)
+  const line4Prefix = 'Direccion Fiscal : '
+  const line4 = `${line4Prefix}${dirStr}`
 
-  // Nombre del cliente
-  const cNombre = (cliente.nombre || '').toUpperCase()
+  const maxLeftColW = 108
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8.5)
-  const cNameLines = doc.splitTextToSize(cNombre, col1W - 6) // dejar 3mm a cada lado
+  const dirLines = doc.splitTextToSize(line4, maxLeftColW)
+  const extraLines = Math.max(0, dirLines.length - 1)
+  const dirLineSpacing = 3.8
+  const extraH = extraLines * dirLineSpacing
+  const headerTotalH = 31 + extraH
 
-  // Ahora calculamos la altura requerida
-  const col1Needed = 3.5 + cNameLines.length * 3.5 + 4.5 + 4.5 + 2 // CLIENTE label + líneas del nombre + RIF + TELÉFONO + padding
-  const col2Needed = 4.5 + 4 + dirLines.length * 3.5 + 2 // VENDEDOR + DIRECCIÓN label + líneas dirección + padding
-
-  // Altura final de la cabecera
-  const headerTotalH = esMembrete ? Math.max(20, col1Needed, col2Needed) : 20
-  const tripleH = headerTotalH
-
-  // Celda de título fusionada (grande, a la izquierda y centro)
-  doc.setDrawColor(120, 120, 120)
-  doc.setLineWidth(gridLW)
-  doc.rect(MARGIN, gY, titleW, headerTotalH, 'S')
-  
-  const clientInHeader = esMembrete
-
+  // Si no es membrete, dibujamos el logo y los datos de la empresa arriba del recuadro
   if (!esMembrete) {
-    // Dibujar logo y datos dentro de la celda de título
-    try { doc.addImage(LOGO_DESPACHO, 'PNG', MARGIN + 2.5, gY + (headerTotalH - 16) / 2, 16, 16) } catch (_) {}
+    try { doc.addImage(LOGO_DESPACHO, 'PNG', MARGIN, 11, 15, 15) } catch (_) {}
     
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(11)
     doc.setTextColor(...C_DARK)
-    doc.text('CONSTRUACERO CARABOBO, C.A.', MARGIN + 21, gY + 6.5)
+    doc.text('CONSTRUACERO CARABOBO, C.A.', MARGIN + 18, 16)
     
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8)
-    doc.text(`RIF: ${rif}`, MARGIN + 21, gY + 11.5)
+    doc.setFontSize(8.5)
+    doc.text(`RIF: ${rif}`, MARGIN + 18, 21)
     
     const tel = fmtTelefono(config.telefono_negocio) || ''
     if (tel) {
-      doc.text(`TELÉFONO: ${tel}`, MARGIN + 21, gY + 16)
+      doc.text(`TELÉFONO: ${tel}`, MARGIN + 18, 26)
     }
-  } else {
-    // Colocamos los datos del cliente dentro de la celda para aprovechar el espacio en dos columnas
-    const col1X = MARGIN + 3
-    const col2X = MARGIN + col1W + 3
-
-    // Línea separadora vertical entre columna 1 y columna 2
-    doc.setDrawColor(120, 120, 120)
-    doc.setLineWidth(gridLW)
-    doc.line(MARGIN + col1W, gY, MARGIN + col1W, gY + headerTotalH)
-    
-    // --- COLUMNA 1: CLIENTE & RIF & TELÉFONO ---
-    // Label CLIENTE
-    let curY = gY + 4
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(6.5)
-    doc.setTextColor(...C_DARK)
-    doc.text('CLIENTE:', col1X, curY)
-    
-    // Nombre del Cliente (puede ser en más de una línea)
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8.5)
-    cNameLines.forEach((line) => {
-      curY += 3.5
-      doc.text(line, col1X, curY)
-    })
-
-    // RIF del Cliente (debajo del nombre)
-    curY += 4.5
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(6.5)
-    doc.text('R.I.F. / C.I.:', col1X, curY)
-    
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8.5)
-    const rifText = (cliente.rif_cedula || cliente.rif || '—').toUpperCase()
-    doc.text(rifText, col1X + 16, curY)
-
-    // TELÉFONO del Cliente
-    curY += 4.5
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(6.5)
-    doc.text('TELÉFONO:', col1X, curY)
-    
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8.5)
-    const tlfText = cliente.telefono ? fmtTelefono(cliente.telefono) : 'S/T'
-    doc.text(tlfText, col1X + 16, curY)
-
-    // --- COLUMNA 2: DIRECCIÓN & VENDEDOR ---
-    // Dirección
-    let curY2 = gY + 4
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(6.5)
-    doc.text('DIRECCIÓN:', col2X, curY2)
-    
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7.5)
-    dirLines.forEach((line) => {
-      curY2 += 3.5
-      doc.text(line, col2X, curY2)
-    })
-
-    // Vendedor
-    curY2 += 4.5
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(6.5)
-    doc.text('VENDEDOR:', col2X, curY2)
-    
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
-    const vNombre = (vendedorResponsable?.nombre || '').toUpperCase()
-    const vStr = `${vNombre}${vendedorTlf}`
-    // Cortar vendedor si excede el ancho de col2W
-    const maxVendWidth = col2W - 18
-    let vD = vStr
-    if (doc.getTextWidth(vD) > maxVendWidth) {
-      while (vD.length > 1 && doc.getTextWidth(vD + '…') > maxVendWidth) vD = vD.slice(0, -1)
-      vD += '…'
-    }
-    doc.text(vD, col2X + 14, curY2)
   }
 
-  // 3 celdas derechas (label + valor por fila)
-  const rLblX = MARGIN + titleW
-  const rValX = rLblX + rightLblW
+  // Dibujar recuadro gris fino unificado sin líneas internas
+  const gridLW = 0.3
+  doc.setDrawColor(120, 120, 120)
+  doc.setLineWidth(gridLW)
+  doc.rect(MARGIN, gY, CONTENT_W, headerTotalH, 'S')
 
-  const rRowH1 = headerTotalH / 3
-  const rRowH2 = headerTotalH / 3
-  const rRowH3 = headerTotalH - rRowH1 - rRowH2
+  // Posiciones Y de las 4 líneas
+  const lineSpacing = 6.8
+  const pY1 = gY + 5.5
+  const pY2 = pY1 + lineSpacing
+  const pY3 = pY2 + lineSpacing
+  const pY4 = pY3 + lineSpacing
 
-  const rRow1Y = gY
-  const rRow2Y = gY + rRowH1
-  const rRow3Y = gY + rRowH1 + rRowH2
+  const col1X = MARGIN + 4
 
-  // Fila 1: FACTURA N°
-  doc.rect(rLblX, rRow1Y, rightLblW, rRowH1, 'S')
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(6.5)
+  // --- COLUMNA 1 (IZQUIERDA) ---
+  doc.setFont('helvetica', 'bold')
   doc.setTextColor(...C_DARK)
-  doc.text('FACTURA N°', rLblX + rightLblW / 2, rRow1Y + rRowH1 / 2 + 0.8, { align: 'center' })
-  
-  doc.rect(rValX, rRow1Y, rightValW, rRowH1, 'S')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9.5)
-  doc.text(String(nroFactura).padStart(5, '0'), rValX + rightValW / 2, rRow1Y + rRowH1 / 2 + 0.8, { align: 'center' })
 
-  // Fila 2: N° CONTROL
-  doc.rect(rLblX, rRow2Y, rightLblW, rRowH2, 'S')
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(6.5)
-  doc.text('N° CONTROL', rLblX + rightLblW / 2, rRow2Y + rRowH2 / 2 + 0.8, { align: 'center' })
-  
-  doc.rect(rValX, rRow2Y, rightValW, rRowH2, 'S')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9.5)
-  doc.text(displayControl, rValX + rightValW / 2, rRow2Y + rRowH2 / 2 + 0.8, { align: 'center' })
-
-  // Fila 3: FECHA
-  doc.rect(rLblX, rRow3Y, rightLblW, rRowH3, 'S')
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(6.5)
-  doc.text('FECHA:', rLblX + rightLblW / 2, rRow3Y + rRowH3 / 2 + 0.8, { align: 'center' })
-  
-  doc.rect(rValX, rRow3Y, rightValW, rRowH3, 'S')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9.5)
-  doc.text(fmtFecha(despacho.creado_en), rValX + rightValW / 2, rRow3Y + rRowH3 / 2 + 0.8, { align: 'center' })
-
-  let yAfterHeader = gY + tripleH + 2
-
-  if (!clientInHeader) {
-    // ── Fila 4: CLIENTE + R.I.F / Cédula ──
-    const f4Y = gY + tripleH
-    const clienteLblW = 25
-    const rifLblW = 22
-    const rifValW = 38
-    const clienteValW = CONTENT_W - clienteLblW - rifLblW - rifValW
-
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(7)
-    doc.text('CLIENTE:', MARGIN + 2, f4Y + rowH / 2 + 0.8)
-    doc.setDrawColor(120, 120, 120)
-    doc.setLineWidth(0.2)
-    doc.rect(MARGIN, f4Y, clienteLblW, rowH, 'S')
-
-    doc.rect(MARGIN + clienteLblW, f4Y, clienteValW, rowH, 'S')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9.5)
-    const clienteNombre = (cliente.nombre || '—').toUpperCase()
-    const maxClienteW = clienteValW - 4
-    let cNombre = clienteNombre
-    if (doc.getTextWidth(cNombre) > maxClienteW) {
-      while (cNombre.length > 1 && doc.getTextWidth(cNombre + '…') > maxClienteW) cNombre = cNombre.slice(0, -1)
-      cNombre += '…'
-    }
-    doc.text(cNombre, MARGIN + clienteLblW + 2, f4Y + rowH / 2 + 0.8)
-
-    doc.rect(MARGIN + clienteLblW + clienteValW, f4Y, rifLblW, rowH, 'S')
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(7)
-    doc.text('R.I.F.,C.I.', MARGIN + clienteLblW + clienteValW + rifLblW / 2, f4Y + rowH / 2 + 0.8, { align: 'center' })
-
-    doc.rect(MARGIN + clienteLblW + clienteValW + rifLblW, f4Y, rifValW, rowH, 'S')
-    doc.setFont('helvetica', 'bold')
-    let rifValFontSize = 9.5
-    doc.setFontSize(rifValFontSize)
-    const rifText = cliente.rif_cedula || '—'
-    const maxRifW = rifValW - 4
-    while (doc.getTextWidth(rifText) > maxRifW && rifValFontSize > 6) {
-      rifValFontSize -= 0.5
-      doc.setFontSize(rifValFontSize)
-    }
-    doc.text(rifText, MARGIN + clienteLblW + clienteValW + rifLblW + rifValW / 2, f4Y + rowH / 2 + 0.8, { align: 'center' })
-
-    // ── Fila 5: DIRECCIÓN (altura dinámica para texto largo) ──
-    const f5Y = f4Y + rowH
-    const dirLblW = 25
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8.5)
-    const dirStr = [cliente.direccion, cliente.ciudad, cliente.estado].filter(Boolean).join(', ').toUpperCase() || '—'
-    const maxDirW = CONTENT_W - dirLblW - 4
-    const dirLines = doc.splitTextToSize(dirStr, maxDirW)
-    const dirLineH = 3.8
-    const dirRowH = Math.max(rowH, dirLines.length * dirLineH + 2.0)
-
-    // Celda label DIRECCIÓN
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(7)
-    doc.setDrawColor(120, 120, 120)
-    doc.setLineWidth(gridLW)
-    doc.rect(MARGIN, f5Y, dirLblW, dirRowH, 'S')
-    doc.setTextColor(...C_DARK)
-    doc.text('DIRECCIÓN:', MARGIN + 2, f5Y + dirRowH / 2 + 0.8)
-
-    // Celda valor DIRECCIÓN — con wrap
-    doc.rect(MARGIN + dirLblW, f5Y, CONTENT_W - dirLblW, dirRowH, 'S')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8.5)
-    const dirTextStartY = f5Y + (dirRowH - dirLines.length * dirLineH) / 2 + dirLineH - 0.8
-    dirLines.forEach((line, idx) => {
-      doc.text(line, MARGIN + dirLblW + 2, dirTextStartY + idx * dirLineH)
-    })
-
-    // ── Fila 6: TELÉFONO + VENDEDOR ──
-    const f6Y = f5Y + dirRowH
-    const tlfLblW = 25
-    const tlfValW = 35
-    const vendLblW = 25
-    const vendValW = CONTENT_W - tlfLblW - tlfValW - vendLblW
-
-    doc.rect(MARGIN, f6Y, tlfLblW, rowH, 'S')
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(7)
-    doc.text('TELÉFONO:', MARGIN + 2, f6Y + rowH / 2 + 0.8)
-
-    doc.rect(MARGIN + tlfLblW, f6Y, tlfValW, rowH, 'S')
-    doc.setFont('helvetica', 'bold')
-    let tlfFontSize = 9.5
-    doc.setFontSize(tlfFontSize)
-    const tlfText = fmtTelefono(cliente.telefono) || '—'
-    const maxTlfW = tlfValW - 4
-    while (doc.getTextWidth(tlfText) > maxTlfW && tlfFontSize > 6) {
-      tlfFontSize -= 0.5
-      doc.setFontSize(tlfFontSize)
-    }
-    doc.text(tlfText, MARGIN + tlfLblW + 2, f6Y + rowH / 2 + 0.8)
-
-    doc.rect(MARGIN + tlfLblW + tlfValW, f6Y, vendLblW, rowH, 'S')
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(7)
-    doc.text('VENDEDOR:', MARGIN + tlfLblW + tlfValW + 2, f6Y + rowH / 2 + 0.8)
-
-    doc.setFillColor(235, 235, 240)
-    doc.rect(MARGIN + tlfLblW + tlfValW + vendLblW, f6Y, vendValW, rowH, 'FD')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8.5)
-    const vendStr = (vendedorResponsable?.nombre?.toUpperCase() || '—') + vendedorTlf
-    const maxVendW = vendValW - 4
-    let vStr = vendStr
-    if (doc.getTextWidth(vStr) > maxVendW) {
-      while (vStr.length > 1 && doc.getTextWidth(vStr + '…') > maxVendW) vStr = vStr.slice(0, -1)
-      vStr += '…'
-    }
-    doc.text(vStr, MARGIN + tlfLblW + tlfValW + vendLblW + 2, f6Y + rowH / 2 + 0.8)
-
-    yAfterHeader = f6Y + rowH + 2
+  // Fila 1: Cliente
+  doc.setFontSize(8.5)
+  const cNombre = (cliente.nombre || '—').toUpperCase()
+  const line1 = `Cliente : ${cNombre}`
+  let displayLine1 = line1
+  if (doc.getTextWidth(displayLine1) > maxLeftColW) {
+    while (displayLine1.length > 1 && doc.getTextWidth(displayLine1 + '…') > maxLeftColW) displayLine1 = displayLine1.slice(0, -1)
+    displayLine1 += '…'
   }
+  doc.text(displayLine1, col1X, pY1)
 
-  y = yAfterHeader
+  // Fila 2: R.F.I/C.I.
+  const line2 = `R.F.I/C.I. : ${formattedRif}`
+  let displayLine2 = line2
+  if (doc.getTextWidth(displayLine2) > maxLeftColW) {
+    while (displayLine2.length > 1 && doc.getTextWidth(displayLine2 + '…') > maxLeftColW) displayLine2 = displayLine2.slice(0, -1)
+    displayLine2 += '…'
+  }
+  doc.text(displayLine2, col1X, pY2)
+
+  // Fila 3: Telefonos
+  const line3 = `Telefonos : ${formattedClienteTlf}`
+  let displayLine3 = line3
+  if (doc.getTextWidth(displayLine3) > maxLeftColW) {
+    while (displayLine3.length > 1 && doc.getTextWidth(displayLine3 + '…') > maxLeftColW) displayLine3 = displayLine3.slice(0, -1)
+    displayLine3 += '…'
+  }
+  doc.text(displayLine3, col1X, pY3)
+
+  // Fila 4: Direccion Fiscal (con soporte para múltiples líneas dinámicas)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8.5)
+  dirLines.forEach((line, idx) => {
+    doc.text(line, col1X, pY4 + idx * dirLineSpacing)
+  })
+
+  // --- COLUMNA 2 (DERECHA) ---
+  const col2LabelX = MARGIN + 115
+  const col2ValueX = PAGE_W - MARGIN - 4
+
+  // Fila 1: FACTURA NUMERO
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8.5)
+  doc.text('FACTURA NUMERO:', col2LabelX, pY1)
+  doc.text(displayInvoice, col2ValueX, pY1, { align: 'right' })
+
+  // Fila 2: Emision
+  doc.text('Emision : ', col2LabelX, pY2)
+  doc.text(displayDate, col2ValueX, pY2, { align: 'right' })
+  // Subrayado exacto del valor de la fecha
+  const dateW = doc.getTextWidth(displayDate)
+  const underlineY = pY2 + 0.8
+  doc.setLineWidth(0.3)
+  doc.setDrawColor(...C_DARK)
+  doc.line(col2ValueX - dateW, underlineY, col2ValueX, underlineY)
+
+  // Fila 3: Vendedor
+  doc.text('Vendedor : ', col2LabelX, pY3)
+  const vendLabelW = doc.getTextWidth('Vendedor : ')
+  const maxVendValW = col2ValueX - (col2LabelX + vendLabelW) - 2
+  let displaySellerTrunc = displaySeller
+  if (doc.getTextWidth(displaySellerTrunc) > maxVendValW) {
+    while (displaySellerTrunc.length > 1 && doc.getTextWidth(displaySellerTrunc + '…') > maxVendValW) displaySellerTrunc = displaySellerTrunc.slice(0, -1)
+    displaySellerTrunc += '…'
+  }
+  doc.text(displaySellerTrunc, col2ValueX, pY3, { align: 'right' })
+
+  // Fila 4: N° CONTROL
+  doc.text('N° CONTROL', col2LabelX, pY4)
+  doc.text(displayControlPadded, col2ValueX, pY4, { align: 'right' })
+
+  y = gY + headerTotalH + 3
 
   // ══════════════════════════════════════════════════════════════════════════
   // 3. TABLA DE PRODUCTOS
@@ -409,12 +272,14 @@ export async function generarFacturaPDF({ despacho, items = [], config = {}, for
   const ROW_H_BASE = 5.2
 
   // Cabecera tabla
-  doc.setFillColor(60, 60, 60)
-  doc.rect(MARGIN, y, CONTENT_W, 7.5, 'F')
+  doc.setFillColor(255, 255, 255)
+  doc.setDrawColor(120, 120, 120)
+  doc.setLineWidth(0.3)
+  doc.rect(MARGIN, y, CONTENT_W, 7.5, 'FD')
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8.5)
-  doc.setTextColor(...C_WHITE)
+  doc.setTextColor(...C_DARK)
   COLS.forEach(col => {
     let tx = col.x + 2
     if (col.align === 'center') tx = col.x + col.w/2
@@ -476,11 +341,13 @@ export async function generarFacturaPDF({ despacho, items = [], config = {}, for
       pageNum++
       y = drawHeader(doc, numFac)
       // Redraw table header
-      doc.setFillColor(60, 60, 60)
-      doc.rect(MARGIN, y, CONTENT_W, 7.5, 'F')
+      doc.setFillColor(255, 255, 255)
+      doc.setDrawColor(120, 120, 120)
+      doc.setLineWidth(0.3)
+      doc.rect(MARGIN, y, CONTENT_W, 7.5, 'FD')
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(8.5)
-      doc.setTextColor(...C_WHITE)
+      doc.setTextColor(...C_DARK)
       COLS.forEach(col => {
         let tx = col.x + 2
         if (col.align === 'center') tx = col.x + col.w / 2
@@ -660,11 +527,13 @@ export async function generarFacturaPDF({ despacho, items = [], config = {}, for
 
   // Barra TOTAL Factura
   const totTopY = comboTop + numComboRows * dataRowH
-  doc.setFillColor(60, 60, 60)
-  doc.rect(MARGIN + comboLeftW, totTopY, comboRightW, totalBarH, 'F')
+  doc.setFillColor(255, 255, 255)
+  doc.setDrawColor(120, 120, 120)
+  doc.setLineWidth(0.3)
+  doc.rect(MARGIN + comboLeftW, totTopY, comboRightW, totalBarH, 'FD')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(11)
-  doc.setTextColor(...C_WHITE)
+  doc.setTextColor(...C_DARK)
   doc.text('Total Factura:', MARGIN + comboLeftW + 3, totTopY + 4.8)
   doc.text(fmtTotalFac(totalFacturaFinal, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 3, totTopY + 4.8, { align: 'right' })
 
