@@ -649,7 +649,7 @@ export default function LogsView() {
           {totalPages > 1 && (
             <div className="flex items-center justify-center gap-3 mt-4">
               <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
+                onClick={() => { setPage(p => Math.max(1, p - 1)); const main = document.querySelector('main'); if (main) main.scrollTo({ top: 0, behavior: 'smooth' }); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
                 disabled={page <= 1}
                 className="p-1.5 rounded-lg border border-slate-200 disabled:opacity-30"
               >
@@ -659,7 +659,7 @@ export default function LogsView() {
                 Página {page} de {totalPages}
               </span>
               <button
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                onClick={() => { setPage(p => Math.min(totalPages, p + 1)); const main = document.querySelector('main'); if (main) main.scrollTo({ top: 0, behavior: 'smooth' }); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
                 disabled={page >= totalPages}
                 className="p-1.5 rounded-lg border border-slate-200 disabled:opacity-30"
               >

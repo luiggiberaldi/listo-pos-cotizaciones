@@ -1,7 +1,7 @@
 // src/views/TransportistasView.jsx
 // Gestión de transportistas — solo supervisores pueden crear/editar/desactivar
-import { useState, useMemo, useCallback } from 'react'
-import { Truck, Plus, Pencil, Ban, RefreshCw } from 'lucide-react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
+import { Truck, Plus, Pencil, Ban, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import {
   useTransportistas,
@@ -284,6 +284,8 @@ export default function TransportistasView() {
   const [modalAbierto,          setModalAbierto]          = useState(false)
   const [editando,              setEditando]              = useState(null)
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 12
   const [desactivandoTransp,    setDesactivandoTransp]    = useState(null)
 
   const { data: transportistas = [], isLoading, isError, refetch } =
@@ -320,6 +322,15 @@ export default function TransportistasView() {
       return n.includes(q) || r.includes(qP) || pC.includes(qP) || pB.includes(qP) || v.includes(q)
     })
   }, [transportistas, search])
+
+  const totalPages = Math.max(1, Math.ceil(transportistasFiltrados.length / PAGE_SIZE))
+  const transportistasPaginados = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE
+    return transportistasFiltrados.slice(start, start + PAGE_SIZE)
+  }, [transportistasFiltrados, page])
+
+  // Reset page on search change
+  useEffect(() => { setPage(1) }, [search])
 
   return (
     <div className="p-3 sm:p-4 md:p-5 lg:p-6 space-y-3 sm:space-y-4 md:space-y-5">
@@ -385,18 +396,37 @@ export default function TransportistasView() {
           onAction={puedeCrear ? abrirNuevo : undefined}
         />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
-          {transportistasFiltrados.map(t => (
-            <TransportistaCard
-              key={t.id}
-              transportista={t}
-              esSupervisor={esSupervisor}
-              puedeEditar={puedeCrear}
-              onEditar={abrirEditar}
-              onDesactivar={setDesactivandoTransp}
-            />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
+            {transportistasPaginados.map(t => (
+              <TransportistaCard
+                key={t.id}
+                transportista={t}
+                esSupervisor={esSupervisor}
+                puedeEditar={puedeCrear}
+                onEditar={abrirEditar}
+                onDesactivar={setDesactivandoTransp}
+              />
+            ))}
+          </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-4 pt-4">
+              <button disabled={page === 1} onClick={() => { setPage(p => p - 1); const main = document.querySelector('main'); if (main) main.scrollTo({ top: 0, behavior: 'smooth' }); window.scrollTo({ top: 0, behavior: 'smooth' }) }} className="p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-30 transition-all">
+                <ChevronLeft size={20} />
+              </button>
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm font-bold text-slate-400">Página</span>
+                <span className="text-sm font-black text-slate-800">{page}</span>
+                <span className="text-sm font-bold text-slate-400">de</span>
+                <span className="text-sm font-black text-slate-800">{totalPages}</span>
+              </div>
+              <button disabled={page >= totalPages} onClick={() => { setPage(p => p + 1); const main = document.querySelector('main'); if (main) main.scrollTo({ top: 0, behavior: 'smooth' }); window.scrollTo({ top: 0, behavior: 'smooth' }) }} className="p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-30 transition-all">
+                <ChevronRight size={20} />
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {/* Modal crear/editar */}

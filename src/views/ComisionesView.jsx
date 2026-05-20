@@ -377,7 +377,7 @@ export default function ComisionesView() {
           {/* Paginación */}
           {comisionesRes?.totalPages > 1 && (
             <div className="flex items-center justify-center gap-4 pt-4">
-              <button disabled={page === 1} onClick={() => setPage(p => p - 1)} className="p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-30 transition-all">
+              <button disabled={page === 1} onClick={() => { setPage(p => p - 1); const main = document.querySelector('main'); if (main) main.scrollTo({ top: 0, behavior: 'smooth' }); window.scrollTo({ top: 0, behavior: 'smooth' }) }} className="p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-30 transition-all">
                 <ChevronLeft size={20} />
               </button>
               <div className="flex items-center gap-1.5">
@@ -386,7 +386,7 @@ export default function ComisionesView() {
                 <span className="text-sm font-bold text-slate-400">de</span>
                 <span className="text-sm font-black text-slate-800">{comisionesRes.totalPages}</span>
               </div>
-              <button disabled={page >= comisionesRes.totalPages} onClick={() => setPage(p => p + 1)} className="p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-30 transition-all">
+              <button disabled={page >= comisionesRes.totalPages} onClick={() => { setPage(p => p + 1); const main = document.querySelector('main'); if (main) main.scrollTo({ top: 0, behavior: 'smooth' }); window.scrollTo({ top: 0, behavior: 'smooth' }) }} className="p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-30 transition-all">
                 <ChevronRight size={20} />
               </button>
             </div>

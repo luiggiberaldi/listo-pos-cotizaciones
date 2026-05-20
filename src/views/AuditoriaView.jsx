@@ -782,11 +782,11 @@ export default function AuditoriaView() {
             Pág. <strong>{pagina + 1}</strong> / <strong>{totalPags}</strong>
           </span>
           <div className="flex items-center gap-1.5">
-            <button onClick={() => setPagina(p => p - 1)} disabled={pagina === 0}
+            <button onClick={() => { setPagina(p => p - 1); const main = document.querySelector('main'); if (main) main.scrollTo({ top: 0, behavior: 'smooth' }); window.scrollTo({ top: 0, behavior: 'smooth' }) }} disabled={pagina === 0}
               className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-30 transition-colors">
               <ChevronLeft size={12} /> Ant.
             </button>
-            <button onClick={() => setPagina(p => p + 1)} disabled={pagina >= totalPags - 1}
+            <button onClick={() => { setPagina(p => p + 1); const main = document.querySelector('main'); if (main) main.scrollTo({ top: 0, behavior: 'smooth' }); window.scrollTo({ top: 0, behavior: 'smooth' }) }} disabled={pagina >= totalPags - 1}
               className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-30 transition-colors">
               Sig. <ChevronRight size={12} />
             </button>

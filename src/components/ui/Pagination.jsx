@@ -7,12 +7,21 @@ export default function Pagination({ paginaActual, totalPaginas, onCambiarPagina
   if (totalPaginas <= 1) return null
   const [irAPagina, setIrAPagina] = useState('')
 
+  // Wrapper que hace scroll al tope al cambiar de página
+  function cambiarPagina(p) {
+    onCambiarPagina(p)
+    // Scroll the main content area (overflow-y-auto container) AND window
+    const main = document.querySelector('main')
+    if (main) main.scrollTo({ top: 0, behavior: 'smooth' })
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   // Keyboard navigation
   useEffect(() => {
     function handleKeyDown(e) {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
-      if (e.key === 'ArrowLeft' && paginaActual > 1) onCambiarPagina(paginaActual - 1)
-      if (e.key === 'ArrowRight' && paginaActual < totalPaginas) onCambiarPagina(paginaActual + 1)
+      if (e.key === 'ArrowLeft' && paginaActual > 1) cambiarPagina(paginaActual - 1)
+      if (e.key === 'ArrowRight' && paginaActual < totalPaginas) cambiarPagina(paginaActual + 1)
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
@@ -35,7 +44,7 @@ export default function Pagination({ paginaActual, totalPaginas, onCambiarPagina
     e.preventDefault()
     const num = parseInt(irAPagina, 10)
     if (num >= 1 && num <= totalPaginas) {
-      onCambiarPagina(num)
+      cambiarPagina(num)
       setIrAPagina('')
     }
   }
@@ -45,7 +54,7 @@ export default function Pagination({ paginaActual, totalPaginas, onCambiarPagina
       <div className="flex items-center gap-1">
         {/* Anterior */}
         <button
-          onClick={() => onCambiarPagina(paginaActual - 1)}
+          onClick={() => cambiarPagina(paginaActual - 1)}
           disabled={paginaActual === 1}
           className="p-2.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         >
@@ -59,7 +68,7 @@ export default function Pagination({ paginaActual, totalPaginas, onCambiarPagina
           ) : (
             <button
               key={p}
-              onClick={() => onCambiarPagina(p)}
+              onClick={() => cambiarPagina(p)}
               className={`min-w-[36px] h-9 rounded-lg text-sm font-medium transition-colors ${
                 p === paginaActual
                   ? 'bg-primary text-white shadow-sm'
@@ -73,7 +82,7 @@ export default function Pagination({ paginaActual, totalPaginas, onCambiarPagina
 
         {/* Siguiente */}
         <button
-          onClick={() => onCambiarPagina(paginaActual + 1)}
+          onClick={() => cambiarPagina(paginaActual + 1)}
           disabled={paginaActual === totalPaginas}
           className="p-2.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         >
