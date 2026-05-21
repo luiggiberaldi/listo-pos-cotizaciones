@@ -109,23 +109,31 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
 
   kpisData.forEach((kpi, i) => {
     const bx = MARGIN + i * kpiBoxW
+    // Fondo blanco con borde gris
+    doc.setFillColor(255, 255, 255)
+    doc.setDrawColor(220, 220, 220)
+    doc.setLineWidth(0.3)
+    doc.roundedRect(bx + 1, y, kpiBoxW - 2, kpiBoxH, 2, 2, 'FD')
+
+    // Barra de color pequeña superior como acento
     doc.setFillColor(...kpi.color)
-    doc.roundedRect(bx + 1, y, kpiBoxW - 2, kpiBoxH, 2, 2, 'F')
-    
+    doc.roundedRect(bx + 1, y, kpiBoxW - 2, 1.5, 0.5, 0.5, 'F')
+
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(6.5)
-    doc.setTextColor(...C_WHITE)
-    doc.text(kpi.label, bx + 4, y + 5.5)
-    
+    doc.setTextColor(100, 100, 100) // gris oscuro
+    doc.text(kpi.label, bx + 4, y + 7)
+
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(10.5)
-    doc.text(kpi.value, bx + 4, y + 12.5)
+    doc.setTextColor(20, 20, 20) // negro
+    doc.text(kpi.value, bx + 4, y + 14)
   })
 
   y += kpiBoxH + 8
 
   // ═══ TABLA DE ANTIGÜEDAD (AGING BREAKDOWN) ══════════════════════════════════
-  y = drawSectionTitle(doc, 'Análisis de Antigüedad de Deuda (Aging)', y)
+  y = drawSectionTitle(doc, 'Análisis de Antigüedad de Deuda', y)
 
   const agingCols = [
     { label: 'Rango de Antigüedad', x: MARGIN + 4,   align: 'left' },

@@ -52,7 +52,24 @@ function SkeletonReporte() {
 }
 
 // ─── KPI Card (reusable) ──────────────────────────────────────────────────
-function KpiCard({ icon: Icon, label, value, sub, gradient, border }) {
+function KpiCard({ icon: Icon, label, value, sub, gradient, border, light = false }) {
+  if (light) {
+    return (
+      <div className="relative overflow-hidden rounded-xl sm:rounded-2xl p-2.5 sm:p-3 md:p-4 flex flex-col gap-1 sm:gap-2 min-w-0 bg-white border border-slate-200"
+        style={{ boxShadow: '0 1px 6px rgba(0,0,0,0.06)' }}>
+        <div className="flex items-start gap-1.5 relative z-10 min-w-0">
+          <div className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 rounded-lg flex items-center justify-center shrink-0 bg-slate-100">
+            <Icon size={12} className="text-slate-600 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] sm:text-xs font-medium leading-tight truncate text-slate-500">{label}</p>
+          </div>
+        </div>
+        <p className="text-base sm:text-xl md:text-2xl font-black leading-tight text-slate-900 relative z-10 truncate">{value}</p>
+        {sub && <p className="text-[11px] sm:text-xs relative z-10 truncate text-slate-400">{sub}</p>}
+      </div>
+    )
+  }
   return (
     <div className="relative overflow-hidden rounded-xl sm:rounded-2xl p-2.5 sm:p-3 md:p-4 flex flex-col gap-1 sm:gap-2 min-w-0"
       style={{ background: gradient, border: `1px solid ${border}`, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
@@ -1523,7 +1540,7 @@ function TabCredito() {
         </div>
       )}
 
-      {/* KPIs — 5 tarjetas */}
+      {/* KPIs — 4 tarjetas */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard
           icon={DollarSign} label="Total por cobrar"
