@@ -5,7 +5,7 @@ import {
   BarChart3, CreditCard, RefreshCw, Download,
   FileText, DollarSign, AlertTriangle,
   Clock, Users, Percent, ArrowUpCircle, Loader2, Briefcase,
-  ChevronDown, Globe, UserCheck
+  ChevronDown, Globe, UserCheck, Printer
 } from 'lucide-react'
 import { useReporteVentas } from '../hooks/useReporteVentas'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
@@ -414,6 +414,7 @@ function TabVentas({ configNeg }) {
   })
   const [exportando, setExportando] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
+  const [showPrintMenu, setShowPrintMenu] = useState(false)
 
   const { data: reporte, isLoading, isError, refetch } = useReporteVentas({
     from: rango.from,
@@ -422,7 +423,7 @@ function TabVentas({ configNeg }) {
     prevTo: rango.prevTo,
   })
 
-  async function exportarPDF(tipoFiltro = 'todos') {
+  async function exportarPDF(tipoFiltro = 'todos', accion = 'descargar') {
     if (!reporte) return
     setExportando(true)
     try {
@@ -445,7 +446,12 @@ function TabVentas({ configNeg }) {
           count: c.despachos,
         })),
       }
-      await generarReporteVentasPDF({ reporte: reportePDF, rango, config: configNeg })
+      await generarReporteVentasPDF({ 
+        reporte: reportePDF, 
+        rango, 
+        config: configNeg, 
+        action: accion === 'imprimir' ? 'print' : 'download'
+      })
     } catch (e) {
       console.error('Error generando reporte de ventas:', e)
     } finally {
@@ -493,7 +499,60 @@ function TabVentas({ configNeg }) {
             <DateRangeSelector value={rango} onChange={setRango} />
           </div>
           
-          <div className="flex justify-end border-t border-slate-50 pt-4 relative">
+          <div className="flex justify-end items-center gap-3 border-t border-slate-50 pt-4 relative">
+            
+            {/* BOTÓN IMPRIMIR PDF */}
+            <div className="relative">
+              <button
+                onClick={() => setShowPrintMenu(!showPrintMenu)}
+                disabled={exportando || !despachos.length}
+                className="flex items-center gap-2 text-xs font-black px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm"
+              >
+                <Printer size={13} className="text-slate-500" />
+                {exportando ? 'Generando...' : 'Imprimir PDF'}
+                <ChevronDown size={13} className={`transition-transform duration-200 ${showPrintMenu ? 'rotate-180' : ''}`} />
+              </button>
+
+              {showPrintMenu && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowPrintMenu(false)} />
+                  <div className="absolute right-0 mt-2 w-56 rounded-xl bg-white border border-slate-200 shadow-xl z-20 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+                    <button
+                      onClick={() => {
+                        setShowPrintMenu(false)
+                        exportarPDF('todos', 'imprimir')
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors"
+                    >
+                      <FileText size={14} className="text-slate-400" />
+                      Imprimir PDF Completo
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowPrintMenu(false)
+                        exportarPDF('internos', 'imprimir')
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors border-t border-slate-50"
+                    >
+                      <UserCheck size={14} className="text-indigo-500" />
+                      Imprimir Solo Internos
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowPrintMenu(false)
+                        exportarPDF('externos', 'imprimir')
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors border-t border-slate-50"
+                    >
+                      <Globe size={14} className="text-amber-500" />
+                      Imprimir Solo Externos
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* BOTÓN DESCARGAR PDF */}
             <div className="relative">
               <button
                 onClick={() => setShowExportMenu(!showExportMenu)}
@@ -502,7 +561,7 @@ function TabVentas({ configNeg }) {
                 style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
               >
                 <Download size={13} />
-                {exportando ? 'Generando...' : 'Exportar PDF'}
+                {exportando ? 'Generando...' : 'Descargar PDF'}
                 <ChevronDown size={13} className={`transition-transform duration-200 ${showExportMenu ? 'rotate-180' : ''}`} />
               </button>
 
@@ -513,37 +572,38 @@ function TabVentas({ configNeg }) {
                     <button
                       onClick={() => {
                         setShowExportMenu(false)
-                        exportarPDF('todos')
+                        exportarPDF('todos', 'descargar')
                       }}
                       className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors"
                     >
                       <FileText size={14} className="text-slate-400" />
-                      Exportar PDF Completo
+                      Descargar PDF Completo
                     </button>
                     <button
                       onClick={() => {
                         setShowExportMenu(false)
-                        exportarPDF('internos')
+                        exportarPDF('internos', 'descargar')
                       }}
                       className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors border-t border-slate-50"
                     >
                       <UserCheck size={14} className="text-indigo-500" />
-                      Exportar Solo Internos
+                      Descargar Solo Internos
                     </button>
                     <button
                       onClick={() => {
                         setShowExportMenu(false)
-                        exportarPDF('externos')
+                        exportarPDF('externos', 'descargar')
                       }}
                       className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors border-t border-slate-50"
                     >
                       <Globe size={14} className="text-amber-500" />
-                      Exportar Solo Externos
+                      Descargar Solo Externos
                     </button>
                   </div>
                 </>
               )}
             </div>
+
           </div>
         </div>
       </div>
@@ -1276,7 +1336,7 @@ function ExportButton({ onClick, loading, disabled }) {
       className="flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-sm font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md"
       style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}>
       <Download size={12} className="sm:w-3.5 sm:h-3.5" />
-      {loading ? 'Generando...' : 'Exportar PDF'}
+      {loading ? 'Generando...' : 'Descargar PDF'}
     </button>
   )
 }

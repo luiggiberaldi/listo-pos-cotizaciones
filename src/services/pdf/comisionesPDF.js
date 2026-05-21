@@ -727,7 +727,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
 }
 
 // ─── Generar Reporte de Ventas PDF ───────────────────────────────────────────
-export async function generarReporteVentasPDF({ reporte, rango, config = {} }) {
+export async function generarReporteVentasPDF({ reporte, rango, config = {}, action = 'download' }) {
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
   let y = 0
 
@@ -1394,5 +1394,29 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {} }) {
     }
   }
 
-  doc.save(dynamicFilename)
+  if (action === 'print') {
+    doc.autoPrint();
+    const hNV = doc.output('bloburl');
+    if (hNV) {
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      iframe.src = hNV;
+      document.body.appendChild(iframe);
+      iframe.onload = () => {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+        setTimeout(() => {
+          document.body.removeChild(iframe);
+          URL.revokeObjectURL(hNV);
+        }, 10000);
+      };
+    }
+  } else {
+    doc.save(dynamicFilename)
+  }
 }
