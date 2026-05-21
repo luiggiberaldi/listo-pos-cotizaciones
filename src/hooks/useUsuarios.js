@@ -16,7 +16,7 @@ export function useUsuarios() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('usuarios')
-        .select('id, nombre, rol, activo, creado_en, color, telefono')
+        .select('id, nombre, rol, activo, creado_en, color, telefono, markup_pct, comision_pct, comision_pct_cabilla, es_externo')
         .order('nombre')
       if (error) throw error
       // Ocultar cuenta "Super Admin" y desarrolladores de todo el sistema
@@ -32,8 +32,8 @@ export function useUsuarios() {
 export function useCrearUsuario() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ nombre, pin, rol, color, telefono }) => {
-      await adminAPI.createUser({ nombre, pin, rol, color, telefono })
+    mutationFn: async ({ nombre, pin, rol, color, telefono, es_externo }) => {
+      await adminAPI.createUser({ nombre, pin, rol, color, telefono, es_externo })
     },
     onSuccess: async () => {
       await qc.cancelQueries({ queryKey: KEY })
@@ -47,8 +47,9 @@ export function useCrearUsuario() {
 export function useActualizarUsuario() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, nombre, rol, pin, color, telefono }) => {
-      await adminAPI.updateUser(id, { nombre, rol, pin: pin || undefined, color, telefono })
+    mutationFn: async ({ id, nombre, rol, pin, color, telefono, markup_pct, comision_pct, comision_pct_cabilla, es_externo }) => {
+      // es_externo ya existe en BD (migración 155 aplicada)
+      await adminAPI.updateUser(id, { nombre, rol, pin: pin || undefined, color, telefono, markup_pct, comision_pct, comision_pct_cabilla, es_externo })
       return { color }
     },
     onSuccess: async (result) => {

@@ -235,6 +235,19 @@ export async function handleEditarPagoDespacho(request, env) {
   if (clienteId !== undefined && isValidUuid(clienteId)) {
     campos.cliente_id = clienteId;
     campos.cliente_factura_id = clienteId;
+
+    // Buscar el vendedor dueño del cliente para mantener consistencia
+    try {
+      const cliRes = await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteId}&select=vendedor_id`, { headers: h });
+      if (cliRes.ok) {
+        const cliData = await cliRes.json();
+        if (Array.isArray(cliData) && cliData.length > 0 && cliData[0].vendedor_id) {
+          campos.vendedor_id = cliData[0].vendedor_id;
+        }
+      }
+    } catch (cliErr) {
+      console.error('[EDITAR_PAGO] Error al sincronizar vendedor del cliente:', cliErr?.message);
+    }
   }
 
   if (Object.keys(campos).length === 0) return jsonError('No hay campos para actualizar', 400, request);
@@ -251,13 +264,13 @@ export async function handleEditarPagoDespacho(request, env) {
   const comEntries = await comRes.json();
   if (Array.isArray(comEntries) && comEntries.length > 0) {
     const vendRolRes2 = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${despacho.vendedor_id}&select=rol`,
+      `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${despacho.vendedor_id}&select=rol,markup_pct`,
       { headers: h }
     );
     const [vendRol2] = await vendRolRes2.json();
-    console.log('[COMISION][EDITAR_PAGO] rol vendedor:', vendRol2?.rol);
+    console.log('[COMISION][EDITAR_PAGO] rol vendedor:', vendRol2?.rol, 'markup:', vendRol2?.markup_pct);
 
-    if (!['vendedor_sin_comision', 'jefe', 'logistica', 'administracion', 'desarrollador'].includes(vendRol2?.rol)) {
+    if (!['jefe', 'logistica', 'administracion', 'desarrollador'].includes(vendRol2?.rol) && (vendRol2?.rol !== 'vendedor_sin_comision' || parseFloat(vendRol2?.markup_pct || 0) > 0)) {
       await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}`, {
         method: 'DELETE', headers: h,
       });
@@ -651,13 +664,13 @@ export async function handleActualizarEstadoDespacho(request, env) {
     if (nuevoEstado === 'entregada') {
       try {
         const vendRolRes = await fetch(
-          `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${desp.vendedor_id}&select=rol`,
+          `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${desp.vendedor_id}&select=rol,markup_pct`,
           { headers }
         );
         const [vendRol] = await vendRolRes.json();
-        console.log('[COMISION] rol vendedor:', vendRol?.rol);
+        console.log('[COMISION] rol vendedor:', vendRol?.rol, 'markup:', vendRol?.markup_pct);
 
-        if (!['vendedor_sin_comision', 'jefe', 'logistica', 'administracion', 'desarrollador'].includes(vendRol?.rol)) {
+        if (!['jefe', 'logistica', 'administracion', 'desarrollador'].includes(vendRol?.rol) && (vendRol?.rol !== 'vendedor_sin_comision' || parseFloat(vendRol?.markup_pct || 0) > 0)) {
           const comRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcularcomisiondespacho`, {
             method: 'POST', headers,
             body: JSON.stringify({ p_despachoid: despachoId }),
@@ -670,7 +683,7 @@ export async function handleActualizarEstadoDespacho(request, env) {
             console.log('[COMISION] Creada con id:', comisionId);
           }
         } else {
-          console.log('[COMISION] Vendedor sin comisión, se omite el cálculo.');
+          console.log('[COMISION] Vendedor sin comisión o rol administrativo, se omite el cálculo.');
         }
       } catch (comEx) {
         console.error('[COMISION] Error al calcular:', comEx?.message);
@@ -929,13 +942,13 @@ export async function handleEditarItemsDespacho(request, env) {
       );
       const [despCheck] = await dResCheck.json();
       const vendRolRes4 = await fetch(
-        `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${despCheck?.vendedor_id}&select=rol`,
+        `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${despCheck?.vendedor_id}&select=rol,markup_pct`,
         { headers }
       );
       const [vendRol4] = await vendRolRes4.json();
-      console.log('[COMISION][EDITAR_ITEMS] rol vendedor:', vendRol4?.rol);
+      console.log('[COMISION][EDITAR_ITEMS] rol vendedor:', vendRol4?.rol, 'markup:', vendRol4?.markup_pct);
 
-      if (!['vendedor_sin_comision', 'jefe', 'logistica', 'administracion', 'desarrollador'].includes(vendRol4?.rol)) {
+      if (!['jefe', 'logistica', 'administracion', 'desarrollador'].includes(vendRol4?.rol) && (vendRol4?.rol !== 'vendedor_sin_comision' || parseFloat(vendRol4?.markup_pct || 0) > 0)) {
         await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}`, {
           method: 'DELETE', headers,
         });
@@ -1079,13 +1092,13 @@ export async function handleGuardarDescuentos(request, env) {
       const comEntries = await comRes.json();
       if (Array.isArray(comEntries) && comEntries.length > 0) {
         const vendRolRes3 = await fetch(
-          `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${desp.vendedor_id}&select=rol`,
+          `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${desp.vendedor_id}&select=rol,markup_pct`,
           { headers }
         );
         const [vendRol3] = await vendRolRes3.json();
-        console.log('[COMISION][DESCUENTOS] rol vendedor:', vendRol3?.rol);
+        console.log('[COMISION][DESCUENTOS] rol vendedor:', vendRol3?.rol, 'markup:', vendRol3?.markup_pct);
 
-        if (!['vendedor_sin_comision', 'jefe'].includes(vendRol3?.rol)) {
+        if (!['jefe'].includes(vendRol3?.rol) && (vendRol3?.rol !== 'vendedor_sin_comision' || parseFloat(vendRol3?.markup_pct || 0) > 0)) {
           // Eliminar comisión existente para que se recalcule
           await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}`, {
             method: 'DELETE', headers,

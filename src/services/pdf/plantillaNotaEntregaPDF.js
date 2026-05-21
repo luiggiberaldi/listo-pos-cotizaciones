@@ -206,12 +206,9 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   // ══════════════════════════════════════════════════════════════════════════
   const comboLeftW = Math.round(CONTENT_W * 0.62)
   const comboRightW = CONTENT_W - comboLeftW
-  const ivaPct = Number(config.iva_pct) || 16
-  const mostrarIva = config.nota_entrega_mostrar_iva !== false  // default true
-
-  const leftLabels = ['8 DÍAS DE CRÉDITO CONTINUO', '', ...(mostrarIva ? [''] : [])]
-  const rightLabels = mostrarIva ? ['Base', `IVA ${ivaPct}%`, 'Flete (E)'] : ['Base', 'Flete (E)']
-  const comboRowsActual = mostrarIva ? 3 : 2
+  const leftLabels = ['8 DÍAS DE CRÉDITO CONTINUO', '']
+  const rightLabels = ['Base', 'Flete (E)']
+  const comboRowsActual = 2
 
   for (let r = 0; r < comboRowsActual; r++) {
     const ry = comboTop + r * dataRowH

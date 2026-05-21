@@ -79,7 +79,7 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false } = {}
 
       // 3. Cargar todos los vendedores necesarios (incluyendo teléfonos)
       const vendedoresRes = allVendedorIds.length
-        ? await supabase.from('usuarios').select('id, nombre, color, telefono, rol').in('id', allVendedorIds)
+        ? await supabase.from('usuarios').select('id, nombre, color, telefono, rol, markup_pct, comision_pct, comision_pct_cabilla, es_externo').in('id', allVendedorIds)
         : { data: [] }
 
       const vendedoresMap = Object.fromEntries((vendedoresRes.error ? [] : vendedoresRes.data ?? []).map(v => [v.id, v]))

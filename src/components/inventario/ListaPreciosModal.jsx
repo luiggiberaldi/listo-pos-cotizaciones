@@ -2,6 +2,7 @@
 // Modal para configurar y generar PDF "Lista de Precios" para clientes
 import { useState } from 'react'
 import { FileText, Loader2, DollarSign, Check, X, PackageCheck } from 'lucide-react'
+import { usePrecioVendedor } from '../../hooks/usePrecioVendedor'
 
 export default function ListaPreciosModal({
   isOpen,
@@ -10,6 +11,7 @@ export default function ListaPreciosModal({
   tasa = 0,
   config = {},
 }) {
+  const { aplicarMarkup } = usePrecioVendedor()
   const [moneda, setMoneda] = useState('$')
   const [soloConStock, setSoloConStock] = useState(true)
   const [modoCats, setModoCats] = useState('todas') // 'todas' | 'seleccionar'
@@ -51,11 +53,17 @@ export default function ListaPreciosModal({
     setGenerando(true)
     try {
       const pAj = Number(ajustePorcentaje) || 0
-      const productosFinales = productosFiltrados.map(p => ({
-        ...p,
-        precio_usd: p.precio_usd != null ? (Number(p.precio_usd) * (1 + (pAj / 100))) : p.precio_usd,
-        precio_2: p.precio_2 != null ? (Number(p.precio_2) * (1 + (pAj / 100))) : p.precio_2,
-      }))
+      const productosFinales = productosFiltrados.map(p => {
+        const baseP1 = p.precio_usd != null ? (Number(p.precio_usd) * (1 + (pAj / 100))) : p.precio_usd
+        const baseP2 = p.precio_2 != null ? (Number(p.precio_2) * (1 + (pAj / 100))) : p.precio_2
+        const baseP3 = p.precio_3 != null ? (Number(p.precio_3) * (1 + (pAj / 100))) : p.precio_3
+        return {
+          ...p,
+          precio_usd: baseP1 != null ? aplicarMarkup(baseP1) : baseP1,
+          precio_2: baseP2 != null ? aplicarMarkup(baseP2) : baseP2,
+          precio_3: baseP3 != null ? aplicarMarkup(baseP3) : baseP3,
+        }
+      })
 
       const { generarListaPreciosPDF } = await import('../../services/pdf/listaPreciosPDF')
       await generarListaPreciosPDF({

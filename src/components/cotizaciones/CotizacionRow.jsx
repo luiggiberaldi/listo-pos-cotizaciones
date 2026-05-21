@@ -13,7 +13,8 @@ export default memo(function CotizacionRow({ cotizacion, onEditar, onVer, tasa =
   const esPropietario = cotizacion.vendedor_id === perfil?.id
   const despacho = cotizacion.despacho
   const canEdit = esBorrador && esPropietario && !despacho
-  const vendedorColor = cotizacion.vendedor?.color || '#64748b'
+  const esVendedorExterno = !!cotizacion.vendedor?.es_externo || (cotizacion.vendedor?.markup_pct != null && Number(cotizacion.vendedor.markup_pct) > 0)
+  const vendedorColor = esVendedorExterno ? '#D97706' : (cotizacion.vendedor?.color || '#64748b')
 
   const numDisplay = `COT-${String(cotizacion.numero).padStart(5, '0')}`
 
@@ -50,7 +51,14 @@ export default memo(function CotizacionRow({ cotizacion, onEditar, onVer, tasa =
             {esSupervisor && cotizacion.vendedor && (
               <>
                 <span className="text-slate-300">·</span>
-                <span style={{ color: vendedorColor }}>{cotizacion.vendedor.nombre}</span>
+                {esVendedorExterno ? (
+                  <span className="inline-flex items-center gap-1 font-semibold" style={{ color: '#D97706' }}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                    💼 {cotizacion.vendedor.nombre}
+                  </span>
+                ) : (
+                  <span style={{ color: vendedorColor }}>{cotizacion.vendedor.nombre}</span>
+                )}
               </>
             )}
           </div>

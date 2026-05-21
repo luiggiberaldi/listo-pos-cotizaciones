@@ -24,6 +24,7 @@ import { calcTotales } from '../../utils/calcTotales'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs, fmtTelefono } from '../../utils/format'
 import { showToast } from '../ui/Toast'
 import { calcComisionEstimada } from '../../utils/comisionUtils'
+import { usePrecioVendedor } from '../../hooks/usePrecioVendedor'
 
 import supabase from '../../services/supabase/client'
 import CustomSelect from '../ui/CustomSelect'
@@ -452,6 +453,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
   const esEdicion = !!cotizacionExistente
   const { perfil } = useAuthStore()
   const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
+  const { aplicarMarkup, esExterno: esVendedorExterno } = usePrecioVendedor()
 
   // Paso actual del wizard (1-4)
   const [paso, setPaso] = useState(esEdicion ? 2 : 1)
@@ -566,8 +568,8 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
   const totalBs = tasaHook.tasaEfectiva > 0 ? mulR(totalUsd, tasaHook.tasaEfectiva) : 0
 
   const comisionEstimada = useMemo(
-    () => calcComisionEstimada(items, config),
-    [items, config]
+    () => calcComisionEstimada(items, config, perfil),
+    [items, config, perfil]
   )
 
   // Conversión visual según moneda seleccionada
@@ -586,11 +588,15 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
     const m = {}
     for (const p of prods) {
       if (p.precio_2 != null || p.precio_3 != null) {
-        m[p.id] = { p1: Number(p.precio_usd) || 0, p2: p.precio_2 != null ? Number(p.precio_2) : null, p3: p.precio_3 != null ? Number(p.precio_3) : null }
+        m[p.id] = {
+          p1: aplicarMarkup(Number(p.precio_usd) || 0),
+          p2: p.precio_2 != null ? aplicarMarkup(Number(p.precio_2)) : null,
+          p3: p.precio_3 != null ? aplicarMarkup(Number(p.precio_3)) : null
+        }
       }
     }
     return m
-  }, [inventarioParaPrecios])
+  }, [inventarioParaPrecios, aplicarMarkup])
 
   // Mapa de stock por producto (para limitar cantidad en la cesta)
   const stockMap = useMemo(() => {
@@ -631,7 +637,8 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
         categoria:     p.categoria || '',
         unidadSnap:    p.unidad ?? 'und',
         cantidad:      isExterno ? (p.cantidadExterna || 1) : 1,
-        precioUnitUsd: Number(p.precio_usd),
+        // Aplicar markup si es vendedor externo (solo para productos de inventario)
+        precioUnitUsd: isExterno ? Number(p.precio_usd) : aplicarMarkup(Number(p.precio_usd)),
         descuentoPct:  0,
       }]
     })
@@ -659,7 +666,8 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
             categoria:     producto.categoria || '',
             unidadSnap:    producto.unidad ?? 'und',
             cantidad:      qty,
-            precioUnitUsd: Number(producto.precio_usd),
+            // Aplicar markup del vendedor externo al hacer bulk-scan
+            precioUnitUsd: aplicarMarkup(Number(producto.precio_usd)),
             descuentoPct:  0,
           })
         }
@@ -715,7 +723,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
     try {
       const payload = {
         cotizacionId,
-        campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd, corteUsd },
+        campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd, corteUsd, canal_venta: esVendedorExterno ? 'externo' : 'interno' },
         items,
       }
       console.log('payload cotizacion (builder-guardar)', payload)

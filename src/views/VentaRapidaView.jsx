@@ -32,6 +32,7 @@ import { showToast } from '../components/ui/Toast'
 import PageHeader from '../components/ui/PageHeader'
 import ProductCard from '../components/shared/ProductCard'
 import CategoryPills from '../components/shared/CategoryPills'
+import { usePrecioVendedor } from '../hooks/usePrecioVendedor'
 
 import { FORMAS_PAGO } from '../constants/formasPago'
 import { PREFIJOS_RIF, parsearRif as parsearRifVR, formatearRif as formatearRifVR } from '../utils/rif'
@@ -356,6 +357,7 @@ function clearDraft(userId) {
 
 export default function VentaRapidaView() {
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
+  const { aplicarMarkup, esExterno } = usePrecioVendedor()
   const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
   const navigate = useNavigate()
   const { data: clientes = [] } = useClientes()
@@ -378,7 +380,7 @@ export default function VentaRapidaView() {
   const [catActiva, setCatActiva] = useState('')
   const { items, setItems, agregarItem: _agregarItem, eliminarPorId: quitarItem, cambiarCantidad, setCantidadDirecta, cambiarPrecio, setStockMap } = useLineItems({ checkStock: true })
   const [editItemIdx, setEditItemIdx] = useState(null)
-  const comisionEstimada = useMemo(() => calcComisionEstimada(items, config), [items, config])
+  const comisionEstimada = useMemo(() => calcComisionEstimada(items, config, perfil), [items, config, perfil])
 
   // Mantener stock map actualizado para validación de cantidades
   useEffect(() => {
@@ -400,9 +402,10 @@ export default function VentaRapidaView() {
       const next = prev.map(it => {
         const prod = prodMap.get(it.productoId)
         if (!prod) return it
-        const precioBase = Number(prod.precio_usd) || 0
-        const precio2    = prod.precio_2 != null ? Number(prod.precio_2) : null
-        const precio3    = prod.precio_3 != null ? Number(prod.precio_3) : null
+        const precioBaseReal = Number(prod.precio_usd) || 0
+        const precioBase = aplicarMarkup(precioBaseReal)
+        const precio2    = prod.precio_2 != null ? aplicarMarkup(Number(prod.precio_2)) : null
+        const precio3    = prod.precio_3 != null ? aplicarMarkup(Number(prod.precio_3)) : null
         // Solo actualizamos si el precio actual coincide con algún nivel de precio del catálogo
         // (el usuario puede haber puesto un precio personalizado que NO tocamos)
         const esPrecioNivel =
@@ -609,14 +612,16 @@ export default function VentaRapidaView() {
     }
   }, [mobileCartOpen])
 
-  // Filtrar clientes
-  const clientesFiltrados = clienteBusqueda.trim()
-    ? clientes.filter(c =>
-        c.nombre.toLowerCase().includes(clienteBusqueda.toLowerCase()) ||
-        (c.rif_cedula ?? '').toLowerCase().includes(clienteBusqueda.toLowerCase()) ||
-        (c.telefono ?? '').includes(clienteBusqueda)
-      ).slice(0, 8)
-    : clientes.slice(0, 8)
+  // Filtrar clientes (excluir inactivos, preservando el seleccionado)
+  const clientesFiltrados = useMemo(() => {
+    const activos = clientes.filter(c => c.activo !== false || c.id === clienteId)
+    if (!clienteBusqueda.trim()) return activos.slice(0, 8)
+    return activos.filter(c =>
+      c.nombre.toLowerCase().includes(clienteBusqueda.toLowerCase()) ||
+      (c.rif_cedula ?? '').toLowerCase().includes(clienteBusqueda.toLowerCase()) ||
+      (c.telefono ?? '').includes(clienteBusqueda)
+    ).slice(0, 8)
+  }, [clientes, clienteBusqueda, clienteId])
 
   // Filtrar productos con smart search (ranking por relevancia)
   const productosFiltrados = useProductSearch(productos, productoBusqueda, catActiva)
@@ -638,7 +643,13 @@ export default function VentaRapidaView() {
 
   function agregarProducto(p) {
     guardarProductoReciente(perfil?.id, p)
-    _agregarItem(p)
+    const precioBase = Number(p.precio_usd || p.preciousd || 0)
+    const precioConMarkup = aplicarMarkup(precioBase)
+    _agregarItem({
+      ...p,
+      precio_usd: precioConMarkup,
+      preciousd: precioConMarkup
+    })
   }
 
 
@@ -1014,6 +1025,7 @@ function Step1Productos({
   productos = [],
   setEditItemIdx,
 }) {
+  const { aplicarMarkup, esExterno } = usePrecioVendedor()
   const [sheetState, setSheetState] = useState('closed')
   const sheetOpen = sheetState !== 'closed'
   const setSheetOpen = (v) => setSheetState(v ? 'expanded' : 'closed')
@@ -1413,14 +1425,16 @@ function Step1Productos({
                         {[{ label: 'Detal', value: preciosMap[it.productoId].p1 }, { label: 'Mayor', value: preciosMap[it.productoId].p2 }, { label: 'Especial', value: preciosMap[it.productoId].p3 }]
                           .filter(n => n.value != null && Number(n.value) > 0)
                           .map(n => {
-                            const active = Math.abs(Number(it.precioUnitUsd) - Number(n.value)) < 0.001
+                            const valConMarkup = aplicarMarkup(Number(n.value))
+                            const active = Math.abs(Number(it.precioUnitUsd) - valConMarkup) < 0.001
                             return (
                               <button key={n.label} type="button"
-                                onClick={() => cambiarPrecio(it.productoId, Number(n.value))}
+                                onClick={() => cambiarPrecio(it.productoId, valConMarkup)}
                                 className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border transition-colors ${
                                   active ? 'bg-primary text-white border-primary' : 'bg-white text-slate-500 border-slate-200 hover:border-primary/40'
-                                }`}>
-                                {n.label} {fmtUsd(n.value)}
+                                }`}
+                                title={esExterno ? `Base: ${fmtUsd(n.value)}` : undefined}>
+                                {n.label} {fmtUsd(valConMarkup)}
                               </button>
                             )
                           })}
@@ -1614,14 +1628,16 @@ function Step1Productos({
                         {[{ label: 'Detal', value: preciosMap[it.productoId].p1 }, { label: 'Mayor', value: preciosMap[it.productoId].p2 }, { label: 'Especial', value: preciosMap[it.productoId].p3 }]
                           .filter(n => n.value != null && Number(n.value) > 0)
                           .map(n => {
-                            const active = Math.abs(Number(it.precioUnitUsd) - Number(n.value)) < 0.001
+                            const valConMarkup = aplicarMarkup(Number(n.value))
+                            const active = Math.abs(Number(it.precioUnitUsd) - valConMarkup) < 0.001
                             return (
                               <button key={n.label} type="button"
-                                onClick={() => cambiarPrecio(it.productoId, Number(n.value))}
+                                onClick={() => cambiarPrecio(it.productoId, valConMarkup)}
                                 className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border transition-colors ${
                                   active ? 'bg-primary text-white border-primary' : 'bg-white text-slate-500 border-slate-200 hover:border-primary/40'
-                                }`}>
-                                {n.label} {fmtUsd(n.value)}
+                                }`}
+                                title={esExterno ? `Base: ${fmtUsd(n.value)}` : undefined}>
+                                {n.label} {fmtUsd(valConMarkup)}
                               </button>
                             )
                           })}

@@ -543,16 +543,17 @@ export default function OrdenCompraView() {
     setProveedorContacto('')
   }
 
-  // Filtrar clientes
+  // Filtrar clientes (excluir inactivos, preservando el seleccionado)
   const clientesFiltrados = useMemo(() => {
-    if (!clienteBusqueda.trim()) return clientes.slice(0, 8)
+    const activos = clientes.filter(c => c.activo !== false || c.id === clienteId)
+    if (!clienteBusqueda.trim()) return activos.slice(0, 8)
     const term = clienteBusqueda.toLowerCase()
-    return clientes.filter(c =>
+    return activos.filter(c =>
       (c.nombre || '').toLowerCase().includes(term) ||
       (c.rif_cedula || '').toLowerCase().includes(term) ||
       (c.telefono || '').includes(term)
     ).slice(0, 8)
-  }, [clientes, clienteBusqueda])
+  }, [clientes, clienteBusqueda, clienteId])
 
   // Detectar si la tabla no existe en BD (Migración no aplicada)
   const dbMigracionFaltante = useMemo(() => {

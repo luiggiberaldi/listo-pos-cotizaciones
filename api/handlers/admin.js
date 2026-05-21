@@ -38,7 +38,7 @@ export async function handleAdmin(request, env, url) {
 
   // ── Crear usuario (solo en tabla usuarios, sin auth.users) ───────────
   if (route === 'users' && request.method === 'POST') {
-    const { nombre, rol, pin, color, telefono } = body;
+    const { nombre, rol, pin, color, telefono, es_externo } = body;
     if (!nombre || !rol || !pin) {
       return jsonError('Faltan campos: nombre, rol, pin', 400, request);
     }
@@ -76,6 +76,7 @@ export async function handleAdmin(request, env, url) {
         pin_hash: hash,
         pin_salt: salt,
         cuenta_id: user.id,
+        es_externo: !!es_externo,
         ...(color ? { color } : {}),
         ...(telefono ? { telefono: telefono.trim() } : {}),
       }),
@@ -102,7 +103,7 @@ export async function handleAdmin(request, env, url) {
   if (route.startsWith('users/') && request.method === 'PUT') {
     const userId = route.replace('users/', '');
     if (!isValidUuid(userId)) return jsonError('ID de usuario inválido', 400, request);
-    const { nombre, rol, pin, color, telefono } = body;
+    const { nombre, rol, pin, color, telefono, markup_pct, comision_pct, comision_pct_cabilla, es_externo } = body;
 
     // Validate rol if provided
     if (rol && !['supervisor', 'vendedor', 'vendedor_sin_comision', 'administracion', 'logistica', 'desarrollador', 'jefe'].includes(rol)) {
@@ -115,6 +116,11 @@ export async function handleAdmin(request, env, url) {
     if (rol) updateData.rol = rol;
     if (color !== undefined) updateData.color = color;
     if (telefono !== undefined) updateData.telefono = telefono ? telefono.trim() : null;
+    if ('es_externo' in body) updateData.es_externo = !!es_externo;
+    // Campos de vendedor externo — null los limpia explícitamente (quitar markup)
+    if ('markup_pct' in body) updateData.markup_pct = markup_pct != null && markup_pct !== '' ? Number(markup_pct) : null;
+    if ('comision_pct' in body) updateData.comision_pct = comision_pct != null && comision_pct !== '' ? Number(comision_pct) : null;
+    if ('comision_pct_cabilla' in body) updateData.comision_pct_cabilla = comision_pct_cabilla != null && comision_pct_cabilla !== '' ? Number(comision_pct_cabilla) : null;
 
     // Hash new PIN if provided
     if (pin) {
@@ -376,6 +382,26 @@ export async function handleRestore(request, env) {
   }, 200, request);
 }
 
+async function getExistingColumns(env, cuentaId) {
+  try {
+    const res = await fetch(`${env.SUPABASE_URL}/rest/v1/configuracion_negocio?cuenta_id=eq.${cuentaId}&limit=1`, {
+      headers: {
+        apikey: env.SUPABASE_SERVICE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+      }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.length > 0) {
+        return Object.keys(data[0]);
+      }
+    }
+  } catch (e) {
+    console.error("Error detecting configuracion_negocio columns:", e);
+  }
+  return [];
+}
+
 export async function handleSaveConfig(request, env) {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return jsonError('Server misconfigured', 500, request);
   const user = await verifyAuth(request, env);
@@ -390,7 +416,27 @@ export async function handleSaveConfig(request, env) {
   }
 
   const campos = await request.json();
-  let res = await fetch(`${env.SUPABASE_URL}/rest/v1/configuracion_negocio?on_conflict=cuenta_id`, {
+  const existingColumns = await getExistingColumns(env, user.id);
+
+  // Filtrar campos para enviar solo los que existen en la BD
+  const datosGuardar = { cuenta_id: user.id };
+  for (const [key, val] of Object.entries(campos)) {
+    if (existingColumns.length === 0 || existingColumns.includes(key)) {
+      datosGuardar[key] = val;
+    }
+  }
+
+  // Si falló la detección de columnas y la lista está vacía, removemos preventivamente campos problemáticos
+  if (existingColumns.length === 0) {
+    delete datosGuardar.markup_pct_externo;
+    delete datosGuardar.comision_ext_pct_cabilla;
+    delete datosGuardar.comision_ext_pct_otros;
+    delete datosGuardar.comision_ext_pct_externos;
+    delete datosGuardar._comision_ext_extras;
+    delete datosGuardar.nota_entrega_plantilla;
+  }
+
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/configuracion_negocio?on_conflict=cuenta_id`, {
     method: 'POST',
     headers: {
       apikey: env.SUPABASE_SERVICE_KEY,
@@ -398,22 +444,9 @@ export async function handleSaveConfig(request, env) {
       'Content-Type': 'application/json',
       Prefer: 'resolution=merge-duplicates',
     },
-    body: JSON.stringify({ cuenta_id: user.id, ...campos }),
+    body: JSON.stringify(datosGuardar),
   });
-  if (!res.ok) {
-    // Fallback: si falla por columna nota_entrega_plantilla inexistente, reintentamos sin ella
-    const { nota_entrega_plantilla, ...camposFallback } = campos;
-    res = await fetch(`${env.SUPABASE_URL}/rest/v1/configuracion_negocio?on_conflict=cuenta_id`, {
-      method: 'POST',
-      headers: {
-        apikey: env.SUPABASE_SERVICE_KEY,
-        Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-        'Content-Type': 'application/json',
-        Prefer: 'resolution=merge-duplicates',
-      },
-      body: JSON.stringify({ cuenta_id: user.id, ...camposFallback }),
-    });
-  }
+
   if (!res.ok) {
     const text = await res.text();
     return jsonError(text || `Error ${res.status}`, res.status, request);
@@ -424,7 +457,7 @@ export async function handleSaveConfig(request, env) {
     await registrarAuditoria(env, { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' }, {
       usuarioId: user.operator_id || user.id, usuarioNombre: user.operator_nombre || 'Supervisor', usuarioRol: user.operator_rol || 'supervisor',
       categoria: 'CONFIG', accion: 'GUARDAR_CONFIG', descripcion: `Configuración del negocio actualizada`,
-      entidadTipo: 'configuracion', entidadId: '1', meta: { campos: Object.keys(campos) },
+      entidadTipo: 'configuracion', entidadId: '1', meta: { campos: Object.keys(datosGuardar) },
       ip: request.headers.get('CF-Connecting-IP') || null,
     });
   } catch {}
@@ -437,24 +470,22 @@ export async function handleGetConfig(request, env) {
   const user = await verifyAuth(request, env);
   if (!user?.id) return jsonError('No autenticado', 401, request);
 
-  let res = await fetch(`${env.SUPABASE_URL}/rest/v1/configuracion_negocio?cuenta_id=eq.${user.id}&limit=1&select=id,nombre_negocio,rif_negocio,telefono_negocio,direccion_negocio,email_negocio,logo_url,moneda_principal,pie_pagina_pdf,tasa_bcv_manual,iva_pct,nota_entrega_mostrar_iva,nota_entrega_plantilla,gate_email,comision_pct_cabilla,comision_pct_otros,comision_pct_externos,comision_categoria_cabilla,creado_en,actualizado_en`, {
+  // Hacemos select=* para traer todas las columnas que existan dinámicamente sin fallar
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/configuracion_negocio?cuenta_id=eq.${user.id}&limit=1`, {
     headers: {
       apikey: env.SUPABASE_SERVICE_KEY,
       Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
     },
   });
-  if (!res.ok) {
-    // Fallback sin nota_entrega_plantilla
-    res = await fetch(`${env.SUPABASE_URL}/rest/v1/configuracion_negocio?cuenta_id=eq.${user.id}&limit=1&select=id,nombre_negocio,rif_negocio,telefono_negocio,direccion_negocio,email_negocio,logo_url,moneda_principal,pie_pagina_pdf,tasa_bcv_manual,iva_pct,nota_entrega_mostrar_iva,gate_email,comision_pct_cabilla,comision_pct_otros,comision_pct_externos,comision_categoria_cabilla,creado_en,actualizado_en`, {
-      headers: {
-        apikey: env.SUPABASE_SERVICE_KEY,
-        Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-      },
-    });
-  }
+
   if (!res.ok) return jsonError('Error al leer configuración', res.status, request);
   const rows = await res.json();
-  return json(rows[0] || {}, 200, request);
+  const config = rows[0] || {};
+  
+  // Por seguridad, quitamos el hash de la contraseña del gate antes de enviarla
+  delete config.gate_password_hash;
+  
+  return json(config, 200, request);
 }
 
 export async function handleResetOperacional(request, env) {

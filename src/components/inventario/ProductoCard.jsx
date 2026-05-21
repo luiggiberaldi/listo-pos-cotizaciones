@@ -1,6 +1,7 @@
 // src/components/inventario/ProductoCard.jsx
 import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle, Package, Trash2, ClipboardList, TrendingUp, Eye } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
+import { usePrecioVendedor } from '../../hooks/usePrecioVendedor'
 import { fmtBs, usdToBs } from '../../utils/format'
 import StockComprometidoDetalle from './StockComprometidoDetalle'
 
@@ -63,7 +64,15 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, onBorra
   const { perfil } = useAuthStore()
   const esAdministracion = perfil?.rol === 'administracion'
   const esPrivilegiado = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe') || esAdministracion
+  // Costo solo visible para administracion, jefe y desarrollador
+  const puedeVerCosto = ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)
   const { fg, bg } = colorCategoria(producto.categoria || '')
+
+  // Markup para vendedor externo (solo presentación, no modifica BD)
+  const { aplicarMarkup, esExterno, markupPct } = usePrecioVendedor()
+  const precioDisplay  = esExterno ? aplicarMarkup(producto.precio_usd) : Number(producto.precio_usd)
+  const precio2Display = producto.precio_2 != null ? (esExterno ? aplicarMarkup(producto.precio_2) : Number(producto.precio_2)) : null
+  const precio3Display = producto.precio_3 != null ? (esExterno ? aplicarMarkup(producto.precio_3) : Number(producto.precio_3)) : null
 
   const stockActual = Number(producto.stock_actual) || 0
   const stockMinimo = Number(producto.stock_minimo) || 0
@@ -72,7 +81,7 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, onBorra
 
   const precio = Number(producto.precio_usd)
   const costo = Number(producto.costo_usd)
-  const margen = esPrivilegiado && precio > 0 && costo > 0
+  const margen = puedeVerCosto && precio > 0 && costo > 0
     ? Math.round(((precio - costo) / precio) * 100)
     : null
 
@@ -159,27 +168,29 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, onBorra
               {(producto.precio_2 != null || producto.precio_3 != null) && (
                 <span className="text-[8px] font-semibold text-slate-400 uppercase tracking-wide shrink-0">Detal</span>
               )}
-              <p className="font-black text-slate-800 text-base sm:text-lg leading-none">{fmtUsd(producto.precio_usd)}</p>
+              <p className="font-black text-slate-800 text-base sm:text-lg leading-none">{fmtUsd(precioDisplay)}</p>
             </div>
-            {tasa > 0 && producto.precio_usd != null && (
-              <p className="text-[10px] text-slate-400 mt-0.5">{fmtBs(usdToBs(producto.precio_usd, tasa))}</p>
+            {tasa > 0 && precioDisplay > 0 && (
+              <p className="text-[10px] text-slate-400 mt-0.5">{fmtBs(usdToBs(precioDisplay, tasa))}</p>
             )}
 
             {/* P2 / P3 — precios secundarios */}
             {(producto.precio_2 != null || producto.precio_3 != null) && (
               <div className="flex flex-wrap gap-1 mt-2 pt-1.5 border-t border-slate-200">
-                {producto.precio_2 != null && (
+                {precio2Display != null && (
                   <div className="flex flex-col bg-white border border-slate-200 rounded-lg px-2 py-1 min-w-0">
                     <span className="text-[8px] font-semibold text-slate-400 uppercase tracking-wide">Mayor</span>
-                    <span className="text-[11px] font-bold text-slate-700 leading-tight">{fmtUsd(producto.precio_2)}</span>
-                    {tasa > 0 && <span className="text-[9px] text-slate-400 leading-none">{fmtBs(usdToBs(producto.precio_2, tasa))}</span>}
+                    <span className="text-[11px] font-bold text-slate-700 leading-tight">{fmtUsd(precio2Display)}</span>
+                    {esExterno && <span className="text-[8px] text-slate-400 line-through">{fmtUsd(producto.precio_2)}</span>}
+                    {tasa > 0 && <span className="text-[9px] text-slate-400 leading-none">{fmtBs(usdToBs(precio2Display, tasa))}</span>}
                   </div>
                 )}
-                {producto.precio_3 != null && (
+                {precio3Display != null && (
                   <div className="flex flex-col bg-white border border-slate-200 rounded-lg px-2 py-1 min-w-0">
                     <span className="text-[8px] font-semibold text-slate-400 uppercase tracking-wide">Especial</span>
-                    <span className="text-[11px] font-bold text-slate-700 leading-tight">{fmtUsd(producto.precio_3)}</span>
-                    {tasa > 0 && <span className="text-[9px] text-slate-400 leading-none">{fmtBs(usdToBs(producto.precio_3, tasa))}</span>}
+                    <span className="text-[11px] font-bold text-slate-700 leading-tight">{fmtUsd(precio3Display)}</span>
+                    {esExterno && <span className="text-[8px] text-slate-400 line-through">{fmtUsd(producto.precio_3)}</span>}
+                    {tasa > 0 && <span className="text-[9px] text-slate-400 leading-none">{fmtBs(usdToBs(precio3Display, tasa))}</span>}
                   </div>
                 )}
               </div>
@@ -187,7 +198,7 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, onBorra
           </div>
 
           {/* Costo — fila secundaria */}
-          {esPrivilegiado && producto.costo_usd != null && (
+          {puedeVerCosto && producto.costo_usd != null && (
             <div className="flex items-center justify-between px-0.5">
               <span className="text-[10px] text-slate-400">Costo</span>
               <div className="text-right">

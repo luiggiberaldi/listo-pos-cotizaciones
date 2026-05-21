@@ -34,7 +34,7 @@ async function fetchClienteViaAPI(clienteId) {
     if (vId && !clienteRaw?.vendedor?.telefono) {
       const { data: vData } = await supabase
         .from('usuarios')
-        .select('id, nombre, color, telefono, rol')
+        .select('id, nombre, color, telefono, rol, markup_pct, es_externo')
         .eq('id', vId)
         .maybeSingle()
       if (vData) clienteRaw.vendedor = vData
@@ -89,7 +89,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         import('../../services/pdf/cotizacionPDF'),
         supabase.from('cotizacion_items').select('cantidad, codigo_snap, nombre_snap, unidad_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacion.id).order('orden'),
         fetchClienteViaAPI(cotizacion.cliente_id),
-        cotizacion.vendedor_id ? supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', cotizacion.vendedor_id).single() : Promise.resolve({ data: null }),
+        cotizacion.vendedor_id ? supabase.from('usuarios').select('id, nombre, color, telefono, markup_pct, es_externo').eq('id', cotizacion.vendedor_id).single() : Promise.resolve({ data: null }),
       ])
       if (itemsRes.error) throw itemsRes.error
       const cotConDatos = {
@@ -141,7 +141,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         import('../../services/pdf/cotizacionPDF'),
         supabase.from('cotizacion_items').select('cantidad, codigo_snap, nombre_snap, unidad_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacion.id).order('orden'),
         fetchClienteViaAPI(cotizacion.cliente_id),
-        cotizacion.vendedor_id ? supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', cotizacion.vendedor_id).single() : Promise.resolve({ data: null }),
+        cotizacion.vendedor_id ? supabase.from('usuarios').select('id, nombre, color, telefono, markup_pct, es_externo').eq('id', cotizacion.vendedor_id).single() : Promise.resolve({ data: null }),
       ])
       if (itemsRes.error) throw itemsRes.error
       const cotConDatos = {
@@ -165,7 +165,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         import('../../services/pdf/cotizacionPDF'),
         supabase.from('cotizacion_items').select('cantidad, codigo_snap, nombre_snap, unidad_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacion.id).order('orden'),
         fetchClienteViaAPI(cotizacion.cliente_id),
-        cotizacion.vendedor_id ? supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', cotizacion.vendedor_id).single() : Promise.resolve({ data: null }),
+        cotizacion.vendedor_id ? supabase.from('usuarios').select('id, nombre, color, telefono, markup_pct, es_externo').eq('id', cotizacion.vendedor_id).single() : Promise.resolve({ data: null }),
       ])
       if (itemsRes.error) throw itemsRes.error
       const cliente = clienteData || cotizacion.cliente
@@ -201,7 +201,8 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
     }
   }
 
-  const vendedorColor = cotizacion.vendedor?.color || '#64748b'
+  const esVendedorExterno = !!cotizacion.vendedor?.es_externo || (cotizacion.vendedor?.markup_pct != null && Number(cotizacion.vendedor.markup_pct) > 0)
+  const vendedorColor = esVendedorExterno ? '#D97706' : (cotizacion.vendedor?.color || '#64748b')
   const despacho = cotizacion.despacho
   const despachoAnulado = despacho?.estado === 'anulada'
   const esPropietario = cotizacion.vendedor_id === perfil?.id
@@ -326,10 +327,17 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
               {cotizacion.cliente.nombre}
             </p>
             {(esSupervisor || esAdministracion) && cotizacion.vendedor && (
-              <span className="inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full"
-                style={{ backgroundColor: vendedorColor + '18', color: vendedorColor, border: `1px solid ${vendedorColor}40` }}>
-                {cotizacion.vendedor.nombre}
-              </span>
+              esVendedorExterno ? (
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2 py-0.5 rounded-full"
+                  style={{ backgroundColor: '#FEF3C7', color: '#B45309', border: '1px solid #FDE68A' }}>
+                  💼 {cotizacion.vendedor.nombre} <span className="text-[9px] px-1 py-0.2 bg-[#B45309] text-white rounded font-extrabold uppercase">Ext</span>
+                </span>
+              ) : (
+                <span className="inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full"
+                  style={{ backgroundColor: vendedorColor + '18', color: vendedorColor, border: `1px solid ${vendedorColor}40` }}>
+                  {cotizacion.vendedor.nombre}
+                </span>
+              )
             )}
           </div>
         )}

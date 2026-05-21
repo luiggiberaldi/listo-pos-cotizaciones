@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
 import { apiUrl, getAuthHeaders } from '../services/apiBase'
 import useAuthStore from '../store/useAuthStore'
+import { getComisionPctForItem } from '../utils/comisionUtils'
 
 export const REPORTE_KEY = ['reporte-ventas']
 
@@ -43,12 +44,49 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
         return json?.data ?? []
       }
 
-      const [despachosRaw, prevDespachosRaw, comisiones, prevComisiones] = await Promise.all([
+      // Fetch all users to have correct markup_pct, color and rates
+      const fetchUsuarios = async () => {
+        const { data } = await supabase
+          .from('usuarios')
+          .select('id, nombre, color, markup_pct, rol, comision_pct, comision_pct_cabilla, es_externo')
+        return data ?? []
+      }
+
+      const fetchConfiguracion = async () => {
+        const { data } = await supabase
+          .from('configuracion_negocio')
+          .select('*')
+          .eq('id', 1)
+          .maybeSingle()
+        return data ?? {
+          comision_pct_cabilla: 0,
+          comision_pct_otros: 0,
+          comision_pct_externos: 3,
+          comision_categoria_cabilla: 'Cabilla'
+        }
+      }
+
+      const [despachosRaw, prevDespachosRaw, comisionesRaw, prevComisionesRaw, dbVendedores, config] = await Promise.all([
         fetchDespachos(from, to),
         fetchDespachos(prevFrom, prevTo),
         fetchComisionesWorker(from, to),
         fetchComisionesWorker(prevFrom, prevTo),
+        fetchUsuarios(),
+        fetchConfiguracion(),
       ])
+
+      const vendorMarkupMap = {}
+      const vendorColorMap = {}
+      const vendorRolMap = {}
+      const vendorEsExternoMap = {}
+      if (dbVendedores) {
+        dbVendedores.forEach(u => {
+          vendorMarkupMap[u.id] = u.markup_pct != null ? Number(u.markup_pct) : null
+          vendorColorMap[u.id] = u.color || '#64748b'
+          vendorRolMap[u.id] = u.rol
+          vendorEsExternoMap[u.id] = !!u.es_externo
+        })
+      }
 
       const normalizarFormaPagoDespacho = (d) => {
         const formas = Array.isArray(d.forma_pago) ? d.forma_pago : []
@@ -81,8 +119,41 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
         }
       }
 
-      const despachos = despachosRaw.map(normalizarFormaPagoDespacho)
-      const prevDespachos = prevDespachosRaw.map(normalizarFormaPagoDespacho)
+      const despachos = despachosRaw.map(normalizarFormaPagoDespacho).filter(d => {
+        const role = vendorRolMap[d.asesor_id || d.vendedor_id]
+        return role !== 'desarrollador' && role !== 'administracion' && role !== 'logistica'
+      })
+      const prevDespachos = prevDespachosRaw.map(normalizarFormaPagoDespacho).filter(d => {
+        const role = vendorRolMap[d.asesor_id || d.vendedor_id]
+        return role !== 'desarrollador' && role !== 'administracion' && role !== 'logistica'
+      })
+
+      const allDispatchIds = [
+        ...new Set([
+          ...despachos.map(d => d.id),
+          ...prevDespachos.map(d => d.id)
+        ].filter(Boolean))
+      ]
+
+      let ndItems = []
+      let despachoDescuentos = []
+
+      if (allDispatchIds.length > 0) {
+        for (let i = 0; i < allDispatchIds.length; i += 50) {
+          const batch = allDispatchIds.slice(i, i + 50)
+          const { data: itemsData } = await supabase
+            .from('notas_despacho_items')
+            .select('despacho_id, producto_id, nombre_snap, codigo_snap, cantidad, precio_unit_usd, total_linea_usd, origen')
+            .in('despacho_id', batch)
+          if (itemsData) ndItems = ndItems.concat(itemsData)
+
+          const { data: descData } = await supabase
+            .from('despacho_descuentos')
+            .select('despacho_id, cotizacion_item_id, monto_usd')
+            .in('despacho_id', batch)
+          if (descData) despachoDescuentos = despachoDescuentos.concat(descData)
+        }
+      }
 
       // ── 2. Items de las cotizaciones de los despachos ──
       const cotIds = [...new Set(despachos.map(d => d.cotizacion_id).filter(Boolean))]
@@ -93,12 +164,159 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
           const batch = cotIds.slice(i, i + 50)
           const { data, error } = await supabase
             .from('cotizacion_items')
-            .select('producto_id, nombre_snap, codigo_snap, cantidad, precio_unit_usd, total_linea_usd, cotizacion_id')
+            .select('id, producto_id, nombre_snap, codigo_snap, cantidad, precio_unit_usd, total_linea_usd, cotizacion_id, origen')
             .in('cotizacion_id', batch)
           if (error) throw error
           items = items.concat(data ?? [])
         }
       }
+
+      // Fetch product categories
+      const allProductIds = [
+        ...new Set([
+          ...items.map(i => i.producto_id),
+          ...ndItems.map(i => i.producto_id)
+        ].filter(Boolean))
+      ]
+      const productCategories = {}
+      if (allProductIds.length > 0) {
+        for (let i = 0; i < allProductIds.length; i += 50) {
+          const batch = allProductIds.slice(i, i + 50)
+          const { data } = await supabase
+            .from('productos')
+            .select('id, categoria')
+            .in('id', batch)
+          if (data) {
+            data.forEach(p => {
+              productCategories[p.id] = p.categoria || ''
+            })
+          }
+        }
+      }
+
+      const calcularComisionDespachoJS = (d, comList) => {
+        const existing = comList.find(c => c.despachoid === d.id)
+        if (existing) {
+          return {
+            totalcomision: Number(existing.totalcomision || 0),
+            comisioncabilla: Number(existing.comisioncabilla || 0),
+            comisionotros: Number(existing.comisionotros || 0),
+            pctcabilla: Number(existing.pctcabilla || 0),
+            pctotros: Number(existing.pctotros || 0),
+            estado: existing.estado || 'pendiente'
+          }
+        }
+
+        if (d.estado !== 'entregada' && d.estado !== 'despachada') {
+          return null
+        }
+
+        const seller = dbVendedores.find(u => u.id === d.asesor_id || u.id === d.vendedor_id)
+        if (!seller) return null
+        const rol = seller.rol
+
+        if (rol === 'vendedor_sin_comision' && !seller.es_externo) {
+          return null
+        }
+        if (['jefe', 'logistica', 'administracion', 'desarrollador'].includes(rol)) {
+          return null
+        }
+
+        const dispatchItems = ndItems.filter(it => it.despacho_id === d.id)
+        let comisionCabilla = 0
+        let comisionOtros = 0
+
+        const processItem = (it, totalNeto) => {
+          const nameLower = (it.nombre_snap || '').toLowerCase().trim()
+          if (nameLower.startsWith('corte')) return
+
+          const pct = getComisionPctForItem(
+            {
+              nombre_snap: it.nombre_snap,
+              producto_id: it.producto_id,
+              codigo_snap: it.codigo_snap,
+              origen: it.origen,
+              categoria: productCategories[it.producto_id] || ''
+            },
+            config,
+            seller
+          )
+
+          const comLinea = Math.round((totalNeto * pct / 100) * 100) / 100
+
+          // Determine if it belongs to cabilla or others
+          const catCabillaStr = (config.comision_categoria_cabilla || 'Cabilla').toLowerCase().trim()
+          const prodCat = (productCategories[it.producto_id] || '').toLowerCase().trim()
+          const es_externo = !!seller.es_externo
+          const esCementoVendedorExterno = es_externo && (prodCat === 'cemento' || nameLower.includes('cemento'))
+          const esCabilla = prodCat === catCabillaStr
+
+          if (esCabilla || esCementoVendedorExterno) {
+            comisionCabilla += comLinea
+          } else {
+            comisionOtros += comLinea
+          }
+        }
+
+        if (dispatchItems.length > 0) {
+          dispatchItems.forEach(it => {
+            processItem(it, Number(it.total_linea_usd || 0))
+          })
+        } else {
+          const cotItems = items.filter(it => it.cotizacion_id === d.cotizacion_id)
+          cotItems.forEach(it => {
+            const desc = despachoDescuentos.find(dd => dd.despacho_id === d.id && dd.cotizacion_item_id === it.id)
+            const descMonto = desc ? Number(desc.monto_usd || 0) : 0
+            const totalNeto = Math.max(Number(it.total_linea_usd || 0) - descMonto, 0)
+            processItem(it, totalNeto)
+          })
+        }
+
+        const totalComision = comisionCabilla + comisionOtros
+        const pctCabilla = seller.es_externo
+          ? Number(config.comision_ext_pct_cabilla ?? 2)
+          : (seller.comision_pct_cabilla != null ? Number(seller.comision_pct_cabilla) : Number(config.comision_pct_cabilla ?? 2))
+        const pctOtros = seller.es_externo
+          ? Number(config.comision_ext_pct_otros ?? 3)
+          : (seller.comision_pct != null ? Number(seller.comision_pct) : Number(config.comision_pct_otros ?? 3))
+
+        return {
+          totalcomision: totalComision,
+          comisioncabilla: comisionCabilla,
+          comisionotros: comisionOtros,
+          pctcabilla: pctCabilla,
+          pctotros: pctOtros,
+          estado: 'pendiente'
+        }
+      }
+
+      const comisiones = despachos.map(d => {
+        const calculated = calcularComisionDespachoJS(d, comisionesRaw)
+        if (calculated) {
+          const seller = dbVendedores.find(u => u.id === d.asesor_id || u.id === d.vendedor_id)
+          return {
+            ...calculated,
+            vendedorid: d.asesor_id || d.vendedor_id,
+            despachoid: d.id,
+            vendedor: seller
+          }
+        }
+        return null
+      }).filter(Boolean)
+
+      const prevComisiones = prevDespachos.map(d => {
+        const calculated = calcularComisionDespachoJS(d, prevComisionesRaw)
+        if (calculated) {
+          const seller = dbVendedores.find(u => u.id === d.asesor_id || u.id === d.vendedor_id)
+          return {
+            ...calculated,
+            vendedorid: d.asesor_id || d.vendedor_id,
+            despachoid: d.id,
+            vendedor: seller
+          }
+        }
+        return null
+      }).filter(Boolean)
 
       // Map cotizacion_id → despacho para enlazar items con vendedor/cliente
       const cotToDespacho = Object.fromEntries(despachos.map(d => [d.cotizacion_id, d]))
@@ -133,7 +351,10 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
           vendedorMap[vid] = {
             id: vid,
             nombre: d.asesor_nombre ?? 'Sin nombre',
-            color: d.asesor_color ?? '#64748b',
+            color: (vendorColorMap[vid] || d.asesor_color) ?? '#64748b',
+            markup_pct: vendorMarkupMap[vid] ?? null,
+            rol: vendorRolMap[vid],
+            es_externo: vendorEsExternoMap[vid] ?? false,
             despachos: 0,
             totalUsd: 0,
             comision: 0,
@@ -148,7 +369,10 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
           vendedorMap[vid] = {
             id: vid,
             nombre: c.vendedor?.nombre || c.vendedornombre || 'Sin nombre',
-            color: c.vendedor?.color || c.vendedorcolor || '#64748b',
+            color: vendorColorMap[vid] || c.vendedor?.color || c.vendedorcolor || '#64748b',
+            markup_pct: vendorMarkupMap[vid] ?? c.vendedor?.markup_pct ?? null,
+            rol: vendorRolMap[vid] || c.vendedor?.rol,
+            es_externo: vendorEsExternoMap[vid] ?? !!c.vendedor?.es_externo ?? false,
             despachos: 0,
             totalUsd: 0,
             comision: 0,
@@ -171,7 +395,13 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
       if (comisiones.length > 0) {
         console.log('[DEBUG] First comision from worker:', comisiones[0])
       }
-      const porVendedor = Object.values(vendedorMap).sort((a, b) => b.totalUsd - a.totalUsd)
+      const porVendedor = Object.values(vendedorMap)
+        .filter(v => {
+          if (v.rol === 'desarrollador') return false
+          if (v.rol === 'administracion' || v.rol === 'logistica') return false
+          return true
+        })
+        .sort((a, b) => b.totalUsd - a.totalUsd)
 
       // Por cliente
       const clienteMap = {}

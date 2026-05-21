@@ -16,6 +16,7 @@ import { COTIZACIONES_KEY } from '../hooks/useCotizaciones'
 import { CLIENTES_KEY } from '../hooks/useClientes'
 import { DESPACHOS_KEY } from '../hooks/useDespachos'
 import { useQueryClient } from '@tanstack/react-query'
+import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import Skeleton    from '../components/ui/Skeleton'
 import EmptyState  from '../components/ui/EmptyState'
@@ -89,7 +90,7 @@ const COLOR_DORADO = '#B8860B' // Metallic gold base
 // ─── Formulario crear usuario ─────────────────────────────────────────────────
 function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
   const primerColorLibre = COLORES_VENDEDOR.find(c => !coloresUsados.includes(c)) ?? COLORES_VENDEDOR[0]
-  const [campos, setCampos] = useState({ nombre: '', pin: '', rol: 'vendedor', color: primerColorLibre, telefono: '' })
+  const [campos, setCampos] = useState({ nombre: '', pin: '', rol: 'vendedor', color: primerColorLibre, telefono: '', es_externo: false })
   const [mostrarPass, setMostrarPass] = useState(false)
   const [error, setError] = useState('')
 
@@ -101,7 +102,7 @@ function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
     if (!campos.nombre.trim())                   { setError('El nombre es obligatorio'); return }
     if (!new RegExp(`^\\d{${pinLen}}$`).test(campos.pin)) { setError(`El PIN debe ser exactamente ${pinLen} dígitos numéricos`); return }
     if (coloresUsados.includes(campos.color))    { setError('Ese color ya está en uso por otro usuario'); return }
-    onGuardar({ nombre: campos.nombre, pin: campos.pin, rol: campos.rol, color: campos.color, telefono: campos.telefono.trim() || undefined })
+    onGuardar({ nombre: campos.nombre, pin: campos.pin, rol: campos.rol, color: campos.color, telefono: campos.telefono.trim() || undefined, es_externo: campos.es_externo })
   }
 
   const inputCls = `
@@ -152,6 +153,10 @@ function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
           if (v === 'jefe') cambiar('color', COLOR_DORADO)
           else if (['administracion', 'logistica'].includes(v)) cambiar('color', COLOR_PLATEADO)
           else if (campos.color === COLOR_PLATEADO || campos.color === COLOR_DORADO) cambiar('color', primerColorLibre)
+          // Al cambiar a rol sin comisión, limpiar flag de externo si no corresponde
+          if (!['vendedor', 'vendedor_sin_comision'].includes(v)) {
+            cambiar('es_externo', false)
+          }
         }}
         options={[
           { value: 'vendedor', label: 'Vendedor' },
@@ -165,6 +170,23 @@ function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
         disabled={cargando}
         searchable={false}
       />
+
+      {/* ¿Es Vendedor Externo? */}
+      {['vendedor', 'vendedor_sin_comision'].includes(campos.rol) && (
+        <label className="flex items-center gap-3 bg-amber-50/50 border border-amber-200/60 p-3 rounded-xl cursor-pointer hover:bg-amber-50 transition-colors">
+          <input
+            type="checkbox"
+            checked={campos.es_externo}
+            onChange={e => cambiar('es_externo', e.target.checked)}
+            className="w-4.5 h-4.5 border-amber-300 text-amber-600 focus:ring-amber-500 rounded cursor-pointer accent-amber-600"
+            disabled={cargando}
+          />
+          <div className="space-y-0.5">
+            <span className="text-xs font-bold text-amber-800 select-none block">¿Es Vendedor Externo?</span>
+            <span className="text-[10px] text-amber-600 select-none block">Usa comisiones y recargos globales de la administración.</span>
+          </div>
+        </label>
+      )}
 
       {/* Color del usuario */}
       <div className="space-y-1.5">
@@ -219,7 +241,14 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando, coloresUsados = 
     if (t.length > 3) t = t.slice(0, 3) + '-' + t.slice(3)
     return t
   })()
-  const [campos, setCampos] = useState({ nombre: usuario.nombre, rol: usuario.rol, pin: '', pinConfirm: '', color: usuario.color || COLORES_VENDEDOR[0], telefono: telNorm })
+  const [campos, setCampos] = useState({
+    nombre: usuario.nombre,
+    rol: usuario.rol,
+    pin: '', pinConfirm: '',
+    color: usuario.color || COLORES_VENDEDOR[0],
+    telefono: telNorm,
+    es_externo: !!usuario.es_externo,
+  })
   const [mostrarPin, setMostrarPin] = useState(false)
   const [error, setError] = useState('')
 
@@ -241,7 +270,17 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando, coloresUsados = 
       setError('Ese color ya está en uso por otro usuario')
       return
     }
-    onGuardar({ nombre: campos.nombre, rol: campos.rol, pin: campos.pin || undefined, color: campos.color, telefono: campos.telefono.trim() })
+    onGuardar({
+      nombre: campos.nombre,
+      rol: campos.rol,
+      pin: campos.pin || undefined,
+      color: campos.color,
+      telefono: campos.telefono.trim(),
+      es_externo: campos.es_externo,
+      markup_pct: null,
+      comision_pct: null,
+      comision_pct_cabilla: null,
+    })
   }
 
   const inputCls = `
@@ -280,6 +319,9 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando, coloresUsados = 
             } else if (p.color === COLOR_PLATEADO || p.color === COLOR_DORADO) {
               updates.color = COLORES_VENDEDOR.find(c => !coloresUsados.includes(c)) || COLORES_VENDEDOR[0]
             }
+            if (!['vendedor', 'vendedor_sin_comision'].includes(v)) {
+              updates.es_externo = false
+            }
             return { ...p, ...updates }
           })
         }}
@@ -295,6 +337,23 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando, coloresUsados = 
         disabled={cargando}
         searchable={false}
       />
+
+      {/* ¿Es Vendedor Externo? */}
+      {['vendedor', 'vendedor_sin_comision'].includes(campos.rol) && (
+        <label className="flex items-center gap-3 bg-amber-50/50 border border-amber-200/60 p-3 rounded-xl cursor-pointer hover:bg-amber-50 transition-colors">
+          <input
+            type="checkbox"
+            checked={campos.es_externo}
+            onChange={e => setCampos(p => ({ ...p, es_externo: e.target.checked }))}
+            className="w-4.5 h-4.5 border-amber-300 text-amber-600 focus:ring-amber-500 rounded cursor-pointer accent-amber-600"
+            disabled={cargando}
+          />
+          <div className="space-y-0.5">
+            <span className="text-xs font-bold text-amber-800 select-none block">¿Es Vendedor Externo?</span>
+            <span className="text-[10px] text-amber-600 select-none block">Usa comisiones y recargos globales de la administración.</span>
+          </div>
+        </label>
+      )}
 
       {/* Color del usuario */}
       <div className="space-y-1.5">
@@ -438,6 +497,9 @@ function UsuarioModal({ usuario = null, onClose, coloresUsados = [] }) {
 function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar, coloresUsados, onCambiarColor, onReasignarClientes }) {
   const conf = ROL_CONFIG[usuario.rol] ?? ROL_CONFIG.vendedor
   const esSupervisor = usuario.rol === 'jefe'
+  const esExterno = !!usuario.es_externo
+  const { data: config = {} } = useConfigNegocio()
+  
   // Color del strip: usar colores de rol para jefe/admin/logistica (igual que login)
   const COLOR_POR_ROL = {
     jefe:           '#B8860B',   // dorado metalílico
@@ -445,18 +507,24 @@ function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar, c
     logistica:      '#94a3b8',   // plateado
   }
   const esColorFijo = ['administracion', 'logistica', 'jefe'].includes(usuario.rol)
-  const color = COLOR_POR_ROL[usuario.rol] || usuario.color || '#1B365D'
+  const color = esExterno ? '#D97706' : (COLOR_POR_ROL[usuario.rol] || usuario.color || '#1B365D')
   const [showColors, setShowColors] = useState(false)
+
+  const cardBorderColor = esExterno ? '#F59E0B60' : (color + '30')
+  const cardShadow = esExterno ? '0 6px 20px rgba(217, 119, 6, 0.12)' : `0 1px 3px ${color}10`
+  const stripBg = esExterno 
+    ? 'linear-gradient(135deg, #B45309 0%, #D97706 100%)' 
+    : `linear-gradient(135deg, ${color}ee 0%, ${color}99 100%)`
 
   return (
     <div className={`bg-white rounded-2xl border overflow-hidden flex flex-col transition-all duration-200 ${
-      usuario.activo ? 'hover:shadow-lg' : 'opacity-60'
-    }`}
-      style={{ borderColor: color + '30', boxShadow: `0 1px 3px ${color}10` }}>
+      usuario.activo ? 'hover:shadow-lg hover:scale-[1.01]' : 'opacity-60'
+    } ${esExterno && usuario.activo ? 'ring-1 ring-amber-300/30' : ''}`}
+      style={{ borderColor: cardBorderColor, boxShadow: cardShadow }}>
 
       {/* ── Strip superior ── */}
       <div className="relative h-20 shrink-0 flex items-center justify-center"
-        style={{ background: `linear-gradient(135deg, ${color}ee 0%, ${color}99 100%)` }}>
+        style={{ background: stripBg }}>
         {/* Dot pattern */}
         <div className="absolute inset-0 opacity-10 pointer-events-none"
           style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '12px 12px' }} />
@@ -469,8 +537,10 @@ function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar, c
         )}
 
         {/* Avatar centrado — clic para cambiar color */}
-        <button type="button" onClick={() => !esColorFijo && setShowColors(!showColors)} title={esColorFijo ? "Color fijo por rol" : "Cambiar color"}
-          className={`relative z-10 w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-transform ${esColorFijo ? 'cursor-default' : 'hover:scale-105 active:scale-95'}`}
+        <button type="button" 
+          onClick={() => !esColorFijo && !esExterno && setShowColors(!showColors)} 
+          title={esColorFijo ? "Color fijo por rol" : esExterno ? "Vendedor externo (color bronce)" : "Cambiar color"}
+          className={`relative z-10 w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-transform ${esColorFijo || esExterno ? 'cursor-default' : 'hover:scale-105 active:scale-95'}`}
           style={{ background: 'rgba(255,255,255,0.22)', border: '2px solid rgba(255,255,255,0.5)', backdropFilter: 'blur(4px)' }}>
           <span className="text-white font-black text-xl select-none leading-none">
             {(usuario.nombre || 'U')[0].toUpperCase()}
@@ -513,10 +583,25 @@ function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar, c
         </div>
 
         {/* Badge de rol */}
-        <span className={`inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full border shadow-sm ${conf.bg} ${conf.text} ${conf.border}`}
-          style={usuario.rol === 'jefe' ? { textShadow: '0 0.5px 0 rgba(255,255,255,0.2)' } : {}}>
-          {conf.label}
-        </span>
+        <div className="flex flex-wrap gap-1.5 items-center">
+          {esExterno ? (
+            <span className="inline-flex text-[10px] font-black px-2 py-0.5 rounded-full border shadow-sm bg-amber-50 text-amber-700 border-amber-200">
+              💼 Vendedor Externo
+            </span>
+          ) : (
+            <span className={`inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full border shadow-sm ${conf.bg} ${conf.text} ${conf.border}`}
+              style={usuario.rol === 'jefe' ? { textShadow: '0 0.5px 0 rgba(255,255,255,0.2)' } : {}}>
+              {conf.label}
+            </span>
+          )}
+          
+          {/* Badge vendedor externo con porcentaje */}
+          {esExterno && (
+            <span className="inline-flex text-[9px] font-black px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+              Markup: +{config.markup_pct_externo ?? 5}%
+            </span>
+          )}
+        </div>
 
         {/* Teléfono */}
         {usuario.telefono && (

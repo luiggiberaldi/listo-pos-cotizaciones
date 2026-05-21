@@ -491,10 +491,6 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const hasExento = montoExento > 0
   const hasFlete = flete > 0
   const hasDescuento = descuentoTotal > 0
-  const ivaPct = Number(config.iva_pct) || 16
-  const montoGravado = totalFinal - montoExento  // IVA solo sobre productos, no exentos
-  const baseImponible = montoGravado / (1 + ivaPct / 100)
-  const ivaAmount = montoGravado - baseImponible
   const transportista = despacho.transportista_id ? (despacho.transportista || null) : null
   const refPago = despacho.referencia_pago || ''
 
@@ -502,13 +498,10 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   // 4. BLOQUE COMBINADO: Crédito + Transporte (izq) | Desglose (der) + TOTAL
   // ══════════════════════════════════════════════════════════════════════════
   // Columna derecha: desglose (estructura fija de totales)
-  const mostrarIva = config.nota_entrega_mostrar_iva !== false
   const rightItems = [
     { label: 'SubTotal:', value: fmtTotal(total, monedaPDF, tasa, factorBcv) },
     { label: 'Descuento:', value: fmtTotal(descuentoTotal, monedaPDF, tasa, factorBcv) },
-    { label: 'Exento:', value: fmtTotal(montoExento, monedaPDF, tasa, factorBcv) },
-    { label: 'Gravable:', value: fmtTotal(montoGravado, monedaPDF, tasa, factorBcv) },
-    { label: `Impuesto ${ivaPct}%:`, value: fmtTotal(mostrarIva ? ivaAmount : 0, monedaPDF, tasa, factorBcv) }
+    { label: 'Exento:', value: fmtTotal(montoExento, monedaPDF, tasa, factorBcv) }
   ]
 
   if (refPago) {

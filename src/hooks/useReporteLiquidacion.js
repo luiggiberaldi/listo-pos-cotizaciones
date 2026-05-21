@@ -23,7 +23,7 @@ export function useReporteLiquidacion({ fechaInicio, fechaFin, vendedorId } = {}
         .select(`
           id, numero, cotizacion_id, total_usd, flete_usd, descuento_total_usd, forma_pago,
           vendedor_id, cliente_id, entregada_en,
-          vendedor:usuarios!notas_despacho_vendedor_id_fkey(id, nombre, color),
+          vendedor:usuarios!notas_despacho_vendedor_id_fkey(id, nombre, color, rol),
           cliente:clientes!notas_despacho_cliente_id_fkey(id, nombre)
         `)
         .eq('estado', 'entregada')
@@ -33,8 +33,13 @@ export function useReporteLiquidacion({ fechaInicio, fechaFin, vendedorId } = {}
 
       if (vendedorId) despachoQuery = despachoQuery.eq('vendedor_id', vendedorId)
 
-      const { data: despachos = [], error: errDespachos } = await despachoQuery
+      const { data: rawDespachos = [], error: errDespachos } = await despachoQuery
       if (errDespachos) throw errDespachos
+
+      const despachos = rawDespachos.filter(d => {
+        const rol = d.vendedor?.rol
+        return rol !== 'desarrollador' && rol !== 'administracion' && rol !== 'logistica'
+      })
 
       // ── 2. Comisiones en el período — vía Worker v2 ────────────────────────
       const comisionParams = new URLSearchParams()
@@ -45,7 +50,10 @@ export function useReporteLiquidacion({ fechaInicio, fechaFin, vendedorId } = {}
       const comHeaders = await getAuthHeaders()
       const comRes = await fetch(apiUrl(`/api/comisiones/lista?${comisionParams}`), { headers: comHeaders })
       const comJson = comRes.ok ? await comRes.json() : { data: [] }
-      const comisiones = comJson?.data ?? []
+      const comisiones = (comJson?.data ?? []).filter(c => {
+        const rol = c.vendedor?.rol
+        return rol !== 'desarrollador' && rol !== 'administracion' && rol !== 'logistica'
+      })
 
       // ── 3. Items de cotizaciones para detalle por artículo ─────────────────
       const cotIds = [...new Set(despachos.map(d => d.cotizacion_id).filter(Boolean))]
@@ -118,7 +126,7 @@ export function useReporteLiquidacion({ fechaInicio, fechaFin, vendedorId } = {}
       const totalVentas      = registros.reduce((s, r) => s + r.ventaNeta, 0)
       const totalComisiones  = comisiones.reduce((s, c) => s + Number(c.totalcomision || 0), 0)
       const totalPagado      = comisiones.filter(c => c.estado === 'pagada').reduce((s, c) => s + Number(c.totalcomision || 0), 0)
-      const totalPendiente   = comisiones.filter(c => c.estado === 'pendiente').reduce((s, c) => s + Number(c.totalcomision || 0), 0)
+      const totalPendiente   = comisiones.filter(c => c.estado !== 'pagada').reduce((s, c) => s + Number(c.totalcomision || 0), 0)
 
       return {
         kpis: { totalVentas, totalComisiones, totalPagado, totalPendiente },

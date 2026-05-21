@@ -1,6 +1,6 @@
 // src/components/cotizaciones/CotizacionClienteSelector.jsx
 // Selector de cliente personalizado con búsqueda inteligente y confirmación de cliente ajeno
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { User, Search, X, Hash, Phone, MapPin, AlertCircle, ChevronDown, CheckCircle } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import { buscarClientes } from '../../utils/clienteSearch'
@@ -30,10 +30,14 @@ export default function ClienteSelector({ clientes, clienteId, onSelect }) {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [abierto])
 
-  const seleccionado = clientes.find(c => c.id === clienteId)
+  const clientesActivos = useMemo(() => {
+    return clientes.filter(c => c.activo !== false || c.id === clienteId)
+  }, [clientes, clienteId])
+
+  const seleccionado = clientesActivos.find(c => c.id === clienteId) || clientes.find(c => c.id === clienteId)
   const filtrados = busqueda.trim()
-    ? buscarClientes(clientes, busqueda)
-    : clientes
+    ? buscarClientes(clientesActivos, busqueda)
+    : clientesActivos
 
   function elegir(c) {
     // Si es vendedor y el cliente pertenece a otro vendedor, pedir confirmación

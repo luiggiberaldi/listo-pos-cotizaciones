@@ -1,6 +1,6 @@
 // src/components/cotizaciones/CotizacionRapida.jsx
 // Cotización rápida — totalmente responsiva (mobile-first)
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import {
   Zap, User, X, Plus, Minus, Package, ArrowLeft, Save, Send, Loader2,
   RefreshCw, Search, CheckCircle, ShoppingCart, DollarSign,
@@ -15,6 +15,7 @@ import { useGuardarBorrador, useEnviarCotizacion } from '../../hooks/useCotizaci
 import { useTasaCambio } from '../../hooks/useTasaCambio'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import useAuthStore from '../../store/useAuthStore'
+import { usePrecioVendedor } from '../../hooks/usePrecioVendedor'
 import { round2, mulR } from '../../utils/dinero'
 import { calcTotales } from '../../utils/calcTotales'
 import { fmtUsdSimple as fmtUsd, fmtBs } from '../../utils/format'
@@ -23,6 +24,7 @@ import { showToast } from '../ui/Toast'
 
 export default function CotizacionRapida({ onVolver, onGuardado }) {
   const { perfil } = useAuthStore()
+  const { aplicarMarkup, esExterno } = usePrecioVendedor()
   const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
   const { data: clientes = [] } = useClientes()
   const { data: inventarioData } = useInventario({ pageSize: 1000 })
@@ -92,14 +94,17 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
     }
   }, [mobileCartOpen])
 
-  // Filtrar clientes
-  const clientesFiltrados = clienteBusqueda.trim()
-    ? clientes.filter(c =>
+  // Filtrar clientes (excluir inactivos, preservando el seleccionado)
+  const clientesFiltrados = useMemo(() => {
+    if (!clienteBusqueda.trim()) return []
+    return clientes.filter(c =>
+      (c.activo !== false || c.id === clienteId) && (
         c.nombre.toLowerCase().includes(clienteBusqueda.toLowerCase()) ||
         (c.rif_cedula ?? '').toLowerCase().includes(clienteBusqueda.toLowerCase()) ||
         (c.telefono ?? '').includes(clienteBusqueda)
-      ).slice(0, 8)
-    : []
+      )
+    ).slice(0, 8)
+  }, [clientes, clienteBusqueda, clienteId])
 
   // Filtrar productos
   const productosFiltrados = useProductSearch(productos, productoBusqueda, catActiva)
@@ -117,7 +122,14 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
 
   function agregarProducto(p) {
     guardarProductoReciente(perfil?.id, p)
-    _agregarItem(p)
+    const precioBase = Number(p.precio_usd || p.preciousd || 0)
+    const precioConMarkup = aplicarMarkup(precioBase)
+    const pConMarkup = {
+      ...p,
+      precio_usd: precioConMarkup,
+      preciousd: precioConMarkup
+    }
+    _agregarItem(pConMarkup)
     setLastAdded(p.id)
     setTimeout(() => setLastAdded(null), 600)
   }
@@ -427,7 +439,7 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
                   yaAgregado ? 'text-emerald-700' : 'text-slate-700'
                 }`}>{p.nombre}</p>
                 <p className={`text-[10px] sm:text-[11px] font-black ${yaAgregado ? 'text-emerald-600' : 'text-slate-800'}`}>
-                  {fmtUsd(p.precio_usd)}
+                  {fmtUsd(aplicarMarkup(p.precio_usd))}
                 </p>
                 <p className={`text-[8px] sm:text-[9px] font-medium mt-0.5 ${
                   sinStock ? 'text-red-500' :

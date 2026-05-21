@@ -36,6 +36,7 @@ export default function LoginAvatar({ user, size = 'lg', className = '' }) {
 
   const esPlateado = ['administracion', 'logistica'].includes(user?.rol)
   const esDorado = user?.rol === 'jefe'
+  const esVendedorExterno = ['vendedor', 'vendedor_sin_comision'].includes(user?.rol) && (!!user?.es_externo || Number(user?.markup_pct) > 0)
 
   const v = esPlateado 
     ? {
@@ -54,7 +55,15 @@ export default function LoginAvatar({ user, size = 'lg', className = '' }) {
             shadowGlow: 'rgba(184,134,11,0.3)',
             accent: '#BF953F'
           }
-        : (user?.color ? hexVariants(user.color) : (COLORES_ROL[user?.rol] ?? COLORES_ROL.vendedor)))
+        : (esVendedorExterno
+            ? {
+                background: 'linear-gradient(135deg, #B45309 0%, #FCF6BA 45%, #D97706 70%, #78350F 100%)',
+                border: 'rgba(217,119,6,0.6)',
+                shadow: '#451a03',
+                shadowGlow: 'rgba(217,119,6,0.3)',
+                accent: '#D97706'
+              }
+            : (user?.color ? hexVariants(user.color) : (COLORES_ROL[user?.rol] ?? COLORES_ROL.vendedor))))
 
   const dim = size === 'lg'
     ? 'w-20 h-20 sm:w-[88px] sm:h-[88px] text-3xl sm:text-4xl'

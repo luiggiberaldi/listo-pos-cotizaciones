@@ -2,6 +2,7 @@
 // Fila compacta de producto para vista de lista
 import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle, Package, Trash2, ClipboardList, Eye } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
+import { usePrecioVendedor } from '../../hooks/usePrecioVendedor'
 import { fmtBs, usdToBs } from '../../utils/format'
 
 function fmtUsd(n) {
@@ -26,6 +27,10 @@ export default function ProductoRow({ producto, onEditar, onDesactivar, onBorrar
   const { perfil } = useAuthStore()
   const esAdministracion = perfil?.rol === 'administracion'
   const esPrivilegiado = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe') || esAdministracion
+  // Costo solo visible para administracion, jefe y desarrollador
+  const puedeVerCosto = ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)
+  const { aplicarMarkup, esExterno, markupPct } = usePrecioVendedor()
+  const precioDisplay = esExterno ? aplicarMarkup(producto.precio_usd) : Number(producto.precio_usd)
   const stockBajo = producto.stock_minimo > 0 && producto.stock_actual <= producto.stock_minimo
   const sobrecomprometido = comprometido > 0 && (producto.stock_actual - comprometido) < 0
   const catColor = colorCategoria(producto.categoria || '')
@@ -71,14 +76,14 @@ export default function ProductoRow({ producto, onEditar, onDesactivar, onBorrar
       {/* Precio + Stock */}
       <div className="hidden sm:flex items-center gap-4 pr-3 shrink-0">
         <div className="text-right">
-          <div>
-            <span className="font-bold text-slate-800 text-sm">{fmtUsd(producto.precio_usd)}</span>
-            {esPrivilegiado && producto.costo_usd != null && (
-              <span className="text-xs text-slate-400 ml-2">C: {fmtUsd(producto.costo_usd)}</span>
+          <div className="flex items-baseline gap-1.5 justify-end">
+            <span className="font-bold text-slate-800 text-sm">{fmtUsd(precioDisplay)}</span>
+            {puedeVerCosto && producto.costo_usd != null && (
+              <span className="text-xs text-slate-400 ml-1">C: {fmtUsd(producto.costo_usd)}</span>
             )}
           </div>
-          {tasa > 0 && producto.precio_usd != null && (
-            <div className="text-[11px] text-slate-400">{fmtBs(usdToBs(producto.precio_usd, tasa))}</div>
+          {tasa > 0 && precioDisplay > 0 && (
+            <div className="text-[11px] text-slate-400">{fmtBs(usdToBs(precioDisplay, tasa))}</div>
           )}
         </div>
 

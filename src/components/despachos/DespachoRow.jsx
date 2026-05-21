@@ -10,7 +10,8 @@ export default memo(function DespachoRow({ despacho, onVer, onEditar, tasa = 0 }
   const { perfil } = useAuthStore()
   const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
   const esPrivilegiado = esSupervisor || perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador'
-  const vendedorColor = despacho.vendedor?.color || '#64748b'
+  const esVendedorExterno = !!despacho.vendedor?.es_externo || (despacho.vendedor?.markup_pct != null && Number(despacho.vendedor.markup_pct) > 0)
+  const vendedorColor = esVendedorExterno ? '#D97706' : (despacho.vendedor?.color || '#64748b')
   const canEditar = despacho.estado === 'pendiente' && (esPrivilegiado || perfil?.rol === 'logistica' || despacho.vendedor_id === perfil?.id)
 
   const numDisplay = despacho.cotizacion
@@ -46,7 +47,14 @@ export default memo(function DespachoRow({ despacho, onVer, onEditar, tasa = 0 }
             {esPrivilegiado && despacho.vendedor && (
               <>
                 <span className="text-slate-300">·</span>
-                <span style={{ color: vendedorColor }}>{despacho.vendedor.nombre}</span>
+                {esVendedorExterno ? (
+                  <span className="inline-flex items-center gap-1 font-semibold" style={{ color: '#D97706' }}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                    💼 {despacho.vendedor.nombre}
+                  </span>
+                ) : (
+                  <span style={{ color: vendedorColor }}>{despacho.vendedor.nombre}</span>
+                )}
               </>
             )}
           </div>

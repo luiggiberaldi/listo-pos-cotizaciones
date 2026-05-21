@@ -2,6 +2,7 @@
 // Tarjeta de producto reutilizable (grid compacto) — usada por VentaRapida y CotizacionBuilder
 import { Plus, Minus, Trash2 } from 'lucide-react'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../../utils/format'
+import { usePrecioVendedor } from '../../hooks/usePrecioVendedor'
 
 /**
  * @param {object} props
@@ -26,6 +27,8 @@ export default function ProductCard({
   onMenos,
   onCantidadDirecta,
 }) {
+  const { aplicarMarkup, esExterno, markupPct } = usePrecioVendedor()
+  const precioDisplay = esExterno ? aplicarMarkup(p.precio_usd) : Number(p.precio_usd) || 0
   const stock = Number(p.stock_actual) || 0
   const sinStock = stock <= 0
   const sinPrecio = !p.precio_usd || Number(p.precio_usd) <= 0
@@ -68,7 +71,7 @@ export default function ProductCard({
 
       {/* Precio */}
       <p className={`text-[11px] font-black ${agregado ? 'text-emerald-600' : 'text-slate-800'}`}>
-        {fmtUsd(p.precio_usd)}
+        {fmtUsd(precioDisplay)}
       </p>
       {tieneMultiprecios && (
         <p className="text-[8px] font-bold text-primary/60">
@@ -76,7 +79,7 @@ export default function ProductCard({
         </p>
       )}
       {tasa > 0 && (
-        <p className="text-[8px] text-slate-400 leading-tight">{fmtBs(usdToBs(p.precio_usd, tasa))}</p>
+        <p className="text-[8px] text-slate-400 leading-tight">{fmtBs(usdToBs(precioDisplay, tasa))}</p>
       )}
 
       {/* Stock badge */}

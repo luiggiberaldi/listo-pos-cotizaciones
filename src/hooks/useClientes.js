@@ -17,7 +17,7 @@ export function useClientes(busqueda = '') {
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
 
   return useQuery({
-    queryKey: [...CLIENTES_KEY, busqueda],
+    queryKey: [...CLIENTES_KEY, perfil?.id || '', busqueda],
     queryFn: async () => {
       const params = new URLSearchParams()
       if (busqueda.trim()) params.set('busqueda', busqueda.trim())
@@ -43,7 +43,7 @@ export function useCliente(id) {
           id, codigo_cliente, nombre, rif_cedula, telefono, email,
           direccion, estado, ciudad, notas, tipo_cliente, activo,
           vendedor_id, asignado_en, saldo_pendiente,
-          vendedor:usuarios!clientes_vendedor_id_fkey(id, nombre, telefono)
+          vendedor:usuarios!clientes_vendedor_id_fkey(id, nombre, telefono, markup_pct, es_externo)
         `)
         .eq('id', id)
         .single()
@@ -248,7 +248,7 @@ export function useVendedores() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('usuarios')
-        .select('id, nombre, rol, color, telefono')
+        .select('id, nombre, rol, color, telefono, markup_pct, es_externo')
         .eq('activo', true)
         .order('nombre', { ascending: true })
 

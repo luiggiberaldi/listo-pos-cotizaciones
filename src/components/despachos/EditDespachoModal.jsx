@@ -24,6 +24,9 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
   const crearTransp = useCrearTransportista()
 
   const [clienteId, setClienteId] = useState('')
+  const clientesActivosParaDespacho = useMemo(() => {
+    return clientes.filter(c => c.activo !== false || c.id === clienteId || c.id === despacho?.cliente_id)
+  }, [clientes, clienteId, despacho?.cliente_id])
   const [referenciaPago, setReferenciaPago] = useState('')
   const [transportistaId, setTransportistaId] = useState('')
   const [fleteUsd, setFleteUsd] = useState('')
@@ -185,7 +188,7 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
                 <CustomSelect
                   value={clienteId}
                   onChange={setClienteId}
-                  options={clientes.map(c => ({
+                  options={clientesActivosParaDespacho.map(c => ({
                     value: c.id,
                     label: c.nombre,
                     sub: c.rif_cedula

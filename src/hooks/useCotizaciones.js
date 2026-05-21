@@ -77,7 +77,7 @@ export function useCotizaciones({ estado = '', clienteId = '', veTodos = false }
 
       // 3. Cargar todos los vendedores necesarios (incluyendo teléfonos)
       const vendedoresRes = allVendedorIds.length
-        ? await supabase.from('usuarios').select('id, nombre, color, telefono, rol').in('id', allVendedorIds)
+        ? await supabase.from('usuarios').select('id, nombre, color, telefono, rol, markup_pct, es_externo').in('id', allVendedorIds)
         : { data: [] }
 
       const vendedoresMap = Object.fromEntries((vendedoresRes.error ? [] : vendedoresRes.data ?? []).map(v => [v.id, v]))
@@ -144,7 +144,7 @@ export function useCotizacion(id) {
             }).then(r => r.ok ? r.json() : [])
           : [],
         cot.vendedor_id
-          ? supabase.from('usuarios').select('id, nombre, color, telefono, rol').eq('id', cot.vendedor_id).maybeSingle()
+          ? supabase.from('usuarios').select('id, nombre, color, telefono, rol, markup_pct, es_externo').eq('id', cot.vendedor_id).maybeSingle()
           : Promise.resolve({ data: null }),
       ])
       const clienteRaw = lookups[0]?.[0] ?? null
@@ -205,6 +205,7 @@ export function useGuardarBorrador() {
         subtotal_usd:         subtotal,
         descuento_usd:        0,
         total_usd:            totalUsd,
+        canal_venta:          campos.canal_venta || 'interno',
       }
 
       const itemRows = items.map((it, idx) => ({

@@ -4,7 +4,8 @@ import { useState, useMemo } from 'react'
 import {
   BarChart3, CreditCard, RefreshCw, Download,
   FileText, DollarSign, AlertTriangle,
-  Clock, Users, Percent, ArrowUpCircle, Loader2
+  Clock, Users, Percent, ArrowUpCircle, Loader2, Briefcase,
+  ChevronDown, Globe, UserCheck
 } from 'lucide-react'
 import { useReporteVentas } from '../hooks/useReporteVentas'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
@@ -76,6 +77,10 @@ function KpiCard({ icon: Icon, label, value, sub, gradient, border }) {
 function FormaPagoSection({ data = [], kpis }) {
   if (data.length === 0) return null
   const total = data.reduce((s, fp) => s + fp.totalUsd, 0)
+
+  const fpCxc = data.find(fp => fp.formaPago === 'Cta por cobrar')
+  const totalCxc = fpCxc ? fpCxc.totalUsd : 0
+  const ventasSinCxc = (kpis?.totalVentas || 0) - totalCxc
   const COLORS = {
     'Efectivo': '#10b981',
     'Zelle': '#3b82f6',
@@ -144,7 +149,7 @@ function FormaPagoSection({ data = [], kpis }) {
         {kpis && (
           <div className="mt-3 pt-3 border-t border-dashed border-slate-200 space-y-1.5 text-[10px] sm:text-xs text-slate-500 bg-slate-50 p-2.5 rounded-xl">
             <p className="font-extrabold text-slate-700 uppercase tracking-wider text-[8px] sm:text-[9px] mb-1">
-              Desglose de la Diferencia (Flete):
+              Desglose de la Diferencia (Recaudación vs Ventas Netas):
             </p>
             <div className="flex justify-between items-center">
               <span>Ventas Netas (Mercancía)</span>
@@ -160,6 +165,19 @@ function FormaPagoSection({ data = [], kpis }) {
               <span>Total Recaudado</span>
               <span>{fmtUsd(total)}</span>
             </div>
+
+            {totalCxc > 0 && (
+              <div className="pt-1.5 border-t border-slate-200/60 mt-1.5 space-y-1.5">
+                <div className="flex justify-between items-center text-slate-500">
+                  <span>Cuentas por Cobrar (CxC)</span>
+                  <span className="font-bold text-red-500">-{fmtUsd(totalCxc)}</span>
+                </div>
+                <div className="flex justify-between items-center font-extrabold text-slate-800 bg-slate-200/40 p-1.5 rounded-lg text-[10.5px] sm:text-[11.5px]">
+                  <span>Ventas Netas sin CxC (Recaudación Real)</span>
+                  <span className="font-black text-slate-900">{fmtUsd(ventasSinCxc)}</span>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -297,6 +315,96 @@ function AgingSection({ title, data, countLabel }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Helper to filter sales report data for PDF generation
+function filtrarReporteVentas(reporte, tipoFiltro) {
+  if (tipoFiltro === 'todos') return reporte
+
+  const esExterno = (v) => !!v.es_externo || (v.markup_pct != null && Number(v.markup_pct) > 0)
+
+  // 1. Filtrar porVendedor
+  const filteredPorVendedor = (reporte.porVendedor || []).filter(v => {
+    const check = esExterno(v)
+    return tipoFiltro === 'externos' ? check : !check
+  })
+
+  const sellerIds = new Set(filteredPorVendedor.map(v => v.id))
+
+  // 2. Filtrar despachos
+  const filteredDespachos = (reporte.despachos || []).filter(d => {
+    const vid = d.asesor_id || 'unassigned'
+    return sellerIds.has(vid)
+  })
+
+  // 3. Recalcular KPIs
+  const totalVentas = filteredDespachos.reduce((s, d) => s + Number(d.venta_neta_usd || 0), 0)
+  const totalFlete = filteredDespachos.reduce((s, d) => s + Number(d.flete_usd || 0), 0)
+  const totalDescuentos = filteredDespachos.reduce((s, d) => s + Number(d.descuento_usd || 0), 0)
+  const numDespachos = filteredDespachos.length
+  const ticketPromedio = numDespachos > 0 ? totalVentas / numDespachos : 0
+
+  const totalComisiones = filteredPorVendedor.reduce((s, v) => s + Number(v.comision || 0), 0)
+  const comisionesPagadas = 0
+  const comisionesPendientes = totalComisiones
+  const comisionCabilla2 = filteredPorVendedor.reduce((s, v) => s + Number(v.comisionCabilla2 || 0), 0)
+  const comisionCabilla3 = filteredPorVendedor.reduce((s, v) => s + Number(v.comisionCabilla3 || 0), 0)
+  const comisionOtros = filteredPorVendedor.reduce((s, v) => s + Number(v.comisionOtros || 0), 0)
+
+  // 4. Recalcular Formas de Pago
+  const formaPagoMap = {}
+  filteredDespachos.forEach(d => {
+    const formas = Array.isArray(d.forma_pago) ? d.forma_pago : []
+    if (formas.length === 0) {
+      const fallback = 'Pendiente'
+      if (!formaPagoMap[fallback]) formaPagoMap[fallback] = { formaPago: fallback, count: 0, totalUsd: 0, pagos: [] }
+      formaPagoMap[fallback].count++
+      formaPagoMap[fallback].totalUsd += Number(d.venta_neta_usd || 0)
+      formaPagoMap[fallback].pagos.push({
+        cliente: d.cliente_nombre || 'Sin cliente',
+        numero: d.despacho_numero || d.despacho_id?.slice(0, 8),
+        monto: Number(d.venta_neta_usd || 0)
+      })
+    } else {
+      formas.forEach(f => {
+        const nombre = f.metodo || 'Sin especificar'
+        const monto = Number(f.monto) || 0
+        if (!formaPagoMap[nombre]) formaPagoMap[nombre] = { formaPago: nombre, count: 0, totalUsd: 0, pagos: [] }
+        formaPagoMap[nombre].count++
+        formaPagoMap[nombre].totalUsd += monto
+        formaPagoMap[nombre].pagos.push({
+          cliente: d.cliente_nombre || 'Sin cliente',
+          numero: d.despacho_numero || d.despacho_id?.slice(0, 8),
+          monto: monto
+        })
+      })
+    }
+  })
+  const porFormaPago = Object.values(formaPagoMap).sort((a, b) => b.totalUsd - a.totalUsd)
+
+  return {
+    ...reporte,
+    kpis: {
+      totalVentas,
+      totalFlete,
+      totalDescuentos,
+      numDespachos,
+      ticketPromedio,
+      totalComisiones,
+      comisionesPagadas,
+      comisionesPendientes,
+      comisionCabilla2,
+      comisionCabilla3,
+      comisionOtros,
+      prevTotalVentas: 0,
+      prevNumDespachos: 0,
+      prevTicketPromedio: 0,
+      prevTotalComisiones: 0,
+    },
+    porVendedor: filteredPorVendedor,
+    porFormaPago,
+    despachos: filteredDespachos,
+  }
+}
+
 // ─── Tab Ventas ───────────────────────────────────────────────────────────────
 function TabVentas({ configNeg }) {
   const [rango, setRango] = useState(() => {
@@ -305,6 +413,7 @@ function TabVentas({ configNeg }) {
     return { from: actual.from, to: actual.to, prevFrom: anterior.from, prevTo: anterior.to }
   })
   const [exportando, setExportando] = useState(false)
+  const [showExportMenu, setShowExportMenu] = useState(false)
 
   const { data: reporte, isLoading, isError, refetch } = useReporteVentas({
     from: rango.from,
@@ -313,20 +422,24 @@ function TabVentas({ configNeg }) {
     prevTo: rango.prevTo,
   })
 
-  async function exportarPDF() {
+  async function exportarPDF(tipoFiltro = 'todos') {
     if (!reporte) return
     setExportando(true)
     try {
       const { generarReporteVentasPDF } = await import('../services/pdf/comisionesPDF')
+      
+      const reporteFiltrado = filtrarReporteVentas(reporte, tipoFiltro)
+
       const reportePDF = {
-        ...reporte,
-        porVendedor: (reporte.porVendedor || []).map(v => ({
+        ...reporteFiltrado,
+        tipoFiltro,
+        porVendedor: (reporteFiltrado.porVendedor || []).map(v => ({
           ...v,
           vendedor: v.nombre,
           vendedorColor: v.color,
           count: v.despachos,
         })),
-        porCliente: (reporte.porCliente || []).map(c => ({
+        porCliente: (reporteFiltrado.porCliente || []).map(c => ({
           ...c,
           cliente: c.nombre,
           count: c.despachos,
@@ -380,8 +493,57 @@ function TabVentas({ configNeg }) {
             <DateRangeSelector value={rango} onChange={setRango} />
           </div>
           
-          <div className="flex justify-end border-t border-slate-50 pt-4">
-            <ExportButton onClick={exportarPDF} loading={exportando} disabled={exportando || !despachos.length} className="h-11 px-8" />
+          <div className="flex justify-end border-t border-slate-50 pt-4 relative">
+            <div className="relative">
+              <button
+                onClick={() => setShowExportMenu(!showExportMenu)}
+                disabled={exportando || !despachos.length}
+                className="flex items-center gap-2 text-xs font-black px-5 py-2.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-lg shadow-indigo-100/40"
+                style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
+              >
+                <Download size={13} />
+                {exportando ? 'Generando...' : 'Exportar PDF'}
+                <ChevronDown size={13} className={`transition-transform duration-200 ${showExportMenu ? 'rotate-180' : ''}`} />
+              </button>
+
+              {showExportMenu && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowExportMenu(false)} />
+                  <div className="absolute right-0 mt-2 w-56 rounded-xl bg-white border border-slate-200 shadow-xl z-20 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+                    <button
+                      onClick={() => {
+                        setShowExportMenu(false)
+                        exportarPDF('todos')
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors"
+                    >
+                      <FileText size={14} className="text-slate-400" />
+                      Exportar PDF Completo
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowExportMenu(false)
+                        exportarPDF('internos')
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors border-t border-slate-50"
+                    >
+                      <UserCheck size={14} className="text-indigo-500" />
+                      Exportar Solo Internos
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowExportMenu(false)
+                        exportarPDF('externos')
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors border-t border-slate-50"
+                    >
+                      <Globe size={14} className="text-amber-500" />
+                      Exportar Solo Externos
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -553,15 +715,29 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
         console.error('Error RPC detalle artículos:', error)
       } else if (itemsRPC && itemsRPC.length > 0) {
         // Filtrar SOLO los ítems que pertenecen a los despachos visibles en la UI
-        const itemsFiltrados = itemsRPC.filter(item => despachoIds.has(item.despacho_id))
+        const itemsFiltrados = itemsRPC.filter(item => despachoIds.has(item.despacho_id || item.despachoid))
         if (itemsFiltrados.length > 0) {
           comisionesParaPDF = itemsFiltrados
         }
       }
 
+      // Enriquecer cada item con el objeto vendedor para que el PDF dibuje/clasifique correctamente
+      if (comisionesParaPDF && comisionesParaPDF.length > 0) {
+        comisionesParaPDF = comisionesParaPDF.map(item => ({
+          ...item,
+          vendedor: {
+            id: vendedor?.id,
+            nombre: vendedor?.nombre,
+            color: vendedor?.color,
+            markup_pct: vendedor?.markup_pct,
+            es_externo: vendedor?.es_externo
+          }
+        }))
+      }
+
       await generarComisionesPDF({
         comisiones: comisionesParaPDF,
-        vendedor: { nombre: vendedor?.nombre, color: vendedor?.color },
+        vendedor: { nombre: vendedor?.nombre, color: vendedor?.color, markup_pct: vendedor?.markup_pct, es_externo: vendedor?.es_externo },
         rango,
         config: configNeg ?? {}
       })
@@ -577,7 +753,16 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`Detalle de Comisiones - ${vendedor?.nombre || 'Vendedor'}`}
+      title={
+        <div className="flex items-center gap-2">
+          <span>Detalle de Comisiones - {vendedor?.nombre || 'Vendedor'}</span>
+          {vendedor && (!!vendedor.es_externo || (vendedor.markup_pct != null && Number(vendedor.markup_pct) > 0)) && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#B45309] bg-[#FEF3C7] border border-[#FDE68A] rounded px-1.5 py-0.5">
+              💼 {vendedor.markup_pct ? `Externo (+${vendedor.markup_pct}%)` : 'Externo'}
+            </span>
+          )}
+        </div>
+      }
       className="max-w-6xl"
     >
       {isLoading ? <SkeletonReporte /> : (
@@ -683,6 +868,8 @@ function TabComisiones({ configNeg }) {
           id: vId,
           nombre: c.vendedor?.nombre || 'Sin Asignar',
           color: c.vendedor?.color || '#cbd5e1',
+          markup_pct: c.vendedor?.markup_pct ?? null,
+          rol: c.vendedor?.rol,
           totalUsd: 0,
           totalBs: 0,
           pendUsd: 0,
@@ -700,7 +887,9 @@ function TabComisiones({ configNeg }) {
       if (['pendiente', 'cta_cobrar'].includes(c.estado)) map[vId].pendUsd += m
       else map[vId].pagUsd += m
     })
-    return Object.values(map).sort((a, b) => b.totalUsd - a.totalUsd)
+    return Object.values(map)
+      .filter(v => v.rol !== 'desarrollador' && v.rol !== 'administracion' && v.rol !== 'logistica')
+      .sort((a, b) => b.totalUsd - a.totalUsd)
   }, [comisiones])
 
   // Obtener lista única de vendedores para el select
@@ -714,46 +903,17 @@ function TabComisiones({ configNeg }) {
     try {
       const { generarComisionesPDF } = await import('../services/pdf/comisionesPDF')
 
-      let { data: detalleCompleto, error } = await supabase.rpc('obtener_reporte_ventas_comisiones', {
-        p_fecha_inicio: rango.from ? `${rango.from}T00:00:00-04:00` : null,
-        p_fecha_fin: rango.to ? `${rango.to}T23:59:59-04:00` : null,
-        p_vendedor_id: null
-      })
+      const [rpcRes, dbUsuariosRes] = await Promise.all([
+        supabase.rpc('obtener_reporte_ventas_comisiones', {
+          p_fecha_inicio: rango.from ? `${rango.from}T00:00:00-04:00` : null,
+          p_fecha_fin: rango.to ? `${rango.to}T23:59:59-04:00` : null,
+          p_vendedor_id: filtroVendedor || null
+        }),
+        supabase.from('usuarios').select('id, nombre, color, markup_pct, rol, es_externo')
+      ])
 
-      if (error) console.error('Error RPC General:', error)
-
-      // Fallback a datos cargados en el hook useComisiones
-      if ((!detalleCompleto || detalleCompleto.length === 0) && comisiones.length > 0) {
-        detalleCompleto = comisiones;
-      }
-
-      if (!detalleCompleto || detalleCompleto.length === 0) {
-        alert(`🔍 SIN DATOS: No hay comisiones registradas entre ${rango.from} y ${rango.to}.`);
-        return;
-      }
-
-      await generarComisionesPDF({
-        comisiones: detalleCompleto || [],
-        config: configNeg ?? {}
-      })
-    } catch (e) {
-      console.error('Error generando PDF general:', e)
-      alert('❌ Error al generar reporte general: ' + e.message)
-    } finally {
-      setExportando(false)
-    }
-  }
-
-  async function exportarPDF() {
-    setExportando(true)
-    try {
-      const { generarComisionesPDF } = await import('../services/pdf/comisionesPDF')
-
-      let { data: detalleCompleto, error } = await supabase.rpc('obtener_reporte_ventas_comisiones', {
-        p_fecha_inicio: rango.from ? `${rango.from}T00:00:00-04:00` : null,
-        p_fecha_fin: rango.to ? `${rango.to}T23:59:59-04:00` : null,
-        p_vendedor_id: filtroVendedor || null
-      })
+      let { data: detalleCompleto, error } = rpcRes
+      const dbUsuarios = dbUsuariosRes.data ?? []
 
       if (error) console.error('Error RPC General:', error)
 
@@ -766,7 +926,7 @@ function TabComisiones({ configNeg }) {
       if (comisiones.length > 0) {
         const despachoIds = new Set(comisiones.map(c => c.despachoid).filter(Boolean))
         if (detalleCompleto && detalleCompleto.length > 0) {
-          const itemsFiltrados = detalleCompleto.filter(item => despachoIds.has(item.despacho_id))
+          const itemsFiltrados = detalleCompleto.filter(item => despachoIds.has(item.despacho_id || item.despachoid))
           if (itemsFiltrados.length > 0) {
             detalleCompleto = itemsFiltrados
           }
@@ -778,13 +938,51 @@ function TabComisiones({ configNeg }) {
         return;
       }
 
+      // Crear lookup map de usuarios
+      const userLookup = {}
+      if (dbUsuarios) {
+        dbUsuarios.forEach(u => {
+          if (u.nombre) {
+            userLookup[u.nombre.trim().toLowerCase()] = {
+              id: u.id,
+              nombre: u.nombre,
+              color: u.color,
+              markup_pct: u.markup_pct != null ? Number(u.markup_pct) : null,
+              es_externo: !!u.es_externo
+            }
+          }
+        })
+      }
+
+      // Enriquecer detalleCompleto con la información de vendedor (incluyendo markup_pct)
+      detalleCompleto = detalleCompleto.map(item => {
+        if (item.vendedor) return item
+        const key = item.asesor ? item.asesor.trim().toLowerCase() : ''
+        const uInfo = userLookup[key]
+        return {
+          ...item,
+          vendedor: uInfo ? {
+            id: uInfo.id,
+            nombre: uInfo.nombre,
+            color: uInfo.color,
+            markup_pct: uInfo.markup_pct,
+            es_externo: uInfo.es_externo
+          } : {
+            nombre: item.asesor || 'Sin Asesor',
+            color: item.asesor_color || '#1B365D',
+            markup_pct: null,
+            es_externo: false
+          }
+        }
+      })
+
       const vendedorInfo = filtroVendedor
         ? vendedoresAgrupados.find(v => v.id === filtroVendedor)
         : null
 
       await generarComisionesPDF({
         comisiones: detalleCompleto || [],
-        vendedor: vendedorInfo ? { nombre: vendedorInfo.nombre, color: vendedorInfo.color } : null,
+        vendedor: vendedorInfo ? { nombre: vendedorInfo.nombre, color: vendedorInfo.color, markup_pct: vendedorInfo.markup_pct, es_externo: vendedorInfo.es_externo } : null,
         rango,
         config: configNeg ?? {}
       })
@@ -819,7 +1017,7 @@ function TabComisiones({ configNeg }) {
       if (comisionesVendedorUI.length > 0) {
         const despachoIds = new Set(comisionesVendedorUI.map(c => c.despachoid).filter(Boolean))
         if (detalleVendedor && detalleVendedor.length > 0) {
-          const itemsFiltrados = detalleVendedor.filter(item => despachoIds.has(item.despacho_id))
+          const itemsFiltrados = detalleVendedor.filter(item => despachoIds.has(item.despacho_id || item.despachoid))
           if (itemsFiltrados.length > 0) {
             detalleVendedor = itemsFiltrados
           }
@@ -831,9 +1029,21 @@ function TabComisiones({ configNeg }) {
         return;
       }
 
+      // Enriquecer cada item con el objeto vendedor para que el PDF dibuje/clasifique correctamente
+      detalleVendedor = detalleVendedor.map(item => ({
+        ...item,
+        vendedor: {
+          id: vendedor.id,
+          nombre: vendedor.nombre,
+          color: vendedor.color,
+          markup_pct: vendedor.markup_pct,
+          es_externo: vendedor.es_externo
+        }
+      }))
+
       await generarComisionesPDF({
         comisiones: detalleVendedor || [],
-        vendedor: { nombre: vendedor.nombre, color: vendedor.color },
+        vendedor: { nombre: vendedor.nombre, color: vendedor.color, markup_pct: vendedor.markup_pct, es_externo: vendedor.es_externo },
         rango,
         config: configNeg ?? {}
       })
@@ -924,49 +1134,123 @@ function TabComisiones({ configNeg }) {
               gradient="linear-gradient(135deg, #065f46, #064e3b)" border="rgba(255,255,255,0.05)" />
           </div>
 
-          {/* Tarjetas de Vendedores (Resumen) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {vendedoresAgrupados.map(v => (
-              <div
-                key={v.id}
-                onClick={() => setVendedorSeleccionado(v)}
-                className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:border-indigo-300 hover:shadow-md transition-all flex flex-col gap-3 group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0 shadow-inner" style={{ backgroundColor: v.color }}>
-                    {v.nombre.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-bold text-slate-800 truncate group-hover:text-indigo-600 transition-colors">{v.nombre}</h4>
-                    <p className="text-xs text-slate-500 font-medium">{v.cantidad} despachos procesados</p>
-                  </div>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); exportarIndividualPDF(v); }}
-                    title="Descargar reporte individual"
-                    className="p-2 bg-slate-50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-xl border border-slate-100 hover:border-indigo-200 transition-all"
-                  >
-                    <Download size={14} />
-                  </button>
-                </div>
+          {/* Tarjetas de Vendedores (Resumen Separado) */}
+          {(() => {
+            const vendedoresInternos = vendedoresAgrupados.filter(v => !(v.es_externo || v.markup_pct > 0))
+            const vendedoresExternos = vendedoresAgrupados.filter(v => !!v.es_externo || v.markup_pct > 0)
+            return (
+              <div className="space-y-6">
+                {/* 1. ASESORES INTERNOS */}
+                {vendedoresInternos.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 px-1">
+                      <Users size={16} className="text-slate-500" />
+                      <h4 className="text-xs font-black text-slate-500 uppercase tracking-wider">Vendedores Internos ({vendedoresInternos.length})</h4>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {vendedoresInternos.map(v => (
+                        <div
+                          key={v.id}
+                          onClick={() => setVendedorSeleccionado(v)}
+                          className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:border-indigo-300 hover:shadow-md transition-all flex flex-col gap-3 group"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0 shadow-inner" style={{ backgroundColor: v.color }}>
+                              {v.nombre.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-bold text-slate-800 truncate group-hover:text-indigo-600 transition-colors">{v.nombre}</h4>
+                              <p className="text-xs text-slate-500 font-medium">{v.cantidad} despachos procesados</p>
+                            </div>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); exportarIndividualPDF(v); }}
+                              title="Descargar reporte individual"
+                              className="p-2 bg-slate-50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-xl border border-slate-100 hover:border-indigo-200 transition-all"
+                            >
+                              <Download size={14} />
+                            </button>
+                          </div>
 
-                <div className="grid grid-cols-2 gap-2 mt-2">
-                  <div className="bg-slate-50 rounded-xl p-2.5 text-center border border-slate-100">
-                    <p className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">Total USD</p>
-                    <p className="font-bold text-slate-900">{fmtUsd(v.totalUsd)}</p>
-                  </div>
-                  <div className="bg-amber-50/50 rounded-xl p-2.5 text-center border border-amber-100/50">
-                    <p className="text-[10px] text-amber-600/70 font-bold uppercase mb-0.5">Pendiente</p>
-                    <p className="font-bold text-amber-600">{fmtUsd(v.pendUsd)}</p>
-                  </div>
-                </div>
+                          <div className="grid grid-cols-2 gap-2 mt-2">
+                            <div className="bg-slate-50 rounded-xl p-2.5 text-center border border-slate-100">
+                              <p className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">Total USD</p>
+                              <p className="font-bold text-slate-900">{fmtUsd(v.totalUsd)}</p>
+                            </div>
+                            <div className="bg-amber-50/50 rounded-xl p-2.5 text-center border border-amber-100/50">
+                              <p className="text-[10px] text-amber-600/70 font-bold uppercase mb-0.5">Pendiente</p>
+                              <p className="font-bold text-amber-600">{fmtUsd(v.pendUsd)}</p>
+                            </div>
+                          </div>
 
-                <div className="flex justify-between items-center px-1 pt-1">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Equiv. Bs</span>
-                  <span className="text-xs font-bold text-indigo-600">{fmtBs(v.totalBs)}</span>
-                </div>
+                          <div className="flex justify-between items-center px-1 pt-1">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase">Equiv. Bs</span>
+                            <span className="text-xs font-bold text-indigo-600">{fmtBs(v.totalBs)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. VENDEDORES EXTERNOS */}
+                {vendedoresExternos.length > 0 && (
+                  <div className="space-y-3 pt-2">
+                    <div className="flex items-center gap-2 px-1">
+                      <Briefcase size={16} className="text-amber-600 animate-pulse" />
+                      <h4 className="text-xs font-black text-amber-700 uppercase tracking-wider">Vendedores Externos ({vendedoresExternos.length})</h4>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {vendedoresExternos.map(v => (
+                        <div
+                          key={v.id}
+                          onClick={() => setVendedorSeleccionado(v)}
+                          className="bg-white p-4 rounded-2xl border border-amber-200 shadow-sm cursor-pointer hover:border-amber-400 hover:shadow-md transition-all flex flex-col gap-3 group bg-amber-50/5"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0 shadow-inner" style={{ backgroundColor: '#D97706' }}>
+                              {v.nombre.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-bold text-slate-800 truncate group-hover:text-amber-600 transition-colors">{v.nombre}</h4>
+                              <div className="flex flex-col gap-0.5 mt-0.5">
+                                <span className="text-xs text-slate-500 font-medium">{v.cantidad} despachos procesados</span>
+                                <span className="inline-flex items-center gap-1 text-[9px] font-bold text-[#B45309] bg-[#FEF3C7] border border-[#FDE68A] rounded px-1.5 py-0.2 w-fit">
+                                  💼 Externo (+{v.markup_pct}%)
+                                </span>
+                              </div>
+                            </div>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); exportarIndividualPDF(v); }}
+                              title="Descargar reporte individual"
+                              className="p-2 bg-amber-50 hover:bg-amber-100 text-amber-600 hover:text-amber-700 rounded-xl border border-amber-100 hover:border-amber-200 transition-all"
+                            >
+                              <Download size={14} />
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 mt-2">
+                            <div className="bg-slate-50 rounded-xl p-2.5 text-center border border-slate-100">
+                              <p className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">Total USD</p>
+                              <p className="font-bold text-slate-900">{fmtUsd(v.totalUsd)}</p>
+                            </div>
+                            <div className="bg-amber-50/50 rounded-xl p-2.5 text-center border border-amber-100/50">
+                              <p className="text-[10px] text-amber-600/70 font-bold uppercase mb-0.5">Pendiente</p>
+                              <p className="font-bold text-amber-600">{fmtUsd(v.pendUsd)}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex justify-between items-center px-1 pt-1">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase">Equiv. Bs</span>
+                            <span className="text-xs font-bold text-indigo-600">{fmtBs(v.totalBs)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            ))}
-          </div>
+            )
+          })()}
 
           <ModalDetalleVendedor
             isOpen={!!vendedorSeleccionado}

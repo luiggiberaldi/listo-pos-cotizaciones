@@ -158,7 +158,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           setItemsFaltantes(faltantes)
           
           // Calcular comisión solo sobre productos reales (sin cortes)
-          const est = calcComisionEstimada(itemsSinCorte, configNegocio)
+          const est = calcComisionEstimada(itemsSinCorte, configNegocio, despacho.vendedor)
           setComisionEst(est)
         } catch (err) {
           console.error('Error verificando stock:', err)
@@ -194,7 +194,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const numDisplay = despacho.cotizacion
     ? `DES-${String(despacho.cotizacion.numero).padStart(5, '0')}`
     : `DES-${String(despacho.numero).padStart(5, '0')}`
-  const vendedorColor = despacho.vendedor?.color || '#64748b'
+  const esVendedorExterno = !!despacho.vendedor?.es_externo || (despacho.vendedor?.markup_pct != null && Number(despacho.vendedor.markup_pct) > 0)
+  const vendedorColor = esVendedorExterno ? '#D97706' : (despacho.vendedor?.color || '#64748b')
   const esVendedorSinComision = (despacho.cliente_factura || despacho.cliente)?.vendedor?.rol === 'vendedor_sin_comision'
 
   const cotNum = despacho.cotizacion
@@ -756,10 +757,17 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
               {(despacho.cliente_factura || despacho.cliente).nombre}
             </p>
             {esPrivilegiado && despacho.vendedor && (
-              <span className="inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full"
-                style={{ backgroundColor: vendedorColor + '18', color: vendedorColor, border: `1px solid ${vendedorColor}40` }}>
-                {despacho.vendedor.nombre}
-              </span>
+              esVendedorExterno ? (
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2 py-0.5 rounded-full"
+                  style={{ backgroundColor: '#FEF3C7', color: '#B45309', border: '1px solid #FDE68A' }}>
+                  💼 {despacho.vendedor.nombre} <span className="text-[9px] px-1 py-0.2 bg-[#B45309] text-white rounded font-extrabold uppercase">Ext</span>
+                </span>
+              ) : (
+                <span className="inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full"
+                  style={{ backgroundColor: vendedorColor + '18', color: vendedorColor, border: `1px solid ${vendedorColor}40` }}>
+                  {despacho.vendedor.nombre}
+                </span>
+              )
             )}
           </div>
         )}

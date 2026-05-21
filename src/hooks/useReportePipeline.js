@@ -24,7 +24,7 @@ export function useReportePipeline({ from, to }) {
         .select(`
           id, numero, version, estado, total_usd, subtotal_usd,
           creado_en, enviada_en,
-          vendedor:usuarios!cotizaciones_vendedor_id_fkey(id, nombre, color),
+          vendedor:usuarios!cotizaciones_vendedor_id_fkey(id, nombre, color, rol),
           cliente:clientes!cotizaciones_cliente_id_fkey(id, nombre)
         `)
         .gte('creado_en', `${from}T00:00:00${tzStr}`)
@@ -35,7 +35,10 @@ export function useReportePipeline({ from, to }) {
 
       const { data: cotizaciones, error } = await q
       if (error) throw error
-      const cots = cotizaciones || []
+      const cots = (cotizaciones || []).filter(c => {
+        const rol = c.vendedor?.rol
+        return rol !== 'desarrollador' && rol !== 'administracion' && rol !== 'logistica'
+      })
 
       // Agregar: por estado
       const estados = ['borrador', 'enviada', 'aceptada', 'rechazada', 'vencida', 'anulada']

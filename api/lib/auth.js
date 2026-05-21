@@ -34,13 +34,14 @@ export async function verifyAuth(request, env) {
   user.operator_id = user.app_metadata?.operator_id || null;
   user.operator_rol = user.app_metadata?.operator_rol || null;
   user.operator_nombre = user.app_metadata?.operator_nombre || null;
+  user.operator_es_externo = user.app_metadata?.operator_es_externo || null;
 
   // Allow frontend to override operator_id via header (handles JWT refresh delay)
   const headerOpId = request.headers.get('X-Operator-Id');
   if (headerOpId && isValidUuid(headerOpId) && headerOpId !== user.operator_id) {
     // Verify the operator exists and is active before trusting the header
     const checkRes = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${headerOpId}&activo=eq.true&cuenta_id=eq.${user.id}&select=id,nombre,rol`,
+      `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${headerOpId}&activo=eq.true&cuenta_id=eq.${user.id}&select=id,nombre,rol,es_externo`,
       { headers: { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}` } }
     );
     if (checkRes.ok) {
@@ -49,6 +50,7 @@ export async function verifyAuth(request, env) {
         user.operator_id = op.id;
         user.operator_rol = op.rol;
         user.operator_nombre = op.nombre;
+        user.operator_es_externo = op.es_externo;
       }
     }
   }
@@ -104,7 +106,7 @@ export async function validateOperator(request, env, { requireSupervisor = false
   const h = supaServiceHeaders(env);
   const rolFilter = requireSupervisor ? '&rol=in.(supervisor,jefe,logistica,administracion,desarrollador)' : '';
   const res = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${user.operator_id}&activo=eq.true${rolFilter}&select=id,nombre,rol,color,cuenta_id`,
+    `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${user.operator_id}&activo=eq.true${rolFilter}&select=id,nombre,rol,color,cuenta_id,markup_pct,es_externo`,
     { headers: h }
   );
   const [operador] = await res.json();

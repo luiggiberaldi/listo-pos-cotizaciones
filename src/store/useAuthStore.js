@@ -327,7 +327,7 @@ const useAuthStore = create((set, get) => ({
 
     const queryPromise = supabase
       .from('usuarios')
-      .select('id, nombre, rol, activo, color')
+      .select('id, nombre, rol, activo, color, markup_pct, comision_pct, comision_pct_cabilla, es_externo')
       .eq('id', operatorId)
       .single()
 
@@ -375,10 +375,23 @@ const useAuthStore = create((set, get) => ({
       rol: data.rol,
       activo: data.activo,
       color: data.color ?? null,
+      markup_pct: data.markup_pct ?? null,
+      comision_pct: data.comision_pct ?? null,
+      comision_pct_cabilla: data.comision_pct_cabilla ?? null,
+      es_externo: !!data.es_externo,
     }
     // Solo actualizar si el perfil realmente cambió (evitar re-renders innecesarios)
     const perfilActual = get().perfil
-    if (perfilActual && perfilActual.id === perfilNuevo.id && perfilActual.rol === perfilNuevo.rol && perfilActual.nombre === perfilNuevo.nombre && perfilActual.color === perfilNuevo.color) {
+    if (
+      perfilActual &&
+      perfilActual.id === perfilNuevo.id &&
+      perfilActual.rol === perfilNuevo.rol &&
+      perfilActual.nombre === perfilNuevo.nombre &&
+      perfilActual.color === perfilNuevo.color &&
+      perfilActual.markup_pct === perfilNuevo.markup_pct &&
+      perfilActual.comision_pct === perfilNuevo.comision_pct &&
+      perfilActual.es_externo === perfilNuevo.es_externo
+    ) {
       return // perfil idéntico, no disparar re-render
     }
     guardarPerfilCache(perfilNuevo, authUser.id)
@@ -496,6 +509,10 @@ const useAuthStore = create((set, get) => ({
           rol: op.rol,
           activo: true,
           color: op.color ?? null,
+          markup_pct: op.markup_pct ?? null,
+          comision_pct: op.comision_pct ?? null,
+          comision_pct_cabilla: op.comision_pct_cabilla ?? null,
+          es_externo: !!op.es_externo,
         }
         guardarPerfilCache(perfilOp, get().user?.id)
         set({ perfil: perfilOp, loading: false, error: null })
@@ -528,6 +545,10 @@ const useAuthStore = create((set, get) => ({
             rol: op.rol,
             activo: true,
             color: op.color ?? null,
+            markup_pct: op.markup_pct ?? null,
+            comision_pct: op.comision_pct ?? null,
+            comision_pct_cabilla: op.comision_pct_cabilla ?? null,
+            es_externo: !!op.es_externo,
             _offline: true,
           }
           guardarPerfilCache(perfilOp, userId)

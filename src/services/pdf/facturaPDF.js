@@ -450,8 +450,8 @@ export async function generarFacturaPDF({ despacho, items = [], config = {}, for
   const totalFinal = total - descuentoTotal
 
   const baseImponible = totalFinal - montoExento  // El total de los productos (después de descuentos, excluyendo flete/corte) es la Base Imponible
-  const ivaPct = 16
-  const ivaAmount = baseImponible * (ivaPct / 100)  // Se le suma el 16% de IVA
+  const ivaPct = config.iva_pct !== undefined && config.iva_pct !== null ? Number(config.iva_pct) : 16
+  const ivaAmount = baseImponible * (ivaPct / 100)  // Se le suma el % de IVA configurado
   const totalFacturaFinal = baseImponible + ivaAmount + montoExento
 
   const hasExento = montoExento > 0
@@ -537,16 +537,7 @@ export async function generarFacturaPDF({ despacho, items = [], config = {}, for
   doc.text('Total Factura:', MARGIN + comboLeftW + 3, totTopY + 4.8)
   doc.text(fmtTotalFac(totalFacturaFinal, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 3, totTopY + 4.8, { align: 'right' })
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // 5. CONDICIONES DE PAGO
-  // ══════════════════════════════════════════════════════════════════════════
-  doc.setDrawColor(120, 120, 120)
-  doc.setLineWidth(0.3)
-  doc.rect(MARGIN, creditRowY, CONTENT_W, CREDIT_ROW_H, 'S')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8.5)
-  doc.setTextColor(...C_DARK)
-  doc.text('8 DÍAS DE CRÉDITO CONTINUO', MARGIN + 3, creditRowY + CREDIT_ROW_H / 2 + 1.0)
+  // (Condiciones de pago eliminadas)
 
   // ── Slogan ──
   if (y < sloganY) {

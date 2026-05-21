@@ -46,6 +46,8 @@ function VendedorCard({ vendedor, comisiones, esSupervisor, onMarcarPagada, onPa
   const montoPendiente = useMemo(() => pendientes.reduce((s, c) => s + Math.max(0, Number(c.totalcomision || 0) - Number(c.montopagado || 0)), 0), [pendientes])
   const montoPagado = useMemo(() => comisiones.reduce((s, c) => s + Number(c.montopagado || 0), 0), [comisiones])
   
+  const esExterno = !!vendedor?.es_externo || (vendedor?.markup_pct != null && Number(vendedor.markup_pct) > 0);
+
   const estadoBadge = (estado) => {
     if (estado === 'pagada') return { label: 'Pagada', cls: 'text-emerald-600' }
     if (estado === 'cta_cobrar') return { label: 'Cta x Cobrar', cls: 'text-orange-600' }
@@ -59,13 +61,21 @@ function VendedorCard({ vendedor, comisiones, esSupervisor, onMarcarPagada, onPa
         className="w-full flex items-start gap-3 p-4 text-left hover:bg-slate-50/50 transition-colors cursor-pointer"
       >
         <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-white text-sm font-black shadow-inner"
-          style={{ background: vendedor?.color || '#1B365D' }}>
+          style={{ background: esExterno ? '#D97706' : (vendedor?.color || '#1B365D') }}>
           {(vendedor?.nombre || '?')[0].toUpperCase()}
         </div>
         
         <div className="flex-1 min-w-0 flex flex-col justify-between">
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-bold text-slate-800 truncate">{vendedor?.nombre ?? 'Vendedor'}</h3>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <h3 className="text-sm font-bold text-slate-800 truncate">
+              {vendedor?.nombre ?? 'Vendedor'}
+              {esExterno && ' (E)'}
+            </h3>
+            {esExterno && (
+              <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-[#B45309] bg-[#FEF3C7] border border-[#FDE68A] rounded px-1.5 py-0.2" title={vendedor?.markup_pct ? `Markup del ${vendedor.markup_pct}%` : 'Vendedor Externo'}>
+                💼 {vendedor?.markup_pct ? `+${vendedor.markup_pct}%` : 'Externo'}
+              </span>
+            )}
             {onExportarPDF && (
               <button
                 onClick={(e) => { e.stopPropagation(); onExportarPDF(vendedor); }}
@@ -359,20 +369,61 @@ export default function ComisionesView() {
         <EmptyState icon={DollarSign} title="Sin resultados" description="No se encontraron comisiones con los filtros actuales." />
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
-            {comisionesPorVendedor.map(g => (
-              <VendedorCard 
-                key={g.id} 
-                vendedor={{ id: g.id, ...g.vendedor }} 
-                comisiones={g.items} 
-                esSupervisor={puedePagarComisiones} 
-                onMarcarPagada={setComisionAPagar} 
-                onPagarTodo={setPagoMasivoData}
-                marcando={marcar.isPending || pagandoMasivo} 
-                onExportarPDF={exportarPDF} 
-              />
-            ))}
-          </div>
+          {(() => {
+            const comisionesInternos = comisionesPorVendedor.filter(g => !(!!g.vendedor?.es_externo || (g.vendedor?.markup_pct != null && Number(g.vendedor.markup_pct) > 0)))
+            const comisionesExternos = comisionesPorVendedor.filter(g => !!g.vendedor?.es_externo || (g.vendedor?.markup_pct != null && Number(g.vendedor.markup_pct) > 0))
+            return (
+              <div className="space-y-8">
+                {/* 1. ASESORES INTERNOS */}
+                {comisionesInternos.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 px-1">
+                      <div className="w-1.5 h-4 bg-indigo-600 rounded-full" />
+                      <h4 className="text-xs font-black text-slate-500 uppercase tracking-wider">Vendedores Internos ({comisionesInternos.length})</h4>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
+                      {comisionesInternos.map(g => (
+                        <VendedorCard 
+                          key={g.id} 
+                          vendedor={{ id: g.id, ...g.vendedor }} 
+                          comisiones={g.items} 
+                          esSupervisor={puedePagarComisiones} 
+                          onMarcarPagada={setComisionAPagar} 
+                          onPagarTodo={setPagoMasivoData}
+                          marcando={marcar.isPending || pagandoMasivo} 
+                          onExportarPDF={exportarPDF} 
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. VENDEDORES EXTERNOS */}
+                {comisionesExternos.length > 0 && (
+                  <div className="space-y-3 pt-2">
+                    <div className="flex items-center gap-2 px-1">
+                      <div className="w-1.5 h-4 bg-[#D97706] rounded-full" />
+                      <h4 className="text-xs font-black text-[#B45309] uppercase tracking-wider">Vendedores Externos ({comisionesExternos.length})</h4>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
+                      {comisionesExternos.map(g => (
+                        <VendedorCard 
+                          key={g.id} 
+                          vendedor={{ id: g.id, ...g.vendedor }} 
+                          comisiones={g.items} 
+                          esSupervisor={puedePagarComisiones} 
+                          onMarcarPagada={setComisionAPagar} 
+                          onPagarTodo={setPagoMasivoData}
+                          marcando={marcar.isPending || pagandoMasivo} 
+                          onExportarPDF={exportarPDF} 
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
 
           {/* Paginación */}
           {comisionesRes?.totalPages > 1 && (

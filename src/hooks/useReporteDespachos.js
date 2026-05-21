@@ -25,7 +25,7 @@ export function useReporteDespachos({ from, to }) {
           id, numero, cotizacion_id, total_usd, forma_pago, estado,
           creado_en, despachada_en, entregada_en,
           cliente_id,
-          vendedor:usuarios!notas_despacho_vendedor_id_fkey(id, nombre, color)
+          vendedor:usuarios!notas_despacho_vendedor_id_fkey(id, nombre, color, rol)
         `)
         .gte('creado_en', `${from}T00:00:00${tzStr}`)
         .lte('creado_en', `${to}T23:59:59${tzStr}`)
@@ -35,7 +35,10 @@ export function useReporteDespachos({ from, to }) {
 
       const { data: despachos, error } = await q
       if (error) throw error
-      let lista = despachos || []
+      let lista = (despachos || []).filter(d => {
+        const rol = d.vendedor?.rol
+        return rol !== 'desarrollador' && rol !== 'administracion' && rol !== 'logistica'
+      })
 
       // Fetch clientes via Worker API (bypasses RLS)
       const clienteIds = [...new Set(lista.map(r => r.cliente_id).filter(Boolean))]

@@ -4,6 +4,7 @@ import { X, Share2, Package, Loader2 } from 'lucide-react'
 import { useRef, useState } from 'react'
 import html2canvas from 'html2canvas'
 import { fmtBs, usdToBs } from '../../utils/format'
+import { usePrecioVendedor } from '../../hooks/usePrecioVendedor'
 
 function fmtUsd(n) {
   if (n == null) return '—'
@@ -13,8 +14,13 @@ function fmtUsd(n) {
 export default function ProductoDetalleModal({ isOpen, onClose, producto, tasa = 0 }) {
   const cardRef = useRef(null)
   const [isSharing, setIsSharing] = useState(false)
+  const { aplicarMarkup } = usePrecioVendedor()
 
   if (!isOpen || !producto) return null
+
+  const precioUsdDisplay = producto.precio_usd != null ? aplicarMarkup(producto.precio_usd) : null
+  const precio2Display = producto.precio_2 != null ? aplicarMarkup(producto.precio_2) : null
+  const precio3Display = producto.precio_3 != null ? aplicarMarkup(producto.precio_3) : null
 
   const stockActual = Number(producto.stock_actual) || 0
   const disponible = stockActual > 0
@@ -25,9 +31,9 @@ export default function ProductoDetalleModal({ isOpen, onClose, producto, tasa =
       const texto = [
         `📦 ${producto.nombre}`,
         producto.codigo ? `Código: ${producto.codigo}` : '',
-        `Precio: ${fmtUsd(producto.precio_usd)}`,
-        tasa > 0 ? `Precio Bs: ${fmtBs(usdToBs(producto.precio_usd, tasa))}` : '',
-        producto.precio_2 != null ? `Precio Mayor: ${fmtUsd(producto.precio_2)}` : '',
+        `Precio: ${fmtUsd(precioUsdDisplay)}`,
+        tasa > 0 ? `Precio Bs: ${fmtBs(usdToBs(precioUsdDisplay, tasa))}` : '',
+        precio2Display != null ? `Precio Mayor: ${fmtUsd(precio2Display)}` : '',
         disponible ? `✅ Disponible` : `❌ Agotado`,
         '',
         '🏗️ Construacero Carabobo',
@@ -134,32 +140,32 @@ export default function ProductoDetalleModal({ isOpen, onClose, producto, tasa =
               {/* Precio principal */}
               <div className="text-center">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
-                  {producto.precio_2 != null ? 'Precio Detal' : 'Precio'}
+                  {precio2Display != null ? 'Precio Detal' : 'Precio'}
                 </p>
-                <p className="text-3xl font-black text-slate-800">{fmtUsd(producto.precio_usd)}</p>
-                {tasa > 0 && producto.precio_usd != null && (
-                  <p className="text-sm text-slate-500 font-semibold mt-0.5">{fmtBs(usdToBs(producto.precio_usd, tasa))}</p>
+                <p className="text-3xl font-black text-slate-800">{fmtUsd(precioUsdDisplay)}</p>
+                {tasa > 0 && precioUsdDisplay != null && (
+                  <p className="text-sm text-slate-500 font-semibold mt-0.5">{fmtBs(usdToBs(precioUsdDisplay, tasa))}</p>
                 )}
               </div>
 
               {/* Precios secundarios */}
-              {(producto.precio_2 != null || producto.precio_3 != null) && (
+              {(precio2Display != null || precio3Display != null) && (
                 <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-200">
-                  {producto.precio_2 != null && (
+                  {precio2Display != null && (
                     <div className="text-center bg-white rounded-xl border border-slate-200 p-3">
                       <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Mayor</p>
-                      <p className="text-base font-black text-slate-700">{fmtUsd(producto.precio_2)}</p>
+                      <p className="text-base font-black text-slate-700">{fmtUsd(precio2Display)}</p>
                       {tasa > 0 && (
-                        <p className="text-[11px] text-slate-400 mt-0.5">{fmtBs(usdToBs(producto.precio_2, tasa))}</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">{fmtBs(usdToBs(precio2Display, tasa))}</p>
                       )}
                     </div>
                   )}
-                  {producto.precio_3 != null && (
+                  {precio3Display != null && (
                     <div className="text-center bg-white rounded-xl border border-slate-200 p-3">
                       <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Especial</p>
-                      <p className="text-base font-black text-slate-700">{fmtUsd(producto.precio_3)}</p>
+                      <p className="text-base font-black text-slate-700">{fmtUsd(precio3Display)}</p>
                       {tasa > 0 && (
-                        <p className="text-[11px] text-slate-400 mt-0.5">{fmtBs(usdToBs(producto.precio_3, tasa))}</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">{fmtBs(usdToBs(precio3Display, tasa))}</p>
                       )}
                     </div>
                   )}

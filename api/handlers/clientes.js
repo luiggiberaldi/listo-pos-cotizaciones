@@ -35,21 +35,23 @@ export async function handleCheckRif(request, env) {
 }
 
 export async function handleListarClientes(request, env) {
-  const user = await verifyAuth(request, env);
-  if (!user?.id) return jsonError('No autenticado', 401, request);
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { user, operador, headers: supaHeaders } = v;
 
   const url = new URL(request.url);
   const busqueda = url.searchParams.get('busqueda') || '';
 
+  const esExterno = !!operador.es_externo;
+
   // Fetch ALL active clients — filtrado en el Worker (in-memory, rápido)
   // limit=10000 evita el tope de 1000 filas de PostgREST
   // Fetch ALL clients (incluyendo inactivos) — filtrado en el Worker
-  const baseUrl = `${env.SUPABASE_URL}/rest/v1/clientes?cuenta_id=eq.${user.id}&order=nombre.asc&limit=10000&select=id,codigo_cliente,nombre,rif_cedula,telefono,email,direccion,estado,ciudad,notas,tipo_cliente,activo,vendedor_id,saldo_pendiente,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color,rol)`;
+  let baseUrl = `${env.SUPABASE_URL}/rest/v1/clientes?cuenta_id=eq.${user.id}&order=nombre.asc&limit=10000&select=id,codigo_cliente,nombre,rif_cedula,telefono,email,direccion,estado,ciudad,notas,tipo_cliente,activo,vendedor_id,saldo_pendiente,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color,rol)`;
 
-  const supaHeaders = {
-    apikey: env.SUPABASE_SERVICE_KEY,
-    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-  };
+  if (esExterno) {
+    baseUrl += `&vendedor_id=eq.${operador.id}`;
+  }
 
   const res = await fetch(baseUrl, { headers: supaHeaders });
   if (!res.ok) {
@@ -87,22 +89,24 @@ export async function handleListarClientes(request, env) {
 
 // ── Lookup clientes by IDs (service key, bypasses RLS) ──────────────────────
 export async function handleClientesLookup(request, env) {
-  const user = await verifyAuth(request, env);
-  if (!user?.id) return jsonError('No autenticado', 401, request);
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { user, operador, headers: supaHeaders } = v;
 
   const { ids } = await request.json();
   if (!Array.isArray(ids) || !ids.length || ids.length > 200) {
     return jsonError('ids debe ser un array de 1-200 UUIDs', 400, request);
   }
 
-  const queryUrl = `${env.SUPABASE_URL}/rest/v1/clientes?id=in.(${ids.map(encodeURIComponent).join(',')})&cuenta_id=eq.${user.id}&select=id,codigo_cliente,nombre,rif_cedula,telefono,email,direccion,estado,ciudad,tipo_cliente,vendedor_id,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color,rol)`;
+  const esExterno = !!operador.es_externo;
 
-  const res = await fetch(queryUrl, {
-    headers: {
-      apikey: env.SUPABASE_SERVICE_KEY,
-      Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-    },
-  });
+  let queryUrl = `${env.SUPABASE_URL}/rest/v1/clientes?id=in.(${ids.map(encodeURIComponent).join(',')})&cuenta_id=eq.${user.id}&select=id,codigo_cliente,nombre,rif_cedula,telefono,email,direccion,estado,ciudad,tipo_cliente,vendedor_id,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color,rol)`;
+
+  if (esExterno) {
+    queryUrl += `&vendedor_id=eq.${operador.id}`;
+  }
+
+  const res = await fetch(queryUrl, { headers: supaHeaders });
 
   if (!res.ok) {
     return jsonError('Error al buscar clientes', res.status, request);
@@ -186,20 +190,24 @@ export async function handleReasignarCliente(request, env) {
 export async function handleBorrarCliente(request, env) {
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
-  const { user, headers } = v;
+  const { user, operador, headers } = v;
 
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
   const { id } = body;
   if (!id || !isValidUuid(id)) return jsonError('ID inválido', 400, request);
 
-  // Verificar que el cliente pertenece a este tenant
-  const cRes = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${id}&cuenta_id=eq.${user.id}&select=id,nombre,saldo_pendiente,activo&limit=1`,
-    { headers }
-  );
+  const esExterno = !!operador.es_externo;
+
+  // Verificar que el cliente pertenece a este tenant (y a este vendedor si es externo)
+  let queryUrl = `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${id}&cuenta_id=eq.${user.id}&select=id,nombre,saldo_pendiente,activo,vendedor_id&limit=1`;
+  if (esExterno) {
+    queryUrl += `&vendedor_id=eq.${operador.id}`;
+  }
+
+  const cRes = await fetch(queryUrl, { headers });
   const [cliente] = await cRes.json();
-  if (!cliente) return jsonError('Cliente no encontrado', 404, request);
+  if (!cliente) return jsonError('Cliente no encontrado o no tienes permisos para borrarlo', 404, request);
 
   // NIVEL 3: Deuda activa → bloqueo total
   if (Number(cliente.saldo_pendiente || 0) > 0) {
@@ -221,7 +229,11 @@ export async function handleBorrarCliente(request, env) {
 
   if (tieneHistorial) {
     // Solo desactivar — preservar integridad histórica
-    await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${id}&cuenta_id=eq.${user.id}`, {
+    let patchUrl = `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${id}&cuenta_id=eq.${user.id}`;
+    if (esExterno) {
+      patchUrl += `&vendedor_id=eq.${operador.id}`;
+    }
+    await fetch(patchUrl, {
       method: 'PATCH',
       headers: { ...headers, Prefer: 'return=minimal' },
       body: JSON.stringify({ activo: false, actualizado_en: new Date().toISOString() }),
@@ -230,7 +242,11 @@ export async function handleBorrarCliente(request, env) {
   }
 
   // NIVEL 1: Sin historial → borrado físico real
-  const delRes = await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${id}&cuenta_id=eq.${user.id}`, {
+  let delUrl = `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${id}&cuenta_id=eq.${user.id}`;
+  if (esExterno) {
+    delUrl += `&vendedor_id=eq.${operador.id}`;
+  }
+  const delRes = await fetch(delUrl, {
     method: 'DELETE',
     headers: { ...headers, Prefer: 'return=minimal' },
   });
@@ -255,6 +271,8 @@ export async function handleCrearCliente(request, env) {
   const { nombre, rif_cedula, telefono, email, direccion, estado, ciudad, notas, tipo_cliente, vendedor_id } = body;
   if (!nombre?.trim()) return jsonError('El nombre es obligatorio', 400, request);
 
+  const esExterno = !!operador.es_externo;
+
   // Verificar duplicado de RIF si se proporciona
   if (rif_cedula?.trim()) {
     const checkUrl = `${env.SUPABASE_URL}/rest/v1/clientes?rif_cedula=eq.${encodeURIComponent(rif_cedula.trim())}&activo=eq.true&cuenta_id=eq.${user.id}&select=id&limit=1`;
@@ -275,7 +293,7 @@ export async function handleCrearCliente(request, env) {
     ciudad: ciudad?.trim() || null,
     notas: notas?.trim() || null,
     tipo_cliente: tipo_cliente || 'natural',
-    vendedor_id: vendedor_id || operador.id,
+    vendedor_id: esExterno ? operador.id : (vendedor_id || operador.id),
     cuenta_id: user.id,
     activo: true,
   };
@@ -298,7 +316,7 @@ export async function handleCrearCliente(request, env) {
 export async function handleActualizarCliente(request, env) {
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
-  const { user, headers } = v;
+  const { user, operador, headers } = v;
 
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
@@ -307,9 +325,14 @@ export async function handleActualizarCliente(request, env) {
   if (!id || !isValidUuid(id)) return jsonError('ID inválido', 400, request);
   if (!nombre?.trim()) return jsonError('El nombre es obligatorio', 400, request);
 
+  const esExterno = !!operador.es_externo;
+
   // Verificar duplicado de RIF excluyendo este cliente
   if (rif_cedula?.trim()) {
-    const checkUrl = `${env.SUPABASE_URL}/rest/v1/clientes?rif_cedula=eq.${encodeURIComponent(rif_cedula.trim())}&activo=eq.true&cuenta_id=eq.${user.id}&id=neq.${id}&select=id&limit=1`;
+    let checkUrl = `${env.SUPABASE_URL}/rest/v1/clientes?rif_cedula=eq.${encodeURIComponent(rif_cedula.trim())}&activo=eq.true&cuenta_id=eq.${user.id}&id=neq.${id}&select=id&limit=1`;
+    if (esExterno) {
+      checkUrl += `&vendedor_id=eq.${operador.id}`;
+    }
     const checkRes = await fetch(checkUrl, { headers });
     if (checkRes.ok) {
       const existing = await checkRes.json();
@@ -330,7 +353,12 @@ export async function handleActualizarCliente(request, env) {
     actualizado_en: new Date().toISOString(),
   };
 
-  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${id}&cuenta_id=eq.${user.id}`, {
+  let updateUrl = `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${id}&cuenta_id=eq.${user.id}`;
+  if (esExterno) {
+    updateUrl += `&vendedor_id=eq.${operador.id}`;
+  }
+
+  const res = await fetch(updateUrl, {
     method: 'PATCH',
     headers: { ...headers, Prefer: 'return=representation' },
     body: JSON.stringify(payload),
@@ -341,21 +369,31 @@ export async function handleActualizarCliente(request, env) {
     return jsonError(`Error al actualizar cliente: ${err}`, res.status, request);
   }
 
-  const [data] = await res.json();
-  return json(data, 200, request);
+  const data = await res.json();
+  if (!Array.isArray(data) || data.length === 0) {
+    return jsonError('Cliente no encontrado o no tienes permisos para modificarlo', 404, request);
+  }
+  return json(data[0], 200, request);
 }
 
 export async function handleActivarCliente(request, env) {
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
-  const { user, headers } = v;
+  const { user, operador, headers } = v;
 
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
   const { id } = body;
   if (!id || !isValidUuid(id)) return jsonError('ID inválido', 400, request);
 
-  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${id}&cuenta_id=eq.${user.id}`, {
+  const esExterno = !!operador.es_externo;
+
+  let activateUrl = `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${id}&cuenta_id=eq.${user.id}`;
+  if (esExterno) {
+    activateUrl += `&vendedor_id=eq.${operador.id}`;
+  }
+
+  const res = await fetch(activateUrl, {
     method: 'PATCH',
     headers: { ...headers, Prefer: 'return=representation' },
     body: JSON.stringify({ activo: true, actualizado_en: new Date().toISOString() }),
@@ -366,9 +404,14 @@ export async function handleActivarCliente(request, env) {
     return jsonError(`Error al activar cliente: ${err}`, res.status, request);
   }
 
-  const [data] = await res.json();
-  return json(data, 200, request);
+  const data = await res.json();
+  if (!Array.isArray(data) || data.length === 0) {
+    return jsonError('Cliente no encontrado o no tienes permisos para activarlo', 404, request);
+  }
+  return json(data[0], 200, request);
 }
+
+
 
 export async function handleReasignarClientesBulk(request, env) {
   const v = await validateOperator(request, env);

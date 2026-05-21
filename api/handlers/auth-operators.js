@@ -24,7 +24,7 @@ export async function handleSwitchOperator(request, env) {
 
   // Fetch operator from usuarios table
   const res = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${operator_id}&activo=eq.true&cuenta_id=eq.${user.id}&select=id,nombre,rol,pin_hash,pin_salt,color`,
+    `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${operator_id}&activo=eq.true&cuenta_id=eq.${user.id}&select=id,nombre,rol,pin_hash,pin_salt,color,markup_pct,comision_pct,comision_pct_cabilla,es_externo`,
     {
       headers: {
         apikey: env.SUPABASE_SERVICE_KEY,
@@ -74,6 +74,7 @@ export async function handleSwitchOperator(request, env) {
           operator_id: operator.id,
           operator_rol: operator.rol,
           operator_nombre: operator.nombre,
+          operator_es_externo: !!operator.es_externo,
         },
       }),
     }
@@ -95,9 +96,37 @@ export async function handleSwitchOperator(request, env) {
     });
   } catch {}
 
+  let markup_pct = operator.markup_pct ?? null;
+  if (operator.es_externo) {
+    const configRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/configuracion_negocio?cuenta_id=eq.${user.id}&limit=1&select=markup_pct_externo`,
+      {
+        headers: {
+          apikey: env.SUPABASE_SERVICE_KEY,
+          Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+        },
+      }
+    );
+    if (configRes.ok) {
+      const [config] = await configRes.json();
+      if (config) {
+        markup_pct = config.markup_pct_externo;
+      }
+    }
+  }
+
   return json({
     ok: true,
-    operator: { id: operator.id, nombre: operator.nombre, rol: operator.rol, color: operator.color },
+    operator: {
+      id: operator.id,
+      nombre: operator.nombre,
+      rol: operator.rol,
+      color: operator.color,
+      markup_pct,
+      comision_pct: operator.comision_pct ?? null,
+      comision_pct_cabilla: operator.comision_pct_cabilla ?? null,
+      es_externo: !!operator.es_externo,
+    },
   }, 200, request);
 }
 
@@ -126,18 +155,50 @@ export async function handleGetOperators(request, env) {
   const user = await verifyAuth(request, env);
   if (!user?.id) return jsonError('No autenticado', 401, request);
 
-  const res = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/usuarios?activo=eq.true&cuenta_id=eq.${user.id}&select=id,nombre,rol,color,pin_hash,pin_salt&order=nombre.asc`,
-    {
-      headers: {
-        apikey: env.SUPABASE_SERVICE_KEY,
-        Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-      },
-    }
-  );
+  const [res, configRes] = await Promise.all([
+    fetch(
+      `${env.SUPABASE_URL}/rest/v1/usuarios?activo=eq.true&cuenta_id=eq.${user.id}&select=id,nombre,rol,color,pin_hash,pin_salt,markup_pct,comision_pct,comision_pct_cabilla,es_externo&order=nombre.asc`,
+      {
+        headers: {
+          apikey: env.SUPABASE_SERVICE_KEY,
+          Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+        },
+      }
+    ),
+    fetch(
+      `${env.SUPABASE_URL}/rest/v1/configuracion_negocio?cuenta_id=eq.${user.id}&limit=1&select=markup_pct_externo`,
+      {
+        headers: {
+          apikey: env.SUPABASE_SERVICE_KEY,
+          Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+        },
+      }
+    )
+  ]);
+
   if (!res.ok) return jsonError('Error al obtener operadores', 500, request);
   const operators = await res.json();
-  return json({ operators }, 200, request);
+
+  let markup_pct_externo = 5.00;
+  if (configRes.ok) {
+    const [config] = await configRes.json();
+    if (config) {
+      markup_pct_externo = config.markup_pct_externo;
+    }
+  }
+
+  // Mapear markup_pct dinámico si es vendedor externo
+  const operatorsMapped = operators.map(op => {
+    if (op.es_externo) {
+      return {
+        ...op,
+        markup_pct: markup_pct_externo
+      };
+    }
+    return op;
+  });
+
+  return json({ operators: operatorsMapped }, 200, request);
 }
 
 // Desarrollador virtual — activa el operador especial sin usuario en DB

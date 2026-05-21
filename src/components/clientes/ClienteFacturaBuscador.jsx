@@ -1,6 +1,6 @@
 // src/components/clientes/ClienteFacturaBuscador.jsx
 // Selector de cliente alterno para facturación — usa modal en vez de dropdown
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { Search, X, Plus, Building2, UserCircle2, Receipt, Check } from 'lucide-react'
 import { Modal } from '../ui/Modal'
 import ClienteForm from './ClienteForm'
@@ -21,10 +21,14 @@ export default function ClienteFacturaBuscador({ clientes = [], clienteId, onSel
     if (abierto) setTimeout(() => inputRef.current?.focus(), 100)
   }, [abierto])
 
-  const seleccionado = clientes.find(c => c.id === clienteId)
+  const clientesActivos = useMemo(() => {
+    return clientes.filter(c => c.activo !== false || c.id === clienteId)
+  }, [clientes, clienteId])
+
+  const seleccionado = clientesActivos.find(c => c.id === clienteId) || clientes.find(c => c.id === clienteId)
   const resultados = busqueda.trim().length >= 1
-    ? buscarClientes(clientes, busqueda)
-    : clientes
+    ? buscarClientes(clientesActivos, busqueda)
+    : clientesActivos
 
   function elegir(c) {
     onSelect(c.id)

@@ -25,6 +25,11 @@ export async function handleGuardarCotizacion(request, env) {
   // Force vendedor_id to authenticated operator
   headerData.vendedor_id = user.operator_id;
 
+  // Estampar canal_venta (interno o externo) — viene del frontend y se preserva para reportes
+  if (!['interno', 'externo'].includes(headerData.canal_venta)) {
+    headerData.canal_venta = 'interno'
+  }
+
   const supaHeaders = {
     apikey: env.SUPABASE_SERVICE_KEY,
     Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,

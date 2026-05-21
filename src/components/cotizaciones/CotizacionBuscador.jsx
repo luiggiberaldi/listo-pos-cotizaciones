@@ -8,6 +8,7 @@ import { useProductSearch } from '../../hooks/useProductSearch'
 import { useInventario, useCategorias } from '../../hooks/useInventario'
 import { useStockComprometido } from '../../hooks/useStockComprometido'
 import useAuthStore from '../../store/useAuthStore'
+import { usePrecioVendedor } from '../../hooks/usePrecioVendedor'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../../utils/format'
 import { round2 } from '../../utils/dinero'
 import { guardarProductoReciente } from './ProductosRecientes'
@@ -17,6 +18,7 @@ import CategoryPills from '../shared/CategoryPills'
 // ─── Selector de nivel de precio (desktop: compacto / mobile: full-width) ──
 export function PrecioSelector({ precios, currentPrice, onSelect, tasa = 0, mobile = false }) {
   if (!precios) return null
+  const { aplicarMarkup, esExterno } = usePrecioVendedor()
   const niveles = [
     { label: 'P1', value: precios.p1 },
     { label: 'P2', value: precios.p2 },
@@ -30,10 +32,11 @@ export function PrecioSelector({ precios, currentPrice, onSelect, tasa = 0, mobi
         <label className="text-xs font-medium text-slate-500">Nivel de precio</label>
         <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${niveles.length}, 1fr)` }}>
           {niveles.map(n => {
-            const active = Number(currentPrice) === Number(n.value)
+            const display = esExterno ? aplicarMarkup(n.value) : Number(n.value)
+            const active = Math.abs(Number(currentPrice) - display) < 0.001
             return (
               <button key={n.label} type="button"
-                onClick={() => onSelect(Number(n.value))}
+                onClick={() => onSelect(display)}
                 className={`flex flex-col items-center justify-center py-3 px-2 rounded-xl border-2 transition-all active:scale-[0.96] touch-manipulation ${
                   active
                     ? 'border-primary bg-primary text-white shadow-md'
@@ -41,7 +44,8 @@ export function PrecioSelector({ precios, currentPrice, onSelect, tasa = 0, mobi
                 }`}
               >
                 <span className={`text-[11px] font-bold uppercase tracking-widest ${active ? 'text-white/80' : 'text-slate-400'}`}>{n.label}</span>
-                <span className={`text-base font-black mt-0.5 ${active ? 'text-white' : 'text-slate-800'}`}>${Number(n.value).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <span className={`text-base font-black mt-0.5 ${active ? 'text-white' : 'text-slate-800'}`}>${Number(display).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                {esExterno && <span className={`text-[8px] line-through ${active ? 'text-white/60' : 'text-slate-400'}`}>${Number(n.value).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
               </button>
             )
           })}
@@ -53,16 +57,17 @@ export function PrecioSelector({ precios, currentPrice, onSelect, tasa = 0, mobi
   return (
     <div className="flex gap-0.5 mt-1">
       {niveles.map(n => {
-        const active = Number(currentPrice) === Number(n.value)
+        const display = esExterno ? aplicarMarkup(n.value) : Number(n.value)
+        const active = Math.abs(Number(currentPrice) - display) < 0.001
         return (
           <button key={n.label} type="button"
-            onClick={() => onSelect(Number(n.value))}
+            onClick={() => onSelect(display)}
             className={`px-1.5 py-0.5 text-[9px] font-bold rounded transition-all ${
               active
                 ? 'bg-primary text-white'
                 : 'bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600'
             }`}
-            title={`${n.label}: $${Number(n.value).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+            title={`${n.label}: $${Number(display).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${esExterno ? ` (base $${Number(n.value).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})` : ''}`}
           >
             {n.label}
           </button>

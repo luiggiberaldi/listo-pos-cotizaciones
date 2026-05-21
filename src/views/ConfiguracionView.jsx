@@ -5,6 +5,7 @@ import {
   Settings, Building2, Phone, Mail, MapPin, FileText, Save, CheckCircle,
   Eye, EyeOff, Accessibility, HardDrive, Download, Upload,
   AlertCircle, AlertTriangle, Percent, Users, Database, Copy, Check, DollarSign,
+  HelpCircle, Info, Trash2, Plus,
 } from 'lucide-react'
 import { useConfigNegocio, useActualizarConfig, hashSHA256 } from '../hooks/useConfigNegocio'
 import { useCategorias } from '../hooks/useInventario'
@@ -35,17 +36,29 @@ const SectionHeader = ({ icon: Icon, children }) => (
   </div>
 )
 
-// ─── Comisiones Tab (extraído para claridad) ─────────────────────────────────
+// ─── Section Header para Externos ───────────────────────────────────────────
+const SectionHeaderExt = ({ icon: Icon, children }) => (
+  <div className="flex items-center gap-3 mb-1">
+    <div className="w-0.5 self-stretch rounded-full shrink-0" style={{ backgroundColor: '#D97706', minHeight: '20px' }} />
+    <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+      style={{ background: 'linear-gradient(135deg, rgba(217, 119, 6, 0.08), rgba(245, 158, 11, 0.08))', border: '1px solid rgba(217, 119, 6, 0.15)' }}>
+      <Icon size={13} style={{ color: '#D97706' }} />
+    </div>
+    <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wide">{children}</h2>
+  </div>
+)
+
 function ComisionesTab({ campos, cambiar, isLoading, cargando }) {
   const { data: categorias = [] } = useCategorias()
   const disabled = isLoading || cargando
 
-  // Parse categorías especiales: [{cat, pct}]
-  // La primera siempre viene de comision_categoria_cabilla + comision_pct_cabilla
-  // Las adicionales se guardan como JSON en un campo especial
+  // Parse categorías especiales internos: [{cat, pct}]
   const [extras, setExtras] = useState([])
 
-  // Inicializar extras desde config (puede ser array nativo o string JSON)
+  // Parse categorías especiales externos: [{cat, pct}]
+  const [extExtras, setExtExtras] = useState([])
+
+  // Inicializar extras internos
   useEffect(() => {
     if (campos._comision_extras) {
       try {
@@ -56,12 +69,25 @@ function ComisionesTab({ campos, cambiar, isLoading, cargando }) {
     }
   }, [campos._comision_extras])
 
-  // Todas las categorías especiales (la principal + extras)
+  // Inicializar extras externos
+  useEffect(() => {
+    if (campos._comision_ext_extras) {
+      try {
+        const val = campos._comision_ext_extras
+        const parsed = Array.isArray(val) ? val : JSON.parse(val)
+        if (Array.isArray(parsed)) setExtExtras(parsed)
+      } catch {}
+    }
+  }, [campos._comision_ext_extras])
+
+  // Categorías especiales internos
   const catPrincipal = campos.comision_categoria_cabilla || ''
   const catsEspeciales = [catPrincipal, ...extras.map(e => e.cat)].filter(Boolean)
 
+  // Categorías especiales externos
+  const catsEspecialesExt = [catPrincipal, ...extExtras.map(e => e.cat)].filter(Boolean)
+
   function agregarCategoria() {
-    // Buscar primera categoría no usada
     const disponibles = categorias.filter(c => !catsEspeciales.includes(c.value))
     if (disponibles.length === 0) return
     const nuevas = [...extras, { cat: disponibles[0].value, pct: 2 }]
@@ -81,12 +107,31 @@ function ComisionesTab({ campos, cambiar, isLoading, cargando }) {
     cambiar('_comision_extras', nuevas)
   }
 
+  function agregarCategoriaExt() {
+    const disponibles = categorias.filter(c => !catsEspecialesExt.includes(c.value))
+    if (disponibles.length === 0) return
+    const nuevas = [...extExtras, { cat: disponibles[0].value, pct: 2 }]
+    setExtExtras(nuevas)
+    cambiar('_comision_ext_extras', nuevas)
+  }
+
+  function cambiarExtraExt(idx, campo, valor) {
+    const nuevas = extExtras.map((e, i) => i === idx ? { ...e, [campo]: valor } : e)
+    setExtExtras(nuevas)
+    cambiar('_comision_ext_extras', nuevas)
+  }
+
+  function eliminarExtraExt(idx) {
+    const nuevas = extExtras.filter((_, i) => i !== idx)
+    setExtExtras(nuevas)
+    cambiar('_comision_ext_extras', nuevas)
+  }
+
   const selectOnFocus = (e) => e.target.select()
 
-  // Categorías disponibles para nueva selección
   const catsDisponibles = categorias.filter(c => !catsEspeciales.includes(c.value))
+  const catsDisponiblesExt = categorias.filter(c => !catsEspecialesExt.includes(c.value))
 
-  // Colores para las tarjetas
   const COLORES = [
     { from: 'from-amber-50', to: 'to-orange-50', border: 'border-amber-200', dot: 'bg-amber-500', title: 'text-amber-800', ring: 'focus:ring-amber-300', pct: 'text-amber-600', ejemplo: 'text-amber-700' },
     { from: 'from-violet-50', to: 'to-purple-50', border: 'border-violet-200', dot: 'bg-violet-500', title: 'text-violet-800', ring: 'focus:ring-violet-300', pct: 'text-violet-600', ejemplo: 'text-violet-700' },
@@ -94,230 +139,387 @@ function ComisionesTab({ campos, cambiar, isLoading, cargando }) {
     { from: 'from-rose-50', to: 'to-pink-50', border: 'border-rose-200', dot: 'bg-rose-500', title: 'text-rose-800', ring: 'focus:ring-rose-300', pct: 'text-rose-600', ejemplo: 'text-rose-700' },
   ]
 
+
+
   return (
-    <div className="space-y-5">
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-5">
-        <SectionHeader icon={Percent}>Tasas de comisión</SectionHeader>
-        <p className="text-xs text-slate-500 -mt-2">
-          Porcentaje que se calcula al marcar un despacho como entregado. Asigna tasas diferenciadas por categoría.
-        </p>
+    <div className="space-y-6">
+      {/* Grid de Configuración de Comisiones - Lado a Lado */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* SECCIÓN 1: VENDEDORES INTERNOS */}
+        <div className="bg-white/80 backdrop-blur-md rounded-2xl border border-slate-200/80 p-5 space-y-5 shadow-sm hover:border-slate-300/80 transition-all duration-300">
+          <SectionHeader icon={Percent}>Vendedores Internos</SectionHeader>
+          <p className="text-xs text-slate-500 -mt-2">
+            Porcentajes de comisión para vendedores internos. Se calculan al marcar un despacho como entregado.
+          </p>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* Tarjeta categoría principal */}
-          <div className={`bg-gradient-to-br ${COLORES[0].from} ${COLORES[0].to} rounded-xl border ${COLORES[0].border} p-4 space-y-3`}>
-            <div className="flex items-center gap-2">
-              <span className={`w-2.5 h-2.5 rounded-full ${COLORES[0].dot}`} />
-              <span className={`text-xs font-bold uppercase tracking-wider ${COLORES[0].title}`}>Categoría especial</span>
-            </div>
+          <div className="space-y-4">
+            {/* Tarjeta categoría principal */}
+            <div className={`bg-gradient-to-br ${COLORES[0].from} ${COLORES[0].to} rounded-xl border ${COLORES[0].border} p-4 space-y-3 shadow-sm hover:scale-[1.01] hover:shadow-md transition-all duration-300`}>
+              <div className="flex items-center gap-2">
+                <span className={`w-2.5 h-2.5 rounded-full ${COLORES[0].dot}`} />
+                <span className={`text-xs font-bold uppercase tracking-wider ${COLORES[0].title}`}>Categoría principal ({catPrincipal || 'Cabilla'})</span>
+              </div>
 
-            {/* Selector dropdown */}
-            {categorias.length > 0 && (
-              <CustomSelect
-                options={categorias.filter(c => !extras.map(e => e.cat).includes(c.value))}
-                value={catPrincipal}
-                onChange={val => !disabled && cambiar('comision_categoria_cabilla', val)}
-                placeholder="Seleccionar categoría"
-                disabled={disabled}
-              />
-            )}
-
-            <div className="flex items-baseline gap-2">
-              <input type="number" min="0" max="100" step="0.01"
-                value={campos.comision_pct_cabilla}
-                onFocus={selectOnFocus}
-                onChange={e => cambiar('comision_pct_cabilla', Math.max(0, Math.min(100, Number(e.target.value))))}
-                className={`w-20 px-3 py-2.5 rounded-xl border ${COLORES[0].border} bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 ${COLORES[0].ring} text-right font-bold`}
-                disabled={disabled} />
-              <span className={`text-lg font-bold ${COLORES[0].pct}`}>%</span>
-            </div>
-            <p className={`text-xs ${COLORES[0].ejemplo}`}>
-              $1,000 → <strong>{fmtUsd(1000 * campos.comision_pct_cabilla / 100)}</strong>
-            </p>
-          </div>
-
-          {/* Tarjetas de categorías extras */}
-          {extras.map((extra, idx) => {
-            const color = COLORES[(idx + 1) % COLORES.length]
-            return (
-              <div key={idx} className={`bg-gradient-to-br ${color.from} ${color.to} rounded-xl border ${color.border} p-4 space-y-3 relative`}>
-                <button type="button" onClick={() => eliminarExtra(idx)} disabled={disabled}
-                  className="absolute top-2 right-2 p-1 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                </button>
-                <div className="flex items-center gap-2">
-                  <span className={`w-2.5 h-2.5 rounded-full ${color.dot}`} />
-                  <span className={`text-xs font-bold uppercase tracking-wider ${color.title}`}>Categoría especial {idx + 2}</span>
-                </div>
-
-                {/* Selector dropdown */}
+              {/* Selector dropdown */}
+              {categorias.length > 0 && (
                 <CustomSelect
-                  options={[
-                    { value: extra.cat, label: extra.cat },
-                    ...categorias.filter(c => !catsEspeciales.includes(c.value)),
-                  ]}
-                  value={extra.cat}
-                  onChange={val => !disabled && cambiarExtra(idx, 'cat', val)}
+                  options={categorias.filter(c => !extras.map(e => e.cat).includes(c.value))}
+                  value={catPrincipal}
+                  onChange={val => !disabled && cambiar('comision_categoria_cabilla', val)}
                   placeholder="Seleccionar categoría"
                   disabled={disabled}
                 />
+              )}
 
-                <div className="flex items-baseline gap-2">
-                  <input type="number" min="0" max="100" step="0.01"
-                    value={extra.pct}
-                    onFocus={selectOnFocus}
-                    onChange={e => cambiarExtra(idx, 'pct', Math.max(0, Math.min(100, Number(e.target.value))))}
-                    className={`w-20 px-3 py-2.5 rounded-xl border ${color.border} bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 ${color.ring} text-right font-bold`}
-                    disabled={disabled} />
-                  <span className={`text-lg font-bold ${color.pct}`}>%</span>
-                </div>
-                <p className={`text-xs ${color.ejemplo}`}>
-                  $1,000 → <strong>{fmtUsd(1000 * extra.pct / 100)}</strong>
-                </p>
+              <div className="flex items-baseline gap-2">
+                <input type="number" min="0" max="100" step="0.01"
+                  value={campos.comision_pct_cabilla}
+                  onFocus={selectOnFocus}
+                  onChange={e => cambiar('comision_pct_cabilla', Math.max(0, Math.min(100, Number(e.target.value))))}
+                  className={`w-20 px-3 py-2.5 rounded-xl border ${COLORES[0].border} bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 ${COLORES[0].ring} text-right font-bold shadow-inner`}
+                  disabled={disabled} />
+                <span className={`text-lg font-bold ${COLORES[0].pct}`}>%</span>
               </div>
-            )
-          })}
+              <p className={`text-xs ${COLORES[0].ejemplo}`}>
+                $1,000 → <strong>{fmtUsd(1000 * campos.comision_pct_cabilla / 100)}</strong>
+              </p>
+            </div>
 
-          {/* Tarjeta "Productos externos" */}
-          <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-xl border border-indigo-200 p-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
-              <span className="text-xs font-bold text-indigo-700 uppercase tracking-wider">Productos externos</span>
+            {/* Tarjetas de categorías extras */}
+            {extras.map((extra, idx) => {
+              const color = COLORES[(idx + 1) % COLORES.length]
+              return (
+                <div key={idx} className={`bg-gradient-to-br ${color.from} ${color.to} rounded-xl border ${color.border} p-4 space-y-3 relative shadow-sm hover:scale-[1.01] hover:shadow-md transition-all duration-300`}>
+                  <button type="button" onClick={() => eliminarExtra(idx)} disabled={disabled}
+                    className="absolute top-3 right-3 p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+                    <Trash2 size={14} />
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2.5 h-2.5 rounded-full ${color.dot}`} />
+                    <span className={`text-xs font-bold uppercase tracking-wider ${color.title}`}>Categoría especial {idx + 2}</span>
+                  </div>
+
+                  {/* Selector dropdown */}
+                  <CustomSelect
+                    options={[
+                      { value: extra.cat, label: extra.cat },
+                      ...categorias.filter(c => !catsEspeciales.includes(c.value)),
+                    ]}
+                    value={extra.cat}
+                    onChange={val => !disabled && cambiarExtra(idx, 'cat', val)}
+                    placeholder="Seleccionar categoría"
+                    disabled={disabled}
+                  />
+
+                  <div className="flex items-baseline gap-2">
+                    <input type="number" min="0" max="100" step="0.01"
+                      value={extra.pct}
+                      onFocus={selectOnFocus}
+                      onChange={e => cambiarExtra(idx, 'pct', Math.max(0, Math.min(100, Number(e.target.value))))}
+                      className={`w-20 px-3 py-2.5 rounded-xl border ${color.border} bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 ${color.ring} text-right font-bold shadow-inner`}
+                      disabled={disabled} />
+                    <span className={`text-lg font-bold ${color.pct}`}>%</span>
+                  </div>
+                  <p className={`text-xs ${color.ejemplo}`}>
+                    $1,000 → <strong>{fmtUsd(1000 * extra.pct / 100)}</strong>
+                  </p>
+                </div>
+              )
+            })}
+
+            {/* Tarjeta "Productos externos" */}
+            <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-xl border border-indigo-200 p-4 space-y-3 shadow-sm hover:scale-[1.01] hover:shadow-md transition-all duration-300">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
+                <span className="text-xs font-bold text-indigo-700 uppercase tracking-wider">Productos externos</span>
+              </div>
+              <p className="text-[11px] text-indigo-400 font-medium">Aplica a productos no pertenecientes al inventario físico.</p>
+              <div className="flex items-baseline gap-2">
+                <input type="number" min="0" max="100" step="0.01"
+                  value={campos.comision_pct_externos}
+                  onFocus={selectOnFocus}
+                  onChange={e => cambiar('comision_pct_externos', Math.max(0, Math.min(100, Number(e.target.value))))}
+                  className="w-20 px-3 py-2.5 rounded-xl border border-indigo-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300 text-right font-bold shadow-inner"
+                  disabled={disabled} />
+                <span className="text-lg font-bold text-indigo-500">%</span>
+              </div>
+              <p className="text-xs text-indigo-600 font-semibold">
+                $1,000 → <strong>{fmtUsd(1000 * (campos.comision_pct_externos ?? 3) / 100)}</strong>
+              </p>
             </div>
-            <p className="text-[11px] text-indigo-400">Aplica a productos no pertenecientes al inventario físico.</p>
-            <div className="flex items-baseline gap-2">
-              <input type="number" min="0" max="100" step="0.01"
-                value={campos.comision_pct_externos}
-                onFocus={selectOnFocus}
-                onChange={e => cambiar('comision_pct_externos', Math.max(0, Math.min(100, Number(e.target.value))))}
-                className="w-20 px-3 py-2.5 rounded-xl border border-indigo-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300 text-right font-bold"
-                disabled={disabled} />
-              <span className="text-lg font-bold text-indigo-500">%</span>
+
+            {/* Tarjeta "Demás categorías" (siempre al final) */}
+            <div className="bg-gradient-to-br from-slate-50 to-blue-50 rounded-xl border border-slate-200 p-4 space-y-3 shadow-sm hover:scale-[1.01] hover:shadow-md transition-all duration-300">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Demás categorías</span>
+              </div>
+              <p className="text-[11px] text-slate-400 font-medium">Aplica a todas las categorías sin tasa especial.</p>
+              <div className="flex items-baseline gap-2">
+                <input type="number" min="0" max="100" step="0.01"
+                  value={campos.comision_pct_otros}
+                  onFocus={selectOnFocus}
+                  onChange={e => cambiar('comision_pct_otros', Math.max(0, Math.min(100, Number(e.target.value))))}
+                  className="w-20 px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 text-right font-bold shadow-inner"
+                  disabled={disabled} />
+                <span className="text-lg font-bold text-blue-500">%</span>
+              </div>
+              <p className="text-xs text-slate-500 font-semibold">
+                $1,000 → <strong>{fmtUsd(1000 * campos.comision_pct_otros / 100)}</strong>
+              </p>
             </div>
-            <p className="text-xs text-indigo-600">
-              $1,000 → <strong>{fmtUsd(1000 * (campos.comision_pct_externos ?? 3) / 100)}</strong>
-            </p>
           </div>
 
-          {/* Tarjeta "Demás categorías" (siempre al final) */}
-          <div className="bg-gradient-to-br from-slate-50 to-blue-50 rounded-xl border border-slate-200 p-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
-              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Demás categorías</span>
+          {/* Botón agregar categoría */}
+          {catsDisponibles.length > 0 && (
+            <button type="button" onClick={agregarCategoria} disabled={disabled}
+              className="flex items-center gap-2 text-xs font-bold text-[#1B365D] hover:text-[#1B365D]/85 transition-colors disabled:opacity-50 mt-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200/80 shadow-sm w-full justify-center active:scale-[0.99]">
+              <Plus size={14} />
+              Agregar categoría especial
+            </button>
+          )}
+        </div>
+
+        {/* SECCIÓN 2: VENDEDORES EXTERNOS (con color ámbar #D97706) */}
+        <div className="bg-white/80 backdrop-blur-md rounded-2xl border border-amber-200/80 p-5 space-y-5 shadow-sm relative overflow-hidden hover:border-amber-300/80 transition-all duration-300">
+          {/* Línea superior para destacar la sección con color de externos */}
+          <div className="absolute top-0 left-0 right-0 h-1 bg-amber-500" />
+          
+          <div className="flex items-center justify-between">
+            <SectionHeaderExt icon={Users}>Vendedores Externos</SectionHeaderExt>
+            <div className="flex items-center gap-1 bg-amber-500/10 text-amber-800 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-amber-500/20">
+              Canal Externo
             </div>
-            <p className="text-[11px] text-slate-400">Aplica a todas las categorías sin tasa especial.</p>
-            <div className="flex items-baseline gap-2">
-              <input type="number" min="0" max="100" step="0.01"
-                value={campos.comision_pct_otros}
-                onFocus={selectOnFocus}
-                onChange={e => cambiar('comision_pct_otros', Math.max(0, Math.min(100, Number(e.target.value))))}
-                className="w-20 px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 text-right font-bold"
-                disabled={disabled} />
-              <span className="text-lg font-bold text-blue-500">%</span>
+          </div>
+          <p className="text-xs text-slate-500 -mt-2">
+            Configuración global aplicable únicamente a los vendedores marcados como <strong>Externos</strong>.
+          </p>
+
+          <div className="space-y-4">
+            {/* Markup Recargo Global */}
+            <div className="bg-gradient-to-br from-amber-50/60 to-orange-50/60 rounded-xl border border-amber-200/60 p-4 space-y-3 shadow-sm hover:scale-[1.01] hover:shadow-md transition-all duration-300">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                <span className="text-xs font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
+                  Recargo de Venta (Markup)
+                  <div className="group relative">
+                    <Info size={12} className="text-amber-700 cursor-pointer" />
+                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-slate-900 text-white text-[10px] p-2 rounded-lg font-normal opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-md z-20">
+                      Margen que se agrega por defecto a los precios del inventario cuando un vendedor externo cotiza.
+                    </span>
+                  </div>
+                </span>
+              </div>
+              <p className="text-[11px] text-amber-700/80 font-medium">
+                Margen incrementado sobre los precios base del inventario.
+              </p>
+              <div className="flex items-baseline gap-2">
+                <input type="number" min="0" max="100" step="0.01"
+                  value={campos.markup_pct_externo}
+                  onFocus={selectOnFocus}
+                  onChange={e => cambiar('markup_pct_externo', Math.max(0, Math.min(100, Number(e.target.value))))}
+                  className="w-20 px-3 py-2.5 rounded-xl border border-amber-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 text-right font-bold shadow-inner"
+                  disabled={disabled} />
+                <span className="text-lg font-bold text-amber-600">%</span>
+              </div>
+              <p className="text-xs text-amber-700 font-semibold">
+                Ejemplo: Costo $100 → Venta <strong>{fmtUsd(100 * (1 + campos.markup_pct_externo / 100))}</strong> (+{campos.markup_pct_externo}%)
+              </p>
             </div>
-            <p className="text-xs text-slate-500">
-              $1,000 → <strong>{fmtUsd(1000 * campos.comision_pct_otros / 100)}</strong>
-            </p>
+
+            {/* Tarjeta categoría principal (Cabilla / Cemento) */}
+            <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl border border-amber-200/60 p-4 space-y-3 shadow-sm hover:scale-[1.01] hover:shadow-md transition-all duration-300">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                <span className="text-xs font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
+                  Categoría principal & Cemento
+                  <div className="group relative">
+                    <Info size={12} className="text-amber-700 cursor-pointer" />
+                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-slate-900 text-white text-[10px] p-2 rounded-lg font-normal opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-md z-20">
+                      Por regla de negocio, el Cemento comparte la misma tasa de comisión que la categoría principal.
+                    </span>
+                  </div>
+                </span>
+              </div>
+              <p className="text-[11px] text-amber-700/80 font-medium">
+                Aplica a la categoría principal y Cemento (actualmente {campos.comision_ext_pct_cabilla}%).
+              </p>
+              <div className="flex items-baseline gap-2">
+                <input type="number" min="0" max="100" step="0.01"
+                  value={campos.comision_ext_pct_cabilla}
+                  onFocus={selectOnFocus}
+                  onChange={e => cambiar('comision_ext_pct_cabilla', Math.max(0, Math.min(100, Number(e.target.value))))}
+                  className="w-20 px-3 py-2.5 rounded-xl border border-amber-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 text-right font-bold shadow-inner"
+                  disabled={disabled} />
+                <span className="text-lg font-bold text-amber-600">%</span>
+              </div>
+              <p className="text-xs text-amber-700 font-semibold">
+                $1,000 → <strong>{fmtUsd(1000 * campos.comision_ext_pct_cabilla / 100)}</strong>
+              </p>
+            </div>
+
+            {/* Tarjetas de categorías extras externos */}
+            {extExtras.map((extra, idx) => {
+              return (
+                <div key={idx} className="bg-gradient-to-br from-amber-50 to-orange-50/30 rounded-xl border border-amber-200/60 p-4 space-y-3 relative shadow-sm hover:scale-[1.01] hover:shadow-md transition-all duration-300">
+                  <button type="button" onClick={() => eliminarExtraExt(idx)} disabled={disabled}
+                    className="absolute top-3 right-3 p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+                    <Trash2 size={14} />
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-amber-800">Categoría especial {idx + 2} (Ext.)</span>
+                  </div>
+
+                  {/* Selector dropdown */}
+                  <CustomSelect
+                    options={[
+                      { value: extra.cat, label: extra.cat },
+                      ...categorias.filter(c => !catsEspecialesExt.includes(c.value)),
+                    ]}
+                    value={extra.cat}
+                    onChange={val => !disabled && cambiarExtraExt(idx, 'cat', val)}
+                    placeholder="Seleccionar categoría"
+                    disabled={disabled}
+                  />
+
+                  <div className="flex items-baseline gap-2">
+                    <input type="number" min="0" max="100" step="0.01"
+                      value={extra.pct}
+                      onFocus={selectOnFocus}
+                      onChange={e => cambiarExtraExt(idx, 'pct', Math.max(0, Math.min(100, Number(e.target.value))))}
+                      className="w-20 px-3 py-2.5 rounded-xl border border-amber-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 text-right font-bold shadow-inner"
+                      disabled={disabled} />
+                    <span className="text-lg font-bold text-amber-600">%</span>
+                  </div>
+                  <p className="text-xs text-amber-700 font-semibold">
+                    $1,000 → <strong>{fmtUsd(1000 * extra.pct / 100)}</strong>
+                  </p>
+                </div>
+              )
+            })}
+
+            {/* Tarjeta "Productos externos" para externos */}
+            <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl border border-amber-200/60 p-4 space-y-3 shadow-sm hover:scale-[1.01] hover:shadow-md transition-all duration-300">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                <span className="text-xs font-bold text-amber-800 uppercase tracking-wider">Productos externos</span>
+              </div>
+              <p className="text-[11px] text-amber-700/80 font-medium">Aplica a productos no pertenecientes al inventario físico.</p>
+              <div className="flex items-baseline gap-2">
+                <input type="number" min="0" max="100" step="0.01"
+                  value={campos.comision_ext_pct_externos}
+                  onFocus={selectOnFocus}
+                  onChange={e => cambiar('comision_ext_pct_externos', Math.max(0, Math.min(100, Number(e.target.value))))}
+                  className="w-20 px-3 py-2.5 rounded-xl border border-amber-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 text-right font-bold shadow-inner"
+                  disabled={disabled} />
+                <span className="text-lg font-bold text-amber-600">%</span>
+              </div>
+              <p className="text-xs text-amber-700 font-semibold">
+                $1,000 → <strong>{fmtUsd(1000 * (campos.comision_ext_pct_externos ?? 3) / 100)}</strong>
+              </p>
+            </div>
+
+            {/* Tarjeta "Demás categorías" para externos */}
+            <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl border border-amber-200/60 p-4 space-y-3 shadow-sm hover:scale-[1.01] hover:shadow-md transition-all duration-300">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                <span className="text-xs font-bold text-amber-800 uppercase tracking-wider">Demás categorías</span>
+              </div>
+              <p className="text-[11px] text-amber-700/80 font-medium">Aplica a todas las categorías sin tasa especial.</p>
+              <div className="flex items-baseline gap-2">
+                <input type="number" min="0" max="100" step="0.01"
+                  value={campos.comision_ext_pct_otros}
+                  onFocus={selectOnFocus}
+                  onChange={e => cambiar('comision_ext_pct_otros', Math.max(0, Math.min(100, Number(e.target.value))))}
+                  className="w-20 px-3 py-2.5 rounded-xl border border-amber-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 text-right font-bold shadow-inner"
+                  disabled={disabled} />
+                <span className="text-lg font-bold text-amber-600">%</span>
+              </div>
+              <p className="text-xs text-amber-700 font-semibold">
+                $1,000 → <strong>{fmtUsd(1000 * campos.comision_ext_pct_otros / 100)}</strong>
+              </p>
+            </div>
+          </div>
+
+          {/* Botón agregar categoría para externos */}
+          {catsDisponiblesExt.length > 0 && (
+            <button type="button" onClick={agregarCategoriaExt} disabled={disabled}
+              className="flex items-center gap-2 text-xs font-bold text-amber-800 hover:text-amber-900 transition-colors disabled:opacity-50 mt-2 bg-amber-50 px-3 py-2 rounded-xl border border-amber-200/80 shadow-sm w-full justify-center active:scale-[0.99]">
+              <Plus size={14} />
+              Agregar categoría especial para externos
+            </button>
+          )}
+        </div>
+      </div>
+
+
+
+      {/* Grid inferior: IVA Simbólico + Plantilla Nota de Entrega */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        
+        {/* ── IVA de Facturación ─────────────────────────────────────────── */}
+        <div className="bg-white/80 backdrop-blur-md rounded-2xl border border-slate-200/80 p-5 space-y-4 shadow-sm hover:border-slate-300/80 transition-all duration-300">
+          <SectionHeader icon={Percent}>IVA de Facturación</SectionHeader>
+          <p className="text-xs text-slate-500 -mt-2">
+            Porcentaje de IVA que se aplicará al generar el PDF de la factura.
+          </p>
+          <div className="flex items-baseline gap-3">
+            <input type="number" min="0" max="100" step="0.01"
+              value={campos.iva_pct}
+              onFocus={e => e.target.select()}
+              onChange={e => cambiar('iva_pct', Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
+              className="w-24 px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 text-right font-bold shadow-inner"
+              disabled={disabled} />
+            <span className="text-lg font-bold text-blue-500">%</span>
           </div>
         </div>
 
-        {/* Botón agregar categoría */}
-        {catsDisponibles.length > 0 && (
-          <button type="button" onClick={agregarCategoria} disabled={disabled}
-            className="flex items-center gap-2 text-sm font-semibold text-primary hover:text-primary-hover transition-colors disabled:opacity-50">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
-            Agregar otra categoría con tasa especial
-          </button>
-        )}
-      </div>
+        {/* ── Plantilla de Nota de Entrega ─────────────────────────────────── */}
+        <div className="bg-white/80 backdrop-blur-md rounded-2xl border border-slate-200/80 p-5 space-y-4 shadow-sm hover:border-slate-300/80 transition-all duration-300">
+          <SectionHeader icon={FileText}>Plantilla de Nota de Entrega</SectionHeader>
+          <p className="text-xs text-slate-500 -mt-2">
+            Selecciona el diseño del PDF generado para las notas de entrega de los despachos.
+          </p>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Opción Estándar */}
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => cambiar('nota_entrega_plantilla', 'estandar')}
+              className={`flex flex-col text-left p-4 rounded-xl border transition-all hover:scale-[1.02] duration-200 ${
+                (campos.nota_entrega_plantilla || 'estandar') === 'estandar'
+                  ? 'border-blue-500 bg-blue-50/50 ring-2 ring-blue-200 shadow-sm'
+                  : 'border-slate-200 bg-white hover:bg-slate-50'
+              }`}
+            >
+              <span className="text-xs font-bold text-slate-800">Estándar (Logo + Membrete)</span>
+              <span className="text-[10px] text-slate-500 mt-1">
+                Incluye logo, datos de contacto y pie de página en el PDF.
+              </span>
+            </button>
 
-    {/* ── IVA simbólico ──────────────────────────────────────────────── */}
-    <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-      <SectionHeader icon={Percent}>IVA simbólico</SectionHeader>
-      <p className="text-xs text-slate-500 -mt-2">
-        Porcentaje de IVA que aparece como desglose simbólico en las notas de entrega. No afecta el cálculo de precios.
-      </p>
-      <div className="flex items-baseline gap-3">
-        <input type="number" min="0" max="100" step="0.01"
-          value={campos.iva_pct}
-          onFocus={e => e.target.select()}
-          onChange={e => cambiar('iva_pct', Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
-          className="w-24 px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 text-right font-bold"
-          disabled={disabled} />
-        <span className="text-lg font-bold text-blue-500">%</span>
-      </div>
-
-      {/* Toggle mostrar IVA en nota de entrega */}
-      <div className="flex items-center justify-between bg-slate-50 rounded-xl border border-slate-200 px-4 py-3">
-        <div className="flex flex-col gap-0.5">
-          <span className="text-sm font-semibold text-slate-700">Mostrar IVA en nota de entrega</span>
-          <span className="text-xs text-slate-400">
-            {campos.nota_entrega_mostrar_iva
-              ? 'La nota de entrega muestra el desglose de IVA.'
-              : 'La nota de entrega NO muestra el desglose de IVA.'}
-          </span>
+            {/* Opción Membrete Pre-Impreso */}
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => cambiar('nota_entrega_plantilla', 'membrete')}
+              className={`flex flex-col text-left p-4 rounded-xl border transition-all hover:scale-[1.02] duration-200 ${
+                campos.nota_entrega_plantilla === 'membrete'
+                  ? 'border-blue-500 bg-blue-50/50 ring-2 ring-blue-200 shadow-sm'
+                  : 'border-slate-200 bg-white hover:bg-slate-50'
+              }`}
+            >
+              <span className="text-xs font-bold text-slate-800">Hoja Pre-Impresa</span>
+              <span className="text-[10px] text-slate-500 mt-1">
+                Omite logo y membrete. Ideal para imprimir sobre hojas físicas ya membretadas.
+              </span>
+            </button>
+          </div>
         </div>
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => cambiar('nota_entrega_mostrar_iva', !campos.nota_entrega_mostrar_iva)}
-          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-            campos.nota_entrega_mostrar_iva ? 'bg-blue-500' : 'bg-slate-300'
-          }`}
-          aria-checked={campos.nota_entrega_mostrar_iva}
-          role="switch"
-        >
-          <span
-            className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform duration-200 ${
-              campos.nota_entrega_mostrar_iva ? 'translate-x-5' : 'translate-x-0'
-            }`}
-          />
-        </button>
       </div>
-    </div>
-
-    {/* ── Plantilla de Nota de Entrega ─────────────────────────────────── */}
-    <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-      <SectionHeader icon={FileText}>Plantilla de Nota de Entrega</SectionHeader>
-      <p className="text-xs text-slate-500 -mt-2">
-        Selecciona el diseño del PDF generado para las notas de entrega de los despachos.
-      </p>
-      
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* Opción Estándar */}
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => cambiar('nota_entrega_plantilla', 'estandar')}
-          className={`flex flex-col text-left p-4 rounded-xl border transition-all ${
-            (campos.nota_entrega_plantilla || 'estandar') === 'estandar'
-              ? 'border-blue-500 bg-blue-50/50 ring-2 ring-blue-200'
-              : 'border-slate-200 bg-white hover:bg-slate-50'
-          }`}
-        >
-          <span className="text-sm font-bold text-slate-800">Estándar (Con Membrete Digital)</span>
-          <span className="text-xs text-slate-500 mt-1">
-            Incluye el logo, datos de contacto del negocio y pie de página en el PDF generado.
-          </span>
-        </button>
-
-        {/* Opción Membrete Pre-Impreso */}
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => cambiar('nota_entrega_plantilla', 'membrete')}
-          className={`flex flex-col text-left p-4 rounded-xl border transition-all ${
-            campos.nota_entrega_plantilla === 'membrete'
-              ? 'border-blue-500 bg-blue-50/50 ring-2 ring-blue-200'
-              : 'border-slate-200 bg-white hover:bg-slate-50'
-          }`}
-        >
-          <span className="text-sm font-bold text-slate-800">Hoja Pre-Impresa (Sin Membrete)</span>
-          <span className="text-xs text-slate-500 mt-1">
-            Omite el logo, membrete y pie de página digital. Ideal para imprimir directamente sobre hojas membretadas físicas.
-          </span>
-        </button>
-      </div>
-    </div>
     </div>
   )
 }
@@ -372,7 +574,7 @@ export default function ConfiguracionView() {
     email_negocio:           '',
     direccion_negocio:       '',
     pie_pagina_pdf:          '',
-    iva_pct:                 0,
+    iva_pct:                 16,
     nota_entrega_mostrar_iva: true,
     nota_entrega_plantilla:  'estandar',
     gate_email:              '',
@@ -381,6 +583,11 @@ export default function ConfiguracionView() {
     comision_pct_externos:        3,
     comision_categoria_cabilla:   'Cabilla',
     _comision_extras:             [],
+    markup_pct_externo:           5.00,
+    comision_ext_pct_cabilla:     2,
+    comision_ext_pct_otros:       3,
+    comision_ext_pct_externos:    3,
+    _comision_ext_extras:         [],
   })
   const [gatePassword, setGatePassword] = useState('')
 
@@ -393,7 +600,7 @@ export default function ConfiguracionView() {
         email_negocio:           config.email_negocio           ?? '',
         direccion_negocio:       config.direccion_negocio       ?? '',
         pie_pagina_pdf:          config.pie_pagina_pdf          ?? '',
-        iva_pct:                 config.iva_pct                 ?? 0,
+        iva_pct:                 config.iva_pct                 ?? 16,
         nota_entrega_mostrar_iva: config.nota_entrega_mostrar_iva ?? true,
         nota_entrega_plantilla:  config.nota_entrega_plantilla  ?? 'estandar',
         gate_email:              config.gate_email              ?? '',
@@ -402,6 +609,11 @@ export default function ConfiguracionView() {
         comision_pct_externos:      config.comision_pct_externos      ?? 3,
         comision_categoria_cabilla: config.comision_categoria_cabilla ?? 'Cabilla',
         _comision_extras:           config._comision_extras           ?? [],
+        markup_pct_externo:         config.markup_pct_externo         ?? 5.00,
+        comision_ext_pct_cabilla:   config.comision_ext_pct_cabilla   ?? 2,
+        comision_ext_pct_otros:     config.comision_ext_pct_otros     ?? 3,
+        comision_ext_pct_externos:  config.comision_ext_pct_externos  ?? 3,
+        _comision_ext_extras:       config._comision_ext_extras       ?? [],
       })
     }
   }, [config])
@@ -472,7 +684,13 @@ export default function ConfiguracionView() {
     e.preventDefault()
     if (!campos.nombre_negocio.trim()) { setError('El nombre del negocio es obligatorio'); return }
     try {
-      const datosGuardar = { ...campos }
+      const keysExistentes = Object.keys(config)
+      const datosGuardar = {}
+      for (const [key, val] of Object.entries(campos)) {
+        if (keysExistentes.length === 0 || keysExistentes.includes(key) || key === 'gate_password_hash') {
+          datosGuardar[key] = val
+        }
+      }
       if (gatePassword.trim()) {
         datosGuardar.gate_password_hash = await hashSHA256(gatePassword)
         setGatePassword('')
@@ -485,7 +703,7 @@ export default function ConfiguracionView() {
     }
   }
 
-  const migrationSql = `ALTER TABLE configuracion_negocio\n  ADD COLUMN IF NOT EXISTS iva_pct NUMERIC(5,2) NOT NULL DEFAULT 0;`
+  const migrationSql = `ALTER TABLE configuracion_negocio\n  ADD COLUMN IF NOT EXISTS iva_pct NUMERIC(5,2) NOT NULL DEFAULT 16;`
   const ivaMissing   = config.iva_pct === undefined || config.iva_pct === null
 
   async function copiarSql() {

@@ -1,6 +1,6 @@
 // src/views/ReporteVendedoresView.jsx
 import { useState, useMemo, useCallback } from 'react'
-import { Users, Download, RefreshCw, TrendingUp, TrendingDown, ChevronDown, ChevronRight, BarChart3, Award, Target, DollarSign, Package, ShoppingBag } from 'lucide-react'
+import { Users, Download, RefreshCw, TrendingUp, TrendingDown, ChevronDown, ChevronRight, BarChart3, Award, Target, DollarSign, Package, ShoppingBag, Briefcase } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { useReporteVendedores } from '../hooks/useReporteVendedores'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
@@ -68,6 +68,8 @@ function KpiCard({ label, value, sub, icon: Icon, color = '#3B82F6', variacion }
 function VendedorRow({ v, rank, isExpanded, onToggle, onExport, isExporting }) {
   const pctBar = v._maxVenta > 0 ? (v.totalUsd / v._maxVenta) * 100 : 0
   const tasaColor = v.tasaCierre >= 60 ? '#059669' : v.tasaCierre >= 35 ? '#D97706' : '#DC2626'
+  const esExterno = !!v.es_externo || v.markup_pct > 0
+  const colorVendedor = esExterno ? '#D97706' : v.color
 
   return (
     <>
@@ -80,11 +82,21 @@ function VendedorRow({ v, rank, isExpanded, onToggle, onExport, isExporting }) {
         </td>
         <td className="py-3 pr-4">
           <div className="flex items-center gap-2.5">
-            <div className="w-3 h-3 rounded-full shrink-0" style={{ background: v.color }} />
+            <div className="w-3 h-3 rounded-full shrink-0" style={{ background: colorVendedor }} />
             <div>
-              <p className="text-sm font-bold text-slate-800">{v.nombre}</p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-sm font-bold text-slate-800">
+                  {v.nombre}
+                  {esExterno && <span className="text-amber-600 font-extrabold ml-1">(E)</span>}
+                </p>
+                {esExterno && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#B45309] bg-[#FEF3C7] border border-[#FDE68A] rounded px-1.5 py-0.2">
+                    💼 +{v.markup_pct}%
+                  </span>
+                )}
+              </div>
               <div className="w-32 h-1.5 bg-slate-100 rounded-full mt-1">
-                <div className="h-1.5 rounded-full" style={{ width: `${pctBar}%`, background: v.color }} />
+                <div className="h-1.5 rounded-full" style={{ width: `${pctBar}%`, background: colorVendedor }} />
               </div>
             </div>
           </div>
@@ -257,10 +269,58 @@ export default function ReporteVendedoresView() {
     prevTo: rango.prevTo,
   })
 
-  const vendedores = useMemo(() => {
-    if (!data?.porVendedor) return []
+  const calcSubtotales = (lista) => {
+    let totalUsd = 0
+    let numDespachos = 0
+    let comisionTotal = 0
+    let aceptadas = 0
+    let enviadas = 0
+    let prevTotalUsd = 0
+
+    lista.forEach(v => {
+      totalUsd += v.totalUsd || 0
+      numDespachos += v.numDespachos || 0
+      comisionTotal += v.comisionTotal || 0
+      prevTotalUsd += v.prevTotalUsd || 0
+
+      const cots = v.cotizaciones || {}
+      const env = (cots.enviada || 0) + (cots.aceptada || 0) + (cots.rechazada || 0)
+      enviadas += env
+      aceptadas += cots.aceptada || 0
+    })
+
+    const ticketPromedio = numDespachos > 0 ? totalUsd / numDespachos : 0
+    const tasaCierre = enviadas > 0 ? Math.round((aceptadas / enviadas) * 100) : 0
+    const variacionUsd = prevTotalUsd > 0 ? ((totalUsd - prevTotalUsd) / prevTotalUsd) * 100 : null
+
+    return {
+      totalUsd,
+      numDespachos,
+      ticketPromedio,
+      tasaCierre,
+      comisionTotal,
+      variacionUsd,
+    }
+  }
+
+  const { internos, externos, subInternos, subExternos, totalGlobal, hasData } = useMemo(() => {
+    if (!data?.porVendedor || data.porVendedor.length === 0) {
+      return { internos: [], externos: [], subInternos: {}, subExternos: {}, totalGlobal: {}, hasData: false }
+    }
     const max = data.porVendedor[0]?.totalUsd ?? 1
-    return data.porVendedor.map(v => ({ ...v, _maxVenta: max }))
+    const mapped = data.porVendedor.map(v => ({ ...v, _maxVenta: max }))
+
+    const intList = mapped.filter(v => !(v.es_externo || (v.markup_pct != null && Number(v.markup_pct) > 0)))
+    const extList = mapped.filter(v => !!v.es_externo || (v.markup_pct != null && Number(v.markup_pct) > 0))
+
+    return {
+      internos: intList,
+      externos: extList,
+      subInternos: calcSubtotales(intList),
+      subExternos: calcSubtotales(extList),
+      totalGlobal: calcSubtotales(mapped),
+      hasData: true
+    }
   }, [data])
 
   const handleToggle = useCallback((id) => {
@@ -366,7 +426,7 @@ export default function ReporteVendedoresView() {
           <p className="font-semibold">Error al cargar datos</p>
           <button onClick={() => refetch()} className="mt-2 text-sm underline">Reintentar</button>
         </div>
-      ) : vendedores.length === 0 ? (
+      ) : !hasData ? (
         <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
           <Users size={40} className="text-slate-300 mx-auto mb-3" />
           <p className="text-slate-500 font-semibold">Sin ventas en este período</p>
@@ -389,18 +449,111 @@ export default function ReporteVendedoresView() {
                 </tr>
               </thead>
               <tbody>
-                {vendedores.map((v, idx) => (
-                  <VendedorRow
-                    key={v.id}
-                    v={v}
-                    rank={idx + 1}
-                    isExpanded={expandedId === v.id}
-                    onToggle={() => handleToggle(v.id)}
-                    onExport={handleExportPDF}
-                    isExporting={pdfLoading === v.id}
-                  />
-                ))}
+                {/* 1. SECCIÓN VENDEDORES INTERNOS */}
+                {internos.length > 0 && (
+                  <>
+                    <tr className="bg-slate-50 font-extrabold text-slate-500 text-[10px] tracking-wider border-b border-slate-100">
+                      <td colSpan={8} className="px-4 py-2 uppercase">
+                        <div className="flex items-center gap-1.5">
+                          <Users size={12} className="text-slate-400" />
+                          Vendedores Internos ({internos.length})
+                        </div>
+                      </td>
+                    </tr>
+                    {internos.map((v, i) => (
+                      <VendedorRow
+                        key={v.id}
+                        v={v}
+                        rank={i + 1}
+                        isExpanded={expandedId === v.id}
+                        onToggle={() => handleToggle(v.id)}
+                        onExport={handleExportPDF}
+                        isExporting={pdfLoading === v.id}
+                      />
+                    ))}
+                    {/* Subtotal Internos */}
+                    <tr className="bg-slate-50/30 font-bold text-slate-600 border-b border-slate-200 text-xs">
+                      <td className="py-2.5 pl-4"></td>
+                      <td className="py-2.5 pr-4 uppercase text-[9px] font-black text-slate-400">Subtotal Internos</td>
+                      <td className="py-2.5 pr-4 text-right">
+                        <span className="font-extrabold text-slate-800">{fmtUsd(subInternos.totalUsd)}</span>
+                        {subInternos.variacionUsd !== null && (
+                          <span className={`text-[10px] font-semibold block ${subInternos.variacionUsd >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                            {subInternos.variacionUsd >= 0 ? '▲' : '▼'} {Math.abs(subInternos.variacionUsd).toFixed(1)}%
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2.5 pr-4 text-right text-slate-600 font-semibold">{subInternos.numDespachos}</td>
+                      <td className="py-2.5 pr-4 text-right text-slate-500">{fmtUsd(subInternos.ticketPromedio)}</td>
+                      <td className="py-2.5 pr-4 text-right font-bold text-slate-700">{subInternos.tasaCierre}%</td>
+                      <td className="py-2.5 pr-4 text-right text-emerald-600 font-extrabold">{fmtUsd(subInternos.comisionTotal)}</td>
+                      <td className="py-2.5 pr-2"></td>
+                    </tr>
+                  </>
+                )}
+
+                {/* 2. SECCIÓN VENDEDORES EXTERNOS (E) */}
+                {externos.length > 0 && (
+                  <>
+                    <tr className="bg-amber-50/50 font-extrabold text-amber-700 text-[10px] tracking-wider border-b border-amber-100 border-t border-slate-100">
+                      <td colSpan={8} className="px-4 py-2 uppercase">
+                        <div className="flex items-center gap-1.5">
+                          <Briefcase size={12} className="text-amber-600" />
+                          Vendedores Externos ({externos.length})
+                        </div>
+                      </td>
+                    </tr>
+                    {externos.map((v, i) => (
+                      <VendedorRow
+                        key={v.id}
+                        v={v}
+                        rank={i + 1}
+                        isExpanded={expandedId === v.id}
+                        onToggle={() => handleToggle(v.id)}
+                        onExport={handleExportPDF}
+                        isExporting={pdfLoading === v.id}
+                      />
+                    ))}
+                    {/* Subtotal Externos */}
+                    <tr className="bg-amber-50/10 font-bold text-amber-800 border-b border-amber-200 text-xs">
+                      <td className="py-2.5 pl-4"></td>
+                      <td className="py-2.5 pr-4 uppercase text-[9px] font-black text-amber-600/70">Subtotal Externos</td>
+                      <td className="py-2.5 pr-4 text-right">
+                        <span className="font-extrabold text-amber-900">{fmtUsd(subExternos.totalUsd)}</span>
+                        {subExternos.variacionUsd !== null && (
+                          <span className={`text-[10px] font-semibold block ${subExternos.variacionUsd >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                            {subExternos.variacionUsd >= 0 ? '▲' : '▼'} {Math.abs(subExternos.variacionUsd).toFixed(1)}%
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2.5 pr-4 text-right text-amber-700 font-semibold">{subExternos.numDespachos}</td>
+                      <td className="py-2.5 pr-4 text-right text-amber-600/70">{fmtUsd(subExternos.ticketPromedio)}</td>
+                      <td className="py-2.5 pr-4 text-right font-bold text-amber-700">{subExternos.tasaCierre}%</td>
+                      <td className="py-2.5 pr-4 text-right text-emerald-600 font-extrabold">{fmtUsd(subExternos.comisionTotal)}</td>
+                      <td className="py-2.5 pr-2"></td>
+                    </tr>
+                  </>
+                )}
               </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-slate-200 bg-slate-100 font-black text-slate-800 text-sm">
+                  <td className="py-3 pl-4"></td>
+                  <td className="py-3 pr-4 uppercase">TOTAL GENERAL</td>
+                  <td className="py-3 pr-4 text-right">
+                    <span className="font-black text-slate-900">{fmtUsd(totalGlobal.totalUsd)}</span>
+                    {totalGlobal.variacionUsd !== null && (
+                      <span className={`text-[10px] font-bold block ${totalGlobal.variacionUsd >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                        {totalGlobal.variacionUsd >= 0 ? '▲' : '▼'} {Math.abs(totalGlobal.variacionUsd).toFixed(1)}%
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-3 pr-4 text-right font-bold text-slate-800">{totalGlobal.numDespachos}</td>
+                  <td className="py-3 pr-4 text-right text-slate-600">{fmtUsd(totalGlobal.ticketPromedio)}</td>
+                  <td className="py-3 pr-4 text-right font-black text-slate-800">{totalGlobal.tasaCierre}%</td>
+                  <td className="py-3 pr-4 text-right text-emerald-700 font-black">{fmtUsd(totalGlobal.comisionTotal)}</td>
+                  <td className="py-3 pr-2"></td>
+                </tr>
+              </tfoot>
             </table>
           </div>
           <div className="px-4 py-2 border-t border-slate-100 text-xs text-slate-400 flex items-center gap-1">

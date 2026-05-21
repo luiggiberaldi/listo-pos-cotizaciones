@@ -52,10 +52,18 @@ function UserCard({ user, onClick, index }) {
     .split(' ')
     .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
     .join(' ')
-    .split(' ').slice(0, 2).join(' ')
 
   const rol = user.rol || 'vendedor'
-  const acc = ROL_ACCENT[rol] ?? ROL_ACCENT.vendedor
+  const esVendedorExterno = ['vendedor', 'vendedor_sin_comision'].includes(rol) && (!!user.es_externo || (user.markup_pct != null && Number(user.markup_pct) > 0))
+  const acc = esVendedorExterno
+    ? {
+        color: '#D97706',
+        glow: 'rgba(217,119,6,0.35)',
+        chip: 'rgba(217,119,6,0.15)',
+        chipBorder: 'rgba(217,119,6,0.3)',
+        label: 'Vendedor (E)'
+      }
+    : (ROL_ACCENT[rol] ?? ROL_ACCENT.vendedor)
 
   return (
     <div
@@ -92,16 +100,23 @@ function UserCard({ user, onClick, index }) {
           <LoginAvatar user={user} className="relative z-10" />
         </div>
         <div className="text-center space-y-1.5 sm:space-y-2 min-w-0 w-full">
-          <p className="text-xs sm:text-sm md:text-base font-black text-white leading-tight tracking-tight line-clamp-2"
-            style={{ textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}>
+          <p
+            className="font-black text-white leading-tight line-clamp-2 break-words w-full"
+            style={{
+              textShadow: '0 2px 10px rgba(0,0,0,0.5)',
+              fontSize: nombre.length > 14 ? '10px' : nombre.length > 10 ? '12px' : nombre.length > 7 ? '13px' : '14px',
+              letterSpacing: nombre.length > 12 ? '0' : undefined,
+              wordBreak: 'break-word',
+            }}>
             {nombre}
           </p>
           <span
-            className="inline-flex items-center px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] font-bold uppercase tracking-wide transition-all duration-300 max-w-full truncate"
+            className="inline-flex items-center px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] font-bold uppercase tracking-wide transition-all duration-300 max-w-full text-center leading-tight"
             style={{
               background: acc.chip,
               border: `1px solid ${acc.chipBorder}`,
               color: acc.chipText || acc.color,
+              wordBreak: 'break-word',
             }}
           >
             {acc.label}
