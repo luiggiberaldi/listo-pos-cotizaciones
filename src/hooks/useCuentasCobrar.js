@@ -147,6 +147,7 @@ export function useResumenCxC() {
         ...c,
         diasSinPago: diasPorCliente[c.id] ?? 0,
         diasRestantes: diasRestantesPorCliente[c.id] !== undefined ? diasRestantesPorCliente[c.id] : null,
+        cargosActivos: cargos.filter(car => car.cliente_id === c.id && car.saldo_usd > 0)
       }))
 
       return {
