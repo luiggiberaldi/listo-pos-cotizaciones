@@ -131,9 +131,22 @@ export function useResumenCxC() {
         }
       })
 
+      // Días restantes para el vencimiento más próximo (de cargos activos con saldo_usd > 0)
+      const diasRestantesPorCliente = {}
+      cargos.forEach(c => {
+        if (c.saldo_usd > 0 && c.fecha_vencimiento) {
+          const fv = new Date(c.fecha_vencimiento)
+          const diffDays = Math.ceil((fv - now) / (1000 * 60 * 60 * 24))
+          if (diasRestantesPorCliente[c.cliente_id] === undefined || diffDays < diasRestantesPorCliente[c.cliente_id]) {
+            diasRestantesPorCliente[c.cliente_id] = diffDays
+          }
+        }
+      })
+
       const clientesEnriquecidos = clientes.map(c => ({
         ...c,
         diasSinPago: diasPorCliente[c.id] ?? 0,
+        diasRestantes: diasRestantesPorCliente[c.id] !== undefined ? diasRestantesPorCliente[c.id] : null,
       }))
 
       return {

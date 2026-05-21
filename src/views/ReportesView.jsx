@@ -1412,14 +1412,14 @@ function AgingBars({ aging }) {
 
 function TabCredito() {
   const { data, isLoading, isError, refetch } = useResumenCxC()
-  const [sortBy, setSortBy] = useState('saldo') // 'saldo' | 'dias'
+  const [sortBy, setSortBy] = useState('saldo') // 'saldo' | 'dias' | 'diasRestantes'
   const [sortDir, setSortDir] = useState('desc')
   const { perfil } = useAuthStore()
   const esAdmin = perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador'
 
   function toggleSort(col) {
     if (sortBy === col) setSortDir(d => d === 'desc' ? 'asc' : 'desc')
-    else { setSortBy(col); setSortDir('desc') }
+    else { setSortBy(col); setSortDir(col === 'diasRestantes' ? 'asc' : 'desc') }
   }
 
   if (isLoading) return <SkeletonReporte />
@@ -1437,19 +1437,21 @@ function TabCredito() {
   const { kpis, clientesConDeuda, aging, alertasVencimiento } = data
 
   const clientesOrdenados = [...clientesConDeuda].sort((a, b) => {
-    const va = sortBy === 'saldo' ? Number(a.saldo_pendiente) : (a.diasSinPago ?? 0)
-    const vb = sortBy === 'saldo' ? Number(b.saldo_pendiente) : (b.diasSinPago ?? 0)
+    let va, vb
+    if (sortBy === 'saldo') {
+      va = Number(a.saldo_pendiente)
+      vb = Number(b.saldo_pendiente)
+    } else if (sortBy === 'diasRestantes') {
+      va = a.diasRestantes !== null ? a.diasRestantes : (sortDir === 'desc' ? -99999 : 99999)
+      vb = b.diasRestantes !== null ? b.diasRestantes : (sortDir === 'desc' ? -99999 : 99999)
+    } else {
+      va = a.diasSinPago ?? 0
+      vb = b.diasSinPago ?? 0
+    }
     return sortDir === 'desc' ? vb - va : va - vb
   })
 
   const maxSaldo = Math.max(...clientesConDeuda.map(c => Number(c.saldo_pendiente)), 1)
-
-  function buildWA(telefono, nombre, saldo) {
-    const clean = (telefono || '').replace(/\D/g, '')
-    const num = clean.startsWith('58') ? clean : `58${clean.startsWith('0') ? clean.slice(1) : clean}`
-    const msg = encodeURIComponent(`Estimado/a ${nombre}, le recordamos que tiene un saldo pendiente de $${Number(saldo).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} con nosotros. Agradecemos su pronta cancelación.`)
-    return `https://wa.me/${num}?text=${msg}`
-  }
 
   const SortBtn = ({ col, label }) => (
     <button
@@ -1549,12 +1551,14 @@ function TabCredito() {
                 <th className="px-3 py-2.5 text-left font-semibold">Vendedor</th>
                 <th className="px-3 py-2.5 text-center font-semibold">Riesgo</th>
                 <th className="px-3 py-2.5 text-center">
-                  <SortBtn col="dias" label="Días" />
+                  <SortBtn col="dias" label="Antigüedad" />
+                </th>
+                <th className="px-3 py-2.5 text-center">
+                  <SortBtn col="diasRestantes" label="Días Restantes" />
                 </th>
                 <th className="px-3 py-2.5 text-right">
                   <SortBtn col="saldo" label="Saldo USD" />
                 </th>
-                <th className="px-3 py-2.5 text-center font-semibold">Contacto</th>
               </tr>
             </thead>
             <tbody>
@@ -1590,35 +1594,35 @@ function TabCredito() {
                         {riesgo.label}
                       </span>
                     </td>
-                    {/* Días */}
+                    {/* Antigüedad */}
                     <td className="px-3 py-3 text-center">
                       <span className={`font-black text-sm ${dias > 60 ? 'text-red-600' : dias > 30 ? 'text-amber-600' : 'text-slate-600'}`}>
                         {dias}d
                       </span>
+                    </td>
+                    {/* Días Restantes */}
+                    <td className="px-3 py-3 text-center">
+                      {c.diasRestantes === null ? (
+                        <span className="text-slate-300">—</span>
+                      ) : c.diasRestantes < 0 ? (
+                        <span className="inline-flex px-2 py-1 rounded-full text-[10px] font-black bg-red-100 text-red-700">
+                          Vencido ({Math.abs(c.diasRestantes)}d)
+                        </span>
+                      ) : c.diasRestantes === 0 ? (
+                        <span className="inline-flex px-2 py-1 rounded-full text-[10px] font-black bg-amber-100 text-amber-700">
+                          Vence hoy
+                        </span>
+                      ) : (
+                        <span className="inline-flex px-2 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700">
+                          {c.diasRestantes}d restantes
+                        </span>
+                      )}
                     </td>
                     {/* Saldo */}
                     <td className="px-3 py-3 text-right">
                       <span className="font-black text-red-600 text-sm">
                         ${saldo.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
-                    </td>
-                    {/* WhatsApp */}
-                    <td className="px-3 py-3 text-center">
-                      {c.telefono ? (
-                        <a
-                          href={buildWA(c.telefono, c.nombre, c.saldo_pendiente)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors font-semibold text-[10px]"
-                          title={`Contactar a ${c.nombre}`}
-                        >
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
-                            <path d="M12 0C5.373 0 0 5.373 0 12c0 2.025.507 3.934 1.395 5.604L0 24l6.545-1.371A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.88 0-3.645-.5-5.17-1.37l-.37-.22-3.885.815.827-3.784-.24-.39A9.94 9.94 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
-                          </svg>
-                          WA
-                        </a>
-                      ) : <span className="text-slate-300 text-[10px]">—</span>}
                     </td>
                   </tr>
                 )
