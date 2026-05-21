@@ -1418,8 +1418,6 @@ function TabCredito() {
   const esAdmin = perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador'
 
   const [exportandoCxC, setExportandoCxC] = useState(false)
-  const [showCxCDownloadMenu, setShowCxCDownloadMenu] = useState(false)
-  const [showCxCPrintMenu, setShowCxCPrintMenu] = useState(false)
   const { data: configNeg = {} } = useConfigNegocio()
 
   async function exportarCxCPDF(tipoReporte = 'detallado', accion = 'descargar') {
@@ -1564,82 +1562,32 @@ function TabCredito() {
             <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-[10px] font-bold">{clientesConDeuda.length}</span>
           </div>
 
-          <div className="flex items-center gap-2 relative">
+          <div className="flex items-center gap-2">
             {/* BOTÓN IMPRIMIR */}
-            <div className="relative">
-              <button
-                onClick={() => { setShowCxCPrintMenu(!showCxCPrintMenu); setShowCxCDownloadMenu(false) }}
-                disabled={exportandoCxC}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all text-xs font-bold active:scale-[0.98] disabled:opacity-50 shadow-sm"
-                title="Imprimir Reporte CxC"
-              >
-                <Printer size={13} className="text-slate-500" />
-                <span className="hidden sm:inline">Imprimir</span>
-                <ChevronDown size={11} className={`text-slate-400 transition-transform ${showCxCPrintMenu ? 'rotate-180' : ''}`} />
-              </button>
-
-              {showCxCPrintMenu && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setShowCxCPrintMenu(false)} />
-                  <div className="absolute right-0 mt-1.5 w-48 rounded-xl bg-white border border-slate-200 shadow-xl z-20 py-1 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
-                    <button
-                      onClick={() => { exportarCxCPDF('resumen', 'imprimir'); setShowCxCPrintMenu(false) }}
-                      className="w-full text-left px-3.5 py-2 hover:bg-slate-50 text-xs font-semibold text-slate-700 flex items-center gap-2"
-                    >
-                      <FileText size={13} className="text-slate-400" />
-                      Solo Resumen
-                    </button>
-                    <button
-                      onClick={() => { exportarCxCPDF('detallado', 'imprimir'); setShowCxCPrintMenu(false) }}
-                      className="w-full text-left px-3.5 py-2 hover:bg-slate-50 border-t border-slate-100 text-xs font-semibold text-slate-700 flex items-center gap-2"
-                    >
-                      <Briefcase size={13} className="text-slate-400" />
-                      Reporte Detallado
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
+            <button
+              onClick={() => exportarCxCPDF('detallado', 'imprimir')}
+              disabled={exportandoCxC}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all text-xs font-bold active:scale-[0.98] disabled:opacity-50 shadow-sm"
+              title="Imprimir Reporte CxC"
+            >
+              <Printer size={13} className="text-slate-500" />
+              <span className="hidden sm:inline">Imprimir</span>
+            </button>
 
             {/* BOTÓN DESCARGAR */}
-            <div className="relative">
-              <button
-                onClick={() => { setShowCxCDownloadMenu(!showCxCDownloadMenu); setShowCxCPrintMenu(false) }}
-                disabled={exportandoCxC}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white transition-all text-xs font-bold active:scale-[0.98] disabled:opacity-50 shadow-sm"
-                title="Descargar Reporte CxC"
-              >
-                {exportandoCxC ? (
-                  <Loader2 size={13} className="animate-spin text-white" />
-                ) : (
-                  <Download size={13} className="text-white" />
-                )}
-                <span className="hidden sm:inline">{exportandoCxC ? 'Generando...' : 'Descargar'}</span>
-                <ChevronDown size={11} className={`text-red-200 transition-transform ${showCxCDownloadMenu ? 'rotate-180' : ''}`} />
-              </button>
-
-              {showCxCDownloadMenu && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setShowCxCDownloadMenu(false)} />
-                  <div className="absolute right-0 mt-1.5 w-48 rounded-xl bg-white border border-slate-200 shadow-xl z-20 py-1 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
-                    <button
-                      onClick={() => { exportarCxCPDF('resumen', 'descargar'); setShowCxCDownloadMenu(false) }}
-                      className="w-full text-left px-3.5 py-2 hover:bg-slate-50 text-xs font-semibold text-slate-700 flex items-center gap-2"
-                    >
-                      <FileText size={13} className="text-slate-400" />
-                      Solo Resumen
-                    </button>
-                    <button
-                      onClick={() => { exportarCxCPDF('detallado', 'descargar'); setShowCxCDownloadMenu(false) }}
-                      className="w-full text-left px-3.5 py-2 hover:bg-slate-50 border-t border-slate-100 text-xs font-semibold text-slate-700 flex items-center gap-2"
-                    >
-                      <Briefcase size={13} className="text-slate-400" />
-                      Reporte Detallado
-                    </button>
-                  </div>
-                </>
+            <button
+              onClick={() => exportarCxCPDF('detallado', 'descargar')}
+              disabled={exportandoCxC}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white transition-all text-xs font-bold active:scale-[0.98] disabled:opacity-50 shadow-sm"
+              title="Descargar Reporte CxC"
+            >
+              {exportandoCxC ? (
+                <Loader2 size={13} className="animate-spin text-white" />
+              ) : (
+                <Download size={13} className="text-white" />
               )}
-            </div>
+              <span className="hidden sm:inline">{exportandoCxC ? 'Generando...' : 'Descargar'}</span>
+            </button>
           </div>
         </div>
 
