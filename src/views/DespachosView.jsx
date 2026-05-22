@@ -24,9 +24,6 @@ import Pagination  from '../components/ui/Pagination'
 import { OnboardingSequence } from '../components/ui/OnboardingTooltip'
 import { showToast } from '../components/ui/Toast'
 
-import { generarPlantillaNotaEntregaPDF } from '../services/pdf/plantillaNotaEntregaPDF'
-import { generarPlantillaOrdenDespachoPDF } from '../services/pdf/plantillaOrdenDespachoPDF'
-
 function SkeletonDespachos() {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
@@ -105,13 +102,21 @@ function PlantillaDropdown({ config }) {
       {open && (
         <div className="absolute right-0 mt-1 w-56 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-50">
           <button
-            onClick={() => { generarPlantillaNotaEntregaPDF({ config }); setOpen(false) }}
+            onClick={async () => {
+              const { generarPlantillaNotaEntregaPDF } = await import('../services/pdf/plantillaNotaEntregaPDF')
+              generarPlantillaNotaEntregaPDF({ config })
+              setOpen(false)
+            }}
             className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 transition-colors text-slate-700"
           >
             Nota de Entrega
           </button>
           <button
-            onClick={() => { generarPlantillaOrdenDespachoPDF({ config, incluirTransporte: true }); setOpen(false) }}
+            onClick={async () => {
+              const { generarPlantillaOrdenDespachoPDF } = await import('../services/pdf/plantillaOrdenDespachoPDF')
+              generarPlantillaOrdenDespachoPDF({ config, incluirTransporte: true })
+              setOpen(false)
+            }}
             className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 transition-colors text-slate-700"
           >
             Orden de Despacho

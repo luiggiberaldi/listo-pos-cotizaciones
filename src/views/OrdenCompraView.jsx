@@ -19,7 +19,6 @@ import {
 } from '../hooks/useOrdenesCompra'
 import { useClientes } from '../hooks/useClientes'
 import ClienteForm from '../components/clientes/ClienteForm'
-import { generarOrdenCompraPDF } from '../services/pdf/ordenCompraPDF'
 import { showToast } from '../components/ui/Toast'
 import PageHeader from '../components/ui/PageHeader'
 import Skeleton from '../components/ui/Skeleton'
@@ -183,6 +182,7 @@ function DetalleOrdenModal({ orden, isOpen, onClose }) {
     if (!orden) return
     setDownloading(true)
     try {
+      const { generarOrdenCompraPDF } = await import('../services/pdf/ordenCompraPDF')
       await generarOrdenCompraPDF({ orden, items, config: { supervisorNombre: perfil?.nombre } })
       showToast('PDF descargado con éxito', 'success')
     } catch (err) {
@@ -798,6 +798,7 @@ export default function OrdenCompraView() {
 
       // Intentar generar y descargar PDF inmediatamente
       try {
+        const { generarOrdenCompraPDF } = await import('../services/pdf/ordenCompraPDF')
         await generarOrdenCompraPDF({
           orden: res.orden,
           items: res.items,
@@ -1037,6 +1038,7 @@ export default function OrdenCompraView() {
                   onDescargarPdf={async (orden) => {
                     try {
                       const { data: itms } = await supabase.from('orden_compra_items').select('*').eq('orden_compra_id', orden.id).order('orden')
+                      const { generarOrdenCompraPDF } = await import('../services/pdf/ordenCompraPDF')
                       await generarOrdenCompraPDF({ orden, items: itms, config: { supervisorNombre: perfil?.nombre } })
                       showToast('PDF generado correctamente', 'success')
                     } catch (err) {

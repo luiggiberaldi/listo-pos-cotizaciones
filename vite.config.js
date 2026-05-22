@@ -41,6 +41,13 @@ export default defineConfig({
 
       injectManifest: {
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+        globIgnores: [
+          '**/node_modules/**/*',
+          '**/pdf-*.js',
+          '**/pdf.*.js',
+          '**/pdf-*.css',
+          '**/pdf.*.css'
+        ],
       },
 
       manifest: {

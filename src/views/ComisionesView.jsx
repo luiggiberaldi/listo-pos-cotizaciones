@@ -8,7 +8,6 @@ import { useVendedores } from '../hooks/useClientes'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import useAuthStore from '../store/useAuthStore'
 import { fmtUsd, fmtFecha } from '../utils/format'
-import { generarComisionesPDF } from '../services/pdf/comisionesPDF'
 import PageHeader    from '../components/ui/PageHeader'
 import Skeleton      from '../components/ui/Skeleton'
 import EmptyState    from '../components/ui/EmptyState'
@@ -270,6 +269,7 @@ export default function ComisionesView() {
         
       const rango = { from: fechaDesde, to: fechaHasta }
       
+      const { generarComisionesPDF } = await import('../services/pdf/comisionesPDF')
       await generarComisionesPDF({ 
         comisiones: items, 
         vendedor: activeVendedor ? { id: activeVendedor.id, nombre: activeVendedor.nombre, color: activeVendedor.color } : null, 

@@ -52,6 +52,8 @@ export function useCliente(id) {
       return data
     },
     enabled: !!id,
+    staleTime: 1000 * 30,
+    gcTime: 1000 * 60 * 5,
   })
 }
 

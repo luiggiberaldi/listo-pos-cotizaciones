@@ -176,6 +176,8 @@ export function useCotizacion(id) {
       }
     },
     enabled: !!id && !!perfil,
+    staleTime: 1000 * 30,
+    gcTime: 1000 * 60 * 5,
   })
 }
 
