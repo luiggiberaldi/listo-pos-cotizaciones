@@ -26,6 +26,7 @@ import { handleGuardarCotizacion, handleReciclarCotizacion, handleReabrirCotizac
 import { handleCrearDespacho, handleActualizarEstadoDespacho, handleEditarItemsDespacho, handleReciclarDespacho, handleGuardarDescuentos, handleObtenerDescuentos, handleEditarPagoDespacho } from './api/handlers/despachos.js'
 import { handleDevTools } from './api/handlers/dev.js'
 import { handleAdmin, handleBackup, handleRestore, handleSaveConfig, handleGetConfig, handleResetOperacional, handleTesterClearAll, handleTesterSeedDemo, handleTesterStressSeed, handleCrearTransportista, handleActualizarTransportista } from './api/handlers/admin.js'
+import { handleGetSeguimiento, handleCrearSeguimiento, handleActualizarSeguimiento, handleBorrarSeguimiento, runPurgeTrackingImages } from './api/handlers/seguimiento.js'
 
 
 export default {
@@ -318,6 +319,20 @@ export default {
       return handlePdfTemp(request, env);
     }
 
+    // ── API: seguimiento operativo ──────────────────────────────────────────
+    if (url.pathname === '/api/seguimiento' && request.method === 'GET') {
+      return handleGetSeguimiento(request, env);
+    }
+    if (url.pathname === '/api/seguimiento/crear' && request.method === 'POST') {
+      return handleCrearSeguimiento(request, env);
+    }
+    if (url.pathname === '/api/seguimiento/actualizar' && request.method === 'PATCH') {
+      return handleActualizarSeguimiento(request, env);
+    }
+    if (url.pathname === '/api/seguimiento/borrar' && request.method === 'DELETE') {
+      return handleBorrarSeguimiento(request, env);
+    }
+
     // ── API: dev tools (solo desarrollador) ─────────────────────────────
     if (url.pathname.startsWith('/api/dev/')) {
       return handleDevTools(request, env, url);
@@ -405,5 +420,17 @@ export default {
       status: response.status,
       headers: newHeaders,
     });
+  },
+
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(
+      runPurgeTrackingImages(env)
+        .then(result => {
+          console.log('[CRON PURGE] Completed successfully:', result);
+        })
+        .catch(err => {
+          console.error('[CRON PURGE] Failed with error:', err);
+        })
+    );
   },
 };

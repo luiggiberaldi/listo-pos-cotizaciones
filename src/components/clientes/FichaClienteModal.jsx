@@ -1,9 +1,10 @@
 // src/components/clientes/FichaClienteModal.jsx
 // Modal ficha del cliente: historial de crédito + formulario de abono
 import { useState, useEffect } from 'react'
-import { X, CreditCard, ArrowUpCircle, ArrowDownCircle, AlertCircle, RefreshCw, DollarSign, Hash, Phone, FileText, ChevronRight } from 'lucide-react'
+import { X, CreditCard, ArrowUpCircle, ArrowDownCircle, AlertCircle, RefreshCw, DollarSign, Hash, Phone, FileText, ChevronRight, MessageSquare } from 'lucide-react'
 import { useCuentasCobrar, useRegistrarAbono } from '../../hooks/useCuentasCobrar'
 import { useCotizacionesCliente } from '../../hooks/useClientes'
+import SeguimientoTimeline from '../ui/SeguimientoTimeline'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtUsdSimple as fmtUsd } from '../../utils/format'
 import EstadoBadge from '../cotizaciones/EstadoBadge'
@@ -399,6 +400,15 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
               Cotizaciones del cliente
             </h3>
             <HistorialCotizaciones clienteId={cliente.id} />
+          </div>
+
+          {/* ── Seguimiento y Novedades del Cliente ── */}
+          <div className="pt-4 border-t border-slate-100">
+            <h3 className="text-sm font-black text-slate-800 flex items-center gap-2 mb-3">
+              <MessageSquare size={14} className="text-slate-500" />
+              Seguimiento Operativo
+            </h3>
+            <SeguimientoTimeline clienteId={cliente.id} />
           </div>
         </div>
       </div>

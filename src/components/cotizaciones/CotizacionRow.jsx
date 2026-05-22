@@ -1,7 +1,7 @@
 // src/components/cotizaciones/CotizacionRow.jsx
 // Fila compacta de cotización para vista de lista
-import { memo } from 'react'
-import { Calendar, Eye, Pencil, Clock, Truck, PackageCheck, XCircle } from 'lucide-react'
+import { memo, useState } from 'react'
+import { Calendar, Eye, Pencil, Clock, Truck, PackageCheck, XCircle, Mail } from 'lucide-react'
 import EstadoBadge from './EstadoBadge'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtFechaHora, fmtBs, usdToBs } from '../../utils/format'
@@ -94,6 +94,7 @@ export default memo(function CotizacionRow({ cotizacion, onEditar, onVer, tasa =
           )}
         </div>
       </div>
+
     </div>
   )
 })

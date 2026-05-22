@@ -82,3 +82,27 @@ export async function eliminarImagenProducto(supabase, productoId) {
   const path = `${productoId}.webp`
   await supabase.storage.from('productos').remove([path])
 }
+
+/**
+ * Sube imagen comprimida a Supabase Storage en el bucket seguimiento_evidencias
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ * @param {string} fileName - nombre único del archivo
+ * @param {Blob} blob - imagen comprimida
+ * @returns {Promise<string>} URL pública de la imagen
+ */
+export async function subirImagenSeguimiento(supabase, fileName, blob) {
+  const path = `${fileName}.webp`
+
+  const { error } = await supabase.storage
+    .from('seguimiento_evidencias')
+    .upload(path, blob, {
+      contentType: 'image/webp',
+      upsert: true,
+      cacheControl: '31536000',
+    })
+
+  if (error) throw error
+
+  const { data } = supabase.storage.from('seguimiento_evidencias').getPublicUrl(path)
+  return data.publicUrl
+}

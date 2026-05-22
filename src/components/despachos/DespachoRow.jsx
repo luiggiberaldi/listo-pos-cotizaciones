@@ -1,7 +1,7 @@
 // src/components/despachos/DespachoRow.jsx
 // Fila compacta de despacho para vista de lista
 import { memo } from 'react'
-import { Calendar, Eye, FileText, Pencil } from 'lucide-react'
+import { Calendar, Eye, FileText, Pencil, Mail } from 'lucide-react'
 import EstadoBadge from '../cotizaciones/EstadoBadge'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtFechaHora, fmtBs, usdToBs } from '../../utils/format'
@@ -22,6 +22,8 @@ export default memo(function DespachoRow({ despacho, onVer, onEditar, tasa = 0 }
     ? `COT-${String(despacho.cotizacion.numero).padStart(5, '0')}`
     : null
 
+  const tieneSeguimientoActivo = despacho.seguimiento?.some(s => s.prioridad === 'pendiente' || s.prioridad === 'urgente' || s.fijada)
+
   return (
     <div className="bg-white rounded-xl border border-slate-200 hover:shadow-md transition-all flex items-stretch overflow-hidden">
       {/* Barra lateral color vendedor */}
@@ -33,6 +35,16 @@ export default memo(function DespachoRow({ despacho, onVer, onEditar, tasa = 0 }
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-bold text-slate-800 text-sm font-mono">{numDisplay}</span>
+            {tieneSeguimientoActivo && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onVer(despacho); }}
+                className="cursor-pointer text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 shrink-0 transition-transform active:scale-95 flex items-center justify-center h-6 w-6 rounded-full border border-rose-100 shadow-sm ml-1"
+                title="Seguimiento activo o fijado (Ver detalle)"
+              >
+                <Mail className="animate-envelope-vibrate" size={13} strokeWidth={2} />
+              </button>
+            )}
             <EstadoBadge estado={despacho.estado} rol={perfil?.rol} />
             {cotNum && (
               <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 font-mono">

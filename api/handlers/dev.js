@@ -2,6 +2,7 @@
 import { json, jsonError } from '../lib/utils.js'
 import { validateOperator, supaServiceHeaders } from '../lib/auth.js'
 import { logToSystem } from '../lib/audit.js'
+import { runPurgeTrackingImages } from './seguimiento.js'
 
 export async function handleDevTools(request, env, url) {
   // Verificar que sea desarrollador
@@ -72,6 +73,12 @@ export async function handleDevTools(request, env, url) {
     }
 
     return json({ ok: true, checks, total_ms: Date.now() - t0 }, 200, request);
+  }
+
+  // POST /api/dev/purge-images — Ejecutar purga de imágenes manualmente
+  if (sub === 'purge-images' && request.method === 'POST') {
+    const result = await runPurgeTrackingImages(env);
+    return json(result, 200, request);
   }
 
   return jsonError('Endpoint no encontrado', 404, request);

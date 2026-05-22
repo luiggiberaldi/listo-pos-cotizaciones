@@ -1,7 +1,7 @@
 // src/components/cotizaciones/CotizacionCard.jsx
 import { useState, useRef, memo, Fragment } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FileText, User, Calendar, Pencil, Ban, XCircle, FileDown, MessageCircle, Loader2, Truck, ChevronDown, DollarSign, RefreshCw, Eye, Clock, PackageCheck, MoreHorizontal, MoreVertical, AlertTriangle, Printer, Check, Download } from 'lucide-react'
+import { FileText, User, Calendar, Pencil, Ban, XCircle, FileDown, MessageCircle, Loader2, Truck, ChevronDown, DollarSign, RefreshCw, Eye, Clock, PackageCheck, MoreHorizontal, MoreVertical, AlertTriangle, Printer, Check, Download, Mail } from 'lucide-react'
 import EstadoBadge from './EstadoBadge'
 
 import useAuthStore from '../../store/useAuthStore'
@@ -279,7 +279,9 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         <div className="relative z-10 space-y-1">
           {/* Fila 1: ID y Kebab */}
           <div className="flex items-center justify-between">
-            <p className="font-black text-white font-mono leading-none drop-shadow text-base">{numDisplay}</p>
+            <div className="flex items-center gap-2">
+              <p className="font-black text-white font-mono leading-none drop-shadow text-base">{numDisplay}</p>
+            </div>
             {moreActions.length > 0 && (
               <button
                 ref={adminBtnRef}
@@ -611,6 +613,8 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         registro={cotizacion}
         tasa={tasa}
       />
+
+
 
       {/* ── Menú kebab ⋮ — nivel raíz, fixed para escapar overflow:hidden ── */}
       {showAdminMenu && moreActions.length > 0 && (() => {

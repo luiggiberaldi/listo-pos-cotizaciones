@@ -18,6 +18,7 @@ const URGENT_TYPES = new Set([
   'despacho_creado',
   'compromiso_alto',
   'despacho_en_ruta',
+  'seguimiento_urgente',
 ])
 
 function playNotifSound(type) {
@@ -67,6 +68,8 @@ export const NOTIF_TYPES = {
   CLIENTE_AJENO:                 'cliente_ajeno',
   DESPACHO_CLIENTE_AJENO:        'despacho_cliente_ajeno',
   FACTURACION_CLIENTE_AJENO:     'facturacion_cliente_ajeno',
+  SEGUIMIENTO_CREADO:            'seguimiento_creado',
+  SEGUIMIENTO_URGENTE:           'seguimiento_urgente',
 }
 
 // ─── Clasificación STATE vs EVENT para deduplicación inteligente ──────────────
@@ -99,6 +102,8 @@ const NOTIF_TARGET_ROLE = {
   [NOTIF_TYPES.CLIENTE_AJENO]:                ['supervisor', 'jefe', 'desarrollador'],
   [NOTIF_TYPES.DESPACHO_CLIENTE_AJENO]:       ['supervisor', 'jefe', 'desarrollador', 'administracion'],
   [NOTIF_TYPES.FACTURACION_CLIENTE_AJENO]:    ['supervisor', 'jefe', 'desarrollador', 'administracion'],
+  [NOTIF_TYPES.SEGUIMIENTO_CREADO]:           ['supervisor', 'jefe', 'desarrollador', 'administracion'],
+  [NOTIF_TYPES.SEGUIMIENTO_URGENTE]:          ['supervisor', 'jefe', 'desarrollador', 'administracion'],
 }
 
 function readNotifs() {
@@ -576,5 +581,29 @@ export function notifyFacturacionClienteAjeno({ numero, clienteCotizacion, clien
     `Despacho COT-${numero}: factura a "${clienteFactura}" en lugar de "${clienteCotizacion}"`,
     { numero, clienteCotizacion, clienteFactura },
     currentRole,
+  )
+}
+
+/**
+ * Notificación en tiempo real para nuevo seguimiento o incidencia
+ */
+export function notifySeguimientoCreado(entrada, usuarioNombre, currentRole = null) {
+  const esUrgente = entrada.prioridad === 'urgente'
+  const limitedText = entrada.contenido && entrada.contenido.length > 80
+    ? entrada.contenido.substring(0, 80) + '...'
+    : entrada.contenido || ''
+
+  createNotification(
+    esUrgente ? NOTIF_TYPES.SEGUIMIENTO_URGENTE : NOTIF_TYPES.SEGUIMIENTO_CREADO,
+    esUrgente ? '🚨 Incidencia URGENTE Reportada' : '💬 Nuevo Seguimiento Registrado',
+    `Vendedor ${usuarioNombre} reportó: "${limitedText}"`,
+    {
+      creadorId: entrada.usuario_id || null,
+      creadorNombre: usuarioNombre,
+      seguimientoId: entrada.id,
+      tipo: entrada.tipo,
+      prioridad: entrada.prioridad
+    },
+    currentRole
   )
 }
