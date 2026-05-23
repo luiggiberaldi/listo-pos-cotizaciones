@@ -1,7 +1,7 @@
 // src/views/TransportistasView.jsx
 // Gestión de transportistas — solo supervisores pueden crear/editar/desactivar
 import { useState, useMemo, useCallback, useEffect } from 'react'
-import { Truck, Plus, Pencil, Ban, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Truck, Plus, Pencil, Ban, RefreshCw, ChevronLeft, ChevronRight, MapPin, Scale } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import {
   useTransportistas,
@@ -28,6 +28,8 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
     vehiculo:        inicial.vehiculo        ?? '',
     placa_chuto:     inicial.placa_chuto     ?? '',
     placa_batea:     inicial.placa_batea     ?? '',
+    zona_cobertura:  inicial.zona_cobertura  ?? '',
+    capacidad:       inicial.capacidad       ?? '',
   })
   const [error, setError] = useState('')
 
@@ -104,6 +106,16 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
           <label className="text-sm font-medium text-slate-700">Placa batea</label>
           <input value={campos.placa_batea} onChange={e => cambiar('placa_batea', e.target.value)}
             placeholder="Ej: XY456ZW" className={inputCls} disabled={cargando} />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-slate-700">Cobertura (Zonas)</label>
+          <input value={campos.zona_cobertura} onChange={e => cambiar('zona_cobertura', e.target.value)}
+            placeholder="Ej: Centro, Occidente, Caracas" className={inputCls} disabled={cargando} />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-slate-700">Capacidad de Carga</label>
+          <input value={campos.capacidad} onChange={e => cambiar('capacidad', e.target.value)}
+            placeholder="Ej: 30 Toneladas, 350 Sacos" className={inputCls} disabled={cargando} />
         </div>
       </div>
 
@@ -227,6 +239,20 @@ function TransportistaCard({ transportista, esSupervisor, puedeEditar, onEditar,
             {transportista.placa_batea && <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded">Batea: {transportista.placa_batea}</span>}
           </div>
         )}
+        {transportista.zona_cobertura && (
+          <div className="flex items-center gap-1.5 text-xs text-slate-500">
+            <MapPin size={11} className="text-slate-400 shrink-0" />
+            <span className="font-medium text-slate-400">Cobertura:</span>
+            <span className="truncate">{transportista.zona_cobertura}</span>
+          </div>
+        )}
+        {transportista.capacidad && (
+          <div className="flex items-center gap-1.5 text-xs text-slate-500">
+            <Scale size={11} className="text-slate-400 shrink-0" />
+            <span className="font-medium text-slate-400">Capacidad:</span>
+            <span className="truncate">{transportista.capacidad}</span>
+          </div>
+        )}
       </div>
 
       {/* ── Acciones ── */}
@@ -317,9 +343,11 @@ export default function TransportistasView() {
       const pC = purificar(t.placa_chuto)
       const pB = purificar(t.placa_batea)
       const v = normalizar(t.vehiculo)
+      const cob = normalizar(t.zona_cobertura)
+      const cap = normalizar(t.capacidad)
       
-      // Coincidencia en nombre, rif, placas o vehículo
-      return n.includes(q) || r.includes(qP) || pC.includes(qP) || pB.includes(qP) || v.includes(q)
+      // Coincidencia en nombre, rif, placas, vehículo, cobertura o capacidad
+      return n.includes(q) || r.includes(qP) || pC.includes(qP) || pB.includes(qP) || v.includes(q) || cob.includes(q) || cap.includes(q)
     })
   }, [transportistas, search])
 

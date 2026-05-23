@@ -17,7 +17,7 @@ export function useTransportistas({ soloActivos = true } = {}) {
     queryFn: async () => {
       let q = supabase
         .from('transportistas')
-        .select('id, nombre, rif, telefono, color, vehiculo, placa_chuto, placa_batea, activo')
+        .select('id, nombre, rif, telefono, color, vehiculo, placa_chuto, placa_batea, activo, zona_cobertura, capacidad')
         .order('nombre')
       if (soloActivos) q = q.eq('activo', true)
       const { data, error } = await q

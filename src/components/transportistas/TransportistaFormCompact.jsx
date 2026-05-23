@@ -12,6 +12,8 @@ export default function TransportistaFormCompact({ onGuardar, onCancelar, cargan
   const [vehiculo, setVehiculo] = useState('')
   const [placaChuto, setPlacaChuto] = useState('')
   const [placaBatea, setPlacaBatea] = useState('')
+  const [zonaCobertura, setZonaCobertura] = useState('')
+  const [capacidad, setCapacidad] = useState('')
   const [error, setError] = useState('')
 
   function submit(e) {
@@ -24,6 +26,8 @@ export default function TransportistaFormCompact({ onGuardar, onCancelar, cargan
       vehiculo,
       placa_chuto: placaChuto,
       placa_batea: placaBatea,
+      zona_cobertura: zonaCobertura,
+      capacidad,
     })
   }
 
@@ -86,6 +90,16 @@ export default function TransportistaFormCompact({ onGuardar, onCancelar, cargan
           <label className="text-xs font-medium text-slate-600">Placa batea</label>
           <input value={placaBatea} onChange={e => setPlacaBatea(e.target.value.toUpperCase())}
             placeholder="Ej: XY456ZW" className={inputCls} disabled={cargando} />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-slate-600">Cobertura (Zonas)</label>
+          <input value={zonaCobertura} onChange={e => setZonaCobertura(e.target.value)}
+            placeholder="Ej: Centro, Occidente" className={inputCls} disabled={cargando} />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-slate-600">Capacidad de Carga</label>
+          <input value={capacidad} onChange={e => setCapacidad(e.target.value)}
+            placeholder="Ej: 30 Toneladas" className={inputCls} disabled={cargando} />
         </div>
       </div>
       {error && <p className="text-xs text-red-500">{error}</p>}
