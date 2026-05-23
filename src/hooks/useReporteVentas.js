@@ -48,7 +48,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
       const fetchUsuarios = async () => {
         const { data } = await supabase
           .from('usuarios')
-          .select('id, nombre, color, markup_pct, rol, comision_pct, comision_pct_cabilla, es_externo')
+          .select('id, nombre, color, markup_pct, rol, comision_pct, comision_pct_cabilla, es_externo, activo')
         return data ?? []
       }
 
@@ -345,6 +345,28 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
 
       // Por vendedor
       const vendedorMap = {}
+
+      // Pre-populamos todos los vendedores activos para que siempre aparezcan en el reporte
+      dbVendedores.forEach(u => {
+        const esVendedorActivo = u.activo && (u.rol === 'vendedor' || !!u.es_externo || (u.markup_pct != null && Number(u.markup_pct) > 0))
+        if (esVendedorActivo) {
+          vendedorMap[u.id] = {
+            id: u.id,
+            nombre: u.nombre,
+            color: u.color || '#64748b',
+            markup_pct: u.markup_pct != null ? Number(u.markup_pct) : null,
+            rol: u.rol,
+            es_externo: !!u.es_externo,
+            despachos: 0,
+            totalUsd: 0,
+            comision: 0,
+            comisionCabilla2: 0,
+            comisionCabilla3: 0,
+            comisionOtros: 0,
+          }
+        }
+      })
+
       despachos.forEach(d => {
         const vid = d.asesor_id || 'unassigned'
         if (!vendedorMap[vid]) {
@@ -358,6 +380,9 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
             despachos: 0,
             totalUsd: 0,
             comision: 0,
+            comisionCabilla2: 0,
+            comisionCabilla3: 0,
+            comisionOtros: 0,
           }
         }
         vendedorMap[vid].despachos++
@@ -399,7 +424,9 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
         .filter(v => {
           if (v.rol === 'desarrollador') return false
           if (v.rol === 'administracion' || v.rol === 'logistica') return false
-          return true
+          
+          // Excluir vendedores sin comisión (a menos que sean externos)
+          return v.rol !== 'vendedor_sin_comision' || v.es_externo || (v.markup_pct && v.markup_pct > 0)
         })
         .sort((a, b) => b.totalUsd - a.totalUsd)
 

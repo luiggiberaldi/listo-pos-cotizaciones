@@ -591,9 +591,21 @@ export default function VentaRapidaView() {
 
   // Validaciones
   const step1Valid = !!clienteId && items.length > 0
-  const step2Valid = esCod
+  const esVendedorSinComision = 
+    clienteSeleccionado?.vendedor?.rol === 'vendedor_sin_comision' ||
+    (clienteSeleccionado?.vendedor_id === perfil?.id && perfil?.rol === 'vendedor_sin_comision');
+
+  const cxcItem = pagosInmediatos.find(f => f.metodo === 'Cta por cobrar');
+  const cxcVencimientoValido = !cxcItem || esVendedorSinComision || (
+    cxcItem.diasVencimiento !== undefined &&
+    cxcItem.diasVencimiento !== null &&
+    !isNaN(cxcItem.diasVencimiento) &&
+    Number(cxcItem.diasVencimiento) > 0
+  );
+
+  const step2Valid = (esCod
     ? (pagoInmediatoCuadrado || (montoCodRequerido > 0.015 && propuestaCodCuadrado))
-    : pagoInmediatoCuadrado
+    : pagoInmediatoCuadrado) && cxcVencimientoValido;
 
   // Close cliente dropdown on outside click
   useEffect(() => {
@@ -857,6 +869,7 @@ export default function VentaRapidaView() {
             tasa={tasa}
             esCod={esCod}
             setEsCod={handleToggleCod}
+            clienteSeleccionado={clienteSeleccionado}
           />
         )}
 
@@ -1684,11 +1697,17 @@ function Step2Pago({
   referenciaPago, setReferenciaPago,
   transportistas, transportistaId, setTransportistaId,
   fleteUsd, setFleteUsd, corteUsd, setCorteUsd, notas, setNotas,
-  tasa, esCod, setEsCod
+  tasa, esCod, setEsCod,
+  clienteSeleccionado
 }) {
   const [showNuevoTransp, setShowNuevoTransp] = useState(false)
   const crearTransp = useCrearTransportista()
   const [transpError, setTranspError] = useState('')
+
+  const perfil = useAuthStore(s => s.perfil)
+  const esVendedorSinComision = 
+    clienteSeleccionado?.vendedor?.rol === 'vendedor_sin_comision' ||
+    (clienteSeleccionado?.vendedor_id === perfil?.id && perfil?.rol === 'vendedor_sin_comision');
 
   const totalConFlete = totalParaPago + Math.max(0, Number(fleteUsd) || 0)
 
@@ -1835,7 +1854,9 @@ function Step2Pago({
                       {fp.metodo === 'Cta por cobrar' && (
                         <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50/50 border border-amber-200/50 rounded-lg ml-6">
                           <Clock size={12} className="text-amber-500 shrink-0" />
-                          <span className="text-[11px] font-medium text-amber-700 whitespace-nowrap">Días de vencimiento (opcional):</span>
+                          <span className="text-[11px] font-medium text-amber-700 whitespace-nowrap">
+                            Días de vencimiento {esVendedorSinComision ? '(opcional)' : '(obligatorio) *'}:
+                          </span>
                           <input
                             type="text"
                             inputMode="numeric"
@@ -1847,8 +1868,8 @@ function Step2Pago({
                                 updatePagoInmediato(fp.metodo, { diasVencimiento: val ? parseInt(val, 10) : null });
                               }
                             }}
-                            placeholder="Ej. 15"
-                            className="w-16 px-2 py-1 rounded border border-amber-200 bg-white focus:outline-none focus:ring-2 focus:ring-amber-300 text-slate-800 text-center font-bold text-xs"
+                            placeholder={esVendedorSinComision ? 'Ej. 15' : 'Obligatorio'}
+                            className="w-20 px-2 py-1 rounded border border-amber-200 bg-white focus:outline-none focus:ring-2 focus:ring-amber-300 text-slate-800 text-center font-bold text-xs"
                           />
                         </div>
                       )}

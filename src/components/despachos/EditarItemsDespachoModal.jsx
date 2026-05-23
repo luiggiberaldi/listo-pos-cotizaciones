@@ -15,6 +15,11 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
   const { perfil } = useAuthStore()
   const esDesarrollador = perfil?.rol === 'desarrollador'
 
+  const billingCliente = despacho?.cliente_factura || despacho?.cliente
+  const esVendedorSinComision = 
+    billingCliente?.vendedor?.rol === 'vendedor_sin_comision' ||
+    (billingCliente?.vendedor_id === perfil?.id && perfil?.rol === 'vendedor_sin_comision')
+
   const { data: inventarioData, isLoading: loadingInv } = useInventario({ pageSize: 1000 })
   const productos = inventarioData?.productos ?? inventarioData ?? []
   const editarItems = useEditarItemsDespacho()
@@ -174,9 +179,22 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
     return { subtotal, total, totalPagos, diferencia, estaCuadrado }
   }, [items, despacho, pagos])
 
+  const cxcItem = pagos.find(f => f.metodo === 'Cta por cobrar');
+  const cxcVencimientoValido = !cxcItem || esVendedorSinComision || (
+    cxcItem.diasVencimiento !== undefined &&
+    cxcItem.diasVencimiento !== null &&
+    cxcItem.diasVencimiento !== '' &&
+    !isNaN(cxcItem.diasVencimiento) &&
+    Number(cxcItem.diasVencimiento) > 0
+  );
+
   async function handleSave() {
     if (items.length === 0) {
       showToast('El despacho debe tener al menos un producto', 'error')
+      return
+    }
+    if (!cxcVencimientoValido) {
+      showToast('Los días de vencimiento son obligatorios para cuentas por cobrar', 'error')
       return
     }
     if (!totales.estaCuadrado) {
@@ -563,7 +581,9 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                 {/* Fila Secundaria: Días Vencimiento (si aplica) */}
                 {p.metodo === 'Cta por cobrar' && (
                   <div className="flex items-center gap-2 mt-1 pt-1 border-t border-slate-50">
-                    <span className="text-[9px] font-bold text-slate-400 uppercase">Días venc.:</span>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase">
+                      Días venc. {esVendedorSinComision ? '(opcional)' : '(obligatorio) *'}:
+                    </span>
                     <input
                       type="number"
                       min="0"
@@ -575,7 +595,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                         setPagos(newPagos)
                       }}
                       className="flex-1 py-1 px-2 rounded-lg text-[11px] font-bold border border-slate-100 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:bg-white transition-all"
-                      placeholder="0"
+                      placeholder={esVendedorSinComision ? 'Opcional' : 'Obligatorio'}
                     />
                   </div>
                 )}
@@ -652,7 +672,8 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
               </button>
               <button
                 onClick={handleSave}
-                disabled={editarItems.isPending || items.length === 0 || !totales.estaCuadrado}
+                disabled={editarItems.isPending || items.length === 0 || !totales.estaCuadrado || !cxcVencimientoValido}
+                title={!cxcVencimientoValido ? 'Días de vencimiento obligatorios para cuentas por cobrar' : undefined}
                 className="px-6 py-3 rounded-2xl bg-indigo-600 text-white font-black text-sm shadow-lg shadow-indigo-200 hover:bg-indigo-700 active:scale-[0.98] transition-all flex items-center gap-2 disabled:opacity-50"
               >
                 {editarItems.isPending ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}

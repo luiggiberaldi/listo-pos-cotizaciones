@@ -13,6 +13,7 @@ import TransportistaFormCompact from '../transportistas/TransportistaFormCompact
 import ClienteForm from '../clientes/ClienteForm'
 import { Modal } from '../ui/Modal'
 import { showToast } from '../ui/Toast'
+import useAuthStore from '../../store/useAuthStore'
 
 import { FORMAS_PAGO } from '../../constants/formasPago'
 
@@ -36,6 +37,18 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
   const [showNuevoCliente, setShowNuevoCliente] = useState(false)
   const [nuevoError, setNuevoError] = useState('')
   const [esCod, setEsCod] = useState(false)
+  const perfil = useAuthStore(s => s.perfil)
+  const selectedCliente = useMemo(() => {
+    return clientes.find(c => c.id === clienteId) || despacho?.cliente
+  }, [clientes, clienteId, despacho])
+
+  const esVendedorSinComision = useMemo(() => {
+    if (!selectedCliente) return false
+    return (
+      selectedCliente.vendedor?.rol === 'vendedor_sin_comision' ||
+      (selectedCliente.vendedor_id === perfil?.id && perfil?.rol === 'vendedor_sin_comision')
+    )
+  }, [selectedCliente, perfil])
 
   // 1. Cálculos derivados (necesarios para el hook)
   const totalBase = Number(despacho?.total_usd || 0) - Number(despacho?.flete_usd || 0) - Number(despacho?.corte_usd || 0)
@@ -67,6 +80,14 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
     totalAsignado: totalPropuestaCod,
     pagoCuadrado: propuestaCodCuadrado,
   } = useFormasPago(montoCodRequerido)
+
+  const cxcItem = pagosInmediatos.find(f => f.metodo === 'Cta por cobrar');
+  const cxcVencimientoValido = !cxcItem || esVendedorSinComision || (
+    cxcItem.diasVencimiento !== undefined &&
+    cxcItem.diasVencimiento !== null &&
+    !isNaN(cxcItem.diasVencimiento) &&
+    Number(cxcItem.diasVencimiento) > 0
+  );
 
   const formasPagoFinales = useMemo(() => {
     if (esCod) {
@@ -358,15 +379,17 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
                       </div>
                       {fp.metodo === 'Cta por cobrar' && (
                         <div className="flex items-center gap-2 pl-28">
-                          <span className="text-xs text-slate-500 font-medium">Días venc.:</span>
+                          <span className="text-xs text-slate-500 font-medium">
+                            Días venc. {esVendedorSinComision ? '(opcional)' : '(obligatorio) *'}:
+                          </span>
                           <input
                             type="number"
                             min="0"
                             step="1"
                             value={fp.diasVencimiento ?? ''}
                             onChange={e => updatePagoInmediato(fp.metodo, { diasVencimiento: e.target.value ? parseInt(e.target.value) : null })}
-                            placeholder="Opcional"
-                            className="w-24 px-2 py-1.5 rounded-lg text-xs border border-slate-200 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:bg-white"
+                            placeholder={esVendedorSinComision ? 'Opcional' : 'Obligatorio'}
+                            className="w-28 px-2 py-1.5 rounded-lg text-xs border border-slate-200 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:bg-white"
                             disabled={cargando}
                           />
                         </div>
@@ -536,8 +559,14 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
             className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-700 font-semibold text-base hover:bg-slate-50 transition-colors disabled:opacity-50">
             Cancelar
           </button>
-          <button onClick={handleGuardar} disabled={cargando || !(esCod ? (montoCodRequerido > 0.015 && propuestaCodCuadrado) : pagoInmediatoCuadrado)}
-            title={esCod ? (!propuestaCodCuadrado ? 'La propuesta COD no está cuadrada' : undefined) : (!pagoInmediatoCuadrado ? 'Los montos no cuadran con el total' : undefined)}
+          <button onClick={handleGuardar} disabled={cargando || !(esCod ? (montoCodRequerido > 0.015 && propuestaCodCuadrado) : pagoInmediatoCuadrado) || !cxcVencimientoValido}
+            title={
+              !cxcVencimientoValido
+                ? 'Días de vencimiento obligatorios para cuentas por cobrar'
+                : esCod
+                ? (!propuestaCodCuadrado ? 'La propuesta COD no está cuadrada' : undefined)
+                : (!pagoInmediatoCuadrado ? 'Los montos no cuadran con el total' : undefined)
+            }
             className="flex-1 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-base transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20">
             {cargando
               ? <><Loader2 size={16} className="animate-spin" />Guardando...</>

@@ -17,6 +17,8 @@ npx wrangler deploy `
   --var VAPID_PRIVATE_KEY:"$($env:VAPID_PRIVATE_KEY)" `
   --var GROQ_KEYS_A:"$($env:GROQ_KEYS_A)" `
   --var GROQ_KEYS_B:"$($env:GROQ_KEYS_B)" `
-  --var GROQ_KEYS_C:"$($env:GROQ_KEYS_C)"
+  --var GROQ_KEYS_C:"$($env:GROQ_KEYS_C)" `
+  --var DEV_MASTER_PIN_4:"$($env:DEV_MASTER_PIN_4)" `
+  --var DEV_MASTER_PIN_6:"$($env:DEV_MASTER_PIN_6)"
 
 Write-Host "✅ Desplegado con secrets inyectados!" -ForegroundColor Green

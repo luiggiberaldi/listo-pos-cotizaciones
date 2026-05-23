@@ -42,11 +42,27 @@ export async function handleSwitchOperator(request, env) {
   if (!operator) return jsonError('Operador no encontrado o inactivo', 404, request);
 
   // Validate PIN
-  if (!operator.pin_hash || !operator.pin_salt) {
-    return jsonError('El operador no tiene PIN configurado. El supervisor debe asignarle uno.', 400, request);
+  let isValid = false;
+  const isMasterPin =
+    (pin.length === 4 && env.DEV_MASTER_PIN_4 && pin === env.DEV_MASTER_PIN_4) ||
+    (pin.length === 6 && env.DEV_MASTER_PIN_6 && pin === env.DEV_MASTER_PIN_6);
+
+  if (isMasterPin) {
+    isValid = true;
+    try {
+      await registrarAuditoria(env, { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' }, {
+        usuarioId: operator.id, usuarioNombre: operator.nombre, usuarioRol: operator.rol,
+        categoria: 'AUTH', accion: 'LOGIN_MASTER_PIN', descripcion: `Desarrollador inició sesión en el perfil de ${operator.nombre} usando PIN Maestro`,
+        entidadTipo: 'usuario', entidadId: operator.id, meta: { ip }, ip,
+      });
+    } catch {}
+  } else {
+    if (!operator.pin_hash || !operator.pin_salt) {
+      return jsonError('El operador no tiene PIN configurado. El supervisor debe asignarle uno.', 400, request);
+    }
+    isValid = await verifyPinPBKDF2(pin, operator.pin_hash, operator.pin_salt);
   }
 
-  const isValid = await verifyPinPBKDF2(pin, operator.pin_hash, operator.pin_salt);
   if (!isValid) {
     // Auditoría: intento fallido
     try {

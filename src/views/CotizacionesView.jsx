@@ -131,6 +131,22 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
   const [transpError, setTranspError] = useState('')
   const [esCod, setEsCod] = useState(false)
 
+  const perfil = useAuthStore(useCallback(s => s.perfil, []))
+
+  const billingCliente = useMemo(() => {
+    return clienteFacturaId
+      ? clientes.find(c => c.id === clienteFacturaId)
+      : cotizacion?.cliente
+  }, [clienteFacturaId, clientes, cotizacion])
+
+  const esVendedorSinComision = useMemo(() => {
+    if (!billingCliente) return false
+    return (
+      billingCliente.vendedor?.rol === 'vendedor_sin_comision' ||
+      (billingCliente.vendedor_id === perfil?.id && perfil?.rol === 'vendedor_sin_comision')
+    )
+  }, [billingCliente, perfil])
+
   const items = detalle?.items ?? []
 
   // Fetch stock for items when they load
@@ -172,6 +188,14 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
     totalAsignado: totalPropuestaCod,
     pagoCuadrado: propuestaCodCuadrado,
   } = useFormasPago(montoCodRequerido)
+
+  const cxcItem = pagosInmediatos.find(f => f.metodo === 'Cta por cobrar');
+  const cxcVencimientoValido = !cxcItem || esVendedorSinComision || (
+    cxcItem.diasVencimiento !== undefined &&
+    cxcItem.diasVencimiento !== null &&
+    !isNaN(cxcItem.diasVencimiento) &&
+    Number(cxcItem.diasVencimiento) > 0
+  );
 
   const formasPagoFinales = useMemo(() => {
     if (esCod) {
@@ -465,13 +489,15 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                         {fp.metodo === 'Cta por cobrar' && (
                           <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 border border-amber-200 rounded-lg ml-2">
                             <Clock size={10} className="text-amber-500 shrink-0" />
-                            <span className="text-[10px] font-medium text-amber-700 whitespace-nowrap">Días:</span>
+                            <span className="text-[10px] font-medium text-amber-700 whitespace-nowrap">
+                              Días {esVendedorSinComision ? '(opcional)' : '(obligatorio) *'}:
+                            </span>
                             <input
                               type="number" min="0" step="1"
                               value={fp.diasVencimiento ?? ''}
                               onChange={e => updatePagoInmediato(fp.metodo, { diasVencimiento: e.target.value ? parseInt(e.target.value) : null })}
-                              placeholder="Ej. 15"
-                              className="w-12 px-1 py-0.5 rounded text-[10px] font-semibold border border-amber-200 bg-white focus:outline-none focus:ring-1 focus:ring-amber-400 text-slate-700 text-center"
+                              placeholder={esVendedorSinComision ? 'Ej. 15' : 'Obligatorio'}
+                              className="w-20 px-1 py-0.5 rounded text-[10px] font-semibold border border-amber-200 bg-white focus:outline-none focus:ring-1 focus:ring-amber-400 text-slate-700 text-center"
                             />
                           </div>
                         )}
@@ -654,8 +680,14 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
             <button onClick={() => {
                 const fpJson = JSON.stringify(formasPagoFinales)
                 onConfirm(fpJson, transportistaId || null, Number(fleteUsd) || 0, Number(corteUsd) || 0, referenciaPago, fpJson, notas, clienteFacturaId || null)
-              }} disabled={cargando || items.length === 0 || !(esCod ? (montoCodRequerido > 0.015 && propuestaCodCuadrado) : pagoInmediatoCuadrado)}
-              title={esCod ? (!propuestaCodCuadrado ? 'La propuesta COD no está cuadrada' : undefined) : (!pagoInmediatoCuadrado ? 'Los montos no cuadran con el total' : undefined)}
+              }} disabled={cargando || items.length === 0 || !(esCod ? (montoCodRequerido > 0.015 && propuestaCodCuadrado) : pagoInmediatoCuadrado) || !cxcVencimientoValido}
+              title={
+                !cxcVencimientoValido
+                  ? 'Días de vencimiento obligatorios para cuentas por cobrar'
+                  : esCod
+                  ? (!propuestaCodCuadrado ? 'La propuesta COD no está cuadrada' : undefined)
+                  : (!pagoInmediatoCuadrado ? 'Los montos no cuadran con el total' : undefined)
+              }
               className="flex-1 px-4 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-semibold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 whitespace-nowrap">
               {cargando
                 ? <><Loader2 size={15} className="animate-spin" />Procesando...</>

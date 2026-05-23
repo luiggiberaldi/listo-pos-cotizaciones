@@ -1654,4 +1654,105 @@ El BUG-01 es el principal. Los dispositivos que no lo experimentan tienen la tas
 
 ---
 
+## SESIÓN 23/05/2026 — Validación de Cuentas por Cobrar Obligatorias y Días de Vencimiento
+
+### Objetivo
+Asegurar que cuando se utilice "Cuentas por cobrar" como método de pago, el campo de días de vencimiento sea obligatorio en todos los flujos de creación/edición, excepto cuando el cliente esté asignado a un vendedor con el rol `vendedor_sin_comision`.
+
+### Cambios realizados
+
+#### 1. Backend (`api/handlers/despachos.js`)
+- Validado en `handleCrearDespacho`, `handleEditarPagoDespacho` y `handleEditarItemsDespacho`.
+- Se comprueba si existe un pago con método `Cta por cobrar`. Si es así y el cliente no pertenece a un `vendedor_sin_comision`, se exige que `diasVencimiento` sea un entero positivo mayor que cero, retornando error `400` en caso contrario.
+
+#### 2. Venta Rápida (`src/views/VentaRapidaView.jsx`)
+- Calculada reactivamente la variable `esVendedorSinComision` basada en el cliente seleccionado.
+- Calculada la validez de los días de vencimiento `cxcVencimientoValido`.
+- Deshabilitado el botón del paso 2 si `cxcVencimientoValido` es falso.
+- Mostrar dinámicamente si el campo es "(opcional)" u "(obligatorio) *" y el placeholder ("Ej. 15" vs "Obligatorio").
+
+#### 3. Despachar Cotización (`src/views/CotizacionesView.jsx`)
+- Se integró la validación del perfil y rol del vendedor del cliente.
+- Se calculó `cxcVencimientoValido` y se deshabilitó el botón "Confirmar despacho" si no se cumplen los requisitos.
+- Se adaptaron los placeholders y etiquetas del input de vencimiento para ser dinámicos.
+
+#### 4. Editar Despacho Modal (`src/components/despachos/EditDespachoModal.jsx`)
+- Se importó `useAuthStore` y se calculó la condición de vendedor sin comisión para el cliente seleccionado.
+- Bloqueada la acción de guardar cambios si `cxcVencimientoValido` es falso, con un mensaje explicativo en la propiedad `title` del botón.
+- Etiquetas y placeholders dinámicos.
+
+#### 5. Editar Ítems de Despacho Modal (`src/components/despachos/EditarItemsDespachoModal.jsx`)
+- Se calculó la condición de vendedor sin comisión con respecto al cliente actual.
+- Bloqueada la acción de guardar cambios si `cxcVencimientoValido` es falso.
+- Mensaje en el title y toast descriptivo en `handleSave` en caso de error.
+- Etiquetas y placeholders dinámicos.
+
+### Verificación
+- Compilación de producción (`npm run build`) completada con éxito.
+- Lógica de anti-alucinaciones y diffs mínimos respetados.
+- NO se realizaron operaciones de commit ni push a petición del usuario.
+
+---
+
+## SESIÓN 23/05/2026 — Reporte de Vendedores: Vendedores Externos, Descarga de Reportes Separados y Diseño Premium
+
+### Objetivo
+Añadir soporte para visualizar vendedores externos en el reporte de vendedores de supervisores, permitir la exportación en PDF de reportes individuales (Internos, Externos y General) recalculando los KPIs dinámicamente, y pulir el diseño visual y contenido del PDF (evitando encabalgamientos, agregando el desglose de cotizaciones/comisiones completo y permitiendo que todos los reportes tengan el nivel de detalle necesario para la gerencia).
+
+### Cambios realizados
+
+#### 1. Servicio de PDF (`src/services/pdf/reporteVendedoresPDF.js`)
+- **Filtro y KPIs locales**: Agregado soporte para filtrar vendedores usando el parámetro `tipo` (`'internos'` y `'externos'`), y cálculo dinámico de KPIs locales (`localTotalVentas`, `localTotalDespachos`, `localTotalComision`, etc.).
+- **Rediseño Premium de las Tarjetas de KPIs (Pág 1)**:
+  - Reemplazados los fondos sólidos fuertes por **fondos en tonos pastel muy suaves** (5% de opacidad del color de acento).
+  - Añadido un **borde fino gris claro** (`slate-200`) en cada tarjeta.
+  - Añadida una **línea vertical de acento** gruesa (1.2mm) en el borde izquierdo con el color representativo (Azul, Esmeralda, Celeste, Ámbar).
+  - Mejorada la jerarquía tipográfica: etiquetas en gris slate oscuro, valores en negrita y subtextos en gris.
+  - Corregidos los subtextos:
+    - Ventas: Variación porcentual (verde/rojo según tendencia) o "Sin datos anteriores" si no hay historial, manteniendo el centrado vertical.
+    - Despachos: Muestra la cantidad de vendedores del subconjunto.
+    - Ticket promedio: Muestra "Por despacho entregado".
+    - Comisiones: Muestra por separado la división exacta de Cabilla 2% y 3% (usando las variables correspondientes calculadas localmente).
+- **Prevención de Encabalgamientos en la Tabla**:
+  - Reajustadas todas las coordenadas `X` y anchos de columnas para aprovechar el ancho total de página (`CONTENT_W` hasta 204mm).
+  - Aumentada la separación entre el nombre del vendedor y la barra de progreso mini.
+  - Modificada la posición de la barra de progreso mini (`MARGIN + 42` con ancho de `35` mm) y el valor de Ventas USD (`MARGIN + 92`, alineado a la derecha) para que la barra nunca solape los números de venta, sin importar la cantidad de dígitos.
+  - Reducido el radio del círculo del vendedor a `1.0` para mayor sutileza visual y alineado verticalmente.
+- **Ampliación del Perfil Detallado (Cotizaciones y Comisiones)**:
+  - El desglose detallado de cada vendedor ahora se incluye de forma automática en **todos** los tipos de reportes descargados (`general`, `internos`, `externos`, `completo`), permitiendo a la gerencia tener el expediente de rendimiento completo de sus vendedores.
+  - **Pipeline de Cotizaciones completo**: Se incorporó el estado `Borrador` en el bloque izquierdo de cotizaciones por vendedor, mostrando ahora los 5 estados (Borradores, Enviadas, Aceptadas, Rechazadas, Anuladas) y su correspondiente porcentaje, rediseñando el alto del bloque a `38` para evitar superposiciones.
+  - **Desglose de Comisiones exacto**: Se reestructuraron las comisiones en 6 líneas, dividiendo de forma precisa: Total generado, Pagado, Pendiente, Cabilla 2%, Cabilla 3% y Otros productos.
+  - Incrementado el alto de los bloques de desglose a `38` y el avance de `y` a `42` para dar holgura y evitar colisiones visuales.
+
+#### 2. Vista de Reporte de Vendedores (`src/views/ReporteVendedoresView.jsx`)
+- Se importaron `useRef` y `useEffect`.
+- Se implementó un menú desplegable (Dropdown) con animación para el botón de exportación en la barra de acciones principal del header.
+- El dropdown permite seleccionar tres opciones:
+  - **Reporte General (Todos)**: Llama a `handleExportPDF('general')`.
+  - **Vendedores Internos**: Llama a `handleExportPDF('internos')`.
+  - **Vendedores Externos**: Llama a `handleExportPDF('externos')`.
+- Se agregó lógica de detección de click fuera del dropdown (`handleClickOutside`) para cerrarlo automáticamente al hacer click en cualquier otra zona de la pantalla.
+- Se actualizó el spinner de carga para activarse independientemente de la opción global elegida (`general`, `internos` o `externos`).
+
+- **Exclusión de Roles de Supervisión (Jefes y Supervisores)**:
+  - Se modificó el filtro del listado de vendedores para descartar explícitamente a los usuarios con roles de `jefe` y `supervisor` (`v.rol === 'jefe' || v.rol === 'supervisor'`), evitando que aparezcan mezclados en las tablas de vendedores con actividad nula o ficticia (ej. el caso de Enzo Patti).
+
+- **Filtro Temporal "Hoy" como Predeterminado**:
+  - Se agregó la opción temporal **"Hoy"** (`key: 'hoy'`) al listado de períodos en la vista de reportes, definiendo `from` y `to` como el día en curso en la zona horaria local, y el período anterior como el día de ayer (`prevFrom` y `prevTo`).
+  - Se estableció **"Hoy"** como la opción por defecto en el estado del componente (`setPeriodo('hoy')`).
+- **Mejoras de Legibilidad e Incremento de Fuentes en el PDF**:
+  - Aumentado el tamaño de la tipografía general de las tablas y fichas en el PDF para garantizar la máxima visibilidad y lectura cómoda.
+  - El tamaño de las fuentes de los encabezados de tabla (`drawTableHeader`) se incrementó a `7.5` y el alto del rectángulo del encabezado a `7.5mm`.
+  - Las celdas de las tablas principales aumentaron de tamaño a `7.5` y su altura a `9mm` para un centrado vertical impecable. Los subtotales subieron a `8.0` y el Total General a `8.5` (en negrita).
+  - En las fichas individuales, las tarjetas KPI internas subieron a tamaño `7` para la etiqueta y `9.5` (en negrita) para el valor.
+  - Los textos de desglose de cotizaciones, comisiones, top clientes y top productos subieron a tamaño `7` y `7.5` para mayor claridad.
+  - El historial de despachos del vendedor incrementó su tamaño general a `7.5` y su espaciado a `7.5mm` por fila.
+
+### Verificación
+- Compilación de producción (`npm run build`) ejecutada de manera exitosa sin errores de sintaxis o bundler.
+- Sin confirmación ni empuje (commit y push) a git, respetando la política de resguardo del usuario.
+
+---
+
 *Mantener este archivo actualizado al inicio y fin de cada sesión de trabajo.*
+

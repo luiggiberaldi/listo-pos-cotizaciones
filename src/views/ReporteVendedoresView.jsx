@@ -1,5 +1,5 @@
 // src/views/ReporteVendedoresView.jsx
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { Users, Download, RefreshCw, TrendingUp, TrendingDown, ChevronDown, ChevronRight, BarChart3, Award, Target, DollarSign, Package, ShoppingBag, Briefcase } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { useReporteVendedores } from '../hooks/useReporteVendedores'
@@ -13,6 +13,11 @@ function getRango(tipo) {
   const hoy = new Date()
   const iso = (d) => d.toISOString().split('T')[0]
 
+  if (tipo === 'hoy') {
+    const ayer = new Date(hoy)
+    ayer.setDate(hoy.getDate() - 1)
+    return { from: iso(hoy), to: iso(hoy), prevFrom: iso(ayer), prevTo: iso(ayer), label: 'Hoy' }
+  }
   if (tipo === 'semana') {
     const dia = hoy.getDay() === 0 ? 6 : hoy.getDay() - 1
     const lunes = new Date(hoy); lunes.setDate(hoy.getDate() - dia)
@@ -39,7 +44,7 @@ function getRango(tipo) {
     const prevIni = new Date(prevFin.getFullYear(), prevFin.getMonth() - 2, 1)
     return { from: iso(ini), to: iso(hoy), prevFrom: iso(prevIni), prevTo: iso(prevFin), label: 'Este trimestre' }
   }
-  return getRango('semana')
+  return getRango('hoy')
 }
 
 // ─── Utilidades UI ────────────────────────────────────────────────────────────
@@ -89,7 +94,7 @@ function VendedorRow({ v, rank, isExpanded, onToggle, onExport, isExporting }) {
                   {v.nombre}
                   {esExterno && <span className="text-amber-600 font-extrabold ml-1">(E)</span>}
                 </p>
-                {esExterno && (
+                {v.markup_pct > 0 && (
                   <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#B45309] bg-[#FEF3C7] border border-[#FDE68A] rounded px-1.5 py-0.2">
                     💼 +{v.markup_pct}%
                   </span>
@@ -247,6 +252,7 @@ function VendedorDetalle({ v, onExport, isExporting }) {
 
 // ─── Vista Principal ──────────────────────────────────────────────────────────
 const PERIODOS = [
+  { key: 'hoy',          label: 'Hoy' },
   { key: 'semana',       label: 'Esta semana' },
   { key: 'mes',          label: 'Este mes' },
   { key: 'mes_anterior', label: 'Mes anterior' },
@@ -255,12 +261,26 @@ const PERIODOS = [
 
 export default function ReporteVendedoresView() {
   const { perfil } = useAuthStore()
-  const [periodo, setPeriodo] = useState('semana')
+  const [periodo, setPeriodo] = useState('hoy')
   const [expandedId, setExpandedId] = useState(null)
   const [pdfLoading, setPdfLoading] = useState(null)
+  const [exportMenuOpen, setExportMenuOpen] = useState(false)
+  const exportDropdownRef = useRef(null)
   const { data: config = {} } = useConfigNegocio()
 
   const rango = useMemo(() => getRango(periodo), [periodo])
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (exportDropdownRef.current && !exportDropdownRef.current.contains(e.target)) {
+        setExportMenuOpen(false)
+      }
+    }
+    if (exportMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [exportMenuOpen])
 
   const { data, isLoading, isError, refetch } = useReporteVendedores({
     from: rango.from,
@@ -329,7 +349,7 @@ export default function ReporteVendedoresView() {
 
   const handleExportPDF = async (tipo = 'general', vendedorId = null) => {
     if (!data) return
-    setPdfLoading(vendedorId || 'general')
+    setPdfLoading(vendedorId || tipo)
     try {
       const { generarReporteVendedoresPDF } = await import('../services/pdf/reporteVendedoresPDF')
       await generarReporteVendedoresPDF({
@@ -347,6 +367,7 @@ export default function ReporteVendedoresView() {
   }
 
   const kpis = data?.kpis
+  const isGlobalLoading = pdfLoading === 'general' || pdfLoading === 'internos' || pdfLoading === 'externos'
 
   return (
     <div className="p-3 sm:p-4 md:p-5 lg:p-6 space-y-4">
@@ -356,17 +377,46 @@ export default function ReporteVendedoresView() {
         subtitle={`${rango.label} · ${rango.from} → ${rango.to}`}
         action={
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => handleExportPDF('general')}
-              disabled={pdfLoading !== null || isLoading || !data}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold border transition-all hover:shadow-sm disabled:opacity-50"
-              style={{ background: 'linear-gradient(135deg,rgba(27,54,93,.07),rgba(184,134,11,.07))', border:'1px solid rgba(27,54,93,.2)', color:'#1B365D' }}
-            >
-              {pdfLoading === 'general'
-                ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                : <Download size={15} />}
-              Exportar General
-            </button>
+            <div ref={exportDropdownRef} className="relative">
+              <button
+                onClick={() => setExportMenuOpen(!exportMenuOpen)}
+                disabled={pdfLoading !== null || isLoading || !data}
+                className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold border transition-all hover:shadow-sm disabled:opacity-50"
+                style={{ background: 'linear-gradient(135deg,rgba(27,54,93,.07),rgba(184,134,11,.07))', border:'1px solid rgba(27,54,93,.2)', color:'#1B365D' }}
+              >
+                {isGlobalLoading
+                  ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  : <Download size={15} />}
+                Exportar Reporte
+                <ChevronDown size={14} className={`transition-transform duration-200 ${exportMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+              
+              {exportMenuOpen && (
+                <div className="absolute right-0 mt-2 w-56 rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50 p-1.5 z-30 animate-in fade-in duration-100">
+                  <button
+                    onClick={() => { handleExportPDF('general'); setExportMenuOpen(false) }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors text-left"
+                  >
+                    <Download size={14} className="text-slate-400" />
+                    Reporte General (Todos)
+                  </button>
+                  <button
+                    onClick={() => { handleExportPDF('internos'); setExportMenuOpen(false) }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors text-left"
+                  >
+                    <Users size={14} className="text-slate-400" />
+                    Vendedores Internos
+                  </button>
+                  <button
+                    onClick={() => { handleExportPDF('externos'); setExportMenuOpen(false) }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors text-left"
+                  >
+                    <Briefcase size={14} className="text-amber-500" />
+                    Vendedores Externos
+                  </button>
+                </div>
+              )}
+            </div>
             <button onClick={() => refetch()} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
               <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
             </button>

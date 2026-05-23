@@ -180,23 +180,12 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
       // ── 5. Construir mapa por vendedor ────────────────────────────────────
       const ventaNeta = (d) => Number(d.venta_neta_usd || 0)
 
-      const vendedorIds = [...new Set([
-        ...despachos.map(d => d.asesor_id),
-        ...prevDespachos.map(d => d.asesor_id),
-        ...cotizaciones.map(c => c.vendedor_id),
-        ...prevCotizaciones.map(c => c.vendedor_id),
-        ...comisionesRaw.map(c => c.vendedorid),
-        ...prevComisionesRaw.map(c => c.vendedorid),
-      ].filter(Boolean))]
-
+      const { data: vData } = await supabase
+        .from('usuarios')
+        .select('id, nombre, color, activo, rol, markup_pct, comision_pct, comision_pct_cabilla, es_externo')
+      
       let vendedoresInfo = {}
-      if (vendedorIds.length > 0) {
-        const { data: vData } = await supabase
-          .from('usuarios')
-          .select('id, nombre, color, activo, rol, markup_pct, comision_pct, comision_pct_cabilla, es_externo')
-          .in('id', vendedorIds)
-        ;(vData ?? []).forEach(v => { vendedoresInfo[v.id] = v })
-      }
+      ;(vData ?? []).forEach(v => { vendedoresInfo[v.id] = v })
 
       const calcularComisionDespachoJS = (d, comList) => {
         const existing = comList.find(c => c.despachoid === d.id)
@@ -349,6 +338,14 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
         return vendedorMap[vid]
       }
 
+      // Pre-populamos todos los vendedores activos para que siempre aparezcan en el reporte
+      Object.values(vendedoresInfo).forEach(v => {
+        const esVendedorActivo = v.activo && (v.rol === 'vendedor' || !!v.es_externo || (v.markup_pct != null && Number(v.markup_pct) > 0))
+        if (esVendedorActivo) {
+          getOrCreate(v.id)
+        }
+      })
+
       // Despachos actuales → ventas
       despachos.forEach(d => {
         const v = getOrCreate(d.asesor_id)
@@ -437,8 +434,10 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
           if (v.rol === 'desarrollador') return false
           // Administración y logística tampoco aparecen en el desglose de vendedores
           if (v.rol === 'administracion' || v.rol === 'logistica') return false
+          // Jefes y supervisores tampoco aparecen en este reporte
+          if (v.rol === 'jefe' || v.rol === 'supervisor') return false
           
-          return v.rol !== 'vendedor_sin_comision' || (v.markup_pct && v.markup_pct > 0)
+          return v.rol !== 'vendedor_sin_comision' || v.es_externo || (v.markup_pct && v.markup_pct > 0)
         })
         .map(v => {
           const enviadas = v.cotizaciones.enviada + v.cotizaciones.aceptada + v.cotizaciones.rechazada

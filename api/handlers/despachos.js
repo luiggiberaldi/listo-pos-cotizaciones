@@ -81,6 +81,35 @@ export async function handleCrearDespacho(request, env) {
       });
     }
 
+    // Fetch cliente details and check if vendedor has no commission
+    let clienteNombre = 'cliente';
+    let esVendedorSinComision = false;
+    if (cot.cliente_id) {
+      const cliRes = await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${cot.cliente_id}&select=nombre,vendedor_id,vendedor:usuarios!clientes_vendedor_id_fkey(rol)`, { headers });
+      if (cliRes.ok) {
+        const cliData = await cliRes.json();
+        if (cliData && cliData.length > 0) {
+          clienteNombre = cliData[0].nombre;
+          esVendedorSinComision = cliData[0].vendedor?.rol === 'vendedor_sin_comision';
+        }
+      }
+    }
+
+    if (formaPago) {
+      try {
+        const fps = typeof formaPago === 'string' ? JSON.parse(formaPago) : formaPago;
+        if (Array.isArray(fps)) {
+          const cxc = fps.find(f => f.metodo === 'Cta por cobrar');
+          if (cxc && !esVendedorSinComision) {
+            const dias = parseInt(cxc.diasVencimiento, 10);
+            if (isNaN(dias) || dias <= 0) {
+              return jsonError('Los días de vencimiento son obligatorios para cuentas por cobrar', 400, request);
+            }
+          }
+        }
+      } catch (e) {}
+    }
+
     // 4. Crear nota de despacho (stock se descuenta al confirmar entrega por logística)
     // Se resta costo_envio_usd y corte_usd de la cotización (estimados) para evitar doble suma
     // con el flete y corte reales ingresados al momento del despacho.
@@ -146,17 +175,6 @@ export async function handleCrearDespacho(request, env) {
         body: JSON.stringify(despItems),
       });
     }
-    // Fetch cliente name if needed
-    let clienteNombre = 'cliente';
-    if (cot.cliente_id) {
-      const cliRes = await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${cot.cliente_id}&select=nombre`, { headers });
-      if (cliRes.ok) {
-        const cliData = await cliRes.json();
-        if (cliData && cliData.length > 0) {
-          clienteNombre = cliData[0].nombre;
-        }
-      }
-    }
 
     // Auditoría (fire-and-forget)
     registrarAuditoria(env, headers, {
@@ -188,7 +206,7 @@ export async function handleEditarPagoDespacho(request, env) {
   const { despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, clienteId } = body;
   if (!despachoId) return jsonError('Falta despachoId', 400, request);
 
-  const checkRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&select=id,estado,vendedor_id,flete_usd,corte_usd,total_usd,cotizacion_id`, { headers: h });
+  const checkRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&select=id,estado,vendedor_id,flete_usd,corte_usd,total_usd,cotizacion_id,cliente_id`, { headers: h });
   if (!checkRes.ok) return jsonError('Error al verificar despacho', 500, request);
   const despachos = await checkRes.json();
   if (!despachos.length) return jsonError('Despacho no encontrado', 404, request);
@@ -197,6 +215,35 @@ export async function handleEditarPagoDespacho(request, env) {
   const esAdmin = ['supervisor', 'administracion', 'jefe', 'desarrollador', 'logistica'].includes(operador.rol);
   const esVendedorDueno = despacho.vendedor_id === operador.id;
   if (!esAdmin && !esVendedorDueno) return jsonError('No tienes permiso para editar este despacho', 403, request);
+
+  const cliToCheck = clienteId || despacho.cliente_id;
+  let esVendedorSinComision = false;
+  if (cliToCheck) {
+    try {
+      const cliRes = await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${cliToCheck}&select=vendedor_id,vendedor:usuarios!clientes_vendedor_id_fkey(rol)`, { headers: h });
+      if (cliRes.ok) {
+        const cliData = await cliRes.json();
+        if (Array.isArray(cliData) && cliData.length > 0) {
+          esVendedorSinComision = cliData[0].vendedor?.rol === 'vendedor_sin_comision';
+        }
+      }
+    } catch {}
+  }
+
+  if (formaPago) {
+    try {
+      const fps = typeof formaPago === 'string' ? JSON.parse(formaPago) : formaPago;
+      if (Array.isArray(fps)) {
+        const cxc = fps.find(f => f.metodo === 'Cta por cobrar');
+        if (cxc && !esVendedorSinComision) {
+          const dias = parseInt(cxc.diasVencimiento, 10);
+          if (isNaN(dias) || dias <= 0) {
+            return jsonError('Los días de vencimiento son obligatorios para cuentas por cobrar', 400, request);
+          }
+        }
+      }
+    } catch {}
+  }
 
   const esConciliacionCod = formaPago !== undefined && 
     (['administracion', 'desarrollador', 'supervisor', 'jefe'].includes(operador.rol));
@@ -802,6 +849,38 @@ export async function handleEditarItemsDespacho(request, env) {
   if (!Array.isArray(items) || items.length === 0) return jsonError('items no puede estar vacío', 400, request);
 
   try {
+    const checkRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&select=cliente_id,cliente_factura_id`, { headers });
+    const despList = await checkRes.json();
+    const despacho = despList?.[0];
+    let esVendedorSinComision = false;
+    if (despacho) {
+      const cliToCheck = despacho.cliente_factura_id || despacho.cliente_id;
+      if (cliToCheck) {
+        const cliRes = await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${cliToCheck}&select=vendedor_id,vendedor:usuarios!clientes_vendedor_id_fkey(rol)`, { headers });
+        if (cliRes.ok) {
+          const cliData = await cliRes.json();
+          if (Array.isArray(cliData) && cliData.length > 0) {
+            esVendedorSinComision = cliData[0].vendedor?.rol === 'vendedor_sin_comision';
+          }
+        }
+      }
+    }
+
+    if (pagos) {
+      try {
+        const fps = typeof pagos === 'string' ? JSON.parse(pagos) : pagos;
+        if (Array.isArray(fps)) {
+          const cxc = fps.find(f => f.metodo === 'Cta por cobrar');
+          if (cxc && !esVendedorSinComision) {
+            const dias = parseInt(cxc.diasVencimiento, 10);
+            if (isNaN(dias) || dias <= 0) {
+              return jsonError('Los días de vencimiento son obligatorios para cuentas por cobrar', 400, request);
+            }
+          }
+        }
+      } catch {}
+    }
+
     // ── 2. Llamar al RPC que maneja la transacción e inventario ────────────────
     const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/editar_despacho_profundidad`, {
       method: 'POST',
