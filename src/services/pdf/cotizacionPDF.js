@@ -125,21 +125,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   y += ROW_H_INFO
 
   // Fila 2: Cliente | R.I.F / Cédula
-  const codCli = cliente.codigo_cliente ? ` [${cliente.codigo_cliente}]` : ''
-  const baseNombre = (cliente.nombre || '').toUpperCase()
-  // Calcular ancho disponible para el nombre restando el label y el código de cliente
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9.5)
-  const lblW = doc.getTextWidth('Cliente: ')
-  const availW = halfW - 2 - lblW - 3 - doc.getTextWidth(codCli)
-  let cNombre = baseNombre
-  if (doc.getTextWidth(cNombre) > availW) {
-    while (cNombre.length > 1 && doc.getTextWidth(cNombre + '…') > availW) {
-      cNombre = cNombre.slice(0, -1)
-    }
-    cNombre += '…'
-  }
-  drawCell(MARGIN, y, halfW, 'Cliente', cNombre + codCli)
+  drawCell(MARGIN, y, halfW, 'Cliente', (cliente.nombre || '').toUpperCase())
   drawCell(MARGIN + halfW, y, halfW, 'R.I.F / Cédula', cliente.rif_cedula)
   y += ROW_H_INFO
 
