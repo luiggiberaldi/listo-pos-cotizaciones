@@ -191,9 +191,9 @@ export function checkPage(doc, y, needed = 30, onPageAdd = null, customBottomMar
  * @param {Object} config - Configuración del negocio
  * @param {string} rightTitle - Texto a mostrar a la derecha (ej: "Cotización Nº- 00001" o "Lista de Precios (Cont.)")
  */
-export function drawSimplifiedHeader(doc, logoData, config, rightTitle = '') {
+export function drawSimplifiedHeader(doc, logoData, config, rightTitle = '', customPrimary = null) {
   const SHDR_H = 12
-  doc.setFillColor(...C_PRIMARY)
+  doc.setFillColor(...(customPrimary || C_PRIMARY))
   doc.rect(0, 0, PAGE_W, SHDR_H, 'F')
 
   if (logoData) {

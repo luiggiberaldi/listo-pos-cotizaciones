@@ -4,12 +4,16 @@ import { jsPDF } from 'jspdf'
 import { cargarLogo } from './pdfLogo'
 import {
   PAGE_W, PAGE_H, MARGIN, CONTENT_W,
-  C_PRIMARY, C_ACCENT, C_DARK, C_WHITE,
+  C_DARK, C_WHITE,
   CUENTAS_BANCARIAS,
   fmtFecha, fmtPrecio, fmtTotal, fmtTelefono,
   hexToRgb, drawWatermark, drawSimplifiedHeader,
   checkPage
 } from './pdfShared'
+
+// Nueva paleta de colores premium: Estilo Industrial Corporativo de Alta Gama (Construacero Premium)
+const C_PRIMARY = [15, 34, 64]      // Azul Marino Industrial Profundo (Elegante y corporativo)
+const C_ACCENT  = [197, 160, 89]    // Dorado Ocre Industrial (Acento metálico sofisticado)
 
 export async function generarPDF({ cotizacion, items = [], config = {}, returnBlob = false, monedaPDF = '$', tasa = 0, tasaUsdt = 0, tasaBcv = 0 }) {
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
@@ -35,16 +39,10 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
       }
     }
 
-    // Cuadro derecho con franjas diagonales "Hazard"
-    const hazW = 40
-    const hazX = PAGE_W - hazW
-    doc.setFillColor(...C_DARK)
-    doc.rect(hazX, 0, hazW, 14, 'F')
+    // Elegante línea divisoria dorada en la base del banner
     doc.setLineWidth(0.8)
-    doc.setDrawColor(...C_PRIMARY)
-    for (let k = 0; k < 15; k++) {
-      doc.line(hazX + k*4, 0, hazX + k*4 - 8, 14)
-    }
+    doc.setDrawColor(...C_ACCENT)
+    doc.line(0, HDR_H, PAGE_W, HDR_H)
 
     // Logo
     if (logoData) {
@@ -181,9 +179,9 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   const totalLabel  = monedaPDF === 'bs' ? 'TOTAL Bs'  : monedaPDF === 'bcv' ? 'TOTAL BCV'  : monedaPDF === 'mixto_bcv' ? 'TOTAL BCV' : 'TOTAL'
   // Anchos fijos que funcionan para cualquier moneda
   const COLS = [
-    { label: 'CANT.',       x: MARGIN,        w: 10,  align: 'center' },
-    { label: 'CÓD.',        x: MARGIN + 10,   w: 16,  align: 'center' },
-    { label: 'DESCRIPCIÓN', x: MARGIN + 26,   w: 98,  align: 'center' },
+    { label: 'CANT.',       x: MARGIN,        w: 13,  align: 'center' },
+    { label: 'CÓD.',        x: MARGIN + 13,   w: 15,  align: 'center' },
+    { label: 'DESCRIPCIÓN', x: MARGIN + 28,   w: 96,  align: 'center' },
     { label: 'UNID.',       x: MARGIN + 124,  w: 9,   align: 'center' },
     { label: precioLabel,    x: MARGIN + 133,  w: 27,  align: 'center' },
     { label: totalLabel,     x: MARGIN + 160,  w: 28,  align: 'right'  },
@@ -192,7 +190,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
 
 
   // Cabecera tabla
-  doc.setFillColor(...C_ACCENT)
+  doc.setFillColor(...C_PRIMARY)
   doc.rect(MARGIN, y, CONTENT_W, 9, 'F')
 
   doc.setFont('helvetica', 'bold')
@@ -240,7 +238,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
       pageNum++
       y = drawHeader(doc, numDisplay)
       // Redraw table header
-      doc.setFillColor(...C_ACCENT)
+      doc.setFillColor(...C_PRIMARY)
       doc.rect(MARGIN, y, CONTENT_W, 9, 'F')
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(9.5)
@@ -353,7 +351,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
 
   // Verificamos si todo esto cabe
   const totalNeededH = (notasH > 0 ? notasH + 2 : 0) + blockH + 2 + 8 // 8 = altura slogan
-  y = checkPage(doc, y, totalNeededH, (d) => drawSimplifiedHeader(d, logoData, config, `Cotización (Cont.) ${numDisplay}`))
+  y = checkPage(doc, y, totalNeededH, (d) => drawSimplifiedHeader(d, logoData, config, `Cotización (Cont.) ${numDisplay}`, C_PRIMARY))
 
   // ── Slogan — fijo 10mm sobre el footer (PAGE_H - 35) ──
   const sloganY = PAGE_H - 35
@@ -381,11 +379,11 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   }
 
   // DIBUJAR CONDICIONES
-  doc.setFillColor(230, 242, 255); doc.setDrawColor(...C_ACCENT); doc.setLineWidth(0.5)
+  doc.setFillColor(248, 250, 252); doc.setDrawColor(203, 213, 225); doc.setLineWidth(0.4)
   doc.roundedRect(MARGIN, finalY, bLeftW, bBoxH, 1.5, 1.5, 'FD')
   doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...C_PRIMARY)
   doc.text('CONDICIONES GENERALES:', MARGIN + bCP, finalY + bCP + 4.5)
-  doc.setDrawColor(...C_ACCENT); doc.setLineWidth(0.3)
+  doc.setDrawColor(226, 232, 240); doc.setLineWidth(0.3)
   doc.line(MARGIN + bCP, finalY + bCP + bCTH, MARGIN + bLeftW - bCP, finalY + bCP + bCTH)
   doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(...C_DARK)
   let bCY = finalY + bCP + bCTH + 4.5
@@ -400,7 +398,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     doc.text(l.label, bTotX + 4, bTy); doc.text(l.val, bTotX + bTotW - 4, bTy, { align: 'right' })
     bTy += bLH
   })
-  doc.setFillColor(...C_ACCENT); doc.rect(bTotX, bTy - 2, bTotW, 10, 'F')
+  doc.setFillColor(...C_PRIMARY); doc.rect(bTotX, bTy - 2, bTotW, 10, 'F')
   doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(...C_WHITE)
   doc.text('Total:', bTotX + 4, bTy + 5)
   doc.text(fmtTotal(bTot, monedaPDF, bTasa, factorBcv), bTotX + bTotW - 4, bTy + 5, { align: 'right' })
@@ -423,21 +421,14 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     const ph = PAGE_H
     {
 
-    // Franja negra superior con las diagonales
-    const hazardY = ph - 30
-    doc.setFillColor(...C_DARK)
-    doc.rect(0, hazardY, PAGE_W, 4, 'F')
-
-    doc.setDrawColor(...C_PRIMARY)
+    // Elegante línea divisoria dorada sobre el footer
     doc.setLineWidth(0.8)
-    for(let k = 1; k < 20; k++) {
-      doc.line(k * 4, hazardY, k * 4 - 3, hazardY + 4)
-      doc.line(PAGE_W - k * 4, hazardY, PAGE_W - k * 4 + 3, hazardY + 4)
-    }
+    doc.setDrawColor(...C_ACCENT)
+    doc.line(0, ph - 26, PAGE_W, ph - 26)
 
-    // Franja principal azul
+    // Franja principal azul marino profundo
     doc.setFillColor(...C_PRIMARY)
-    doc.rect(0, ph - 29, PAGE_W, 29, 'F')
+    doc.rect(0, ph - 25.2, PAGE_W, 25.2, 'F')
 
     // ── Icono pin ubicación + dirección ──
     doc.setFillColor(...C_WHITE)
@@ -450,17 +441,17 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     const addr1 = 'Av. 76, (Calle S-3) Nro. 70-C-766, Local Galpón Nro. 3 Edificio Centro Industrial Massico II'
     const addr2 = 'Parcela MB-6 y Mb7, Urb. Industrial Aeropuerto Vía Flor Amarillo, Valencia, Edo. Carabobo, Zona Postal 2003'
 
-    // Pin a la izquierda de addr1
+    // Pin a la izquierda de addr1 (reajustado verticalmente)
     const addr1W = doc.getTextWidth(addr1)
     const addr1X = PAGE_W/2 - addr1W/2
     const pinX = addr1X - 4
-    const pinY = ph - 21
+    const pinY = ph - 17.5
     doc.circle(pinX, pinY - 0.3, 1.4, 'F')
     doc.triangle(pinX - 1.2, pinY, pinX + 1.2, pinY, pinX, pinY + 2.4, 'F')
 
-    doc.text(addr1, PAGE_W/2, ph - 19.5, { align: 'center' })
+    doc.text(addr1, PAGE_W/2, ph - 16, { align: 'center' })
     doc.setFont('helvetica', 'normal')
-    doc.text(addr2, PAGE_W/2, ph - 15, { align: 'center' })
+    doc.text(addr2, PAGE_W/2, ph - 11.5, { align: 'center' })
 
     const tel = fmtTelefono(config.telefono_negocio) || ''
     const email = config.email_negocio || ''
@@ -479,7 +470,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
       })
 
       let cx = PAGE_W/2 - totalW/2
-      const cy = ph - 7
+      const cy = ph - 5.5
 
       parts.forEach((p, i) => {
         doc.setFillColor(...C_WHITE)
