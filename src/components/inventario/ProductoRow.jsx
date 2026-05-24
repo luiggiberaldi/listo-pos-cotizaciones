@@ -1,5 +1,6 @@
 // src/components/inventario/ProductoRow.jsx
 // Fila compacta de producto para vista de lista
+import { useState } from 'react'
 import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle, Package, Trash2, ClipboardList, Eye } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import { usePrecioVendedor } from '../../hooks/usePrecioVendedor'
@@ -25,6 +26,16 @@ function colorCategoria(str = '') {
 
 export default function ProductoRow({ producto, onEditar, onDesactivar, onBorrar, onKardex, onDetalle, tasa = 0, comprometido = 0 }) {
   const { perfil } = useAuthStore()
+  const [copiado, setCopiado] = useState(false)
+
+  const handleCopiarCodigo = (e) => {
+    e.stopPropagation()
+    if (!producto.codigo) return
+    navigator.clipboard.writeText(producto.codigo)
+    setCopiado(true)
+    setTimeout(() => setCopiado(false), 1500)
+  }
+
   const esAdministracion = perfil?.rol === 'administracion'
   const esPrivilegiado = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe') || esAdministracion
   // Costo solo visible para administracion, jefe y desarrollador
@@ -46,7 +57,7 @@ export default function ProductoRow({ producto, onEditar, onDesactivar, onBorrar
       <div className="w-10 h-10 my-auto ml-3 rounded-lg flex items-center justify-center overflow-hidden shrink-0"
         style={{ background: catColor + '15' }}>
         {producto.imagen_url ? (
-          <img src={producto.imagen_url} alt="" className="w-full h-full object-cover" loading="lazy" />
+          <img src={producto.imagen_url} alt="" className="w-full h-full object-contain p-0.5" loading="lazy" />
         ) : (
           <Package size={16} style={{ color: catColor, opacity: 0.7 }} />
         )}
@@ -57,9 +68,18 @@ export default function ProductoRow({ producto, onEditar, onDesactivar, onBorrar
         <div className="flex items-center gap-2 flex-wrap">
           <h3 className="font-bold text-slate-800 text-sm truncate uppercase">{producto.nombre}</h3>
           {producto.codigo && (
-            <span className="px-1 py-0.5 bg-slate-50 border border-slate-200 rounded text-[9px] font-mono font-bold text-slate-400 uppercase tracking-tighter">
-              {producto.codigo}
-            </span>
+            <button
+              onClick={handleCopiarCodigo}
+              title="Click para copiar código"
+              className={`relative flex items-center gap-1 px-2 py-0.5 border rounded-lg text-[10px] font-mono font-bold uppercase transition-all duration-200 active:scale-95 shrink-0 ${
+                copiado
+                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm shadow-emerald-100'
+                  : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-200 hover:border-slate-300 hover:text-slate-800'
+              }`}
+            >
+              <Hash size={10} className={copiado ? 'text-white' : 'text-slate-400'} />
+              <span>{copiado ? '¡Copiado!' : producto.codigo}</span>
+            </button>
           )}
           {producto.categoria && (
             <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full"

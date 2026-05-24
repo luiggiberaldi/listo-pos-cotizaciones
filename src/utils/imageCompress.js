@@ -7,7 +7,7 @@
  * @param {File} file - archivo de imagen original
  * @returns {Promise<{ blob: Blob, dataUrl: string, revoke: () => void }>}
  */
-export function comprimirImagen(file, { maxSize = 300, quality = 0.55 } = {}) {
+export function comprimirImagen(file, { maxSize = 800, quality = 0.80 } = {}) {
   return new Promise((resolve, reject) => {
     const img = new Image()
     const url = URL.createObjectURL(file)

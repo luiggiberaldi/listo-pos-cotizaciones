@@ -1,4 +1,5 @@
 // src/components/inventario/ProductoCard.jsx
+import { useState } from 'react'
 import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle, Package, Trash2, ClipboardList, TrendingUp, Eye } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import { usePrecioVendedor } from '../../hooks/usePrecioVendedor'
@@ -62,6 +63,16 @@ function StockBadge({ actual, minimo, comprometido = 0, productoId }) {
 
 export default function ProductoCard({ producto, onEditar, onDesactivar, onBorrar, onKardex, onDetalle, tasa = 0, comprometido = 0 }) {
   const { perfil } = useAuthStore()
+  const [copiado, setCopiado] = useState(false)
+
+  const handleCopiarCodigo = (e) => {
+    e.stopPropagation()
+    if (!producto.codigo) return
+    navigator.clipboard.writeText(producto.codigo)
+    setCopiado(true)
+    setTimeout(() => setCopiado(false), 1500)
+  }
+
   const esAdministracion = perfil?.rol === 'administracion'
   const esPrivilegiado = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe') || esAdministracion
   // Costo solo visible para administracion, jefe y desarrollador
@@ -99,7 +110,7 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, onBorra
         style={{ background: producto.imagen_url ? '#f8fafc' : bg }}>
         {producto.imagen_url ? (
           <img src={producto.imagen_url} alt={producto.nombre}
-            className="w-full h-full object-cover" loading="lazy" />
+            className="w-full h-full object-contain p-1" loading="lazy" />
         ) : (
           <Package size={24} style={{ color: fg, opacity: 0.7 }} />
         )}
@@ -125,9 +136,18 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, onBorra
           <div className="flex items-center justify-between gap-1 mb-1">
             {producto.codigo && (
               <div className="flex items-center gap-1 min-w-0">
-                <span className="px-1 py-0.5 bg-slate-100 border border-slate-200 rounded text-[8px] font-mono font-bold text-slate-500 uppercase tracking-tighter">
-                  {producto.codigo}
-                </span>
+                <button
+                  onClick={handleCopiarCodigo}
+                  title="Click para copiar código"
+                  className={`relative flex items-center gap-1 px-2 py-1 border rounded-lg text-[10px] font-mono font-bold uppercase transition-all duration-200 active:scale-95 shrink-0 ${
+                    copiado
+                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm shadow-emerald-100'
+                      : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200 hover:border-slate-300 hover:text-slate-900'
+                  }`}
+                >
+                  <Hash size={10} className={copiado ? 'text-white' : 'text-slate-400'} />
+                  <span>{copiado ? '¡Copiado!' : producto.codigo}</span>
+                </button>
               </div>
             )}
             {producto.unidad && (

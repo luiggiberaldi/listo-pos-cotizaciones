@@ -310,6 +310,33 @@ export async function handleGetComisionesResumen(request, env) {
     const rows = await res.json();
     const r = rows[0] || {};
 
+    // ── CONSULTA SECUNDARIA: desglose de saldo pendiente (Regular vs CxC) ─────
+    let queryBreakdown = `${env.SUPABASE_URL}/rest/v1/comisiones?select=estado,totalcomision,montopagado&estado=in.(pendiente,cta_cobrar)`;
+    const userContext = { ...user, operator_rol: operador.rol, operator_id: operador.id };
+    queryBreakdown = aplicarFiltrosComisiones(queryBreakdown, url.searchParams, userContext);
+
+    let pendienteRegular = 0;
+    let pendienteCxc = 0;
+
+    try {
+      const breakdownRes = await fetch(queryBreakdown, { headers });
+      if (breakdownRes.ok) {
+        const items = await breakdownRes.json();
+        for (const item of items) {
+          const saldo = Math.max(0, Number(item.totalcomision || 0) - Number(item.montopagado || 0));
+          if (item.estado === 'cta_cobrar') {
+            pendienteCxc += saldo;
+          } else {
+            pendienteRegular += saldo;
+          }
+        }
+      } else {
+        console.error('[ResumenComisiones] Error fetching breakdown:', await breakdownRes.text());
+      }
+    } catch (eBreakdown) {
+      console.error('[ResumenComisiones] Exception in breakdown:', eBreakdown);
+    }
+
     return json({
       totalAcumulado: Number(r.totalacumulado || 0),
       pendientePago: Number(r.pendientepago || 0),
@@ -317,6 +344,8 @@ export async function handleGetComisionesResumen(request, env) {
       numPendientes: Number(r.numpendientes || 0),
       numPagadas: Number(r.numpagadas || 0),
       total: Number(r.total || 0),
+      pendienteRegular,
+      pendienteCxc,
     }, 200, request);
 
   } catch (e) {

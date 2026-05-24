@@ -143,6 +143,9 @@ export function useComisionesResumen({ vendedorId = '', desde = '', hasta = '', 
           numPendientes:  Number(data.numPendientes  || 0),
           numPagadas:     Number(data.numPagadas     || 0),
           totalRegistros: Number(data.total          || 0),
+          // Desglose de pendientes
+          pendienteRegular: Number(data.pendienteRegular || 0),
+          pendienteCxc:     Number(data.pendienteCxc || 0),
         }
       } catch (e) {
         console.error('Error useComisionesResumen:', e.message)

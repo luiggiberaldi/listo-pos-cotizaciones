@@ -2,7 +2,7 @@
 // Vista de comisiones agrupadas por vendedor con soporte para paginación y resumen SQL
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { DollarSign, CheckCircle, Clock, Filter, TrendingUp, FileText, Download, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar } from 'lucide-react'
+import { DollarSign, CheckCircle, Clock, Filter, TrendingUp, FileText, Download, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, User, Briefcase } from 'lucide-react'
 import { useComisiones, useComisionesResumen, useMarcarComisionPagada } from '../hooks/useComisiones'
 import { useVendedores } from '../hooks/useClientes'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
@@ -29,7 +29,7 @@ function ResumenCard({ icon: Icon, label, value, sub, gradient, border }) {
       </div>
       <div className="relative z-10">
         <p className="text-2xl font-black leading-tight text-white">{value}</p>
-        {sub && <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.45)' }}>{sub}</p>}
+        {sub && <div className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.45)' }}>{sub}</div>}
       </div>
     </div>
   )
@@ -43,14 +43,40 @@ function VendedorCard({ vendedor, comisiones, esSupervisor, onMarcarPagada, onPa
   const totalGeneral = useMemo(() => comisiones.reduce((s, c) => s + Number(c.totalcomision || 0), 0), [comisiones])
   const pendientes = useMemo(() => comisiones.filter(c => ['pendiente', 'cta_cobrar'].includes(c.estado) && Math.max(0, Number(c.totalcomision || 0) - Number(c.montopagado || 0)) > 0), [comisiones])
   const montoPendiente = useMemo(() => pendientes.reduce((s, c) => s + Math.max(0, Number(c.totalcomision || 0) - Number(c.montopagado || 0)), 0), [pendientes])
+  
+  const montoPendienteRegular = useMemo(() => 
+    pendientes.filter(c => c.estado !== 'cta_cobrar')
+      .reduce((s, c) => s + Math.max(0, Number(c.totalcomision || 0) - Number(c.montopagado || 0)), 0), 
+    [pendientes]
+  )
+  
+  const montoPendienteCxc = useMemo(() => 
+    pendientes.filter(c => c.estado === 'cta_cobrar')
+      .reduce((s, c) => s + Math.max(0, Number(c.totalcomision || 0) - Number(c.montopagado || 0)), 0), 
+    [pendientes]
+  )
+  
   const montoPagado = useMemo(() => comisiones.reduce((s, c) => s + Number(c.montopagado || 0), 0), [comisiones])
   
   const esExterno = !!vendedor?.es_externo || (vendedor?.markup_pct != null && Number(vendedor.markup_pct) > 0);
 
   const estadoBadge = (estado) => {
-    if (estado === 'pagada') return { label: 'Pagada', cls: 'text-emerald-600' }
-    if (estado === 'cta_cobrar') return { label: 'Cta x Cobrar', cls: 'text-orange-600' }
-    return { label: 'Pendiente', cls: 'text-amber-600 font-bold' }
+    if (estado === 'pagada') {
+      return { 
+        label: 'Pagada', 
+        cls: 'text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2 py-0.5 rounded-md font-bold' 
+      }
+    }
+    if (estado === 'cta_cobrar') {
+      return { 
+        label: 'Cta x Cobrar', 
+        cls: 'text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded-md font-black shadow-sm shadow-red-50' 
+      }
+    }
+    return { 
+      label: 'Pendiente', 
+      cls: 'text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md font-bold' 
+    }
   }
 
   return (
@@ -100,24 +126,32 @@ function VendedorCard({ vendedor, comisiones, esSupervisor, onMarcarPagada, onPa
         <div className="text-right shrink-0 flex flex-col items-end">
           <p className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">Saldo Pendiente</p>
           <p className="text-lg font-black text-amber-600 leading-none">{fmtUsd(montoPendiente)}</p>
-          <div className="flex items-center gap-2 mt-1.5 text-[10px] font-bold text-slate-400">
-            <span>Gen: {fmtUsd(totalGeneral)}</span>
-            <span>Pag: {fmtUsd(montoPagado)}</span>
+          <div className="flex flex-col items-end gap-1 mt-1.5 text-[9px] font-bold text-slate-400">
+            <div className="flex items-center gap-1.5">
+              <span>Gen: {fmtUsd(totalGeneral)}</span>
+              <span>Pag: {fmtUsd(montoPagado)}</span>
+            </div>
+            {(montoPendienteRegular > 0 || montoPendienteCxc > 0) && (
+              <div className="flex gap-1 items-center mt-0.5">
+                <span className="text-amber-600 bg-amber-50/60 px-1 py-0.2 rounded border border-amber-200/50">Reg: {fmtUsd(montoPendienteRegular)}</span>
+                <span className="text-red-600 bg-red-50/60 px-1 py-0.2 rounded border border-red-200/50">CxC: {fmtUsd(montoPendienteCxc)}</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
       {abierto && (
         <div className="border-t border-slate-100 bg-slate-50/30">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left whitespace-nowrap">
+          <div className="overflow-x-hidden">
+            <table className="w-full text-xs text-left">
               <thead>
                 <tr className="border-b border-slate-100 text-[10px] text-slate-400 uppercase tracking-wider bg-slate-50/80">
-                  <th className="px-4 py-2 font-semibold">Operación</th>
-                  <th className="px-4 py-2 font-semibold">Cabilla / Otros</th>
-                  <th className="px-4 py-2 font-semibold text-right">Total Com.</th>
-                  <th className="px-4 py-2 font-semibold text-center">Estado</th>
-                  {esSupervisor && montoPendiente > 0 && <th className="px-4 py-2"></th>}
+                  <th className="px-2 py-2 font-semibold">Operación</th>
+                  <th className="px-2 py-2 font-semibold">Cabilla / Otros</th>
+                  <th className="px-2 py-2 font-semibold text-right">Total Com.</th>
+                  <th className="px-2 py-2 font-semibold text-center">Estado</th>
+                  {esSupervisor && montoPendiente > 0 && <th className="px-1 py-2"></th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100/60">
@@ -128,39 +162,39 @@ function VendedorCard({ vendedor, comisiones, esSupervisor, onMarcarPagada, onPa
                   
                   return (
                     <tr key={c.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-4 py-3">
+                      <td className="px-2 py-2.5">
                         <div className="flex flex-col">
                           <span className="font-mono font-medium text-slate-700">#{c.despacho?.numero ?? '---'}</span>
                           <span className="text-[10px] text-slate-400">{fmtFecha(c.creadoen)}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-2 py-2.5">
                         <div className="flex flex-col text-[11px]">
-                          <span className="text-slate-500">Cabilla: <span className="font-semibold text-slate-700">{fmtUsd(c.comisioncabilla)}</span></span>
+                          <span className="text-slate-500">Cab: <span className="font-semibold text-slate-700">{fmtUsd(c.comisioncabilla)}</span></span>
                           <span className="text-slate-500">Otros: <span className="font-semibold text-slate-700">{fmtUsd(c.comisionotros)}</span></span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-2 py-2.5 text-right">
                         <span className="font-black text-slate-800 text-sm">{fmtUsd(c.totalcomision)}</span>
                         {c.montopagado > 0 && c.estado !== 'pagada' && (
-                          <div className="text-[10px] text-emerald-600 font-bold mt-0.5">Abono: {fmtUsd(c.montopagado)}</div>
+                          <div className="text-[10px] text-emerald-600 font-bold mt-0.5">Ab: {fmtUsd(c.montopagado)}</div>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={`text-[11px] ${badge.cls}`}>{badge.label}</span>
+                      <td className="px-2 py-2.5 text-center">
+                        <span className={`text-[10px] ${badge.cls}`}>{badge.label}</span>
                       </td>
                       {esSupervisor && montoPendiente > 0 && (
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-1 py-2.5 text-right">
                           {puedePagar && saldoPagar > 0 ? (
                             <button
                               onClick={() => onMarcarPagada(c)}
                               disabled={marcando}
-                              className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 font-bold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 border border-emerald-200/50 shadow-sm"
+                              className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 font-bold px-2 py-1 rounded-lg transition-colors disabled:opacity-50 border border-emerald-200/50 shadow-sm text-[10px]"
                             >
-                              <CheckCircle size={12} /> Pagar
+                              <CheckCircle size={10} /> Pagar
                             </button>
                           ) : (
-                            <span className="inline-block w-16"></span>
+                            <span className="inline-block w-10"></span>
                           )}
                         </td>
                       )}
@@ -243,6 +277,7 @@ export default function ComisionesView() {
   const { data: configNeg = {} } = useConfigNegocio()
   const marcar = useMarcarComisionPagada()
   const [exportando, setExportando] = useState(false)
+  const [menuAbierto, setMenuAbierto] = useState(false)
 
   const comisiones = comisionesRes?.data ?? []
 
@@ -258,14 +293,28 @@ export default function ComisionesView() {
     return [...mapa.values()]
   }, [comisiones])
 
-  async function exportarPDF(vendedorFiltro = null) {
+  async function exportarPDF(vendedorFiltro = null, tipoVendedor = null) {
     setExportando(true)
     try {
       const activeVendedor = vendedorFiltro || (filtroVendedor ? vendedores.find(v => v.id === filtroVendedor) : null)
       
-      const items = activeVendedor
-        ? comisiones.filter(c => (c.vendedorid || '00000000-0000-0000-0000-000000000000') === activeVendedor.id)
-        : comisiones
+      let items = comisiones
+      
+      if (activeVendedor) {
+        items = comisiones.filter(c => (c.vendedorid || '00000000-0000-0000-0000-000000000000') === activeVendedor.id)
+      } else if (tipoVendedor === 'internos') {
+        items = comisiones.filter(c => {
+          const v = c.vendedor
+          const esExt = !!v?.es_externo || (v?.markup_pct != null && Number(v.markup_pct) > 0)
+          return !esExt
+        })
+      } else if (tipoVendedor === 'externos') {
+        items = comisiones.filter(c => {
+          const v = c.vendedor
+          const esExt = !!v?.es_externo || (v?.markup_pct != null && Number(v.markup_pct) > 0)
+          return esExt
+        })
+      }
         
       const rango = { from: fechaDesde, to: fechaHasta }
       
@@ -273,6 +322,7 @@ export default function ComisionesView() {
       await generarComisionesPDF({ 
         comisiones: items, 
         vendedor: activeVendedor ? { id: activeVendedor.id, nombre: activeVendedor.nombre, color: activeVendedor.color } : null, 
+        tipoVendedor,
         rango, 
         config: configNeg ?? {} 
       })
@@ -307,7 +357,16 @@ export default function ComisionesView() {
             icon={Clock}
             label="Pendiente Cobro"
             value={fmtUsd(resumen.pendientePago)}
-            sub={`${resumen.numPendientes} registros`}
+            sub={
+              <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                <span className="text-[10px] text-amber-200 bg-amber-950/40 border border-amber-800/20 px-1.5 py-0.5 rounded font-bold shadow-sm shadow-black/10">
+                  Reg: {fmtUsd(resumen.pendienteRegular ?? 0)}
+                </span>
+                <span className="text-[10px] text-red-200 bg-red-950/40 border border-red-800/20 px-1.5 py-0.5 rounded font-black shadow-sm shadow-black/10">
+                  CxC: {fmtUsd(resumen.pendienteCxc ?? 0)}
+                </span>
+              </div>
+            }
             gradient="linear-gradient(135deg, #92400e 0%, #78350f 100%)"
             border="rgba(255,255,255,0.05)"
           />
@@ -357,9 +416,52 @@ export default function ComisionesView() {
           )}
 
           {comisiones.length > 0 && (
-            <button onClick={() => exportarPDF(null)} disabled={exportando} className="ml-auto flex items-center gap-2 bg-slate-900 text-white px-5 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-slate-200 active:scale-95 transition-all disabled:opacity-50">
-              <Download size={14} /> {exportando ? '...' : 'PDF PÁGINA ACTUAL'}
-            </button>
+            <div className="relative ml-auto shrink-0">
+              <button 
+                onClick={() => setMenuAbierto(!menuAbierto)} 
+                disabled={exportando} 
+                className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-slate-200 active:scale-95 transition-all disabled:opacity-50"
+              >
+                <Download size={14} />
+                <span>{exportando ? 'EXPORTANDO...' : 'DESCARGAR PDF'}</span>
+                <ChevronDown size={14} className={`transition-transform duration-200 ${menuAbierto ? 'rotate-180' : ''}`} />
+              </button>
+              
+              {menuAbierto && (
+                <>
+                  {/* Backdrop para cerrar clickeando fuera */}
+                  <div className="fixed inset-0 z-40" onClick={() => setMenuAbierto(false)} />
+                  
+                  <div className="absolute right-0 mt-2 w-56 rounded-2xl bg-white border border-slate-100 shadow-xl py-2 z-50 animate-in fade-in slide-in-from-top-1 duration-150">
+                    <button
+                      onClick={() => { setMenuAbierto(false); exportarPDF(null); }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+                    >
+                      <FileText size={16} className="text-slate-400 shrink-0" />
+                      <span>Toda la Página</span>
+                    </button>
+                    <button
+                      onClick={() => { setMenuAbierto(false); exportarPDF(null, 'internos'); }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+                    >
+                      <span className="w-5 h-5 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0">
+                        <User size={12} className="text-indigo-600" />
+                      </span>
+                      <span>Solo Vendedores Internos</span>
+                    </button>
+                    <button
+                      onClick={() => { setMenuAbierto(false); exportarPDF(null, 'externos'); }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+                    >
+                      <span className="w-5 h-5 rounded-full bg-[#FEF3C7] border border-[#FDE68A] flex items-center justify-center shrink-0">
+                        <Briefcase size={12} className="text-[#B45309]" />
+                      </span>
+                      <span>Solo Vendedores Externos</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </div>
       </div>

@@ -275,18 +275,29 @@ export default function ProductoForm({ producto = null, onSuccess, onCancel }) {
     try {
       let productoResult
       if (esEdicion) {
-        productoResult = await actualizar.mutateAsync({ id: producto.id, campos, imagen_url: producto.imagen_url })
-      } else {
-        productoResult = await crear.mutateAsync(campos)
-      }
+        // 1. Determinar el URL final de la imagen
+        let finalImageUrl = producto.imagen_url
+        if (imagenEliminada) {
+          finalImageUrl = null
+        } else if (imagenBlob) {
+          finalImageUrl = await subirImagenProducto(supabase, producto.id, imagenBlob)
+        }
 
-      // Subir imagen si hay una nueva, o eliminarla
-      const productoId = productoResult?.id ?? producto?.id
-      if (imagenBlob && productoId) {
-        const url = await subirImagenProducto(supabase, productoId, imagenBlob)
-        await supabase.from('productos').update({ imagen_url: url }).eq('id', productoId)
-      } else if (imagenEliminada && productoId) {
-        await supabase.from('productos').update({ imagen_url: null }).eq('id', productoId)
+        // 2. Ejecutar la actualización en base de datos con el nuevo URL
+        productoResult = await actualizar.mutateAsync({
+          id: producto.id,
+          campos,
+          imagen_url: finalImageUrl
+        })
+      } else {
+        // Para nuevos productos: primero creamos para obtener el ID
+        productoResult = await crear.mutateAsync(campos)
+        
+        // Luego subimos la imagen si hay una
+        if (imagenBlob && productoResult?.id) {
+          const url = await subirImagenProducto(supabase, productoResult.id, imagenBlob)
+          await supabase.from('productos').update({ imagen_url: url }).eq('id', productoResult.id)
+        }
       }
 
       onSuccess?.()

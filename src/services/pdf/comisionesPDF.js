@@ -6,16 +6,60 @@ import {
   PAGE_W, PAGE_H, MARGIN, CONTENT_W,
   C_PRIMARY, C_DARK, C_WHITE, C_EMERALD, C_AMBER, C_GRAY,
   fmtUsd, fmtBs, fmtFecha, fmtFechaCorta,
-  hexToRgb, drawWatermark, checkPage,
+  hexToRgb, drawWatermark, checkPage, drawSimplifiedHeader,
 } from './pdfShared'
 
 // ─── Generar Reporte de Comisiones ───────────────────────────────────────────
 // ─── Generar Reporte de Comisiones ───────────────────────────────────────────
-export async function generarComisionesPDF({ comisiones, vendedor = null, resumen = null, rango = null, config = {} }) {
+export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVendedor = null, resumen = null, rango = null, config = {} }) {
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
   let y = 0
 
   const logoData = await cargarLogo(config.logo_url)
+
+  const handlePageAdd = (d) => {
+    let rightTitle = 'Reporte de Comisiones'
+    if (tipoVendedor === 'internos') rightTitle = 'Comisiones (Vendedores Internos)'
+    else if (tipoVendedor === 'externos') rightTitle = 'Comisiones (Vendedores Externos)'
+    else if (vendedor) rightTitle = `Comisiones - ${vendedor.nombre}`
+    return drawSimplifiedHeader(d, logoData, config, rightTitle)
+  }
+
+  function drawStatusBadge(d, estado, x, y, w, h) {
+    let bgColor = [241, 245, 249] // slate 100
+    let borderColor = [226, 232, 240] // slate 200
+    let textColor = [71, 85, 105] // slate 600
+    let text = 'PENDIENTE'
+    
+    if (estado === 'pagada') {
+      bgColor = [236, 253, 245] // emerald 50
+      borderColor = [167, 243, 208] // emerald 200
+      textColor = [4, 120, 87] // emerald 700
+      text = 'PAGADA'
+    } else if (estado === 'cta_cobrar') {
+      bgColor = [254, 242, 242] // red 50 (#FEF2F2)
+      borderColor = [254, 202, 202] // red 200 (#FECACA)
+      textColor = [185, 28, 28] // red 700 (#B91C1C)
+      text = 'CTA X COBRAR'
+    } else {
+      bgColor = [255, 251, 235] // amber 50
+      borderColor = [253, 230, 138] // amber 200
+      textColor = [180, 83, 9] // amber 700
+      text = 'PENDIENTE'
+    }
+    
+    d.setFillColor(...bgColor)
+    d.roundedRect(x, y - h + 1, w, h, 1, 1, 'F')
+    
+    d.setDrawColor(...borderColor)
+    d.setLineWidth(0.2)
+    d.roundedRect(x, y - h + 1, w, h, 1, 1, 'S')
+    
+    d.setFont('helvetica', 'bold')
+    d.setFontSize(5.5)
+    d.setTextColor(...textColor)
+    d.text(text, x + w / 2, y - h / 2 + 1.2, { align: 'center' })
+  }
 
   // NORMALIZAR: unificar naming antes de procesar (soporte para Worker API y RPC)
   function normalizarComision(c) {
@@ -95,7 +139,10 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
   // Subtítulo
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(11)
-  doc.text('Reporte de Comisiones', PAGE_W - MARGIN, HDR_H - 8, { align: 'right' })
+  let subTitleText = 'Reporte de Comisiones'
+  if (tipoVendedor === 'internos') subTitleText = 'Reporte de Comisiones — Vendedores Internos'
+  else if (tipoVendedor === 'externos') subTitleText = 'Reporte de Comisiones — Vendedores Externos'
+  doc.text(subTitleText, PAGE_W - MARGIN, HDR_H - 8, { align: 'right' })
   doc.setFontSize(8)
   doc.setFont('helvetica', 'normal')
   let subHeaderDate = fmtFecha(new Date().toISOString(), 'short-month')
@@ -137,38 +184,147 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
     .filter(c => ['pendiente', 'cta_cobrar'].includes(c.estado))
     .reduce((s, c) => s + Math.max(c.totalcomision - (c.montopagado || 0), 0), 0)
     
+  // Desglose de pendientes
+  const totalPendienteRegular = comisionesNorm
+    .filter(c => c.estado === 'pendiente')
+    .reduce((s, c) => s + Math.max(c.totalcomision - (c.montopagado || 0), 0), 0)
+
+  const totalPendienteCxc = comisionesNorm
+    .filter(c => c.estado === 'cta_cobrar')
+    .reduce((s, c) => s + Math.max(c.totalcomision - (c.montopagado || 0), 0), 0)
+    
   // 2) "Total Pagado": sum(COALESCE(montopagado, 0)) de todas
   const totalPagado = comisionesNorm.reduce((s, c) => s + (c.montopagado || 0), 0)
   
   // 3) "Generado Histórico": sum(totalcomision) de todas
   const totalGeneral = comisionesNorm.reduce((s, c) => s + c.totalcomision, 0)
 
-  // Cuadro resumen
+  // Cuadro resumen premium
   const boxH = 18
   const boxW = CONTENT_W / 3
   const boxes = [
-    { label: 'Generado Histórico', value: fmtUsd(totalGeneral), count: `${comisionesNorm.length} comisiones`, color: C_PRIMARY },
-    { label: 'Total Pagado', value: fmtUsd(totalPagado), count: `${pagadas.length} pagadas`, color: C_EMERALD },
-    { label: 'Saldo Pendiente', value: fmtUsd(totalPendiente), count: `${pends.length} pend / ${cxc.length} cxc`, color: C_AMBER },
+    { 
+      label: 'Generado Histórico', 
+      value: fmtUsd(totalGeneral), 
+      count: `${comisionesNorm.length} comisiones`, 
+      bgColor: [248, 250, 252], // Slate 50
+      borderColor: [226, 232, 240], // Slate 200
+      textColor: [15, 23, 42], // Slate 900
+      badgeColor: [100, 116, 139] // Slate 500
+    },
+    { 
+      label: 'Total Pagado', 
+      value: fmtUsd(totalPagado), 
+      count: `${pagadas.length} pagadas`, 
+      bgColor: [236, 253, 245], // Emerald 50
+      borderColor: [167, 243, 208], // Emerald 200
+      textColor: [4, 120, 87], // Emerald 700
+      badgeColor: [5, 150, 105] // Emerald 600
+    },
+    { 
+      label: 'Saldo Pendiente', 
+      value: fmtUsd(totalPendiente), 
+      count: `${pends.length} pend / ${cxc.length} cxc`, 
+      bgColor: [255, 251, 235], // Amber 50
+      borderColor: [253, 230, 138], // Amber 200
+      textColor: [180, 83, 9], // Amber 700
+      badgeColor: [217, 119, 6] // Amber 600
+    },
   ]
 
   boxes.forEach((box, i) => {
     const bx = MARGIN + i * boxW
-    doc.setFillColor(box.color[0], box.color[1], box.color[2])
-    doc.roundedRect(bx + 1, y, boxW - 2, boxH, 2, 2, 'F')
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(7)
-    doc.setTextColor(...C_WHITE)
-    doc.text(box.label, bx + 4, y + 5.5)
+    
+    // Draw background
+    doc.setFillColor(...box.bgColor)
+    doc.roundedRect(bx + 1, y, boxW - 2, boxH, 2.5, 2.5, 'F')
+    
+    // Draw border
+    doc.setDrawColor(...box.borderColor)
+    doc.setLineWidth(0.4)
+    doc.roundedRect(bx + 1, y, boxW - 2, boxH, 2.5, 2.5, 'S')
+    
+    // Draw content
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(11)
-    doc.text(box.value, bx + 4, y + 12)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(6)
-    doc.text(box.count, bx + 4, y + 16)
+    doc.setFontSize(7)
+    doc.setTextColor(...box.badgeColor)
+    doc.text(box.label.toUpperCase(), bx + 4.5, y + 5.5)
+    
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(12)
+    doc.setTextColor(...box.textColor)
+    doc.text(box.value, bx + 4.5, y + 11.5)
+    
+    if (i === 2) {
+      // Dibujar desglose premium
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(6.2)
+      doc.setTextColor(217, 119, 6) // Amber 600
+      const txtReg = `Reg: ${fmtUsd(totalPendienteRegular)}  ·  `
+      doc.text(txtReg, bx + 4.5, y + 15.5)
+      const offset = doc.getTextWidth(txtReg)
+      doc.setTextColor(185, 28, 28) // Red 700
+      doc.text(`CxC: ${fmtUsd(totalPendienteCxc)}`, bx + 4.5 + offset, y + 15.5)
+    } else {
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(6.5)
+      doc.setTextColor(...box.badgeColor)
+      doc.text(box.count, bx + 4.5, y + 15.5)
+    }
   })
 
-  y += boxH + 8
+  y += boxH + 4
+
+  // DRAW VISUAL BREAKDOWN BAR (Barra de progreso)
+  if (totalGeneral > 0) {
+    const barH = 5
+    const barW = CONTENT_W
+    const pctPagado = (totalPagado / totalGeneral) * 100
+    const pctPendiente = (totalPendiente / totalGeneral) * 100
+    const wPagado = (totalPagado / totalGeneral) * barW
+
+    y = checkPage(doc, y, 14)
+    
+    // Label
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7.5)
+    doc.setTextColor(...C_DARK)
+    doc.text('Distribución de Liquidación:', MARGIN + 1, y + 3)
+    
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7)
+    doc.setTextColor(...C_GRAY)
+    const labelPct = `${pctPagado.toFixed(1)}% Pagado · ${pctPendiente.toFixed(1)}% Pendiente`
+    doc.text(labelPct, MARGIN + CONTENT_W - 1, y + 3, { align: 'right' })
+    
+    y += 4.5
+
+    // Background track
+    doc.setFillColor(241, 245, 249) // Gray 100
+    doc.roundedRect(MARGIN, y, barW, barH, 1.5, 1.5, 'F')
+
+    // Emerald fill (Pagado)
+    if (wPagado > 0) {
+      doc.setFillColor(16, 185, 129) // Emerald 500
+      doc.roundedRect(MARGIN, y, wPagado, barH, 1.5, 1.5, 'F')
+    }
+
+    // Amber fill (Pendiente)
+    if (barW - wPagado > 0.5) {
+      doc.setFillColor(245, 158, 11) // Amber 500
+      doc.roundedRect(MARGIN + wPagado, y, barW - wPagado, barH, 1.5, 1.5, 'F')
+      
+      // Draw divider line if both parts exist
+      if (wPagado > 0 && wPagado < barW) {
+        doc.setFillColor(255, 255, 255)
+        doc.rect(MARGIN + wPagado - 0.2, y, 0.4, barH, 'F')
+      }
+    }
+
+    y += barH + 6
+  } else {
+    y += 4
+  }
 
   // ══════════════════════════════════════════════════════════════════════════
   // 4. TABLA DE COMISIONES
@@ -258,7 +414,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
   // Función auxiliar para dibujar un grupo de comisiones
   function dibujarGrupoTabla(titulo, items) {
     if (items.length === 0) {
-      y = checkPage(doc, y, 15);
+      y = checkPage(doc, y, 15, handlePageAdd);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8.5);
       doc.setTextColor(...C_DARK);
@@ -273,7 +429,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
       return { totalUsd: 0, cabillaUsd: 0, otrosUsd: 0, abonadoUsd: 0, totalBs: 0 };
     }
 
-    y = checkPage(doc, y, 18);
+    y = checkPage(doc, y, 18, handlePageAdd);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
     doc.setTextColor(...C_DARK);
@@ -290,7 +446,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
 
     items.forEach((c, idx) => {
       const rowH = 6;
-      y = checkPage(doc, y, rowH + 2);
+      y = checkPage(doc, y, rowH + 2, handlePageAdd);
 
       if (y < MARGIN + 12) {
         y = drawTableHeader(doc, y);
@@ -307,16 +463,6 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
 
       const tasa = c.tasa_snapshot;
       const comBs = tasa > 0 ? c.totalcomision * tasa : 0;
-      
-      let textoEstado = 'Pendiente';
-      let colorEstado = C_AMBER;
-      if (c.estado === 'pagada') {
-        textoEstado = 'Pagada';
-        colorEstado = C_EMERALD;
-      } else if (c.estado === 'cta_cobrar') {
-        textoEstado = 'Cta. por cobrar';
-        colorEstado = [148, 163, 184];
-      }
 
       // Sumar a subtotales
       subCabillaUsd += c.comisioncabilla;
@@ -348,10 +494,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
           doc.setFont('helvetica', 'bold');
           doc.text(tasa > 0 ? fmtBs(comBs) : 'N/D', cols[7].x + cols[7].w - 2, y + 3, { align: 'right' });
 
-          doc.setFontSize(6);
-          doc.setTextColor(...colorEstado);
-          doc.text(textoEstado, cols[8].x + (cols[8].w / 2), y + 3, { align: 'center' });
-          doc.setFontSize(6.5);
+          drawStatusBadge(doc, c.estado, cols[8].x, y + 3.5, cols[8].w, 4);
         } else {
           doc.setFont('helvetica', 'bold');
           const isExt = !!c.vendedor?.es_externo || (c.vendedor?.markup_pct != null && Number(c.vendedor.markup_pct) > 0);
@@ -381,10 +524,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
           doc.setFont('helvetica', 'bold');
           doc.text(tasa > 0 ? fmtBs(comBs) : 'N/D', cols[7].x + cols[7].w - 2, y + 3, { align: 'right' });
 
-          doc.setFontSize(6);
-          doc.setTextColor(...colorEstado);
-          doc.text(textoEstado, cols[8].x + (cols[8].w / 2), y + 3, { align: 'center' });
-          doc.setFontSize(6.5);
+          drawStatusBadge(doc, c.estado, cols[8].x, y + 3.5, cols[8].w, 4);
         }
       } else {
         if (vendedor) {
@@ -405,10 +545,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
           doc.setFont('helvetica', 'bold');
           doc.text(tasa > 0 ? fmtBs(comBs) : 'N/D', cols[7].x + cols[7].w - 2, y + 3, { align: 'right' });
 
-          doc.setFontSize(6);
-          doc.setTextColor(...colorEstado);
-          doc.text(textoEstado, cols[8].x + (cols[8].w / 2), y + 3, { align: 'center' });
-          doc.setFontSize(6.5);
+          drawStatusBadge(doc, c.estado, cols[8].x, y + 3.5, cols[8].w, 4);
         } else {
           doc.setFont('helvetica', 'bold');
           const isExt = !!c.vendedor?.es_externo || (c.vendedor?.markup_pct != null && Number(c.vendedor.markup_pct) > 0);
@@ -432,10 +569,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
           doc.setFont('helvetica', 'bold');
           doc.text(tasa > 0 ? fmtBs(comBs) : 'N/D', cols[6].x + cols[6].w - 2, y + 3, { align: 'right' });
 
-          doc.setFontSize(6);
-          doc.setTextColor(...colorEstado);
-          doc.text(textoEstado, cols[7].x + (cols[7].w / 2), y + 3, { align: 'center' });
-          doc.setFontSize(6.5);
+          drawStatusBadge(doc, c.estado, cols[7].x, y + 3.5, cols[7].w, 4);
         }
       }
 
@@ -443,7 +577,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
     });
 
     // Subtotal del grupo
-    y = checkPage(doc, y, 9);
+    y = checkPage(doc, y, 9, handlePageAdd);
     doc.setDrawColor(210, 215, 225);
     doc.setLineWidth(0.3);
     doc.line(MARGIN, y, MARGIN + CONTENT_W, y);
@@ -489,18 +623,26 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
     sumAbonadoUsd = res.abonadoUsd;
     sumTotalBs = res.totalBs;
   } else {
-    const resInt = dibujarGrupoTabla("Vendedores Internos", comisionesInternos);
-    const resExt = dibujarGrupoTabla("Vendedores Externos", comisionesExternos);
-    
-    sumCabillaUsd = resInt.cabillaUsd + resExt.cabillaUsd;
-    sumOtrosUsd = resInt.otrosUsd + resExt.otrosUsd;
-    sumTotalUsd = resInt.totalUsd + resExt.totalUsd;
-    sumAbonadoUsd = resInt.abonadoUsd + resExt.abonadoUsd;
-    sumTotalBs = resInt.totalBs + resExt.totalBs;
+    if (tipoVendedor !== 'externos') {
+      const resInt = dibujarGrupoTabla("Vendedores Internos", comisionesInternos);
+      sumCabillaUsd += resInt.cabillaUsd;
+      sumOtrosUsd += resInt.otrosUsd;
+      sumTotalUsd += resInt.totalUsd;
+      sumAbonadoUsd += resInt.abonadoUsd;
+      sumTotalBs += resInt.totalBs;
+    }
+    if (tipoVendedor !== 'internos') {
+      const resExt = dibujarGrupoTabla("Vendedores Externos", comisionesExternos);
+      sumCabillaUsd += resExt.cabillaUsd;
+      sumOtrosUsd += resExt.otrosUsd;
+      sumTotalUsd += resExt.totalUsd;
+      sumAbonadoUsd += resExt.abonadoUsd;
+      sumTotalBs += resExt.totalBs;
+    }
   }
 
   // Línea final y TOTALIZACIÓN
-  y = checkPage(doc, y, 10);
+  y = checkPage(doc, y, 10, handlePageAdd);
   doc.setDrawColor(210, 215, 225);
   doc.setLineWidth(0.5);
   doc.line(MARGIN, y, MARGIN + CONTENT_W, y);
@@ -544,23 +686,29 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
           color: c.vendedorcolor || c.vendedor?.color || '#1B365D',
           markup_pct: c.vendedor?.markup_pct ?? null,
           es_externo: c.vendedor?.es_externo ?? null,
-          total: 0, pendiente: 0, pagado: 0, count: 0,
+          total: 0, pendiente: 0, pendienteReg: 0, pendienteCxc: 0, pagado: 0, count: 0,
         };
       }
       const v = porVendedor[vName];
 
       const monto = c.totalcomision;
+      const saldo = Math.max(0, monto - (c.montopagado || 0));
       v.total += monto;
       v.count++;
-      if (c.estado !== 'pagada') v.pendiente += monto;
-      else v.pagado += monto;
+      if (c.estado === 'pagada') {
+        v.pagado += c.montopagado || monto;
+      } else {
+        v.pendiente += saldo;
+        if (c.estado === 'cta_cobrar') v.pendienteCxc += saldo;
+        else v.pendienteReg += saldo;
+      }
     });
 
     const vendedoresList = Object.values(porVendedor).sort((a, b) => b.total - a.total);
     const vendedoresInternos = vendedoresList.filter(v => !(!!v.es_externo || (v.markup_pct != null && Number(v.markup_pct) > 0)));
     const vendedoresExternos = vendedoresList.filter(v => !!v.es_externo || (v.markup_pct != null && Number(v.markup_pct) > 0));
 
-    y = checkPage(doc, y, 15);
+    y = checkPage(doc, y, 15, handlePageAdd);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9.5);
     doc.setTextColor(...C_DARK);
@@ -569,7 +717,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
 
     function dibujarResumenGrupo(titulo, list) {
       if (list.length === 0) {
-        y = checkPage(doc, y, 12);
+        y = checkPage(doc, y, 12, handlePageAdd);
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(8);
         doc.setTextColor(...C_DARK);
@@ -581,10 +729,10 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
         doc.setTextColor(...C_GRAY);
         doc.text('No hay vendedores en este grupo.', MARGIN + 2, y + 4);
         y += 8;
-        return { total: 0, pendiente: 0, pagado: 0, count: 0 };
+        return { total: 0, pendiente: 0, pendienteReg: 0, pendienteCxc: 0, pagado: 0, count: 0 };
       }
 
-      y = checkPage(doc, y, 15 + list.length * 7);
+      y = checkPage(doc, y, 15 + list.length * 10, handlePageAdd);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8.5);
       doc.setTextColor(...C_DARK);
@@ -598,27 +746,30 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
       doc.setFontSize(6.5);
       doc.setTextColor(80, 90, 110);
       doc.text('Vendedor', MARGIN + 2, y + 4);
-      doc.text('Comisiones', MARGIN + 50, y + 4);
-      doc.text('Pendiente', MARGIN + 80, y + 4);
-      doc.text('Pagado', MARGIN + 115, y + 4);
-      doc.text('Total', MARGIN + 148, y + 4);
+      doc.text('Com.', MARGIN + 50, y + 4);
+      doc.text('Pendiente (Reg / CxC)', MARGIN + 70, y + 4);
+      doc.text('Pagado', MARGIN + 130, y + 4);
+      doc.text('Total', MARGIN + 155, y + 4);
       y += 8;
 
       let subCount = 0;
       let subPend = 0;
+      let subPendReg = 0;
+      let subPendCxc = 0;
       let subPag = 0;
       let subTot = 0;
 
       list.forEach((v, idx) => {
-        y = checkPage(doc, y, 7);
+        const rowH = (v.pendienteCxc > 0) ? 10 : 7;
+        y = checkPage(doc, y, rowH + 1, handlePageAdd);
         if (idx % 2 === 0) {
           doc.setFillColor(252, 252, 253);
-          doc.rect(MARGIN, y - 1, CONTENT_W, 6, 'F');
+          doc.rect(MARGIN, y - 1, CONTENT_W, rowH, 'F');
         }
 
         const vColor = hexToRgb(v.color);
         doc.setFillColor(vColor[0], vColor[1], vColor[2]);
-        doc.circle(MARGIN + 3, y + 2, 1.5, 'F');
+        doc.circle(MARGIN + 3, y + 2.5, 1.5, 'F');
 
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(7);
@@ -631,25 +782,38 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
         doc.text(displayName, MARGIN + 7, y + 3);
 
         doc.setFont('helvetica', 'normal');
-        doc.text(String(v.count), MARGIN + 55, y + 3);
-        doc.setTextColor(...C_AMBER);
-        doc.text(fmtUsd(v.pendiente), MARGIN + 80, y + 3);
+        doc.text(String(v.count), MARGIN + 53, y + 3);
+
+        // Columna Pendiente: Regular arriba, CxC abajo
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...C_AMBER); // Ámbar = Regular
+        doc.text(fmtUsd(v.pendienteReg), MARGIN + 70, y + 3);
+        
+        if (v.pendienteCxc > 0) {
+          doc.setFontSize(6.5);
+          doc.setTextColor(185, 28, 28); // Rojo = CxC
+          doc.text(`CxC: ${fmtUsd(v.pendienteCxc)}`, MARGIN + 70, y + 7.5);
+          doc.setFontSize(7);
+        }
+
         doc.setTextColor(...C_EMERALD);
-        doc.text(fmtUsd(v.pagado), MARGIN + 115, y + 3);
+        doc.text(fmtUsd(v.pagado), MARGIN + 130, y + 3);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(...C_DARK);
-        doc.text(fmtUsd(v.total), MARGIN + 148, y + 3);
+        doc.text(fmtUsd(v.total), MARGIN + 155, y + 3);
         
         subCount += v.count;
         subPend += v.pendiente;
+        subPendReg += v.pendienteReg;
+        subPendCxc += v.pendienteCxc;
         subPag += v.pagado;
         subTot += v.total;
         
-        y += 6;
+        y += rowH;
       });
 
       // Subtotal de Resumen
-      y = checkPage(doc, y, 8);
+      y = checkPage(doc, y, 12, handlePageAdd);
       doc.setDrawColor(220, 225, 235);
       doc.setLineWidth(0.3);
       doc.line(MARGIN, y, MARGIN + CONTENT_W, y);
@@ -659,43 +823,61 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
       doc.setFontSize(7);
       doc.setTextColor(80, 90, 110);
       doc.text(`Subtotal ${titulo}:`, MARGIN + 2, y);
-      doc.text(String(subCount), MARGIN + 55, y);
+      doc.text(String(subCount), MARGIN + 53, y);
+      
       doc.setTextColor(...C_AMBER);
-      doc.text(fmtUsd(subPend), MARGIN + 80, y);
+      doc.text(fmtUsd(subPendReg), MARGIN + 70, y);
+      
+      if (subPendCxc > 0) {
+        doc.setFontSize(6.5);
+        doc.setTextColor(185, 28, 28);
+        doc.text(`CxC: ${fmtUsd(subPendCxc)}`, MARGIN + 70, y + 4.5);
+        doc.setFontSize(7);
+      }
+      
       doc.setTextColor(...C_EMERALD);
-      doc.text(fmtUsd(subPag), MARGIN + 115, y);
+      doc.text(fmtUsd(subPag), MARGIN + 130, y);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(...C_DARK);
-      doc.text(fmtUsd(subTot), MARGIN + 148, y);
+      doc.text(fmtUsd(subTot), MARGIN + 155, y);
       
-      y += 8;
-      return { total: subTot, pendiente: subPend, pagado: subPag, count: subCount };
+      y += (subPendCxc > 0 ? 12 : 8);
+      return { total: subTot, pendiente: subPend, pendienteReg: subPendReg, pendienteCxc: subPendCxc, pagado: subPag, count: subCount };
     }
 
-    const rInt = dibujarResumenGrupo("Vendedores Internos", vendedoresInternos);
-    const rExt = dibujarResumenGrupo("Vendedores Externos", vendedoresExternos);
+    const rInt = tipoVendedor !== 'externos' ? dibujarResumenGrupo("Vendedores Internos", vendedoresInternos) : { total: 0, pendiente: 0, pendienteReg: 0, pendienteCxc: 0, pagado: 0, count: 0 };
+    const rExt = tipoVendedor !== 'internos' ? dibujarResumenGrupo("Vendedores Externos", vendedoresExternos) : { total: 0, pendiente: 0, pendienteReg: 0, pendienteCxc: 0, pagado: 0, count: 0 };
 
     // Gran Total del Resumen
-    y = checkPage(doc, y, 10);
+    y = checkPage(doc, y, 14, handlePageAdd);
     doc.setDrawColor(180, 190, 205);
     doc.setLineWidth(0.5);
     doc.line(MARGIN, y, MARGIN + CONTENT_W, y);
     y += 5;
 
+    const gtPendReg = rInt.pendienteReg + rExt.pendienteReg;
+    const gtPendCxc = rInt.pendienteCxc + rExt.pendienteCxc;
+
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7.5);
     doc.setTextColor(...C_DARK);
     doc.text('TOTAL GENERAL VENDEDORES:', MARGIN + 2, y);
-    doc.text(String(rInt.count + rExt.count), MARGIN + 55, y);
+    doc.text(String(rInt.count + rExt.count), MARGIN + 53, y);
     doc.setTextColor(...C_AMBER);
-    doc.text(fmtUsd(rInt.pendiente + rExt.pendiente), MARGIN + 80, y);
+    doc.text(fmtUsd(gtPendReg), MARGIN + 70, y);
+    if (gtPendCxc > 0) {
+      doc.setFontSize(6.5);
+      doc.setTextColor(185, 28, 28);
+      doc.text(`CxC: ${fmtUsd(gtPendCxc)}`, MARGIN + 70, y + 4.5);
+      doc.setFontSize(7.5);
+    }
     doc.setTextColor(...C_EMERALD);
-    doc.text(fmtUsd(rInt.pagado + rExt.pagado), MARGIN + 115, y);
+    doc.text(fmtUsd(rInt.pagado + rExt.pagado), MARGIN + 130, y);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...C_DARK);
-    doc.text(fmtUsd(rInt.total + rExt.total), MARGIN + 148, y);
+    doc.text(fmtUsd(rInt.total + rExt.total), MARGIN + 155, y);
     
-    y += 6;
+    y += (gtPendCxc > 0 ? 10 : 6);
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -720,9 +902,10 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, resume
   }
 
   // Guardar
+  const suffix = tipoVendedor ? `_${tipoVendedor}` : ''
   const titulo = vendedor
     ? `Comisiones_${vendedor.nombre.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}`
-    : `Comisiones_General_${new Date().toISOString().slice(0, 10)}`
+    : `Comisiones_General${suffix}_${new Date().toISOString().slice(0, 10)}`
   doc.save(`${titulo}.pdf`)
 }
 
