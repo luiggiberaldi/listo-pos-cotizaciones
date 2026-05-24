@@ -11,9 +11,9 @@ import {
   checkPage
 } from './pdfShared'
 
-// Nueva paleta de colores premium: Estilo Industrial Corporativo de Alta Gama (Construacero Premium)
-const C_PRIMARY = [15, 34, 64]      // Azul Marino Industrial Profundo (Elegante y corporativo)
-const C_ACCENT  = [197, 160, 89]    // Dorado Ocre Industrial (Acento metálico sofisticado)
+// Nueva paleta de colores premium: Fusión Industrial de Alta Gama (Azul Acero & Amarillo Mostaza Cerrajería)
+const C_PRIMARY = [26, 54, 93]      // Azul de Acero Oscuro (Corporativo e industrial)
+const C_ACCENT  = [245, 158, 11]    // Amarillo Mostaza Cálido de Cerrajería (Acento de alta visibilidad)
 
 export async function generarPDF({ cotizacion, items = [], config = {}, returnBlob = false, monedaPDF = '$', tasa = 0, tasaUsdt = 0, tasaBcv = 0 }) {
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
@@ -39,23 +39,80 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
       }
     }
 
-    // Elegante línea divisoria dorada en la base del banner
-    doc.setLineWidth(0.8)
+    // Cuadro derecho con franjas diagonales "Hazard" idéntico al zoom de la cerrajería
+    const hazBgW = 45
+    const hazBgX = PAGE_W - hazBgW
+    
+    // 2. Franja superior en Amarillo Mostaza en la esquina derecha (con borde izquierdo inclinado /)
+    doc.setFillColor(...C_ACCENT)
+    const solidStartX = PAGE_W - 25.2
+    const solidStartBottomX = solidStartX - 2.5
+    
+    // Dibujamos el rectángulo y el triángulo con sus coordenadas matemáticas originales y perfectas.
+    doc.rect(solidStartX, 0, PAGE_W - solidStartX, 6, 'F')
+    doc.triangle(solidStartX, 0, solidStartBottomX, 6, solidStartX, 6, 'F')
+    
+    // Fusionamos la costura vertical con una línea interna que NO llega a los bordes superior e inferior
+    // para evitar cualquier deformación de las esquinas o caps redondeados que sobresalgan.
+    doc.setLineWidth(0.5)
+    doc.setDrawColor(...C_ACCENT)
+    doc.line(solidStartX, 0.5, solidStartX, 5.5)
+    
+    // 3. Diagonales en Amarillo Mostaza inclinadas - Paralelogramos con inclinación /
+    const diagStartX = PAGE_W - 42.0
+    const stripeWidth = 1.4 // Ancho de cada franja
+    const stripeSlant = 2.5 // Inclinación lateral hacia la izquierda en la base
+    for (let i = 0; i < 6; i++) {
+      const lx = diagStartX + i * 2.8
+      // Dibujamos un paralelogramo geométrico impecable y perfectamente paralelo
+      doc.triangle(lx, 0, lx + stripeWidth, 0, lx - stripeSlant, 6, 'F')
+      doc.triangle(lx + stripeWidth, 0, lx - stripeSlant + stripeWidth, 6, lx - stripeSlant, 6, 'F')
+      
+      // Fusionamos la diagonal interna con una línea de soldadura que se detiene 0.5mm antes de los bordes.
+      // Esto elimina las costuras sub-píxel y garantiza líneas de contorno vectoriales 100% limpias y rectas.
+      doc.line(lx + stripeWidth - 0.2, 0.5, lx - stripeSlant + 0.2, 5.5)
+    }
+    
+    // 4. Puntos negros decorativos en la parte amarilla inferior derecha (micro-dots refinados)
+    for (let i = 0; i < 5; i++) {
+      for (let j = 0; j < 2; j++) {
+        doc.circle(PAGE_W - 16 + i * 3.0, 9.5 + j * 2.5, 0.3, 'F')
+      }
+    }
+
+    // Elegante línea divisoria en amarillo mostaza cálido en la base del banner
+    doc.setLineWidth(1.0)
     doc.setDrawColor(...C_ACCENT)
     doc.line(0, HDR_H, PAGE_W, HDR_H)
 
+    // Micro-indicadores técnicos de alineación (Estilo Formalismo Industrial Blueprint)
+    doc.setLineWidth(0.12)
+    doc.setDrawColor(180, 188, 200) // Slate gris azulado sutil
+    // Superior izquierdo
+    doc.line(MARGIN - 2, 46, MARGIN + 2, 46)
+    doc.line(MARGIN, 44, MARGIN, 48)
+    // Superior derecho
+    doc.line(PAGE_W - MARGIN - 2, 46, PAGE_W - MARGIN + 2, 46)
+    doc.line(PAGE_W - MARGIN, 44, PAGE_W - MARGIN, 48)
+    // Inferior izquierdo (anclado sobre el slogan)
+    doc.line(MARGIN - 2, PAGE_H - 33, MARGIN + 2, PAGE_H - 33)
+    doc.line(MARGIN, PAGE_H - 35, MARGIN, PAGE_H - 31)
+    // Inferior derecho
+    doc.line(PAGE_W - MARGIN - 2, PAGE_H - 33, PAGE_W - MARGIN + 2, PAGE_H - 33)
+    doc.line(PAGE_W - MARGIN, PAGE_H - 35, PAGE_W - MARGIN, PAGE_H - 31)
+
     // Logo
     if (logoData) {
-      try { doc.addImage(logoData, 'PNG', MARGIN + 12, 4, 32, 32) } catch (_) {}
+      try { doc.addImage(logoData, 'PNG', MARGIN + 11, 3, 34, 34) } catch (_) {}
     }
 
     // Títulos Negocio
     const textCenterX = (MARGIN + 44 + PAGE_W - MARGIN - 40) / 2
     doc.setFont('times', 'bold')
     doc.setTextColor(...C_WHITE)
-    doc.setFontSize(22)
+    doc.setFontSize(24)
     doc.text('CONSTRUACERO', textCenterX, 18, { align: 'center' })
-    doc.setFontSize(14)
+    doc.setFontSize(16)
     doc.text('CARABOBO C.A.', textCenterX, 27, { align: 'center' })
 
     // "Cotización" + número
@@ -81,12 +138,12 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   // ══════════════════════════════════════════════════════════════════════════
   const cliente = cotizacion.cliente || {}
 
-  // Encabezado tipo "COTIZACIÓN:"
+  // Encabezado tipo "COTIZACIÓN:" - Rediseñado para el Formalismo Industrial
   const cotBarY = y - 4
-  doc.setFillColor(248, 248, 248)
+  doc.setFillColor(246, 248, 250)
   doc.rect(MARGIN, cotBarY, CONTENT_W, 7, 'F')
-  doc.setDrawColor(200, 200, 200)
-  doc.setLineWidth(0.3)
+  doc.setDrawColor(220, 225, 230)
+  doc.setLineWidth(0.2)
   doc.rect(MARGIN, cotBarY, CONTENT_W, 7, 'S')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(10)
@@ -97,13 +154,13 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   const ROW_H_INFO = 6
   const halfW = CONTENT_W / 2
   doc.setLineWidth(0.2)
-  doc.setDrawColor(200, 200, 200)
+  doc.setDrawColor(220, 225, 230)
 
-  // Helper para dibujar celda con label + valor
+  // Helper para dibujar celda con label + valor - Rejilla Suiza ultra-precisa
   const drawCell = (x, cellY, w, label, val, opts = {}) => {
     doc.rect(x, cellY, w, ROW_H_INFO, 'S')
     if (opts.fill) {
-      doc.setFillColor(240, 240, 240)
+      doc.setFillColor(246, 248, 250)
       doc.rect(x, cellY, w, ROW_H_INFO, 'F')
       doc.rect(x, cellY, w, ROW_H_INFO, 'S')
     }
@@ -155,7 +212,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     const dirLineH = 4.5
     const dirCellH = Math.max(ROW_H_INFO, dirLines.length * dirLineH + 3)
     doc.setLineWidth(0.2)
-    doc.setDrawColor(200, 200, 200)
+    doc.setDrawColor(220, 225, 230)
     doc.rect(MARGIN, y, CONTENT_W, dirCellH, 'S')
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(8)
@@ -189,7 +246,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   const ROW_H_BASE = 6.0
 
 
-  // Cabecera tabla
+  // Cabecera tabla - Azul Acero con texto Blanco para un anclaje premium
   doc.setFillColor(...C_PRIMARY)
   doc.rect(MARGIN, y, CONTENT_W, 9, 'F')
 
@@ -237,19 +294,19 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
       doc.addPage()
       pageNum++
       y = drawHeader(doc, numDisplay)
-      // Redraw table header
-      doc.setFillColor(...C_PRIMARY)
-      doc.rect(MARGIN, y, CONTENT_W, 9, 'F')
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(9.5)
-      doc.setTextColor(...C_WHITE)
-      COLS.forEach(col => {
-        let tx = col.x + 2
-        if (col.align === 'center') tx = col.x + col.w / 2
-        else if (col.align === 'right') tx = col.x + col.w - 2
-        doc.text(col.label, tx, y + 6.5, { align: col.align })
-      })
-      y += 9
+       // Redraw table header
+       doc.setFillColor(...C_PRIMARY)
+       doc.rect(MARGIN, y, CONTENT_W, 9, 'F')
+       doc.setFont('helvetica', 'bold')
+       doc.setFontSize(9.5)
+       doc.setTextColor(...C_WHITE)
+       COLS.forEach(col => {
+         let tx = col.x + 2
+         if (col.align === 'center') tx = col.x + col.w / 2
+         else if (col.align === 'right') tx = col.x + col.w - 2
+         doc.text(col.label, tx, y + 6.5, { align: col.align })
+       })
+       y += 9
     }
 
     doc.setLineWidth(0.2)
@@ -378,16 +435,25 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     })
   }
 
-  // DIBUJAR CONDICIONES
-  doc.setFillColor(248, 250, 252); doc.setDrawColor(203, 213, 225); doc.setLineWidth(0.4)
+  // DIBUJAR CONDICIONES (Modular card de Formalismo Industrial con barra lateral sólida)
+  doc.setFillColor(248, 250, 252) // Fondo gris/azul muy suave
+  doc.setDrawColor(226, 232, 240) // Borde sutil
+  doc.setLineWidth(0.3)
   doc.roundedRect(MARGIN, finalY, bLeftW, bBoxH, 1.5, 1.5, 'FD')
+  
+  // Barra sólida de acento amarillo mostaza a la izquierda
+  doc.setFillColor(...C_ACCENT)
+  doc.rect(MARGIN, finalY, 2.0, bBoxH, 'F')
+  
+  // Ajustamos el padding horizontal (leftPad) para que el texto respete la barra de acento
+  const leftPad = 4.5
   doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...C_PRIMARY)
-  doc.text('CONDICIONES GENERALES:', MARGIN + bCP, finalY + bCP + 4.5)
+  doc.text('CONDICIONES GENERALES:', MARGIN + leftPad, finalY + bCP + 4.5)
   doc.setDrawColor(226, 232, 240); doc.setLineWidth(0.3)
-  doc.line(MARGIN + bCP, finalY + bCP + bCTH, MARGIN + bLeftW - bCP, finalY + bCP + bCTH)
+  doc.line(MARGIN + leftPad, finalY + bCP + bCTH, MARGIN + bLeftW - bCP, finalY + bCP + bCTH)
   doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(...C_DARK)
   let bCY = finalY + bCP + bCTH + 4.5
-  bConds.forEach(c => { doc.text('\u2022 ' + c, MARGIN + bCP, bCY); bCY += bCLH })
+  bConds.forEach(c => { doc.text('\u2022 ' + c, MARGIN + leftPad, bCY); bCY += bCLH })
 
   // DIBUJAR TOTALES
   doc.setFillColor(250, 250, 250); doc.setDrawColor(220, 220, 220); doc.setLineWidth(0.3)
@@ -421,18 +487,25 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     const ph = PAGE_H
     {
 
-    // Elegante línea divisoria dorada sobre el footer
-    doc.setLineWidth(0.8)
-    doc.setDrawColor(...C_ACCENT)
-    doc.line(0, ph - 26, PAGE_W, ph - 26)
-
-    // Franja principal azul marino profundo
+    // Franja superior con las diagonales "Hazard" (Fondo azul oscuro con líneas amarillas)
+    const hazardY = ph - 30
     doc.setFillColor(...C_PRIMARY)
-    doc.rect(0, ph - 25.2, PAGE_W, 25.2, 'F')
+    doc.rect(0, hazardY, PAGE_W, 4, 'F')
 
-    // ── Icono pin ubicación + dirección ──
-    doc.setFillColor(...C_WHITE)
-    doc.setDrawColor(...C_WHITE)
+    doc.setDrawColor(...C_ACCENT)
+    doc.setLineWidth(0.8)
+    for(let k = 1; k < 20; k++) {
+      doc.line(k * 4, hazardY, k * 4 - 3, hazardY + 4)
+      doc.line(PAGE_W - k * 4, hazardY, PAGE_W - k * 4 + 3, hazardY + 4)
+    }
+
+    // Franja principal azul de acero oscuro corporativa
+    doc.setFillColor(...C_PRIMARY)
+    doc.rect(0, ph - 26, PAGE_W, 26, 'F')
+
+    // ── Icono pin ubicación + dirección (en color blanco con pin amarillo accent) ──
+    doc.setFillColor(...C_ACCENT)
+    doc.setDrawColor(...C_ACCENT)
 
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(8.5)
@@ -473,8 +546,8 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
       const cy = ph - 5.5
 
       parts.forEach((p, i) => {
-        doc.setFillColor(...C_WHITE)
-        doc.setDrawColor(...C_WHITE)
+        doc.setFillColor(...C_ACCENT)
+        doc.setDrawColor(...C_ACCENT)
         if (p.icon === 'phone') {
           // Icono teléfono: rectángulo redondeado
           doc.setLineWidth(0.4)
