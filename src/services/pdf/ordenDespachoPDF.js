@@ -139,15 +139,17 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   doc.rect(MARGIN + clienteLblW, f4Y, clienteValW, rowH, 'S')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(10)
-  const codCli = cliente.codigo_cliente ? `[${cliente.codigo_cliente}] ` : ''
-  const clienteNombre = (codCli + (cliente.nombre || '—')).toUpperCase()
-  const maxClienteW = clienteValW - 4
-  let cNombre = clienteNombre
+  const codCli = cliente.codigo_cliente ? ` [${cliente.codigo_cliente}]` : ''
+  const baseNombre = (cliente.nombre || '—').toUpperCase()
+  const maxClienteW = clienteValW - 4 - doc.getTextWidth(codCli)
+  let cNombre = baseNombre
   if (doc.getTextWidth(cNombre) > maxClienteW) {
-    while (cNombre.length > 1 && doc.getTextWidth(cNombre + '…') > maxClienteW) cNombre = cNombre.slice(0, -1)
+    while (cNombre.length > 1 && doc.getTextWidth(cNombre + '…') > maxClienteW) {
+      cNombre = cNombre.slice(0, -1)
+    }
     cNombre += '…'
   }
-  doc.text(cNombre, MARGIN + clienteLblW + 2, f4Y + rowH / 2 + 1)
+  doc.text(cNombre + codCli, MARGIN + clienteLblW + 2, f4Y + rowH / 2 + 1)
 
   doc.rect(MARGIN + clienteLblW + clienteValW, f4Y, rifLblW, rowH, 'S')
   doc.setFont('helvetica', 'normal')
