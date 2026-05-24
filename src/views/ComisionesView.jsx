@@ -38,12 +38,24 @@ function ResumenCard({ icon: Icon, label, value, sub, gradient, border }) {
 // ─── Tarjeta agrupada por vendedor ──────────────────────────────────────────
 function VendedorCard({ vendedor, comisiones, esSupervisor, onMarcarPagada, onPagarTodo, marcando, onExportarPDF }) {
   const [abierto, setAbierto] = useState(false)
+  const [seleccionados, setSeleccionados] = useState([])
 
   // Cálculos locales para la tarjeta
   const totalGeneral = useMemo(() => comisiones.reduce((s, c) => s + Number(c.totalcomision || 0), 0), [comisiones])
   const pendientes = useMemo(() => comisiones.filter(c => ['pendiente', 'cta_cobrar'].includes(c.estado) && Math.max(0, Number(c.totalcomision || 0) - Number(c.montopagado || 0)) > 0), [comisiones])
   const montoPendiente = useMemo(() => pendientes.reduce((s, c) => s + Math.max(0, Number(c.totalcomision || 0) - Number(c.montopagado || 0)), 0), [pendientes])
   
+  // Limpiar seleccionados que ya no existen o ya no están pendientes
+  useEffect(() => {
+    setSeleccionados(prev => prev.filter(id => pendientes.some(p => p.id === id)))
+  }, [pendientes])
+
+  const montoSeleccionado = useMemo(() => {
+    return pendientes
+      .filter(p => seleccionados.includes(p.id))
+      .reduce((s, c) => s + Math.max(0, Number(c.totalcomision || 0) - Number(c.montopagado || 0)), 0);
+  }, [pendientes, seleccionados])
+
   const montoPendienteRegular = useMemo(() => 
     pendientes.filter(c => c.estado !== 'cta_cobrar')
       .reduce((s, c) => s + Math.max(0, Number(c.totalcomision || 0) - Number(c.montopagado || 0)), 0), 
@@ -112,14 +124,52 @@ function VendedorCard({ vendedor, comisiones, esSupervisor, onMarcarPagada, onPa
             )}
           </div>
           <p className="text-xs text-slate-400 font-medium">{comisiones.length} operaciones</p>
-          {esSupervisor && pendientes.length > 1 && montoPendiente > 0 && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onPagarTodo({ vendedor, pendientes, montoPendiente }); }}
-              disabled={marcando}
-              className="mt-1 inline-flex items-center gap-1.5 bg-emerald-500 text-white hover:bg-emerald-600 font-bold px-3 py-1.5 rounded-lg text-[11px] transition-all disabled:opacity-50 shadow-sm active:scale-95"
-            >
-              <CheckCircle size={12} /> Pagar Todo ({fmtUsd(montoPendiente)})
-            </button>
+          {esSupervisor && pendientes.length > 0 && montoPendiente > 0 && (
+            <div className="flex gap-1.5 flex-wrap mt-1">
+              {montoPendienteCxc > 0 && montoPendienteRegular > 0 && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const regularPendientes = pendientes.filter(c => c.estado !== 'cta_cobrar');
+                    onPagarTodo({
+                      vendedor,
+                      pendientes: regularPendientes,
+                      montoPendiente: montoPendienteRegular,
+                      esRegular: true
+                    });
+                  }}
+                  disabled={marcando}
+                  className="inline-flex items-center gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700 font-bold px-3 py-1.5 rounded-lg text-[11px] transition-all disabled:opacity-50 shadow-sm active:scale-95 animate-in fade-in duration-200"
+                >
+                  <CheckCircle size={12} /> Pagar Regular ({fmtUsd(montoPendienteRegular)})
+                </button>
+              )}
+              <button
+                onClick={(e) => { e.stopPropagation(); onPagarTodo({ vendedor, pendientes, montoPendiente }); }}
+                disabled={marcando}
+                className="inline-flex items-center gap-1.5 bg-slate-700 text-white hover:bg-slate-850 font-bold px-3 py-1.5 rounded-lg text-[11px] transition-all disabled:opacity-50 shadow-sm active:scale-95"
+              >
+                <CheckCircle size={12} /> Pagar Todo ({fmtUsd(montoPendiente)})
+              </button>
+              {seleccionados.length > 0 && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const selectedItems = pendientes.filter(p => seleccionados.includes(p.id));
+                    onPagarTodo({
+                      vendedor,
+                      pendientes: selectedItems,
+                      montoPendiente: montoSeleccionado,
+                      esSeleccion: true
+                    });
+                  }}
+                  disabled={marcando}
+                  className="inline-flex items-center gap-1.5 bg-emerald-500 text-white hover:bg-emerald-600 font-bold px-3 py-1.5 rounded-lg text-[11px] transition-all disabled:opacity-50 shadow-sm active:scale-95 animate-in fade-in zoom-in duration-150"
+                >
+                  <CheckCircle size={12} /> Pagar Seleccionados ({fmtUsd(montoSeleccionado)})
+                </button>
+              )}
+            </div>
           )}
         </div>
 
@@ -147,6 +197,22 @@ function VendedorCard({ vendedor, comisiones, esSupervisor, onMarcarPagada, onPa
             <table className="w-full text-xs text-left">
               <thead>
                 <tr className="border-b border-slate-100 text-[10px] text-slate-400 uppercase tracking-wider bg-slate-50/80">
+                  {esSupervisor && montoPendiente > 0 && (
+                    <th className="w-8 px-1.5 py-2 text-center">
+                      <input
+                        type="checkbox"
+                        checked={pendientes.length > 0 && seleccionados.length === pendientes.length}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSeleccionados(pendientes.map(p => p.id));
+                          } else {
+                            setSeleccionados([]);
+                          }
+                        }}
+                        className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                      />
+                    </th>
+                  )}
                   <th className="px-2 py-2 font-semibold">Operación</th>
                   <th className="px-2 py-2 font-semibold">Cabilla / Otros</th>
                   <th className="px-2 py-2 font-semibold text-right">Total Com.</th>
@@ -162,6 +228,26 @@ function VendedorCard({ vendedor, comisiones, esSupervisor, onMarcarPagada, onPa
                   
                   return (
                     <tr key={c.id} className="hover:bg-slate-50 transition-colors">
+                      {esSupervisor && montoPendiente > 0 && (
+                        <td className="w-8 px-1.5 py-2.5 text-center">
+                          {puedePagar && saldoPagar > 0 ? (
+                            <input
+                              type="checkbox"
+                              checked={seleccionados.includes(c.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSeleccionados(prev => [...prev, c.id]);
+                                } else {
+                                  setSeleccionados(prev => prev.filter(id => id !== c.id));
+                                }
+                              }}
+                              className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                            />
+                          ) : (
+                            <span className="inline-block w-4" />
+                          )}
+                        </td>
+                      )}
                       <td className="px-2 py-2.5">
                         <div className="flex flex-col">
                           <span className="font-mono font-medium text-slate-700">#{c.despacho?.numero ?? '---'}</span>
@@ -577,9 +663,25 @@ export default function ComisionesView() {
           setPagoMasivoData(null)
         }}
         onClose={() => setPagoMasivoData(null)}
-        title="Pagar Todas las Comisiones"
-        message={pagoMasivoData ? `Se registrará el pago de ${pagoMasivoData.pendientes.length} comisiones pendientes de ${pagoMasivoData.vendedor?.nombre || 'este vendedor'} por un total de ${fmtUsd(pagoMasivoData.montoPendiente)}. Esta acción es secuencial y final.` : ''}
-        confirmText="Confirmar Pago Total"
+        title={
+          pagoMasivoData?.esSeleccion 
+            ? "Pagar Comisiones Seleccionadas" 
+            : (pagoMasivoData?.esRegular ? "Pagar Comisiones Regulares (no CxC)" : "Pagar Todas las Comisiones")
+        }
+        message={
+          pagoMasivoData 
+            ? `Se registrará el pago de ${pagoMasivoData.pendientes.length} comisiones ${
+                pagoMasivoData.esSeleccion 
+                  ? 'seleccionadas' 
+                  : (pagoMasivoData.esRegular ? 'regulares (no CxC)' : 'pendientes')
+              } de ${pagoMasivoData.vendedor?.nombre || 'este vendedor'} por un total de ${fmtUsd(pagoMasivoData.montoPendiente)}. Esta acción es secuencial y final.` 
+            : ''
+        }
+        confirmText={
+          pagoMasivoData?.esSeleccion 
+            ? "Confirmar Pago Seleccionado" 
+            : (pagoMasivoData?.esRegular ? "Confirmar Pago Regular" : "Confirmar Pago Total")
+        }
         variant="success"
       />
     </div>
