@@ -82,7 +82,7 @@ export default function ClienteCard({ cliente, onEditar, onReasignar, onCotizar,
         <div className="flex items-center gap-1.5 flex-wrap">
           <h3 className="font-bold text-slate-800 text-sm leading-tight truncate">{cliente.nombre}</h3>
           {cliente.codigo_cliente && (
-            <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded shrink-0">
+            <span className="text-[10px] font-mono font-black bg-slate-950 text-white px-2 py-0.5 rounded-lg shadow-sm shrink-0" title="Código de cliente">
               #{cliente.codigo_cliente}
             </span>
           )}

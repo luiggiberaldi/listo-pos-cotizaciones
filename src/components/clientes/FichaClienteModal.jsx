@@ -295,7 +295,13 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
                 <div className="flex items-center gap-2 flex-wrap">
                   <h2 className="font-black text-white text-base leading-tight truncate">{cliente.nombre}</h2>
                   {cliente.codigo_cliente && (
-                    <span className="bg-white/20 text-white font-mono font-bold text-[10px] px-1.5 py-0.5 rounded border border-white/30 shrink-0">
+                    <span 
+                      className="bg-white text-slate-900 font-mono font-black text-[11px] px-2 py-0.5 rounded-lg shadow-md border border-white/80 shrink-0 select-all cursor-pointer transition-all active:scale-95 hover:bg-slate-100" 
+                      title="Código de cliente (haz clic para copiar)"
+                      onClick={() => {
+                        navigator.clipboard.writeText(cliente.codigo_cliente);
+                      }}
+                    >
                       #{cliente.codigo_cliente}
                     </span>
                   )}

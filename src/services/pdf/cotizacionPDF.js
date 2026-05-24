@@ -125,7 +125,8 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   y += ROW_H_INFO
 
   // Fila 2: Cliente | R.I.F / Cédula
-  drawCell(MARGIN, y, halfW, 'Cliente', (cliente.nombre || '').toUpperCase())
+  const codCli = cliente.codigo_cliente ? `[${cliente.codigo_cliente}] ` : ''
+  drawCell(MARGIN, y, halfW, 'Cliente', codCli + (cliente.nombre || '').toUpperCase())
   drawCell(MARGIN + halfW, y, halfW, 'R.I.F / Cédula', cliente.rif_cedula)
   y += ROW_H_INFO
 
