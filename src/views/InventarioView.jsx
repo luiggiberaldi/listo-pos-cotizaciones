@@ -23,6 +23,7 @@ import ListaPreciosModal from '../components/inventario/ListaPreciosModal'
 import BusquedaListaModal from '../components/inventario/BusquedaListaModal'
 import ModalBatchPrice from '../components/ModalBatchPrice'
 import ModalTransformacion from '../components/inventario/ModalTransformacion'
+import IngresoLoteHubModal from '../components/inventario/IngresoLoteHubModal'
 import { Modal }     from '../components/ui/Modal'
 import ConfirmModal  from '../components/ui/ConfirmModal'
 import EmptyState    from '../components/ui/EmptyState'
@@ -102,6 +103,7 @@ export default function InventarioView() {
   const [showBusquedaLista, setShowBusquedaLista] = useState(false)
   const [showBatchPrice, setShowBatchPrice] = useState(false)
   const [showTransformacion, setShowTransformacion] = useState(false)
+  const [showIngresoLote, setShowIngresoLote] = useState(false)
 
   // Data — todos los productos (sin filtro de búsqueda, filtro client-side con smartSearch)
   const { data: inventarioData, isLoading, isError, refetch } = useInventario({ categoria, pageSize: 1000 })
@@ -233,6 +235,14 @@ export default function InventarioView() {
         subtitle={<>{isLoading ? 'Cargando...' : `${productosFiltrados.length} producto${productosFiltrados.length !== 1 ? 's' : ''}${stockBajo ? ' con stock bajo' : ''}`}{!esPrivilegiado && <span className="ml-1 opacity-60">(catálogo de precios)</span>}</>}
         action={puedeGestionarInventario && (
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowIngresoLote(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-emerald-500 text-emerald-700 font-bold text-sm hover:bg-emerald-50 transition-all shadow-sm"
+            >
+              <ClipboardPaste size={16} />
+              <span className="hidden sm:inline">Ingreso Masivo</span>
+              <span className="sm:hidden">Masivo</span>
+            </button>
             <button onClick={() => setModalLoteOpen(true)} className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98] bg-slate-700 hover:bg-slate-600">
               <ArrowLeftRight size={16} />
               <span className="hidden sm:inline">Ingreso / Egreso</span>
@@ -546,6 +556,14 @@ export default function InventarioView() {
         onClose={() => setShowTransformacion(false)}
         productos={todosProductos}
         cuentaId={user?.id}
+        onSuccess={refetch}
+      />
+
+      <IngresoLoteHubModal
+        isOpen={showIngresoLote}
+        onClose={() => setShowIngresoLote(false)}
+        productos={todosProductos}
+        categorias={categoriasBatch}
         onSuccess={refetch}
       />
     </div>

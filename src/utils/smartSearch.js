@@ -13,6 +13,29 @@ const STOPWORDS = new Set([
 
 // ─── Fracciones multi-palabra (se procesan antes de tokenizar) ────────────────
 const FRACCIONES_MULTI = [
+  // Fracciones escritas y coloquiales
+  ['1 pulgada y media', '1 1/2"'],
+  ['1 pulgada y medio', '1 1/2"'],
+  ['2 pulgadas y media', '2 1/2"'],
+  ['2 pulgadas y medio', '2 1/2"'],
+  ['3 pulgadas y media', '3 1/2"'],
+  ['3 pulgadas y medio', '3 1/2"'],
+  ['de media', '1/2'],
+  ['un medio', '1/2'],
+  ['media pulgada', '1/2"'],
+  ['medio pulgada', '1/2"'],
+  ['de un cuarto', '1/4'],
+  ['de tres octavos', '3/8'],
+  ['de cinco octavos', '5/8'],
+  ['de tres cuartos', '3/4'],
+  ['de siete octavos', '7/8'],
+  ['3 octavos', '3/8'],
+  ['5 octavos', '5/8'],
+  ['7 octavos', '7/8'],
+  ['3 cuartos', '3/4'],
+  ['1 cuarto', '1/4'],
+  ['un cuarto', '1/4'],
+
   // Fracciones escritas
   ['tres octavos', '3/8'],
   ['cinco octavos', '5/8'],
@@ -723,29 +746,47 @@ function fuzzyThreshold(token) {
 
 // ─── Normalización de texto ───────────────────────────────────────────────────
 export function normalizeText(text) {
-  return (text || '').toLowerCase()
+  let t = (text || '').toLowerCase()
     .replace(/[áàä]/g, 'a')
     .replace(/[éèë]/g, 'e')
     .replace(/[íìï]/g, 'i')
     .replace(/[óòö]/g, 'o')
     .replace(/[úùü]/g, 'u')
     .replace(/ñ/g, 'n')
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+
+  // Colapsar espacios antes de unidades de medida (ej: "2 mm" -> "2mm")
+  t = t.replace(/(\d+(?:\.\d+)?)\s*(mm|mt|mts|m|kg|kilos|cal|calibre)\b/g, '$1$2')
+
+  // Colapsar espacios alrededor de la "x" en dimensiones (ej: "2 X 1" -> "2x1")
+  t = t.replace(/([\d"\/])\s*x\s*([\d"\/])/g, '$1x$2')
+
+  // Reemplazar comas decimales por puntos para evitar desajustes en OCR y consultas (ej: "0,90" -> "0.90")
+  t = t.replace(/(\d+),(\d+)/g, '$1.$2')
+
+  return t.replace(/\s+/g, ' ').trim()
 }
 
-// ─── Pre-procesar query: fracciones, medidas, limpieza ────────────────────────
+// ─── Pre-procesar query: fracciones, de-plurizacion, calibre y limpieza ───────
 function preprocessQuery(query) {
   let q = normalizeText(query)
 
-  // Fracciones multi-palabra y sustituciones contextuales
+  // Separar longitudes en metros acopladas con 'x' en perfiles
+  q = q.replace(/\b(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?\s*(?:mt|mts|m))\b/gi, '$1 $2')
+
+  // Limpiar slashes que no corresponden a fracciones (ej: "7018/ " -> "7018 ")
+  q = q.replace(/(?<!\d)\/|\/(?!\d)/g, ' ')
+
+  // Normalizar calibres a un formato estándar 'cal XX' o el decimal limpio
+  q = q.replace(/\bcalibre\s+(\d+)\b/g, 'cal $1')
+  q = q.replace(/\bcal\s+(\d+)\b/g, 'cal $1')
+  q = q.replace(/\bc[/\s]+(\d+)\b/g, 'cal $1')
+  q = q.replace(/\bc[/\s]+(0[.]\d+)\b/g, '$1') // c/0.90 -> 0.90
+
   for (const [frase, reemplazo] of FRACCIONES_MULTI) {
     q = q.replace(new RegExp(frase, 'gi'), reemplazo)
   }
-
-  // Números + " como pulgadas: "4"" → "4\""
-  // Already handled by FRACCIONES_MULTI pulgadas→"
-
-  // Detectar medidas compuestas: "1 1/2", "2 1/2" — no separar
-  // Se manejan en tokenización
 
   return q
 }
@@ -766,45 +807,125 @@ function tokenize(q) {
 
   // Restaurar compounds y filtrar stopwords
   return rawTokens.map(t => {
-    const compoundMatch = t.match(/^__COMPOUND(\d+)__$/)
-    if (compoundMatch) return compounds[parseInt(compoundMatch[1])]
-    return t
+    let replaced = t
+    const compoundMatches = t.match(/__COMPOUND(\d+)__/g)
+    if (compoundMatches) {
+      compoundMatches.forEach(match => {
+        const idx = parseInt(match.match(/\d+/)[0])
+        replaced = replaced.replace(match, compounds[idx])
+      })
+    }
+    return replaced
   }).filter(t => !STOPWORDS.has(t) && t.length > 0)
 }
 
 // ─── Expandir un token en variantes ───────────────────────────────────────────
-function expandToken(token) {
-  const variantes = new Set([token])
+export function expandToken(token) {
+  const variantes = new Set([token.toLowerCase()])
 
-  // 1. Corrección de typos conocidos
+  // 1. Expansión de dimensiones combinadas con 'x' (ej: 1.20x2.40 -> 1200x2.40)
+  if (token.includes('x')) {
+    const parts = token.split('x')
+    if (parts.length === 2) {
+      const v1 = expandToken(parts[0])
+      const v2 = expandToken(parts[1])
+      v1.forEach(p1 => {
+        v2.forEach(p2 => {
+          variantes.add(`${p1}x${p2}`)
+        })
+      })
+    }
+  }
+
+  // 1.5. Manejo de comillas de pulgadas de forma opcional y bidireccional
+  if (token.endsWith('"')) {
+    const sinComillas = token.slice(0, -1)
+    variantes.add(sinComillas)
+    // Expandir variantes de la versión limpia
+    expandToken(sinComillas).forEach(v => variantes.add(v.toLowerCase()))
+  } else {
+    // Si es un número entero, decimal o fracción que representa pulgadas (ej: "1/2", "1 1/2", "1", "2")
+    if (/^\d+(?:\/\d+)?$/.test(token) || /^\d+\s+\d+\/\d+$/.test(token)) {
+      variantes.add(token + '"')
+    }
+  }
+
+  // Mapeo calibre -> mm
+  if (token === '20') {
+    variantes.add('0.90'); variantes.add('0.9');
+  } else if (token === '18') {
+    variantes.add('1.20'); variantes.add('1.2'); variantes.add('1.10'); variantes.add('1.1');
+  } else if (token === '22') {
+    variantes.add('0.70'); variantes.add('0.7');
+  } else if (token === '24') {
+    variantes.add('0.60'); variantes.add('0.6'); variantes.add('0.55');
+  } else if (token === '26') {
+    variantes.add('0.45');
+  } else if (token === '28') {
+    variantes.add('0.35');
+  } else if (token === '30') {
+    variantes.add('0.30'); variantes.add('0.3');
+  }
+
+  // 2. Corrección de typos conocidos
   const corrected = TYPO_MAP[token]
   if (corrected) {
-    variantes.add(corrected)
+    variantes.add(corrected.toLowerCase())
     // También expandir sinónimos del corregido
-    const sins = SINONIMOS[corrected]
-    if (sins) sins.forEach(s => variantes.add(s))
+    const sins = SINONIMOS[corrected.toLowerCase()]
+    if (sins) sins.forEach(s => variantes.add(s.toLowerCase()))
   }
 
-  // 2. Sinónimos directos
-  const sins = SINONIMOS[token]
-  if (sins) sins.forEach(s => variantes.add(s))
+  // 3. Sinónimos directos
+  const sins = SINONIMOS[token.toLowerCase()]
+  if (sins) sins.forEach(s => variantes.add(s.toLowerCase()))
 
-  // 3. Deplural: "cabillas" → "cabilla"
+  // 4. Deplural: "cabillas" → "cabilla"
   if (token.length > 3 && token.endsWith('s')) {
     const singular = token.slice(0, -1)
-    variantes.add(singular)
-    const sinsSingular = SINONIMOS[singular]
-    if (sinsSingular) sinsSingular.forEach(s => variantes.add(s))
-    const typoSingular = TYPO_MAP[singular]
-    if (typoSingular) variantes.add(typoSingular)
+    variantes.add(singular.toLowerCase())
+    const sinsSingular = SINONIMOS[singular.toLowerCase()]
+    if (sinsSingular) sinsSingular.forEach(s => variantes.add(s.toLowerCase()))
+    const typoSingular = TYPO_MAP[singular.toLowerCase()]
+    if (typoSingular) variantes.add(typoSingular.toLowerCase())
   }
 
-  // 4. Deplural "es": "conexiones" → "conexion"
+  // 5. Deplural "es": "conexiones" → "conexion"
   if (token.length > 4 && token.endsWith('es')) {
     const base = token.slice(0, -2)
-    variantes.add(base)
-    const sinsBase = SINONIMOS[base]
-    if (sinsBase) sinsBase.forEach(s => variantes.add(s))
+    variantes.add(base.toLowerCase())
+    const sinsBase = SINONIMOS[base.toLowerCase()]
+    if (sinsBase) sinsBase.forEach(s => variantes.add(s.toLowerCase()))
+  }
+
+  // 6. Expansiones de dimensiones comunes (metros a milímetros de láminas)
+  const cleanTok = token.replace(',', '.')
+  if (cleanTok === '1.20' || cleanTok === '1.2' || cleanTok === '1,20' || cleanTok === '1,2') {
+    variantes.add('1200')
+    variantes.add('1.20')
+    variantes.add('1.2')
+  } else if (cleanTok === '1200') {
+    variantes.add('1.20')
+    variantes.add('1.2')
+  } else if (cleanTok === '1.00' || cleanTok === '1' || cleanTok === '1,00') {
+    variantes.add('1000')
+    variantes.add('1.00')
+    variantes.add('1')
+  } else if (cleanTok === '1000') {
+    variantes.add('1.00')
+    variantes.add('1')
+  } else if (cleanTok === '1.25' || cleanTok === '1,25') {
+    variantes.add('1250')
+  } else if (cleanTok === '1250') {
+    variantes.add('1.25')
+  } else if (cleanTok === '1.01' || cleanTok === '1,01') {
+    variantes.add('1010')
+  } else if (cleanTok === '1010') {
+    variantes.add('1.01')
+  } else if (cleanTok === '1.22' || cleanTok === '1,22') {
+    variantes.add('1220')
+  } else if (cleanTok === '1220') {
+    variantes.add('1.22')
   }
 
   return [...variantes]
@@ -820,12 +941,104 @@ export function parseSearchTerms(query) {
   return tokens.map(token => expandToken(token))
 }
 
+// Helper to parse dimension or fractional sizes to comparative decimal values
+function parseSizeToDecimal(str) {
+  if (!str) return 0;
+  let clean = str.replace(/["\s]/g, ' ').replace(/-/g, ' ').trim();
+  const compoundMatch = clean.match(/^(\d+)\s+(\d+)\/(\d+)$/);
+  if (compoundMatch) {
+    const whole = parseInt(compoundMatch[1], 10);
+    const num = parseInt(compoundMatch[2], 10);
+    const den = parseInt(compoundMatch[3], 10);
+    return whole + (num / den);
+  }
+  const fractionMatch = clean.match(/^(\d+)\/(\d+)$/);
+  if (fractionMatch) {
+    const num = parseInt(fractionMatch[1], 10);
+    const den = parseInt(fractionMatch[2], 10);
+    return num / den;
+  }
+  const val = parseFloat(clean);
+  return isNaN(val) ? 0 : val;
+}
+
+function parseSizeStructure(str) {
+  if (!str) return [];
+  const parts = str.toLowerCase().split('x');
+  return parts.map(part => parseSizeToDecimal(part.trim())).filter(val => val > 0);
+}
+
+// Extrae tamaños en pulgadas o fracciones, limpiando otras unidades físicas (m, mm, kg)
+export function extractInchSizes(text) {
+  let cleanText = normalizeText(text)
+  cleanText = cleanText.replace(/\b(?:cal|calibre|c\/)\s*\d+(?:\.\d+)?\b/g, '')
+  cleanText = cleanText.replace(/(?:^|[\s,;\-x])\d+(?:\.\d+)?\s*(?:mm|mt|mts|m|kg|kilos)\b/gi, '')
+  const matches = cleanText.match(/\b\d+(?:\.\d+)?(?:\"|in\b|pulg\b|pulgadas?\b)?x\d+(?:\.\d+)?(?:\"|in\b|pulg\b|pulgadas?\b)?|\d+\s+\d+\/\d+|\d+\/\d+|\b\d+(?:\.\d+)?(?:\"|in\b|pulg\b|pulgadas?\b)?/gi) || []
+  const sizes = []
+  for (const m of matches) {
+    let clean = m.replace(/["\s]|in\b|pulg\b|pulgadas?\b/i, ' ').trim();
+    if (!clean) continue;
+    clean = clean.replace(/\s+/g, ' ');
+    if (clean.includes('x')) {
+      const parts = clean.split('x').map(p => p.trim()).filter(part => {
+        const val = parseSizeToDecimal(part);
+        return isNaN(val) || val >= 1;
+      });
+      if (parts.length === 0) continue;
+      clean = parts.join('x');
+    }
+    const isFrac = clean.includes('/');
+    const hasPulgMarker = /"|\bin\b|\bpulg\b|\bpulgadas?\b/i.test(m);
+    const num = parseSizeToDecimal(clean);
+    if (!clean.includes('x') && !isFrac && !isNaN(num) && num < 1) {
+      continue;
+    }
+    if (isFrac || hasPulgMarker || clean.includes('x') || (!isNaN(num) && num > 0 && num < 10)) {
+      if (!sizes.includes(clean)) sizes.push(clean);
+    }
+  }
+  return sizes
+}
+
+export function sizesConflict(qs, ps) {
+  const qStr = qs.toLowerCase().replace(/["\s]/g, '');
+  const pStr = ps.toLowerCase().replace(/["\s]/g, '');
+  
+  const qsHasX = qStr.includes('x');
+  const psHasX = pStr.includes('x');
+  
+  if (qsHasX !== psHasX) {
+    if (pStr.includes(qStr) || qStr.includes(pStr)) {
+      return true;
+    }
+    return false;
+  }
+  
+  const qComponents = parseSizeStructure(qs);
+  const pComponents = parseSizeStructure(ps);
+  
+  if (qComponents.length === 0 || pComponents.length === 0) return false;
+  
+  // Compare up to the length of the shorter components list
+  const len = Math.min(qComponents.length, pComponents.length);
+  for (let i = 0; i < len; i++) {
+    const qVal = qComponents[i];
+    const pVal = pComponents[i];
+    const maxVal = Math.max(qVal, pVal);
+    if (maxVal > 0) {
+      const pctDiff = Math.abs(qVal - pVal) / maxVal;
+      if (pctDiff > 0.09) return true;
+    }
+  }
+  return false;
+}
+
 // ─── Búsqueda con match exacto (includes) ────────────────────────────────────
 export function smartMatch(text, searchTerms) {
   if (!searchTerms || searchTerms.length === 0) return true
   const normalized = normalizeText(text)
   return searchTerms.every(variantes =>
-    variantes.some(v => normalized.includes(v))
+    variantes.some(v => normalized.includes(v.toLowerCase()))
   )
 }
 
@@ -833,24 +1046,113 @@ export function smartMatch(text, searchTerms) {
 export function smartMatchScore(text, searchTerms) {
   if (!searchTerms || searchTerms.length === 0) return { match: true, score: 0 }
   const normalized = normalizeText(text)
+
+  // ─── Exclusividad de dimensiones con 'x' ───
+  const queryDims = []
+  searchTerms.forEach(variantes => {
+    variantes.forEach(v => {
+      const match = v.match(/\b\d+(?:\.\d+)?(?:mm|mt|mts|m)?(?:x\d+(?:\.\d+)?(?:mm|mt|mts|m)?)+\b/gi)
+      if (match) {
+        match.forEach(d => {
+          const cleanD = d.replace(/[^0-9.x]/gi, '')
+          if (!queryDims.includes(cleanD)) queryDims.push(cleanD)
+        })
+      }
+    })
+  })
+
+  if (queryDims.length > 0) {
+    const rawProductDims = normalized.match(/\b\d+(?:\.\d+)?(?:mm|mt|mts|m)?(?:x\d+(?:\.\d+)?(?:mm|mt|mts|m)?)+\b/gi) || []
+    const productDims = rawProductDims.map(d => d.replace(/[^0-9.x]/gi, ''))
+    if (productDims.length > 0) {
+      const hasMatchingDim = queryDims.some(qd => 
+        productDims.some(pd => !sizesConflict(qd, pd))
+      )
+      if (!hasMatchingDim) {
+        return { match: false, score: 0, coverage: 0, matchedTerms: 0, totalTerms: searchTerms.length }
+      }
+    }
+  }
+
+  // ─── Exclusividad de medidas fraccionales/pulgadas ───
+  const querySizes = []
+  searchTerms.forEach(variantes => {
+    const orig = variantes[0]
+    // Keep spaces for compound fractions like "7018 1/8" — removing spaces corrupts them
+    const clean = orig.replace(/"/g, '').trim()
+    if (!clean || clean === 'x') return // Skip standalone 'x'
+    const isFrac = clean.includes('/')
+    const hasPulgMarker = /"|\bin\b|\bpulg\b|\bpulgadas?\b/i.test(orig)
+    const num = parseSizeToDecimal(clean.replace(/\s+.*/, '')) // parse leading number only
+    const hasUnit = /(?:mm|mt|mts|m|kg|kilos|cal)\b/i.test(orig)
+    const isModelCode = isFrac && num >= 100
+    // Only add to querySizes if:
+    // - Has a fraction, pulgada marker, or 'x' (but not standalone)
+    // - AND num is < 100 (avoid model numbers like 7018 being treated as sizes)
+    // - AND not a thickness/caliber decimal (< 1.0 values that represent mm thickness)
+    const isThickness = !isFrac && !hasPulgMarker && !clean.includes('x') && !isNaN(num) && num > 0 && num < 1.0
+    if (!hasUnit && !isThickness && !isModelCode && (isFrac || hasPulgMarker || (clean.includes('x') && clean !== 'x') || (!isNaN(num) && num > 0 && num < 10))) {
+      // For compound fractions like "7018 1/8", only add the fractional part
+      // to avoid treating model numbers as sizes
+      const fractPart = clean.match(/^\d{4,}\s+(\d+\/\d+)$/)
+      const sizeKey = fractPart ? fractPart[1] : clean
+      if (!querySizes.includes(sizeKey)) querySizes.push(sizeKey)
+    }
+  })
+
+  if (querySizes.length > 0) {
+    const productSizes = extractInchSizes(normalized)
+    if (productSizes.length > 0) {
+      const isConflict = querySizes.some(qs => {
+        return productSizes.some(ps => {
+          return sizesConflict(qs, ps)
+        })
+      })
+      if (isConflict) {
+        return { match: false, score: 0, coverage: 0, matchedTerms: 0, totalTerms: searchTerms.length }
+      }
+    }
+  }
+
   let totalScore = 0
   let matchedTerms = 0
 
   for (const variantes of searchTerms) {
     let bestScore = 0
     let found = false
+    const originalToken = variantes[0]
 
     for (const v of variantes) {
-      if (normalized.includes(v)) {
+      const isXDim = /^\d+(?:\.\d+)?(?:mm|mt|mts|m)?(?:x\d+(?:\.\d+)?(?:mm|mt|mts|m)?)+\b/i.test(v)
+      let isMatch = false
+      if (isXDim) {
+        const cleanV = v.replace(/[^0-9.x]/gi, '')
+        const rawProductDims = normalized.match(/\b\d+(?:\.\d+)?(?:mm|mt|mts|m)?(?:x\d+(?:\.\d+)?(?:mm|mt|mts|m)?)+\b/gi) || []
+        const productDims = rawProductDims.map(d => d.replace(/[^0-9.x]/gi, ''))
+        isMatch = productDims.some(pd => !sizesConflict(cleanV, pd))
+      } else {
+        // Enforce word boundaries for numeric/caliber tokens to avoid substring matches like "20" inside "1200"
+        const isNumeric = /^\d+(?:\.\d+)?$/.test(v)
+        if (isNumeric) {
+          const regex = new RegExp(`(?:^|[^0-9.])${v.replace(/[.]/g, '\\.')}(?:$|[^0-9.])`)
+          isMatch = regex.test(normalized)
+        } else {
+          isMatch = normalized.includes(v.toLowerCase())
+        }
+      }
+
+      if (isMatch) {
         found = true
         // Bonus por match exacto de palabra vs substring
-        const wordBoundary = new RegExp(`(^|[\\s.,;/\\-"])${v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[\\s.,;/\\-"])`)
-        if (wordBoundary.test(normalized)) {
-          bestScore = Math.max(bestScore, 10 + v.length) // match exacto de palabra
-        } else {
-          bestScore = Math.max(bestScore, 5 + v.length) // match como substring
-        }
-        break
+        const isOriginal = (v === originalToken)
+        const wordBoundary = new RegExp(`(^|[\\s.,;/\\-"'])${v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[\\s.,;/\\-"'])`)
+        const isWord = wordBoundary.test(normalized)
+        
+        let score = 10
+        if (isOriginal) score += 5
+        if (isWord) score += 5
+        
+        bestScore = Math.max(bestScore, score)
       }
     }
 
@@ -859,11 +1161,13 @@ export function smartMatchScore(text, searchTerms) {
       totalScore += bestScore
     } else {
       // No encontrado exacto — intentar fuzzy
-      const words = normalized.split(/[\s.,;/\-"]+/).filter(Boolean)
+      const textForFuzzy = normalized.replace(/(?<!\d)\.|\.(?!\d)|[,\s;/\-"]/g, ' ')
+      const words = textForFuzzy.split(/\s+/).filter(Boolean)
       let bestFuzzy = Infinity
       let fuzzyFound = false
 
       for (const v of variantes) {
+        if (/\d/.test(v)) continue // No fuzzy for tokens containing digits
         const threshold = fuzzyThreshold(v)
         if (threshold === 0) continue // No fuzzy para tokens cortos
 
@@ -888,7 +1192,7 @@ export function smartMatchScore(text, searchTerms) {
   // Score final: % de términos que matchearon * score acumulado
   const coverage = matchedTerms / searchTerms.length
   return {
-    match: coverage >= 0.5, // Al menos 50% de los términos deben matchear
+    match: coverage >= 0.5, // Al menos 50% de los términos deben matchear (permite marcas/nombres no en DB)
     score: totalScore * coverage,
     coverage,
     matchedTerms,
@@ -897,62 +1201,30 @@ export function smartMatchScore(text, searchTerms) {
 }
 
 // ─── Búsqueda directa por código (sin tokenizar, máxima prioridad) ───────────
-// Compara la query cruda contra el código del producto: exacto, prefijo y substring.
-// Esto garantiza que escribir el código siempre encuentre el producto.
 export function matchByCode(producto, rawQuery) {
   if (!rawQuery || !rawQuery.trim()) return false
   const codigo = normalizeText(producto.codigo || '')
   if (!codigo) return false
   const q = normalizeText(rawQuery.trim())
-  // Exacto
+  
   if (codigo === q) return true
-  // La query es prefijo del código (ej. "CA-0" encuentra "CA-001")
   if (codigo.startsWith(q) && q.length >= 2) return true
-  // El código contiene la query como substring
   if (q.length >= 2 && codigo.includes(q)) return true
-  // Comparar sin separadores (guiones, puntos, barras)
+  
   const codLimpio = codigo.replace(/[^a-z0-9]/g, '')
   const qLimpio = q.replace(/[^a-z0-9]/g, '')
   if (qLimpio.length >= 2 && codLimpio.includes(qLimpio)) return true
   return false
 }
 
-// ─── Búsqueda de producto con fuzzy fallback ─────────────────────────────────
+// ─── Autocomplete matching — delegates completely to smartMatchScore ─────────
 export function smartMatchProducto(producto, searchTerms, rawQuery = '') {
   if (!searchTerms || searchTerms.length === 0) return true
-
-  // ── Prioridad máxima: match directo por código ────────────────────────────
-  // Si la query parece un código (contiene dígitos o es corta con guiones)
-  // se intenta primero de forma directa sin pasar por el motor de tokens.
   if (rawQuery && matchByCode(producto, rawQuery)) return true
 
-  const texto = normalizeText(`${producto.nombre || ''} ${producto.codigo || ''} ${producto.categoria || ''} ${producto.descripcion || ''}`)
-
-  // Primero intentar match exacto (rápido)
-  const exactMatch = searchTerms.every(variantes =>
-    variantes.some(v => texto.includes(v))
-  )
-  if (exactMatch) return true
-
-  // Fallback: fuzzy match — al menos 60% de los términos deben matchear
-  const words = texto.split(/[\s.,;/\-"]+/).filter(Boolean)
-  let matched = 0
-  for (const variantes of searchTerms) {
-    let found = false
-    for (const v of variantes) {
-      if (texto.includes(v)) { found = true; break }
-      // Fuzzy solo para tokens >= 4 chars
-      const threshold = fuzzyThreshold(v)
-      if (threshold > 0) {
-        for (const word of words) {
-          if (levenshtein(v, word) <= threshold) { found = true; break }
-        }
-        if (found) break
-      }
-    }
-    if (found) matched++
-  }
-  return matched >= Math.ceil(searchTerms.length * 0.6)
+  const texto = `${producto.nombre || ''} ${producto.codigo || ''} ${producto.categoria || ''} ${producto.descripcion || ''}`
+  const result = smartMatchScore(texto, searchTerms)
+  return result.match
 }
 
 // ─── Búsqueda con ranking para listas de productos ───────────────────────────
@@ -994,4 +1266,280 @@ export function buildSmartFilter(query) {
     })
     return conditions.join(',')
   }).filter(Boolean)
+}
+
+// ─── Utilidades Unificadas de OCR y Procesamiento de Listas ───────────────────
+export function canonicalizeOcr(str) {
+  if (!str) return ''
+  return str.toUpperCase()
+    .replace(/[ODQU0]/g, '0')
+    .replace(/[ILTJ1]/g, '1')
+    .replace(/[Z2]/g, '2')
+    .replace(/[S35]/g, '3')
+    .replace(/[A4]/g, '4')
+    .replace(/[G6]/g, '6')
+    .replace(/[B8]/g, '8')
+    .replace(/[Y7]/g, '7')
+}
+
+export function findBestFuzzyCodeMatch(ocrCode, catalogProducts) {
+  if (!ocrCode || ocrCode.length < 4) return null
+  
+  const ocrClean = ocrCode.toUpperCase().replace(/[^A-Z0-9]/g, '').trim()
+  const ocrCanon = canonicalizeOcr(ocrClean)
+  
+  let bestMatch = null
+  let minDistance = 99
+  
+  for (const p of catalogProducts) {
+    if (!p.codigo) continue
+    const catClean = p.codigo.toUpperCase().trim()
+    
+    // 1. Coincidencia exacta
+    if (ocrClean === catClean) {
+      return p
+    }
+    
+    // 2. Coincidencia canonicalizada exacta
+    const catCanon = canonicalizeOcr(catClean)
+    if (ocrCanon === catCanon) {
+      return p
+    }
+    
+    // 3. Coincidencia por distancia de Levenshtein en códigos normalizados
+    const dist = levenshtein(ocrCanon, catCanon)
+    if (dist < minDistance && dist <= 3) {
+      minDistance = dist
+      bestMatch = p
+    }
+  }
+  return bestMatch
+}
+
+export function parsearLineaCompletaInteligente(linea) {
+  let text = linea.trim()
+  if (!text || text.length < 3) return null
+
+  // Collapser espacios alrededor de 'x' en dimensiones
+  text = text.replace(/([\d"\/])\s*x\s*([\d"\/])/gi, '$1x$2')
+
+  // Limpiar viñetas iniciales
+  text = text.replace(/^[\s*\-•·▪]+/g, '').trim()
+
+  // Filtro de ruido explícito para cabeceras y logos con tolerancia a errores de OCR
+  const cleanLineForFilter = text.toUpperCase()
+    .replace(/[0OQ]/g, '0')
+    .replace(/[ÍI]/g, 'I')
+    .replace(/[ÓO]/g, 'O')
+  
+  if (
+    cleanLineForFilter.includes('LISTA DE PRECIOS') || 
+    cleanLineForFilter.includes('CONSTRUACERO') || 
+    cleanLineForFilter.includes('RIF-') || 
+    cleanLineForFilter.includes('PRODUCTOS') || 
+    cleanLineForFilter.includes('CATEGORIAS') || 
+    cleanLineForFilter.includes('DESCRIPCION') || 
+    cleanLineForFilter.includes('PRECIO DETAL') || 
+    cleanLineForFilter.includes('PRECIO MAYOR') || 
+    cleanLineForFilter.includes('STOCK') || 
+    cleanLineForFilter.includes('MAY.') || 
+    cleanLineForFilter.includes('CODIGO') ||
+    cleanLineForFilter === 'UND' ||
+    /^\d+\s+[A-Z\s]+$/.test(cleanLineForFilter)
+  ) {
+    return null
+  }
+
+  let codigo = ''
+  let nombre = ''
+  let unidad = 'und'
+  let costo = 0
+  let precio = 0
+  let cantidad = 1
+
+  // 1. Extraer Cantidad al inicio (ej: "10 cabillas" o "01 atado")
+  const matchCantInicio = text.match(/^(\d+(?:[.,]\d+)?)\s*(?:und|unid|unidades|pzs|piezas|sacos|mts|metros|kg|kilos|barras|atado|atados|rollos|rollo|laminas|lamina|cajas|caja|x)?\s+/i)
+  if (matchCantInicio) {
+    cantidad = parseFloat(matchCantInicio[1].replace(',', '.'))
+    text = text.replace(matchCantInicio[0], '').trim()
+  } else {
+    // Intentar cantidad al final
+    const matchCantFin = text.match(/(?<!cal|c\/|calibre|esp|espesor|e=)\s+[\-–—/]?\s*(\d+(?:[.,]\d+)?)$/i)
+    if (matchCantFin) {
+      let cantStr = matchCantFin[1]
+      const prevChar = text.charAt(matchCantFin.index - 1)
+      if (prevChar !== '/' && prevChar !== '.') {
+        if (cantStr.includes('.') && cantStr.split('.')[1].length === 3) {
+          cantStr = cantStr.replace('.', '') // miles
+        }
+        cantidad = parseFloat(cantStr.replace(',', '.'))
+        text = text.slice(0, matchCantFin.index).trim()
+      }
+    }
+  }
+
+  // 2. Extraer Código Alfanumérico Real (ej: ELE0433005)
+  // Excluimos explícitamente palabras de medidas con sufijos (ej: 100mt, 12mt)
+  let words = text.split(/[\s|]+/).map(w => w.trim().replace(/[▪•·*]/g, '')).filter(Boolean)
+  let codeCandidate = ''
+
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i].toUpperCase()
+    
+    const hasLetter = /[A-Z]/i.test(w)
+    const hasDigit = /\d/.test(w)
+    const matchesFormat = /^[A-Z0-9\-]+$/i.test(w)
+    const isDimension = /\d+X/i.test(w) || /X\d+/i.test(w) || /^\d+\/\d+/.test(w) || /^\d+\.\d+$/.test(w)
+    const isUnitSuffix = /\d+(?:mt|mts|m|mm|kg|kilos|cal|calibre)$/i.test(w)
+    const endsWithX = w.endsWith('X')
+    
+    if (hasLetter && hasDigit && matchesFormat && !isDimension && !isUnitSuffix && !endsWithX && w.length >= 4 && w.length <= 15) {
+      codeCandidate = words[i]
+      break
+    }
+  }
+
+  if (codeCandidate) {
+    codigo = codeCandidate.toUpperCase().replace(/[^A-Z0-9\-]/g, '')
+    text = text.replace(codeCandidate, '').trim()
+  }
+
+  // 3. Extraer Precios y Costos de forma segura (etiquetas explícitas o símbolos)
+  const matchDolar = text.match(/\$\s*(\d+(?:[.,]\d+)?)/)
+  if (matchDolar) {
+    precio = parseFloat(matchDolar[1].replace(',', '.'))
+    costo = precio
+    text = text.replace(matchDolar[0], '').trim()
+  } else {
+    const matchCostoEtiqueta = text.match(/(?:costo|costos|c)\s*[:=]?\s*(\d+(?:[.,]\d+)?)/i)
+    if (matchCostoEtiqueta) {
+      costo = parseFloat(matchCostoEtiqueta[1].replace(',', '.'))
+      text = text.replace(matchCostoEtiqueta[0], '').trim()
+    }
+    const matchPrecioEtiqueta = text.match(/(?:precio|pv|pvp|p)\s*[:=]?\s*(\d+(?:[.,]\d+)?)/i)
+    if (matchPrecioEtiqueta) {
+      precio = parseFloat(matchPrecioEtiqueta[1].replace(',', '.'))
+      text = text.replace(matchPrecioEtiqueta[0], '').trim()
+      if (costo === 0) costo = precio
+    }
+  }
+
+  // 4. Limpiar nombre
+  nombre = text
+    .replace(/[—|\[\]\=\*▪•·_–]/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+
+  // Filtro final de ruido
+  if (!codigo && cantidad === 1 && !nombre) {
+    return null
+  }
+
+  return {
+    codigo,
+    nombre: nombre || 'PRODUCTO SIN NOMBRE',
+    unidad,
+    costo,
+    precio,
+    cantidad
+  }
+}
+
+export function preprocesarImagenCanvas(imageSrc) {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas')
+        const ctx = canvas.getContext('2d')
+        
+        let width = img.width
+        let height = img.height
+        const maxDim = 2000
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width)
+            width = maxDim
+          } else {
+            width = Math.round((width * maxDim) / height)
+            height = maxDim
+          }
+        }
+        
+        canvas.width = width
+        canvas.height = height
+        ctx.drawImage(img, 0, 0, width, height)
+        
+        const imgData = ctx.getImageData(0, 0, width, height)
+        const data = imgData.data
+        
+        const s = Math.max(8, Math.round(width / 16))
+        const t = 12
+        
+        const gray = new Uint8Array(width * height)
+        const integral = new Int32Array(width * height)
+        
+        for (let y = 0; y < height; y++) {
+          let sum = 0
+          for (let x = 0; x < width; x++) {
+            const idx = (y * width + x) * 4
+            const r = data[idx]
+            const g = data[idx + 1]
+            const b = data[idx + 2]
+            
+            const grayVal = Math.round(0.299 * r + 0.587 * g + 0.114 * b)
+            gray[y * width + x] = grayVal
+            
+            sum += grayVal
+            if (y === 0) {
+              integral[y * width + x] = sum
+            } else {
+              integral[y * width + x] = integral[(y - 1) * width + x] + sum
+            }
+          }
+        }
+        
+        const halfS = Math.round(s / 2)
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            const idx = y * width + x
+            const g = gray[idx]
+            
+            const x1 = Math.max(0, x - halfS)
+            const x2 = Math.min(width - 1, x + halfS)
+            const y1 = Math.max(0, y - halfS)
+            const y2 = Math.min(height - 1, y + halfS)
+            
+            const count = (x2 - x1 + 1) * (y2 - y1 + 1)
+            
+            const a = integral[y2 * width + x2]
+            const b = y1 > 0 ? integral[(y1 - 1) * width + x2] : 0
+            const c = x1 > 0 ? integral[y2 * width + (x1 - 1)] : 0
+            const d = (y1 > 0 && x1 > 0) ? integral[(y1 - 1) * width + (x1 - 1)] : 0
+            const sumVal = a - b - c + d
+            
+            const outIdx = idx * 4
+            if (g * count < sumVal * (100 - t) / 100) {
+              data[outIdx] = 0
+              data[outIdx + 1] = 0
+              data[outIdx + 2] = 0
+            } else {
+              data[outIdx] = 255
+              data[outIdx + 1] = 255
+              data[outIdx + 2] = 255
+            }
+            data[outIdx + 3] = 255
+          }
+        }
+        
+        ctx.putImageData(imgData, 0, 0)
+        resolve(canvas)
+      } catch (err) {
+        reject(err)
+      }
+    }
+    img.onerror = (err) => reject(err)
+    img.src = imageSrc
+  })
 }

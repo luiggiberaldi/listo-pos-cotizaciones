@@ -164,8 +164,9 @@ export async function handleAplicarMovimientoLote(request, env) {
 // ── Parsear texto WhatsApp → productos del inventario ────────────────────────
 export async function handleParseMaterialText(request, env) {
   if (!env.AI) return jsonError('Servicio AI no configurado', 503, request)
-  const user = await verifyAuth(request, env)
-  if (!user?.id) return jsonError('No autenticado', 401, request)
+  const v = await validateOperator(request, env)
+  if (v.error) return v.error
+  const { operador } = v
 
   let body
   try { body = await request.json() } catch { return jsonError('Body inválido', 400, request) }
@@ -182,7 +183,7 @@ export async function handleParseMaterialText(request, env) {
 
   // 1. Obtener catálogo de productos del tenant (nombre, codigo)
   const prodRes = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/productos?activo=eq.true&cuenta_id=eq.${user.id}&select=id,nombre,codigo,unidad,precio_usd,precio_2,precio_3,stock_actual,stock_minimo,imagen_url&order=nombre.asc`,
+    `${env.SUPABASE_URL}/rest/v1/productos?activo=eq.true&cuenta_id=eq.${operador.cuenta_id}&select=id,nombre,codigo,unidad,precio_usd,precio_2,precio_3,stock_actual,stock_minimo,imagen_url&order=nombre.asc`,
     { headers: h }
   )
   if (!prodRes.ok) return jsonError('Error obteniendo productos', 500, request)
@@ -252,6 +253,149 @@ RESPOnde ÚNICAMENTE en JSON válido con este formato (sin markdown, sin explica
   }
 
   // 5. Mapear matchIds a productos completos (puede ser id o codigo)
+  const prodMapById = new Map(productos.map(p => [p.id, p]))
+  const prodMapByCodigo = new Map(productos.map(p => [p.codigo, p]).filter(([k]) => k))
+  const items = parsed.items.map(item => ({
+    descripcionOriginal: item.descripcionOriginal || '',
+    cantidad: Math.max(1, Number(item.cantidad) || 1),
+    confianza: Math.min(1, Math.max(0, Number(item.confianza) || 0.5)),
+    matches: (item.matchIds || [])
+      .map(id => prodMapById.get(id) || prodMapByCodigo.get(id))
+      .filter(Boolean)
+      .map(p => ({
+        id: p.id,
+        codigo: p.codigo,
+        nombre: p.nombre,
+        unidad: p.unidad,
+        precio_usd: Number(p.precio_usd),
+        precio_2: p.precio_2 ? Number(p.precio_2) : null,
+        precio_3: p.precio_3 ? Number(p.precio_3) : null,
+        stock_actual: Number(p.stock_actual),
+        stock_minimo: Number(p.stock_minimo),
+        imagen_url: p.imagen_url,
+      })),
+  }))
+
+  return json({ items, rawAiText }, 200, request)
+}
+
+// ── Escanear fotografía de lista de materiales (OCR con Llama 3.2 Vision + Kimi) ──
+export async function handleScanMaterialList(request, env) {
+  if (!env.AI) return jsonError('Servicio AI no configurado', 503, request)
+  const v = await validateOperator(request, env)
+  if (v.error) return v.error
+  const { operador } = v
+
+  let body
+  try { body = await request.json() } catch { return jsonError('Body inválido', 400, request) }
+  const { image } = body
+  if (!image || typeof image !== 'string') {
+    return jsonError('Imagen vacía o inválida', 400, request)
+  }
+
+  // 1. Convertir Base64 a buffer binario
+  let binaryImg
+  try {
+    binaryImg = Uint8Array.from(atob(image), c => c.charCodeAt(0))
+  } catch (err) {
+    return jsonError('Error al decodificar la imagen Base64', 400, request)
+  }
+
+  // 2. Ejecutar Llama 3.2 Vision para extraer el texto de la imagen (OCR inteligente)
+  let extractedText = ''
+  try {
+    const aiResponse = await env.AI.run('@cf/meta/llama-3.2-11b-vision-instruct', {
+      image: [...binaryImg],
+      prompt: 'Analiza esta imagen y extrae todos los materiales, productos, artículos y sus cantidades. Escribe únicamente la lista de materiales y cantidades en español, un elemento por línea, sin explicaciones ni markdown. Ejemplo: 10 cabillas de 1/2, 5 pegas azules, etc.',
+      max_tokens: 1000,
+      temperature: 0.1
+    })
+    extractedText = aiResponse?.response || ''
+  } catch (e) {
+    console.error('[SCAN OCR] Vision AI error:', e.message)
+    return jsonError(`Error en Vision AI: ${e.message}`, 500, request)
+  }
+
+  if (!extractedText.trim()) {
+    return json({ items: [], rawAiText: 'No se detectó texto en la imagen' }, 200, request)
+  }
+
+  // 3. Obtener catálogo de productos de Supabase
+  const h = {
+    apikey: env.SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    'Content-Type': 'application/json',
+  }
+
+  const prodRes = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/productos?activo=eq.true&cuenta_id=eq.${operador.cuenta_id}&select=id,nombre,codigo,unidad,precio_usd,precio_2,precio_3,stock_actual,stock_minimo,imagen_url&order=nombre.asc`,
+    { headers: h }
+  )
+  if (!prodRes.ok) return jsonError('Error obteniendo productos', 500, request)
+  const productos = await prodRes.json()
+
+  // 4. Construir catálogo compacto
+  const catalogo = productos.map(p => `${p.codigo || p.id}|${p.nombre}`).join('\n')
+
+  // 5. Usar AI Kimi para parsear texto Y hacer matching contra catálogo
+  const systemPrompt = `Eres un asistente de ferretería/materiales de construcción. Tu trabajo es:
+1. Extraer materiales y cantidades de un texto (mensaje de WhatsApp, lista, nota).
+2. Hacer matching inteligente contra el catálogo del inventario.
+
+REGLAS DE MATCHING:
+- Usa conocimiento de ferretería: "cabilla 1/2" = "CABILLA 1/2 LISA" o "BARRA LISA 1/2"
+- Las medidas pueden estar en diferentes formatos: 1/2, 1/2", 1/2 pulgada, etc.
+- Sinónimos comunes: cemento=saco de cemento, pega=pegamento, tubo=tubería, codo=codo PVC, etc.
+- Si hay varias coincidencias posibles, devuelve hasta 3 ordenadas por relevancia.
+- La cantidad por defecto es 1 si no se especifica.
+- Ignora texto que claramente no son materiales (saludos, preguntas, emojis).
+
+CATÁLOGO DE PRODUCTOS (codigo|nombre):
+${catalogo}
+
+RESPOnde ÚNICAMENTE en JSON válido con este formato (sin markdown, sin explicaciones):
+{"items":[{"descripcionOriginal":"texto exacto del item","cantidad":N,"confianza":0.0-1.0,"matchIds":["codigo1","codigo2"]}]}
+
+- confianza: 1.0 = match exacto, 0.8 = muy probable, 0.5 = posible, 0.3 = poco probable
+- matchIds: array de CÓDIGOS del catálogo (máx 3), ordenados por relevancia. Vacío si no hay match.
+- Si el texto no contiene materiales, devuelve {"items":[]}`
+
+  let rawAiText = ''
+  try {
+    const aiResponseKimi = await env.AI.run('@cf/moonshotai/kimi-k2.6', {
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: extractedText.trim() },
+      ],
+      max_tokens: 4000,
+      temperature: 0.1,
+    })
+    rawAiText = aiResponseKimi?.response || ''
+  } catch (e) {
+    console.error('[SCAN PARSE] Kimi AI error:', e.message)
+    return jsonError(`Error Kimi AI: ${e.message}`, 500, request)
+  }
+
+  // 6. Parsear respuesta AI
+  let parsed
+  try {
+    let clean = rawAiText.trim()
+    if (clean.startsWith('```')) clean = clean.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
+    const rawParsed = JSON.parse(clean)
+    if (Array.isArray(rawParsed)) {
+      parsed = { items: rawParsed }
+    } else {
+      parsed = rawParsed
+    }
+  } catch {
+    return json({ items: [], rawAiText, error: 'No se pudo parsear respuesta AI' }, 200, request)
+  }
+
+  if (!parsed?.items?.length) {
+    return json({ items: [], rawAiText }, 200, request)
+  }
+
+  // 7. Mapear matchIds a productos completos
   const prodMapById = new Map(productos.map(p => [p.id, p]))
   const prodMapByCodigo = new Map(productos.map(p => [p.codigo, p]).filter(([k]) => k))
   const items = parsed.items.map(item => ({
@@ -619,5 +763,199 @@ export async function handleTransformacionInventario(request, env) {
 
   } catch (e) {
     return jsonError(e.message || 'Error en proceso de transformación', 500, request);
+  }
+}
+
+// ── Ingreso masivo por lote (admin / supervisor) ─────────────────────────────
+export async function handleBatchIngest(request, env) {
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { user, operador, headers, ip } = v;
+
+  const ROLES_BATCH = ['supervisor', 'administracion', 'jefe', 'desarrollador'];
+  if (!ROLES_BATCH.includes(operador.rol)) {
+    return jsonError('Permisos insuficientes para ingreso masivo de productos', 403, request);
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonError('Body inválido', 400, request);
+  }
+
+  const { motivo, productos } = body;
+  if (!motivo || !productos || !Array.isArray(productos) || productos.length === 0) {
+    return jsonError('Faltan campos: motivo o lista de productos vacía', 400, request);
+  }
+
+  const loteId = crypto.randomUUID();
+  const timestamp = new Date().toISOString();
+  const nuevosAInsertar = [];
+  const movimientosAAgregar = [];
+  let procesadosCount = 0;
+
+  try {
+    for (const p of productos) {
+      if (p.isNuevo) {
+        // Crear un producto nuevo
+        const nuevoId = crypto.randomUUID();
+        const codigoFinal = p.codigo ? p.codigo.toUpperCase().trim() : null;
+        const nombreFinal = p.nombre.toUpperCase().trim();
+
+        // 1. Agregar a la lista de inserción en lote
+        nuevosAInsertar.push({
+          id: nuevoId,
+          codigo: codigoFinal,
+          nombre: nombreFinal,
+          categoria: p.categoria,
+          unidad: p.unidad || 'und',
+          precio_usd: Number(p.precio) || 0,
+          costo_usd: Number(p.costo) || 0,
+          stock_actual: Number(p.cantidad) || 0,
+          activo: true,
+          cuenta_id: user.id,
+          creado_en: timestamp,
+          actualizado_en: timestamp
+        });
+
+        // 2. Crear movimiento de Kardex
+        movimientosAAgregar.push({
+          lote_id: loteId,
+          tipo: 'ingreso',
+          motivo: motivo.trim(),
+          motivo_tipo: 'ingreso_lote',
+          producto_id: nuevoId,
+          producto_nombre: nombreFinal,
+          cantidad: Number(p.cantidad),
+          stock_anterior: 0,
+          stock_nuevo: Number(p.cantidad),
+          usuario_id: user.operator_id,
+          usuario_nombre: operador.nombre,
+          creado_en: timestamp
+        });
+
+        procesadosCount++;
+      } else {
+        // Producto existente - Obtener stock y costo actuales de la DB
+        const pRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${p.id}&cuenta_id=eq.${user.id}`, { headers });
+        const prodList = await pRes.json();
+        if (!Array.isArray(prodList) || prodList.length === 0) {
+          return jsonError(`Producto existente con ID ${p.id} no encontrado en el catálogo`, 400, request);
+        }
+        const prod = prodList[0];
+
+        const stockAnterior = Number(prod.stock_actual || 0);
+        let stockNuevo = stockAnterior;
+        if (p.modoExistente === 'sobrescribir') {
+          stockNuevo = Number(p.cantidad);
+        } else {
+          // sumar
+          stockNuevo = stockAnterior + Number(p.cantidad);
+        }
+
+        const updateObj = {
+          stock_actual: stockNuevo,
+          actualizado_en: timestamp
+        };
+
+        if (p.actualizarCosto) {
+          updateObj.costo_usd = Number(p.costo) || 0;
+        }
+        if (p.precio > 0) {
+          updateObj.precio_usd = Number(p.precio) || 0;
+        }
+
+        // Ejecutar PATCH inmediato para este producto
+        const patchRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${p.id}`, {
+          method: 'PATCH',
+          headers: { ...headers, Prefer: 'return=minimal' },
+          body: JSON.stringify(updateObj)
+        });
+
+        if (!patchRes.ok) {
+          const errText = await patchRes.text();
+          throw new Error(`Error al actualizar producto "${prod.nombre}": ${errText}`);
+        }
+
+        // Crear movimiento de Kardex (ajustar tipo si es sobrescribir y bajó)
+        let diff = stockNuevo - stockAnterior;
+        let tipoMov = 'ingreso';
+        let cantidadMov = Math.abs(diff);
+
+        if (diff < 0) {
+          tipoMov = 'egreso';
+        }
+
+        if (diff !== 0 || p.modoExistente === 'sumar') {
+          movimientosAAgregar.push({
+            lote_id: loteId,
+            tipo: tipoMov,
+            motivo: motivo.trim(),
+            motivo_tipo: 'ingreso_lote',
+            producto_id: prod.id,
+            producto_nombre: prod.nombre,
+            cantidad: p.modoExistente === 'sumar' ? Number(p.cantidad) : cantidadMov,
+            stock_anterior: stockAnterior,
+            stock_nuevo: stockNuevo,
+            usuario_id: user.operator_id,
+            usuario_nombre: operador.nombre,
+            creado_en: timestamp
+          });
+        }
+
+        procesadosCount++;
+      }
+    }
+
+    // 3. Insertar nuevos productos en lote
+    if (nuevosAInsertar.length > 0) {
+      const insRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos`, {
+        method: 'POST',
+        headers: { ...headers, Prefer: 'return=minimal' },
+        body: JSON.stringify(nuevosAInsertar)
+      });
+      if (!insRes.ok) {
+        const errText = await insRes.text();
+        throw new Error(`Error al insertar nuevos productos: ${errText}`);
+      }
+    }
+
+    // 4. Insertar todos los movimientos de Kardex en lote
+    if (movimientosAAgregar.length > 0) {
+      const movRes = await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos`, {
+        method: 'POST',
+        headers: { ...headers, Prefer: 'return=minimal' },
+        body: JSON.stringify(movimientosAAgregar)
+      });
+      if (!movRes.ok) {
+        const errText = await movRes.text();
+        throw new Error(`Error al registrar movimientos de Kardex: ${errText}`);
+      }
+    }
+
+    // 5. Registrar en la auditoría general del sistema
+    try {
+      await registrarAuditoria(env, headers, {
+        usuarioId: user.operator_id,
+        usuarioNombre: operador.nombre,
+        usuarioRol: operador.rol,
+        categoria: 'INVENTARIO',
+        accion: 'BATCH_INGEST_PRODUCTOS',
+        descripcion: `Ingreso masivo por lote: ${procesadosCount} productos procesados (${nuevosAInsertar.length} nuevos, ${procesadosCount - nuevosAInsertar.length} existentes). Motivo: ${motivo}`,
+        entidadTipo: 'inventario',
+        entidadId: loteId,
+        meta: { motivo, lote_id: loteId, count_nuevos: nuevosAInsertar.length, count_existentes: procesadosCount - nuevosAInsertar.length },
+        ip
+      });
+    } catch (e) {
+      console.error('[BATCH_INGEST] Audit error:', e.message);
+    }
+
+    return json({ ok: true, procesados: procesadosCount, lote_id: loteId }, 200, request);
+
+  } catch (e) {
+    console.error('[BATCH_INGEST] General error:', e.message);
+    return jsonError(e.message || 'Error en proceso de ingreso masivo', 500, request);
   }
 }

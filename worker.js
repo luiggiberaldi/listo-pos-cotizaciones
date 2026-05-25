@@ -21,7 +21,7 @@ import { handleGetAudit, handleGetAuditStats, handleAnalyzeAudit } from './api/h
 import { handleMarcarComisionPagada, handleActualizarEstadoComision, handleGetComisionesConfig, handleGetComisiones, handleGetComisionesResumen } from './api/handlers/comisiones.js'
 import { handleRegistrarAbono } from './api/handlers/cxc.js'
 import { handleSwitchOperator, handleClearOperator, handleGetOperators, handleSuperAdmin } from './api/handlers/auth-operators.js'
-import { handleBuscarProductosHibrido, handleSyncEmbeddings, handleParseMaterialText, handleAplicarMovimientoLote, handleTransformacionInventario, handleBatchPriceUpdate, handleClearInventory, handlePdfTemp } from './api/handlers/inventario.js'
+import { handleBuscarProductosHibrido, handleSyncEmbeddings, handleParseMaterialText, handleScanMaterialList, handleAplicarMovimientoLote, handleBatchIngest, handleTransformacionInventario, handleBatchPriceUpdate, handleClearInventory, handlePdfTemp } from './api/handlers/inventario.js'
 import { handleGuardarCotizacion, handleReciclarCotizacion, handleReabrirCotizacion, handleCrearVersion, handleEnviarCotizacion, handleVentaRapida } from './api/handlers/cotizaciones.js'
 import { handleCrearDespacho, handleActualizarEstadoDespacho, handleEditarItemsDespacho, handleReciclarDespacho, handleGuardarDescuentos, handleObtenerDescuentos, handleEditarPagoDespacho } from './api/handlers/despachos.js'
 import { handleDevTools } from './api/handlers/dev.js'
@@ -113,6 +113,11 @@ export default {
     // ── API: parsear texto de WhatsApp → materiales ─────────────────────────
     if (url.pathname === '/api/parse-material-text' && request.method === 'POST') {
       return handleParseMaterialText(request, env);
+    }
+
+    // ── API: escanear fotografía de lista de materiales ─────────────────────
+    if (url.pathname === '/api/scan-material-list' && request.method === 'POST') {
+      return handleScanMaterialList(request, env);
     }
 
     // ── API: Búsqueda híbrida de productos ──────────────────────────────────
@@ -232,6 +237,11 @@ export default {
     // ── API: aplicar movimiento de inventario (bypass RLS) ──────────────────
     if (url.pathname === '/api/inventario/movimiento' && request.method === 'POST') {
       return handleAplicarMovimientoLote(request, env);
+    }
+
+    // ── API: ingreso masivo por lote (bypass RLS) ───────────────────────────
+    if (url.pathname === '/api/inventario/batch-ingest' && request.method === 'POST') {
+      return handleBatchIngest(request, env);
     }
 
     // ── API: transformación de inventario (admin) ──────────────────────────
