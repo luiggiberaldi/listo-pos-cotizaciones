@@ -212,7 +212,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
   const canWhatsApp = !despachoAnulado && (cotizacion.estado === 'enviada' || cotizacion.estado === 'aceptada')
   const canDespachar = (esSupervisor || esPropietario) && ['enviada', 'aceptada'].includes(cotizacion.estado) && onDespachar && !despacho
   const canAnular = !despachoAnulado && cotizacion.estado !== 'anulada' && cotizacion.estado !== 'vencida' && cotizacion.estado !== 'rechazada' && (esBorrador || (esEnviada && (esSupervisor || esPropietario)) || (cotizacion.estado === 'aceptada' && !despacho && esSupervisor))
-  const canReciclar = esSupervisor && (despachoAnulado || ['rechazada', 'anulada', 'vencida'].includes(cotizacion.estado))
+  const canReciclar = esSupervisor && esPropietario && (despachoAnulado || ['rechazada', 'anulada', 'vencida'].includes(cotizacion.estado))
 
   // ── Acción primaria ──
   function getPrimaryAction() {

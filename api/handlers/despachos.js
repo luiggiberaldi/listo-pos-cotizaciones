@@ -602,13 +602,13 @@ export async function handleActualizarEstadoDespacho(request, env) {
       }
     }
 
-    // 4c. Revertir/Eliminar comisión si pasa de entregada a cualquier otro estado
-    if (desp.estado === 'entregada' && ['pendiente', 'despachada', 'anulada'].includes(nuevoEstado)) {
+    // 4c. Revertir/Eliminar comisión si pasa de aprobada/entregada a pendiente o anulada
+    if (['despachada', 'entregada'].includes(desp.estado) && ['pendiente', 'anulada'].includes(nuevoEstado)) {
       try {
         await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}`, {
           method: 'DELETE', headers,
         });
-        console.log('[COMISION] Comisión eliminada por reversión de entrega.');
+        console.log('[COMISION] Comisión eliminada por reversión de despacho.');
       } catch (comRevErr) {
         console.error('[COMISION] Error al revertir comisión:', comRevErr?.message);
       }
@@ -707,8 +707,8 @@ export async function handleActualizarEstadoDespacho(request, env) {
       }
     }
 
-    // 5b. Calcular comisión solo al confirmar entrega
-    if (nuevoEstado === 'entregada') {
+    // 5b. Calcular comisión al aprobar o entregar
+    if (nuevoEstado === 'despachada' || nuevoEstado === 'entregada') {
       try {
         const vendRolRes = await fetch(
           `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${desp.vendedor_id}&select=rol,markup_pct`,

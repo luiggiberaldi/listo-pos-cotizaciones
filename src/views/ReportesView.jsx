@@ -915,6 +915,8 @@ function TabComisiones({ configNeg }) {
   const [filtroEstado, setFiltroEstado] = useState('') // '', 'pendiente', 'pagada'
   const [filtroVendedor, setFiltroVendedor] = useState('')
   const [exportando, setExportando] = useState(false)
+  const [showPrintMenu, setShowPrintMenu] = useState(false)
+  const [showExportMenu, setShowExportMenu] = useState(false)
 
   const [vendedorSeleccionado, setVendedorSeleccionado] = useState(null)
 
@@ -923,9 +925,18 @@ function TabComisiones({ configNeg }) {
     vendedorId: filtroVendedor,
     desde: rango.from,
     hasta: rango.to,
-    pageSize: 1000 // Cargamos un lote amplio para el reporte de resumen
+    pageSize: 1000
   })
   const comisiones = comisionesRes?.data ?? []
+
+  // Segunda llamada SIN filtro de vendedor, solo para construir el dropdown
+  // de forma que siempre muestre los vendedores con comisiones en el rango
+  const { data: comisionesDropdownRes } = useComisiones({
+    desde: rango.from,
+    hasta: rango.to,
+    pageSize: 2000
+  })
+  const comisionesParaDropdown = comisionesDropdownRes?.data ?? []
 
   const { data: resumen, isLoading: resumenLoading } = useComisionesResumen({
     vendedorId: filtroVendedor,
@@ -969,13 +980,23 @@ function TabComisiones({ configNeg }) {
       .sort((a, b) => b.totalUsd - a.totalUsd)
   }, [comisiones])
 
-  // Obtener lista única de vendedores para el select
+  // Obtener lista única de vendedores para el select (desde el dataset sin filtro de vendedor)
   const vendedoresDisponibles = useMemo(() => {
     if (!esAdmin) return []
-    return vendedoresAgrupados.map(v => ({ id: v.id, nombre: v.nombre }))
-  }, [vendedoresAgrupados, esAdmin])
+    const map = {}
+    const UUID_HUERFANO = '00000000-0000-0000-0000-000000000000'
+    comisionesParaDropdown.forEach(c => {
+      const vId = c.vendedor?.id || UUID_HUERFANO
+      const rol = c.vendedor?.rol
+      if (rol === 'desarrollador' || rol === 'administracion' || rol === 'logistica') return
+      if (!map[vId]) {
+        map[vId] = { id: vId, nombre: c.vendedor?.nombre || 'Sin Asignar' }
+      }
+    })
+    return Object.values(map).sort((a, b) => a.nombre.localeCompare(b.nombre))
+  }, [comisionesParaDropdown, esAdmin])
 
-  async function exportarPDF() {
+  async function exportarPDF(tipoFiltro = 'todos', accion = 'descargar') {
     setExportando(true)
     try {
       const { generarComisionesPDF } = await import('../services/pdf/comisionesPDF')
@@ -1053,6 +1074,26 @@ function TabComisiones({ configNeg }) {
         }
       })
 
+      // Filtrar comisiones según el tipo de vendedor seleccionado
+      if (tipoFiltro === 'internos') {
+        detalleCompleto = detalleCompleto.filter(c => {
+          const v = c.vendedor
+          const esExterno = !!v?.es_externo || (v?.markup_pct != null && Number(v.markup_pct) > 0)
+          return !esExterno
+        })
+      } else if (tipoFiltro === 'externos') {
+        detalleCompleto = detalleCompleto.filter(c => {
+          const v = c.vendedor
+          const esExterno = !!v?.es_externo || (v?.markup_pct != null && Number(v.markup_pct) > 0)
+          return esExterno
+        })
+      }
+
+      if (detalleCompleto.length === 0) {
+        alert(`🔍 SIN DATOS: No hay comisiones registradas para el grupo de vendedores seleccionado en este rango.`);
+        return;
+      }
+
       const vendedorInfo = filtroVendedor
         ? vendedoresAgrupados.find(v => v.id === filtroVendedor)
         : null
@@ -1060,8 +1101,10 @@ function TabComisiones({ configNeg }) {
       await generarComisionesPDF({
         comisiones: detalleCompleto || [],
         vendedor: vendedorInfo ? { nombre: vendedorInfo.nombre, color: vendedorInfo.color, markup_pct: vendedorInfo.markup_pct, es_externo: vendedorInfo.es_externo } : null,
+        tipoVendedor: tipoFiltro === 'todos' ? null : tipoFiltro,
         rango,
-        config: configNeg ?? {}
+        config: configNeg ?? {},
+        action: accion === 'imprimir' ? 'print' : 'download'
       })
     } catch (e) {
       console.error('Error generando PDF general:', e)
@@ -1182,8 +1225,109 @@ function TabComisiones({ configNeg }) {
               </div>
             </div>
 
-            <div className="w-full lg:w-auto shrink-0">
-              <ExportButton onClick={exportarPDF} loading={exportando} disabled={exportando || comisiones.length === 0} className="w-full h-11" />
+            <div className="flex items-center gap-3 relative shrink-0">
+              {/* BOTÓN IMPRIMIR PDF */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowPrintMenu(!showPrintMenu)}
+                  disabled={exportando || comisiones.length === 0}
+                  className="flex items-center gap-2 text-xs font-black px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm h-11"
+                >
+                  <Printer size={13} className="text-slate-500" />
+                  {exportando ? 'Generando...' : 'Imprimir PDF'}
+                  <ChevronDown size={13} className={`transition-transform duration-200 ${showPrintMenu ? 'rotate-180' : ''}`} />
+                </button>
+
+                {showPrintMenu && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setShowPrintMenu(false)} />
+                    <div className="absolute right-0 mt-2 w-56 rounded-xl bg-white border border-slate-200 shadow-xl z-20 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+                      <button
+                        onClick={() => {
+                          setShowPrintMenu(false)
+                          exportarPDF('todos', 'imprimir')
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors"
+                      >
+                        <FileText size={14} className="text-slate-400" />
+                        Imprimir PDF Completo
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowPrintMenu(false)
+                          exportarPDF('internos', 'imprimir')
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors border-t border-slate-50"
+                      >
+                        <UserCheck size={14} className="text-indigo-500" />
+                        Imprimir Solo Internos
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowPrintMenu(false)
+                          exportarPDF('externos', 'imprimir')
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors border-t border-slate-50"
+                      >
+                        <Globe size={14} className="text-amber-500" />
+                        Imprimir Solo Externos
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* BOTÓN DESCARGAR PDF */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowExportMenu(!showExportMenu)}
+                  disabled={exportando || comisiones.length === 0}
+                  className="flex items-center gap-2 text-xs font-black px-5 py-2.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-lg shadow-indigo-100/40 h-11"
+                  style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
+                >
+                  <Download size={13} />
+                  {exportando ? 'Generando...' : 'Descargar PDF'}
+                  <ChevronDown size={13} className={`transition-transform duration-200 ${showExportMenu ? 'rotate-180' : ''}`} />
+                </button>
+
+                {showExportMenu && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setShowExportMenu(false)} />
+                    <div className="absolute right-0 mt-2 w-56 rounded-xl bg-white border border-slate-200 shadow-xl z-20 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+                      <button
+                        onClick={() => {
+                          setShowExportMenu(false)
+                          exportarPDF('todos', 'descargar')
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors"
+                      >
+                        <FileText size={14} className="text-slate-400" />
+                        Descargar PDF Completo
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowExportMenu(false)
+                          exportarPDF('internos', 'descargar')
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors border-t border-slate-50"
+                      >
+                        <UserCheck size={14} className="text-indigo-500" />
+                        Descargar Solo Internos
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowExportMenu(false)
+                          exportarPDF('externos', 'descargar')
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors border-t border-slate-50"
+                      >
+                        <Globe size={14} className="text-amber-500" />
+                        Descargar Solo Externos
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>

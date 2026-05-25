@@ -43,13 +43,33 @@ export default function DateRangeSelector({ value, onChange }) {
   }
 
   function handleCustom(field, val) {
+    if (!val) return
     const next = { ...value, [field]: val }
-    // Calcular prev automáticamente: misma duración hacia atrás
+
+    // Auto-corrección: si from > to, ajustar el otro campo automáticamente
     if (next.from && next.to) {
-      const fromD = new Date(next.from)
-      const toD = new Date(next.to)
-      const diff = toD - fromD
-      const prevTo = new Date(fromD.getTime() - 1) // día anterior al from
+      const pFrom = next.from.split('-')
+      const pTo = next.to.split('-')
+      const fromD = new Date(pFrom[0], pFrom[1] - 1, pFrom[2])
+      const toD = new Date(pTo[0], pTo[1] - 1, pTo[2])
+
+      if (fromD > toD) {
+        // Si el usuario cambió "from" y quedó mayor que "to" → mover "to" = "from"
+        // Si el usuario cambió "to" y quedó menor que "from" → mover "from" = "to"
+        if (field === 'from') {
+          next.to = val
+        } else {
+          next.from = val
+        }
+      }
+
+      // Recalcular con los valores ya corregidos
+      const pFromC = next.from.split('-')
+      const pToC = next.to.split('-')
+      const fromDC = new Date(pFromC[0], pFromC[1] - 1, pFromC[2])
+      const toDC = new Date(pToC[0], pToC[1] - 1, pToC[2])
+      const diff = Math.max(toDC - fromDC, 0)
+      const prevTo = new Date(fromDC.getTime() - 86400000) // día anterior al from
       const prevFrom = new Date(prevTo.getTime() - diff)
       next.prevFrom = getLocalISODate(prevFrom)
       next.prevTo = getLocalISODate(prevTo)
@@ -85,14 +105,22 @@ export default function DateRangeSelector({ value, onChange }) {
         </button>
       </div>
       {showCustom && (
-        <div className="flex items-center gap-2">
-          <input type="date" value={value.from}
-            onChange={e => handleCustom('from', e.target.value)}
-            className="text-[11px] sm:text-xs px-2 py-1.5 rounded-lg border border-slate-200 text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-focus flex-1 min-w-0" />
-          <span className="text-[10px] sm:text-xs text-slate-400 shrink-0">a</span>
-          <input type="date" value={value.to}
-            onChange={e => handleCustom('to', e.target.value)}
-            className="text-[11px] sm:text-xs px-2 py-1.5 rounded-lg border border-slate-200 text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-focus flex-1 min-w-0" />
+        <div className="flex items-center gap-3">
+          <div className="flex flex-col flex-1 min-w-0">
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1 ml-1">Desde</span>
+            <input type="date" value={value.from}
+              max={value.to || undefined}
+              onChange={e => handleCustom('from', e.target.value)}
+              className="text-[11px] sm:text-xs px-2 py-1.5 rounded-lg border border-slate-200 text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-focus w-full" />
+          </div>
+          <span className="text-[10px] text-slate-300 shrink-0 mt-4">→</span>
+          <div className="flex flex-col flex-1 min-w-0">
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1 ml-1">Hasta</span>
+            <input type="date" value={value.to}
+              min={value.from || undefined}
+              onChange={e => handleCustom('to', e.target.value)}
+              className="text-[11px] sm:text-xs px-2 py-1.5 rounded-lg border border-slate-200 text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-focus w-full" />
+          </div>
         </div>
       )}
     </div>

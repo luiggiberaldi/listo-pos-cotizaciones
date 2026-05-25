@@ -158,6 +158,65 @@ export default function DespachosView() {
   const cambiarEstado = useActualizarEstadoDespacho()
   const reciclar = useReciclarDespacho()
 
+  // Filtrar los vendedores en el selector para mostrar solo los que tienen despachos en el rango/estado/búsqueda seleccionado
+  const vendedoresFiltrados = useMemo(() => {
+    if (!despachos || despachos.length === 0) return []
+    
+    // Filtro por fecha/estado/búsqueda similar al de despachosFiltrados, pero sin filtrar por vendedor
+    let lista = despachos
+    if (estadoFiltro === 'hoy') {
+      const today = new Date()
+      lista = lista.filter(d => {
+        if (!d.creado_en) return false
+        const dateObj = new Date(d.creado_en)
+        return (
+          dateObj.getDate() === today.getDate() &&
+          dateObj.getMonth() === today.getMonth() &&
+          dateObj.getFullYear() === today.getFullYear()
+        )
+      })
+    } else if (estadoFiltro) {
+      lista = lista.filter(d => d.estado === estadoFiltro)
+    }
+
+    if (busquedaGlobal) {
+      const q = busquedaGlobal.toLowerCase()
+      const qClean = q.replace(/[\.\-\s]/g, '')
+      lista = lista.filter(d => {
+        const numCotStr = d.cotizacion?.numero ? `cot-${String(d.cotizacion.numero).padStart(5, '0')}` : ''
+        const numDspStr = `dsp-${String(d.numero).padStart(5, '0')}`
+        const clienteNombre = (d.cliente?.nombre || '').toLowerCase()
+        const clienteRif = (d.cliente?.rif_cedula || '').toLowerCase()
+        const clienteRifClean = clienteRif.replace(/[\.\-\s]/g, '')
+        const clienteCodigo = (d.cliente?.codigo_cliente || '').toLowerCase()
+        const totalStr = String(d.cotizacion?.total_usd || 0)
+        
+        return numCotStr.includes(q) ||
+               numDspStr.includes(q) ||
+               String(d.numero).includes(q) ||
+               String(d.cotizacion?.numero || '').includes(q) ||
+               clienteNombre.includes(q) || 
+               clienteRif.includes(q) ||
+               clienteCodigo.includes(q) ||
+               (qClean.length > 2 && clienteRifClean.includes(qClean)) ||
+               totalStr.includes(q)
+      })
+    }
+
+    const idsConDespachos = new Set(lista.map(d => d.vendedor_id).filter(Boolean))
+    return vendedores.filter(v => idsConDespachos.has(v.id))
+  }, [despachos, vendedores, estadoFiltro, busquedaGlobal])
+
+  // Limpiar filtro de vendedor si el vendedor seleccionado ya no tiene despachos en el rango seleccionado
+  useEffect(() => {
+    if (vendedorFiltro) {
+      const existe = vendedoresFiltrados.some(v => v.id === vendedorFiltro)
+      if (!existe) {
+        setVendedorFiltro('')
+      }
+    }
+  }, [vendedoresFiltrados, vendedorFiltro])
+
   // Filtrar por vendedor (solo supervisor)
   const despachosFiltrados = useMemo(() => {
     let lista = vendedorFiltro ? despachos.filter(d => d.vendedor_id === vendedorFiltro) : despachos
@@ -331,9 +390,9 @@ export default function DespachosView() {
           {((esAdministracion || esLogistica) || (esPrivilegiado && verTodos)) && vendedores.length > 1 && (
             <div className="hidden md:flex items-center gap-2">
               <div className="w-px h-5 bg-slate-200 mx-1" />
-              <VendedorFilterPill vendedores={vendedores} value={vendedorFiltro} onChange={setVendedorFiltro} />
+              <VendedorFilterPill vendedores={vendedoresFiltrados} value={vendedorFiltro} onChange={setVendedorFiltro} />
             </div>
-          )}
+          ) /* esAdministracion */}
           <div className="flex items-center gap-1.5 ml-auto shrink-0">
             <div className="flex bg-slate-100 rounded-xl p-0.5">
               <button type="button" onClick={() => {
@@ -364,7 +423,7 @@ export default function DespachosView() {
         {/* Filtro por vendedor — móvil segunda fila */}
         {((esAdministracion || esLogistica) || (esPrivilegiado && verTodos)) && vendedores.length > 1 && (
           <div className="md:hidden">
-            <VendedorFilterPill vendedores={vendedores} value={vendedorFiltro} onChange={setVendedorFiltro} />
+            <VendedorFilterPill vendedores={vendedoresFiltrados} value={vendedorFiltro} onChange={setVendedorFiltro} />
           </div>
         )}
       </div>

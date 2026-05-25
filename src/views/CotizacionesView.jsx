@@ -35,7 +35,6 @@ import PageHeader from '../components/ui/PageHeader'
 import Pagination from '../components/ui/Pagination'
 import { OnboardingSequence } from '../components/ui/OnboardingTooltip'
 import { getAction } from '../utils/cotizacionActions'
-import ReciclarCotizacionModal from '../components/cotizaciones/ReciclarCotizacionModal'
 import ClienteFacturaBuscador from '../components/clientes/ClienteFacturaBuscador'
 import TransportistaFormCompact from '../components/transportistas/TransportistaFormCompact'
 
@@ -766,7 +765,6 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
   const [cotizacionAAnular, setCotizacionAAnular] = useState(null)
   const [cotizacionADespachar, setCotizacionADespachar] = useState(null)
   const [cotizacionAReciclar, setCotizacionAReciclar] = useState(null)
-  const [vendedorReciclar, setVendedorReciclar] = useState('')
   const [cotizacionDetalle, setCotizacionDetalle] = useState(null)
 
   // Abrir modal de despacho cuando viene del builder
@@ -890,14 +888,13 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
   }
 
   async function confirmarReciclar() {
-    if (!cotizacionAReciclar || !vendedorReciclar) return
+    if (!cotizacionAReciclar) return
     try {
       await reciclar.mutateAsync({
         cotizacionId: cotizacionAReciclar.id,
-        vendedorDestinoId: vendedorReciclar,
+        vendedorDestinoId: perfil?.id,
       })
       setCotizacionAReciclar(null)
-      setVendedorReciclar('')
     } catch (err) {
       showToast(err.message || 'Error al reciclar cotización', 'error')
     }
@@ -905,7 +902,6 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
 
   function abrirReciclar(cot) {
     setCotizacionAReciclar(cot)
-    setVendedorReciclar(cot.vendedor_id || '')
   }
 
   // Interceptar cambio de estado
@@ -1106,15 +1102,14 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
       />
 
       {/* Modal reciclar cotización */}
-      <ReciclarCotizacionModal
+      <ConfirmModal
         isOpen={!!cotizacionAReciclar}
-        cotizacion={cotizacionAReciclar}
-        vendedores={vendedores}
-        vendedorSeleccionado={vendedorReciclar}
-        onVendedorChange={setVendedorReciclar}
+        onClose={() => setCotizacionAReciclar(null)}
         onConfirm={confirmarReciclar}
-        onClose={() => { setCotizacionAReciclar(null); setVendedorReciclar('') }}
-        isPending={reciclar.isPending}
+        title="¿Reutilizar cotización?"
+        message={`Se creará un nuevo borrador con los mismos productos a nombre de ${perfil?.nombre || 'tu usuario'}.`}
+        confirmText="Sí, reutilizar"
+        variant="default"
       />
     </div>
   )

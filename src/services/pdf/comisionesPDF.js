@@ -11,7 +11,7 @@ import {
 
 // ─── Generar Reporte de Comisiones ───────────────────────────────────────────
 // ─── Generar Reporte de Comisiones ───────────────────────────────────────────
-export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVendedor = null, resumen = null, rango = null, config = {} }) {
+export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVendedor = null, resumen = null, rango = null, config = {}, action = 'download' }) {
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
   let y = 0
 
@@ -56,9 +56,9 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
     d.roundedRect(x, y - h + 1, w, h, 1, 1, 'S')
     
     d.setFont('helvetica', 'bold')
-    d.setFontSize(5.5)
+    d.setFontSize(7.0)
     d.setTextColor(...textColor)
-    d.text(text, x + w / 2, y - h / 2 + 1.2, { align: 'center' })
+    d.text(text, x + w / 2, y - h / 2 + 1.4, { align: 'center' })
   }
 
   // NORMALIZAR: unificar naming antes de procesar (soporte para Worker API y RPC)
@@ -95,7 +95,33 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
     }
   }
 
-  const comisionesNorm = (comisiones || []).map(normalizarComision)
+  const ordenarPorVendedorYDocumento = (a, b) => {
+    const nombreA = (a.vendedor?.nombre || '').trim().toLowerCase();
+    const nombreB = (b.vendedor?.nombre || '').trim().toLowerCase();
+    if (nombreA < nombreB) return -1;
+    if (nombreA > nombreB) return 1;
+
+    // Mismo vendedor, ordenar por número de despacho descendente
+    const numA = parseInt(String(a.despachonumero).replace(/\D/g, ''), 10) || 0;
+    const numB = parseInt(String(b.despachonumero).replace(/\D/g, ''), 10) || 0;
+    if (numA !== numB) {
+      return numB - numA;
+    }
+
+    // Mismo despacho, ordenar por fecha descendente
+    const dateA = new Date(a.creadoen).getTime() || 0;
+    const dateB = new Date(b.creadoen).getTime() || 0;
+    if (dateA !== dateB) {
+      return dateB - dateA;
+    }
+
+    // Por descripción
+    const descA = (a.descripcion || '').toLowerCase();
+    const descB = (b.descripcion || '').toLowerCase();
+    return descA.localeCompare(descB);
+  };
+
+  const comisionesNorm = (comisiones || []).map(normalizarComision).sort(ordenarPorVendedorYDocumento)
   // Si hay descripciones significativas, es el reporte detallado
   const esDetallado = comisionesNorm.some(c => c.descripcion && c.descripcion !== '---')
 
@@ -138,12 +164,12 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
 
   // Subtítulo
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
+  doc.setFontSize(12.5)
   let subTitleText = 'Reporte de Comisiones'
   if (tipoVendedor === 'internos') subTitleText = 'Reporte de Comisiones — Vendedores Internos'
   else if (tipoVendedor === 'externos') subTitleText = 'Reporte de Comisiones — Vendedores Externos'
   doc.text(subTitleText, PAGE_W - MARGIN, HDR_H - 8, { align: 'right' })
-  doc.setFontSize(8)
+  doc.setFontSize(9.5)
   doc.setFont('helvetica', 'normal')
   let subHeaderDate = fmtFecha(new Date().toISOString(), 'short-month')
   if (rango && (rango.from || rango.to)) {
@@ -164,7 +190,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
     doc.setFillColor(vColor[0], vColor[1], vColor[2])
     doc.roundedRect(MARGIN, y, 4, 10, 2, 2, 'F')
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(12)
+    doc.setFontSize(13.5)
     doc.setTextColor(...C_DARK)
     const esExterno = !!vendedor.es_externo || (vendedor.markup_pct != null && Number(vendedor.markup_pct) > 0);
     const labelV = esExterno ? `${vendedor.nombre} — Vendedor Externo (+${vendedor.markup_pct || 0}%)` : `${vendedor.nombre} — Vendedor Interno`;
@@ -246,19 +272,19 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
     
     // Draw content
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7)
+    doc.setFontSize(8.5)
     doc.setTextColor(...box.badgeColor)
     doc.text(box.label.toUpperCase(), bx + 4.5, y + 5.5)
     
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(12)
+    doc.setFontSize(13.5)
     doc.setTextColor(...box.textColor)
     doc.text(box.value, bx + 4.5, y + 11.5)
     
     if (i === 2) {
       // Dibujar desglose premium
       doc.setFont('helvetica', 'bold')
-      doc.setFontSize(6.2)
+      doc.setFontSize(7.7)
       doc.setTextColor(217, 119, 6) // Amber 600
       const txtReg = `Reg: ${fmtUsd(totalPendienteRegular)}  ·  `
       doc.text(txtReg, bx + 4.5, y + 15.5)
@@ -267,7 +293,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
       doc.text(`CxC: ${fmtUsd(totalPendienteCxc)}`, bx + 4.5 + offset, y + 15.5)
     } else {
       doc.setFont('helvetica', 'normal')
-      doc.setFontSize(6.5)
+      doc.setFontSize(8.0)
       doc.setTextColor(...box.badgeColor)
       doc.text(box.count, bx + 4.5, y + 15.5)
     }
@@ -287,12 +313,12 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
     
     // Label
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7.5)
+    doc.setFontSize(9.0)
     doc.setTextColor(...C_DARK)
     doc.text('Distribución de Liquidación:', MARGIN + 1, y + 3)
     
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(7)
+    doc.setFontSize(8.5)
     doc.setTextColor(...C_GRAY)
     const labelPct = `${pctPagado.toFixed(1)}% Pagado · ${pctPendiente.toFixed(1)}% Pendiente`
     doc.text(labelPct, MARGIN + CONTENT_W - 1, y + 3, { align: 'right' })
@@ -333,52 +359,29 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
   let cols = []
   
   if (esDetallado) {
-    cols = vendedor
-      ? [
-          { label: 'Fecha', x: MARGIN, w: 16 },
-          { label: 'Nº Doc', x: MARGIN + 16, w: 12 },
-          { label: 'Producto / Descripción', x: MARGIN + 28, w: 55 },
-          { label: 'Valor ($)', x: MARGIN + 83, w: 15, align: 'right' },
-          { label: '%', x: MARGIN + 98, w: 8, align: 'right' },
-          { label: 'Com ($)', x: MARGIN + 106, w: 15, align: 'right' },
-          { label: 'Tasa (Bs)', x: MARGIN + 121, w: 15, align: 'right' },
-          { label: 'Com (Bs)', x: MARGIN + 136, w: 18, align: 'right' },
-          { label: 'Estado', x: MARGIN + 154, w: 18, align: 'center' },
-        ]
-      : [
-          { label: 'Vendedor', x: MARGIN, w: 18 },
-          { label: 'Nº Doc', x: MARGIN + 18, w: 12 },
-          { label: 'Producto / Descripción', x: MARGIN + 30, w: 50 },
-          { label: 'Valor ($)', x: MARGIN + 80, w: 15, align: 'right' },
-          { label: '%', x: MARGIN + 95, w: 8, align: 'right' },
-          { label: 'Com ($)', x: MARGIN + 103, w: 15, align: 'right' },
-          { label: 'Tasa (Bs)', x: MARGIN + 118, w: 15, align: 'right' },
-          { label: 'Com (Bs)', x: MARGIN + 133, w: 18, align: 'right' },
-          { label: 'Estado', x: MARGIN + 151, w: 18, align: 'center' },
-        ]
+    cols = [
+      { label: 'Fecha', x: MARGIN, w: 16 },
+      { label: 'Nº Doc', x: MARGIN + 16, w: 12 },
+      { label: 'Producto / Descripción', x: MARGIN + 28, w: 55 },
+      { label: 'Valor ($)', x: MARGIN + 83, w: 15, align: 'right' },
+      { label: '%', x: MARGIN + 98, w: 8, align: 'right' },
+      { label: 'Com ($)', x: MARGIN + 106, w: 15, align: 'right' },
+      { label: 'Tasa (Bs)', x: MARGIN + 121, w: 15, align: 'right' },
+      { label: 'Com (Bs)', x: MARGIN + 136, w: 18, align: 'right' },
+      { label: 'Estado', x: MARGIN + 154, w: 18, align: 'center' },
+    ]
   } else {
-    cols = vendedor
-      ? [
-          { label: 'Fecha', x: MARGIN, w: 18 },
-          { label: 'Nº Doc', x: MARGIN + 18, w: 15 },
-          { label: 'Cabilla ($)', x: MARGIN + 33, w: 22, align: 'right' },
-          { label: 'Otros ($)', x: MARGIN + 55, w: 22, align: 'right' },
-          { label: 'Total Com ($)', x: MARGIN + 77, w: 25, align: 'right' },
-          { label: 'Abonado ($)', x: MARGIN + 102, w: 22, align: 'right' },
-          { label: 'Tasa (Bs)', x: MARGIN + 124, w: 18, align: 'right' },
-          { label: 'Com. (Bs)', x: MARGIN + 142, w: 25, align: 'right' },
-          { label: 'Estado', x: MARGIN + 167, w: 25, align: 'center' },
-        ]
-      : [
-          { label: 'Vendedor', x: MARGIN, w: 25 },
-          { label: 'Fecha', x: MARGIN + 25, w: 18 },
-          { label: 'Nº Doc', x: MARGIN + 43, w: 15 },
-          { label: 'Total Com ($)', x: MARGIN + 58, w: 25, align: 'right' },
-          { label: 'Abonado ($)', x: MARGIN + 83, w: 22, align: 'right' },
-          { label: 'Tasa (Bs)', x: MARGIN + 105, w: 18, align: 'right' },
-          { label: 'Com. (Bs)', x: MARGIN + 123, w: 25, align: 'right' },
-          { label: 'Estado', x: MARGIN + 148, w: 25, align: 'center' },
-        ]
+    cols = [
+      { label: 'Fecha', x: MARGIN, w: 18 },
+      { label: 'Nº Doc', x: MARGIN + 18, w: 15 },
+      { label: 'Cabilla ($)', x: MARGIN + 33, w: 22, align: 'right' },
+      { label: 'Otros ($)', x: MARGIN + 55, w: 22, align: 'right' },
+      { label: 'Total Com ($)', x: MARGIN + 77, w: 25, align: 'right' },
+      { label: 'Abonado ($)', x: MARGIN + 102, w: 22, align: 'right' },
+      { label: 'Tasa (Bs)', x: MARGIN + 124, w: 18, align: 'right' },
+      { label: 'Com. (Bs)', x: MARGIN + 142, w: 25, align: 'right' },
+      { label: 'Estado', x: MARGIN + 167, w: 25, align: 'center' },
+    ]
   }
 
   function drawTableHeader(doc, yPos) {
@@ -389,7 +392,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
     doc.line(MARGIN, yPos + 7, MARGIN + CONTENT_W, yPos + 7)
     
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(6.5)
+    doc.setFontSize(9.0)
     doc.setTextColor(80, 90, 110)
     cols.forEach(col => {
       const align = col.align || 'left'
@@ -416,197 +419,266 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
     if (items.length === 0) {
       y = checkPage(doc, y, 15, handlePageAdd);
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(8.5);
+      doc.setFontSize(11.0);
       doc.setTextColor(...C_DARK);
       doc.text(titulo, MARGIN, y + 4);
       y += 6;
       
       doc.setFont('helvetica', 'italic');
-      doc.setFontSize(7.5);
+      doc.setFontSize(10.0);
       doc.setTextColor(...C_GRAY);
       doc.text('No hay comisiones registradas en este grupo.', MARGIN + 2, y + 4);
       y += 8;
       return { totalUsd: 0, cabillaUsd: 0, otrosUsd: 0, abonadoUsd: 0, totalBs: 0 };
     }
 
-    y = checkPage(doc, y, 18, handlePageAdd);
+    y = checkPage(doc, y, 15, handlePageAdd);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.setTextColor(...C_DARK);
+    doc.setFontSize(12.0);
+    doc.setTextColor(...C_PRIMARY);
     doc.text(titulo, MARGIN, y + 4);
     y += 7;
 
-    y = drawTableHeader(doc, y);
+    let groupCabillaUsd = 0;
+    let groupOtrosUsd = 0;
+    let groupTotalUsd = 0;
+    let groupAbonadoUsd = 0;
+    let groupTotalBs = 0;
 
-    let subCabillaUsd = 0;
-    let subOtrosUsd = 0;
-    let subTotalUsd = 0;
-    let subAbonadoUsd = 0;
-    let subTotalBs = 0;
-
-    items.forEach((c, idx) => {
-      const rowH = 6;
-      y = checkPage(doc, y, rowH + 2, handlePageAdd);
-
-      if (y < MARGIN + 12) {
-        y = drawTableHeader(doc, y);
-      }
-
-      if (idx % 2 === 0) {
-        doc.setFillColor(252, 252, 253);
-        doc.rect(MARGIN, y - 1, CONTENT_W, rowH, 'F');
-      }
-
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(6.5);
+    function dibujarSubTablaVendedor(vNombre, vColor, vItems) {
+      // Dibujar subheader del vendedor
+      y = checkPage(doc, y, 18, handlePageAdd);
+      
+      const rgbColor = hexToRgb(vColor || '#1B365D');
+      doc.setFillColor(rgbColor[0], rgbColor[1], rgbColor[2]);
+      doc.circle(MARGIN + 3, y + 3, 1.5, 'F');
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11.0);
       doc.setTextColor(...C_DARK);
+      doc.text(vNombre.toUpperCase(), MARGIN + 7, y + 4);
+      y += 7;
 
-      const tasa = c.tasa_snapshot;
-      const comBs = tasa > 0 ? c.totalcomision * tasa : 0;
+      // Dibujar cabecera de tabla
+      y = drawTableHeader(doc, y);
 
-      // Sumar a subtotales
-      subCabillaUsd += c.comisioncabilla;
-      subOtrosUsd += c.comisionotros;
-      subTotalUsd += c.totalcomision;
-      subAbonadoUsd += c.montopagado;
-      subTotalBs += comBs;
+      const comisionesNormales = vItems.filter(c => c.estado !== 'cta_cobrar');
+      const cuentasCobrar = vItems.filter(c => c.estado === 'cta_cobrar');
 
-      if (esDetallado) {
-        if (vendedor) {
-          doc.text(fmtFechaCorta(c.creadoen), cols[0].x + 1, y + 3);
-          doc.text(`#${c.despachonumero}`, cols[1].x + 1, y + 3);
-          
-          doc.setFontSize(5.5);
-          const desc = `${c.codigo ? '['+c.codigo+'] ' : ''}${c.descripcion || '—'}`;
-          const splitDesc = doc.splitTextToSize(desc, cols[2].w - 2);
-          doc.text(splitDesc, cols[2].x + 1, y + 2.5);
-          doc.setFontSize(6.5);
+      let totalCabillaUsd = 0;
+      let totalOtrosUsd = 0;
+      let totalTotalUsd = 0;
+      let totalAbonadoUsd = 0;
+      let totalTotalBs = 0;
 
-          doc.text(fmtUsd(c.valor), cols[3].x + cols[3].w - 2, y + 3, { align: 'right' });
-          doc.text(`${c.pct}%`, cols[4].x + cols[4].w - 2, y + 3, { align: 'right' });
-          
+      function dibujarTablaEspecifica(itemsParaTabla, tituloTabla, suffixSubtotal) {
+        if (itemsParaTabla.length === 0) return;
+
+        // Si hay ambos tipos, dibujar un pequeño título de sección para la tabla
+        if (comisionesNormales.length > 0 && cuentasCobrar.length > 0) {
+          y = checkPage(doc, y, 10, handlePageAdd);
           doc.setFont('helvetica', 'bold');
-          doc.text(fmtUsd(c.totalcomision), cols[5].x + cols[5].w - 2, y + 3, { align: 'right' });
-          
-          doc.setFont('helvetica', 'normal');
-          doc.text(tasa > 0 ? `Bs ${tasa}` : 'N/D', cols[6].x + cols[6].w - 2, y + 3, { align: 'right' });
-          
-          doc.setFont('helvetica', 'bold');
-          doc.text(tasa > 0 ? fmtBs(comBs) : 'N/D', cols[7].x + cols[7].w - 2, y + 3, { align: 'right' });
-
-          drawStatusBadge(doc, c.estado, cols[8].x, y + 3.5, cols[8].w, 4);
-        } else {
-          doc.setFont('helvetica', 'bold');
-          const isExt = !!c.vendedor?.es_externo || (c.vendedor?.markup_pct != null && Number(c.vendedor.markup_pct) > 0);
-          const markupSuffix = isExt ? ` (E)` : '';
-          const vName = `${c.vendedor?.nombre || 'Sin asesor'}${markupSuffix}`;
-          const vNameLines = doc.splitTextToSize(vName, cols[0].w - 2);
-          doc.text(vNameLines[0], cols[0].x + 1, y + 3);
-          
-          doc.setFont('helvetica', 'normal');
-          doc.text(`#${c.despachonumero}`, cols[1].x + 1, y + 3);
-
-          doc.setFontSize(5.5);
-          const desc = `${c.codigo ? '['+c.codigo+'] ' : ''}${c.descripcion || '—'}`;
-          const splitDesc = doc.splitTextToSize(desc, cols[2].w - 2);
-          doc.text(splitDesc, cols[2].x + 1, y + 2.5);
-          doc.setFontSize(6.5);
-
-          doc.text(fmtUsd(c.valor), cols[3].x + cols[3].w - 2, y + 3, { align: 'right' });
-          doc.text(`${c.pct}%`, cols[4].x + cols[4].w - 2, y + 3, { align: 'right' });
-          
-          doc.setFont('helvetica', 'bold');
-          doc.text(fmtUsd(c.totalcomision), cols[5].x + cols[5].w - 2, y + 3, { align: 'right' });
-          
-          doc.setFont('helvetica', 'normal');
-          doc.text(tasa > 0 ? `Bs ${tasa}` : 'N/D', cols[6].x + cols[6].w - 2, y + 3, { align: 'right' });
-          
-          doc.setFont('helvetica', 'bold');
-          doc.text(tasa > 0 ? fmtBs(comBs) : 'N/D', cols[7].x + cols[7].w - 2, y + 3, { align: 'right' });
-
-          drawStatusBadge(doc, c.estado, cols[8].x, y + 3.5, cols[8].w, 4);
+          doc.setFontSize(8.5);
+          doc.setTextColor(80, 90, 110);
+          doc.text(tituloTabla.toUpperCase(), MARGIN + 2, y + 4);
+          y += 6;
         }
-      } else {
-        if (vendedor) {
-          doc.text(fmtFechaCorta(c.creadoen), cols[0].x + 1, y + 3);
-          doc.text(`#${c.despachonumero}`, cols[1].x + 1, y + 3);
-          
-          doc.text(fmtUsd(c.comisioncabilla), cols[2].x + cols[2].w - 2, y + 3, { align: 'right' });
-          doc.text(fmtUsd(c.comisionotros), cols[3].x + cols[3].w - 2, y + 3, { align: 'right' });
-          
-          doc.setFont('helvetica', 'bold');
-          doc.text(fmtUsd(c.totalcomision), cols[4].x + cols[4].w - 2, y + 3, { align: 'right' });
-          
-          doc.setFont('helvetica', 'normal');
-          doc.text(c.montopagado > 0 ? fmtUsd(c.montopagado) : '—', cols[5].x + cols[5].w - 2, y + 3, { align: 'right' });
-          
-          doc.text(tasa > 0 ? `Bs ${tasa}` : 'N/D', cols[6].x + cols[6].w - 2, y + 3, { align: 'right' });
-          
-          doc.setFont('helvetica', 'bold');
-          doc.text(tasa > 0 ? fmtBs(comBs) : 'N/D', cols[7].x + cols[7].w - 2, y + 3, { align: 'right' });
 
-          drawStatusBadge(doc, c.estado, cols[8].x, y + 3.5, cols[8].w, 4);
+        // Dibujar cabecera de tabla
+        y = drawTableHeader(doc, y);
+
+        let subCabillaUsd = 0;
+        let subOtrosUsd = 0;
+        let subTotalUsd = 0;
+        let subAbonadoUsd = 0;
+        let subTotalBs = 0;
+
+        itemsParaTabla.forEach((c, idx) => {
+          const rowH = 7.5;
+          y = checkPage(doc, y, rowH + 2, handlePageAdd);
+
+          if (y < MARGIN + 12) {
+            y = drawTableHeader(doc, y);
+          }
+
+          if (idx % 2 === 0) {
+            doc.setFillColor(252, 252, 253);
+            doc.rect(MARGIN, y - 1, CONTENT_W, rowH, 'F');
+          }
+
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(9.0);
+          doc.setTextColor(...C_DARK);
+
+          const tasa = c.tasa_snapshot;
+          const comBs = tasa > 0 ? c.totalcomision * tasa : 0;
+
+          // Sumar a subtotales de esta subtabla
+          subCabillaUsd += c.comisioncabilla;
+          subOtrosUsd += c.comisionotros;
+          subTotalUsd += c.totalcomision;
+          subAbonadoUsd += c.montopagado;
+          subTotalBs += comBs;
+
+          // Sumar al total general del vendedor
+          totalCabillaUsd += c.comisioncabilla;
+          totalOtrosUsd += c.comisionotros;
+          totalTotalUsd += c.totalcomision;
+          totalAbonadoUsd += c.montopagado;
+          totalTotalBs += comBs;
+
+          if (esDetallado) {
+            doc.text(fmtFechaCorta(c.creadoen), cols[0].x + 1, y + 4.5);
+            doc.text(`#${c.despachonumero}`, cols[1].x + 1, y + 4.5);
+            
+            doc.setFontSize(8.0);
+            const desc = `${c.codigo ? '['+c.codigo+'] ' : ''}${c.descripcion || '—'}`;
+            const splitDesc = doc.splitTextToSize(desc, cols[2].w - 2);
+            doc.text(splitDesc, cols[2].x + 1, y + 3.2);
+            doc.setFontSize(9.0);
+
+            doc.text(fmtUsd(c.valor), cols[3].x + cols[3].w - 2, y + 4.5, { align: 'right' });
+            doc.text(`${c.pct}%`, cols[4].x + cols[4].w - 2, y + 4.5, { align: 'right' });
+            
+            doc.setFont('helvetica', 'bold');
+            doc.text(fmtUsd(c.totalcomision), cols[5].x + cols[5].w - 2, y + 4.5, { align: 'right' });
+            
+            doc.setFont('helvetica', 'normal');
+            doc.text(tasa > 0 ? `Bs ${tasa}` : 'N/D', cols[6].x + cols[6].w - 2, y + 4.5, { align: 'right' });
+            
+            doc.setFont('helvetica', 'bold');
+            doc.text(tasa > 0 ? fmtBs(comBs) : 'N/D', cols[7].x + cols[7].w - 2, y + 4.5, { align: 'right' });
+
+            drawStatusBadge(doc, c.estado, cols[8].x, y + 5.5, cols[8].w, 4.5);
+          } else {
+            doc.text(fmtFechaCorta(c.creadoen), cols[0].x + 1, y + 4.5);
+            doc.text(`#${c.despachonumero}`, cols[1].x + 1, y + 4.5);
+            
+            doc.text(fmtUsd(c.comisioncabilla), cols[2].x + cols[2].w - 2, y + 4.5, { align: 'right' });
+            doc.text(fmtUsd(c.comisionotros), cols[3].x + cols[3].w - 2, y + 4.5, { align: 'right' });
+            
+            doc.setFont('helvetica', 'bold');
+            doc.text(fmtUsd(c.totalcomision), cols[4].x + cols[4].w - 2, y + 4.5, { align: 'right' });
+            
+            doc.setFont('helvetica', 'normal');
+            doc.text(c.montopagado > 0 ? fmtUsd(c.montopagado) : '—', cols[5].x + cols[5].w - 2, y + 4.5, { align: 'right' });
+            
+            doc.text(tasa > 0 ? `Bs ${tasa}` : 'N/D', cols[6].x + cols[6].w - 2, y + 4.5, { align: 'right' });
+            
+            doc.setFont('helvetica', 'bold');
+            doc.text(tasa > 0 ? fmtBs(comBs) : 'N/D', cols[7].x + cols[7].w - 2, y + 4.5, { align: 'right' });
+
+            drawStatusBadge(doc, c.estado, cols[8].x, y + 5.5, cols[8].w, 4.5);
+          }
+
+          y += rowH;
+        });
+
+        // Dibujar subtotal de esta subtabla
+        y = checkPage(doc, y, 10, handlePageAdd);
+        doc.setDrawColor(210, 215, 225);
+        doc.setLineWidth(0.25);
+        doc.line(MARGIN, y, MARGIN + CONTENT_W, y);
+        y += 4.5;
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9.0);
+        doc.setTextColor(80, 90, 100);
+        doc.text(`Subtotal ${vNombre}${suffixSubtotal}:`, MARGIN + 2, y);
+
+        doc.setTextColor(...C_DARK);
+        if (esDetallado) {
+          doc.text(fmtUsd(subTotalUsd), cols[5].x + cols[5].w - 2, y, { align: 'right' });
+          doc.text(fmtBs(subTotalBs), cols[7].x + cols[7].w - 2, y, { align: 'right' });
         } else {
-          doc.setFont('helvetica', 'bold');
-          const isExt = !!c.vendedor?.es_externo || (c.vendedor?.markup_pct != null && Number(c.vendedor.markup_pct) > 0);
-          const markupSuffix = isExt ? ` (E)` : '';
-          const vName = `${c.vendedor?.nombre || 'Sin asesor'}${markupSuffix}`;
-          const vNameLines = doc.splitTextToSize(vName, cols[0].w - 2);
-          doc.text(vNameLines[0], cols[0].x + 1, y + 3);
-          
-          doc.setFont('helvetica', 'normal');
-          doc.text(fmtFechaCorta(c.creadoen), cols[1].x + 1, y + 3);
-          doc.text(`#${c.despachonumero}`, cols[2].x + 1, y + 3);
-
-          doc.setFont('helvetica', 'bold');
-          doc.text(fmtUsd(c.totalcomision), cols[3].x + cols[3].w - 2, y + 3, { align: 'right' });
-          
-          doc.setFont('helvetica', 'normal');
-          doc.text(c.montopagado > 0 ? fmtUsd(c.montopagado) : '—', cols[4].x + cols[4].w - 2, y + 3, { align: 'right' });
-          
-          doc.text(tasa > 0 ? `Bs ${tasa}` : 'N/D', cols[5].x + cols[5].w - 2, y + 3, { align: 'right' });
-          
-          doc.setFont('helvetica', 'bold');
-          doc.text(tasa > 0 ? fmtBs(comBs) : 'N/D', cols[6].x + cols[6].w - 2, y + 3, { align: 'right' });
-
-          drawStatusBadge(doc, c.estado, cols[7].x, y + 3.5, cols[7].w, 4);
+          doc.text(fmtUsd(subCabillaUsd), cols[2].x + cols[2].w - 2, y, { align: 'right' });
+          doc.text(fmtUsd(subOtrosUsd), cols[3].x + cols[3].w - 2, y, { align: 'right' });
+          doc.text(fmtUsd(subTotalUsd), cols[4].x + cols[4].w - 2, y, { align: 'right' });
+          doc.text(fmtUsd(subAbonadoUsd), cols[5].x + cols[5].w - 2, y, { align: 'right' });
+          doc.text(fmtBs(subTotalBs), cols[7].x + cols[7].w - 2, y, { align: 'right' });
         }
+        y += 6.5;
       }
 
-      y += rowH;
-    });
-
-    // Subtotal del grupo
-    y = checkPage(doc, y, 9, handlePageAdd);
-    doc.setDrawColor(210, 215, 225);
-    doc.setLineWidth(0.3);
-    doc.line(MARGIN, y, MARGIN + CONTENT_W, y);
-    y += 3.5;
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(6.5);
-    doc.setTextColor(80, 90, 110);
-    doc.text(`Subtotal ${titulo}:`, MARGIN + 2, y);
-
-    if (esDetallado) {
-      doc.text(fmtUsd(subTotalUsd), cols[5].x + cols[5].w - 2, y, { align: 'right' });
-      doc.text(fmtBs(subTotalBs), cols[7].x + cols[7].w - 2, y, { align: 'right' });
-    } else {
-      if (vendedor) {
-        doc.text(fmtUsd(subCabillaUsd), cols[2].x + cols[2].w - 2, y, { align: 'right' });
-        doc.text(fmtUsd(subOtrosUsd), cols[3].x + cols[3].w - 2, y, { align: 'right' });
-        doc.text(fmtUsd(subTotalUsd), cols[4].x + cols[4].w - 2, y, { align: 'right' });
-        doc.text(fmtUsd(subAbonadoUsd), cols[5].x + cols[5].w - 2, y, { align: 'right' });
-        doc.text(fmtBs(subTotalBs), cols[7].x + cols[7].w - 2, y, { align: 'right' });
-      } else {
-        doc.text(fmtUsd(subTotalUsd), cols[3].x + cols[3].w - 2, y, { align: 'right' });
-        doc.text(fmtUsd(subAbonadoUsd), cols[4].x + cols[4].w - 2, y, { align: 'right' });
-        doc.text(fmtBs(subTotalBs), cols[6].x + cols[6].w - 2, y, { align: 'right' });
+      // Dibujar las tablas según corresponda
+      if (comisionesNormales.length > 0) {
+        dibujarTablaEspecifica(comisionesNormales, "Comisiones", "");
       }
+      
+      if (cuentasCobrar.length > 0) {
+        if (comisionesNormales.length > 0) {
+          y += 4; // Espacio adicional si se dibujan ambas tablas
+        }
+        dibujarTablaEspecifica(cuentasCobrar, "Cuentas por Cobrar", " (Cuentas por Cobrar)");
+      }
+
+      return { totalUsd: totalTotalUsd, cabillaUsd: totalCabillaUsd, otrosUsd: totalOtrosUsd, abonadoUsd: totalAbonadoUsd, totalBs: totalTotalBs };
     }
-    y += 5.5;
 
-    return { totalUsd: subTotalUsd, cabillaUsd: subCabillaUsd, otrosUsd: subOtrosUsd, abonadoUsd: subAbonadoUsd, totalBs: subTotalBs };
+    if (vendedor) {
+      const res = dibujarSubTablaVendedor(vendedor.nombre, vendedor.color, items);
+      groupCabillaUsd = res.cabillaUsd;
+      groupOtrosUsd = res.otrosUsd;
+      groupTotalUsd = res.totalUsd;
+      groupAbonadoUsd = res.abonadoUsd;
+      groupTotalBs = res.totalBs;
+    } else {
+      const itemsPorVendedor = {};
+      const vendedoresOrdenados = [];
+
+      items.forEach(c => {
+        const vName = c.vendedor?.nombre || 'Sin asesor';
+        if (!itemsPorVendedor[vName]) {
+          itemsPorVendedor[vName] = [];
+          vendedoresOrdenados.push({
+            nombre: vName,
+            color: c.vendedor?.color || '#1B365D'
+          });
+        }
+        itemsPorVendedor[vName].push(c);
+      });
+
+      vendedoresOrdenados.forEach((v, idx) => {
+        if (idx > 0) {
+          y += 8; // Espacio entre vendedores
+        }
+        const res = dibujarSubTablaVendedor(v.nombre, v.color, itemsPorVendedor[v.nombre]);
+        groupCabillaUsd += res.cabillaUsd;
+        groupOtrosUsd += res.otrosUsd;
+        groupTotalUsd += res.totalUsd;
+        groupAbonadoUsd += res.abonadoUsd;
+        groupTotalBs += res.totalBs;
+      });
+    }
+
+    // Subtotal del grupo (e.g. Vendedores Internos)
+    if (!tipoVendedor && !vendedor) {
+      y = checkPage(doc, y, 10, handlePageAdd);
+      doc.setDrawColor(210, 215, 225);
+      doc.setLineWidth(0.4);
+      doc.line(MARGIN, y, MARGIN + CONTENT_W, y);
+      y += 4.5;
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9.5);
+      doc.setTextColor(80, 90, 110);
+      doc.text(`Subtotal ${titulo}:`, MARGIN + 2, y);
+
+      doc.setTextColor(...C_DARK);
+      if (esDetallado) {
+        doc.text(fmtUsd(groupTotalUsd), cols[5].x + cols[5].w - 2, y, { align: 'right' });
+        doc.text(fmtBs(groupTotalBs), cols[7].x + cols[7].w - 2, y, { align: 'right' });
+      } else {
+        doc.text(fmtUsd(groupCabillaUsd), cols[2].x + cols[2].w - 2, y, { align: 'right' });
+        doc.text(fmtUsd(groupOtrosUsd), cols[3].x + cols[3].w - 2, y, { align: 'right' });
+        doc.text(fmtUsd(groupTotalUsd), cols[4].x + cols[4].w - 2, y, { align: 'right' });
+        doc.text(fmtUsd(groupAbonadoUsd), cols[5].x + cols[5].w - 2, y, { align: 'right' });
+        doc.text(fmtBs(groupTotalBs), cols[7].x + cols[7].w - 2, y, { align: 'right' });
+      }
+      y += 6.5;
+    }
+
+    return { totalUsd: groupTotalUsd, cabillaUsd: groupCabillaUsd, otrosUsd: groupOtrosUsd, abonadoUsd: groupAbonadoUsd, totalBs: groupTotalBs };
   }
 
   let sumCabillaUsd = 0;
@@ -642,243 +714,30 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
   }
 
   // Línea final y TOTALIZACIÓN
-  y = checkPage(doc, y, 10, handlePageAdd);
+  y = checkPage(doc, y, 12, handlePageAdd);
   doc.setDrawColor(210, 215, 225);
   doc.setLineWidth(0.5);
   doc.line(MARGIN, y, MARGIN + CONTENT_W, y);
-  y += 4;
+  y += 5;
 
   // Fila de gran total
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7);
+  doc.setFontSize(10.0);
   doc.setTextColor(...C_DARK);
-  doc.text('TOTAL GENERAL:', MARGIN + 2, y + 1);
+  doc.text('TOTAL GENERAL:', MARGIN + 2, y + 1.5);
   
   if (esDetallado) {
-    doc.text(fmtUsd(sumTotalUsd), cols[5].x + cols[5].w - 2, y + 1, { align: 'right' });
-    doc.text(fmtBs(sumTotalBs), cols[7].x + cols[7].w - 2, y + 1, { align: 'right' });
+    doc.text(fmtUsd(sumTotalUsd), cols[5].x + cols[5].w - 2, y + 1.5, { align: 'right' });
+    doc.text(fmtBs(sumTotalBs), cols[7].x + cols[7].w - 2, y + 1.5, { align: 'right' });
   } else {
-    if (vendedor) {
-      doc.text(fmtUsd(sumCabillaUsd), cols[2].x + cols[2].w - 2, y + 1, { align: 'right' });
-      doc.text(fmtUsd(sumOtrosUsd), cols[3].x + cols[3].w - 2, y + 1, { align: 'right' });
-      doc.text(fmtUsd(sumTotalUsd), cols[4].x + cols[4].w - 2, y + 1, { align: 'right' });
-      doc.text(fmtUsd(sumAbonadoUsd), cols[5].x + cols[5].w - 2, y + 1, { align: 'right' });
-      doc.text(fmtBs(sumTotalBs), cols[7].x + cols[7].w - 2, y + 1, { align: 'right' });
-    } else {
-      doc.text(fmtUsd(sumTotalUsd), cols[3].x + cols[3].w - 2, y + 1, { align: 'right' });
-      doc.text(fmtUsd(sumAbonadoUsd), cols[4].x + cols[4].w - 2, y + 1, { align: 'right' });
-      doc.text(fmtBs(sumTotalBs), cols[6].x + cols[6].w - 2, y + 1, { align: 'right' });
-    }
+    doc.text(fmtUsd(sumCabillaUsd), cols[2].x + cols[2].w - 2, y + 1.5, { align: 'right' });
+    doc.text(fmtUsd(sumOtrosUsd), cols[3].x + cols[3].w - 2, y + 1.5, { align: 'right' });
+    doc.text(fmtUsd(sumTotalUsd), cols[4].x + cols[4].w - 2, y + 1.5, { align: 'right' });
+    doc.text(fmtUsd(sumAbonadoUsd), cols[5].x + cols[5].w - 2, y + 1.5, { align: 'right' });
+    doc.text(fmtBs(sumTotalBs), cols[7].x + cols[7].w - 2, y + 1.5, { align: 'right' });
   }
   
-  y += 6;
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // 6. RESUMEN POR VENDEDOR (si es reporte general)
-  // ══════════════════════════════════════════════════════════════════════════
-  if (!vendedor) {
-    const porVendedor = {};
-    comisionesNorm.forEach(c => {
-      const vName = c.vendedornombre || c.vendedor?.nombre || 'Sin Asesor';
-      if (!porVendedor[vName]) {
-        porVendedor[vName] = {
-          nombre: vName,
-          color: c.vendedorcolor || c.vendedor?.color || '#1B365D',
-          markup_pct: c.vendedor?.markup_pct ?? null,
-          es_externo: c.vendedor?.es_externo ?? null,
-          total: 0, pendiente: 0, pendienteReg: 0, pendienteCxc: 0, pagado: 0, count: 0,
-        };
-      }
-      const v = porVendedor[vName];
-
-      const monto = c.totalcomision;
-      const saldo = Math.max(0, monto - (c.montopagado || 0));
-      v.total += monto;
-      v.count++;
-      if (c.estado === 'pagada') {
-        v.pagado += c.montopagado || monto;
-      } else {
-        v.pendiente += saldo;
-        if (c.estado === 'cta_cobrar') v.pendienteCxc += saldo;
-        else v.pendienteReg += saldo;
-      }
-    });
-
-    const vendedoresList = Object.values(porVendedor).sort((a, b) => b.total - a.total);
-    const vendedoresInternos = vendedoresList.filter(v => !(!!v.es_externo || (v.markup_pct != null && Number(v.markup_pct) > 0)));
-    const vendedoresExternos = vendedoresList.filter(v => !!v.es_externo || (v.markup_pct != null && Number(v.markup_pct) > 0));
-
-    y = checkPage(doc, y, 15, handlePageAdd);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9.5);
-    doc.setTextColor(...C_DARK);
-    doc.text('Resumen por Vendedor', MARGIN, y + 4);
-    y += 8;
-
-    function dibujarResumenGrupo(titulo, list) {
-      if (list.length === 0) {
-        y = checkPage(doc, y, 12, handlePageAdd);
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8);
-        doc.setTextColor(...C_DARK);
-        doc.text(titulo, MARGIN, y + 4);
-        y += 6;
-        
-        doc.setFont('helvetica', 'italic');
-        doc.setFontSize(7);
-        doc.setTextColor(...C_GRAY);
-        doc.text('No hay vendedores en este grupo.', MARGIN + 2, y + 4);
-        y += 8;
-        return { total: 0, pendiente: 0, pendienteReg: 0, pendienteCxc: 0, pagado: 0, count: 0 };
-      }
-
-      y = checkPage(doc, y, 15 + list.length * 10, handlePageAdd);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(8.5);
-      doc.setTextColor(...C_DARK);
-      doc.text(titulo, MARGIN, y + 4);
-      y += 7;
-
-      // Mini tabla header
-      doc.setFillColor(240, 242, 245);
-      doc.rect(MARGIN, y, CONTENT_W, 6, 'F');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(6.5);
-      doc.setTextColor(80, 90, 110);
-      doc.text('Vendedor', MARGIN + 2, y + 4);
-      doc.text('Com.', MARGIN + 50, y + 4);
-      doc.text('Pendiente (Reg / CxC)', MARGIN + 70, y + 4);
-      doc.text('Pagado', MARGIN + 130, y + 4);
-      doc.text('Total', MARGIN + 155, y + 4);
-      y += 8;
-
-      let subCount = 0;
-      let subPend = 0;
-      let subPendReg = 0;
-      let subPendCxc = 0;
-      let subPag = 0;
-      let subTot = 0;
-
-      list.forEach((v, idx) => {
-        const rowH = (v.pendienteCxc > 0) ? 10 : 7;
-        y = checkPage(doc, y, rowH + 1, handlePageAdd);
-        if (idx % 2 === 0) {
-          doc.setFillColor(252, 252, 253);
-          doc.rect(MARGIN, y - 1, CONTENT_W, rowH, 'F');
-        }
-
-        const vColor = hexToRgb(v.color);
-        doc.setFillColor(vColor[0], vColor[1], vColor[2]);
-        doc.circle(MARGIN + 3, y + 2.5, 1.5, 'F');
-
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(7);
-        doc.setTextColor(...C_DARK);
-        
-        const esVendedorExterno = !!v.es_externo || (v.markup_pct != null && Number(v.markup_pct) > 0);
-        const displayName = esVendedorExterno
-          ? (v.markup_pct != null && Number(v.markup_pct) > 0 ? `${v.nombre} (E) (+${v.markup_pct}%)` : `${v.nombre} (E)`)
-          : v.nombre;
-        doc.text(displayName, MARGIN + 7, y + 3);
-
-        doc.setFont('helvetica', 'normal');
-        doc.text(String(v.count), MARGIN + 53, y + 3);
-
-        // Columna Pendiente: Regular arriba, CxC abajo
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(...C_AMBER); // Ámbar = Regular
-        doc.text(fmtUsd(v.pendienteReg), MARGIN + 70, y + 3);
-        
-        if (v.pendienteCxc > 0) {
-          doc.setFontSize(6.5);
-          doc.setTextColor(185, 28, 28); // Rojo = CxC
-          doc.text(`CxC: ${fmtUsd(v.pendienteCxc)}`, MARGIN + 70, y + 7.5);
-          doc.setFontSize(7);
-        }
-
-        doc.setTextColor(...C_EMERALD);
-        doc.text(fmtUsd(v.pagado), MARGIN + 130, y + 3);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(...C_DARK);
-        doc.text(fmtUsd(v.total), MARGIN + 155, y + 3);
-        
-        subCount += v.count;
-        subPend += v.pendiente;
-        subPendReg += v.pendienteReg;
-        subPendCxc += v.pendienteCxc;
-        subPag += v.pagado;
-        subTot += v.total;
-        
-        y += rowH;
-      });
-
-      // Subtotal de Resumen
-      y = checkPage(doc, y, 12, handlePageAdd);
-      doc.setDrawColor(220, 225, 235);
-      doc.setLineWidth(0.3);
-      doc.line(MARGIN, y, MARGIN + CONTENT_W, y);
-      y += 4;
-
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7);
-      doc.setTextColor(80, 90, 110);
-      doc.text(`Subtotal ${titulo}:`, MARGIN + 2, y);
-      doc.text(String(subCount), MARGIN + 53, y);
-      
-      doc.setTextColor(...C_AMBER);
-      doc.text(fmtUsd(subPendReg), MARGIN + 70, y);
-      
-      if (subPendCxc > 0) {
-        doc.setFontSize(6.5);
-        doc.setTextColor(185, 28, 28);
-        doc.text(`CxC: ${fmtUsd(subPendCxc)}`, MARGIN + 70, y + 4.5);
-        doc.setFontSize(7);
-      }
-      
-      doc.setTextColor(...C_EMERALD);
-      doc.text(fmtUsd(subPag), MARGIN + 130, y);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(...C_DARK);
-      doc.text(fmtUsd(subTot), MARGIN + 155, y);
-      
-      y += (subPendCxc > 0 ? 12 : 8);
-      return { total: subTot, pendiente: subPend, pendienteReg: subPendReg, pendienteCxc: subPendCxc, pagado: subPag, count: subCount };
-    }
-
-    const rInt = tipoVendedor !== 'externos' ? dibujarResumenGrupo("Vendedores Internos", vendedoresInternos) : { total: 0, pendiente: 0, pendienteReg: 0, pendienteCxc: 0, pagado: 0, count: 0 };
-    const rExt = tipoVendedor !== 'internos' ? dibujarResumenGrupo("Vendedores Externos", vendedoresExternos) : { total: 0, pendiente: 0, pendienteReg: 0, pendienteCxc: 0, pagado: 0, count: 0 };
-
-    // Gran Total del Resumen
-    y = checkPage(doc, y, 14, handlePageAdd);
-    doc.setDrawColor(180, 190, 205);
-    doc.setLineWidth(0.5);
-    doc.line(MARGIN, y, MARGIN + CONTENT_W, y);
-    y += 5;
-
-    const gtPendReg = rInt.pendienteReg + rExt.pendienteReg;
-    const gtPendCxc = rInt.pendienteCxc + rExt.pendienteCxc;
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.5);
-    doc.setTextColor(...C_DARK);
-    doc.text('TOTAL GENERAL VENDEDORES:', MARGIN + 2, y);
-    doc.text(String(rInt.count + rExt.count), MARGIN + 53, y);
-    doc.setTextColor(...C_AMBER);
-    doc.text(fmtUsd(gtPendReg), MARGIN + 70, y);
-    if (gtPendCxc > 0) {
-      doc.setFontSize(6.5);
-      doc.setTextColor(185, 28, 28);
-      doc.text(`CxC: ${fmtUsd(gtPendCxc)}`, MARGIN + 70, y + 4.5);
-      doc.setFontSize(7.5);
-    }
-    doc.setTextColor(...C_EMERALD);
-    doc.text(fmtUsd(rInt.pagado + rExt.pagado), MARGIN + 130, y);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...C_DARK);
-    doc.text(fmtUsd(rInt.total + rExt.total), MARGIN + 155, y);
-    
-    y += (gtPendCxc > 0 ? 10 : 6);
-  }
+  y += 8;
 
   // ══════════════════════════════════════════════════════════════════════════
   // 7. FOOTER
@@ -901,12 +760,37 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
     doc.text(`Página ${p} de ${totalPages}`, PAGE_W - MARGIN, PAGE_H - 10, { align: 'right' })
   }
 
-  // Guardar
+  // Guardar o Imprimir
   const suffix = tipoVendedor ? `_${tipoVendedor}` : ''
   const titulo = vendedor
     ? `Comisiones_${vendedor.nombre.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}`
     : `Comisiones_General${suffix}_${new Date().toISOString().slice(0, 10)}`
-  doc.save(`${titulo}.pdf`)
+
+  if (action === 'print') {
+    doc.autoPrint();
+    const hNV = doc.output('bloburl');
+    if (hNV) {
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      iframe.src = hNV;
+      document.body.appendChild(iframe);
+      iframe.onload = () => {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+        setTimeout(() => {
+          document.body.removeChild(iframe);
+          URL.revokeObjectURL(hNV);
+        }, 10000);
+      };
+    }
+  } else {
+    doc.save(`${titulo}.pdf`)
+  }
 }
 
 // ─── Generar Reporte de Ventas PDF ───────────────────────────────────────────

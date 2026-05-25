@@ -478,11 +478,22 @@ export default function ComisionesView() {
       {/* Filtros Avanzados */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-4 shadow-sm">
         <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-2 bg-slate-100 px-3 py-2 rounded-xl border border-slate-200">
-            <Calendar size={14} className="text-slate-500" />
-            <input type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} className="bg-transparent text-xs font-bold focus:outline-none" />
-            <span className="text-slate-300">→</span>
-            <input type="date" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} className="bg-transparent text-xs font-bold focus:outline-none" />
+          <div className="flex items-center gap-3">
+            <div className="flex flex-col">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1 ml-1">Desde</span>
+              <div className="flex items-center gap-1.5 bg-slate-100 px-3 py-2 rounded-xl border border-slate-200">
+                <Calendar size={13} className="text-slate-400 shrink-0" />
+                <input type="date" value={fechaDesde} max={fechaHasta || undefined} onChange={e => setFechaDesde(e.target.value)} className="bg-transparent text-xs font-bold focus:outline-none" />
+              </div>
+            </div>
+            <span className="text-slate-300 mt-4">→</span>
+            <div className="flex flex-col">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1 ml-1">Hasta</span>
+              <div className="flex items-center gap-1.5 bg-slate-100 px-3 py-2 rounded-xl border border-slate-200">
+                <Calendar size={13} className="text-slate-400 shrink-0" />
+                <input type="date" value={fechaHasta} min={fechaDesde || undefined} onChange={e => setFechaHasta(e.target.value)} className="bg-transparent text-xs font-bold focus:outline-none" />
+              </div>
+            </div>
           </div>
 
           <div className="flex gap-1">
