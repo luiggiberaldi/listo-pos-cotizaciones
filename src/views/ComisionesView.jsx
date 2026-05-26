@@ -256,8 +256,11 @@ function VendedorCard({ vendedor, comisiones, esSupervisor, onMarcarPagada, onPa
                       )}
                       <td className="px-2 py-2.5">
                         <div className="flex flex-col">
-                          <span className="font-mono font-medium text-slate-700">#{c.despacho?.numero ?? '---'}</span>
-                          <span className="text-[10px] text-slate-400">{fmtFecha(c.creadoen)}</span>
+                          <span className="text-[11px] font-bold text-slate-800 truncate max-w-[140px]" title={c.despacho?.cliente_nombre || c.cotizacion?.cliente_nombre || ''}>
+                            {(c.despacho?.cliente_nombre || c.cotizacion?.cliente_nombre || '---').toUpperCase()}
+                          </span>
+                          <span className="font-mono text-[10px] text-slate-500 mt-0.5">#{c.despacho?.numero ?? '---'}</span>
+                          <span className="text-[9px] text-slate-400">{fmtFecha(c.creadoen)}</span>
                         </div>
                       </td>
                       <td className="px-2 py-2.5">

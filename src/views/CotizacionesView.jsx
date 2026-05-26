@@ -457,7 +457,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                 {/* Métodos activos de pagosInmediatos */}
                 <div className="space-y-1.5">
                   {pagosInmediatos.map(fp => {
-                    const restante = totalConFlete - totalInmediato
+                    const restante = totalConFlete - totalInmediato - totalPropuestaCod
                     return (
                       <div key={fp.metodo} className="flex flex-col gap-1">
                         <div className="flex items-center gap-0 rounded-lg border border-indigo-300 bg-indigo-50 overflow-hidden">

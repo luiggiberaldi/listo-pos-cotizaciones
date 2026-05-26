@@ -1820,7 +1820,7 @@ function Step2Pago({
               {/* Métodos activos — fila con monto inline */}
               <div className="space-y-2">
                 {pagosInmediatos.map(fp => {
-                  const restante = totalConFlete - totalInmediato
+                  const restante = totalConFlete - totalInmediato - totalPropuestaCod
                   return (
                     <div key={fp.metodo} className="space-y-2">
                       <div className="flex items-center gap-2 bg-sky-50 border border-sky-300 rounded-xl px-3 py-2">

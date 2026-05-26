@@ -224,11 +224,12 @@ export async function handleGetComisiones(request, env) {
   }
 
   const rows = await res.json()
-  const despachos = await fetchByIds(env, headers, 'notas_despacho', rows.map(c => c.despachoid), 'id,numero,total_usd,tasa_snapshot')
-  const cotizaciones = await fetchByIds(env, headers, 'cotizaciones', rows.map(c => c.cotizacionid), 'id,numero,tasa_bcv_snapshot')
+  const despachos = await fetchByIds(env, headers, 'notas_despacho', rows.map(c => c.despachoid), 'id,numero,total_usd,tasa_snapshot,cliente_id,cliente:clientes!notas_despacho_cliente_id_fkey(id,nombre)')
+  const cotizaciones = await fetchByIds(env, headers, 'cotizaciones', rows.map(c => c.cotizacionid), 'id,numero,tasa_bcv_snapshot,cliente_id,cliente:clientes(id,nombre)')
   const vendedores = await fetchByIds(env, headers, 'usuarios', rows.map(c => c.vendedorid), 'id,nombre,color,markup_pct,rol,es_externo')
   const data = rows.map(c => {
     const despacho = despachos[c.despachoid]
+    const cotizacion = cotizaciones[c.cotizacionid]
     return {
       id: c.id,
       despachoid: c.despachoid,
@@ -246,8 +247,19 @@ export async function handleGetComisiones(request, env) {
       pagadapor: c.pagadapor,
       creadoen: c.creadoen,
       vendedor: vendedores[c.vendedorid] || { id: null, nombre: 'Sin vendedor asignado', color: '#94a3b8' },
-      despacho: despacho ? { id: despacho.id, numero: despacho.numero, totalusd: despacho.total_usd, tasa_snapshot: despacho.tasa_snapshot } : null,
-      cotizacion: cotizaciones[c.cotizacionid] || null
+      despacho: despacho ? { 
+        id: despacho.id, 
+        numero: despacho.numero, 
+        totalusd: despacho.total_usd, 
+        tasa_snapshot: despacho.tasa_snapshot,
+        cliente_nombre: despacho.cliente?.nombre || null
+      } : null,
+      cotizacion: cotizacion ? {
+        id: cotizacion.id,
+        numero: cotizacion.numero,
+        tasa_bcv_snapshot: cotizacion.tasa_bcv_snapshot,
+        cliente_nombre: cotizacion.cliente?.nombre || null
+      } : null
     }
   })
   

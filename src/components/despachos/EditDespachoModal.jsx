@@ -349,7 +349,7 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
               {/* Métodos activos de pagosInmediatos */}
               <div className="space-y-2">
                 {pagosInmediatos.map(fp => {
-                  const restante = totalConFlete - totalInmediato
+                  const restante = totalConFlete - totalInmediato - totalPropuestaCod
                   return (
                     <div key={fp.metodo} className="flex flex-col gap-2">
                       <div className="flex items-center gap-2">

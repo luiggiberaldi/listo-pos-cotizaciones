@@ -111,6 +111,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
       ),
       // Mapeo de estados: 'pagada' es el único estado que suma al pagado, resto son pendientes
       estado: rawEstado,
+      clienteNombre: c.cliente || c.despacho?.cliente_nombre || c.cotizacion?.cliente_nombre || '---',
       creadoen: c.fecha || c.creadoen || new Date().toISOString()
     }
   }
@@ -142,6 +143,13 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
   };
 
   const comisionesNorm = (comisiones || []).map(normalizarComision).sort(ordenarPorVendedorYDocumento)
+  console.log('[generarComisionesPDF] Comisiones normalizadas para el PDF:', comisionesNorm.map(c => ({
+    id: c.id,
+    doc: c.despachonumero,
+    clienteNombre: c.clienteNombre,
+    despachoRaw: c.despacho,
+    cotizacionRaw: c.cotizacion
+  })));
   // Si hay descripciones significativas, es el reporte detallado
   const esDetallado = comisionesNorm.some(c => c.descripcion && c.descripcion !== '---')
 
@@ -343,15 +351,15 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
   
   if (esDetallado) {
     cols = [
-      { label: 'Fecha', x: MARGIN, w: 14 },
-      { label: 'Nº Doc', x: MARGIN + 14, w: 12 },
-      { label: 'Producto / Descripción', x: MARGIN + 26, w: 54 },
-      { label: 'Valor ($)', x: MARGIN + 80, w: 16, align: 'right' },
-      { label: '%', x: MARGIN + 96, w: 8, align: 'right' },
-      { label: 'Com ($)', x: MARGIN + 104, w: 16, align: 'right' },
-      { label: 'Tasa (Bs)', x: MARGIN + 120, w: 16, align: 'right' },
-      { label: 'Com (Bs)', x: MARGIN + 136, w: 22, align: 'right' },
-      { label: 'Estado', x: MARGIN + 158, w: 30, align: 'center' },
+      { label: 'Fecha', x: MARGIN, w: 13 },
+      { label: 'Doc / Cliente', x: MARGIN + 13, w: 40 },
+      { label: 'Producto / Descripción', x: MARGIN + 53, w: 53 },
+      { label: 'Valor ($)', x: MARGIN + 106, w: 13, align: 'right' },
+      { label: '%', x: MARGIN + 119, w: 7, align: 'right' },
+      { label: 'Com ($)', x: MARGIN + 126, w: 14, align: 'right' },
+      { label: 'Tasa', x: MARGIN + 140, w: 11, align: 'right' },
+      { label: 'Com (Bs)', x: MARGIN + 151, w: 19, align: 'right' },
+      { label: 'Estado', x: MARGIN + 170, w: 18, align: 'center' },
     ]
   } else {
     const catName = config.comision_categoria_cabilla || 'Cabilla';
@@ -361,15 +369,15 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
       : `${catName} (${pct}%) ($)`;
 
     cols = [
-      { label: 'Fecha', x: MARGIN, w: 16 },
-      { label: 'Nº Doc', x: MARGIN + 16, w: 13 },
-      { label: cabLabel, x: MARGIN + 29, w: 20, align: 'right' },
-      { label: 'Otros ($)', x: MARGIN + 49, w: 20, align: 'right' },
-      { label: 'Total Com ($)', x: MARGIN + 69, w: 22, align: 'right' },
-      { label: 'Abonado ($)', x: MARGIN + 91, w: 20, align: 'right' },
-      { label: 'Tasa (Bs)', x: MARGIN + 111, w: 17, align: 'right' },
-      { label: 'Com. (Bs)', x: MARGIN + 128, w: 24, align: 'right' },
-      { label: 'Estado', x: MARGIN + 152, w: 36, align: 'center' },
+      { label: 'Fecha', x: MARGIN, w: 13 },
+      { label: 'Doc / Cliente', x: MARGIN + 13, w: 40 },
+      { label: cabLabel, x: MARGIN + 53, w: 25, align: 'right' },
+      { label: 'Otros ($)', x: MARGIN + 78, w: 16, align: 'right' },
+      { label: 'Total Com ($)', x: MARGIN + 94, w: 16, align: 'right' },
+      { label: 'Abonado ($)', x: MARGIN + 110, w: 16, align: 'right' },
+      { label: 'Tasa', x: MARGIN + 126, w: 11, align: 'right' },
+      { label: 'Com. (Bs)', x: MARGIN + 137, w: 19, align: 'right' },
+      { label: 'Estado', x: MARGIN + 156, w: 32, align: 'center' },
     ]
   }
 
@@ -486,7 +494,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
         let subTotalBs = 0;
 
         itemsParaTabla.forEach((c, idx) => {
-          const rowH = 7.5;
+          const rowH = 9.5;
           y = checkPage(doc, y, rowH + 2, handlePageAdd);
 
           if (y < MARGIN + 12) {
@@ -520,47 +528,86 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
           totalTotalBs += comBs;
 
           if (esDetallado) {
-            doc.text(fmtFechaCorta(c.creadoen), cols[0].x + 1, y + 4.5);
-            doc.text(`#${c.despachonumero}`, cols[1].x + 1, y + 4.5);
+            doc.setFontSize(8.0);
+            doc.text(fmtFechaCorta(c.creadoen), cols[0].x + 1, y + 5.5);
+            doc.setFontSize(9.0);
+            
+            // Cliente y Documento apilados (Cliente primero)
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(7.5);
+            const maxLen = 22;
+            const cliDisplay = (c.clienteNombre || '---').toUpperCase();
+            const cliTrunc = cliDisplay.length > maxLen ? cliDisplay.substring(0, maxLen - 2) + '..' : cliDisplay;
+            doc.text(cliTrunc, cols[1].x + 1, y + 3.8);
+            
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7.0);
+            doc.setTextColor(100, 116, 139); // Slate 500
+            doc.text(`#${c.despachonumero}`, cols[1].x + 1, y + 7.5);
+            
+            // Restaurar estilos
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9.0);
+            doc.setTextColor(...C_DARK);
             
             doc.setFontSize(8.0);
             const desc = `${c.codigo ? '['+c.codigo+'] ' : ''}${c.descripcion || '—'}`;
-            const splitDesc = doc.splitTextToSize(desc, cols[2].w - 2);
-            doc.text(splitDesc, cols[2].x + 1, y + 3.2);
+            const splitDesc = doc.splitTextToSize(desc, cols[2].w - 9);
+            const descY = splitDesc.length > 1 ? y + 3.8 : y + 5.5;
+            doc.text(splitDesc, cols[2].x + 1, descY);
             doc.setFontSize(9.0);
 
-            doc.text(fmtUsd(c.valor), cols[3].x + cols[3].w - 2, y + 4.5, { align: 'right' });
-            doc.text(`${c.pct}%`, cols[4].x + cols[4].w - 2, y + 4.5, { align: 'right' });
+            doc.text(fmtUsd(c.valor), cols[3].x + cols[3].w - 2, y + 5.5, { align: 'right' });
+            doc.text(`${c.pct}%`, cols[4].x + cols[4].w - 2, y + 5.5, { align: 'right' });
             
             doc.setFont('helvetica', 'bold');
-            doc.text(fmtUsd(c.totalcomision), cols[5].x + cols[5].w - 2, y + 4.5, { align: 'right' });
+            doc.text(fmtUsd(c.totalcomision), cols[5].x + cols[5].w - 2, y + 5.5, { align: 'right' });
             
             doc.setFont('helvetica', 'normal');
-            doc.text(tasa > 0 ? `Bs ${tasa}` : 'N/D', cols[6].x + cols[6].w - 2, y + 4.5, { align: 'right' });
+            doc.text(tasa > 0 ? `Bs ${tasa}` : 'N/D', cols[6].x + cols[6].w - 2, y + 5.5, { align: 'right' });
             
             doc.setFont('helvetica', 'bold');
-            doc.text(tasa > 0 ? fmtBs(comBs) : 'N/D', cols[7].x + cols[7].w - 2, y + 4.5, { align: 'right' });
+            doc.text(tasa > 0 ? fmtBs(comBs) : 'N/D', cols[7].x + cols[7].w - 2, y + 5.5, { align: 'right' });
 
-            drawStatusBadge(doc, c.estado, cols[8].x, y + 5.5, cols[8].w, 4.5);
+            drawStatusBadge(doc, c.estado, cols[8].x, y + 6.5, cols[8].w, 4.5);
           } else {
-            doc.text(fmtFechaCorta(c.creadoen), cols[0].x + 1, y + 4.5);
-            doc.text(`#${c.despachonumero}`, cols[1].x + 1, y + 4.5);
+            doc.setFontSize(8.0);
+            doc.text(fmtFechaCorta(c.creadoen), cols[0].x + 1, y + 5.5);
+            doc.setFontSize(9.0);
             
-            doc.text(fmtUsd(c.comisioncabilla), cols[2].x + cols[2].w - 2, y + 4.5, { align: 'right' });
-            doc.text(fmtUsd(c.comisionotros), cols[3].x + cols[3].w - 2, y + 4.5, { align: 'right' });
-            
+            // Cliente y Documento apilados (Cliente primero)
             doc.setFont('helvetica', 'bold');
-            doc.text(fmtUsd(c.totalcomision), cols[4].x + cols[4].w - 2, y + 4.5, { align: 'right' });
+            doc.setFontSize(7.5);
+            const maxLen = 22;
+            const cliDisplay = (c.clienteNombre || '---').toUpperCase();
+            const cliTrunc = cliDisplay.length > maxLen ? cliDisplay.substring(0, maxLen - 2) + '..' : cliDisplay;
+            doc.text(cliTrunc, cols[1].x + 1, y + 3.8);
             
             doc.setFont('helvetica', 'normal');
-            doc.text(c.montopagado > 0 ? fmtUsd(c.montopagado) : '—', cols[5].x + cols[5].w - 2, y + 4.5, { align: 'right' });
+            doc.setFontSize(7.0);
+            doc.setTextColor(100, 116, 139); // Slate 500
+            doc.text(`#${c.despachonumero}`, cols[1].x + 1, y + 7.5);
             
-            doc.text(tasa > 0 ? `Bs ${tasa}` : 'N/D', cols[6].x + cols[6].w - 2, y + 4.5, { align: 'right' });
+            // Restaurar estilos
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9.0);
+            doc.setTextColor(...C_DARK);
+            
+            doc.text(fmtUsd(c.comisioncabilla), cols[2].x + cols[2].w - 2, y + 5.5, { align: 'right' });
+            doc.text(fmtUsd(c.comisionotros), cols[3].x + cols[3].w - 2, y + 5.5, { align: 'right' });
             
             doc.setFont('helvetica', 'bold');
-            doc.text(tasa > 0 ? fmtBs(comBs) : 'N/D', cols[7].x + cols[7].w - 2, y + 4.5, { align: 'right' });
+            doc.text(fmtUsd(c.totalcomision), cols[4].x + cols[4].w - 2, y + 5.5, { align: 'right' });
+            
+            doc.setFont('helvetica', 'normal');
+            doc.text(c.montopagado > 0 ? fmtUsd(c.montopagado) : '—', cols[5].x + cols[5].w - 2, y + 5.5, { align: 'right' });
+            
+            doc.text(tasa > 0 ? `Bs ${tasa}` : 'N/D', cols[6].x + cols[6].w - 2, y + 5.5, { align: 'right' });
+            
+            doc.setFont('helvetica', 'bold');
+            doc.text(tasa > 0 ? fmtBs(comBs) : 'N/D', cols[7].x + cols[7].w - 2, y + 5.5, { align: 'right' });
 
-            drawStatusBadge(doc, c.estado, cols[8].x, y + 5.5, cols[8].w, 4.5);
+            drawStatusBadge(doc, c.estado, cols[8].x, y + 6.5, cols[8].w, 4.5);
           }
 
           y += rowH;
