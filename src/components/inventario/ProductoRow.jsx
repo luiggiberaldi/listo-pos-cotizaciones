@@ -1,10 +1,13 @@
 // src/components/inventario/ProductoRow.jsx
 // Fila compacta de producto para vista de lista
 import { useState } from 'react'
-import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle, Package, Trash2, ClipboardList, Eye } from 'lucide-react'
+import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle, Package, Trash2, ClipboardList, Eye, Building2, Zap } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import { usePrecioVendedor } from '../../hooks/usePrecioVendedor'
+import { useTasaCambio } from '../../hooks/useTasaCambio'
 import { fmtBs, usdToBs } from '../../utils/format'
+
+
 
 function fmtUsd(n) {
   if (n == null) return '—'
@@ -27,6 +30,7 @@ function colorCategoria(str = '') {
 export default function ProductoRow({ producto, onEditar, onDesactivar, onBorrar, onKardex, onDetalle, tasa = 0, comprometido = 0 }) {
   const { perfil } = useAuthStore()
   const [copiado, setCopiado] = useState(false)
+  const { tasaBcv, tasaUsdt } = useTasaCambio()
 
   const handleCopiarCodigo = (e) => {
     e.stopPropagation()
@@ -95,16 +99,34 @@ export default function ProductoRow({ producto, onEditar, onDesactivar, onBorrar
 
       {/* Precio + Stock */}
       <div className="hidden sm:flex items-center gap-4 pr-3 shrink-0">
-        <div className="text-right">
+        <div className="text-right space-y-1">
           <div className="flex items-baseline gap-1.5 justify-end">
             <span className="font-bold text-slate-800 text-sm">{fmtUsd(precioDisplay)}</span>
             {puedeVerCosto && producto.costo_usd != null && (
               <span className="text-xs text-slate-400 ml-1">C: {fmtUsd(producto.costo_usd)}</span>
             )}
           </div>
-          {tasa > 0 && precioDisplay > 0 && (
-            <div className="text-[11px] text-slate-400">{fmtBs(usdToBs(precioDisplay, tasa))}</div>
-          )}
+          {precioDisplay > 0 && (() => {
+            const factorBcv = tasaBcv?.precio > 0 && tasaUsdt?.precio > 0
+              ? tasaUsdt.precio / tasaBcv.precio
+              : 1
+            const precioBcvUsd = precioDisplay * factorBcv
+            const precioBs    = tasaUsdt?.precio > 0
+              ? usdToBs(precioDisplay, tasaUsdt.precio)
+              : (tasa > 0 ? usdToBs(precioDisplay, tasa) : null)
+            return (
+              <div className="flex items-center gap-1 justify-end text-[9px] font-bold">
+                <span className="inline-flex items-center gap-0.5 px-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-100" title="Precio en Bolívares">
+                  <Zap size={8} />
+                  {precioBs != null ? fmtBs(precioBs) : '—'}
+                </span>
+                <span className="inline-flex items-center gap-0.5 px-1 rounded bg-blue-50 text-blue-700 border border-blue-100" title="Equivalente USD a tasa BCV">
+                  <Building2 size={8} />
+                  {tasaBcv?.precio > 0 && tasaUsdt?.precio > 0 ? fmtUsd(precioBcvUsd) : '—'}
+                </span>
+              </div>
+            )
+          })()}
         </div>
 
         <div className="flex items-center gap-1.5">

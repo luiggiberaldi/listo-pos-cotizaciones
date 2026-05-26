@@ -1,8 +1,9 @@
 // src/components/inventario/ProductoCard.jsx
 import { useState } from 'react'
-import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle, Package, Trash2, ClipboardList, TrendingUp, Eye } from 'lucide-react'
+import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle, Package, Trash2, ClipboardList, TrendingUp, Eye, Building2, Zap } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import { usePrecioVendedor } from '../../hooks/usePrecioVendedor'
+import { useTasaCambio } from '../../hooks/useTasaCambio'
 import { fmtBs, usdToBs } from '../../utils/format'
 import StockComprometidoDetalle from './StockComprometidoDetalle'
 
@@ -64,6 +65,7 @@ function StockBadge({ actual, minimo, comprometido = 0, productoId }) {
 export default function ProductoCard({ producto, onEditar, onDesactivar, onBorrar, onKardex, onDetalle, tasa = 0, comprometido = 0 }) {
   const { perfil } = useAuthStore()
   const [copiado, setCopiado] = useState(false)
+  const { tasaBcv, tasaUsdt } = useTasaCambio()
 
   const handleCopiarCodigo = (e) => {
     e.stopPropagation()
@@ -190,9 +192,43 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, onBorra
               )}
               <p className="font-black text-slate-800 text-base sm:text-lg leading-none">{fmtUsd(precioDisplay)}</p>
             </div>
-            {tasa > 0 && precioDisplay > 0 && (
-              <p className="text-[10px] text-slate-400 mt-0.5">{fmtBs(usdToBs(precioDisplay, tasa))}</p>
-            )}
+
+            {/* Bloque Multimoneda Compacto */}
+            {precioDisplay > 0 && (() => {
+              // factorBcv: mismo cálculo que PDFs y DetalleModal
+              const factorBcv = tasaBcv?.precio > 0 && tasaUsdt?.precio > 0
+                ? tasaUsdt.precio / tasaBcv.precio
+                : 1
+              const precioBcvUsd = precioDisplay * factorBcv
+              const precioBs    = tasaUsdt?.precio > 0
+                ? usdToBs(precioDisplay, tasaUsdt.precio)
+                : (tasa > 0 ? usdToBs(precioDisplay, tasa) : null)
+              return (
+                <div className="grid grid-cols-2 gap-1.5 mt-2">
+                  {/* Bs — precio en bolívares (tasa USDT/mercado) */}
+                  <div className="flex flex-col rounded-lg bg-emerald-50/70 border border-emerald-100 p-1.5 text-center min-w-0">
+                    <span className="inline-flex items-center justify-center gap-0.5 text-[8px] font-bold text-emerald-700 uppercase tracking-wider">
+                      <Zap size={9} />
+                      Bs
+                    </span>
+                    <span className="text-[10px] font-extrabold text-emerald-900 mt-0.5 truncate">
+                      {precioBs != null ? fmtBs(precioBs) : '—'}
+                    </span>
+                  </div>
+
+                  {/* BCV — equivalente USD al factor BCV */}
+                  <div className="flex flex-col rounded-lg bg-blue-50/70 border border-blue-100 p-1.5 text-center min-w-0">
+                    <span className="inline-flex items-center justify-center gap-0.5 text-[8px] font-bold text-blue-700 uppercase tracking-wider">
+                      <Building2 size={9} />
+                      BCV
+                    </span>
+                    <span className="text-[10px] font-extrabold text-blue-900 mt-0.5 truncate">
+                      {tasaBcv?.precio > 0 && tasaUsdt?.precio > 0 ? fmtUsd(precioBcvUsd) : '—'}
+                    </span>
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* P2 / P3 — precios secundarios */}
             {(producto.precio_2 != null || producto.precio_3 != null) && (
