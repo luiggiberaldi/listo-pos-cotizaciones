@@ -763,6 +763,11 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
   const esDev = perfil?.rol === 'desarrollador'
   const puedePagarComisiones = esAdmin || esJefe || esDev
 
+  const catPrincipal = configNeg?.comision_categoria_cabilla || 'Cabilla'
+  const esExterno = !!vendedor?.es_externo || (vendedor?.markup_pct != null && Number(vendedor.markup_pct) > 0)
+  const pctCabilla = esExterno ? (configNeg?.comision_ext_pct_cabilla || 2) : (configNeg?.comision_pct_cabilla || 2)
+  const labelCabillaHeader = esExterno ? `Cemento (${pctCabilla}%)` : `${catPrincipal} (${pctCabilla}%)`
+
   const [comisionAPagar, setComisionAPagar] = useState(null)
   const [pagoMasivoData, setPagoMasivoData] = useState(null)
   const [pagandoMasivo, setPagandoMasivo] = useState(false)
@@ -1045,7 +1050,7 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
                     <th className="px-2 sm:px-4 py-2 font-semibold text-left">Fecha</th>
                     <th className="px-2 sm:px-4 py-2 font-semibold text-left">Correlativo</th>
                     <th className="px-2 sm:px-4 py-2 font-semibold text-right">Venta ($)</th>
-                    <th className="px-2 sm:px-4 py-2 font-semibold text-right">Cabilla</th>
+                    <th className="px-2 sm:px-4 py-2 font-semibold text-right">{labelCabillaHeader}</th>
                     <th className="px-2 sm:px-4 py-2 font-semibold text-right">Otros</th>
                     <th className="px-2 sm:px-4 py-2 font-semibold text-right">Com. ($)</th>
                     <th className="px-2 sm:px-4 py-2 font-semibold text-right">Tasa BCV</th>
@@ -1274,6 +1279,7 @@ function TabComisiones({ configNeg }) {
           nombre: c.vendedor?.nombre || 'Sin Asignar',
           color: c.vendedor?.color || '#cbd5e1',
           markup_pct: c.vendedor?.markup_pct ?? null,
+          es_externo: !!c.vendedor?.es_externo,
           rol: c.vendedor?.rol,
           totalUsd: 0,
           totalBs: 0,

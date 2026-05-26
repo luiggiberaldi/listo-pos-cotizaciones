@@ -69,17 +69,32 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
   // NORMALIZAR: unificar naming antes de procesar (soporte para Worker API y RPC)
   function normalizarComision(c) {
     const rawEstado = (c.estado_comision || c.estado || 'pendiente').toLowerCase()
+    const vend = c.vendedor || (vendedor ? { nombre: vendedor.nombre, color: vendedor.color, markup_pct: vendedor.markup_pct, es_externo: vendedor.es_externo } : (c.asesor ? { nombre: c.asesor, color: c.asesor_color || '#1B365D', es_externo: c.vendedor_es_externo } : null))
+    
+    const esExterno = vend ? (!!vend.es_externo || (vend.markup_pct != null && Number(vend.markup_pct) > 0)) : false;
+    
+    let pct = Number(c.comision_pct ?? c.pct ?? 0)
+    let totalcomision = Number(c.total_com ?? c.totalcomision ?? c.despacho_comision_total ?? 0)
+    
+    const descLower = (c.descripcion || c.nombre_snap || '').toLowerCase().trim()
+    const catLower = (c.categoria || '').toLowerCase().trim()
+    
+    if (esExterno && (catLower === 'cemento' || descLower.includes('cemento'))) {
+      const pctCabilla = config?.comision_ext_pct_cabilla ?? 2
+      pct = pctCabilla
+      totalcomision = Number((Number(c.total ?? c.total_linea_neto ?? 0) * pctCabilla / 100).toFixed(2))
+    }
     
     return {
       ...c,
-      vendedor: c.vendedor || (c.asesor ? { nombre: c.asesor, color: c.asesor_color || '#1B365D' } : null),
+      vendedor: vend,
       // Totales (Prioridad a RPC si existen, luego Worker, luego default)
-      totalcomision: Number(c.total_com ?? c.totalcomision ?? c.despacho_comision_total ?? 0),
+      totalcomision,
       comisioncabilla: Number(c.comisioncabilla ?? 0),
       comisionotros: Number(c.comisionotros ?? 0),
       // Valor del item (si aplica)
-      valor: Number(c.total ?? 0),
-      pct: Number(c.comision_pct ?? c.pct ?? 0),
+      valor: Number(c.total ?? c.total_linea_neto ?? 0),
+      pct,
       // Producto
       codigo: c.codigo || '',
       descripcion: (c.descripcion || c.nombre_snap || '').toUpperCase(),
@@ -376,10 +391,16 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
       { label: 'Estado', x: MARGIN + 158, w: 30, align: 'center' },
     ]
   } else {
+    const catName = config.comision_categoria_cabilla || 'Cabilla';
+    const pct = tipoVendedor === 'externos' ? (config.comision_ext_pct_cabilla || 2) : (config.comision_pct_cabilla || 2);
+    const cabLabel = tipoVendedor === 'externos' 
+      ? `Cemento (${pct}%) ($)` 
+      : `${catName} (${pct}%) ($)`;
+
     cols = [
       { label: 'Fecha', x: MARGIN, w: 16 },
       { label: 'Nº Doc', x: MARGIN + 16, w: 13 },
-      { label: 'Cabilla ($)', x: MARGIN + 29, w: 20, align: 'right' },
+      { label: cabLabel, x: MARGIN + 29, w: 20, align: 'right' },
       { label: 'Otros ($)', x: MARGIN + 49, w: 20, align: 'right' },
       { label: 'Total Com ($)', x: MARGIN + 69, w: 22, align: 'right' },
       { label: 'Abonado ($)', x: MARGIN + 91, w: 20, align: 'right' },

@@ -36,7 +36,7 @@ function ResumenCard({ icon: Icon, label, value, sub, gradient, border }) {
 }
 
 // ─── Tarjeta agrupada por vendedor ──────────────────────────────────────────
-function VendedorCard({ vendedor, comisiones, esSupervisor, onMarcarPagada, onPagarTodo, marcando, onExportarPDF }) {
+function VendedorCard({ vendedor, comisiones, esSupervisor, onMarcarPagada, onPagarTodo, marcando, onExportarPDF, config }) {
   const [abierto, setAbierto] = useState(false)
   const [seleccionados, setSeleccionados] = useState([])
 
@@ -71,6 +71,12 @@ function VendedorCard({ vendedor, comisiones, esSupervisor, onMarcarPagada, onPa
   const montoPagado = useMemo(() => comisiones.reduce((s, c) => s + Number(c.montopagado || 0), 0), [comisiones])
   
   const esExterno = !!vendedor?.es_externo || (vendedor?.markup_pct != null && Number(vendedor.markup_pct) > 0);
+
+  const catName = useMemo(() => {
+    const base = config?.comision_categoria_cabilla || 'Cabilla';
+    const pct = esExterno ? (config?.comision_ext_pct_cabilla || 2) : (config?.comision_pct_cabilla || 2);
+    return esExterno ? `Cemento (${pct}%)` : `${base} (${pct}%)`;
+  }, [config, esExterno]);
 
   const estadoBadge = (estado) => {
     if (estado === 'pagada') {
@@ -256,7 +262,7 @@ function VendedorCard({ vendedor, comisiones, esSupervisor, onMarcarPagada, onPa
                       </td>
                       <td className="px-2 py-2.5">
                         <div className="flex flex-col text-[11px]">
-                          <span className="text-slate-500">Cab: <span className="font-semibold text-slate-700">{fmtUsd(c.comisioncabilla)}</span></span>
+                          <span className="text-slate-500">{catName}: <span className="font-semibold text-slate-700">{fmtUsd(c.comisioncabilla)}</span></span>
                           <span className="text-slate-500">Otros: <span className="font-semibold text-slate-700">{fmtUsd(c.comisionotros)}</span></span>
                         </div>
                       </td>
@@ -591,6 +597,7 @@ export default function ComisionesView() {
                           onPagarTodo={setPagoMasivoData}
                           marcando={marcar.isPending || pagandoMasivo} 
                           onExportarPDF={exportarPDF} 
+                          config={configNeg}
                         />
                       ))}
                     </div>
@@ -615,6 +622,7 @@ export default function ComisionesView() {
                           onPagarTodo={setPagoMasivoData}
                           marcando={marcar.isPending || pagandoMasivo} 
                           onExportarPDF={exportarPDF} 
+                          config={configNeg}
                         />
                       ))}
                     </div>

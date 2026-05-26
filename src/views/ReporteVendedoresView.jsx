@@ -70,7 +70,7 @@ function KpiCard({ label, value, sub, icon: Icon, color = '#3B82F6', variacion }
   )
 }
 
-function VendedorRow({ v, rank, isExpanded, onToggle, onExport, isExporting }) {
+function VendedorRow({ v, rank, isExpanded, onToggle, onExport, isExporting, config }) {
   const pctBar = v._maxVenta > 0 ? (v.totalUsd / v._maxVenta) * 100 : 0
   const tasaColor = v.tasaCierre >= 60 ? '#059669' : v.tasaCierre >= 35 ? '#D97706' : '#DC2626'
   const esExterno = !!v.es_externo || v.markup_pct > 0
@@ -115,7 +115,7 @@ function VendedorRow({ v, rank, isExpanded, onToggle, onExport, isExporting }) {
           )}
         </td>
         <td className="py-3 pr-4 text-right text-sm text-slate-600">{v.numDespachos}</td>
-        <td className="py-3 pr-4 text-right text-sm text-slate-600">{fmtUsd(v.ticketPromedio)}</td>
+        <td className="py-3 pr-4 text-right text-sm text-slate-600">{fmtUsd(v.ticketAverage || v.ticketPromedio)}</td>
         <td className="py-3 pr-4 text-right">
           <span className="text-sm font-bold" style={{ color: tasaColor }}>{v.tasaCierre}%</span>
         </td>
@@ -127,7 +127,7 @@ function VendedorRow({ v, rank, isExpanded, onToggle, onExport, isExporting }) {
       {isExpanded && (
         <tr>
           <td colSpan={8} className="p-0 bg-slate-50 border-b border-slate-200">
-            <VendedorDetalle v={v} onExport={() => onExport('individual', v.id)} isExporting={isExporting} />
+            <VendedorDetalle v={v} onExport={() => onExport('individual', v.id)} isExporting={isExporting} config={config} />
           </td>
         </tr>
       )}
@@ -135,7 +135,7 @@ function VendedorRow({ v, rank, isExpanded, onToggle, onExport, isExporting }) {
   )
 }
 
-function VendedorDetalle({ v, onExport, isExporting }) {
+function VendedorDetalle({ v, onExport, isExporting, config }) {
   const estados = [
     { key: 'enviada',   label: 'Enviadas',   color: '#3B82F6' },
     { key: 'aceptada',  label: 'Aceptadas',  color: '#059669' },
@@ -143,6 +143,10 @@ function VendedorDetalle({ v, onExport, isExporting }) {
     { key: 'anulada',   label: 'Anuladas',   color: '#94A3B8' },
   ]
   const totalCots = v.cotizaciones?.total || 0
+  const esExterno = !!v.es_externo || v.markup_pct > 0
+  const catPrincipal = config?.comision_categoria_cabilla || 'Cabilla'
+  const pct = esExterno ? (config?.comision_ext_pct_cabilla || 2) : (config?.comision_pct_cabilla || 2)
+  const labelPrincipal = esExterno ? `Cemento (${pct}%)` : `${catPrincipal} (${pct}%)`
 
   return (
     <div className="px-6 py-5 grid grid-cols-1 md:grid-cols-3 gap-4 relative">
@@ -207,11 +211,11 @@ function VendedorDetalle({ v, onExport, isExporting }) {
             <span className="font-bold text-amber-600">{fmtUsd(v.comisionPendiente)}</span>
           </div>
           <div className="flex justify-between text-[11px] pt-1 border-t border-dashed border-slate-100">
-            <span className="text-slate-400">Cabillas al 2%</span>
+            <span className="text-slate-400">{labelPrincipal} al 2%</span>
             <span className="font-bold text-slate-700">{fmtUsd(v.comisionCabilla2 || 0)}</span>
           </div>
           <div className="flex justify-between text-[11px]">
-            <span className="text-slate-400">Cabillas al 3%</span>
+            <span className="text-slate-400">{labelPrincipal} al 3%</span>
             <span className="font-bold text-slate-700">{fmtUsd(v.comisionCabilla3 || 0)}</span>
           </div>
         </div>
@@ -461,7 +465,7 @@ export default function ReporteVendedoresView() {
             value={fmtUsd(kpis.totalComision)}
             icon={Award}
             color="#D97706"
-            sub={`Cabillas 2%: ${fmtUsd(kpis.totalComisionCabilla2 || 0)} | 3%: ${fmtUsd(kpis.totalComisionCabilla3 || 0)}`}
+            sub={`${config.comision_categoria_cabilla || 'Cabillas'} 2%: ${fmtUsd(kpis.totalComisionCabilla2 || 0)} | 3%: ${fmtUsd(kpis.totalComisionCabilla3 || 0)}`}
           />
         </div>
       )}
@@ -519,6 +523,7 @@ export default function ReporteVendedoresView() {
                         onToggle={() => handleToggle(v.id)}
                         onExport={handleExportPDF}
                         isExporting={pdfLoading === v.id}
+                        config={config}
                       />
                     ))}
                     {/* Subtotal Internos */}
@@ -562,6 +567,7 @@ export default function ReporteVendedoresView() {
                         onToggle={() => handleToggle(v.id)}
                         onExport={handleExportPDF}
                         isExporting={pdfLoading === v.id}
+                        config={config}
                       />
                     ))}
                     {/* Subtotal Externos */}

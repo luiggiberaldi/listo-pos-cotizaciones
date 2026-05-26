@@ -203,8 +203,9 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
       } else if (i === 3) {
         doc.setTextColor(100, 116, 139)
         doc.setFontSize(5.5)
+        const catPrincipal = config.comision_categoria_cabilla || 'Cabilla'
         doc.text(
-          `Cab. 2%: ${fmtUsd(localTotalComisionCabilla2)} | 3%: ${fmtUsd(localTotalComisionCabilla3)}`,
+          `${catPrincipal} 2%: ${fmtUsd(localTotalComisionCabilla2)} | 3%: ${fmtUsd(localTotalComisionCabilla3)}`,
           bx + 4.5, y + 18.5
         )
       }
@@ -527,12 +528,14 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
     doc.setFontSize(8.5)
     doc.setTextColor(...C_DARK)
     doc.text('Comisiones', bx2 + 3, y + 6)
+    const catPrincipal = config.comision_categoria_cabilla || 'Cabilla'
+    const labelPrincipal = esExterno ? `${catPrincipal}/Cem` : catPrincipal
     const comData = [
       { label: 'Total generado', value: fmtUsd(v.comisionTotal), color: C_DARK },
       { label: 'Pagado',         value: fmtUsd(v.comisionPagada), color: C_EMERALD },
       { label: 'Pendiente',      value: fmtUsd(v.comisionPendiente), color: C_AMBER },
-      { label: 'Cabilla 2%',     value: fmtUsd(v.comisionCabilla2 || 0), color: C_DARK },
-      { label: 'Cabilla 3%',     value: fmtUsd(v.comisionCabilla3 || 0), color: C_DARK },
+      { label: `${labelPrincipal} 2%`,     value: fmtUsd(v.comisionCabilla2 || 0), color: C_DARK },
+      { label: `${labelPrincipal} 3%`,     value: fmtUsd(v.comisionCabilla3 || 0), color: C_DARK },
       { label: 'Otros productos',value: fmtUsd(v.comisionOtros || 0), color: C_DARK },
     ]
     comData.forEach((c, ci) => {

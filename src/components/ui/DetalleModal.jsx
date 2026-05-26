@@ -18,7 +18,7 @@ function calcDescMonto(desc, totalLinea, cantidad) {
   return Math.round(Math.min(v * Number(cantidad), totalLinea) * 10000) / 10000
 }
 
-function ItemRow({ item, descuento, fmt, config, tipo, perfil }) {
+function ItemRow({ item, descuento, fmt, config, tipo, perfil, vendedorPerfil }) {
   const cant     = Number(item.cantidad || 1)
   const precio   = Number(item.precio_unit_usd || 0)
   const total    = Number(item.total_linea_usd || cant * precio)
@@ -28,7 +28,8 @@ function ItemRow({ item, descuento, fmt, config, tipo, perfil }) {
   const sinStock = !item.cotizacion_id && !esExterno && cant > (item.producto?.stock_actual || 0)
 
   const showComision = tipo === 'despacho' && ['administracion', 'jefe', 'desarrollador', 'vendedor'].includes(perfil?.rol)
-  const pct = showComision ? getComisionPctForItem(item, config) : 0
+  // Usar el perfil del vendedor dueño del cliente (no el usuario logueado) para detectar es_externo
+  const pct = showComision ? getComisionPctForItem(item, config, vendedorPerfil ?? null) : 0
 
   return (
     <tr className={`border-b border-slate-100 last:border-0 ${descMonto > 0 ? 'bg-amber-50/70' : ''} ${sinStock ? 'bg-red-50/60' : ''}`}>
@@ -76,7 +77,7 @@ function ItemRow({ item, descuento, fmt, config, tipo, perfil }) {
   )
 }
 
-function ItemCard({ item, descuento, fmt, config, tipo, perfil }) {
+function ItemCard({ item, descuento, fmt, config, tipo, perfil, vendedorPerfil }) {
   const cant     = Number(item.cantidad || 1)
   const precio   = Number(item.precio_unit_usd || 0)
   const total    = Number(item.total_linea_usd || cant * precio)
@@ -86,7 +87,8 @@ function ItemCard({ item, descuento, fmt, config, tipo, perfil }) {
   const sinStock = !item.cotizacion_id && !esExterno && cant > (item.producto?.stock_actual || 0)
 
   const showComision = tipo === 'despacho' && ['administracion', 'jefe', 'desarrollador', 'vendedor'].includes(perfil?.rol)
-  const pct = showComision ? getComisionPctForItem(item, config) : 0
+  // Usar el perfil del vendedor dueño del cliente (no el usuario logueado) para detectar es_externo
+  const pct = showComision ? getComisionPctForItem(item, config, vendedorPerfil ?? null) : 0
 
   return (
     <div className={`py-3 border-b border-slate-100 last:border-0 ${descMonto > 0 ? 'bg-amber-50/70 -mx-3 px-3 rounded-lg' : ''} ${sinStock ? 'bg-red-50/60 -mx-3 px-3 rounded-lg' : ''}`}>
@@ -405,13 +407,13 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
                     </tr>
                   </thead>
                   <tbody>
-                    {items.map(it => <ItemRow key={it.id} item={it} descuento={descuentos[it.id]} fmt={fmt} config={config} tipo={tipo} perfil={perfil} />)}
+                    {items.map(it => <ItemRow key={it.id} item={it} descuento={descuentos[it.id]} fmt={fmt} config={config} tipo={tipo} perfil={perfil} vendedorPerfil={registro.vendedor} />)}
                   </tbody>
                 </table>
               </div>
               {/* Mobile card layout */}
               <div className="sm:hidden">
-                {items.map(it => <ItemCard key={it.id} item={it} descuento={descuentos[it.id]} fmt={fmt} config={config} tipo={tipo} perfil={perfil} />)}
+                {items.map(it => <ItemCard key={it.id} item={it} descuento={descuentos[it.id]} fmt={fmt} config={config} tipo={tipo} perfil={perfil} vendedorPerfil={registro.vendedor} />)}
               </div>
             </>
           )}
