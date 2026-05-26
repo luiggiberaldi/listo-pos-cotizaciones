@@ -1,15 +1,16 @@
 // src/views/ReportesView.jsx
 // Vista profesional de reportes administrativos con tabs
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import {
   BarChart3, CreditCard, RefreshCw, Download,
   FileText, DollarSign, AlertTriangle,
   Clock, Users, Percent, ArrowUpCircle, Loader2, Briefcase,
-  ChevronDown, Globe, UserCheck, Printer
+  ChevronDown, Globe, UserCheck, Printer, CheckCircle
 } from 'lucide-react'
 import { useReporteVentas } from '../hooks/useReporteVentas'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
-import { useComisiones, useComisionesResumen } from '../hooks/useComisiones'
+import { useComisiones, useComisionesResumen, useMarcarComisionPagada } from '../hooks/useComisiones'
+import ConfirmModal from '../components/ui/ConfirmModal'
 import { useResumenCxC } from '../hooks/useCuentasCobrar'
 import { getDayRange, getWeekRange, getMonthRange } from '../utils/dateHelpers'
 import { fmtUsd, fmtBs } from '../utils/format'
@@ -755,6 +756,37 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
   })
   const detalle = comisionesRes?.data ?? []
 
+  const marcar = useMarcarComisionPagada()
+  const { perfil } = useAuthStore()
+  const esAdmin = perfil?.rol === 'administracion'
+  const esJefe = perfil?.rol === 'jefe'
+  const esDev = perfil?.rol === 'desarrollador'
+  const puedePagarComisiones = esAdmin || esJefe || esDev
+
+  const [comisionAPagar, setComisionAPagar] = useState(null)
+  const [pagoMasivoData, setPagoMasivoData] = useState(null)
+  const [pagandoMasivo, setPagandoMasivo] = useState(false)
+
+  const comisionesPendientes = useMemo(() => {
+    return detalle.filter(c => c.estado !== 'pagada')
+  }, [detalle])
+
+  const comisionesSoloPendientes = useMemo(() => {
+    return detalle.filter(c => c.estado === 'pendiente')
+  }, [detalle])
+
+  const montoPendiente = useMemo(() => {
+    return comisionesPendientes.reduce((acc, c) => {
+      return acc + Math.max(0, Number(c.totalcomision || 0) - Number(c.montopagado || 0))
+    }, 0)
+  }, [comisionesPendientes])
+
+  const montoSoloPendiente = useMemo(() => {
+    return comisionesSoloPendientes.reduce((acc, c) => {
+      return acc + Math.max(0, Number(c.totalcomision || 0) - Number(c.montopagado || 0))
+    }, 0)
+  }, [comisionesSoloPendientes])
+
   const tasaComision = (item) => Number(item.despacho?.tasa_snapshot || item.cotizacion?.tasa_bcv_snapshot || 0)
 
   // Calcular totales del detalle
@@ -844,20 +876,65 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
     >
       {isLoading ? <SkeletonReporte /> : (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex-1 grid grid-cols-2 gap-3">
-              <KpiCard icon={DollarSign} label="Total Comisión USD" value={fmtUsd(totales.totalUsd)} gradient="linear-gradient(135deg, #1e293b, #0f172a)" border="rgba(255,255,255,0.05)" />
-              <KpiCard icon={Percent} label="Total Comisión Bs" value={fmtBs(totales.comBs)} gradient="linear-gradient(135deg, #065f46, #064e3b)" border="rgba(255,255,255,0.05)" />
-            </div>
+          {/* Fila 1: KPIs - siempre en ancho completo */}
+          <div className="grid grid-cols-2 gap-4">
+            <KpiCard icon={DollarSign} label="Total Comisión USD" value={fmtUsd(totales.totalUsd)} gradient="linear-gradient(135deg, #1e293b, #0f172a)" border="rgba(255,255,255,0.05)" />
+            <KpiCard icon={Percent} label="Total Comisión Bs" value={fmtBs(totales.comBs)} gradient="linear-gradient(135deg, #065f46, #064e3b)" border="rgba(255,255,255,0.05)" />
+          </div>
+
+          {/* Fila 2: Acciones */}
+          <div className="flex flex-wrap items-center gap-2.5">
             <button
               onClick={(e) => { e.stopPropagation(); exportarPDF(); }}
               disabled={exportando}
-              className="ml-3 shrink-0 flex flex-col items-center justify-center gap-1 w-14 h-14 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white transition-all shadow-lg border border-white/10 group disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white transition-all duration-200 border border-slate-700 shadow-md active:scale-95 disabled:opacity-50 group font-bold text-xs tracking-wide"
               title="Descargar Reporte PDF"
             >
-              {exportando ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} className="group-hover:scale-110 transition-transform" />}
-              <span className="text-[9px] font-black tracking-widest uppercase">PDF</span>
+              {exportando ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} className="group-hover:translate-y-0.5 transition-transform" />}
+              <span>Exportar PDF</span>
             </button>
+
+            {puedePagarComisiones && comisionesSoloPendientes.length > 0 && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPagoMasivoData({
+                    pendientes: comisionesSoloPendientes,
+                    montoPendiente: montoSoloPendiente,
+                    vendedor,
+                    title: "Pagar Solo Comisiones (Sin CxC)",
+                    desc: "solo comisiones pendientes, excluyendo cuentas por cobrar"
+                  });
+                }}
+                disabled={marcar.isPending || pagandoMasivo}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white transition-all duration-200 shadow-md shadow-indigo-600/10 border border-indigo-500/20 active:scale-95 disabled:opacity-50 group font-bold text-xs tracking-wide"
+                title="Pagar solo las comisiones sin incluir cuentas por cobrar"
+              >
+                <CreditCard size={14} className="group-hover:scale-110 transition-transform text-white shrink-0" />
+                <span>Pagar Comis. ({fmtUsd(montoSoloPendiente)})</span>
+              </button>
+            )}
+
+            {puedePagarComisiones && comisionesPendientes.length > 0 && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPagoMasivoData({
+                    pendientes: comisionesPendientes,
+                    montoPendiente,
+                    vendedor,
+                    title: "Pagar Todo (Comisiones + CxC)",
+                    desc: "todas las comisiones pendientes, incluyendo cuentas por cobrar"
+                  });
+                }}
+                disabled={marcar.isPending || pagandoMasivo}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white transition-all duration-200 shadow-md shadow-emerald-600/10 border border-emerald-500/20 active:scale-95 disabled:opacity-50 group font-bold text-xs tracking-wide"
+                title="Pagar todas las comisiones pendientes de este vendedor"
+              >
+                <CheckCircle size={14} className="group-hover:scale-110 transition-transform text-white shrink-0" />
+                <span>Pagar Todo ({fmtUsd(montoPendiente)})</span>
+              </button>
+            )}
           </div>
 
           <AdminTable
@@ -876,35 +953,60 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
               const total = Number(d.totalcomision || 0)
               const tasa = tasaComision(d)
               const comBs = total * tasa
+              
+              const valCabilla = Number(d.comisioncabilla || 0)
+              const valOtros = Number(d.comisionotros || 0)
+              
               return [
-                { content: new Date(d.creadoen).toLocaleDateString('es-VE', { day: '2-digit', month: 'short' }) },
+                { content: <span className="font-bold text-slate-700">{new Date(d.creadoen).toLocaleDateString('es-VE', { day: '2-digit', month: 'short' })}</span> },
                 {
                   content: (
-                    <div className="text-[10px] leading-tight font-bold space-y-0.5">
-                      <div>D: #{d.despacho?.numero || '—'}</div>
-                      <div>C: #{d.cotizacion?.numero || '—'}</div>
+                    <div className="text-[10px] leading-tight font-mono font-bold space-y-1.5 my-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[8px] bg-slate-100 text-slate-500 px-1 py-0.5 rounded font-sans uppercase tracking-wider scale-90">Desp</span>
+                        <span className="text-slate-700">#{d.despacho?.numero || '—'}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[8px] bg-indigo-50 text-indigo-600 px-1 py-0.5 rounded font-sans uppercase tracking-wider scale-90">Cot</span>
+                        <span className="text-slate-700">#{d.cotizacion?.numero || '—'}</span>
+                      </div>
                     </div>
                   )
                 },
-                { content: fmtUsd(d.despacho?.totalusd || 0), className: 'text-right font-medium text-slate-600' },
-                { content: fmtUsd(d.comisioncabilla || 0), className: 'text-right font-semibold text-slate-700' },
-                { content: fmtUsd(d.comisionotros || 0), className: 'text-right font-semibold text-slate-700' },
-                { content: fmtUsd(total), className: 'text-right font-bold text-slate-900' },
-                { content: tasa > 0 ? `Bs ${tasa.toLocaleString('es-VE', { minimumFractionDigits: 2 })}` : '—', className: 'text-right text-[11px] text-slate-600 font-semibold' },
-                { content: fmtBs(comBs), className: 'text-right font-bold text-indigo-600' },
+                { content: fmtUsd(d.despacho?.totalusd || 0), className: 'text-right font-medium text-slate-500' },
+                { content: fmtUsd(valCabilla), className: `text-right font-semibold ${valCabilla === 0 ? 'text-slate-300 font-normal' : 'text-slate-800'}` },
+                { content: fmtUsd(valOtros), className: `text-right font-semibold ${valOtros === 0 ? 'text-slate-300 font-normal' : 'text-slate-800'}` },
+                { content: fmtUsd(total), className: 'text-right font-black text-slate-900 bg-slate-50/50' },
+                { content: tasa > 0 ? `Bs ${tasa.toLocaleString('es-VE', { minimumFractionDigits: 2 })}` : '—', className: 'text-right text-[11px] text-slate-500 font-semibold' },
+                { content: fmtBs(comBs), className: 'text-right font-black text-indigo-600 bg-indigo-50/20' },
                 {
                   content: (() => {
-                    let badgeClass = 'bg-amber-100 text-amber-700'
+                    let badgeClass = 'bg-amber-50 text-amber-700 border border-amber-200'
                     let label = d.estado
                     if (d.estado === 'pagada') {
-                      badgeClass = 'bg-emerald-100 text-emerald-700'
+                      badgeClass = 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                     } else if (d.estado === 'cta_cobrar') {
-                      badgeClass = 'bg-red-100 text-red-700 border border-red-200'
+                      badgeClass = 'bg-rose-50 text-rose-700 border border-rose-200'
                       label = 'cta x cobrar'
                     }
                     return (
-                      <div className={`inline-flex px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${badgeClass}`}>
-                        {label}
+                      <div className="flex flex-col items-center gap-1.5 py-0.5">
+                        <div className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${badgeClass}`}>
+                          {d.estado === 'pagada' && <CheckCircle size={9} className="text-emerald-600 animate-in zoom-in duration-350" />}
+                          {label}
+                        </div>
+                        {puedePagarComisiones && d.estado !== 'pagada' && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setComisionAPagar(d);
+                            }}
+                            className="px-2 py-0.5 rounded-md text-[9.5px] font-extrabold text-emerald-700 bg-emerald-50 hover:bg-emerald-600 hover:text-white border border-emerald-200 hover:border-emerald-500 transition-all duration-200 active:scale-95 uppercase tracking-wider shadow-sm flex items-center justify-center gap-1 mx-auto"
+                          >
+                            <CreditCard size={9} />
+                            Pagar
+                          </button>
+                        )}
                       </div>
                     )
                   })(),
@@ -915,6 +1017,52 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
           />
         </div>
       )}
+
+      {/* Modales de Confirmación de Pago */}
+      <ConfirmModal
+        isOpen={!!comisionAPagar}
+        onConfirm={() => {
+          if (!comisionAPagar) return
+          const saldo = Math.max(0, Number(comisionAPagar.totalcomision || 0) - Number(comisionAPagar.montopagado || 0))
+          marcar.mutate({ comisionid: comisionAPagar.id, montopagado: saldo })
+          setComisionAPagar(null)
+        }}
+        onClose={() => setComisionAPagar(null)}
+        title="Registrar Pago de Comisión"
+        message={comisionAPagar ? `Se registrará el pago de ${fmtUsd(Math.max(0, Number(comisionAPagar.totalcomision || 0) - Number(comisionAPagar.montopagado || 0)))}. Esta acción es atómica y final.` : ''}
+        confirmText="Confirmar Pago"
+        variant="success"
+      />
+
+      <ConfirmModal
+        isOpen={!!pagoMasivoData}
+        onConfirm={async () => {
+          if (!pagoMasivoData) return
+          setPagandoMasivo(true)
+          const { pendientes: items } = pagoMasivoData
+          for (const c of items) {
+            const saldo = Math.max(0, Number(c.totalcomision || 0) - Number(c.montopagado || 0))
+            if (saldo > 0) {
+              try {
+                await marcar.mutateAsync({ comisionid: c.id, montopagado: saldo })
+              } catch (e) {
+                console.error('Error pagando comisión', c.id, e)
+              }
+            }
+          }
+          setPagandoMasivo(false)
+          setPagoMasivoData(null)
+        }}
+        onClose={() => setPagoMasivoData(null)}
+        title={pagoMasivoData?.title || "Pagar Comisiones"}
+        message={
+          pagoMasivoData 
+            ? `Se registrará el pago de ${pagoMasivoData.pendientes.length} comisiones (${pagoMasivoData.desc}) de ${pagoMasivoData.vendedor?.nombre || 'este vendedor'} por un total de ${fmtUsd(pagoMasivoData.montoPendiente)}. Esta acción es secuencial y final.` 
+            : ''
+        }
+        confirmText="Confirmar Pago"
+        variant="success"
+      />
     </Modal>
   )
 }
@@ -925,6 +1073,13 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
 function TabComisiones({ configNeg }) {
   const { perfil } = useAuthStore()
   const esAdmin = perfil?.rol === 'administracion'
+  const esJefe = perfil?.rol === 'jefe'
+  const esDev = perfil?.rol === 'desarrollador'
+  const puedePagarComisiones = esAdmin || esJefe || esDev
+
+  const marcar = useMarcarComisionPagada()
+  const [pagoMasivoData, setPagoMasivoData] = useState(null)
+  const [pagandoMasivo, setPagandoMasivo] = useState(false)
 
   const [rango, setRango] = useState(() => {
     const r = getMonthRange(0)
@@ -946,6 +1101,19 @@ function TabComisiones({ configNeg }) {
     pageSize: 1000
   })
   const comisiones = comisionesRes?.data ?? []
+
+  const handlePagarTodoVendedor = useCallback((v) => {
+    const pendientes = comisiones.filter(c => {
+      const vId = c.vendedor?.id || '00000000-0000-0000-0000-000000000000'
+      return vId === v.id && c.estado !== 'pagada'
+    })
+    if (pendientes.length === 0) return
+    setPagoMasivoData({
+      pendientes,
+      montoPendiente: v.pendUsd,
+      vendedor: v
+    })
+  }, [comisiones])
 
   // Segunda llamada SIN filtro de vendedor, solo para construir el dropdown
   // de forma que siempre muestre los vendedores con comisiones en el rango
@@ -1246,103 +1414,130 @@ function TabComisiones({ configNeg }) {
             <div className="flex items-center gap-3 relative shrink-0">
               {/* BOTÓN IMPRIMIR PDF */}
               <div className="relative">
-                <button
-                  onClick={() => setShowPrintMenu(!showPrintMenu)}
-                  disabled={exportando || comisiones.length === 0}
-                  className="flex items-center gap-2 text-xs font-black px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm h-11"
-                >
-                  <Printer size={13} className="text-slate-500" />
-                  {exportando ? 'Generando...' : 'Imprimir PDF'}
-                  <ChevronDown size={13} className={`transition-transform duration-200 ${showPrintMenu ? 'rotate-180' : ''}`} />
-                </button>
-
-                {showPrintMenu && (
+                {filtroVendedor ? (
+                  <button
+                    onClick={() => exportarPDF('todos', 'imprimir')}
+                    disabled={exportando || comisiones.length === 0}
+                    className="flex items-center gap-2 text-xs font-black px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm h-11"
+                  >
+                    <Printer size={13} className="text-slate-500" />
+                    {exportando ? 'Generando...' : 'Imprimir PDF'}
+                  </button>
+                ) : (
                   <>
-                    <div className="fixed inset-0 z-10" onClick={() => setShowPrintMenu(false)} />
-                    <div className="absolute right-0 mt-2 w-56 rounded-xl bg-white border border-slate-200 shadow-xl z-20 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
-                      <button
-                        onClick={() => {
-                          setShowPrintMenu(false)
-                          exportarPDF('todos', 'imprimir')
-                        }}
-                        className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors"
-                      >
-                        <FileText size={14} className="text-slate-400" />
-                        Imprimir PDF Completo
-                      </button>
-                      <button
-                        onClick={() => {
-                          setShowPrintMenu(false)
-                          exportarPDF('internos', 'imprimir')
-                        }}
-                        className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors border-t border-slate-50"
-                      >
-                        <UserCheck size={14} className="text-indigo-500" />
-                        Imprimir Solo Internos
-                      </button>
-                      <button
-                        onClick={() => {
-                          setShowPrintMenu(false)
-                          exportarPDF('externos', 'imprimir')
-                        }}
-                        className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors border-t border-slate-50"
-                      >
-                        <Globe size={14} className="text-amber-500" />
-                        Imprimir Solo Externos
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => setShowPrintMenu(!showPrintMenu)}
+                      disabled={exportando || comisiones.length === 0}
+                      className="flex items-center gap-2 text-xs font-black px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm h-11"
+                    >
+                      <Printer size={13} className="text-slate-500" />
+                      {exportando ? 'Generando...' : 'Imprimir PDF'}
+                      <ChevronDown size={13} className={`transition-transform duration-200 ${showPrintMenu ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {showPrintMenu && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setShowPrintMenu(false)} />
+                        <div className="absolute right-0 mt-2 w-56 rounded-xl bg-white border border-slate-200 shadow-xl z-20 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+                          <button
+                            onClick={() => {
+                              setShowPrintMenu(false)
+                              exportarPDF('todos', 'imprimir')
+                            }}
+                            className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors"
+                          >
+                            <FileText size={14} className="text-slate-400" />
+                            Imprimir PDF Completo
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowPrintMenu(false)
+                              exportarPDF('internos', 'imprimir')
+                            }}
+                            className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors border-t border-slate-50"
+                          >
+                            <UserCheck size={14} className="text-indigo-500" />
+                            Imprimir Solo Internos
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowPrintMenu(false)
+                              exportarPDF('externos', 'imprimir')
+                            }}
+                            className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors border-t border-slate-50"
+                          >
+                            <Globe size={14} className="text-amber-500" />
+                            Imprimir Solo Externos
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
               </div>
 
               {/* BOTÓN DESCARGAR PDF */}
               <div className="relative">
-                <button
-                  onClick={() => setShowExportMenu(!showExportMenu)}
-                  disabled={exportando || comisiones.length === 0}
-                  className="flex items-center gap-2 text-xs font-black px-5 py-2.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-lg shadow-indigo-100/40 h-11"
-                  style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
-                >
-                  <Download size={13} />
-                  {exportando ? 'Generando...' : 'Descargar PDF'}
-                  <ChevronDown size={13} className={`transition-transform duration-200 ${showExportMenu ? 'rotate-180' : ''}`} />
-                </button>
-
-                {showExportMenu && (
+                {filtroVendedor ? (
+                  <button
+                    onClick={() => exportarPDF('todos', 'descargar')}
+                    disabled={exportando || comisiones.length === 0}
+                    className="flex items-center gap-2 text-xs font-black px-5 py-2.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-lg shadow-indigo-100/40 h-11"
+                    style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
+                  >
+                    <Download size={13} />
+                    {exportando ? 'Generando...' : 'Descargar PDF'}
+                  </button>
+                ) : (
                   <>
-                    <div className="fixed inset-0 z-10" onClick={() => setShowExportMenu(false)} />
-                    <div className="absolute right-0 mt-2 w-56 rounded-xl bg-white border border-slate-200 shadow-xl z-20 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
-                      <button
-                        onClick={() => {
-                          setShowExportMenu(false)
-                          exportarPDF('todos', 'descargar')
-                        }}
-                        className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors"
-                      >
-                        <FileText size={14} className="text-slate-400" />
-                        Descargar PDF Completo
-                      </button>
-                      <button
-                        onClick={() => {
-                          setShowExportMenu(false)
-                          exportarPDF('internos', 'descargar')
-                        }}
-                        className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors border-t border-slate-50"
-                      >
-                        <UserCheck size={14} className="text-indigo-500" />
-                        Descargar Solo Internos
-                      </button>
-                      <button
-                        onClick={() => {
-                          setShowExportMenu(false)
-                          exportarPDF('externos', 'descargar')
-                        }}
-                        className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors border-t border-slate-50"
-                      >
-                        <Globe size={14} className="text-amber-500" />
-                        Descargar Solo Externos
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => setShowExportMenu(!showExportMenu)}
+                      disabled={exportando || comisiones.length === 0}
+                      className="flex items-center gap-2 text-xs font-black px-5 py-2.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-lg shadow-indigo-100/40 h-11"
+                      style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
+                    >
+                      <Download size={13} />
+                      {exportando ? 'Generando...' : 'Descargar PDF'}
+                      <ChevronDown size={13} className={`transition-transform duration-200 ${showExportMenu ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {showExportMenu && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setShowExportMenu(false)} />
+                        <div className="absolute right-0 mt-2 w-56 rounded-xl bg-white border border-slate-200 shadow-xl z-20 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+                          <button
+                            onClick={() => {
+                              setShowExportMenu(false)
+                              exportarPDF('todos', 'descargar')
+                            }}
+                            className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors"
+                          >
+                            <FileText size={14} className="text-slate-400" />
+                            Descargar PDF Completo
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowExportMenu(false)
+                              exportarPDF('internos', 'descargar')
+                            }}
+                            className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors border-t border-slate-50"
+                          >
+                            <UserCheck size={14} className="text-indigo-500" />
+                            Descargar Solo Internos
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowExportMenu(false)
+                              exportarPDF('externos', 'descargar')
+                            }}
+                            className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors border-t border-slate-50"
+                          >
+                            <Globe size={14} className="text-amber-500" />
+                            Descargar Solo Externos
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
               </div>
@@ -1358,16 +1553,13 @@ function TabComisiones({ configNeg }) {
       ) : (
         <>
           {/* KPIs (Fuente de verdad SQL) */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <KpiCard icon={DollarSign} label="Total Periodo" value={fmtUsd(resumen?.total || 0)}
               sub="Bruto histórico"
               gradient="linear-gradient(135deg, #1e293b, #0f172a)" border="rgba(255,255,255,0.05)" />
             <KpiCard icon={Clock} label="Pendiente USD" value={fmtUsd(resumen?.pendiente || 0)}
               sub={`${resumen?.countPendiente || 0} comisiones`}
               gradient="linear-gradient(135deg, #92400e, #78350f)" border="rgba(255,255,255,0.05)" />
-            <KpiCard icon={Percent} label="En Reserva" value={fmtUsd(resumen?.retenida || 0)}
-              sub="Falta despachar"
-              gradient="linear-gradient(135deg, #b45309, #92400e)" border="rgba(255,255,255,0.05)" />
             <KpiCard icon={ArrowUpCircle} label="Total Pagado" value={fmtUsd(resumen?.pagado || 0)}
               sub={`${resumen?.countPagado || 0} liquidadas`}
               gradient="linear-gradient(135deg, #065f46, #064e3b)" border="rgba(255,255,255,0.05)" />
@@ -1391,7 +1583,7 @@ function TabComisiones({ configNeg }) {
                         <div
                           key={v.id}
                           onClick={() => setVendedorSeleccionado(v)}
-                          className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:border-indigo-300 hover:shadow-md transition-all flex flex-col gap-3 group"
+                          className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:border-indigo-400 hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex flex-col gap-3 group"
                         >
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0 shadow-inner" style={{ backgroundColor: v.color }}>
@@ -1404,7 +1596,7 @@ function TabComisiones({ configNeg }) {
                             <button
                               onClick={(e) => { e.stopPropagation(); exportarIndividualPDF(v); }}
                               title="Descargar reporte individual"
-                              className="p-2 bg-slate-50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-xl border border-slate-100 hover:border-indigo-200 transition-all"
+                              className="p-2 bg-slate-50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-xl border border-slate-100 hover:border-indigo-200 transition-all active:scale-95 duration-200"
                             >
                               <Download size={14} />
                             </button>
@@ -1425,6 +1617,19 @@ function TabComisiones({ configNeg }) {
                             <span className="text-[10px] font-bold text-slate-400 uppercase">Equiv. Bs</span>
                             <span className="text-xs font-bold text-indigo-600">{fmtBs(v.totalBs)}</span>
                           </div>
+
+                          {puedePagarComisiones && v.pendUsd > 0 && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handlePagarTodoVendedor(v);
+                              }}
+                              className="w-full mt-3 py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all duration-300 shadow-md hover:shadow-emerald-600/20 active:scale-[0.98] border border-emerald-500/20"
+                            >
+                              <CheckCircle size={14} className="text-white" />
+                              <span>Pagar Todo ({fmtUsd(v.pendUsd)})</span>
+                            </button>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -1443,7 +1648,7 @@ function TabComisiones({ configNeg }) {
                         <div
                           key={v.id}
                           onClick={() => setVendedorSeleccionado(v)}
-                          className="bg-white p-4 rounded-2xl border border-amber-200 shadow-sm cursor-pointer hover:border-amber-400 hover:shadow-md transition-all flex flex-col gap-3 group bg-amber-50/5"
+                          className="bg-white p-4 rounded-2xl border border-amber-200 shadow-sm cursor-pointer hover:border-amber-400 hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex flex-col gap-3 group bg-amber-50/5"
                         >
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0 shadow-inner" style={{ backgroundColor: '#D97706' }}>
@@ -1453,7 +1658,7 @@ function TabComisiones({ configNeg }) {
                               <h4 className="font-bold text-slate-800 truncate group-hover:text-amber-600 transition-colors">{v.nombre}</h4>
                               <div className="flex flex-col gap-0.5 mt-0.5">
                                 <span className="text-xs text-slate-500 font-medium">{v.cantidad} despachos procesados</span>
-                                <span className="inline-flex items-center gap-1 text-[9px] font-bold text-[#B45309] bg-[#FEF3C7] border border-[#FDE68A] rounded px-1.5 py-0.2 w-fit">
+                                <span className="inline-flex items-center gap-1 text-[9px] font-bold text-[#B45309] bg-[#FEF3C7] border border-[#FDE68A] rounded px-1.5 py-0.5 w-fit">
                                   💼 Externo (+{v.markup_pct}%)
                                 </span>
                               </div>
@@ -1461,7 +1666,7 @@ function TabComisiones({ configNeg }) {
                             <button
                               onClick={(e) => { e.stopPropagation(); exportarIndividualPDF(v); }}
                               title="Descargar reporte individual"
-                              className="p-2 bg-amber-50 hover:bg-amber-100 text-amber-600 hover:text-amber-700 rounded-xl border border-amber-100 hover:border-amber-200 transition-all"
+                              className="p-2 bg-amber-50 hover:bg-amber-100 text-amber-600 hover:text-amber-700 rounded-xl border border-amber-100 hover:border-amber-200 transition-all active:scale-95 duration-200"
                             >
                               <Download size={14} />
                             </button>
@@ -1482,6 +1687,19 @@ function TabComisiones({ configNeg }) {
                             <span className="text-[10px] font-bold text-slate-400 uppercase">Equiv. Bs</span>
                             <span className="text-xs font-bold text-indigo-600">{fmtBs(v.totalBs)}</span>
                           </div>
+
+                          {puedePagarComisiones && v.pendUsd > 0 && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handlePagarTodoVendedor(v);
+                              }}
+                              className="w-full mt-3 py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all duration-300 shadow-md hover:shadow-emerald-600/20 active:scale-[0.98] border border-emerald-500/20"
+                            >
+                              <CheckCircle size={14} className="text-white" />
+                              <span>Pagar Todo ({fmtUsd(v.pendUsd)})</span>
+                            </button>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -1502,6 +1720,38 @@ function TabComisiones({ configNeg }) {
           {comisiones.length === 0 && (
             <EmptyState icon={Percent} title="Sin comisiones" description="No hay comisiones en el periodo seleccionado." />
           )}
+
+          {/* Confirmar Pago Masivo desde Tarjeta del Dashboard */}
+          <ConfirmModal
+            isOpen={!!pagoMasivoData}
+            onConfirm={async () => {
+              if (!pagoMasivoData) return
+              setPagandoMasivo(true)
+              const { pendientes: items } = pagoMasivoData
+              for (const c of items) {
+                const saldo = Math.max(0, Number(c.totalcomision || 0) - Number(c.montopagado || 0))
+                if (saldo > 0) {
+                  try {
+                    await marcar.mutateAsync({ comisionid: c.id, montopagado: saldo })
+                  } catch (e) {
+                    console.error('Error pagando comisión', c.id, e)
+                  }
+                }
+              }
+              setPagandoMasivo(false)
+              setPagoMasivoData(null)
+              refetch() // Refrescar los datos para actualizar el pendUsd en las tarjetas
+            }}
+            onClose={() => setPagoMasivoData(null)}
+            title={pagoMasivoData?.title || "Pagar Todas las Comisiones"}
+            message={
+              pagoMasivoData 
+                ? `Se registrará el pago de ${pagoMasivoData.pendientes.length} comisiones (${pagoMasivoData.desc || 'pendientes'}) de ${pagoMasivoData.vendedor?.nombre || 'este vendedor'} por un total de ${fmtUsd(pagoMasivoData.montoPendiente)}. Esta acción es secuencial y final.` 
+                : ''
+            }
+            confirmText={pagoMasivoData?.confirmText || "Confirmar Pago Total"}
+            variant="success"
+          />
         </>
       )}
     </div>

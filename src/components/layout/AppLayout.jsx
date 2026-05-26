@@ -78,7 +78,7 @@ const NAV_TODOS = [
   { path: '/clientes',       label: 'Clientes',       icono: Users,          excludeRoles: ['logistica'] },
   { path: '/inventario',     label: 'Inventario',     icono: Package,        excludeRoles: ['logistica'] },
   { path: '/transportistas', label: 'Transportistas', icono: Truck,          excludeRoles: ['administracion', 'logistica'] },
-  { path: '/comisiones',     label: 'Comisiones',     icono: DollarSign,     excludeRoles: ['logistica'] },
+  { path: '/comisiones',     label: 'Comisiones',     icono: DollarSign,     excludeRoles: ['logistica', 'administracion'] },
 ]
 
 const NAV_SUPERVISOR = [
