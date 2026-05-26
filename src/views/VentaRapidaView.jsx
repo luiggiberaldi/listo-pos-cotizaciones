@@ -595,7 +595,7 @@ export default function VentaRapidaView() {
     (clienteSeleccionado?.vendedor_id === perfil?.id && perfil?.rol === 'vendedor_sin_comision');
 
   const cxcItem = pagosInmediatos.find(f => f.metodo === 'Cta por cobrar');
-  const cxcVencimientoValido = !cxcItem || esVendedorSinComision || (
+  const cxcVencimientoValido = !cxcItem || (
     cxcItem.diasVencimiento !== undefined &&
     cxcItem.diasVencimiento !== null &&
     !isNaN(cxcItem.diasVencimiento) &&
@@ -1854,7 +1854,7 @@ function Step2Pago({
                         <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50/50 border border-amber-200/50 rounded-lg ml-6">
                           <Clock size={12} className="text-amber-500 shrink-0" />
                           <span className="text-[11px] font-medium text-amber-700 whitespace-nowrap">
-                            Días de vencimiento {esVendedorSinComision ? '(opcional)' : '(obligatorio) *'}:
+                            Días de vencimiento (obligatorio) *:
                           </span>
                           <input
                             type="text"
@@ -1867,7 +1867,7 @@ function Step2Pago({
                                 updatePagoInmediato(fp.metodo, { diasVencimiento: val ? parseInt(val, 10) : null });
                               }
                             }}
-                            placeholder={esVendedorSinComision ? 'Ej. 15' : 'Obligatorio'}
+                            placeholder="Obligatorio"
                             className="w-20 px-2 py-1 rounded border border-amber-200 bg-white focus:outline-none focus:ring-2 focus:ring-amber-300 text-slate-800 text-center font-bold text-xs"
                           />
                         </div>

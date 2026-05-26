@@ -100,7 +100,7 @@ export async function handleCrearDespacho(request, env) {
         const fps = typeof formaPago === 'string' ? JSON.parse(formaPago) : formaPago;
         if (Array.isArray(fps)) {
           const cxc = fps.find(f => f.metodo === 'Cta por cobrar');
-          if (cxc && !esVendedorSinComision) {
+          if (cxc) {
             const dias = parseInt(cxc.diasVencimiento, 10);
             if (isNaN(dias) || dias <= 0) {
               return jsonError('Los días de vencimiento son obligatorios para cuentas por cobrar', 400, request);
@@ -235,7 +235,7 @@ export async function handleEditarPagoDespacho(request, env) {
       const fps = typeof formaPago === 'string' ? JSON.parse(formaPago) : formaPago;
       if (Array.isArray(fps)) {
         const cxc = fps.find(f => f.metodo === 'Cta por cobrar');
-        if (cxc && !esVendedorSinComision) {
+        if (cxc) {
           const dias = parseInt(cxc.diasVencimiento, 10);
           if (isNaN(dias) || dias <= 0) {
             return jsonError('Los días de vencimiento son obligatorios para cuentas por cobrar', 400, request);
@@ -868,7 +868,7 @@ export async function handleEditarItemsDespacho(request, env) {
         const fps = typeof pagos === 'string' ? JSON.parse(pagos) : pagos;
         if (Array.isArray(fps)) {
           const cxc = fps.find(f => f.metodo === 'Cta por cobrar');
-          if (cxc && !esVendedorSinComision) {
+          if (cxc) {
             const dias = parseInt(cxc.diasVencimiento, 10);
             if (isNaN(dias) || dias <= 0) {
               return jsonError('Los días de vencimiento son obligatorios para cuentas por cobrar', 400, request);

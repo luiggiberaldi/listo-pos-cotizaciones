@@ -82,7 +82,7 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
   } = useFormasPago(montoCodRequerido)
 
   const cxcItem = pagosInmediatos.find(f => f.metodo === 'Cta por cobrar');
-  const cxcVencimientoValido = !cxcItem || esVendedorSinComision || (
+  const cxcVencimientoValido = !cxcItem || (
     cxcItem.diasVencimiento !== undefined &&
     cxcItem.diasVencimiento !== null &&
     !isNaN(cxcItem.diasVencimiento) &&
@@ -386,7 +386,7 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
                       {fp.metodo === 'Cta por cobrar' && (
                         <div className="flex items-center gap-2 pl-28">
                           <span className="text-xs text-slate-500 font-medium">
-                            Días venc. {esVendedorSinComision ? '(opcional)' : '(obligatorio) *'}:
+                            Días venc. (obligatorio) *:
                           </span>
                           <input
                             type="number"
@@ -394,7 +394,7 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
                             step="1"
                             value={fp.diasVencimiento ?? ''}
                             onChange={e => updatePagoInmediato(fp.metodo, { diasVencimiento: e.target.value ? parseInt(e.target.value) : null })}
-                            placeholder={esVendedorSinComision ? 'Opcional' : 'Obligatorio'}
+                            placeholder="Obligatorio"
                             className="w-28 px-2 py-1.5 rounded-lg text-xs border border-slate-200 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:bg-white"
                             disabled={cargando}
                           />

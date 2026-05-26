@@ -189,7 +189,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
   } = useFormasPago(montoCodRequerido)
 
   const cxcItem = pagosInmediatos.find(f => f.metodo === 'Cta por cobrar');
-  const cxcVencimientoValido = !cxcItem || esVendedorSinComision || (
+  const cxcVencimientoValido = !cxcItem || (
     cxcItem.diasVencimiento !== undefined &&
     cxcItem.diasVencimiento !== null &&
     !isNaN(cxcItem.diasVencimiento) &&
@@ -488,13 +488,13 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                           <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 border border-amber-200 rounded-lg ml-2">
                             <Clock size={10} className="text-amber-500 shrink-0" />
                             <span className="text-[10px] font-medium text-amber-700 whitespace-nowrap">
-                              Días {esVendedorSinComision ? '(opcional)' : '(obligatorio) *'}:
+                              Días (obligatorio) *:
                             </span>
                             <input
                               type="number" min="0" step="1"
                               value={fp.diasVencimiento ?? ''}
                               onChange={e => updatePagoInmediato(fp.metodo, { diasVencimiento: e.target.value ? parseInt(e.target.value) : null })}
-                              placeholder={esVendedorSinComision ? 'Ej. 15' : 'Obligatorio'}
+                              placeholder="Obligatorio"
                               className="w-20 px-1 py-0.5 rounded text-[10px] font-semibold border border-amber-200 bg-white focus:outline-none focus:ring-1 focus:ring-amber-400 text-slate-700 text-center"
                             />
                           </div>
