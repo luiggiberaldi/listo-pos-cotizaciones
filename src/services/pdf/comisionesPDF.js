@@ -494,7 +494,18 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
         let subTotalBs = 0;
 
         itemsParaTabla.forEach((c, idx) => {
-          const rowH = 9.5;
+          let rowH = 9.5;
+          let splitDesc = [];
+          if (esDetallado) {
+            const desc = `${c.codigo ? '['+c.codigo+'] ' : ''}${c.descripcion || '—'}`;
+            doc.setFontSize(8.0);
+            splitDesc = doc.splitTextToSize(desc, cols[2].w - 9);
+            doc.setFontSize(9.0);
+            if (splitDesc.length > 2) {
+              rowH = 12.0;
+            }
+          }
+
           y = checkPage(doc, y, rowH + 2, handlePageAdd);
 
           if (y < MARGIN + 12) {
@@ -529,7 +540,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
 
           if (esDetallado) {
             doc.setFontSize(8.0);
-            doc.text(fmtFechaCorta(c.creadoen), cols[0].x + 1, y + 5.5);
+            doc.text(fmtFechaCorta(c.creadoen), cols[0].x + 1, y + (rowH / 2) + 0.7);
             doc.setFontSize(9.0);
             
             // Cliente y Documento apilados (Cliente primero)
@@ -551,28 +562,26 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
             doc.setTextColor(...C_DARK);
             
             doc.setFontSize(8.0);
-            const desc = `${c.codigo ? '['+c.codigo+'] ' : ''}${c.descripcion || '—'}`;
-            const splitDesc = doc.splitTextToSize(desc, cols[2].w - 9);
-            const descY = splitDesc.length > 1 ? y + 3.8 : y + 5.5;
+            const descY = splitDesc.length > 1 ? y + 3.8 : y + (rowH / 2) + 0.7;
             doc.text(splitDesc, cols[2].x + 1, descY);
             doc.setFontSize(9.0);
 
-            doc.text(fmtUsd(c.valor), cols[3].x + cols[3].w - 2, y + 5.5, { align: 'right' });
-            doc.text(`${c.pct}%`, cols[4].x + cols[4].w - 2, y + 5.5, { align: 'right' });
+            doc.text(fmtUsd(c.valor), cols[3].x + cols[3].w - 2, y + (rowH / 2) + 0.7, { align: 'right' });
+            doc.text(`${c.pct}%`, cols[4].x + cols[4].w - 2, y + (rowH / 2) + 0.7, { align: 'right' });
             
             doc.setFont('helvetica', 'bold');
-            doc.text(fmtUsd(c.totalcomision), cols[5].x + cols[5].w - 2, y + 5.5, { align: 'right' });
+            doc.text(fmtUsd(c.totalcomision), cols[5].x + cols[5].w - 2, y + (rowH / 2) + 0.7, { align: 'right' });
             
             doc.setFont('helvetica', 'normal');
-            doc.text(tasa > 0 ? `Bs ${tasa}` : 'N/D', cols[6].x + cols[6].w - 2, y + 5.5, { align: 'right' });
+            doc.text(tasa > 0 ? `Bs ${tasa}` : 'N/D', cols[6].x + cols[6].w - 2, y + (rowH / 2) + 0.7, { align: 'right' });
             
             doc.setFont('helvetica', 'bold');
-            doc.text(tasa > 0 ? fmtBs(comBs) : 'N/D', cols[7].x + cols[7].w - 2, y + 5.5, { align: 'right' });
+            doc.text(tasa > 0 ? fmtBs(comBs) : 'N/D', cols[7].x + cols[7].w - 2, y + (rowH / 2) + 0.7, { align: 'right' });
 
-            drawStatusBadge(doc, c.estado, cols[8].x, y + 6.5, cols[8].w, 4.5);
+            drawStatusBadge(doc, c.estado, cols[8].x, y + (rowH / 2) + 1.7, cols[8].w, 4.5);
           } else {
             doc.setFontSize(8.0);
-            doc.text(fmtFechaCorta(c.creadoen), cols[0].x + 1, y + 5.5);
+            doc.text(fmtFechaCorta(c.creadoen), cols[0].x + 1, y + (rowH / 2) + 0.7);
             doc.setFontSize(9.0);
             
             // Cliente y Documento apilados (Cliente primero)
@@ -593,21 +602,21 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
             doc.setFontSize(9.0);
             doc.setTextColor(...C_DARK);
             
-            doc.text(fmtUsd(c.comisioncabilla), cols[2].x + cols[2].w - 2, y + 5.5, { align: 'right' });
-            doc.text(fmtUsd(c.comisionotros), cols[3].x + cols[3].w - 2, y + 5.5, { align: 'right' });
+            doc.text(fmtUsd(c.comisioncabilla), cols[2].x + cols[2].w - 2, y + (rowH / 2) + 0.7, { align: 'right' });
+            doc.text(fmtUsd(c.comisionotros), cols[3].x + cols[3].w - 2, y + (rowH / 2) + 0.7, { align: 'right' });
             
             doc.setFont('helvetica', 'bold');
-            doc.text(fmtUsd(c.totalcomision), cols[4].x + cols[4].w - 2, y + 5.5, { align: 'right' });
+            doc.text(fmtUsd(c.totalcomision), cols[4].x + cols[4].w - 2, y + (rowH / 2) + 0.7, { align: 'right' });
             
             doc.setFont('helvetica', 'normal');
-            doc.text(c.montopagado > 0 ? fmtUsd(c.montopagado) : '—', cols[5].x + cols[5].w - 2, y + 5.5, { align: 'right' });
+            doc.text(c.montopagado > 0 ? fmtUsd(c.montopagado) : '—', cols[5].x + cols[5].w - 2, y + (rowH / 2) + 0.7, { align: 'right' });
             
-            doc.text(tasa > 0 ? `Bs ${tasa}` : 'N/D', cols[6].x + cols[6].w - 2, y + 5.5, { align: 'right' });
+            doc.text(tasa > 0 ? `Bs ${tasa}` : 'N/D', cols[6].x + cols[6].w - 2, y + (rowH / 2) + 0.7, { align: 'right' });
             
             doc.setFont('helvetica', 'bold');
-            doc.text(tasa > 0 ? fmtBs(comBs) : 'N/D', cols[7].x + cols[7].w - 2, y + 5.5, { align: 'right' });
+            doc.text(tasa > 0 ? fmtBs(comBs) : 'N/D', cols[7].x + cols[7].w - 2, y + (rowH / 2) + 0.7, { align: 'right' });
 
-            drawStatusBadge(doc, c.estado, cols[8].x, y + 6.5, cols[8].w, 4.5);
+            drawStatusBadge(doc, c.estado, cols[8].x, y + (rowH / 2) + 1.7, cols[8].w, 4.5);
           }
 
           y += rowH;
