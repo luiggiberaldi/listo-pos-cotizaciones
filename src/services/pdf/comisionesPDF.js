@@ -6,7 +6,7 @@ import {
   PAGE_W, PAGE_H, MARGIN, CONTENT_W,
   C_PRIMARY, C_DARK, C_WHITE, C_EMERALD, C_AMBER, C_GRAY,
   fmtUsd, fmtBs, fmtFecha, fmtFechaCorta,
-  hexToRgb, drawWatermark, checkPage, drawSimplifiedHeader,
+  hexToRgb, drawWatermark, checkPage, drawSimplifiedHeader, drawPremiumHeader
 } from './pdfShared'
 
 // ─── Generar Reporte de Comisiones ───────────────────────────────────────────
@@ -145,59 +145,22 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
   // Si hay descripciones significativas, es el reporte detallado
   const esDetallado = comisionesNorm.some(c => c.descripcion && c.descripcion !== '---')
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // 1. CABECERA
-  // ══════════════════════════════════════════════════════════════════════════
-  const HDR_H = 36
-  doc.setFillColor(...C_PRIMARY)
-  doc.rect(0, 0, PAGE_W, HDR_H, 'F')
-
-  // Hazard derecho
-  const hazW = 40
-  const hazX = PAGE_W - hazW
-  doc.setFillColor(...C_DARK)
-  doc.rect(hazX, 0, hazW, 14, 'F')
-  doc.setLineWidth(0.8)
-  doc.setDrawColor(...C_PRIMARY)
-  for (let k = 0; k < 15; k++) {
-    doc.line(hazX + k*4, 0, hazX + k*4 - 8, 14)
-  }
-
-  // Logo
-  if (logoData) {
-    try { doc.addImage(logoData, 'PNG', MARGIN + 8, 3, 30, 30) } catch (_) {}
-  }
-
-  // Título
-  const textCenterX = (MARGIN + 44 + PAGE_W - MARGIN - 40) / 2
-  doc.setFont('times', 'bold')
-  doc.setFontSize(18)
-  doc.setTextColor(...C_WHITE)
-  let n1 = config.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.'
-  if (n1.trim().toUpperCase() === 'PRUEBA' || n1.trim() === '') n1 = 'CONSTRUACERO CARABOBO C.A.'
-  const nombreNeg = n1.split(' ')
-  doc.text((nombreNeg[0] || '').toUpperCase(), textCenterX, 16, { align: 'center' })
-  if (nombreNeg.length > 1) {
-    doc.setFontSize(12)
-    doc.text(nombreNeg.slice(1).join(' ').toUpperCase(), textCenterX, 23, { align: 'center' })
-  }
-
-  // Subtítulo
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(12.5)
   let subTitleText = 'Reporte de Comisiones'
-  if (tipoVendedor === 'internos') subTitleText = 'Reporte de Comisiones — Vendedores Internos'
-  else if (tipoVendedor === 'externos') subTitleText = 'Reporte de Comisiones — Vendedores Externos'
-  doc.text(subTitleText, PAGE_W - MARGIN, HDR_H - 8, { align: 'right' })
-  doc.setFontSize(9.5)
-  doc.setFont('helvetica', 'normal')
+  if (tipoVendedor === 'internos') subTitleText = 'Reporte de Comisiones — Internos'
+  else if (tipoVendedor === 'externos') subTitleText = 'Reporte de Comisiones — Externos'
+  
   let subHeaderDate = fmtFecha(new Date().toISOString(), 'short-month')
   if (rango && (rango.from || rango.to)) {
     subHeaderDate = `Periodo: ${rango.from ? fmtFechaCorta(rango.from) : 'Inicio'} al ${rango.to ? fmtFechaCorta(rango.to) : 'Fin'}`
   }
-  doc.text(subHeaderDate, PAGE_W - MARGIN, HDR_H - 3, { align: 'right' })
 
-  y = HDR_H + 6
+  y = drawPremiumHeader({
+    doc,
+    logoData,
+    config,
+    title: subTitleText,
+    subtitle: subHeaderDate
+  })
 
   // Watermark
   drawWatermark(doc)
@@ -829,40 +792,6 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
 
   const logoData = await cargarLogo(config.logo_url)
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // 1. CABECERA
-  // ══════════════════════════════════════════════════════════════════════════
-  const HDR_H = 36
-  doc.setFillColor(...C_PRIMARY)
-  doc.rect(0, 0, PAGE_W, HDR_H, 'F')
-
-  const hazW = 40
-  const hazX = PAGE_W - hazW
-  doc.setFillColor(...C_DARK)
-  doc.rect(hazX, 0, hazW, 14, 'F')
-  doc.setLineWidth(0.8)
-  doc.setDrawColor(...C_PRIMARY)
-  for (let k = 0; k < 15; k++) {
-    doc.line(hazX + k*4, 0, hazX + k*4 - 8, 14)
-  }
-
-  if (logoData) {
-    try { doc.addImage(logoData, 'PNG', MARGIN + 8, 3, 30, 30) } catch (_) {}
-  }
-
-  const textCenterX = (MARGIN + 44 + PAGE_W - MARGIN - 40) / 2
-  doc.setFont('times', 'bold')
-  doc.setFontSize(18)
-  doc.setTextColor(...C_WHITE)
-  let n2 = config.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.'
-  if (n2.trim().toUpperCase() === 'PRUEBA' || n2.trim() === '') n2 = 'CONSTRUACERO CARABOBO C.A.'
-  const nombreNeg2 = n2.split(' ')
-  doc.text((nombreNeg2[0] || '').toUpperCase(), textCenterX, 16, { align: 'center' })
-  if (nombreNeg2.length > 1) {
-    doc.setFontSize(12)
-    doc.text(nombreNeg2.slice(1).join(' ').toUpperCase(), textCenterX, 23, { align: 'center' })
-  }
-
   let labelTitle = 'Reporte de Ventas';
   if (reporte.tipoFiltro === 'internos') {
     labelTitle = 'Reporte de Ventas — Internos';
@@ -881,14 +810,13 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
     }
   }
 
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
-  doc.text(labelTitle, PAGE_W - MARGIN, HDR_H - 8, { align: 'right' })
-  doc.setFontSize(8)
-  doc.setFont('helvetica', 'normal')
-  doc.text(`${rango.from} — ${rango.to}`, PAGE_W - MARGIN, HDR_H - 3, { align: 'right' })
-
-  y = HDR_H + 6
+  y = drawPremiumHeader({
+    doc,
+    logoData,
+    config,
+    title: labelTitle,
+    subtitle: `${rango.from} — ${rango.to}`
+  })
 
   // Watermark
   drawWatermark(doc)

@@ -6,11 +6,12 @@ import {
   PAGE_W, PAGE_H, MARGIN, CONTENT_W,
   C_DARK, C_WHITE, C_EMERALD, C_AMBER, C_RED, C_GRAY,
   fmtUsd, fmtFecha, hexToRgb, drawWatermark, checkPage,
+  C_PRIMARY, C_ACCENT, drawPremiumHeader, drawSimplifiedHeader
 } from './pdfShared'
 
-// Color primario del reporte (Rojo Carmesí para CxC)
-const C_CXC_PRIMARY = [153, 27, 27] // #991b1b
-const C_CXC_ACCENT = [224, 242, 254] // Sky 50/100
+// Color primario del reporte CxC heredado del corporate design
+const C_CXC_PRIMARY = C_PRIMARY
+const C_CXC_ACCENT = [241, 245, 249] // slate soft bg
 
 // Helper para dibujar títulos de sección estilizados
 function drawSectionTitle(doc, text, y) {
@@ -49,52 +50,25 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
   const logoData = await cargarLogo(config.logo_url)
   let y = 0
+  const HDR_H = 40 // Altura del header premium
+  const nombreNeg = config.nombre_negocio || config.empresa || 'Mi Empresa'
 
-  const nombreNeg = (() => {
-    let n = config.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.'
-    if (!n || n.trim().toUpperCase() === 'PRUEBA' || !n.trim()) n = 'CONSTRUACERO CARABOBO C.A.'
-    return n
-  })()
+  // Callback: header compacto en páginas de continuación (ahorra ~30mm por página)
+  const onNewPage = (d) => {
+    const y2 = drawSimplifiedHeader(d, logoData, config, 'Reporte CxC (Cont.)')
+    drawWatermark(d)
+    return y2
+  }
 
   // ═══ CABECERA PRINCIPAL ══════════════════════════════════════════════════════
-  const HDR_H = 34
-  doc.setFillColor(...C_CXC_PRIMARY)
-  doc.rect(0, 0, PAGE_W, HDR_H, 'F')
+  y = drawPremiumHeader({
+    doc,
+    logoData,
+    config,
+    title: 'Reporte de Cuentas por Cobrar (CxC)',
+    subtitle: `Fecha de Emisión: ${new Date().toLocaleDateString('es-VE')}`
+  })
 
-  // Patrón de rayas decorativas esquina derecha
-  const hazW = 45, hazX = PAGE_W - hazW
-  doc.setFillColor(127, 29, 29) // Rojo más oscuro (maroon-900)
-  doc.rect(hazX, 0, hazW, 14, 'F')
-  doc.setLineWidth(0.8)
-  doc.setDrawColor(...C_CXC_PRIMARY)
-  for (let k = 0; k < 15; k++) doc.line(hazX + k * 4, 0, hazX + k * 4 - 8, 14)
-
-  // Renderizar logo del negocio
-  if (logoData) {
-    try { doc.addImage(logoData, 'PNG', MARGIN + 6, 2.5, 29, 29) } catch (_) {}
-  }
-
-  // Texto centrado del encabezado
-  const textCenterX = (MARGIN + 38 + PAGE_W - MARGIN - 40) / 2
-  const partes = nombreNeg.split(' ')
-  doc.setFont('times', 'bold')
-  doc.setFontSize(17)
-  doc.setTextColor(...C_WHITE)
-  doc.text((partes[0] || '').toUpperCase(), textCenterX, 12, { align: 'center' })
-  if (partes.length > 1) {
-    doc.setFontSize(11)
-    doc.text(partes.slice(1).join(' ').toUpperCase(), textCenterX, 18, { align: 'center' })
-  }
-
-  // Título del reporte a la derecha
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
-  doc.text('REPORTE DE CUENTAS POR COBRAR (CxC)', PAGE_W - MARGIN, HDR_H - 8, { align: 'right' })
-  doc.setFontSize(7.5)
-  doc.setFont('helvetica', 'normal')
-  doc.text(`Fecha de Emisión: ${new Date().toLocaleString('es-VE')}`, PAGE_W - MARGIN, HDR_H - 3, { align: 'right' })
-
-  y = HDR_H + 6
   drawWatermark(doc)
 
   // ═══ KPIs GENERALES (Resumen Ejecutivo) ══════════════════════════════════════
@@ -198,8 +172,7 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
   const maxSaldo = Math.max(...clientesConDeuda.map(c => Number(c.saldo_pendiente || 0)), 1)
 
   clientesConDeuda.forEach((c, idx) => {
-    y = checkPage(doc, y, 9, null, 22)
-    if (y < HDR_H) y = HDR_H + 6
+    y = checkPage(doc, y, 9, onNewPage, 22)
 
     if (idx % 2 === 0) {
       doc.setFillColor(250, 251, 255)
@@ -238,7 +211,7 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
       const vColor = hexToRgb(c.vendedor.color || '#64748b')
       doc.setFillColor(...vColor)
       doc.circle(MARGIN + 66, y + 4, 1.2, 'F')
-      doc.setFont('helvetica', 'medium')
+      doc.setFont('helvetica', 'bold')
       doc.text((c.vendedor.nombre || '—').substring(0, 18), MARGIN + 69, y + 4.5)
     } else {
       doc.setFont('helvetica', 'normal')
@@ -303,8 +276,7 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
   })
 
   // Total consolidado
-  y = checkPage(doc, y, 9, null, 22)
-  if (y < HDR_H) y = HDR_H + 6
+  y = checkPage(doc, y, 9, onNewPage, 22)
   doc.setLineWidth(0.4)
   doc.setDrawColor(...C_CXC_PRIMARY)
   doc.line(MARGIN, y - 1, MARGIN + CONTENT_W, y - 1)
@@ -326,8 +298,7 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
       const cargosActivos = c.cargosActivos || []
       if (cargosActivos.length === 0) return
 
-      y = checkPage(doc, y, 22, null, 22)
-      if (y < HDR_H) y = HDR_H + 6
+      y = checkPage(doc, y, 22, onNewPage, 22)
 
       // Divisor elegante para el cliente
       doc.setFillColor(241, 245, 249) // slate-100
@@ -348,15 +319,14 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
       const detCols = [
         { label: 'Fecha Emisión',  x: MARGIN + 4,   align: 'left' },
         { label: 'Fecha Vencim.', x: MARGIN + 35,  align: 'left' },
-        { label: 'Estatus / Plazo',x: MARGIN + 70,  align: 'left' },
-        { label: 'Monto Original', x: MARGIN + 130, align: 'right' },
-        { label: 'Saldo Pendiente',x: MARGIN + 180, align: 'right' },
+        { label: 'Estatus / Plazo',x: MARGIN + 68,  align: 'left' },
+        { label: 'Monto Original', x: MARGIN + 140, align: 'right' },
+        { label: 'Saldo Pendiente',x: MARGIN + 185, align: 'right' },
       ]
       y = drawTableHeader(doc, detCols, y)
 
       cargosActivos.forEach((car, cIdx) => {
-        y = checkPage(doc, y, 7.5, null, 22)
-        if (y < HDR_H) y = HDR_H + 6
+        y = checkPage(doc, y, 7.5, onNewPage, 22)
 
         if (cIdx % 2 === 0) {
           doc.setFillColor(252, 252, 253)
@@ -390,22 +360,21 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
         }
         doc.setFont('helvetica', 'bold')
         doc.setTextColor(...estColor)
-        doc.text(estatusStr, MARGIN + 70, y + 3.2)
+        doc.text(estatusStr, MARGIN + 68, y + 3.2)
 
         doc.setFont('helvetica', 'normal')
         doc.setTextColor(...C_DARK)
-        doc.text(fmtUsd(car.monto_usd), MARGIN + 130, y + 3.2, { align: 'right' })
+        doc.text(fmtUsd(car.monto_usd), MARGIN + 140, y + 3.2, { align: 'right' })
         
         doc.setFont('helvetica', 'bold')
         doc.setTextColor(...C_RED)
-        doc.text(fmtUsd(car.saldo_usd), MARGIN + 180, y + 3.2, { align: 'right' })
+        doc.text(fmtUsd(car.saldo_usd), MARGIN + 185, y + 3.2, { align: 'right' })
 
         y += 6
       })
 
       // Sub-total del cliente
-      y = checkPage(doc, y, 7.5, null, 22)
-      if (y < HDR_H) y = HDR_H + 6
+      y = checkPage(doc, y, 7.5, onNewPage, 22)
       doc.setLineWidth(0.2)
       doc.setDrawColor(226, 232, 240)
       doc.line(MARGIN, y - 0.5, MARGIN + CONTENT_W, y - 0.5)
@@ -416,7 +385,7 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
       doc.text(`TOTAL ${c.nombre?.toUpperCase()}`, MARGIN + 4, y + 3.5)
       doc.setFontSize(7)
       doc.setTextColor(...C_RED)
-      doc.text(fmtUsd(c.saldo_pendiente), MARGIN + 180, y + 3.5, { align: 'right' })
+      doc.text(fmtUsd(c.saldo_pendiente), MARGIN + 185, y + 3.5, { align: 'right' })
 
       y += 10
     })

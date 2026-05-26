@@ -6,7 +6,7 @@ import { cargarLogo } from './pdfLogo'
 import {
   C_PRIMARY, C_DARK, C_WHITE, C_EMERALD, C_AMBER, C_GRAY,
   fmtUsd,
-  hexToRgb, drawWatermark, checkPage,
+  hexToRgb, drawWatermark, checkPage, drawPremiumHeader
 } from './pdfShared'
 
 // ─── Dimensiones landscape letter ─────────────────────────────────────────────
@@ -47,39 +47,13 @@ function checkPageL(doc, y, needed = 10) {
 
 // ─── Cabecera ─────────────────────────────────────────────────────────────────
 async function dibujarCabecera(doc, config, logoData, subtitulo, rangoStr) {
-  const HDR_H = 30
-
-  doc.setFillColor(...C_PRIMARY)
-  doc.rect(0, 0, L_W, HDR_H, 'F')
-
-  // Hazard
-  const hazW = 40; const hazX = L_W - hazW
-  doc.setFillColor(...C_DARK)
-  doc.rect(hazX, 0, hazW, 12, 'F')
-  doc.setLineWidth(0.8); doc.setDrawColor(...C_PRIMARY)
-  for (let k = 0; k < 15; k++) doc.line(hazX + k * 4, 0, hazX + k * 4 - 8, 12)
-
-  if (logoData) {
-    try { doc.addImage(logoData, 'PNG', L_M + 6, 2, 25, 25) } catch (_) {}
-  }
-
-  const textCenterX = (L_M + 34 + L_W - L_M - 40) / 2
-  doc.setFont('times', 'bold'); doc.setFontSize(18); doc.setTextColor(...C_WHITE)
-  let n = config.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.'
-  if (n.trim().toUpperCase() === 'PRUEBA' || n.trim() === '') n = 'CONSTRUACERO CARABOBO C.A.'
-  const words = n.split(' ')
-  doc.text((words[0] || '').toUpperCase(), textCenterX, 13, { align: 'center' })
-  if (words.length > 1) {
-    doc.setFontSize(11)
-    doc.text(words.slice(1).join(' ').toUpperCase(), textCenterX, 20, { align: 'center' })
-  }
-
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...C_WHITE)
-  doc.text(subtitulo, L_W - L_M, HDR_H - 6, { align: 'right' })
-  doc.setFontSize(7); doc.setFont('helvetica', 'normal')
-  doc.text(rangoStr, L_W - L_M, HDR_H - 2, { align: 'right' })
-
-  return HDR_H + 5
+  return drawPremiumHeader({
+    doc,
+    logoData,
+    config,
+    title: subtitulo,
+    subtitle: rangoStr
+  })
 }
 
 // ─── Footer ───────────────────────────────────────────────────────────────────

@@ -6,7 +6,7 @@ import {
   PAGE_W, PAGE_H, MARGIN, CONTENT_W,
   C_PRIMARY, C_DARK, C_WHITE, C_EMERALD, C_AMBER, C_RED, C_GRAY,
   fmtUsd,
-  hexToRgb, drawWatermark, checkPage,
+  hexToRgb, drawWatermark, checkPage, drawPremiumHeader,
 } from './pdfShared'
 
 // ─── Colores específicos de este reporte ────────────────────────────────────
@@ -36,42 +36,13 @@ export async function generarDespachoReportePDF({ reporte, rango, config = {} })
   let y = 0
 
   // ═══ CABECERA ═══
-  const HDR_H = 36
-  doc.setFillColor(...C_PRIMARY)
-  doc.rect(0, 0, PAGE_W, HDR_H, 'F')
-
-  const hazW = 40, hazX = PAGE_W - hazW
-  doc.setFillColor(...C_DARK)
-  doc.rect(hazX, 0, hazW, 14, 'F')
-  doc.setLineWidth(0.8)
-  doc.setDrawColor(...C_PRIMARY)
-  for (let k = 0; k < 15; k++) doc.line(hazX + k*4, 0, hazX + k*4 - 8, 14)
-
-  if (logoData) {
-    try { doc.addImage(logoData, 'PNG', MARGIN + 8, 3, 30, 30) } catch (_) {}
-  }
-
-  const textCenterX = (MARGIN + 44 + PAGE_W - MARGIN - 40) / 2
-  doc.setFont('times', 'bold')
-  doc.setFontSize(18)
-  doc.setTextColor(...C_WHITE)
-  let n = config.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.'
-  if (n.trim().toUpperCase() === 'PRUEBA' || n.trim() === '') n = 'CONSTRUACERO CARABOBO C.A.'
-  const nombreNeg = n.split(' ')
-  doc.text((nombreNeg[0] || '').toUpperCase(), textCenterX, 16, { align: 'center' })
-  if (nombreNeg.length > 1) {
-    doc.setFontSize(12)
-    doc.text(nombreNeg.slice(1).join(' ').toUpperCase(), textCenterX, 23, { align: 'center' })
-  }
-
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
-  doc.text('Despachos y Cobranza', PAGE_W - MARGIN, HDR_H - 8, { align: 'right' })
-  doc.setFontSize(8)
-  doc.setFont('helvetica', 'normal')
-  doc.text(`${rango.from} — ${rango.to}`, PAGE_W - MARGIN, HDR_H - 3, { align: 'right' })
-
-  y = HDR_H + 6
+  y = drawPremiumHeader({
+    doc,
+    logoData,
+    config,
+    title: 'Despachos y Cobranza',
+    subtitle: `${rango.from} — ${rango.to}`
+  })
 
   // Watermark
   drawWatermark(doc)

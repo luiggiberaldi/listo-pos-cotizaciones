@@ -3,28 +3,16 @@
 import { jsPDF } from 'jspdf'
 import { cargarLogo } from './pdfLogo'
 import { WATERMARK_LOGO } from './watermarkBase64'
+import {
+  PAGE_W, PAGE_H, MARGIN, CONTENT_W,
+  C_PRIMARY, C_DARK, C_WHITE, C_EMERALD, C_AMBER, C_RED, C_GRAY,
+  drawPremiumHeader, fmtUsd
+} from './pdfShared'
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-function fmtUsd(n) {
-  return `$${Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
+// ─── Helpers locales ──────────────────────────────────────────────────────────
 function fmtNum(n) {
   return Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
 }
-
-// ─── Layout y Colores ────────────────────────────────────────────────────────
-const PAGE_W    = 216
-const PAGE_H    = 279
-const MARGIN    = 14
-const CONTENT_W = PAGE_W - MARGIN * 2
-
-const C_PRIMARY = [58, 99, 168]
-const C_DARK    = [5, 8, 52]
-const C_WHITE   = [255, 255, 255]
-const C_EMERALD = [4, 120, 87]
-const C_AMBER   = [146, 64, 14]
-const C_RED     = [185, 28, 28]
-const C_GRAY    = [100, 116, 139]
 
 function checkPage(doc, y, needed = 30) {
   if (y + needed > PAGE_H - 25) {
@@ -42,42 +30,13 @@ function checkPage(doc, y, needed = 30) {
 
 // ─── Dibujar cabecera ────────────────────────────────────────────────────────
 function drawHeader(doc, logoData, config, titulo) {
-  const HDR_H = 36
-  doc.setFillColor(...C_PRIMARY)
-  doc.rect(0, 0, PAGE_W, HDR_H, 'F')
-
-  const hazW = 40, hazX = PAGE_W - hazW
-  doc.setFillColor(...C_DARK)
-  doc.rect(hazX, 0, hazW, 14, 'F')
-  doc.setLineWidth(0.8)
-  doc.setDrawColor(...C_PRIMARY)
-  for (let k = 0; k < 15; k++) doc.line(hazX + k*4, 0, hazX + k*4 - 8, 14)
-
-  if (logoData) {
-    try { doc.addImage(logoData, 'PNG', MARGIN + 8, 3, 30, 30) } catch (_) {}
-  }
-
-  const textCenterX = (MARGIN + 44 + PAGE_W - MARGIN - 40) / 2
-  doc.setFont('times', 'bold')
-  doc.setFontSize(18)
-  doc.setTextColor(...C_WHITE)
-  let n = config.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.'
-  if (n.trim().toUpperCase() === 'PRUEBA' || n.trim() === '') n = 'CONSTRUACERO CARABOBO C.A.'
-  const nombreNeg = n.split(' ')
-  doc.text((nombreNeg[0] || '').toUpperCase(), textCenterX, 16, { align: 'center' })
-  if (nombreNeg.length > 1) {
-    doc.setFontSize(12)
-    doc.text(nombreNeg.slice(1).join(' ').toUpperCase(), textCenterX, 23, { align: 'center' })
-  }
-
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
-  doc.text(titulo, PAGE_W - MARGIN, HDR_H - 8, { align: 'right' })
-  doc.setFontSize(8)
-  doc.setFont('helvetica', 'normal')
-  doc.text(new Date().toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' }), PAGE_W - MARGIN, HDR_H - 3, { align: 'right' })
-
-  return HDR_H + 6
+  return drawPremiumHeader({
+    doc,
+    logoData,
+    config,
+    title: titulo,
+    subtitle: new Date().toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })
+  })
 }
 
 // ─── Dibujar footer en todas las páginas ─────────────────────────────────────

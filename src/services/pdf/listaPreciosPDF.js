@@ -6,7 +6,7 @@ import { WATERMARK_LOGO, HEADER_LOGO_WHITE } from './watermarkBase64'
 import { 
   PAGE_W, PAGE_H, MARGIN, CONTENT_W, 
   C_PRIMARY, C_DARK, C_WHITE, C_GRAY,
-  drawSimplifiedHeader, checkPage, drawWatermark
+  drawSimplifiedHeader, checkPage, drawWatermark, drawPremiumHeader
 } from './pdfShared'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -167,45 +167,14 @@ function fitText(doc, text, maxW) {
 
 // ─── Dibujar cabecera ────────────────────────────────────────────────────────
 function drawHeader(doc, logoData, config, moneda, tasa) {
-  const HDR_H = 36
-  doc.setFillColor(...C_PRIMARY)
-  doc.rect(0, 0, PAGE_W, HDR_H, 'F')
-
-  // Hazard stripe
-  const hazW = 40, hazX = PAGE_W - hazW
-  doc.setFillColor(...C_DARK)
-  doc.rect(hazX, 0, hazW, 14, 'F')
-  doc.setLineWidth(0.8)
-  doc.setDrawColor(...C_PRIMARY)
-  for (let k = 0; k < 15; k++) doc.line(hazX + k*4, 0, hazX + k*4 - 8, 14)
-
-  if (logoData) {
-    try { doc.addImage(logoData, 'PNG', MARGIN + 8, 3, 30, 30, 'MAIN_LOGO', 'FAST') } catch (_) {}
-  }
-
-  const textCenterX = PAGE_W / 2
-  doc.setFont('times', 'bold')
-  doc.setFontSize(20)
-  doc.setTextColor(...C_WHITE)
-  let n = config.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.'
-  if (n.trim().toUpperCase() === 'PRUEBA' || n.trim() === '') n = 'CONSTRUACERO CARABOBO C.A.'
-  const nombreNeg = n.split(' ')
-  doc.text((nombreNeg[0] || '').toUpperCase(), textCenterX, 16, { align: 'center' })
-  if (nombreNeg.length > 1) {
-    doc.setFontSize(14)
-    doc.text(nombreNeg.slice(1).join(' ').toUpperCase(), textCenterX, 23, { align: 'center' })
-  }
-
-  // Título y fecha
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
-  doc.text('Lista de Precios', PAGE_W - MARGIN, HDR_H - 12, { align: 'right' })
-  doc.setFontSize(8)
-  doc.setFont('helvetica', 'normal')
   const fechaTxt = new Date().toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })
-  doc.text(fechaTxt, PAGE_W - MARGIN, HDR_H - 3, { align: 'right' })
-
-  return HDR_H + 6
+  return drawPremiumHeader({
+    doc,
+    logoData,
+    config,
+    title: 'Lista de Precios',
+    subtitle: fechaTxt
+  })
 }
 
 function fmtTelefono(tel) {

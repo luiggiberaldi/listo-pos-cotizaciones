@@ -5,7 +5,7 @@ import { cargarLogo } from './pdfLogo'
 import {
   PAGE_W, PAGE_H, MARGIN, CONTENT_W,
   C_PRIMARY, C_DARK, C_WHITE, C_EMERALD, C_AMBER, C_RED, C_GRAY,
-  fmtUsd, fmtFecha, hexToRgb, drawWatermark, checkPage,
+  fmtUsd, fmtFecha, hexToRgb, drawWatermark, checkPage, drawPremiumHeader,
 } from './pdfShared'
 
 // ─── Utilidades locales ────────────────────────────────────────────────────────
@@ -65,57 +65,27 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
   const logoData = await cargarLogo(config.logo_url)
   let y = 0
-
-  const nombreNeg = (() => {
-    let n = config.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.'
-    if (!n || n.trim().toUpperCase() === 'PRUEBA' || !n.trim()) n = 'CONSTRUACERO CARABOBO C.A.'
-    return n
-  })()
+  const HDR_H = 40
+  const nombreNeg = config.nombre_negocio || config.empresa || 'Mi Empresa'
 
   // ═══ CABECERA PRINCIPAL ══════════════════════════════════════════════════════
-  const HDR_H = 36
-  doc.setFillColor(...C_PRIMARY)
-  doc.rect(0, 0, PAGE_W, HDR_H, 'F')
-
-  // Patrón decorativo esquina derecha
-  const hazW = 40, hazX = PAGE_W - hazW
-  doc.setFillColor(...C_DARK)
-  doc.rect(hazX, 0, hazW, 14, 'F')
-  doc.setLineWidth(0.8)
-  doc.setDrawColor(...C_PRIMARY)
-  for (let k = 0; k < 15; k++) doc.line(hazX + k * 4, 0, hazX + k * 4 - 8, 14)
-
-  if (logoData) {
-    try { doc.addImage(logoData, 'PNG', MARGIN + 8, 3, 30, 30) } catch (_) {}
-  }
-
-  const textCenterX = (MARGIN + 44 + PAGE_W - MARGIN - 40) / 2
-  const partes = nombreNeg.split(' ')
-  doc.setFont('times', 'bold')
-  doc.setFontSize(18)
-  doc.setTextColor(...C_WHITE)
-  doc.text((partes[0] || '').toUpperCase(), textCenterX, 14, { align: 'center' })
-  if (partes.length > 1) {
-    doc.setFontSize(12)
-    doc.text(partes.slice(1).join(' ').toUpperCase(), textCenterX, 21, { align: 'center' })
-  }
-
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
   const reportTitle = tipo === 'internos' 
-    ? 'REPORTE DE VENDEDORES INTERNOS' 
+    ? 'Reporte de Vendedores Internos' 
     : tipo === 'externos' 
-    ? 'REPORTE DE VENDEDORES EXTERNOS' 
-    : 'REPORTE DE VENDEDORES'
-  doc.text(reportTitle, PAGE_W - MARGIN, HDR_H - 8, { align: 'right' })
-  doc.setFontSize(7.5)
-  doc.setFont('helvetica', 'normal')
+    ? 'Reporte de Vendedores Externos' 
+    : 'Reporte de Vendedores'
   const rangoLabel = periodo.from && periodo.to
     ? `${fmtFecha(periodo.from)} — ${fmtFecha(periodo.to)}`
     : 'Período seleccionado'
-  doc.text(rangoLabel, PAGE_W - MARGIN, HDR_H - 3, { align: 'right' })
 
-  y = HDR_H + 6
+  y = drawPremiumHeader({
+    doc,
+    logoData,
+    config,
+    title: reportTitle,
+    subtitle: rangoLabel
+  })
+
   drawWatermark(doc)
 
   if (tipo === 'completo' || tipo === 'general' || tipo === 'internos' || tipo === 'externos') {

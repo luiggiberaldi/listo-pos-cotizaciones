@@ -3,6 +3,11 @@
 import { jsPDF } from 'jspdf'
 import { cargarLogo } from './pdfLogo'
 import { WATERMARK_LOGO } from './watermarkBase64'
+import {
+  PAGE_W, PAGE_H, MARGIN, CONTENT_W,
+  C_PRIMARY, C_DARK, C_WHITE, C_EMERALD, C_AMBER, C_RED, C_GRAY,
+  drawPremiumHeader
+} from './pdfShared'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmtUsd(n) {
@@ -18,20 +23,6 @@ function hexToRgb(hex) {
   if (h.length !== 6) return [5, 8, 52]
   return [parseInt(h.substring(0,2),16), parseInt(h.substring(2,4),16), parseInt(h.substring(4,6),16)]
 }
-
-// ─── Layout y Colores ────────────────────────────────────────────────────────
-const PAGE_W    = 216
-const PAGE_H    = 279
-const MARGIN    = 14
-const CONTENT_W = PAGE_W - MARGIN * 2
-
-const C_PRIMARY = [58, 99, 168]
-const C_DARK    = [5, 8, 52]
-const C_WHITE   = [255, 255, 255]
-const C_EMERALD = [4, 120, 87]
-const C_AMBER   = [146, 64, 14]
-const C_RED     = [185, 28, 28]
-const C_GRAY    = [100, 116, 139]
 
 const ESTADO_COLORS = {
   borrador:  [148, 163, 184],
@@ -63,42 +54,13 @@ export async function generarPipelinePDF({ reporte, rango, config = {} }) {
   let y = 0
 
   // ═══ CABECERA ═══
-  const HDR_H = 36
-  doc.setFillColor(...C_PRIMARY)
-  doc.rect(0, 0, PAGE_W, HDR_H, 'F')
-
-  const hazW = 40, hazX = PAGE_W - hazW
-  doc.setFillColor(...C_DARK)
-  doc.rect(hazX, 0, hazW, 14, 'F')
-  doc.setLineWidth(0.8)
-  doc.setDrawColor(...C_PRIMARY)
-  for (let k = 0; k < 15; k++) doc.line(hazX + k*4, 0, hazX + k*4 - 8, 14)
-
-  if (logoData) {
-    try { doc.addImage(logoData, 'PNG', MARGIN + 8, 3, 30, 30) } catch (_) {}
-  }
-
-  const textCenterX = (MARGIN + 44 + PAGE_W - MARGIN - 40) / 2
-  doc.setFont('times', 'bold')
-  doc.setFontSize(18)
-  doc.setTextColor(...C_WHITE)
-  let n = config.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.'
-  if (n.trim().toUpperCase() === 'PRUEBA' || n.trim() === '') n = 'CONSTRUACERO CARABOBO C.A.'
-  const nombreNeg = n.split(' ')
-  doc.text((nombreNeg[0] || '').toUpperCase(), textCenterX, 16, { align: 'center' })
-  if (nombreNeg.length > 1) {
-    doc.setFontSize(12)
-    doc.text(nombreNeg.slice(1).join(' ').toUpperCase(), textCenterX, 23, { align: 'center' })
-  }
-
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
-  doc.text('Pipeline de Cotizaciones', PAGE_W - MARGIN, HDR_H - 8, { align: 'right' })
-  doc.setFontSize(8)
-  doc.setFont('helvetica', 'normal')
-  doc.text(`${rango.from} — ${rango.to}`, PAGE_W - MARGIN, HDR_H - 3, { align: 'right' })
-
-  y = HDR_H + 6
+  y = drawPremiumHeader({
+    doc,
+    logoData,
+    config,
+    title: 'Pipeline de Cotizaciones',
+    subtitle: `${rango.from} — ${rango.to}`
+  })
 
   // Watermark
   try {

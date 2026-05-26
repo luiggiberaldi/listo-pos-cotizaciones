@@ -9,8 +9,8 @@ export const MARGIN    = 14
 export const CONTENT_W = PAGE_W - MARGIN * 2
 
 // ─── Colores ─────────────────────────────────────────────────────────────────
-export const C_PRIMARY = [58, 99, 168]     // Mariner — header, footer, accents
-export const C_ACCENT  = [124, 184, 242]   // Maya Blue — table headers, labels
+export const C_PRIMARY = [26, 54, 93]      // Azul de Acero Oscuro (Corporativo e industrial)
+export const C_ACCENT  = [245, 158, 11]    // Amarillo Mostaza Cálido de Cerrajería (Acento de alta visibilidad)
 export const C_DARK    = [5, 8, 52]        // Midnight Express — text
 export const C_WHITE   = [255, 255, 255]
 export const C_EMERALD = [4, 120, 87]      // Para estados "pagada"/"entregada"
@@ -193,8 +193,9 @@ export function checkPage(doc, y, needed = 30, onPageAdd = null, customBottomMar
  */
 export function drawSimplifiedHeader(doc, logoData, config, rightTitle = '', customPrimary = null) {
   const SHDR_H = 12
+  const pageWidth = doc.internal.pageSize.getWidth()
   doc.setFillColor(...(customPrimary || C_PRIMARY))
-  doc.rect(0, 0, PAGE_W, SHDR_H, 'F')
+  doc.rect(0, 0, pageWidth, SHDR_H, 'F')
 
   if (logoData) {
     try { doc.addImage(logoData, 'PNG', MARGIN + 4, 0.75, 10.5, 10.5, 'HEADER_LOGO', 'FAST') } catch (_) {}
@@ -206,13 +207,121 @@ export function drawSimplifiedHeader(doc, logoData, config, rightTitle = '', cus
   doc.setFont('times', 'bold')
   doc.setFontSize(15.5)
   doc.setTextColor(...C_WHITE)
-  doc.text(n.toUpperCase(), PAGE_W / 2, 8.5, { align: 'center' })
+  doc.text(n.toUpperCase(), pageWidth / 2, 8.5, { align: 'center' })
 
   if (rightTitle) {
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(8)
-    doc.text(rightTitle, PAGE_W - MARGIN, 8.5, { align: 'right' })
+    doc.text(rightTitle, pageWidth - MARGIN, 8.5, { align: 'right' })
   }
 
   return SHDR_H + 4
 }
+
+/**
+ * Dibuja el encabezado premium con el estilo Construacero (hazard stripes, puntos y blueprint markers).
+ */
+export function drawPremiumHeader({
+  doc,
+  logoData,
+  config,
+  title,
+  subtitle,
+  dotColor = null
+}) {
+  const W = doc.internal.pageSize.getWidth()
+  const H = doc.internal.pageSize.getHeight()
+  const HDR_H = 40
+
+  // Banner primario
+  doc.setFillColor(...C_PRIMARY)
+  doc.rect(0, 0, W, HDR_H, 'F')
+
+  // Puntos decorativos izquierdo
+  const dotsCol = dotColor || C_ACCENT
+  doc.setFillColor(...dotsCol)
+  for(let i = 0; i < 4; i++) {
+    for(let j = 0; j < 6; j++) {
+      doc.circle(MARGIN + i * 2.5, 4 + j * 2.5, 0.4, 'F')
+    }
+  }
+
+  // Hazard stripe superior derecho
+  doc.setFillColor(...C_ACCENT)
+  const solidStartX = W - 25.2
+  const solidStartBottomX = solidStartX - 2.5
+  doc.rect(solidStartX, 0, W - solidStartX, 6, 'F')
+  doc.triangle(solidStartX, 0, solidStartBottomX, 6, solidStartX, 6, 'F')
+  
+  doc.setLineWidth(0.5)
+  doc.setDrawColor(...C_ACCENT)
+  doc.line(solidStartX, 0.5, solidStartX, 5.5)
+
+  // Diagonales amarillas mostaza
+  const diagStartX = W - 42.0
+  const stripeWidth = 1.4
+  const stripeSlant = 2.5
+  for (let i = 0; i < 6; i++) {
+    const lx = diagStartX + i * 2.8
+    doc.triangle(lx, 0, lx + stripeWidth, 0, lx - stripeSlant, 6, 'F')
+    doc.triangle(lx + stripeWidth, 0, lx - stripeSlant + stripeWidth, 6, lx - stripeSlant, 6, 'F')
+    doc.line(lx + stripeWidth - 0.2, 0.5, lx - stripeSlant + 0.2, 5.5)
+  }
+
+  // Micro-dots negros en zona amarilla
+  for (let i = 0; i < 5; i++) {
+    for (let j = 0; j < 2; j++) {
+      doc.circle(W - 16 + i * 3.0, 9.5 + j * 2.5, 0.3, 'F')
+    }
+  }
+
+  // Línea base del header
+  doc.setLineWidth(1.0)
+  doc.setDrawColor(...C_ACCENT)
+  doc.line(0, HDR_H, W, HDR_H)
+
+  // Blueprint micro-indicadores
+  doc.setLineWidth(0.12)
+  doc.setDrawColor(180, 188, 200)
+  // Sup Izq
+  doc.line(MARGIN - 2, 46, MARGIN + 2, 46); doc.line(MARGIN, 44, MARGIN, 48)
+  // Sup Der
+  doc.line(W - MARGIN - 2, 46, W - MARGIN + 2, 46); doc.line(W - MARGIN, 44, W - MARGIN, 48)
+  // Inf Izq
+  doc.line(MARGIN - 2, H - 33, MARGIN + 2, H - 33); doc.line(MARGIN, H - 35, MARGIN, H - 31)
+  // Inf Der
+  doc.line(W - MARGIN - 2, H - 33, W - MARGIN + 2, H - 33); doc.line(W - MARGIN, H - 35, W - MARGIN, H - 31)
+
+  // Logo
+  if (logoData) {
+    try { doc.addImage(logoData, 'PNG', MARGIN + 11, 3, 34, 34) } catch (_) {}
+  }
+
+  // Títulos de negocio centrado
+  let n = config.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.'
+  if (!n || n.trim().toUpperCase() === 'PRUEBA' || n.trim() === '') n = 'CONSTRUACERO CARABOBO C.A.'
+  const words = n.split(' ')
+  const main = (words[0] || 'CONSTRUACERO').toUpperCase()
+  const secondary = words.slice(1).join(' ').toUpperCase() || 'CARABOBO C.A.'
+  
+  // Alinear el nombre de la empresa a la izquierda, al lado del logo
+  const businessTextX = MARGIN + 48
+  doc.setFont('times', 'bold'); doc.setTextColor(...C_WHITE)
+  doc.setFontSize(20); doc.text(main, businessTextX, 17, { align: 'left' })
+  doc.setFontSize(13); doc.text(secondary, businessTextX, 24, { align: 'left' })
+
+  // Títulos del reporte derecha (con un tamaño y posición refinados para que se vean espectaculares)
+  if (title) {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12)
+    doc.setTextColor(...C_WHITE)
+    doc.text(title, W - MARGIN, HDR_H - 13, { align: 'right' })
+  }
+  if (subtitle) {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5)
+    doc.setTextColor(...C_ACCENT) // Color mostaza/amarillo de contraste para subtítulos (periodo/fecha)
+    doc.text(subtitle, W - MARGIN, HDR_H - 6, { align: 'right' })
+  }
+
+  return HDR_H + 6
+}
+
