@@ -351,15 +351,15 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
   
   if (esDetallado) {
     cols = [
-      { label: 'Fecha', x: MARGIN, w: 13 },
-      { label: 'Doc / Cliente', x: MARGIN + 13, w: 40 },
-      { label: 'Producto / Descripción', x: MARGIN + 53, w: 53 },
-      { label: 'Valor ($)', x: MARGIN + 106, w: 13, align: 'right' },
-      { label: '%', x: MARGIN + 119, w: 7, align: 'right' },
-      { label: 'Com ($)', x: MARGIN + 126, w: 14, align: 'right' },
-      { label: 'Tasa', x: MARGIN + 140, w: 11, align: 'right' },
-      { label: 'Com (Bs)', x: MARGIN + 151, w: 19, align: 'right' },
-      { label: 'Estado', x: MARGIN + 170, w: 18, align: 'center' },
+      { label: 'Fecha', x: MARGIN, w: 12 },
+      { label: 'Doc / Cliente', x: MARGIN + 12, w: 38 },
+      { label: 'Producto / Descripción', x: MARGIN + 50, w: 48 },
+      { label: 'Valor ($)', x: MARGIN + 98, w: 14, align: 'right' },
+      { label: '%', x: MARGIN + 112, w: 6, align: 'right' },
+      { label: 'Com ($)', x: MARGIN + 118, w: 13, align: 'right' },
+      { label: 'Tasa', x: MARGIN + 131, w: 8, align: 'right' },
+      { label: 'Com (Bs)', x: MARGIN + 139, w: 27, align: 'right' },
+      { label: 'Estado', x: MARGIN + 166, w: 22, align: 'center' },
     ]
   } else {
     const catName = config.comision_categoria_cabilla || 'Cabilla';
@@ -369,15 +369,15 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
       : `${catName} (${pct}%) ($)`;
 
     cols = [
-      { label: 'Fecha', x: MARGIN, w: 13 },
-      { label: 'Doc / Cliente', x: MARGIN + 13, w: 40 },
-      { label: cabLabel, x: MARGIN + 53, w: 25, align: 'right' },
-      { label: 'Otros ($)', x: MARGIN + 78, w: 16, align: 'right' },
-      { label: 'Total Com ($)', x: MARGIN + 94, w: 16, align: 'right' },
-      { label: 'Abonado ($)', x: MARGIN + 110, w: 16, align: 'right' },
-      { label: 'Tasa', x: MARGIN + 126, w: 11, align: 'right' },
-      { label: 'Com. (Bs)', x: MARGIN + 137, w: 19, align: 'right' },
-      { label: 'Estado', x: MARGIN + 156, w: 32, align: 'center' },
+      { label: 'Fecha', x: MARGIN, w: 12 },
+      { label: 'Doc / Cliente', x: MARGIN + 12, w: 38 },
+      { label: cabLabel, x: MARGIN + 50, w: 28, align: 'right' },
+      { label: 'Otros ($)', x: MARGIN + 78, w: 15, align: 'right' },
+      { label: 'Total Com ($)', x: MARGIN + 93, w: 20, align: 'right' },
+      { label: 'Abonado ($)', x: MARGIN + 113, w: 20, align: 'right' },
+      { label: 'Tasa', x: MARGIN + 133, w: 8, align: 'right' },
+      { label: 'Com. (Bs)', x: MARGIN + 141, w: 27, align: 'right' },
+      { label: 'Estado', x: MARGIN + 168, w: 20, align: 'center' },
     ]
   }
 
@@ -540,7 +540,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
 
           if (esDetallado) {
             doc.setFontSize(8.0);
-            doc.text(fmtFechaCorta(c.creadoen), cols[0].x + 1, y + (rowH / 2) + 0.7);
+            doc.text(fmtFechaCorta(c.creadoen), cols[0].x + 1, y + 3.8);
             doc.setFontSize(9.0);
             
             // Cliente y Documento apilados (Cliente primero)
@@ -573,7 +573,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
             doc.text(fmtUsd(c.totalcomision), cols[5].x + cols[5].w - 2, y + (rowH / 2) + 0.7, { align: 'right' });
             
             doc.setFont('helvetica', 'normal');
-            doc.text(tasa > 0 ? `Bs ${tasa}` : 'N/D', cols[6].x + cols[6].w - 2, y + (rowH / 2) + 0.7, { align: 'right' });
+            doc.text(tasa > 0 ? String(tasa) : 'N/D', cols[6].x + cols[6].w - 2, y + (rowH / 2) + 0.7, { align: 'right' });
             
             doc.setFont('helvetica', 'bold');
             doc.text(tasa > 0 ? fmtBs(comBs) : 'N/D', cols[7].x + cols[7].w - 2, y + (rowH / 2) + 0.7, { align: 'right' });
@@ -581,7 +581,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
             drawStatusBadge(doc, c.estado, cols[8].x, y + (rowH / 2) + 1.7, cols[8].w, 4.5);
           } else {
             doc.setFontSize(8.0);
-            doc.text(fmtFechaCorta(c.creadoen), cols[0].x + 1, y + (rowH / 2) + 0.7);
+            doc.text(fmtFechaCorta(c.creadoen), cols[0].x + 1, y + 3.8);
             doc.setFontSize(9.0);
             
             // Cliente y Documento apilados (Cliente primero)
@@ -611,7 +611,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
             doc.setFont('helvetica', 'normal');
             doc.text(c.montopagado > 0 ? fmtUsd(c.montopagado) : '—', cols[5].x + cols[5].w - 2, y + (rowH / 2) + 0.7, { align: 'right' });
             
-            doc.text(tasa > 0 ? `Bs ${tasa}` : 'N/D', cols[6].x + cols[6].w - 2, y + (rowH / 2) + 0.7, { align: 'right' });
+            doc.text(tasa > 0 ? String(tasa) : 'N/D', cols[6].x + cols[6].w - 2, y + (rowH / 2) + 0.7, { align: 'right' });
             
             doc.setFont('helvetica', 'bold');
             doc.text(tasa > 0 ? fmtBs(comBs) : 'N/D', cols[7].x + cols[7].w - 2, y + (rowH / 2) + 0.7, { align: 'right' });
