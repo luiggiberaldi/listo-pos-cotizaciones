@@ -684,7 +684,7 @@ export async function handleTesterSeedDemo(request, env) {
     logStep(`  PATCH configuracion_negocio: HTTP ${cfgRes.status} (${Date.now() - t0Cfg}ms)`);
 
     // Productos
-    logStep('--- Fase 4: Insertar productos (30) ---');
+    logStep('--- Fase 4: Insertar productos (25) ---');
     const productos = [
       { codigo: 'CEM-001', nombre: 'Cemento Gris Tipo I 42.5kg',        categoria: 'Cemento',      unidad: 'bolsa', precio_usd: 5.50,  costo_usd: 4.20,  stock_actual: 250,  stock_minimo: 50 },
       { codigo: 'CEM-002', nombre: 'Cemento Blanco 1kg',                 categoria: 'Cemento',      unidad: 'kg',    precio_usd: 2.80,  costo_usd: 2.10,  stock_actual: 80,   stock_minimo: 20 },
@@ -696,11 +696,6 @@ export async function handleTesterSeedDemo(request, env) {
       { codigo: 'PIN-003', nombre: 'Esmalte Brillante Rojo 1L',             categoria: 'Pintura',   unidad: 'und',   precio_usd: 8.50,  costo_usd: 6.20,  stock_actual: 25,   stock_minimo: 5 },
       { codigo: 'PIN-004', nombre: 'Impermeabilizante Acrílico 4L',         categoria: 'Pintura',   unidad: 'und',   precio_usd: 28.00, costo_usd: 21.00, stock_actual: 15,   stock_minimo: 5 },
       { codigo: 'PIN-005', nombre: 'Rodillo de Felpa 9" con Mango',         categoria: 'Pintura',   unidad: 'und',   precio_usd: 4.50,  costo_usd: 2.80,  stock_actual: 60,   stock_minimo: 15 },
-      { codigo: 'HER-001', nombre: 'Martillo de Uña 16oz Mango Fibra',  categoria: 'Herramientas', unidad: 'und',   precio_usd: 12.00, costo_usd: 8.50,  stock_actual: 20,   stock_minimo: 5 },
-      { codigo: 'HER-002', nombre: 'Taladro Percutor 1/2" 750W',        categoria: 'Herramientas', unidad: 'und',   precio_usd: 45.00, costo_usd: 32.00, stock_actual: 8,    stock_minimo: 3 },
-      { codigo: 'HER-003', nombre: 'Juego Destornilladores 6 piezas',   categoria: 'Herramientas', unidad: 'und',   precio_usd: 9.00,  costo_usd: 5.80,  stock_actual: 15,   stock_minimo: 5 },
-      { codigo: 'HER-004', nombre: 'Nivel de Burbuja 24"',              categoria: 'Herramientas', unidad: 'und',   precio_usd: 7.50,  costo_usd: 4.80,  stock_actual: 12,   stock_minimo: 3 },
-      { codigo: 'HER-005', nombre: 'Cinta Métrica 5m Stanley',          categoria: 'Herramientas', unidad: 'und',   precio_usd: 5.00,  costo_usd: 3.20,  stock_actual: 35,   stock_minimo: 10 },
       { codigo: 'ELE-001', nombre: 'Cable THHN 12AWG Rojo (rollo 100m)',  categoria: 'Electricidad', unidad: 'rollo', precio_usd: 35.00, costo_usd: 26.00, stock_actual: 18,  stock_minimo: 5 },
       { codigo: 'ELE-002', nombre: 'Interruptor Sencillo 15A Blanco',     categoria: 'Electricidad', unidad: 'und',   precio_usd: 2.50,  costo_usd: 1.50,  stock_actual: 80,  stock_minimo: 20 },
       { codigo: 'ELE-003', nombre: 'Toma Corriente Doble 15A',            categoria: 'Electricidad', unidad: 'und',   precio_usd: 3.00,  costo_usd: 1.80,  stock_actual: 65,  stock_minimo: 15 },
@@ -764,7 +759,7 @@ export async function handleTesterSeedDemo(request, env) {
       { cliente_id: clientesCreados[0].id, vendedor_id: supervisor.id, estado: 'enviada', subtotal_usd: 438.48, descuento_global_pct: 0, descuento_usd: 0, costo_envio_usd: 0, total_usd: 438.48, tasa_bcv_snapshot: 95.50, total_bs_snapshot: 41874.84, notas_cliente: 'Retiro en tienda.', enviada_en: hace5d, creado_en: hace5d },
       { cliente_id: clientesCreados[12].id, vendedor_id: vendedorId, transportista_id: transCreados[0].id, estado: 'enviada', subtotal_usd: 121.50, descuento_global_pct: 0, descuento_usd: 0, costo_envio_usd: 8, total_usd: 129.50, tasa_bcv_snapshot: 94.80, total_bs_snapshot: 12276.60, notas_cliente: 'Plomería residencial.', enviada_en: hace3d, creado_en: hace5d },
       { cliente_id: clientesCreados[11].id, vendedor_id: vendedorId, estado: 'aceptada', subtotal_usd: 441.25, descuento_global_pct: 2, descuento_usd: 8.83, costo_envio_usd: 0, total_usd: 432.42, tasa_bcv_snapshot: 93.20, total_bs_snapshot: 40321.54, notas_cliente: 'Material eléctrico.', enviada_en: hace7d, creado_en: hace10d },
-      { cliente_id: clientesCreados[3].id, vendedor_id: supervisor.id, estado: 'borrador', subtotal_usd: 29.00, descuento_global_pct: 0, descuento_usd: 0, costo_envio_usd: 0, total_usd: 29.00, notas_internas: 'Preguntó por descuento efectivo.', creado_en: new Date().toISOString() },
+      { cliente_id: clientesCreados[3].id, vendedor_id: supervisor.id, estado: 'borrador', subtotal_usd: 22.00, descuento_global_pct: 0, descuento_usd: 0, costo_envio_usd: 0, total_usd: 22.00, notas_internas: 'Preguntó por descuento efectivo.', creado_en: new Date().toISOString() },
       { cliente_id: clientesCreados[8].id, vendedor_id: vendedorId, transportista_id: transCreados[3].id, estado: 'enviada', subtotal_usd: 1627.50, descuento_global_pct: 5, descuento_usd: 81.38, costo_envio_usd: 15, total_usd: 1561.12, tasa_bcv_snapshot: 95.10, total_bs_snapshot: 148462.51, notas_cliente: 'Entrega en obra: Parque del Este.', notas_internas: 'Descuento autorizado.', enviada_en: hace3d, creado_en: hace5d },
     ];
     const cotsCreadas = await supaBatch(env, 'cotizaciones', cotizaciones, 500, logStep);
@@ -772,24 +767,23 @@ export async function handleTesterSeedDemo(request, env) {
     for (const c of cotsCreadas) logStep(`    → Cot ${c.id?.substring(0, 8)}... estado=${c.estado} cliente=${c.cliente_id?.substring(0, 8)}...`);
 
     // Items (simplificados)
-    logStep('--- Fase 8: Insertar items (19) ---');
+    logStep('--- Fase 8: Insertar items (18) ---');
     const allItems = [
       { cotizacion_id: cotsCreadas[0].id, producto_id: prodsCreados[0].id, codigo_snap: 'CEM-001', nombre_snap: 'Cemento Gris Tipo I 42.5kg', unidad_snap: 'bolsa', cantidad: 100, precio_unit_usd: 5.50, descuento_pct: 5, total_linea_usd: 522.50, orden: 0 },
       { cotizacion_id: cotsCreadas[0].id, producto_id: prodsCreados[3].id, codigo_snap: 'CEM-004', nombre_snap: 'Arena Lavada (saco 40kg)', unidad_snap: 'bolsa', cantidad: 50, precio_unit_usd: 2.00, descuento_pct: 0, total_linea_usd: 100.00, orden: 1 },
       { cotizacion_id: cotsCreadas[0].id, producto_id: prodsCreados[4].id, codigo_snap: 'CEM-005', nombre_snap: 'Piedra Picada Nro. 2', unidad_snap: 'bolsa', cantidad: 50, precio_unit_usd: 2.50, descuento_pct: 0, total_linea_usd: 125.00, orden: 2 },
-      { cotizacion_id: cotsCreadas[0].id, producto_id: prodsCreados[25].id, codigo_snap: 'FIJ-001', nombre_snap: 'Tornillo Drywall', unidad_snap: 'caja', cantidad: 10, precio_unit_usd: 3.00, descuento_pct: 0, total_linea_usd: 30.00, orden: 3 },
+      { cotizacion_id: cotsCreadas[0].id, producto_id: prodsCreados[20].id, codigo_snap: 'FIJ-001', nombre_snap: 'Tornillo Drywall', unidad_snap: 'caja', cantidad: 10, precio_unit_usd: 3.00, descuento_pct: 0, total_linea_usd: 30.00, orden: 3 },
       { cotizacion_id: cotsCreadas[1].id, producto_id: prodsCreados[5].id, codigo_snap: 'PIN-001', nombre_snap: 'Pintura Caucho Int.', unidad_snap: 'und', cantidad: 12, precio_unit_usd: 18.00, descuento_pct: 8, total_linea_usd: 198.72, orden: 0 },
       { cotizacion_id: cotsCreadas[1].id, producto_id: prodsCreados[6].id, codigo_snap: 'PIN-002', nombre_snap: 'Pintura Caucho Ext.', unidad_snap: 'und', cantidad: 8, precio_unit_usd: 22.00, descuento_pct: 8, total_linea_usd: 161.92, orden: 1 },
       { cotizacion_id: cotsCreadas[1].id, producto_id: prodsCreados[9].id, codigo_snap: 'PIN-005', nombre_snap: 'Rodillo de Felpa', unidad_snap: 'und', cantidad: 20, precio_unit_usd: 4.50, descuento_pct: 0, total_linea_usd: 90.00, orden: 2 },
-      { cotizacion_id: cotsCreadas[2].id, producto_id: prodsCreados[20].id, codigo_snap: 'PLO-001', nombre_snap: 'Tubo PVC 1/2"', unidad_snap: 'und', cantidad: 20, precio_unit_usd: 3.50, descuento_pct: 0, total_linea_usd: 70.00, orden: 0 },
-      { cotizacion_id: cotsCreadas[2].id, producto_id: prodsCreados[22].id, codigo_snap: 'PLO-003', nombre_snap: 'Codo PVC 1/2"', unidad_snap: 'und', cantidad: 40, precio_unit_usd: 0.40, descuento_pct: 0, total_linea_usd: 16.00, orden: 1 },
-      { cotizacion_id: cotsCreadas[3].id, producto_id: prodsCreados[15].id, codigo_snap: 'ELE-001', nombre_snap: 'Cable THHN 12AWG', unidad_snap: 'rollo', cantidad: 5, precio_unit_usd: 35.00, descuento_pct: 5, total_linea_usd: 166.25, orden: 0 },
-      { cotizacion_id: cotsCreadas[3].id, producto_id: prodsCreados[16].id, codigo_snap: 'ELE-002', nombre_snap: 'Interruptor 15A', unidad_snap: 'und', cantidad: 30, precio_unit_usd: 2.50, descuento_pct: 0, total_linea_usd: 75.00, orden: 1 },
-      { cotizacion_id: cotsCreadas[3].id, producto_id: prodsCreados[17].id, codigo_snap: 'ELE-003', nombre_snap: 'Toma Corriente', unidad_snap: 'und', cantidad: 25, precio_unit_usd: 3.00, descuento_pct: 0, total_linea_usd: 75.00, orden: 2 },
-      { cotizacion_id: cotsCreadas[3].id, producto_id: prodsCreados[19].id, codigo_snap: 'ELE-005', nombre_snap: 'Bombillo LED', unidad_snap: 'und', cantidad: 50, precio_unit_usd: 2.00, descuento_pct: 0, total_linea_usd: 100.00, orden: 3 },
-      { cotizacion_id: cotsCreadas[4].id, producto_id: prodsCreados[10].id, codigo_snap: 'HER-001', nombre_snap: 'Martillo 16oz', unidad_snap: 'und', cantidad: 1, precio_unit_usd: 12.00, descuento_pct: 0, total_linea_usd: 12.00, orden: 0 },
-      { cotizacion_id: cotsCreadas[4].id, producto_id: prodsCreados[14].id, codigo_snap: 'HER-005', nombre_snap: 'Cinta Métrica 5m', unidad_snap: 'und', cantidad: 1, precio_unit_usd: 5.00, descuento_pct: 0, total_linea_usd: 5.00, orden: 1 },
-      { cotizacion_id: cotsCreadas[4].id, producto_id: prodsCreados[28].id, codigo_snap: 'FIJ-004', nombre_snap: 'Silicón Transparente', unidad_snap: 'und', cantidad: 3, precio_unit_usd: 4.00, descuento_pct: 0, total_linea_usd: 12.00, orden: 2 },
+      { cotizacion_id: cotsCreadas[2].id, producto_id: prodsCreados[15].id, codigo_snap: 'PLO-001', nombre_snap: 'Tubo PVC 1/2"', unidad_snap: 'und', cantidad: 20, precio_unit_usd: 3.50, descuento_pct: 0, total_linea_usd: 70.00, orden: 0 },
+      { cotizacion_id: cotsCreadas[2].id, producto_id: prodsCreados[17].id, codigo_snap: 'PLO-003', nombre_snap: 'Codo PVC 1/2"', unidad_snap: 'und', cantidad: 40, precio_unit_usd: 0.40, descuento_pct: 0, total_linea_usd: 16.00, orden: 1 },
+      { cotizacion_id: cotsCreadas[3].id, producto_id: prodsCreados[10].id, codigo_snap: 'ELE-001', nombre_snap: 'Cable THHN 12AWG', unidad_snap: 'rollo', cantidad: 5, precio_unit_usd: 35.00, descuento_pct: 5, total_linea_usd: 166.25, orden: 0 },
+      { cotizacion_id: cotsCreadas[3].id, producto_id: prodsCreados[11].id, codigo_snap: 'ELE-002', nombre_snap: 'Interruptor 15A', unidad_snap: 'und', cantidad: 30, precio_unit_usd: 2.50, descuento_pct: 0, total_linea_usd: 75.00, orden: 1 },
+      { cotizacion_id: cotsCreadas[3].id, producto_id: prodsCreados[12].id, codigo_snap: 'ELE-003', nombre_snap: 'Toma Corriente', unidad_snap: 'und', cantidad: 25, precio_unit_usd: 3.00, descuento_pct: 0, total_linea_usd: 75.00, orden: 2 },
+      { cotizacion_id: cotsCreadas[3].id, producto_id: prodsCreados[14].id, codigo_snap: 'ELE-005', nombre_snap: 'Bombillo LED', unidad_snap: 'und', cantidad: 50, precio_unit_usd: 2.00, descuento_pct: 0, total_linea_usd: 100.00, orden: 3 },
+      { cotizacion_id: cotsCreadas[4].id, producto_id: prodsCreados[11].id, codigo_snap: 'ELE-002', nombre_snap: 'Interruptor 15A', unidad_snap: 'und', cantidad: 4, precio_unit_usd: 2.50, descuento_pct: 0, total_linea_usd: 10.00, orden: 0 },
+      { cotizacion_id: cotsCreadas[4].id, producto_id: prodsCreados[23].id, codigo_snap: 'FIJ-004', nombre_snap: 'Silicón Transparente', unidad_snap: 'und', cantidad: 3, precio_unit_usd: 4.00, descuento_pct: 0, total_linea_usd: 12.00, orden: 1 },
       { cotizacion_id: cotsCreadas[5].id, producto_id: prodsCreados[0].id, codigo_snap: 'CEM-001', nombre_snap: 'Cemento Gris', unidad_snap: 'bolsa', cantidad: 200, precio_unit_usd: 5.50, descuento_pct: 8, total_linea_usd: 1012.00, orden: 0 },
       { cotizacion_id: cotsCreadas[5].id, producto_id: prodsCreados[2].id, codigo_snap: 'CEM-003', nombre_snap: 'Mortero 40kg', unidad_snap: 'bolsa', cantidad: 50, precio_unit_usd: 4.50, descuento_pct: 5, total_linea_usd: 213.75, orden: 1 },
       { cotizacion_id: cotsCreadas[5].id, producto_id: prodsCreados[3].id, codigo_snap: 'CEM-004', nombre_snap: 'Arena Lavada', unidad_snap: 'bolsa', cantidad: 80, precio_unit_usd: 2.00, descuento_pct: 0, total_linea_usd: 160.00, orden: 2 },
