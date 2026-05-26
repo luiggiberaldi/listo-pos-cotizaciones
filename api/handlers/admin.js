@@ -684,7 +684,7 @@ export async function handleTesterSeedDemo(request, env) {
     logStep(`  PATCH configuracion_negocio: HTTP ${cfgRes.status} (${Date.now() - t0Cfg}ms)`);
 
     // Productos
-    logStep('--- Fase 4: Insertar productos (25) ---');
+    logStep('--- Fase 4: Insertar productos (21) ---');
     const productos = [
       { codigo: 'CEM-001', nombre: 'Cemento Gris Tipo I 42.5kg',        categoria: 'Cemento',      unidad: 'bolsa', precio_usd: 5.50,  costo_usd: 4.20,  stock_actual: 250,  stock_minimo: 50 },
       { codigo: 'CEM-002', nombre: 'Cemento Blanco 1kg',                 categoria: 'Cemento',      unidad: 'kg',    precio_usd: 2.80,  costo_usd: 2.10,  stock_actual: 80,   stock_minimo: 20 },
@@ -707,10 +707,6 @@ export async function handleTesterSeedDemo(request, env) {
       { codigo: 'PLO-004', nombre: 'Llave de Paso 1/2" Bronce',        categoria: 'Plomería',     unidad: 'und',   precio_usd: 5.50,  costo_usd: 3.80,  stock_actual: 20,   stock_minimo: 5 },
       { codigo: 'PLO-005', nombre: 'Teflón Industrial 3/4" x 10m',     categoria: 'Plomería',     unidad: 'und',   precio_usd: 0.80,  costo_usd: 0.40,  stock_actual: 150,  stock_minimo: 40 },
       { codigo: 'FIJ-001', nombre: 'Tornillo Drywall 6x1" (caja 100)', categoria: 'Fijación',     unidad: 'caja',  precio_usd: 3.00,  costo_usd: 1.80,  stock_actual: 40,   stock_minimo: 10 },
-      { codigo: 'FIJ-002', nombre: 'Clavo de Acero 2" (kg)',            categoria: 'Fijación',     unidad: 'kg',    precio_usd: 2.50,  costo_usd: 1.60,  stock_actual: 30,   stock_minimo: 10 },
-      { codigo: 'FIJ-003', nombre: 'Ancla Expansiva 3/8" x 3"',        categoria: 'Fijación',     unidad: 'und',   precio_usd: 0.60,  costo_usd: 0.30,  stock_actual: 300,  stock_minimo: 50 },
-      { codigo: 'FIJ-004', nombre: 'Silicón Transparente 280ml',        categoria: 'Fijación',     unidad: 'und',   precio_usd: 4.00,  costo_usd: 2.80,  stock_actual: 25,   stock_minimo: 8 },
-      { codigo: 'FIJ-005', nombre: 'Pega Epóxica Bicomponente 50ml',    categoria: 'Fijación',     unidad: 'und',   precio_usd: 5.50,  costo_usd: 3.60,  stock_actual: 18,   stock_minimo: 5 },
     ];
     const prodsCreados = await supaBatch(env, 'productos', productos, 500, logStep);
     logStep(`✓ ${prodsCreados.length} productos creados`);
@@ -759,7 +755,7 @@ export async function handleTesterSeedDemo(request, env) {
       { cliente_id: clientesCreados[0].id, vendedor_id: supervisor.id, estado: 'enviada', subtotal_usd: 438.48, descuento_global_pct: 0, descuento_usd: 0, costo_envio_usd: 0, total_usd: 438.48, tasa_bcv_snapshot: 95.50, total_bs_snapshot: 41874.84, notas_cliente: 'Retiro en tienda.', enviada_en: hace5d, creado_en: hace5d },
       { cliente_id: clientesCreados[12].id, vendedor_id: vendedorId, transportista_id: transCreados[0].id, estado: 'enviada', subtotal_usd: 121.50, descuento_global_pct: 0, descuento_usd: 0, costo_envio_usd: 8, total_usd: 129.50, tasa_bcv_snapshot: 94.80, total_bs_snapshot: 12276.60, notas_cliente: 'Plomería residencial.', enviada_en: hace3d, creado_en: hace5d },
       { cliente_id: clientesCreados[11].id, vendedor_id: vendedorId, estado: 'aceptada', subtotal_usd: 441.25, descuento_global_pct: 2, descuento_usd: 8.83, costo_envio_usd: 0, total_usd: 432.42, tasa_bcv_snapshot: 93.20, total_bs_snapshot: 40321.54, notas_cliente: 'Material eléctrico.', enviada_en: hace7d, creado_en: hace10d },
-      { cliente_id: clientesCreados[3].id, vendedor_id: supervisor.id, estado: 'borrador', subtotal_usd: 22.00, descuento_global_pct: 0, descuento_usd: 0, costo_envio_usd: 0, total_usd: 22.00, notas_internas: 'Preguntó por descuento efectivo.', creado_en: new Date().toISOString() },
+      { cliente_id: clientesCreados[3].id, vendedor_id: supervisor.id, estado: 'borrador', subtotal_usd: 10.00, descuento_global_pct: 0, descuento_usd: 0, costo_envio_usd: 0, total_usd: 10.00, notas_internas: 'Preguntó por descuento efectivo.', creado_en: new Date().toISOString() },
       { cliente_id: clientesCreados[8].id, vendedor_id: vendedorId, transportista_id: transCreados[3].id, estado: 'enviada', subtotal_usd: 1627.50, descuento_global_pct: 5, descuento_usd: 81.38, costo_envio_usd: 15, total_usd: 1561.12, tasa_bcv_snapshot: 95.10, total_bs_snapshot: 148462.51, notas_cliente: 'Entrega en obra: Parque del Este.', notas_internas: 'Descuento autorizado.', enviada_en: hace3d, creado_en: hace5d },
     ];
     const cotsCreadas = await supaBatch(env, 'cotizaciones', cotizaciones, 500, logStep);
@@ -767,7 +763,7 @@ export async function handleTesterSeedDemo(request, env) {
     for (const c of cotsCreadas) logStep(`    → Cot ${c.id?.substring(0, 8)}... estado=${c.estado} cliente=${c.cliente_id?.substring(0, 8)}...`);
 
     // Items (simplificados)
-    logStep('--- Fase 8: Insertar items (18) ---');
+    logStep('--- Fase 8: Insertar items (17) ---');
     const allItems = [
       { cotizacion_id: cotsCreadas[0].id, producto_id: prodsCreados[0].id, codigo_snap: 'CEM-001', nombre_snap: 'Cemento Gris Tipo I 42.5kg', unidad_snap: 'bolsa', cantidad: 100, precio_unit_usd: 5.50, descuento_pct: 5, total_linea_usd: 522.50, orden: 0 },
       { cotizacion_id: cotsCreadas[0].id, producto_id: prodsCreados[3].id, codigo_snap: 'CEM-004', nombre_snap: 'Arena Lavada (saco 40kg)', unidad_snap: 'bolsa', cantidad: 50, precio_unit_usd: 2.00, descuento_pct: 0, total_linea_usd: 100.00, orden: 1 },
@@ -783,7 +779,6 @@ export async function handleTesterSeedDemo(request, env) {
       { cotizacion_id: cotsCreadas[3].id, producto_id: prodsCreados[12].id, codigo_snap: 'ELE-003', nombre_snap: 'Toma Corriente', unidad_snap: 'und', cantidad: 25, precio_unit_usd: 3.00, descuento_pct: 0, total_linea_usd: 75.00, orden: 2 },
       { cotizacion_id: cotsCreadas[3].id, producto_id: prodsCreados[14].id, codigo_snap: 'ELE-005', nombre_snap: 'Bombillo LED', unidad_snap: 'und', cantidad: 50, precio_unit_usd: 2.00, descuento_pct: 0, total_linea_usd: 100.00, orden: 3 },
       { cotizacion_id: cotsCreadas[4].id, producto_id: prodsCreados[11].id, codigo_snap: 'ELE-002', nombre_snap: 'Interruptor 15A', unidad_snap: 'und', cantidad: 4, precio_unit_usd: 2.50, descuento_pct: 0, total_linea_usd: 10.00, orden: 0 },
-      { cotizacion_id: cotsCreadas[4].id, producto_id: prodsCreados[23].id, codigo_snap: 'FIJ-004', nombre_snap: 'Silicón Transparente', unidad_snap: 'und', cantidad: 3, precio_unit_usd: 4.00, descuento_pct: 0, total_linea_usd: 12.00, orden: 1 },
       { cotizacion_id: cotsCreadas[5].id, producto_id: prodsCreados[0].id, codigo_snap: 'CEM-001', nombre_snap: 'Cemento Gris', unidad_snap: 'bolsa', cantidad: 200, precio_unit_usd: 5.50, descuento_pct: 8, total_linea_usd: 1012.00, orden: 0 },
       { cotizacion_id: cotsCreadas[5].id, producto_id: prodsCreados[2].id, codigo_snap: 'CEM-003', nombre_snap: 'Mortero 40kg', unidad_snap: 'bolsa', cantidad: 50, precio_unit_usd: 4.50, descuento_pct: 5, total_linea_usd: 213.75, orden: 1 },
       { cotizacion_id: cotsCreadas[5].id, producto_id: prodsCreados[3].id, codigo_snap: 'CEM-004', nombre_snap: 'Arena Lavada', unidad_snap: 'bolsa', cantidad: 80, precio_unit_usd: 2.00, descuento_pct: 0, total_linea_usd: 160.00, orden: 2 },
