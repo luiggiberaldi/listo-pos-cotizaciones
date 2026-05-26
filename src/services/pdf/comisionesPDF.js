@@ -48,17 +48,22 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
       text = 'PENDIENTE'
     }
     
+    d.setFont('helvetica', 'bold')
+    d.setFontSize(7.0)
+    
+    const textW = d.getTextWidth(text)
+    const badgeW = Math.min(w, textW + 4)
+    const badgeX = x + (w - badgeW) / 2
+    
     d.setFillColor(...bgColor)
-    d.roundedRect(x, y - h + 1, w, h, 1, 1, 'F')
+    d.roundedRect(badgeX, y - h + 1, badgeW, h, 1.2, 1.2, 'F')
     
     d.setDrawColor(...borderColor)
     d.setLineWidth(0.2)
-    d.roundedRect(x, y - h + 1, w, h, 1, 1, 'S')
+    d.roundedRect(badgeX, y - h + 1, badgeW, h, 1.2, 1.2, 'S')
     
-    d.setFont('helvetica', 'bold')
-    d.setFontSize(7.0)
     d.setTextColor(...textColor)
-    d.text(text, x + w / 2, y - h / 2 + 1.4, { align: 'center' })
+    d.text(text, badgeX + badgeW / 2, y - h / 2 + 1.4, { align: 'center' })
   }
 
   // NORMALIZAR: unificar naming antes de procesar (soporte para Worker API y RPC)
@@ -360,27 +365,27 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
   
   if (esDetallado) {
     cols = [
-      { label: 'Fecha', x: MARGIN, w: 16 },
-      { label: 'Nº Doc', x: MARGIN + 16, w: 14 },
-      { label: 'Producto / Descripción', x: MARGIN + 30, w: 58 },
-      { label: 'Valor ($)', x: MARGIN + 88, w: 18, align: 'right' },
-      { label: '%', x: MARGIN + 106, w: 10, align: 'right' },
-      { label: 'Com ($)', x: MARGIN + 116, w: 18, align: 'right' },
-      { label: 'Tasa (Bs)', x: MARGIN + 134, w: 18, align: 'right' },
-      { label: 'Com (Bs)', x: MARGIN + 152, w: 22, align: 'right' },
-      { label: 'Estado', x: MARGIN + 174, w: 14, align: 'center' },
+      { label: 'Fecha', x: MARGIN, w: 14 },
+      { label: 'Nº Doc', x: MARGIN + 14, w: 12 },
+      { label: 'Producto / Descripción', x: MARGIN + 26, w: 54 },
+      { label: 'Valor ($)', x: MARGIN + 80, w: 16, align: 'right' },
+      { label: '%', x: MARGIN + 96, w: 8, align: 'right' },
+      { label: 'Com ($)', x: MARGIN + 104, w: 16, align: 'right' },
+      { label: 'Tasa (Bs)', x: MARGIN + 120, w: 16, align: 'right' },
+      { label: 'Com (Bs)', x: MARGIN + 136, w: 22, align: 'right' },
+      { label: 'Estado', x: MARGIN + 158, w: 30, align: 'center' },
     ]
   } else {
     cols = [
-      { label: 'Fecha', x: MARGIN, w: 18 },
-      { label: 'Nº Doc', x: MARGIN + 18, w: 15 },
-      { label: 'Cabilla ($)', x: MARGIN + 33, w: 22, align: 'right' },
-      { label: 'Otros ($)', x: MARGIN + 55, w: 22, align: 'right' },
-      { label: 'Total Com ($)', x: MARGIN + 77, w: 24, align: 'right' },
-      { label: 'Abonado ($)', x: MARGIN + 101, w: 22, align: 'right' },
-      { label: 'Tasa (Bs)', x: MARGIN + 123, w: 18, align: 'right' },
-      { label: 'Com. (Bs)', x: MARGIN + 141, w: 24, align: 'right' },
-      { label: 'Estado', x: MARGIN + 165, w: 23, align: 'center' },
+      { label: 'Fecha', x: MARGIN, w: 16 },
+      { label: 'Nº Doc', x: MARGIN + 16, w: 13 },
+      { label: 'Cabilla ($)', x: MARGIN + 29, w: 20, align: 'right' },
+      { label: 'Otros ($)', x: MARGIN + 49, w: 20, align: 'right' },
+      { label: 'Total Com ($)', x: MARGIN + 69, w: 22, align: 'right' },
+      { label: 'Abonado ($)', x: MARGIN + 91, w: 20, align: 'right' },
+      { label: 'Tasa (Bs)', x: MARGIN + 111, w: 17, align: 'right' },
+      { label: 'Com. (Bs)', x: MARGIN + 128, w: 24, align: 'right' },
+      { label: 'Estado', x: MARGIN + 152, w: 36, align: 'center' },
     ]
   }
 
@@ -471,9 +476,15 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
       function dibujarTablaEspecifica(itemsParaTabla, tituloTabla, suffixSubtotal) {
         if (itemsParaTabla.length === 0) return;
 
+        // Para evitar cabeceras o títulos huérfanos al final de la página,
+        // verificamos que quepa al menos el título (si aplica) + la cabecera + la primera fila
+        const tieneTituloSeccion = comisionesNormales.length > 0 && cuentasCobrar.length > 0;
+        const espacioRequerido = tieneTituloSeccion ? 28 : 20;
+        
+        y = checkPage(doc, y, espacioRequerido, handlePageAdd);
+
         // Si hay ambos tipos, dibujar un pequeño título de sección para la tabla
-        if (comisionesNormales.length > 0 && cuentasCobrar.length > 0) {
-          y = checkPage(doc, y, 10, handlePageAdd);
+        if (tieneTituloSeccion) {
           doc.setFont('helvetica', 'bold');
           doc.setFontSize(8.5);
           doc.setTextColor(80, 90, 110);

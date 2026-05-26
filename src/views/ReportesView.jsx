@@ -766,6 +766,7 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
   const [comisionAPagar, setComisionAPagar] = useState(null)
   const [pagoMasivoData, setPagoMasivoData] = useState(null)
   const [pagandoMasivo, setPagandoMasivo] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(new Set())
 
   const comisionesPendientes = useMemo(() => {
     return detalle.filter(c => c.estado !== 'pagada')
@@ -787,6 +788,37 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
     }, 0)
   }, [comisionesSoloPendientes])
 
+  // Derived: selected pending commissions and their total
+  const selectedPendientes = useMemo(() => {
+    return comisionesPendientes.filter(c => selectedIds.has(c.id))
+  }, [comisionesPendientes, selectedIds])
+
+  const montoSeleccionado = useMemo(() => {
+    return selectedPendientes.reduce((acc, c) => {
+      return acc + Math.max(0, Number(c.totalcomision || 0) - Number(c.montopagado || 0))
+    }, 0)
+  }, [selectedPendientes])
+
+  const allPendienteIds = useMemo(() => comisionesPendientes.map(c => c.id), [comisionesPendientes])
+  const allSelected = allPendienteIds.length > 0 && allPendienteIds.every(id => selectedIds.has(id))
+  const someSelected = allPendienteIds.some(id => selectedIds.has(id))
+
+  const toggleId = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(allPendienteIds))
+    }
+  }
+
   const tasaComision = (item) => Number(item.despacho?.tasa_snapshot || item.cotizacion?.tasa_bcv_snapshot || 0)
 
   // Calcular totales del detalle
@@ -799,7 +831,7 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
 
   const [exportando, setExportando] = useState(false)
 
-  async function exportarPDF() {
+  async function exportarPDF(action = 'download') {
     setExportando(true)
     try {
       const { generarComisionesPDF } = await import('../services/pdf/comisionesPDF')
@@ -848,7 +880,8 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
         comisiones: comisionesParaPDF,
         vendedor: { nombre: vendedor?.nombre, color: vendedor?.color, markup_pct: vendedor?.markup_pct, es_externo: vendedor?.es_externo },
         rango,
-        config: configNeg ?? {}
+        config: configNeg ?? {},
+        action
       })
     } catch (e) {
       console.error('Error generando PDF individual:', e)
@@ -885,108 +918,151 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
           {/* Fila 2: Acciones */}
           <div className="flex flex-wrap items-center gap-2.5">
             <button
-              onClick={(e) => { e.stopPropagation(); exportarPDF(); }}
+              onClick={(e) => { e.stopPropagation(); exportarPDF('download'); }}
               disabled={exportando}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white transition-all duration-200 border border-slate-700 shadow-md active:scale-95 disabled:opacity-50 group font-bold text-xs tracking-wide"
               title="Descargar Reporte PDF"
             >
               {exportando ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} className="group-hover:translate-y-0.5 transition-transform" />}
-              <span>Exportar PDF</span>
+              <span>Descargar PDF</span>
             </button>
 
-            {puedePagarComisiones && comisionesSoloPendientes.length > 0 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); exportarPDF('print'); }}
+              disabled={exportando}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-900/10 hover:bg-blue-900/20 text-blue-900 transition-all duration-200 border border-blue-900/20 shadow-md active:scale-95 disabled:opacity-50 group font-bold text-xs tracking-wide"
+              title="Imprimir Reporte PDF"
+            >
+              {exportando ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} className="group-hover:scale-110 transition-transform" />}
+              <span>Imprimir</span>
+            </button>
+
+            {/* Pagar seleccionadas (cuando hay selección) */}
+            {puedePagarComisiones && someSelected && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   setPagoMasivoData({
-                    pendientes: comisionesSoloPendientes,
-                    montoPendiente: montoSoloPendiente,
+                    pendientes: selectedPendientes,
+                    montoPendiente: montoSeleccionado,
                     vendedor,
-                    title: "Pagar Solo Comisiones (Sin CxC)",
-                    desc: "solo comisiones pendientes, excluyendo cuentas por cobrar"
+                    title: `Pagar ${selectedPendientes.length} comisión(es) seleccionada(s)`,
+                    desc: `${selectedPendientes.length} comisiones marcadas manualmente`
                   });
                 }}
                 disabled={marcar.isPending || pagandoMasivo}
-                className="flex items-center gap-2.5 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white transition-all duration-200 shadow-md shadow-indigo-600/10 border border-indigo-500/20 active:scale-95 disabled:opacity-50 group"
-                title="Pagar solo las comisiones sin incluir cuentas por cobrar"
+                className="flex items-center gap-2.5 px-4 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-purple-700 hover:from-violet-500 hover:to-purple-600 text-white transition-all duration-200 shadow-md shadow-violet-600/15 border border-violet-500/20 active:scale-95 disabled:opacity-50 group"
+                title={`Pagar ${selectedPendientes.length} comisiones seleccionadas`}
               >
-                <CreditCard size={15} className="group-hover:scale-110 transition-transform text-indigo-200 shrink-0" />
+                <CheckCircle size={15} className="group-hover:scale-110 transition-transform text-violet-200 shrink-0" />
                 <div className="flex flex-col items-start leading-tight">
-                  <span className="font-black text-xs tracking-wide">{fmtUsd(montoSoloPendiente)}</span>
-                  <span className="text-[10px] font-medium text-indigo-200 whitespace-nowrap">Solo comis. <span className="opacity-75">(sin CxC)</span></span>
+                  <span className="font-black text-xs tracking-wide">{fmtUsd(montoSeleccionado)}</span>
+                  <span className="text-[10px] font-medium text-violet-200 whitespace-nowrap">{selectedPendientes.length} seleccionada{selectedPendientes.length !== 1 ? 's' : ''}</span>
                 </div>
               </button>
             )}
 
-            {puedePagarComisiones && comisionesPendientes.length > 0 && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setPagoMasivoData({
-                    pendientes: comisionesPendientes,
-                    montoPendiente,
-                    vendedor,
-                    title: "Pagar Todo (Comisiones + CxC)",
-                    desc: "todas las comisiones pendientes, incluyendo cuentas por cobrar"
-                  });
-                }}
-                disabled={marcar.isPending || pagandoMasivo}
-                className="flex items-center gap-2.5 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white transition-all duration-200 shadow-md shadow-emerald-600/10 border border-emerald-500/20 active:scale-95 disabled:opacity-50 group"
-                title="Pagar todas las comisiones pendientes de este vendedor"
-              >
-                <CheckCircle size={15} className="group-hover:scale-110 transition-transform text-emerald-200 shrink-0" />
-                <div className="flex flex-col items-start leading-tight">
-                  <span className="font-black text-xs tracking-wide">{fmtUsd(montoPendiente)}</span>
-                  <span className="text-[10px] font-medium text-emerald-200 whitespace-nowrap">Comis. + CxC <span className="opacity-75">(todo)</span></span>
-                </div>
-              </button>
+            {/* Separador + botones globales cuando NO hay selección */}
+            {!someSelected && (
+              <>
+                {puedePagarComisiones && comisionesSoloPendientes.length > 0 && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPagoMasivoData({
+                        pendientes: comisionesSoloPendientes,
+                        montoPendiente: montoSoloPendiente,
+                        vendedor,
+                        title: "Pagar Solo Comisiones (Sin CxC)",
+                        desc: "solo comisiones pendientes, excluyendo cuentas por cobrar"
+                      });
+                    }}
+                    disabled={marcar.isPending || pagandoMasivo}
+                    className="flex items-center gap-2.5 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white transition-all duration-200 shadow-md shadow-indigo-600/10 border border-indigo-500/20 active:scale-95 disabled:opacity-50 group"
+                    title="Pagar solo las comisiones sin incluir cuentas por cobrar"
+                  >
+                    <CreditCard size={15} className="group-hover:scale-110 transition-transform text-indigo-200 shrink-0" />
+                    <div className="flex flex-col items-start leading-tight">
+                      <span className="font-black text-xs tracking-wide">{fmtUsd(montoSoloPendiente)}</span>
+                      <span className="text-[10px] font-medium text-indigo-200 whitespace-nowrap">Solo comis. <span className="opacity-75">(sin CxC)</span></span>
+                    </div>
+                  </button>
+                )}
+
+                {puedePagarComisiones && comisionesPendientes.length > 0 && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPagoMasivoData({
+                        pendientes: comisionesPendientes,
+                        montoPendiente,
+                        vendedor,
+                        title: "Pagar Todo (Comisiones + CxC)",
+                        desc: "todas las comisiones pendientes, incluyendo cuentas por cobrar"
+                      });
+                    }}
+                    disabled={marcar.isPending || pagandoMasivo}
+                    className="flex items-center gap-2.5 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white transition-all duration-200 shadow-md shadow-emerald-600/10 border border-emerald-500/20 active:scale-95 disabled:opacity-50 group"
+                    title="Pagar todas las comisiones pendientes de este vendedor"
+                  >
+                    <CheckCircle size={15} className="group-hover:scale-110 transition-transform text-emerald-200 shrink-0" />
+                    <div className="flex flex-col items-start leading-tight">
+                      <span className="font-black text-xs tracking-wide">{fmtUsd(montoPendiente)}</span>
+                      <span className="text-[10px] font-medium text-emerald-200 whitespace-nowrap">Comis. + CxC <span className="opacity-75">(todo)</span></span>
+                    </div>
+                  </button>
+                )}
+              </>
             )}
           </div>
 
-          <AdminTable
-            icon={FileText} iconColor="text-indigo-500" title="Comisiones generadas"
-            headers={[
-              { label: 'Fecha' }, { label: 'Correlativo' },
-              { label: 'Venta ($)', align: 'text-right' },
-              { label: 'Cabilla', align: 'text-right' },
-              { label: 'Otros', align: 'text-right' },
-              { label: 'Com. ($)', align: 'text-right' },
-              { label: 'Tasa BCV', align: 'text-right' },
-              { label: 'Com. (Bs)', align: 'text-right' },
-              { label: 'Estado', align: 'text-center' }
-            ]}
-            rows={detalle.map((d) => {
-              const total = Number(d.totalcomision || 0)
-              const tasa = tasaComision(d)
-              const comBs = total * tasa
-              
-              const valCabilla = Number(d.comisioncabilla || 0)
-              const valOtros = Number(d.comisionotros || 0)
-              
-              return [
-                { content: <span className="font-bold text-slate-700">{new Date(d.creadoen).toLocaleDateString('es-VE', { day: '2-digit', month: 'short' })}</span> },
-                {
-                  content: (
-                    <div className="text-[10px] leading-tight font-mono font-bold space-y-1.5 my-0.5">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[8px] bg-slate-100 text-slate-500 px-1 py-0.5 rounded font-sans uppercase tracking-wider scale-90">Desp</span>
-                        <span className="text-slate-700">#{d.despacho?.numero || '—'}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[8px] bg-indigo-50 text-indigo-600 px-1 py-0.5 rounded font-sans uppercase tracking-wider scale-90">Cot</span>
-                        <span className="text-slate-700">#{d.cotizacion?.numero || '—'}</span>
-                      </div>
-                    </div>
-                  )
-                },
-                { content: fmtUsd(d.despacho?.totalusd || 0), className: 'text-right font-medium text-slate-500' },
-                { content: fmtUsd(valCabilla), className: `text-right font-semibold ${valCabilla === 0 ? 'text-slate-300 font-normal' : 'text-slate-800'}` },
-                { content: fmtUsd(valOtros), className: `text-right font-semibold ${valOtros === 0 ? 'text-slate-300 font-normal' : 'text-slate-800'}` },
-                { content: fmtUsd(total), className: 'text-right font-black text-slate-900 bg-slate-50/50' },
-                { content: tasa > 0 ? `Bs ${tasa.toLocaleString('es-VE', { minimumFractionDigits: 2 })}` : '—', className: 'text-right text-[11px] text-slate-500 font-semibold' },
-                { content: fmtBs(comBs), className: 'text-right font-black text-indigo-600 bg-indigo-50/20' },
-                {
-                  content: (() => {
+          <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 overflow-hidden">
+            <div className="px-3 sm:px-4 py-2 sm:py-3 border-b border-slate-100 flex items-center gap-2">
+              <FileText size={14} className="text-indigo-500 sm:w-4 sm:h-4" />
+              <h3 className="text-xs sm:text-sm font-black text-slate-800 flex-1">Comisiones generadas</h3>
+              {puedePagarComisiones && someSelected && (
+                <span className="text-[10px] font-bold text-violet-600 bg-violet-50 border border-violet-200 px-2 py-0.5 rounded-full">
+                  {selectedIds.size} seleccionada{selectedIds.size !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs sm:text-sm">
+                <thead>
+                  <tr className="text-[10px] sm:text-xs text-slate-400 uppercase border-b border-slate-100">
+                    {puedePagarComisiones && (
+                      <th className="px-3 py-2 w-8">
+                        <input
+                          type="checkbox"
+                          checked={allSelected}
+                          ref={el => { if (el) el.indeterminate = someSelected && !allSelected }}
+                          onChange={toggleAll}
+                          className="w-3.5 h-3.5 rounded border-slate-300 text-violet-600 cursor-pointer accent-violet-600"
+                          title={allSelected ? 'Deseleccionar todas' : 'Seleccionar todas las pendientes'}
+                        />
+                      </th>
+                    )}
+                    <th className="px-2 sm:px-4 py-2 font-semibold text-left">Fecha</th>
+                    <th className="px-2 sm:px-4 py-2 font-semibold text-left">Correlativo</th>
+                    <th className="px-2 sm:px-4 py-2 font-semibold text-right">Venta ($)</th>
+                    <th className="px-2 sm:px-4 py-2 font-semibold text-right">Cabilla</th>
+                    <th className="px-2 sm:px-4 py-2 font-semibold text-right">Otros</th>
+                    <th className="px-2 sm:px-4 py-2 font-semibold text-right">Com. ($)</th>
+                    <th className="px-2 sm:px-4 py-2 font-semibold text-right">Tasa BCV</th>
+                    <th className="px-2 sm:px-4 py-2 font-semibold text-right">Com. (Bs)</th>
+                    <th className="px-2 sm:px-4 py-2 font-semibold text-center">Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detalle.map((d, i) => {
+                    const total = Number(d.totalcomision || 0)
+                    const tasa = tasaComision(d)
+                    const comBs = total * tasa
+                    const valCabilla = Number(d.comisioncabilla || 0)
+                    const valOtros = Number(d.comisionotros || 0)
+                    const isPendiente = d.estado !== 'pagada'
+                    const isSelected = selectedIds.has(d.id)
+
                     let badgeClass = 'bg-amber-50 text-amber-700 border border-amber-200'
                     let label = d.estado
                     if (d.estado === 'pagada') {
@@ -995,32 +1071,78 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
                       badgeClass = 'bg-rose-50 text-rose-700 border border-rose-200'
                       label = 'cta x cobrar'
                     }
+
                     return (
-                      <div className="flex flex-col items-center gap-1.5 py-0.5">
-                        <div className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${badgeClass}`}>
-                          {d.estado === 'pagada' && <CheckCircle size={9} className="text-emerald-600 animate-in zoom-in duration-350" />}
-                          {label}
-                        </div>
-                        {puedePagarComisiones && d.estado !== 'pagada' && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setComisionAPagar(d);
-                            }}
-                            className="px-2 py-0.5 rounded-md text-[9.5px] font-extrabold text-emerald-700 bg-emerald-50 hover:bg-emerald-600 hover:text-white border border-emerald-200 hover:border-emerald-500 transition-all duration-200 active:scale-95 uppercase tracking-wider shadow-sm flex items-center justify-center gap-1 mx-auto"
-                          >
-                            <CreditCard size={9} />
-                            Pagar
-                          </button>
+                      <tr
+                        key={d.id || i}
+                        className={`border-b border-slate-50 transition-colors duration-150 ${
+                          isSelected
+                            ? 'bg-violet-50/60 hover:bg-violet-50'
+                            : 'hover:bg-slate-50/50'
+                        }`}
+                        onClick={() => isPendiente && puedePagarComisiones && toggleId(d.id)}
+                        style={{ cursor: isPendiente && puedePagarComisiones ? 'pointer' : 'default' }}
+                      >
+                        {puedePagarComisiones && (
+                          <td className="px-3 py-2 w-8">
+                            {isPendiente ? (
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleId(d.id)}
+                                onClick={e => e.stopPropagation()}
+                                className="w-3.5 h-3.5 rounded border-slate-300 cursor-pointer accent-violet-600"
+                              />
+                            ) : (
+                              <span className="block w-3.5 h-3.5" />
+                            )}
+                          </td>
                         )}
-                      </div>
+                        <td className="px-2 sm:px-4 py-2 sm:py-2.5">
+                          <span className="font-bold text-slate-700">{new Date(d.creadoen).toLocaleDateString('es-VE', { day: '2-digit', month: 'short' })}</span>
+                        </td>
+                        <td className="px-2 sm:px-4 py-2 sm:py-2.5">
+                          <div className="text-[10px] leading-tight font-mono font-bold space-y-1.5 my-0.5">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[8px] bg-slate-100 text-slate-500 px-1 py-0.5 rounded font-sans uppercase tracking-wider">Desp</span>
+                              <span className="text-slate-700">#{d.despacho?.numero || '—'}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[8px] bg-indigo-50 text-indigo-600 px-1 py-0.5 rounded font-sans uppercase tracking-wider">Cot</span>
+                              <span className="text-slate-700">#{d.cotizacion?.numero || '—'}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-2 sm:px-4 py-2 sm:py-2.5 text-right font-medium text-slate-500">{fmtUsd(d.despacho?.totalusd || 0)}</td>
+                        <td className={`px-2 sm:px-4 py-2 sm:py-2.5 text-right font-semibold ${valCabilla === 0 ? 'text-slate-300 font-normal' : 'text-slate-800'}`}>{fmtUsd(valCabilla)}</td>
+                        <td className={`px-2 sm:px-4 py-2 sm:py-2.5 text-right font-semibold ${valOtros === 0 ? 'text-slate-300 font-normal' : 'text-slate-800'}`}>{fmtUsd(valOtros)}</td>
+                        <td className="px-2 sm:px-4 py-2 sm:py-2.5 text-right font-black text-slate-900 bg-slate-50/50">{fmtUsd(total)}</td>
+                        <td className="px-2 sm:px-4 py-2 sm:py-2.5 text-right text-[11px] text-slate-500 font-semibold">{tasa > 0 ? `Bs ${tasa.toLocaleString('es-VE', { minimumFractionDigits: 2 })}` : '—'}</td>
+                        <td className="px-2 sm:px-4 py-2 sm:py-2.5 text-right font-black text-indigo-600 bg-indigo-50/20">{fmtBs(comBs)}</td>
+                        <td className="px-2 sm:px-4 py-2 sm:py-2.5 text-center">
+                          <div className="flex flex-col items-center gap-1.5 py-0.5">
+                            <div className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${badgeClass}`}>
+                              {d.estado === 'pagada' && <CheckCircle size={9} className="text-emerald-600" />}
+                              {label}
+                            </div>
+                            {puedePagarComisiones && d.estado !== 'pagada' && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setComisionAPagar(d); }}
+                                className="px-2 py-0.5 rounded-md text-[9.5px] font-extrabold text-emerald-700 bg-emerald-50 hover:bg-emerald-600 hover:text-white border border-emerald-200 hover:border-emerald-500 transition-all duration-200 active:scale-95 uppercase tracking-wider shadow-sm flex items-center justify-center gap-1 mx-auto"
+                              >
+                                <CreditCard size={9} />
+                                Pagar
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
                     )
-                  })(),
-                  className: 'text-center'
-                }
-              ]
-            })}
-          />
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1088,7 +1210,7 @@ function TabComisiones({ configNeg }) {
   const [pagandoMasivo, setPagandoMasivo] = useState(false)
 
   const [rango, setRango] = useState(() => {
-    const r = getMonthRange(0)
+    const r = getWeekRange(0)
     return { from: r.from, to: r.to }
   })
   const [filtroEstado, setFiltroEstado] = useState('') // '', 'pendiente', 'pagada'
@@ -1108,16 +1230,19 @@ function TabComisiones({ configNeg }) {
   })
   const comisiones = comisionesRes?.data ?? []
 
-  const handlePagarTodoVendedor = useCallback((v) => {
+  const handlePagarTodoVendedor = useCallback((v, conCxc = true) => {
     const pendientes = comisiones.filter(c => {
       const vId = c.vendedor?.id || '00000000-0000-0000-0000-000000000000'
-      return vId === v.id && c.estado !== 'pagada'
+      const matchEstado = conCxc ? c.estado !== 'pagada' : c.estado === 'pendiente'
+      return vId === v.id && matchEstado
     })
     if (pendientes.length === 0) return
     setPagoMasivoData({
       pendientes,
-      montoPendiente: v.pendUsd,
-      vendedor: v
+      montoPendiente: conCxc ? v.pendUsd : v.pendSoloComisUsd,
+      vendedor: v,
+      title: conCxc ? "Pagar Todo (Comisiones + CxC)" : "Pagar Solo Comisiones (Sin CxC)",
+      desc: conCxc ? "todas las comisiones pendientes, incluyendo cuentas por cobrar" : "solo comisiones pendientes, excluyendo cuentas por cobrar"
     })
   }, [comisiones])
 
@@ -1153,6 +1278,7 @@ function TabComisiones({ configNeg }) {
           totalUsd: 0,
           totalBs: 0,
           pendUsd: 0,
+          pendSoloComisUsd: 0,
           pagUsd: 0,
           cantidad: 0
         }
@@ -1164,8 +1290,14 @@ function TabComisiones({ configNeg }) {
       map[vId].totalUsd += m
       map[vId].totalBs += mBs
       map[vId].cantidad++
-      if (['pendiente', 'cta_cobrar'].includes(c.estado)) map[vId].pendUsd += m
-      else map[vId].pagUsd += m
+      if (['pendiente', 'cta_cobrar'].includes(c.estado)) {
+        map[vId].pendUsd += m
+        if (c.estado === 'pendiente') {
+          map[vId].pendSoloComisUsd += m
+        }
+      } else {
+        map[vId].pagUsd += m
+      }
     })
     return Object.values(map)
       .filter(v => v.rol !== 'desarrollador' && v.rol !== 'administracion' && v.rol !== 'logistica')
@@ -1625,16 +1757,43 @@ function TabComisiones({ configNeg }) {
                           </div>
 
                           {puedePagarComisiones && v.pendUsd > 0 && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handlePagarTodoVendedor(v);
-                              }}
-                              className="w-full mt-3 py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all duration-300 shadow-md hover:shadow-emerald-600/20 active:scale-[0.98] border border-emerald-500/20"
-                            >
-                              <CheckCircle size={14} className="text-white" />
-                              <span>Pagar Todo ({fmtUsd(v.pendUsd)})</span>
-                            </button>
+                            <div className="flex flex-col gap-2 mt-3">
+                              {v.pendSoloComisUsd > 0 && v.pendSoloComisUsd < v.pendUsd ? (
+                                <>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handlePagarTodoVendedor(v, false);
+                                    }}
+                                    className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all duration-300 shadow-sm active:scale-[0.98] border border-indigo-500/20"
+                                  >
+                                    <CreditCard size={13} className="text-indigo-200" />
+                                    <span>Solo Comis. ({fmtUsd(v.pendSoloComisUsd)})</span>
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handlePagarTodoVendedor(v, true);
+                                    }}
+                                    className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all duration-300 shadow-md hover:shadow-emerald-600/20 active:scale-[0.98] border border-emerald-500/20"
+                                  >
+                                    <CheckCircle size={14} className="text-white" />
+                                    <span>Comis. + CxC ({fmtUsd(v.pendUsd)})</span>
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handlePagarTodoVendedor(v, true);
+                                  }}
+                                  className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all duration-300 shadow-md hover:shadow-emerald-600/20 active:scale-[0.98] border border-emerald-500/20"
+                                >
+                                  <CheckCircle size={14} className="text-white" />
+                                  <span>Pagar Todo ({fmtUsd(v.pendUsd)})</span>
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
                       ))}
@@ -1695,16 +1854,43 @@ function TabComisiones({ configNeg }) {
                           </div>
 
                           {puedePagarComisiones && v.pendUsd > 0 && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handlePagarTodoVendedor(v);
-                              }}
-                              className="w-full mt-3 py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all duration-300 shadow-md hover:shadow-emerald-600/20 active:scale-[0.98] border border-emerald-500/20"
-                            >
-                              <CheckCircle size={14} className="text-white" />
-                              <span>Pagar Todo ({fmtUsd(v.pendUsd)})</span>
-                            </button>
+                            <div className="flex flex-col gap-2 mt-3">
+                              {v.pendSoloComisUsd > 0 && v.pendSoloComisUsd < v.pendUsd ? (
+                                <>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handlePagarTodoVendedor(v, false);
+                                    }}
+                                    className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all duration-300 shadow-sm active:scale-[0.98] border border-indigo-500/20"
+                                  >
+                                    <CreditCard size={13} className="text-indigo-200" />
+                                    <span>Solo Comis. ({fmtUsd(v.pendSoloComisUsd)})</span>
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handlePagarTodoVendedor(v, true);
+                                    }}
+                                    className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all duration-300 shadow-md hover:shadow-emerald-600/20 active:scale-[0.98] border border-emerald-500/20"
+                                  >
+                                    <CheckCircle size={14} className="text-white" />
+                                    <span>Comis. + CxC ({fmtUsd(v.pendUsd)})</span>
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handlePagarTodoVendedor(v, true);
+                                  }}
+                                  className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all duration-300 shadow-md hover:shadow-emerald-600/20 active:scale-[0.98] border border-emerald-500/20"
+                                >
+                                  <CheckCircle size={14} className="text-white" />
+                                  <span>Pagar Todo ({fmtUsd(v.pendUsd)})</span>
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
                       ))}
