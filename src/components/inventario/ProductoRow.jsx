@@ -30,7 +30,7 @@ function colorCategoria(str = '') {
 export default function ProductoRow({ producto, onEditar, onDesactivar, onBorrar, onKardex, onDetalle, tasa = 0, comprometido = 0 }) {
   const { perfil } = useAuthStore()
   const [copiado, setCopiado] = useState(false)
-  const { tasaBcv, tasaUsdt } = useTasaCambio()
+  const { tasaBcv, tasaUsdt, tasaEfectiva } = useTasaCambio()
 
   const handleCopiarCodigo = (e) => {
     e.stopPropagation()
@@ -111,9 +111,9 @@ export default function ProductoRow({ producto, onEditar, onDesactivar, onBorrar
               ? tasaUsdt.precio / tasaBcv.precio
               : 1
             const precioBcvUsd = precioDisplay * factorBcv
-            const precioBs    = tasaUsdt?.precio > 0
-              ? usdToBs(precioDisplay, tasaUsdt.precio)
-              : (tasa > 0 ? usdToBs(precioDisplay, tasa) : null)
+            const precioBs = tasaEfectiva > 0
+              ? usdToBs(precioDisplay, tasaEfectiva)
+              : null
             return (
               <div className="flex items-center gap-1 justify-end text-[9px] font-bold">
                 <span className="inline-flex items-center gap-0.5 px-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-100" title="Precio en Bolívares">

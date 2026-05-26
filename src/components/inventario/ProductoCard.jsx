@@ -65,7 +65,7 @@ function StockBadge({ actual, minimo, comprometido = 0, productoId }) {
 export default function ProductoCard({ producto, onEditar, onDesactivar, onBorrar, onKardex, onDetalle, tasa = 0, comprometido = 0 }) {
   const { perfil } = useAuthStore()
   const [copiado, setCopiado] = useState(false)
-  const { tasaBcv, tasaUsdt } = useTasaCambio()
+  const { tasaBcv, tasaUsdt, tasaEfectiva } = useTasaCambio()
 
   const handleCopiarCodigo = (e) => {
     e.stopPropagation()
@@ -200,9 +200,9 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, onBorra
                 ? tasaUsdt.precio / tasaBcv.precio
                 : 1
               const precioBcvUsd = precioDisplay * factorBcv
-              const precioBs    = tasaUsdt?.precio > 0
-                ? usdToBs(precioDisplay, tasaUsdt.precio)
-                : (tasa > 0 ? usdToBs(precioDisplay, tasa) : null)
+              const precioBs = tasaEfectiva > 0
+                ? usdToBs(precioDisplay, tasaEfectiva)
+                : null
               return (
                 <div className="grid grid-cols-2 gap-1.5 mt-2">
                   {/* Bs — precio en bolívares (tasa USDT/mercado) */}
