@@ -361,14 +361,14 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
   if (esDetallado) {
     cols = [
       { label: 'Fecha', x: MARGIN, w: 16 },
-      { label: 'Nº Doc', x: MARGIN + 16, w: 12 },
-      { label: 'Producto / Descripción', x: MARGIN + 28, w: 55 },
-      { label: 'Valor ($)', x: MARGIN + 83, w: 15, align: 'right' },
-      { label: '%', x: MARGIN + 98, w: 8, align: 'right' },
-      { label: 'Com ($)', x: MARGIN + 106, w: 15, align: 'right' },
-      { label: 'Tasa (Bs)', x: MARGIN + 121, w: 15, align: 'right' },
-      { label: 'Com (Bs)', x: MARGIN + 136, w: 18, align: 'right' },
-      { label: 'Estado', x: MARGIN + 154, w: 18, align: 'center' },
+      { label: 'Nº Doc', x: MARGIN + 16, w: 14 },
+      { label: 'Producto / Descripción', x: MARGIN + 30, w: 58 },
+      { label: 'Valor ($)', x: MARGIN + 88, w: 18, align: 'right' },
+      { label: '%', x: MARGIN + 106, w: 10, align: 'right' },
+      { label: 'Com ($)', x: MARGIN + 116, w: 18, align: 'right' },
+      { label: 'Tasa (Bs)', x: MARGIN + 134, w: 18, align: 'right' },
+      { label: 'Com (Bs)', x: MARGIN + 152, w: 22, align: 'right' },
+      { label: 'Estado', x: MARGIN + 174, w: 14, align: 'center' },
     ]
   } else {
     cols = [
@@ -376,11 +376,11 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
       { label: 'Nº Doc', x: MARGIN + 18, w: 15 },
       { label: 'Cabilla ($)', x: MARGIN + 33, w: 22, align: 'right' },
       { label: 'Otros ($)', x: MARGIN + 55, w: 22, align: 'right' },
-      { label: 'Total Com ($)', x: MARGIN + 77, w: 25, align: 'right' },
-      { label: 'Abonado ($)', x: MARGIN + 102, w: 22, align: 'right' },
-      { label: 'Tasa (Bs)', x: MARGIN + 124, w: 18, align: 'right' },
-      { label: 'Com. (Bs)', x: MARGIN + 142, w: 25, align: 'right' },
-      { label: 'Estado', x: MARGIN + 167, w: 25, align: 'center' },
+      { label: 'Total Com ($)', x: MARGIN + 77, w: 24, align: 'right' },
+      { label: 'Abonado ($)', x: MARGIN + 101, w: 22, align: 'right' },
+      { label: 'Tasa (Bs)', x: MARGIN + 123, w: 18, align: 'right' },
+      { label: 'Com. (Bs)', x: MARGIN + 141, w: 24, align: 'right' },
+      { label: 'Estado', x: MARGIN + 165, w: 23, align: 'center' },
     ]
   }
 
@@ -458,9 +458,6 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
       doc.setTextColor(...C_DARK);
       doc.text(vNombre.toUpperCase(), MARGIN + 7, y + 4);
       y += 7;
-
-      // Dibujar cabecera de tabla
-      y = drawTableHeader(doc, y);
 
       const comisionesNormales = vItems.filter(c => c.estado !== 'cta_cobrar');
       const cuentasCobrar = vItems.filter(c => c.estado === 'cta_cobrar');

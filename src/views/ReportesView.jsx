@@ -863,7 +863,7 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
           <AdminTable
             icon={FileText} iconColor="text-indigo-500" title="Comisiones generadas"
             headers={[
-              { label: 'Fecha' }, { label: 'Despacho' }, { label: 'Cotización' },
+              { label: 'Fecha' }, { label: 'Correlativo' },
               { label: 'Venta ($)', align: 'text-right' },
               { label: 'Cabilla', align: 'text-right' },
               { label: 'Otros', align: 'text-right' },
@@ -878,8 +878,14 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
               const comBs = total * tasa
               return [
                 { content: new Date(d.creadoen).toLocaleDateString('es-VE', { day: '2-digit', month: 'short' }) },
-                { content: <div className="text-[10px] leading-tight font-bold">D: #{d.despacho?.numero || '—'}</div> },
-                { content: <div className="text-[10px] leading-tight font-bold">C: #{d.cotizacion?.numero || '—'}</div> },
+                {
+                  content: (
+                    <div className="text-[10px] leading-tight font-bold space-y-0.5">
+                      <div>D: #{d.despacho?.numero || '—'}</div>
+                      <div>C: #{d.cotizacion?.numero || '—'}</div>
+                    </div>
+                  )
+                },
                 { content: fmtUsd(d.despacho?.totalusd || 0), className: 'text-right font-medium text-slate-600' },
                 { content: fmtUsd(d.comisioncabilla || 0), className: 'text-right font-semibold text-slate-700' },
                 { content: fmtUsd(d.comisionotros || 0), className: 'text-right font-semibold text-slate-700' },
@@ -887,10 +893,22 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
                 { content: tasa > 0 ? `Bs ${tasa.toLocaleString('es-VE', { minimumFractionDigits: 2 })}` : '—', className: 'text-right text-[11px] text-slate-600 font-semibold' },
                 { content: fmtBs(comBs), className: 'text-right font-bold text-indigo-600' },
                 {
-                  content: <div className={`inline-flex px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${d.estado !== 'pagada' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
-                    }`}>
-                    {d.estado === 'cta_cobrar' ? 'cta x cobrar' : d.estado}
-                  </div>, className: 'text-center'
+                  content: (() => {
+                    let badgeClass = 'bg-amber-100 text-amber-700'
+                    let label = d.estado
+                    if (d.estado === 'pagada') {
+                      badgeClass = 'bg-emerald-100 text-emerald-700'
+                    } else if (d.estado === 'cta_cobrar') {
+                      badgeClass = 'bg-red-100 text-red-700 border border-red-200'
+                      label = 'cta x cobrar'
+                    }
+                    return (
+                      <div className={`inline-flex px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${badgeClass}`}>
+                        {label}
+                      </div>
+                    )
+                  })(),
+                  className: 'text-center'
                 }
               ]
             })}
