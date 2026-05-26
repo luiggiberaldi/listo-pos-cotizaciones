@@ -195,9 +195,10 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, onBorra
 
             {/* Bloque Multimoneda Compacto */}
             {precioDisplay > 0 && (() => {
-              // factorBcv: mismo cálculo que PDFs y DetalleModal
-              const factorBcv = tasaBcv?.precio > 0 && tasaUsdt?.precio > 0
-                ? tasaUsdt.precio / tasaBcv.precio
+              // factorBcv = tasaEfectiva / tasaBcv
+              // Cuánto USD equivale el precio al pagar por transferencia BCV
+              const factorBcv = tasaBcv?.precio > 0 && tasaEfectiva > 0
+                ? tasaEfectiva / tasaBcv.precio
                 : 1
               const precioBcvUsd = precioDisplay * factorBcv
               const precioBs = tasaEfectiva > 0
@@ -223,7 +224,7 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, onBorra
                       BCV
                     </span>
                     <span className="text-[10px] font-extrabold text-blue-900 mt-0.5 truncate">
-                      {tasaBcv?.precio > 0 && tasaUsdt?.precio > 0 ? fmtUsd(precioBcvUsd) : '—'}
+                      {tasaBcv?.precio > 0 && tasaEfectiva > 0 ? fmtUsd(precioBcvUsd) : '—'}
                     </span>
                   </div>
                 </div>

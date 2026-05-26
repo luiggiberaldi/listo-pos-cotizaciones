@@ -107,8 +107,8 @@ export default function ProductoRow({ producto, onEditar, onDesactivar, onBorrar
             )}
           </div>
           {precioDisplay > 0 && (() => {
-            const factorBcv = tasaBcv?.precio > 0 && tasaUsdt?.precio > 0
-              ? tasaUsdt.precio / tasaBcv.precio
+            const factorBcv = tasaBcv?.precio > 0 && tasaEfectiva > 0
+              ? tasaEfectiva / tasaBcv.precio
               : 1
             const precioBcvUsd = precioDisplay * factorBcv
             const precioBs = tasaEfectiva > 0
@@ -122,7 +122,7 @@ export default function ProductoRow({ producto, onEditar, onDesactivar, onBorrar
                 </span>
                 <span className="inline-flex items-center gap-0.5 px-1 rounded bg-blue-50 text-blue-700 border border-blue-100" title="Equivalente USD a tasa BCV">
                   <Building2 size={8} />
-                  {tasaBcv?.precio > 0 && tasaUsdt?.precio > 0 ? fmtUsd(precioBcvUsd) : '—'}
+                  {tasaBcv?.precio > 0 && tasaEfectiva > 0 ? fmtUsd(precioBcvUsd) : '—'}
                 </span>
               </div>
             )
