@@ -474,13 +474,10 @@ export async function handleActualizarEstadoDespacho(request, env) {
         const productosEnt = await prodResEnt.json();
         const stockMapEnt = Object.fromEntries(productosEnt.map(p => [p.id, p]));
 
-        // Verificar stock
+        // Verificar existencia de productos
         for (const item of itemsEnt) {
           const prod = stockMapEnt[item.producto_id];
           if (!prod) return jsonError(`Producto "${item.nombre_snap}" no encontrado o inactivo`, 400, request);
-          if (Number(prod.stock_actual) < Number(item.cantidad)) {
-            return jsonError(`Stock insuficiente para entrega: "${item.nombre_snap}" requiere ${item.cantidad} pero solo hay ${prod.stock_actual}`, 400, request);
-          }
         }
 
         // Descontar stock y registrar kardex
