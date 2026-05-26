@@ -11,6 +11,7 @@ import {
   AlertTriangle, Send, CheckCircle, Ban,
   PanelLeftClose, PanelLeftOpen, BarChart3, BarChart2,
   Clock, AlertCircle, ScrollText, FlaskConical, UserX, Shield, ShoppingCart,
+  Globe, Compass, Smartphone, HelpCircle, Lock,
 } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import LoginAvatar from '../auth/LoginAvatar'
@@ -176,6 +177,8 @@ export default function AppLayout() {
 
   // Push notifications
   const { supported: pushSupported, subscribed: pushSubscribed, loading: pushLoading, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe } = usePushNotifications()
+  const [showPushTrouble, setShowPushTrouble] = useState(false)
+  const [pushTroubleRawMsg, setPushTroubleRawMsg] = useState('')
 
   async function togglePush() {
     if (pushSubscribed) {
@@ -183,8 +186,15 @@ export default function AppLayout() {
       showToast('Notificaciones push desactivadas', 'info')
     } else {
       const result = await pushSubscribe()
-      if (result.ok) showToast('Notificaciones push activadas', 'success')
-      else showToast(result.error || 'No se pudo activar', 'error')
+      if (result.ok) {
+        showToast('Notificaciones push activadas', 'success')
+      } else if (result.error === 'push-service-error') {
+        setPushTroubleRawMsg(result.rawError || 'Registration failed - push service error')
+        setShowPushTrouble(true)
+        showToast('Error en servicio push. Pulse para solucionar.', 'warning', 5000)
+      } else {
+        showToast(result.error || 'No se pudo activar', 'error')
+      }
     }
   }
 
@@ -706,18 +716,213 @@ export default function AppLayout() {
                 >
                   Verificar Ahora
                 </button>
-                <button
-                  onClick={() => setUrgentNotif(null)}
-                  className="flex-1 px-5 py-3 rounded-xl text-sm font-bold bg-slate-800/80 hover:bg-slate-800 border border-slate-700/50 text-slate-300 transition-all select-none hover:scale-[1.02] active:scale-[0.98]"
-                >
-                  Entendido
-                </button>
               </div>
             </div>
           </div>
         </div>
       )}
 
+      {/* ── Modal de Resolución de Problemas Push ── */}
+      <PushTroubleshootingModal
+        isOpen={showPushTrouble}
+        onClose={() => setShowPushTrouble(false)}
+        rawError={pushTroubleRawMsg}
+      />
+
+    </div>
+  )
+}
+
+// ─── Componente Modal de Resolución de Problemas Push ─────────────────────────
+function PushTroubleshootingModal({ isOpen, onClose, rawError }) {
+  const [activeTab, setActiveTab] = useState('vpn')
+
+  if (!isOpen) return null
+
+  const tabs = [
+    {
+      id: 'vpn',
+      label: 'Bloqueo / VPN',
+      icon: Globe,
+      title: 'Bloqueo de Proveedores (Venezuela)',
+      content: (
+        <div className="space-y-3 text-left">
+          <p className="text-sm text-slate-300 leading-relaxed">
+            Los servidores de notificaciones push de Google (FCM) y otros servicios web sufren frecuentemente bloqueos o saturación temporal por parte de operadoras locales de internet en Venezuela (como <strong>CANTV, Movistar, Digitel</strong>).
+          </p>
+          <div className="bg-slate-950/40 border border-slate-800/80 p-3.5 rounded-xl space-y-2">
+            <h4 className="text-xs font-black text-amber-400 uppercase tracking-wide flex items-center gap-1.5">
+              <AlertTriangle size={12} /> Solución Recomendada:
+            </h4>
+            <ol className="text-xs text-slate-400 space-y-1.5 list-decimal pl-4">
+              <li>Active un <strong>VPN gratuito</strong> (como Windscribe, ProtonVPN, Warp Cloudflare o TunnelBear) en su teléfono móvil.</li>
+              <li>Una vez activado el VPN, vuelva a intentar presionar el botón <strong>"Activar notificaciones push"</strong>.</li>
+              <li>¡Listo! Una vez realizada la suscripción, ya puede apagar el VPN; las notificaciones seguirán llegando.</li>
+              <li>Opcional: Pruebe alternando entre sus <strong>Datos Móviles</strong> y una red <strong>WiFi</strong>.</li>
+            </ol>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'brave',
+      label: 'Brave Browser',
+      icon: Shield,
+      title: 'Configuración de Privacidad en Brave',
+      content: (
+        <div className="space-y-3 text-left">
+          <p className="text-sm text-slate-300 leading-relaxed">
+            El navegador Brave bloquea los servicios de push de Google por defecto para proteger su privacidad. Debe habilitar la mensajería push explícitamente.
+          </p>
+          <div className="bg-slate-950/40 border border-slate-800/80 p-3.5 rounded-xl space-y-2">
+            <h4 className="text-xs font-black text-sky-400 uppercase tracking-wide flex items-center gap-1.5">
+              <Settings size={12} /> Pasos para activar:
+            </h4>
+            <ol className="text-xs text-slate-400 space-y-1.5 list-decimal pl-4">
+              <li>Vaya a la <strong>Configuración / Ajustes</strong> de Brave en su móvil.</li>
+              <li>Seleccione <strong>Privacidad y seguridad</strong>.</li>
+              <li>Active la opción <strong>"Usar servicios de Google para mensajería push"</strong> (Use Google services for push messaging).</li>
+              <li><strong>Cierre por completo</strong> el navegador Brave y vuelva a abrir la aplicación.</li>
+              <li>Intente activar las notificaciones push nuevamente.</li>
+            </ol>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'ios',
+      label: 'iPhone / iOS',
+      icon: Compass,
+      title: 'Notificaciones Push en iOS (Apple)',
+      content: (
+        <div className="space-y-3 text-left">
+          <p className="text-sm text-slate-300 leading-relaxed">
+            En dispositivos iPhone y iPad, Apple restringe las notificaciones push en el navegador Safari normal. <strong>Solo están permitidas si la app se instala en la pantalla de inicio</strong>.
+          </p>
+          <div className="bg-slate-950/40 border border-slate-800/80 p-3.5 rounded-xl space-y-2">
+            <h4 className="text-xs font-black text-rose-400 uppercase tracking-wide flex items-center gap-1.5">
+              <Smartphone size={12} /> Guía de Instalación PWA:
+            </h4>
+            <ol className="text-xs text-slate-400 space-y-1.5 list-decimal pl-4">
+              <li>Abra la aplicación en <strong>Safari</strong>.</li>
+              <li>Presione el botón <strong>Compartir</strong> (el ícono de la flecha hacia arriba en la barra inferior).</li>
+              <li>Deslice hacia abajo y presione <strong>"Agregar a inicio"</strong> (Add to Home Screen).</li>
+              <li>Abra el nuevo ícono que se creó en la pantalla de inicio de su iPhone.</li>
+              <li>Inicie sesión allí, abra las alertas y presione <strong>"Activar notificaciones push"</strong>.</li>
+            </ol>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'browser',
+      label: 'Incógnito / Permisos',
+      icon: HelpCircle,
+      title: 'Pestañas Privadas y Permisos del Sitio',
+      content: (
+        <div className="space-y-3 text-left">
+          <p className="text-sm text-slate-300 leading-relaxed">
+            Asegúrese de no estar utilizando el modo incógnito o de haber bloqueado los permisos sin querer.
+          </p>
+          <div className="bg-slate-950/40 border border-slate-800/80 p-3.5 rounded-xl space-y-2">
+            <h4 className="text-xs font-black text-amber-500 uppercase tracking-wide flex items-center gap-1.5">
+              <Lock size={12} /> Solución de Permisos:
+            </h4>
+            <ul className="text-xs text-slate-400 space-y-1.5 list-disc pl-4">
+              <li>Las pestañas en <strong>Modo Incógnito</strong> no tienen acceso al motor de notificaciones. Use una pestaña normal.</li>
+              <li>Si al presionar el botón de activación no le pregunta permisos, verifique el candado <Lock size={10} className="inline mx-0.5" /> al lado de la dirección URL en la parte superior del navegador y asegúrese de que el permiso de <strong>Notificaciones</strong> esté en <strong>"Permitir"</strong>.</li>
+            </ul>
+          </div>
+        </div>
+      )
+    }
+  ]
+
+  const ActiveTabItem = tabs.find(t => t.id === activeTab) || tabs[0]
+
+  return (
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-3 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-300">
+      <div className="relative overflow-hidden bg-slate-900/95 border border-slate-700/50 rounded-3xl p-5 max-w-lg w-full shadow-[0_20px_50px_rgba(0,0,0,0.6)] animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+        
+        {/* Glow Effects */}
+        <div className="absolute -top-12 -left-12 w-32 h-32 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -top-12 -right-12 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        {/* Header */}
+        <div className="flex items-start justify-between pb-3 border-b border-white/10 shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/25 flex items-center justify-center">
+              <BellOff size={20} className="text-rose-400 animate-pulse" />
+            </div>
+            <div className="text-left">
+              <h3 className="text-base font-black text-white leading-tight">Soporte de Notificaciones</h3>
+              <p className="text-[10px] text-slate-400 mt-0.5">Guía interactiva para resolver el error de registro</p>
+            </div>
+          </div>
+          <button 
+            onClick={onClose}
+            className="p-1.5 rounded-xl bg-white/5 border border-white/10 text-white/50 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Tab selection */}
+        <div className="flex gap-1.5 overflow-x-auto py-2.5 border-b border-white/5 shrink-0 scrollbar-none">
+          {tabs.map(tab => {
+            const TabIcon = tab.icon
+            const isActive = activeTab === tab.id
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
+                  isActive 
+                    ? 'text-white bg-white/10 border border-white/10 shadow-md' 
+                    : 'text-white/40 hover:text-white/70 hover:bg-white/5 border border-transparent'
+                }`}
+                style={isActive ? { background: 'linear-gradient(135deg, rgba(27,54,93,0.5), rgba(184,134,11,0.3))' } : {}}
+              >
+                <TabIcon size={13} className={isActive ? 'text-amber-400' : ''} />
+                <span>{tab.label}</span>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Tab Content */}
+        <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1">
+          <div className="space-y-2">
+            <h4 className="text-sm font-black text-white text-left flex items-center gap-2">
+              <ActiveTabItem.icon size={16} className="text-amber-400" />
+              {ActiveTabItem.title}
+            </h4>
+            {ActiveTabItem.content}
+          </div>
+
+          {rawError && (
+            <div className="bg-slate-950/60 border border-red-500/10 p-2.5 rounded-xl text-left shrink-0">
+              <p className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Código de error técnico:</p>
+              <p className="text-[10px] font-mono text-rose-400/80 break-all mt-0.5 leading-snug">{rawError}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Footer actions */}
+        <div className="pt-3 border-t border-white/10 flex gap-3 shrink-0">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl text-xs font-black text-slate-900 transition-all select-none hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-1.5"
+            style={{
+              background: 'linear-gradient(135deg, #fbbf24 0%, #d97706 100%)',
+              boxShadow: '0 4px 12px rgba(217, 119, 6, 0.3)',
+            }}
+          >
+            Entendido, lo intentaré
+          </button>
+        </div>
+
+      </div>
     </div>
   )
 }

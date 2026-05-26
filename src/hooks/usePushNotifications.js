@@ -93,7 +93,15 @@ export function usePushNotifications() {
       setSubscribed(true)
       return { ok: true }
     } catch (err) {
-      return { ok: false, error: err.message }
+      const isPushServiceError = 
+        err.message?.includes('push service error') || 
+        err.message?.includes('Registration failed') || 
+        err.name === 'AbortError'
+      return { 
+        ok: false, 
+        error: isPushServiceError ? 'push-service-error' : err.message,
+        rawError: err.message 
+      }
     } finally {
       setLoading(false)
     }
