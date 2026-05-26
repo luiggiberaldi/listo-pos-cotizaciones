@@ -222,12 +222,13 @@ export async function generarPlantillaOrdenDespachoPDF({ config = {}, incluirTra
   doc.setFontSize(9)
   doc.setTextColor(...C_DARK)
   doc.text('FORMA DE PAGO:', MARGIN + 3, fpY + 6)
-  drawCheck(doc, 'EFECTIVO',   MARGIN + 38, fpY + 6)
-  drawCheck(doc, 'ZELLE',      MARGIN + 60, fpY + 6)
-  drawCheck(doc, 'P. MÓVIL',   MARGIN + 78, fpY + 6)
-  drawCheck(doc, 'USDT',       MARGIN + 98, fpY + 6)
-  drawCheck(doc, 'TRANSF.',    MARGIN + 114, fpY + 6)
-  drawCheck(doc, 'CTA X COB.', MARGIN + 134, fpY + 6)
+  drawCheck(doc, 'EFECTIVO $',  MARGIN + 38, fpY + 6)
+  drawCheck(doc, 'EFECTIVO Bs', MARGIN + 58, fpY + 6)
+  drawCheck(doc, 'ZELLE',       MARGIN + 78, fpY + 6)
+  drawCheck(doc, 'P. MÓVIL',    MARGIN + 94, fpY + 6)
+  drawCheck(doc, 'USDT',        MARGIN + 114, fpY + 6)
+  drawCheck(doc, 'TRANSF.',     MARGIN + 130, fpY + 6)
+  drawCheck(doc, 'CTA X COB.',  MARGIN + 150, fpY + 6)
 
   // Barra TOTAL — fondo blanco, borde, "Total:" en negro
   const totTopY = fpY + 9

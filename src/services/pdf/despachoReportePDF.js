@@ -18,7 +18,8 @@ const ESTADO_COLORS = {
 }
 
 const FP_COLORS = {
-  'Efectivo':         [16, 185, 129],
+  'Efectivo $':       [16, 185, 129],
+  'Efectivo Bs':      [34, 197, 94],
   'Zelle':            [59, 130, 246],
   'Pago Móvil':       [139, 92, 246],
   'USDT':             [245, 158, 11],

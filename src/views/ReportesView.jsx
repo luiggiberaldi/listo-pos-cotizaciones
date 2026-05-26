@@ -100,7 +100,8 @@ function FormaPagoSection({ data = [], kpis }) {
   const totalCxc = fpCxc ? fpCxc.totalUsd : 0
   const ventasSinCxc = (kpis?.totalVentas || 0) - totalCxc
   const COLORS = {
-    'Efectivo': '#10b981',
+    'Efectivo $': '#10b981',
+    'Efectivo Bs': '#22c55e',
     'Zelle': '#3b82f6',
     'Pago Móvil': '#8b5cf6',
     'USDT': '#f59e0b',
@@ -485,7 +486,8 @@ function TabVentas({ configNeg }) {
   const rangoLabel = `${new Date(`${rango.from}T00:00:00`).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })} - ${new Date(`${rango.to}T00:00:00`).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}`
 
   const METODO_PAGOS_STYLES = {
-    'Efectivo': 'bg-emerald-50 text-emerald-700 border-emerald-100',
+    'Efectivo $': 'bg-emerald-50 text-emerald-700 border-emerald-100',
+    'Efectivo Bs': 'bg-green-50 text-green-700 border-green-100',
     'Zelle': 'bg-blue-50 text-blue-700 border-blue-100',
     'Pago Móvil': 'bg-purple-50 text-purple-700 border-purple-100',
     'USDT': 'bg-amber-50 text-amber-700 border-amber-100',

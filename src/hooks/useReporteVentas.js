@@ -98,16 +98,17 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
                 const metodosDefinitivos = Array.isArray(f.metodos_pagados) ? f.metodos_pagados : (Array.isArray(f.metodo_propuesto) ? f.metodo_propuesto : []);
                 if (metodosDefinitivos.length > 0) {
                   metodosDefinitivos.forEach(p => {
-                    processedFormas.push({ metodo: p.metodo || 'Efectivo', monto: Number(p.monto) || 0 })
+                    processedFormas.push({ metodo: p.metodo === 'Efectivo' ? 'Efectivo $' : (p.metodo || 'Efectivo $'), monto: Number(p.monto) || 0 })
                   })
                 } else {
-                  processedFormas.push({ metodo: 'Efectivo', monto: Number(f.monto) || 0 })
+                  processedFormas.push({ metodo: 'Efectivo $', monto: Number(f.monto) || 0 })
                 }
               } else {
                 processedFormas.push({ metodo: 'Cta por cobrar', monto: Number(f.monto) || 0 })
               }
             } else {
-              processedFormas.push(f)
+              const metodoNorm = f.metodo === 'Efectivo' ? 'Efectivo $' : (f.metodo || 'Sin especificar')
+              processedFormas.push({ ...f, metodo: metodoNorm })
             }
           })
         } else {

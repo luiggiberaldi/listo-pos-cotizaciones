@@ -33,17 +33,17 @@ export default function ConciliarCodModal({ isOpen, onClose, despacho }) {
     const cod = fps.find(f => f.metodo === 'Cobro a destino')
     if (cod) {
       setCodMethod(cod)
-      // Initialize payments from metodo_propuesto if it exists, otherwise default to full amount in Efectivo
+      // Initialize payments from metodo_propuesto if it exists, otherwise default to full amount in Efectivo $
       if (Array.isArray(cod.metodo_propuesto) && cod.metodo_propuesto.length > 0) {
         setHasPropuesto(true)
         setPayments(cod.metodo_propuesto.map(p => ({
-          metodo: p.metodo || 'Efectivo',
+          metodo: p.metodo === 'Efectivo' ? 'Efectivo $' : (p.metodo || 'Efectivo $'),
           monto: Number(p.monto) || 0,
           referencia: p.referencia || ''
         })))
       } else {
         setHasPropuesto(false)
-        setPayments([{ metodo: 'Efectivo', monto: Number(cod.monto) || 0, referencia: '' }])
+        setPayments([{ metodo: 'Efectivo $', monto: Number(cod.monto) || 0, referencia: '' }])
       }
     } else {
       setCodMethod(null)
@@ -230,7 +230,7 @@ export default function ConciliarCodModal({ isOpen, onClose, despacho }) {
                       </div>
 
                       {/* Referencia Input */}
-                      {p.metodo !== 'Efectivo' && (
+                      {p.metodo !== 'Efectivo $' && p.metodo !== 'Efectivo Bs' && (
                         <input
                           type="text"
                           value={p.referencia}

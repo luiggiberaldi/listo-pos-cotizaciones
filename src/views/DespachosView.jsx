@@ -333,9 +333,6 @@ export default function DespachosView() {
         icon={PackageCheck}
         title={esLogistica ? 'Entregas' : 'Notas de Despacho'}
         subtitle={isLoading ? 'Cargando...' : `${despachosFiltrados.length} ${esLogistica ? 'entrega' : 'despacho'}${despachosFiltrados.length !== 1 ? 's' : ''}`}
-        action={
-          !esLogistica && <PlantillaDropdown config={config} />
-        }
       />
 
       {/* Onboarding tips */}

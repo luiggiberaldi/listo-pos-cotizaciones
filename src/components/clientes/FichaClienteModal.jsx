@@ -16,11 +16,11 @@ function fmtFecha(iso) {
     ' ' + d.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })
 }
 
-const METODOS = ['Efectivo', 'Zelle', 'Pago Móvil', 'Punto de Venta', 'USDT', 'Transferencia', 'Cruce']
+const METODOS = ['Efectivo $', 'Efectivo Bs', 'Zelle', 'Pago Móvil', 'Punto de Venta', 'USDT', 'Transferencia', 'Cruce']
 
 function FormAbono({ clienteId, saldo, onSuccess }) {
   // Cada línea de pago: { metodo, monto, referencia }
-  const [lineas, setLineas] = useState([{ metodo: 'Efectivo', monto: '', referencia: '' }])
+  const [lineas, setLineas] = useState([{ metodo: 'Efectivo $', monto: '', referencia: '' }])
   const [descripcion, setDescripcion] = useState('')
   const registrar = useRegistrarAbono()
 
@@ -34,7 +34,7 @@ function FormAbono({ clienteId, saldo, onSuccess }) {
   }
 
   function agregarLinea() {
-    setLineas(prev => [...prev, { metodo: 'Efectivo', monto: '', referencia: '' }])
+    setLineas(prev => [...prev, { metodo: 'Efectivo $', monto: '', referencia: '' }])
   }
 
   function quitarLinea(idx) {
@@ -65,7 +65,7 @@ function FormAbono({ clienteId, saldo, onSuccess }) {
       referencia: lineas[0]?.referencia || '',
       descripcion: descripcion || 'Abono recibido',
     })
-    setLineas([{ metodo: 'Efectivo', monto: '', referencia: '' }])
+    setLineas([{ metodo: 'Efectivo $', monto: '', referencia: '' }])
     setDescripcion('')
     onSuccess?.(totalIngresado)
   }

@@ -139,12 +139,18 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
         const parsed = JSON.parse(fpRaw)
         const pagosArray = Array.isArray(parsed) && parsed.length > 0 ? parsed : []
         if (pagosArray.length > 0) {
-          setPagos(pagosArray)
+          // Mapear cualquier metodo 'Efectivo' viejo a 'Efectivo $'
+          const mappedPagos = pagosArray.map(p => ({
+            ...p,
+            metodo: p.metodo === 'Efectivo' ? 'Efectivo $' : p.metodo
+          }))
+          setPagos(mappedPagos)
         } else {
           setPagos([{ metodo: 'Por definir', monto: Number(despacho.total_usd) || 0 }])
         }
       } catch {
-        setPagos([{ metodo: despacho.forma_pago || 'Efectivo', monto: Number(despacho.total_usd) || 0 }])
+        const metodoDb = despacho.forma_pago === 'Efectivo' ? 'Efectivo $' : (despacho.forma_pago || 'Efectivo $')
+        setPagos([{ metodo: metodoDb, monto: Number(despacho.total_usd) || 0 }])
       }
     } else {
       setPagos([{ metodo: 'Por definir', monto: Number(despacho.total_usd) || 0 }])

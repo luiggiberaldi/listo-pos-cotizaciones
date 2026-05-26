@@ -465,21 +465,25 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
             const metodosDefinitivos = Array.isArray(f.metodos_pagados) ? f.metodos_pagados : (Array.isArray(f.metodo_propuesto) ? f.metodo_propuesto : []);
             if (metodosDefinitivos.length > 0) {
               metodosDefinitivos.forEach(p => {
-                formasPagoArr.push({ metodo: p.metodo, monto: p.monto })
+                formasPagoArr.push({ metodo: p.metodo === 'Efectivo' ? 'Efectivo $' : p.metodo, monto: p.monto })
               })
             } else {
-              formasPagoArr.push({ metodo: 'Efectivo', monto: f.monto })
+              formasPagoArr.push({ metodo: 'Efectivo $', monto: f.monto })
             }
           } else {
             formasPagoArr.push({ metodo: 'Cobro a destino (COD)', monto: f.monto })
           }
         } else {
-          formasPagoArr.push(f)
+          const metodoNorm = f.metodo === 'Efectivo' ? 'Efectivo $' : f.metodo
+          formasPagoArr.push({ ...f, metodo: metodoNorm })
         }
       })
     }
   } catch {
-    if (fpRaw) formasPagoArr = [{ metodo: fpRaw, monto: null }]
+    if (fpRaw) {
+      const metodoNorm = fpRaw === 'Efectivo' ? 'Efectivo $' : fpRaw
+      formasPagoArr = [{ metodo: metodoNorm, monto: null }]
+    }
   }
 
   // Con un solo método de pago siempre mostrar el total real (incluye flete/corte)
