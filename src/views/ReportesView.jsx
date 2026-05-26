@@ -907,11 +907,14 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
                   });
                 }}
                 disabled={marcar.isPending || pagandoMasivo}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white transition-all duration-200 shadow-md shadow-indigo-600/10 border border-indigo-500/20 active:scale-95 disabled:opacity-50 group font-bold text-xs tracking-wide"
+                className="flex items-center gap-2.5 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white transition-all duration-200 shadow-md shadow-indigo-600/10 border border-indigo-500/20 active:scale-95 disabled:opacity-50 group"
                 title="Pagar solo las comisiones sin incluir cuentas por cobrar"
               >
-                <CreditCard size={14} className="group-hover:scale-110 transition-transform text-white shrink-0" />
-                <span>Pagar Comis. ({fmtUsd(montoSoloPendiente)})</span>
+                <CreditCard size={15} className="group-hover:scale-110 transition-transform text-indigo-200 shrink-0" />
+                <div className="flex flex-col items-start leading-tight">
+                  <span className="font-black text-xs tracking-wide">{fmtUsd(montoSoloPendiente)}</span>
+                  <span className="text-[10px] font-medium text-indigo-200 whitespace-nowrap">Solo comis. <span className="opacity-75">(sin CxC)</span></span>
+                </div>
               </button>
             )}
 
@@ -928,11 +931,14 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
                   });
                 }}
                 disabled={marcar.isPending || pagandoMasivo}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white transition-all duration-200 shadow-md shadow-emerald-600/10 border border-emerald-500/20 active:scale-95 disabled:opacity-50 group font-bold text-xs tracking-wide"
+                className="flex items-center gap-2.5 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white transition-all duration-200 shadow-md shadow-emerald-600/10 border border-emerald-500/20 active:scale-95 disabled:opacity-50 group"
                 title="Pagar todas las comisiones pendientes de este vendedor"
               >
-                <CheckCircle size={14} className="group-hover:scale-110 transition-transform text-white shrink-0" />
-                <span>Pagar Todo ({fmtUsd(montoPendiente)})</span>
+                <CheckCircle size={15} className="group-hover:scale-110 transition-transform text-emerald-200 shrink-0" />
+                <div className="flex flex-col items-start leading-tight">
+                  <span className="font-black text-xs tracking-wide">{fmtUsd(montoPendiente)}</span>
+                  <span className="text-[10px] font-medium text-emerald-200 whitespace-nowrap">Comis. + CxC <span className="opacity-75">(todo)</span></span>
+                </div>
               </button>
             )}
           </div>
