@@ -96,7 +96,7 @@ const TEST = {
   ventaRapida: {
     cantidad: 5,
     precio_unit: 25.00,
-    forma_pago: 'Efectivo',
+    forma_pago: 'Efectivo $',
     total_linea: 125.00,
     total_usd: 125.00,
   },
@@ -173,7 +173,7 @@ const STEPS = [
   // Venta rápida
   { id: 'venta_rapida',                      label: '49. Venta rápida (cotización+despacho atómico)',    group: 'Venta Rápida' },
   { id: 'assert_vr_cotizacion',              label: '50. Assert: cotización aceptada, total=$125',       group: 'Venta Rápida' },
-  { id: 'assert_vr_despacho',                label: '51. Assert: despacho pendiente, pago=Efectivo',     group: 'Venta Rápida' },
+  { id: 'assert_vr_despacho',                label: '51. Assert: despacho pendiente, pago=Efectivo $',   group: 'Venta Rápida' },
   { id: 'assert_stock_post_vr',              label: '52. Assert: stock=105 (110-5)',                     group: 'Venta Rápida' },
   // Anular despacho + reciclar
   { id: 'anular_despacho',                   label: '53. Anular despacho de venta rápida',               group: 'Anulación' },
@@ -1106,7 +1106,7 @@ export default function TesterFlowView() {
       clienteId: d.clienteId,
       transportistaId: d.transportistaTestId,
       fleteUsd: 0,
-      formaPago: 'Efectivo',
+      formaPago: 'Efectivo $',
       formaPagoCliente: '',
       referenciaPago: 'REF-TEST-VR',
       notas: 'Venta rápida determinista',
@@ -1144,8 +1144,8 @@ export default function TesterFlowView() {
     addLog(id, `Raw DB: ${JSON.stringify(des)}`)
     assert(des.estado === 'pendiente', 'pendiente', des.estado, 'estado')
     addLog(id, `  estado = "pendiente" ✓`)
-    assert(des.forma_pago === 'Efectivo', 'Efectivo', des.forma_pago, 'forma_pago')
-    addLog(id, `  forma_pago = "Efectivo" ✓`)
+    assert(des.forma_pago === 'Efectivo $', 'Efectivo $', des.forma_pago, 'forma_pago')
+    addLog(id, `  forma_pago = "Efectivo $" ✓`)
     assert(Number(des.total_usd) === 125.00, 125.00, Number(des.total_usd), 'total_usd')
     addLog(id, `  total_usd = $${des.total_usd} ✓`)
     addLog(id, 'Despacho de venta rápida correcto', 'success')

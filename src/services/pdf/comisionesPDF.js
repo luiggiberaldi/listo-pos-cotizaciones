@@ -389,7 +389,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
     doc.line(MARGIN, yPos + 7, MARGIN + CONTENT_W, yPos + 7)
     
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9.0)
+    doc.setFontSize(8.0)
     doc.setTextColor(80, 90, 110)
     cols.forEach(col => {
       const align = col.align || 'left'
@@ -630,9 +630,16 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
         y += 4.5;
 
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(9.0);
+        doc.setFontSize(8.0);
         doc.setTextColor(80, 90, 100);
-        doc.text(`Subtotal ${vNombre}${suffixSubtotal}:`, MARGIN + 2, y);
+        const rawLabel = `Subtotal ${vNombre}${suffixSubtotal}:`;
+        const maxLabelW = cols[2].x - (MARGIN + 4);
+        let finalLabel = rawLabel;
+        if (doc.getTextWidth(finalLabel) > maxLabelW) {
+          const shortName = vNombre.length > 15 ? vNombre.substring(0, 13) + '..' : vNombre;
+          finalLabel = `Subtotal ${shortName}${suffixSubtotal}:`;
+        }
+        doc.text(finalLabel, MARGIN + 2, y);
 
         doc.setTextColor(...C_DARK);
         if (esDetallado) {
@@ -657,7 +664,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
         if (comisionesNormales.length > 0) {
           y += 4; // Espacio adicional si se dibujan ambas tablas
         }
-        dibujarTablaEspecifica(cuentasCobrar, "Cuentas por Cobrar", " (Cuentas por Cobrar)");
+        dibujarTablaEspecifica(cuentasCobrar, "Cuentas por Cobrar", " (CxC)");
       }
 
       return { totalUsd: totalTotalUsd, cabillaUsd: totalCabillaUsd, otrosUsd: totalOtrosUsd, abonadoUsd: totalAbonadoUsd, totalBs: totalTotalBs };
