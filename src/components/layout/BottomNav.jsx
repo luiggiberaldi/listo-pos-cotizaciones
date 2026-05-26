@@ -18,7 +18,7 @@ const MORE_ITEMS = [
   { path: '/venta-rapida',        label: 'Venta rápida',       icon: Zap,       onlyRoles: ['vendedor', 'vendedor_sin_comision', 'supervisor'] },
   { path: '/orden-compra',        label: 'Orden de Compra',    icon: ShoppingCart, onlyRoles: ['supervisor', 'jefe', 'desarrollador'] },
   { path: '/inventario',          label: 'Inventario',         icon: Package,   excludeRoles: ['logistica'] },
-  { path: '/transportistas',      label: 'Transportistas',     icon: Truck,     excludeRoles: ['administracion', 'logistica'] },
+  { path: '/transportistas',      label: 'Transportistas',     icon: Truck,     excludeRoles: ['logistica'] },
   { path: '/comisiones',          label: 'Comisiones',         icon: DollarSign, excludeRoles: ['logistica', 'administracion'] },
   { path: '/reporte-vendedores',  label: 'Rep. Vendedores',    icon: BarChart2, onlyRoles: ['supervisor', 'jefe', 'desarrollador'] },
   { path: '/reportes',            label: 'Reportes',           icon: BarChart3, onlyRoles: ['administracion', 'desarrollador'] },

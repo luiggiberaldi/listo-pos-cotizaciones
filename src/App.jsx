@@ -216,7 +216,7 @@ function RutaDesarrollador() {
 }
 
 // ─── Ruta que excluye un rol específico ──────────────────────────────────────
-// Administracion y logistica NO pueden ver transportistas
+// Logistica NO puede ver transportistas
 function RutaExcluyeAdmin() {
   const hasUser = useAuthStore(useCallback(s => !!s.user, []))
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
@@ -226,7 +226,7 @@ function RutaExcluyeAdmin() {
   if (!initialized) return <PantallaCarga />
   if (!perfil && hasUser && cargandoPerfil) return <PantallaCarga />
   if (!perfil) return <Navigate to="/login" replace />
-  if (perfil.rol !== 'desarrollador' && perfil.rol !== 'jefe' && (perfil.rol === 'administracion' || perfil.rol === 'logistica')) return <Navigate to="/" replace />
+  if (perfil.rol !== 'desarrollador' && perfil.rol !== 'jefe' && perfil.rol === 'logistica') return <Navigate to="/" replace />
   return <Outlet />
 }
 

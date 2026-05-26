@@ -4,9 +4,10 @@
 // — Supervisor: ve todos los clientes + puede reasignar
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Users, Plus, Search, RefreshCw, X, LayoutGrid, List, Filter, ChevronDown, Check, AlertCircle, Trash2, UserCheck } from 'lucide-react'
+import { Users, Plus, Search, RefreshCw, X, LayoutGrid, List, Filter, ChevronDown, Check, AlertCircle, Trash2, UserCheck, FileText, Printer } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { useClientes, useVendedores, useBorrarCliente, useActivarCliente } from '../hooks/useClientes'
+import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import ClienteCard       from '../components/clientes/ClienteCard'
 import ClienteRow        from '../components/clientes/ClienteRow'
 import ClienteForm       from '../components/clientes/ClienteForm'
@@ -136,6 +137,25 @@ export default function ClientesView() {
   const { data: vendedores = [] } = useVendedores()
   const borrarCliente = useBorrarCliente()
   const activarCliente = useActivarCliente()
+  const { data: config = {} } = useConfigNegocio()
+  const [exportandoPDF, setExportandoPDF] = useState(false)
+  const [imprimiendoPDF, setImprimiendoPDF] = useState(false)
+
+  async function exportarClientesPDF(accion = 'download') {
+    if (accion === 'print') setImprimiendoPDF(true)
+    else setExportandoPDF(true)
+    try {
+      const { generarClientesPDF } = await import('../services/pdf/clientesPDF')
+      await generarClientesPDF({ items: clientesFiltrados, config, action: accion })
+    } catch (err) {
+      import('../components/ui/Toast').then(({ showToast }) =>
+        showToast('Error al generar el PDF: ' + err.message, 'error')
+      )
+    } finally {
+      setExportandoPDF(false)
+      setImprimiendoPDF(false)
+    }
+  }
 
   // Filtrado local y ordenamiento (clientes con deuda primero)
   const clientesFiltrados = useMemo(() => {
@@ -281,12 +301,36 @@ export default function ClientesView() {
         icon={Users}
         title="Clientes"
         subtitle={isLoading ? 'Cargando...' : `${clientesFiltrados.length} cliente${clientesFiltrados.length !== 1 ? 's' : ''}`}
-        action={!esAdministracion && (
-          <button onClick={abrirCrear} className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98]"
-            style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
-            <Plus size={16} />Nuevo cliente
-          </button>
-        )}
+        action={
+          <div className="flex items-center gap-2">
+            {(perfil?.rol === 'administracion' || perfil?.rol === 'jefe' || perfil?.rol === 'desarrollador') && (
+              <>
+                <button 
+                  onClick={() => exportarClientesPDF('print')} 
+                  disabled={imprimiendoPDF || exportandoPDF || isLoading}
+                  className="flex items-center gap-2 bg-slate-700 hover:bg-slate-800 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50"
+                >
+                  <Printer size={16} />
+                  {imprimiendoPDF ? 'Imprimiendo...' : 'Imprimir'}
+                </button>
+                <button 
+                  onClick={() => exportarClientesPDF('download')} 
+                  disabled={imprimiendoPDF || exportandoPDF || isLoading}
+                  className="flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50"
+                >
+                  <FileText size={16} />
+                  {exportandoPDF ? 'Generando...' : 'Descargar PDF'}
+                </button>
+              </>
+            )}
+            {!esAdministracion && (
+              <button onClick={abrirCrear} className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98]"
+                style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
+                <Plus size={16} />Nuevo cliente
+              </button>
+            )}
+          </div>
+        }
       />
 
       {/* ── Barra de búsqueda ──────────────────────────────────────────────── */}

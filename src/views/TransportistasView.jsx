@@ -1,8 +1,9 @@
 // src/views/TransportistasView.jsx
 // Gestión de transportistas — solo supervisores pueden crear/editar/desactivar
 import { useState, useMemo, useCallback, useEffect } from 'react'
-import { Truck, Plus, Pencil, Ban, RefreshCw, ChevronLeft, ChevronRight, MapPin, Scale } from 'lucide-react'
+import { Truck, Plus, Pencil, Ban, RefreshCw, ChevronLeft, ChevronRight, MapPin, Scale, FileText, Printer } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
+import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import {
   useTransportistas,
   useCrearTransportista,
@@ -317,6 +318,25 @@ export default function TransportistasView() {
   const { data: transportistas = [], isLoading, isError, refetch } =
     useTransportistas({ soloActivos: true })
   const desactivar = useDesactivarTransportista()
+  const { data: config = {} } = useConfigNegocio()
+  const [exportandoPDF, setExportandoPDF] = useState(false)
+  const [imprimiendoPDF, setImprimiendoPDF] = useState(false)
+
+  async function exportarTransportistasPDF(accion = 'download') {
+    if (accion === 'print') setImprimiendoPDF(true)
+    else setExportandoPDF(true)
+    try {
+      const { generarTransportistasPDF } = await import('../services/pdf/transportistasPDF')
+      await generarTransportistasPDF({ items: transportistasFiltrados, config, action: accion })
+    } catch (err) {
+      import('../components/ui/Toast').then(({ showToast }) =>
+        showToast('Error al generar el PDF: ' + err.message, 'error')
+      )
+    } finally {
+      setExportandoPDF(false)
+      setImprimiendoPDF(false)
+    }
+  }
 
   function abrirNuevo() { setEditando(null); setModalAbierto(true) }
   function abrirEditar(t) { setEditando(t); setModalAbierto(true) }
@@ -396,7 +416,27 @@ export default function TransportistasView() {
               <button onClick={() => refetch()} className="p-2 rounded-xl transition-colors text-slate-400 hover:text-slate-700 hover:bg-slate-100">
                 <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
               </button>
-              {puedeCrear && (
+              {(perfil?.rol === 'administracion' || perfil?.rol === 'jefe' || perfil?.rol === 'desarrollador') && (
+                <>
+                  <button 
+                    onClick={() => exportarTransportistasPDF('print')}
+                    disabled={imprimiendoPDF || exportandoPDF || isLoading}
+                    className="flex items-center gap-2 bg-slate-700 hover:bg-slate-800 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 whitespace-nowrap"
+                  >
+                    <Printer size={16} />
+                    {imprimiendoPDF ? 'Imprimiendo...' : 'Imprimir'}
+                  </button>
+                  <button 
+                    onClick={() => exportarTransportistasPDF('download')}
+                    disabled={imprimiendoPDF || exportandoPDF || isLoading}
+                    className="flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 whitespace-nowrap"
+                  >
+                    <FileText size={16} />
+                    {exportandoPDF ? 'Generando...' : 'Descargar PDF'}
+                  </button>
+                </>
+              )}
+              {puedeCrear && perfil?.rol !== 'administracion' && (
                 <button onClick={abrirNuevo} className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98] whitespace-nowrap"
                   style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
                   <Plus size={16} />Nuevo
