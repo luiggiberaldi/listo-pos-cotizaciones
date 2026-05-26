@@ -208,22 +208,22 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, onBorra
                 <div className="grid grid-cols-2 gap-1.5 mt-2">
                   {/* Bs — precio en bolívares (tasa USDT/mercado) */}
                   <div className="flex flex-col rounded-lg bg-emerald-50/70 border border-emerald-100 p-1.5 text-center min-w-0">
-                    <span className="inline-flex items-center justify-center gap-0.5 text-[8px] font-bold text-emerald-700 uppercase tracking-wider">
-                      <Zap size={9} />
+                    <span className="inline-flex items-center justify-center gap-0.5 text-[10px] font-bold text-emerald-700 uppercase tracking-wider">
+                      <Zap size={10} />
                       Bs
                     </span>
-                    <span className="text-[10px] font-extrabold text-emerald-900 mt-0.5 truncate">
+                    <span className="text-[12px] font-extrabold text-emerald-900 mt-0.5 truncate">
                       {precioBs != null ? fmtBs(precioBs) : '—'}
                     </span>
                   </div>
 
                   {/* BCV — equivalente USD al factor BCV */}
                   <div className="flex flex-col rounded-lg bg-blue-50/70 border border-blue-100 p-1.5 text-center min-w-0">
-                    <span className="inline-flex items-center justify-center gap-0.5 text-[8px] font-bold text-blue-700 uppercase tracking-wider">
-                      <Building2 size={9} />
+                    <span className="inline-flex items-center justify-center gap-0.5 text-[10px] font-bold text-blue-700 uppercase tracking-wider">
+                      <Building2 size={10} />
                       BCV
                     </span>
-                    <span className="text-[10px] font-extrabold text-blue-900 mt-0.5 truncate">
+                    <span className="text-[12px] font-extrabold text-blue-900 mt-0.5 truncate">
                       {tasaBcv?.precio > 0 && tasaEfectiva > 0 ? fmtUsd(precioBcvUsd) : '—'}
                     </span>
                   </div>

@@ -556,7 +556,6 @@ export default function VentaRapidaView() {
       if (!next) {
         resetPropuestaCod();
       } else {
-        resetPagosInmediatos();
         resetPropuestaCod();
       }
       return next;
@@ -1879,10 +1878,10 @@ function Step2Pago({
               </div>
 
               {/* Chips para agregar métodos de pago inmediato */}
-              {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && (!esCod || m !== 'Cta por cobrar'))
+              {FORMAS_PAGO.filter(m => m !== 'Cobro a destino')
                 .some(m => !pagosInmediatos.some(f => f.metodo === m)) && (
                 <div className="flex flex-wrap gap-2">
-                  {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && (!esCod || m !== 'Cta por cobrar'))
+                  {FORMAS_PAGO.filter(m => m !== 'Cobro a destino')
                     .filter(m => !pagosInmediatos.some(f => f.metodo === m))
                     .map(m => (
                       <button key={m} type="button" onClick={() => togglePagoInmediato(m)}

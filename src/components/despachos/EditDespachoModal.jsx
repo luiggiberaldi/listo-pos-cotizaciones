@@ -112,7 +112,6 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
       if (!next) {
         resetPropuestaCod();
       } else {
-        resetPagosInmediatos();
         resetPropuestaCod();
       }
       return next;
@@ -376,6 +375,13 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
                             </button>
                           )}
                         </div>
+                        <button type="button"
+                          onClick={() => togglePagoInmediato(fp.metodo)}
+                          disabled={cargando}
+                          className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                          title="Eliminar forma de pago">
+                          <X size={15} />
+                        </button>
                       </div>
                       {fp.metodo === 'Cta por cobrar' && (
                         <div className="flex items-center gap-2 pl-28">
@@ -400,10 +406,10 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
               </div>
 
               {/* Chips para agregar métodos inmediatos */}
-              {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && (!esCod || m !== 'Cta por cobrar'))
+              {FORMAS_PAGO.filter(m => m !== 'Cobro a destino')
                 .some(m => !pagosInmediatos.some(f => f.metodo === m)) && (
                 <div className="flex flex-wrap gap-2">
-                  {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && (!esCod || m !== 'Cta por cobrar'))
+                  {FORMAS_PAGO.filter(m => m !== 'Cobro a destino')
                     .filter(m => !pagosInmediatos.some(f => f.metodo === m))
                     .map(m => (
                       <button key={m} type="button"
@@ -485,6 +491,13 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
                                   </button>
                                 )}
                               </div>
+                              <button type="button"
+                                onClick={() => togglePropuestaCod(fp.metodo)}
+                                disabled={cargando}
+                                className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                                title="Eliminar propuesta">
+                                <X size={15} />
+                              </button>
                             </div>
                           </div>
                         );

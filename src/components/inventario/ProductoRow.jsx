@@ -115,13 +115,13 @@ export default function ProductoRow({ producto, onEditar, onDesactivar, onBorrar
               ? usdToBs(precioDisplay, tasaEfectiva)
               : null
             return (
-              <div className="flex items-center gap-1 justify-end text-[9px] font-bold">
+              <div className="flex items-center gap-1 justify-end text-[11px] font-bold">
                 <span className="inline-flex items-center gap-0.5 px-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-100" title="Precio en Bolívares">
-                  <Zap size={8} />
+                  <Zap size={9.5} />
                   {precioBs != null ? fmtBs(precioBs) : '—'}
                 </span>
                 <span className="inline-flex items-center gap-0.5 px-1 rounded bg-blue-50 text-blue-700 border border-blue-100" title="Equivalente USD a tasa BCV">
-                  <Building2 size={8} />
+                  <Building2 size={9.5} />
                   {tasaBcv?.precio > 0 && tasaEfectiva > 0 ? fmtUsd(precioBcvUsd) : '—'}
                 </span>
               </div>
