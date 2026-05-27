@@ -32,10 +32,15 @@ function corregirCategoriaCruzada(categoriaActual, nombre) {
   const n = (nombre || '').toUpperCase()
   const c = (categoriaActual || '').toUpperCase().trim()
 
+  if (c.startsWith('LAMINA')) {
+    return 'LAMINAS'
+  }
+
   // Definir palabras clave para detectar inconsistencias
   const reglas = [
     // 1. PRODUCTOS PRINCIPALES (Alta prioridad)
     { key: 'LAMINA', target: 'LAMINAS' },
+    { key: 'LOSACERO', target: 'LAMINAS' },
     { key: 'VIGA', target: 'VIGAS' },
     { key: 'PERFIL MARCO', target: 'PERFILES PARA MARCOS' },
     { key: 'ANGULO', target: 'PERFILES ANGULOS' },
@@ -110,9 +115,77 @@ function corregirCategoriaCruzada(categoriaActual, nombre) {
   return categoriaActual
 }
 
-function obtenerSubcategoria(nombre) {
+function obtenerSubcategoria(nombre, cat) {
   if (!nombre) return 'OTROS'
   const n = nombre.toUpperCase().trim()
+
+  if (cat === 'LAMINAS') {
+    if (n.includes('LOSACERO')) {
+      return 'LOSACERO (LOSA ESTRUCTURAL)'
+    }
+    if (n.includes(' HN') || n.includes('HN ') || n.includes('HIERRO NEGRO') || n.startsWith('HN')) {
+      return 'LÁMINAS DE HIERRO NEGRO (HN)'
+    }
+    if (n.includes(' HP') || n.includes('HP ') || n.includes('HIERRO PULIDO') || n.startsWith('HP')) {
+      return 'LÁMINAS DE HIERRO PULIDO (HP)'
+    }
+    if (n.includes('EST.') || n.includes('ESTRIADA') || n.includes('ESTRIADO')) {
+      return 'LÁMINAS ESTRIADAS'
+    }
+    if (n.includes('GALV. LISA') || n.includes('GALV LISA') || n.includes('GALVANIZADA LISA')) {
+      return 'LÁMINAS GALVANIZADAS LISAS'
+    }
+    if (n.includes('PREPINTADO')) {
+      return 'LÁMINAS PREPINTADAS'
+    }
+    if (n.includes('ZINC')) {
+      return 'LÁMINAS DE ZINC'
+    }
+    if (n.includes('TERMOPANEL')) {
+      return 'LÁMINAS TERMOPANEL'
+    }
+    if (n.includes('ARQUITECTONICA')) {
+      return 'LÁMINAS ARQUITECTÓNICAS'
+    }
+    if (n.includes('CUMBRERA') || n.includes('CABALLETE') || n.includes('REMATE')) {
+      return 'ACCESORIOS PARA TECHO'
+    }
+    const keywordsTecho = [
+      'GALVATECHO', 'ACEROLIT', 'TEJAS', 'TEJA'
+    ]
+    if (keywordsTecho.some(key => n.includes(key))) {
+      return 'LÁMINAS PARA TECHO'
+    }
+    return 'OTROS'
+  }
+
+  if (cat === 'VIGAS') {
+    if (n.includes('WF')) {
+      return 'VIGAS WF'
+    }
+    if (n.includes('IPE')) {
+      return 'VIGAS IPE'
+    }
+    if (n.includes('IPN')) {
+      return 'VIGAS IPN'
+    }
+    if (n.includes('HEA')) {
+      return 'VIGAS HEA'
+    }
+    if (n.includes('HEB')) {
+      return 'VIGAS HEB'
+    }
+    if (n.includes('UPL')) {
+      return 'VIGAS UPL'
+    }
+    if (n.includes('UPN')) {
+      return 'VIGAS UPN'
+    }
+    if (n.includes('VP')) {
+      return 'VIGAS VP'
+    }
+    return 'OTROS'
+  }
 
   // Detección de abreviaturas comunes de ferretería para tornillería
   if (n.startsWith('TOR ') || n.includes(' TOR ') || n.includes('TORNILLO')) {
@@ -156,7 +229,6 @@ function obtenerSubcategoria(nombre) {
     { key: 'BREAKER', label: 'BREAKERS' },
     { key: 'CAJETIN', label: 'CAJETINES' },
     { key: 'TABLERO', label: 'TABLEROS' },
-    { key: 'LOTE', label: 'LOTES' },
     { key: 'MARCO', label: 'MARCOS' }
   ]
   
@@ -512,7 +584,7 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
     // 1. Agrupar items de la categoría por subcategoría
     const subgrupos = {}
     items.forEach(p => {
-      const sub = obtenerSubcategoria(p.nombre)
+      const sub = obtenerSubcategoria(p.nombre, cat)
       if (!subgrupos[sub]) subgrupos[sub] = []
       subgrupos[sub].push(p)
     })
@@ -520,6 +592,47 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
     const subcats = Object.keys(subgrupos).sort((a, b) => {
       if (a === 'OTROS') return 1
       if (b === 'OTROS') return -1
+      if (cat === 'LAMINAS') {
+        const order = [
+          'LÁMINAS DE HIERRO PULIDO (HP)',
+          'LÁMINAS DE HIERRO NEGRO (HN)',
+          'LÁMINAS ESTRIADAS',
+          'LÁMINAS GALVANIZADAS LISAS',
+          'LOSACERO (LOSA ESTRUCTURAL)',
+          'LÁMINAS DE ZINC',
+          'LÁMINAS PREPINTADAS',
+          'LÁMINAS TERMOPANEL',
+          'LÁMINAS ARQUITECTÓNICAS',
+          'LÁMINAS PARA TECHO',
+          'ACCESORIOS PARA TECHO'
+        ]
+        const indexA = order.indexOf(a)
+        const indexB = order.indexOf(b)
+        if (indexA !== -1 && indexB !== -1) {
+          return indexA - indexB
+        }
+        if (indexA !== -1) return -1
+        if (indexB !== -1) return 1
+      }
+      if (cat === 'VIGAS') {
+        const order = [
+          'VIGAS IPE',
+          'VIGAS WF',
+          'VIGAS IPN',
+          'VIGAS HEA',
+          'VIGAS HEB',
+          'VIGAS UPL',
+          'VIGAS UPN',
+          'VIGAS VP'
+        ]
+        const indexA = order.indexOf(a)
+        const indexB = order.indexOf(b)
+        if (indexA !== -1 && indexB !== -1) {
+          return indexA - indexB
+        }
+        if (indexA !== -1) return -1
+        if (indexB !== -1) return 1
+      }
       return a.localeCompare(b)
     })
     const catIndex = categoriasOrdenadas.indexOf(cat) + 1
