@@ -197,8 +197,13 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           const itemsFiltrados = (data ?? []).filter(it => {
             const esCorte = it.nombre_snap?.toLowerCase().includes('corte') || it.codigo_snap?.toUpperCase().startsWith('CRT')
             const esFlete = it.nombre_snap?.toLowerCase().includes('flete') || it.codigo_snap?.toUpperCase().startsWith('FTL')
+            if (esCorte || esFlete) return false
+            
+            // Si el item es un préstamo o el despacho en general maneja préstamos, conservamos el material real
+            if (it.es_prestamo || tienePrestamos) return true
+            
             const esExterno = !it.producto_id || String(it.producto_id).startsWith('manual-') || String(it.codigo_snap).startsWith('EXT')
-            return !esCorte && !esFlete && !esExterno
+            return !esExterno
           })
           
           // Aplicar fallback si el despacho tiene_prestamos pero ningún item tiene es_prestamo = true
@@ -1263,7 +1268,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
                               : 'Este despacho contiene los siguientes materiales en préstamo:'
                             }
                           </p>
-                          <div className="flex flex-wrap gap-1 mt-1">
+                          <div className="flex flex-wrap gap-1 mt-1 max-h-24 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-200/60">
                             {itemsPrestamo.map((it, idx) => (
                               <span key={idx} className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 text-[9px] font-bold px-1.5 py-0.5 rounded">
                                 <Handshake size={8} /> {it.nombre_snap} ({it.cantidad} {it.unidad_snap || 'und'})
@@ -1322,23 +1327,35 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
                   </div>
 
                   <div className="w-full text-left bg-slate-50 p-3 rounded-xl text-sm border border-slate-200 mt-2 shadow-sm">
-                    <h4 className="font-bold text-slate-700 border-b border-slate-200 pb-1.5 mb-2">Advertencias antes de entregar</h4>
+                    <h4 className="font-bold text-slate-700 border-b border-slate-200 pb-1.5 mb-2">
+                      Advertencias antes de {accionPendiente?.estado === 'despachada' ? 'aprobar' : 'entregar'}
+                    </h4>
                     <div className="space-y-2 text-xs">
-                      <div className="flex items-start gap-2">
-                        <PackageCheck size={14} className="text-amber-500 shrink-0 mt-0.5" />
-                        <p className="text-slate-600"><strong>Inventario:</strong> Los productos se descontarán definitivamente del stock.</p>
-                      </div>
+                      {accionPendiente?.estado === 'entregada' && (
+                        <div className="flex items-start gap-2">
+                          <PackageCheck size={14} className="text-amber-500 shrink-0 mt-0.5" />
+                          <p className="text-slate-600"><strong>Inventario:</strong> Los productos se descontarán definitivamente del stock.</p>
+                        </div>
+                      )}
+                      {accionPendiente?.estado === 'despachada' && (
+                        <div className="flex items-start gap-2">
+                          <PackageCheck size={14} className="text-blue-500 shrink-0 mt-0.5" />
+                          <p className="text-slate-600"><strong>Estado:</strong> El despacho se marcará como aprobado y listo para entregar.</p>
+                        </div>
+                      )}
                       <div className="flex items-start gap-2">
                         <DollarSign size={14} className="text-emerald-500 shrink-0 mt-0.5" />
                         <p className="text-slate-600"><strong>Comisiones:</strong> La comisión del vendedor se consolidará para pago.</p>
                       </div>
                       <div className="flex items-start gap-2">
                         <AlertTriangle size={14} className="text-red-500 shrink-0 mt-0.5" />
-                        <p className="text-slate-600"><strong>Irreversible:</strong> No se podrán hacer cambios después de entregar.</p>
+                        <p className="text-slate-600"><strong>Irreversible:</strong> No se podrán hacer cambios después de {accionPendiente?.estado === 'despachada' ? 'aprobar' : 'entregar'}.</p>
                       </div>
                     </div>
                     
-                    <h4 className="font-bold text-slate-700 border-b border-slate-200 pb-1.5 mb-2 mt-4">Productos a Descontar</h4>
+                    <h4 className="font-bold text-slate-700 border-b border-slate-200 pb-1.5 mb-2 mt-4">
+                      {accionPendiente?.estado === 'despachada' ? 'Productos a Despachar' : 'Productos a Descontar'}
+                    </h4>
                     {loadingItems ? (
                       <p className="text-xs text-slate-400">Cargando ítems...</p>
                     ) : (

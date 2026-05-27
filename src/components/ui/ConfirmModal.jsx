@@ -74,7 +74,7 @@ export default function ConfirmModal({
       className="fixed inset-0 z-[200] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200 pb-[env(safe-area-inset-bottom)]"
       onClick={onClose}>
       <div
-        className="relative bg-white rounded-[1.5rem] max-w-[calc(100vw-1.5rem)] sm:max-w-sm w-full shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
+        className="relative bg-white rounded-[1.5rem] max-w-[calc(100vw-1.5rem)] sm:max-w-sm w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
         onClick={e => e.stopPropagation()}>
 
         {/* Color strip top */}
@@ -113,8 +113,8 @@ export default function ConfirmModal({
           </button>
         </div>
 
-        {/* Content */}
-        <div className="px-6 pt-5 pb-6">
+        {/* Content (Scrollable) */}
+        <div className="flex-1 overflow-y-auto min-h-0 px-6 pt-5 pb-4 scrollbar-thin scrollbar-thumb-slate-200">
           <h3 className="text-lg font-black text-slate-800 text-center mb-2">{title}</h3>
 
           {message && (
@@ -124,30 +124,28 @@ export default function ConfirmModal({
           )}
 
           {details && (
-            <p className="text-xs text-slate-400 text-center leading-relaxed mb-4">{details}</p>
+            <p className="text-xs text-slate-400 text-center leading-relaxed mb-2">{details}</p>
           )}
+        </div>
 
-          {!details && message && <div className="mb-4" />}
-
-          {/* Actions */}
-          <div className="flex gap-3">
-            <button
-              onClick={onClose}
-              disabled={loading}
-              className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors border border-slate-100 disabled:opacity-50">
-              {cancelText}
-            </button>
-            <button
-              onClick={handleConfirm}
-              disabled={loading}
-              className="flex-1 h-11 text-sm font-bold text-white rounded-xl active:scale-95 transition-all disabled:opacity-70 flex items-center justify-center"
-              style={v.btnStyle}>
-              {loading
-                ? <Loader2 size={18} className="animate-spin" />
-                : <span className="px-2 text-center leading-snug">{confirmText}</span>
-              }
-            </button>
-          </div>
+        {/* Footer Actions (Sticky at bottom) */}
+        <div className="shrink-0 p-6 pt-4 border-t border-slate-100 bg-slate-50/30 flex gap-3">
+          <button
+            onClick={onClose}
+            disabled={loading}
+            className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors border border-slate-100 disabled:opacity-50">
+            {cancelText}
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={loading}
+            className="flex-1 h-11 text-sm font-bold text-white rounded-xl active:scale-95 transition-all disabled:opacity-70 flex items-center justify-center"
+            style={v.btnStyle}>
+            {loading
+              ? <Loader2 size={18} className="animate-spin" />
+              : <span className="px-2 text-center leading-snug">{confirmText}</span>
+            }
+          </button>
         </div>
       </div>
     </div>
