@@ -634,8 +634,11 @@ export async function handleVentaRapida(request, env) {
     const [cot] = await cotRes.json();
     console.log('[VR] Cotización created:', cot?.id, cot?.numero);
 
-    // 4. Insert cotización items
-    const ciRows = cotItems.map(it => ({ ...it, cotizacion_id: cot.id }));
+    // 4. Insert cotización items (omitir es_prestamo ya que la tabla cotizacion_items no posee esta columna)
+    const ciRows = cotItems.map(it => {
+      const { es_prestamo, ...rest } = it;
+      return { ...rest, cotizacion_id: cot.id };
+    });
     console.log('[VR] Inserting items:', ciRows.length);
     const ciRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizacion_items`, {
       method: 'POST', headers,
