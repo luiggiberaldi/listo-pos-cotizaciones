@@ -104,7 +104,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
                   processedFormas.push({ metodo: 'Efectivo $', monto: Number(f.monto) || 0 })
                 }
               } else {
-                processedFormas.push({ metodo: 'Cta por cobrar', monto: Number(f.monto) || 0 })
+                processedFormas.push({ metodo: 'Cobro a destino', monto: Number(f.monto) || 0 })
               }
             } else {
               const metodoNorm = f.metodo === 'Efectivo' ? 'Efectivo $' : (f.metodo || 'Sin especificar')

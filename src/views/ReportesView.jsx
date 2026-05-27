@@ -97,7 +97,8 @@ function FormaPagoSection({ data = [], kpis }) {
   const total = data.reduce((s, fp) => s + fp.totalUsd, 0)
 
   const fpCxc = data.find(fp => fp.formaPago === 'Cta por cobrar')
-  const totalCxc = fpCxc ? fpCxc.totalUsd : 0
+  const fpCod = data.find(fp => fp.formaPago === 'Cobro a destino')
+  const totalCxc = (fpCxc ? fpCxc.totalUsd : 0) + (fpCod ? fpCod.totalUsd : 0)
   const fpDonacion = data.find(fp => fp.formaPago === 'Donación')
   const totalDonacion = fpDonacion ? fpDonacion.totalUsd : 0
   const totalDeducciones = totalCxc + totalDonacion
@@ -195,7 +196,7 @@ function FormaPagoSection({ data = [], kpis }) {
               <div className="pt-1.5 border-t border-slate-200/60 mt-1.5 space-y-1.5">
                 {totalCxc > 0 && (
                   <div className="flex justify-between items-center text-slate-500">
-                    <span>Cuentas por Cobrar (CxC)</span>
+                    <span>CxC y COD Pendientes</span>
                     <span className="font-bold text-red-500">-{fmtUsd(totalCxc)}</span>
                   </div>
                 )}

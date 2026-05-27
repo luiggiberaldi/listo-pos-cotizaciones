@@ -1376,7 +1376,8 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
 
     // Bloque de Desglose de Flete / Diferencia
     const fpCxc = porFormaPago.find(fp => fp.formaPago === 'Cta por cobrar');
-    const totalCxC = fpCxc ? fpCxc.totalUsd : 0;
+    const fpCod = porFormaPago.find(fp => fp.formaPago === 'Cobro a destino');
+    const totalCxC = (fpCxc ? fpCxc.totalUsd : 0) + (fpCod ? fpCod.totalUsd : 0);
     const ventasSinCxc = (kpis.totalVentas || 0) - totalCxC;
     const tieneCxC = totalCxC > 0;
     const boxH = tieneCxC ? 21 : 14;
@@ -1446,7 +1447,7 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
     if (tieneCxC) {
       let curX2 = MARGIN + 3.5;
       
-      const lblCxC = 'Cuentas por Cobrar (CxC): ';
+      const lblCxC = 'CxC y COD Pendientes: ';
       doc.setFont('helvetica', 'normal')
       doc.text(lblCxC, curX2, y + 16.5)
       curX2 += doc.getTextWidth(lblCxC)
