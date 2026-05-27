@@ -300,10 +300,8 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   const isLargeDoc = itemsToRender.length >= 23
 
   itemsToRender.forEach((item) => {
-    // Calcular cuántas líneas necesita la descripción
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(9)
-    const descLines = doc.splitTextToSize(item.nombre_snap || '', COLS[2].w - 4)
+    const baseNombre = item.es_prestamo ? `${item.nombre_snap || ''} (PRÉSTAMO)` : (item.nombre_snap || '')
+    const descLines = doc.splitTextToSize(baseNombre.toUpperCase(), COLS[2].w - 4)
     const lineH = 4.0
     const ROW_H = Math.max(ROW_H_BASE, descLines.length * lineH + 2)
 

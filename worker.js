@@ -14,7 +14,7 @@ import { verifyAuth, getOperatorRole, verifySupervisor, verifyPrivileged, valida
 import { groqFetch, groqCounters } from './api/lib/groq.js'
 import { logToSystem, registrarAuditoria } from './api/lib/audit.js'
 import { sendWebPush } from './api/lib/webpush.js'
-import { handleListarClientes, handleCheckRif, handleClientesLookup, handleReasignarCliente, handleReasignarClientesBulk, handleCrearCliente, handleActualizarCliente, handleBorrarCliente, handleActivarCliente } from './api/handlers/clientes.js'
+import { handleListarClientes, handleCheckRif, handleClientesLookup, handleReasignarCliente, handleReasignarClientesBulk, handleCrearCliente, handleActualizarCliente, handleBorrarCliente, handleActivarCliente, handleGetPrestamosCliente, handleDevolverPrestamo, handleFacturarPrestamo } from './api/handlers/clientes.js'
 import { handlePush } from './api/handlers/push.js'
 import { handleLogFromClient, handleGetLogs, handleGetLogStats, handleDownloadLogs, handleAnalyzeLogs, handlePurgeLogs } from './api/handlers/logs.js'
 import { handleGetAudit, handleGetAuditStats, handleAnalyzeAudit } from './api/handlers/audit.js'
@@ -78,6 +78,21 @@ export default {
     // ── API: lookup clientes por IDs (bypass RLS para vendedores) ──────────
     if (url.pathname === '/api/clientes/lookup' && request.method === 'POST') {
       return handleClientesLookup(request, env);
+    }
+
+    // ── API: obtener préstamos del cliente ────────────────────────────────
+    if (url.pathname === '/api/clientes/prestamos' && request.method === 'GET') {
+      return handleGetPrestamosCliente(request, env);
+    }
+
+    // ── API: registrar devolución de préstamo ─────────────────────────────
+    if (url.pathname === '/api/clientes/prestamos/devolver' && request.method === 'POST') {
+      return handleDevolverPrestamo(request, env);
+    }
+
+    // ── API: facturar préstamo (convertir a venta) ────────────────────────
+    if (url.pathname === '/api/clientes/prestamos/facturar' && request.method === 'POST') {
+      return handleFacturarPrestamo(request, env);
     }
 
     // ── API: guardar cotización (bypass RLS para clientes ajenos) ─────────

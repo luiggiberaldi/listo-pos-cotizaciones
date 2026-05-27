@@ -1,7 +1,7 @@
 // src/components/inventario/ProductoRow.jsx
 // Fila compacta de producto para vista de lista
 import { useState } from 'react'
-import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle, Package, Trash2, ClipboardList, Eye, Building2, Zap } from 'lucide-react'
+import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle, Package, Trash2, ClipboardList, Eye, Building2, Zap, Copy } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import { usePrecioVendedor } from '../../hooks/usePrecioVendedor'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
@@ -27,7 +27,7 @@ function colorCategoria(str = '') {
   return fg
 }
 
-export default function ProductoRow({ producto, onEditar, onDesactivar, onBorrar, onKardex, onDetalle, tasa = 0, comprometido = 0 }) {
+export default function ProductoRow({ producto, onEditar, onClonar, onDesactivar, onBorrar, onKardex, onDetalle, tasa = 0, comprometido = 0 }) {
   const { perfil } = useAuthStore()
   const [copiado, setCopiado] = useState(false)
   const { tasaBcv, tasaUsdt, tasaEfectiva } = useTasaCambio()
@@ -177,6 +177,10 @@ export default function ProductoRow({ producto, onEditar, onDesactivar, onBorrar
                 <button onClick={() => onEditar(producto)} title="Editar producto"
                   className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-light transition-colors">
                   <Pencil size={15} />
+                </button>
+                <button onClick={() => onClonar?.(producto)} title="Crear producto similar"
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors">
+                  <Copy size={15} />
                 </button>
                 <button onClick={() => onDesactivar(producto)} title="Desactivar producto"
                   className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 transition-colors">

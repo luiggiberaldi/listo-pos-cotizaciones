@@ -63,7 +63,7 @@ export default function ConciliarCodModal({ isOpen, onClose, despacho }) {
   const difference = totalReconciled - totalCod
   const isSquare = Math.abs(difference) < 0.02
 
-  const allowedMethods = FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && m !== 'Cta por cobrar')
+  const allowedMethods = FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && m !== 'Cta por cobrar' && m !== 'Donación')
 
   function toggleForma(metodo) {
     setPayments(prev => {

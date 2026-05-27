@@ -239,16 +239,22 @@ export default function DespachosView() {
 
     // Ordenar:
     // 1. Los anulados siempre de último ("los anulados de ultimo")
-    // 2. Por fecha de actualización descendente (lo más nuevo arriba)
+    // 2. Por correlativos descendente (lo más nuevo arriba) si es "Todos", o por fecha de actualización descendente
     lista = [...lista].sort((a, b) => {
       const isAnuladoA = a.estado === 'anulada'
       const isAnuladoB = b.estado === 'anulada'
       if (isAnuladoA && !isAnuladoB) return 1
       if (!isAnuladoA && isAnuladoB) return -1
       
-      const dateA = new Date(a.actualizado_en || a.creado_en || 0).getTime()
-      const dateB = new Date(b.actualizado_en || b.creado_en || 0).getTime()
-      return dateB - dateA
+      if (estadoFiltro === '') {
+        const numA = Number(a.numero || 0)
+        const numB = Number(b.numero || 0)
+        return numB - numA
+      } else {
+        const dateA = new Date(a.actualizado_en || a.creado_en || 0).getTime()
+        const dateB = new Date(b.actualizado_en || b.creado_en || 0).getTime()
+        return dateB - dateA
+      }
     })
     if (busquedaGlobal) {
       const q = busquedaGlobal.toLowerCase()

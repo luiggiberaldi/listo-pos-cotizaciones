@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, memo, Fragment } from 'react'
-import { FileText, Calendar, Truck, CheckCircle, Ban, RefreshCcw, RefreshCw, Download, Loader2, Eye, MoreHorizontal, MoreVertical, ChevronDown, Printer, Tag, Pencil, RotateCcw, AlertTriangle, Clock, CreditCard, DollarSign, Check, PackageCheck, Mail } from 'lucide-react'
+import { FileText, Calendar, Truck, CheckCircle, Ban, RefreshCcw, RefreshCw, Download, Loader2, Eye, MoreHorizontal, MoreVertical, ChevronDown, Printer, Tag, Pencil, RotateCcw, AlertTriangle, Clock, CreditCard, DollarSign, Check, PackageCheck, Mail, Handshake } from 'lucide-react'
 import EstadoBadge from '../cotizaciones/EstadoBadge'
 import MobileActionSheet from '../cotizaciones/MobileActionSheet'
 import ConfirmModal from '../ui/ConfirmModal'
@@ -108,6 +108,18 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     }
   }, [despacho.estado, accionPendiente])
 
+  let tienePrestamos = !!despacho.tiene_prestamos
+  try {
+    const fp = typeof despacho.forma_pago === 'string' ? JSON.parse(despacho.forma_pago) : (despacho.forma_pago || [])
+    if (Array.isArray(fp) && fp.some(f => f.metodo === 'Préstamo' || f.metodo === 'Prestamo')) {
+      tienePrestamos = true
+    }
+  } catch (e) {
+    if (typeof despacho.forma_pago === 'string' && (despacho.forma_pago === 'Préstamo' || despacho.forma_pago === 'Prestamo')) {
+      tienePrestamos = true
+    }
+  }
+
   // Verificar stock insuficiente para Admin
   const [itemsFaltantes, setItemsFaltantes] = useState([])
   const [comisionEst, setComisionEst] = useState(null)
@@ -117,12 +129,14 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   // Para mostrar items en modal de entrega
   const [itemsDespacho, setItemsDespacho] = useState([])
   const [loadingItems, setLoadingItems] = useState(false)
+  const [itemsDelDespacho, setItemsDelDespacho] = useState([])
 
   useEffect(() => {
     if (['pendiente', 'despachada'].includes(despacho.estado) && esPrivilegiado) {
       async function checkStock() {
         try {
           const items = await fetchItemsDespacho()
+          setItemsDelDespacho(items || [])
           const ids = items.map(it => it.producto_id).filter(Boolean)
           if (ids.length === 0) return
           
@@ -175,7 +189,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   }, [despacho.id, despacho.estado, pctCabilla, pctOtros, catCabilla])
 
   useEffect(() => {
-    if (accionPendiente?.estado === 'entregada') {
+    if (accionPendiente && (accionPendiente.estado === 'despachada' || accionPendiente.estado === 'entregada')) {
       setLoadingItems(true)
       fetchItemsDespacho()
         .then(data => {
@@ -186,12 +200,20 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             const esExterno = !it.producto_id || String(it.producto_id).startsWith('manual-') || String(it.codigo_snap).startsWith('EXT')
             return !esCorte && !esFlete && !esExterno
           })
-          setItemsDespacho(itemsFiltrados)
+          
+          // Aplicar fallback si el despacho tiene_prestamos pero ningún item tiene es_prestamo = true
+          const hasAnyPrestamoItem = itemsFiltrados.some(it => it.es_prestamo)
+          const itemsConFallback = tienePrestamos && !hasAnyPrestamoItem && itemsFiltrados.length > 0
+            ? itemsFiltrados.map(it => ({ ...it, es_prestamo: true }))
+            : itemsFiltrados
+
+          setItemsDespacho(itemsConFallback)
+          setItemsDelDespacho(data || [])
         })
         .catch(err => console.error('Error fetching items:', err))
         .finally(() => setLoadingItems(false))
     }
-  }, [accionPendiente])
+  }, [accionPendiente, tienePrestamos])
 
   const numDisplay = despacho.cotizacion
     ? `DES-${String(despacho.cotizacion.numero).padStart(5, '0')}`
@@ -223,6 +245,11 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const subtotalProductos = totalBruto - fleteUsd - corteUsd // solo productos sin servicios
   const totalFinal = totalBruto - descuentoTotal // total con flete+corte, menos descuento
 
+  // tienePrestamos is already declared at the top of the component
+  const itemsDelDespachoConFallback = tienePrestamos && !itemsDelDespacho.some(x => x.es_prestamo)
+    ? itemsDelDespacho.map(it => ({ ...it, es_prestamo: true }))
+    : itemsDelDespacho
+
   let isCtaPorCobrar = false
   let isMixtoCxc = false
   let textVencimiento = null
@@ -233,6 +260,9 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   try {
     const fp = typeof despacho.forma_pago === 'string' ? JSON.parse(despacho.forma_pago) : (despacho.forma_pago || [])
     if (Array.isArray(fp)) {
+      if (fp.some(f => f.metodo === 'Préstamo' || f.metodo === 'Prestamo')) {
+        tienePrestamos = true
+      }
       numMetodos = fp.length
       metodosPagoList = fp.map(f => f.metodo === 'Cta por cobrar' ? 'Cta. por cobrar' : f.metodo)
       const cta = fp.find(f => f.metodo === 'Cta por cobrar')
@@ -277,7 +307,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   async function fetchItemsDespacho() {
     const res = await supabase
       .from('notas_despacho_items')
-      .select('id, producto_id, codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, total_linea_usd, orden, productos(categoria)')
+      .select('id, producto_id, codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, total_linea_usd, orden, es_prestamo, productos(categoria)')
       .eq('despacho_id', despacho.id)
       .order('orden')
     if (res.error) throw new Error(res.error.message || 'Sin items en caché — conecta a internet al menos una vez para imprimir offline')
@@ -712,6 +742,17 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
               <span className="bg-emerald-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded border border-emerald-400/50 shadow-sm uppercase tracking-wider leading-none shrink-0 select-none">
                 COD ✓
               </span>
+            )}
+            {tienePrestamos && (
+              totalFinal <= 0.015 ? (
+                <span className="inline-flex items-center gap-1 bg-emerald-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded border border-emerald-400/50 shadow-sm uppercase tracking-wider leading-none shrink-0 select-none" title="Todos los materiales son de préstamo">
+                  <Handshake size={10} /> Préstamo
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 bg-teal-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded border border-teal-400/50 shadow-sm uppercase tracking-wider leading-none shrink-0 select-none" title="Contiene artículos vendidos y artículos prestados">
+                  <Handshake size={10} /> Mixto
+                </span>
+              )
             )}
           </div>
           {/* Kebab ⋮ — acciones secundarias */}
@@ -1179,7 +1220,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         title={confirmConfig.confirmTitle || (accionPendiente?.estado === 'despachada' ? '¿Marcar como despachada?' : '¿Marcar como entregada?')}
         message={
           <div className="flex flex-col items-center gap-3 w-full">
-            <p className="text-center font-medium">
+            <p className="text-center">
               {esVendedorSinComision ? (
                 <span className="inline-flex items-center justify-center gap-1.5 bg-slate-100/70 border border-slate-200 px-3 py-1 rounded-full text-[11px] font-bold text-slate-500 shadow-sm">
                   🏢 Venta directa de la empresa. No genera comisiones.
@@ -1189,146 +1230,134 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
               )}
             </p>
             
-            {accionPendiente?.estado === 'despachada' && (
-              <div className="w-full text-left bg-slate-50 p-3 rounded-xl text-sm border border-slate-200 mt-2 shadow-sm">
-                <h4 className="font-bold text-slate-700 border-b border-slate-200 pb-1.5 mb-2">Resumen de la Operación</h4>
-                <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs">
-                  <span className="text-slate-500">Cliente:</span>
-                  <span className="font-bold text-right line-clamp-2"
-                    style={{ color: (despacho.cliente_factura || despacho.cliente)?.vendedor?.color || '#334155' }}>
-                    {(despacho.cliente_factura || despacho.cliente)?.nombre || 'N/A'}
-                  </span>
-                  
-                  <span className="text-slate-500">Vendedor:</span>
-                  <span className="font-semibold text-right truncate"
-                    style={{ color: despacho.vendedor?.color || '#334155' }}>
-                    {despacho.vendedor?.nombre || 'N/A'}
-                  </span>
+            {accionPendiente?.estado === 'despachada' && (() => {
+              const isPrestamoPuroAccion = itemsDespacho.length > 0 && itemsDespacho.every(it => it.es_prestamo)
+              const hasPrestamos = itemsDespacho.some(it => it.es_prestamo)
+              
+              // Ajustar valores si es préstamo puro
+              const subtotalAjustado = isPrestamoPuroAccion ? 0 : subtotalProductos
+              const fleteAjustado = isPrestamoPuroAccion ? 0 : fleteUsd
+              const corteAjustado = isPrestamoPuroAccion ? 0 : corteUsd
+              const descuentoAjustado = isPrestamoPuroAccion ? 0 : descuentoTotal
+              const totalAjustado = isPrestamoPuroAccion ? 0 : totalFinal
 
-                  {despacho.cliente?.vendedor?.nombre && (
-                    <>
-                      <span className="text-slate-500">Comisión para:</span>
-                      <span className="font-bold text-right truncate"
-                        style={{ color: despacho.cliente.vendedor.color || '#10b981' }}>
-                        {despacho.cliente.vendedor.nombre}
-                      </span>
-                    </>
-                  )}
-
-                  {despacho.transportista?.nombre && (
-                    <>
-                      <span className="text-slate-500">Transporte:</span>
-                      <span className="font-semibold text-slate-800 text-right truncate">{despacho.transportista.nombre}</span>
-                    </>
-                  )}
-
-                  <span className="col-span-2 border-t border-slate-200 my-0.5"></span>
-
-                  <span className="text-slate-500">Subtotal:</span>
-                  <span className="font-medium text-slate-700 text-right">{fmtUsd(subtotalProductos)}</span>
-                  
-                  {fleteUsd > 0 && (
-                    <>
-                      <span className="text-slate-500">Flete:</span>
-                      <span className="font-medium text-emerald-600 text-right">+{fmtUsd(fleteUsd)}</span>
-                    </>
-                  )}
-                  
-                  {corteUsd > 0 && (
-                    <>
-                      <span className="text-slate-500">Corte:</span>
-                      <span className="font-medium text-emerald-600 text-right">+{fmtUsd(corteUsd)}</span>
-                    </>
-                  )}
-
-                  {descuentoTotal > 0 && (
-                    <>
-                      <span className="text-slate-500">Descuento:</span>
-                      <span className="font-medium text-amber-600 text-right">-{fmtUsd(descuentoTotal)}</span>
-                    </>
-                  )}
-
-                  <span className="text-slate-500">Condición:</span>
-                  <span className={`font-semibold text-right ${isCtaPorCobrar ? 'text-amber-600' : 'text-emerald-600'}`}>
-                    {isMixtoCxc ? 'Mixto (Contado + CxC)' : isCtaPorCobrar ? 'Crédito (CxC)' : 'Contado'}
-                  </span>
-
-                  {esVendedorSinComision ? (
-                    <>
-                      <span className="text-slate-500">Comisión Est.:</span>
-                      <span className="font-bold text-slate-400 text-right text-xs">
-                        $0,00 (Exento)
-                      </span>
-                    </>
-                  ) : (pctCabilla > 0 || pctOtros > 0) ? (
-                    <>
-                      <span className="text-slate-500">Comisión Est.:</span>
-                      <span className="font-medium text-emerald-600 text-right">
-                        {comisionEst ? fmtUsd(comisionEst.monto) : fmtUsd(subtotalProductos * pctOtros / 100)}
-                      </span>
-                      
-                      {comisionEst && (
-                        <div className="col-span-2 flex flex-col gap-1 mt-1 mb-2 bg-slate-50 p-2 rounded border border-slate-100">
-                          {comisionEst.detalle.map(d => (
-                            <div key={d.cat} className="flex justify-between text-[11px] text-slate-600">
-                              <span className="capitalize">{d.cat} ({d.pct}%):</span>
-                              <span className="font-semibold">{fmtUsd(d.comision)}</span>
-                            </div>
-                          ))}
+              return (
+                <>
+                  <div className="w-full text-left bg-slate-50 p-3 rounded-xl text-sm border border-slate-200 mt-2 shadow-sm">
+                    <h4 className="font-bold text-slate-700 border-b border-slate-200 pb-1.5 mb-2">Resumen de la Operación</h4>
+                    
+                    {hasPrestamos && (() => {
+                      const todosPrestamo = itemsDespacho.every(it => it.es_prestamo);
+                      const itemsPrestamo = itemsDespacho.filter(it => it.es_prestamo);
+                      return (
+                        <div className={`mb-3 p-2.5 rounded-xl border flex flex-col gap-1.5 ${
+                          todosPrestamo ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-teal-50 border-teal-200 text-teal-800'
+                        }`}>
+                          <div className="flex items-center gap-1.5 font-bold uppercase tracking-wide text-[10px]">
+                            <Handshake size={14} className={todosPrestamo ? 'text-emerald-600' : 'text-teal-600'} />
+                            <span>{todosPrestamo ? 'Préstamo Puro' : 'Tiene Productos a Préstamo'}</span>
+                          </div>
+                          <p className={`text-[10px] leading-snug ${todosPrestamo ? 'text-emerald-700' : 'text-teal-700'}`}>
+                            {todosPrestamo
+                              ? 'Este despacho consiste enteramente en préstamos de materiales.'
+                              : 'Este despacho contiene los siguientes materiales en préstamo:'
+                            }
+                          </p>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {itemsPrestamo.map((it, idx) => (
+                              <span key={idx} className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 text-[9px] font-bold px-1.5 py-0.5 rounded">
+                                <Handshake size={8} /> {it.nombre_snap} ({it.cantidad} {it.unidad_snap || 'und'})
+                              </span>
+                            ))}
+                          </div>
                         </div>
+                      )
+                    })()}
+
+                    <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs">
+                      <span className="text-slate-500">Cliente:</span>
+                      <span className="font-semibold text-slate-800 text-right line-clamp-2">{(despacho.cliente_factura || despacho.cliente)?.nombre || 'N/A'}</span>
+                      
+                      <span className="text-slate-500">Vendedor:</span>
+                      <span className="font-semibold text-slate-800 text-right truncate">{despacho.vendedor?.nombre || 'N/A'}</span>
+
+                      {despacho.transportista?.nombre && (
+                        <>
+                          <span className="text-slate-500">Transporte:</span>
+                          <span className="font-semibold text-slate-800 text-right truncate">{despacho.transportista.nombre}</span>
+                        </>
                       )}
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-slate-500">Comisión:</span>
-                      <span className="text-slate-400 text-right text-[11px]">Sin % configurado</span>
-                    </>
-                  )}
 
-                  <span className="col-span-2 border-t border-slate-200 my-0.5"></span>
+                      <span className="col-span-2 border-t border-slate-200 my-0.5"></span>
 
-                  <span className="font-bold text-slate-700 text-[13px] pt-0.5">Total USD:</span>
-                  <span className="font-black text-slate-800 text-right text-[14px]">{fmtUsd(totalFinal)}</span>
-                </div>
-              </div>
-            )}
+                      <span className="text-slate-500">Subtotal:</span>
+                      <span className="font-medium text-slate-700 text-right">{fmtUsd(subtotalAjustado)}</span>
+                      
+                      {fleteAjustado > 0 && (
+                        <>
+                          <span className="text-slate-500">Flete:</span>
+                          <span className="font-medium text-emerald-600 text-right">+{fmtUsd(fleteAjustado)}</span>
+                        </>
+                      )}
+                      
+                      {corteAjustado > 0 && (
+                        <>
+                          <span className="text-slate-500">Corte:</span>
+                          <span className="font-medium text-emerald-600 text-right">+{fmtUsd(corteAjustado)}</span>
+                        </>
+                      )}
 
-            {accionPendiente?.estado === 'entregada' && (
-              <div className="w-full text-left bg-slate-50 p-3 rounded-xl text-sm border border-slate-200 mt-2 shadow-sm">
-                <h4 className="font-bold text-slate-700 border-b border-slate-200 pb-1.5 mb-2">Advertencias antes de entregar</h4>
-                <div className="space-y-2 text-xs">
-                  <div className="flex items-start gap-2">
-                    <PackageCheck size={14} className="text-amber-500 shrink-0 mt-0.5" />
-                    <p className="text-slate-600"><strong>Inventario:</strong> Los productos se descontarán definitivamente del stock.</p>
+                      {descuentoAjustado > 0 && (
+                        <>
+                          <span className="text-slate-500">Descuento:</span>
+                          <span className="font-medium text-amber-600 text-right">-{fmtUsd(descuentoAjustado)}</span>
+                        </>
+                      )}
+
+                      <span className="col-span-2 border-t border-slate-200 my-0.5"></span>
+
+                      <span className="font-bold text-slate-700 text-[13px] pt-0.5">Total USD:</span>
+                      <span className="font-black text-slate-800 text-right text-[14px]">{fmtUsd(totalAjustado)}</span>
+                    </div>
                   </div>
-                  <div className="flex items-start gap-2">
-                    <DollarSign size={14} className="text-emerald-500 shrink-0 mt-0.5" />
-                    <p className="text-slate-600"><strong>Comisiones:</strong> La comisión del vendedor se consolidará para pago.</p>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <AlertTriangle size={14} className="text-red-500 shrink-0 mt-0.5" />
-                    <p className="text-slate-600"><strong>Irreversible:</strong> No se podrán hacer cambios después de entregar.</p>
-                  </div>
-                </div>
-                
-                <h4 className="font-bold text-slate-700 border-b border-slate-200 pb-1.5 mb-2 mt-4">Productos a Descontar</h4>
-                {loadingItems ? (
-                  <p className="text-xs text-slate-400">Cargando ítems...</p>
-                ) : (
-                  <div className="max-h-32 overflow-y-auto space-y-1">
-                    {itemsDespacho.map((it, idx) => (
-                      <div key={idx} className="flex justify-between text-xs text-slate-600">
-                        <span className="truncate max-w-[200px]">{it.nombre_snap}</span>
-                        <span className="font-bold">{it.cantidad} {it.unidad_snap || 'und'}</span>
+
+                  <div className="w-full text-left bg-slate-50 p-3 rounded-xl text-sm border border-slate-200 mt-2 shadow-sm">
+                    <h4 className="font-bold text-slate-700 border-b border-slate-200 pb-1.5 mb-2">Advertencias antes de entregar</h4>
+                    <div className="space-y-2 text-xs">
+                      <div className="flex items-start gap-2">
+                        <PackageCheck size={14} className="text-amber-500 shrink-0 mt-0.5" />
+                        <p className="text-slate-600"><strong>Inventario:</strong> Los productos se descontarán definitivamente del stock.</p>
                       </div>
-                    ))}
-                    {itemsDespacho.length === 0 && (
-                      <p className="text-xs text-slate-400">No hay ítems registrados.</p>
+                      <div className="flex items-start gap-2">
+                        <DollarSign size={14} className="text-emerald-500 shrink-0 mt-0.5" />
+                        <p className="text-slate-600"><strong>Comisiones:</strong> La comisión del vendedor se consolidará para pago.</p>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle size={14} className="text-red-500 shrink-0 mt-0.5" />
+                        <p className="text-slate-600"><strong>Irreversible:</strong> No se podrán hacer cambios después de entregar.</p>
+                      </div>
+                    </div>
+                    
+                    <h4 className="font-bold text-slate-700 border-b border-slate-200 pb-1.5 mb-2 mt-4">Productos a Descontar</h4>
+                    {loadingItems ? (
+                      <p className="text-xs text-slate-400">Cargando ítems...</p>
+                    ) : (
+                      <div className="max-h-32 overflow-y-auto space-y-1">
+                        {itemsDespacho.map((it, idx) => (
+                          <div key={idx} className="flex justify-between text-xs text-slate-600">
+                            <span className="truncate max-w-[200px]">{it.nombre_snap}</span>
+                            <span className="font-bold">{it.cantidad} {it.unidad_snap || 'und'}</span>
+                          </div>
+                        ))}
+                        {itemsDespacho.length === 0 && (
+                          <p className="text-xs text-slate-400">No hay ítems registrados.</p>
+                        )}
+                      </div>
                     )}
                   </div>
-                )}
-              </div>
-            )}
+                </>
+              )
+            })()}
 
             {isCtaPorCobrar && accionPendiente?.estado === 'despachada' && (
               <div className="w-full p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 font-bold text-xs flex items-center gap-2 mt-1">

@@ -580,8 +580,9 @@ export async function handleVentaRapida(request, env) {
     let subtotal = 0;
     const cotItems = items.map((it, idx) => {
       const prod = stockMap[it.productoId];
-      const linea = Number(it.precioUnitUsd) * Number(it.cantidad);
-      subtotal += linea;
+      const esPrestamo = !!it.es_prestamo;
+      const linea = esPrestamo ? 0.0000 : Number(it.precioUnitUsd) * Number(it.cantidad);
+      if (!esPrestamo) subtotal += linea;
       return {
         producto_id: prod?.id || null,
         nombre_snap: prod?.nombre || it.nombre || it.nombreSnap || 'Producto sin nombre',
@@ -593,6 +594,7 @@ export async function handleVentaRapida(request, env) {
         descuento_pct: it.descuentoPct || 0,
         total_linea_usd: Number(linea),
         orden: idx,
+        es_prestamo: esPrestamo
       };
     });
 
@@ -691,6 +693,7 @@ export async function handleVentaRapida(request, env) {
       descuento_pct:     Number(item.descuento_pct || 0),
       total_linea_usd:   Number(item.total_linea_usd),
       orden:             item.orden ?? i,
+      es_prestamo:       item.es_prestamo || false
     }));
 
     const diRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho_items`, {

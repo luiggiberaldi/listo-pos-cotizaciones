@@ -98,7 +98,10 @@ function FormaPagoSection({ data = [], kpis }) {
 
   const fpCxc = data.find(fp => fp.formaPago === 'Cta por cobrar')
   const totalCxc = fpCxc ? fpCxc.totalUsd : 0
-  const ventasSinCxc = (kpis?.totalVentas || 0) - totalCxc
+  const fpDonacion = data.find(fp => fp.formaPago === 'Donación')
+  const totalDonacion = fpDonacion ? fpDonacion.totalUsd : 0
+  const totalDeducciones = totalCxc + totalDonacion
+  const ventasSinCxc = (kpis?.totalVentas || 0) - totalDeducciones
   const COLORS = {
     'Efectivo $': '#10b981',
     'Efectivo Bs': '#22c55e',
@@ -108,6 +111,7 @@ function FormaPagoSection({ data = [], kpis }) {
     'Punto de Venta': '#06b6d4',
     'Transferencia': '#14b8a6',
     'Cruce': '#ec4899',
+    'Donación': '#a855f7',
     'Cta por cobrar': '#ef4444',
     'Sin especificar': '#94a3b8'
   }
@@ -185,14 +189,22 @@ function FormaPagoSection({ data = [], kpis }) {
               <span>{fmtUsd(total)}</span>
             </div>
 
-            {totalCxc > 0 && (
+            {(totalCxc > 0 || totalDonacion > 0) && (
               <div className="pt-1.5 border-t border-slate-200/60 mt-1.5 space-y-1.5">
-                <div className="flex justify-between items-center text-slate-500">
-                  <span>Cuentas por Cobrar (CxC)</span>
-                  <span className="font-bold text-red-500">-{fmtUsd(totalCxc)}</span>
-                </div>
+                {totalCxc > 0 && (
+                  <div className="flex justify-between items-center text-slate-500">
+                    <span>Cuentas por Cobrar (CxC)</span>
+                    <span className="font-bold text-red-500">-{fmtUsd(totalCxc)}</span>
+                  </div>
+                )}
+                {totalDonacion > 0 && (
+                  <div className="flex justify-between items-center text-slate-500">
+                    <span>Donaciones</span>
+                    <span className="font-bold text-purple-500">-{fmtUsd(totalDonacion)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between items-center font-extrabold text-slate-800 bg-slate-200/40 p-1.5 rounded-lg text-[10.5px] sm:text-[11.5px]">
-                  <span>Ventas Netas sin CxC (Recaudación Real)</span>
+                  <span>Ventas Líquidas (Recaudación Real)</span>
                   <span className="font-black text-slate-900">{fmtUsd(ventasSinCxc)}</span>
                 </div>
               </div>
@@ -494,6 +506,7 @@ function TabVentas({ configNeg }) {
     'Punto de Venta': 'bg-cyan-50 text-cyan-700 border-cyan-100',
     'Transferencia': 'bg-teal-50 text-teal-700 border-teal-100',
     'Cruce': 'bg-pink-50 text-pink-700 border-pink-100',
+    'Donación': 'bg-purple-50 text-purple-700 border-purple-100',
     'Cta por cobrar': 'bg-red-50 text-red-700 border-red-100',
     'Sin especificar': 'bg-slate-50 text-slate-600 border-slate-100',
   }

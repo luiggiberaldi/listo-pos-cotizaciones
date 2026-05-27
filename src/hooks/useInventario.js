@@ -13,20 +13,17 @@ import { authFetch } from '../services/authFetch'
 
 export const INVENTARIO_KEY = ['inventario']
 
-// ─── Agrupación de categorías ────────────────────────────────────────────────
 // Prefijos que se consolidan en una sola categoría padre
 const CATEGORY_GROUPS = [
   'CONEXIONES',
   'ELECTRICIDAD',
   'LAMINAS',
   'PERFILES',
-  'TUBOS ESTRUCTURALES',
-  'TUBOS GALVANIZADO',
-  'TUBOS PULIDO',
-  'TUBOS PVC',
-  'TUBOS',
-  'VIGAS',
+  'BARRAS',
+  'TUBERIAS',
+  'FERRETERIA',
 ]
+
 
 // Dada una categoría raw de la DB, retorna el grupo padre
 function getCategoryGroup(cat) {

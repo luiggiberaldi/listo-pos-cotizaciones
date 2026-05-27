@@ -188,6 +188,23 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
       ;(vData ?? []).forEach(v => { vendedoresInfo[v.id] = v })
 
       const calcularComisionDespachoJS = (d, comList) => {
+        let esDonacion = false
+        const fp = Array.isArray(d.forma_pago) ? d.forma_pago : []
+        if (fp.some(f => f.metodo === 'Donación') || d.forma_pago === 'Donación') {
+          esDonacion = true
+        }
+
+        if (esDonacion) {
+          return {
+            totalcomision: 0,
+            comisioncabilla: 0,
+            comisionotros: 0,
+            pctcabilla: 0,
+            pctotros: 0,
+            estado: 'pagada'
+          }
+        }
+
         const existing = comList.find(c => c.despachoid === d.id)
         if (existing) {
           return {

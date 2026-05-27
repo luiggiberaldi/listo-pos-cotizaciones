@@ -1,6 +1,6 @@
 // src/components/clientes/ClienteRow.jsx
 // Fila compacta de cliente para vista de lista — barra lateral color vendedor
-import { Phone, Mail, MapPin, Hash, Tag, Pencil, UserMinus, ArrowRightLeft, FileText, AlertCircle, BookOpen, Trash2, UserCheck } from 'lucide-react'
+import { Phone, Mail, MapPin, Hash, Tag, Pencil, UserMinus, ArrowRightLeft, FileText, AlertCircle, BookOpen, Trash2, UserCheck, Handshake } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtUsdSimple as fmtUsd } from '../../utils/format'
 
@@ -43,6 +43,16 @@ export default function ClienteRow({ cliente, onEditar, onReasignar, onCotizar, 
           {cliente.tipo_cliente && (
             <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${TIPO_COLORS[cliente.tipo_cliente] || TIPO_COLORS.natural}`}>
               <Tag size={9} />{TIPO_LABELS[cliente.tipo_cliente] || cliente.tipo_cliente}
+            </span>
+          )}
+          {cliente.tiene_prestamos_activos && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-black px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 uppercase tracking-wider animate-pulse">
+              <Handshake size={9} /> Préstamo
+            </span>
+          )}
+          {Number(cliente.saldo_pendiente || 0) > 0 && !esAdministracion && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200">
+              <AlertCircle size={9} /> Deuda: {fmtUsd(cliente.saldo_pendiente)}
             </span>
           )}
           {!cliente.activo && (

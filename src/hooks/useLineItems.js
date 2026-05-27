@@ -50,6 +50,7 @@ export function useLineItems({ withDescuento = false, checkStock = false } = {})
         precioUnitUsd: Number(producto.precio_usd ?? producto.preciousd ?? 0),
         origen: producto.origen ?? 'inventario',
         categoria: producto.categoria ?? '',
+        esPrestamo: producto.esPrestamo ?? producto.es_prestamo ?? false,
       }
       if (withDescuento) item.descuentoPct = 0
       return [...prev, item]
@@ -104,6 +105,12 @@ export function useLineItems({ withDescuento = false, checkStock = false } = {})
     ))
   }, [])
 
+  const togglePrestamo = useCallback((productoId) => {
+    setItems(prev => prev.map(it =>
+      it.productoId === productoId ? { ...it, esPrestamo: !it.esPrestamo } : it
+    ))
+  }, [])
+
   const limpiar = useCallback(() => setItems([]), [])
 
   return {
@@ -116,6 +123,7 @@ export function useLineItems({ withDescuento = false, checkStock = false } = {})
     cambiarCantidad,
     setCantidadDirecta,
     cambiarPrecio,
+    togglePrestamo,
     limpiar,
     setStockMap,
   }

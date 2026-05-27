@@ -15,6 +15,7 @@ export function calcTotales(items, descGlobalPct, costoEnvio, costoCorte = 0) {
     return { subtotal: 0, descuentoUsd: 0, totalUsd: round2((Number(costoEnvio) || 0) + (Number(costoCorte) || 0)) }
   }
   const subtotal     = round2(items.reduce((s, it) => {
+    if (it.esPrestamo || it.es_prestamo) return s
     const qty = Number(it.cantidad) || 0
     const price = Number(it.precioUnitUsd) || 0
     return round2(s + round2(qty * price))

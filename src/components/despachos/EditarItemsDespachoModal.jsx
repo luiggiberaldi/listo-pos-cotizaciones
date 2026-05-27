@@ -1,13 +1,14 @@
 // src/components/despachos/EditarItemsDespachoModal.jsx
 import { useState, useEffect, useMemo } from 'react'
-import { X, Search, Plus, Minus, Trash2, Loader2, Package, Save, AlertCircle, CreditCard, CheckCircle, Edit2, DollarSign, Copy } from 'lucide-react'
+import { X, Search, Plus, Minus, Trash2, Loader2, Package, Save, AlertCircle, CreditCard, CheckCircle, Edit2, DollarSign, Copy, Truck, Handshake } from 'lucide-react'
 import { useLineItems } from '../../hooks/useLineItems'
 import { useInventario } from '../../hooks/useInventario'
 import { useProductSearch } from '../../hooks/useProductSearch'
 import { useEditarItemsDespacho } from '../../hooks/useDespachos'
 import { fmtUsdSimple as fmtUsd } from '../../utils/format'
-import { round4 } from '../../utils/dinero'
+import { round4, round2 } from '../../utils/dinero'
 import { showToast } from '../ui/Toast'
+import { useFormasPago } from '../../hooks/useFormasPago'
 import { FORMAS_PAGO } from '../../constants/formasPago'
 import useAuthStore from '../../store/useAuthStore'
 
@@ -23,7 +24,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
   const { data: inventarioData, isLoading: loadingInv } = useInventario({ pageSize: 1000 })
   const productos = inventarioData?.productos ?? inventarioData ?? []
   const editarItems = useEditarItemsDespacho()
-  const { items, setItems, agregarItem, eliminarPorId, cambiarCantidad, setCantidadDirecta, cambiarPrecio, setStockMap } = useLineItems({ checkStock: true })
+  const { items, setItems, agregarItem, eliminarPorId, cambiarCantidad, setCantidadDirecta, cambiarPrecio, togglePrestamo, setStockMap } = useLineItems({ checkStock: true })
 
     const [busqueda, setBusqueda] = useState('')
     const [cargandoItems, setCargandoItems] = useState(false)
@@ -36,9 +37,11 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
     const [manualPrecio, setManualPrecio] = useState('')
     const [manualCantidad, setManualCantidad] = useState(1)
   
-    // Pagos
-    const [pagos, setPagos] = useState([])
-    const [mostrarSelectorMetodo, setMostrarSelectorMetodo] = useState(false)
+    // Pagos y COD
+    const [esCod, setEsCod] = useState(false)
+    const [tabActiva, setTabActiva] = useState('inmediato')
+    const [mostrarSelectorInmediato, setMostrarSelectorInmediato] = useState(false)
+    const [mostrarSelectorCod, setMostrarSelectorCod] = useState(false)
   
     // Edición de producto externo
     const [editItemIdx, setEditItemIdx] = useState(null)
@@ -90,152 +93,389 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
       showToast('Producto manual agregado', 'success')
     }
   
-    // 1. Cargar items actuales del despacho
-    useEffect(() => {
-    if (!isOpen || !despacho?.id) return
+    // 3.5. Calcular total base con flete/corte/descuento de productos para los hooks de pago
+    const totalConFlete = useMemo(() => {
+      let subtotal = 0
+      items.forEach(it => {
+        if (it.esPrestamo || it.es_prestamo) return
+        subtotal += round4(it.cantidad * it.precioUnitUsd * (1 - (it.descuentoPct || 0) / 100))
+      })
+      const flete = Number(despacho?.flete_usd || 0)
+      const corte = Number(despacho?.corte_usd || 0)
+      const descTotal = Number(despacho?.descuento_total_usd || 0)
+      return Math.max(0, subtotal + flete + corte - descTotal)
+    }, [items, despacho])
 
-    async function fetchItems() {
-      setCargandoItems(true)
-      setError(null)
-      try {
-        const { data, error: fetchErr } = await (await import('../../services/supabase/client')).default
-          .from('notas_despacho_items')
-          .select('*')
-          .eq('despacho_id', despacho.id)
-          .order('orden')
+    // 1. Hook para pagos inmediatos (adelantos / seña)
+    const {
+      formasPago: pagosInmediatos,
+      setFormas: setPagosInmediatos,
+      toggleForma: togglePagoInmediato,
+      setMontoForma: setMontoPagoInmediato,
+      updateForma: updatePagoInmediato,
+      resetFormas: resetPagosInmediatos,
+      totalAsignado: totalInmediato,
+      pagoCuadrado: pagoInmediatoCuadrado,
+    } = useFormasPago(totalConFlete)
 
-        if (fetchErr) throw fetchErr
+    // 2. Monto COD requerido
+    const montoCodRequerido = Math.max(0, round2(totalConFlete - totalInmediato))
 
-        const mapped = (data || []).map(it => ({
-          _key: `existing-${it.id}`,
-          // Los ítems externos tienen producto_id = null → asignamos ID temporal único
-          // para que las funciones del hook (cambiarCantidad, cambiarPrecio, eliminarPorId)
-          // puedan identificarlos correctamente por productoId
-          productoId: it.producto_id ?? `ext-${it.id}`,
-          codigoSnap: it.codigo_snap,
-          nombreSnap: it.nombre_snap,
-          unidadSnap: it.unidad_snap,
-          cantidad: Number(it.cantidad),
-          precioUnitUsd: Number(it.precio_unit_usd),
-          descuentoPct: Number(it.descuento_pct || 0),
-          origen: it.origen ?? 'inventario',
-          orden: it.orden
-        }))
-        setItems(mapped)
-      } catch (err) {
-        console.error('Error fetching items:', err)
-        setError('No se pudieron cargar los productos del despacho')
-      } finally {
-        setCargandoItems(false)
-      }
+    // 3. Hook para propuesta de pagos en destino
+    const {
+      formasPago: propuestaCod,
+      setFormas: setPropuestaCod,
+      toggleForma: togglePropuestaCod,
+      setMontoForma: setMontoPropuestaCod,
+      updateForma: updatePropuestaCod,
+      resetFormas: resetPropuestaCod,
+      totalAsignado: totalPropuestaCod,
+      pagoCuadrado: propuestaCodCuadrado,
+    } = useFormasPago(montoCodRequerido)
+
+    const handleToggleCod = () => {
+      setEsCod(prev => {
+        const next = !prev
+        if (!next) {
+          resetPropuestaCod()
+          setTabActiva('inmediato')
+        } else {
+          resetPropuestaCod()
+          setTabActiva('cod')
+        }
+        return next
+      })
     }
 
-    fetchItems()
+    // 1. Cargar items actuales del despacho
+    useEffect(() => {
+      if (!isOpen || !despacho?.id) return
 
-    // 1.1 Cargar pagos actuales
-    if (despacho.forma_pago_cliente || despacho.forma_pago) {
-      try {
-        const fpRaw = despacho.forma_pago_cliente || despacho.forma_pago
-        const parsed = JSON.parse(fpRaw)
-        const pagosArray = Array.isArray(parsed) && parsed.length > 0 ? parsed : []
-        if (pagosArray.length > 0) {
+      async function fetchItems() {
+        setCargandoItems(true)
+        setError(null)
+        try {
+          const { data, error: fetchErr } = await (await import('../../services/supabase/client')).default
+            .from('notas_despacho_items')
+            .select('*')
+            .eq('despacho_id', despacho.id)
+            .order('orden')
+
+          if (fetchErr) throw fetchErr
+
+          const mapped = (data || []).map(it => ({
+            _key: `existing-${it.id}`,
+            // Los ítems externos tienen producto_id = null → asignamos ID temporal único
+            // para que las funciones del hook (cambiarCantidad, cambiarPrecio, eliminarPorId)
+            // puedan identificarlos correctamente por productoId
+            productoId: it.producto_id ?? `ext-${it.id}`,
+            codigoSnap: it.codigo_snap,
+            nombreSnap: it.nombre_snap,
+            unidadSnap: it.unidad_snap,
+            cantidad: Number(it.cantidad),
+            precioUnitUsd: Number(it.precio_unit_usd),
+            descuentoPct: Number(it.descuento_pct || 0),
+            origen: it.origen ?? 'inventario',
+            esPrestamo: !!it.es_prestamo,
+            orden: it.orden
+          }))
+          setItems(mapped)
+        } catch (err) {
+          console.error('Error fetching items:', err)
+          setError('No se pudieron cargar los productos del despacho')
+        } finally {
+          setCargandoItems(false)
+        }
+      }
+
+      fetchItems()
+
+      // 1.1 Cargar pagos actuales
+      if (despacho.forma_pago_cliente || despacho.forma_pago) {
+        try {
+          const fpRaw = despacho.forma_pago_cliente || despacho.forma_pago
+          const parsed = JSON.parse(fpRaw)
+          const pagosArray = Array.isArray(parsed) && parsed.length > 0 ? parsed : []
+          
           // Mapear cualquier metodo 'Efectivo' viejo a 'Efectivo $'
           const mappedPagos = pagosArray.map(p => ({
             ...p,
             metodo: p.metodo === 'Efectivo' ? 'Efectivo $' : p.metodo
           }))
-          setPagos(mappedPagos)
-        } else {
-          setPagos([{ metodo: 'Por definir', monto: Number(despacho.total_usd) || 0 }])
+
+          const codItem = mappedPagos.find(f => f.metodo === 'Cobro a destino')
+          if (codItem) {
+            setEsCod(true)
+            setPropuestaCod(Array.isArray(codItem.metodo_propuesto) ? codItem.metodo_propuesto : [])
+            setPagosInmediatos(mappedPagos.filter(f => f.metodo !== 'Cobro a destino'))
+            setTabActiva('inmediato')
+          } else {
+            setEsCod(false)
+            setPagosInmediatos(mappedPagos)
+            setPropuestaCod([])
+            setTabActiva('inmediato')
+          }
+        } catch {
+          const metodoDb = despacho.forma_pago === 'Efectivo' ? 'Efectivo $' : (despacho.forma_pago || 'Efectivo $')
+          setEsCod(false)
+          setPagosInmediatos([{ metodo: metodoDb, monto: Number(despacho.total_usd) || 0 }])
+          setPropuestaCod([])
+          setTabActiva('inmediato')
         }
-      } catch {
-        const metodoDb = despacho.forma_pago === 'Efectivo' ? 'Efectivo $' : (despacho.forma_pago || 'Efectivo $')
-        setPagos([{ metodo: metodoDb, monto: Number(despacho.total_usd) || 0 }])
+      } else {
+        setEsCod(false)
+        setPagosInmediatos([{ metodo: 'Por definir', monto: Number(despacho.total_usd) || 0 }])
+        setPropuestaCod([])
+        setTabActiva('inmediato')
       }
-    } else {
-      setPagos([{ metodo: 'Por definir', monto: Number(despacho.total_usd) || 0 }])
-    }
-  }, [isOpen, despacho?.id, despacho?.forma_pago, despacho?.forma_pago_cliente, despacho?.total_usd, setItems])
-
-  // 2. Sincronizar stock map
-  useEffect(() => {
-    if (productos.length > 0) {
-      const map = {}
-      productos.forEach(p => { map[p.id] = Number(p.stock_actual) || 0 })
-      setStockMap(map)
-    }
-  }, [productos, setStockMap])
-
-  // 3. Filtrar productos
-  const productosFiltrados = useProductSearch(productos, busqueda)
-
-  // 4. Calcular totales
-  const totales = useMemo(() => {
-    let subtotal = 0
-    items.forEach(it => {
-      subtotal += round4(it.cantidad * it.precioUnitUsd * (1 - (it.descuentoPct || 0) / 100))
-    })
-    const flete = Number(despacho?.flete_usd || 0)
-    const corte = Number(despacho?.corte_usd || 0)
-    const descTotal = Number(despacho?.descuento_total_usd || 0)
-    const total = Math.max(0, subtotal + flete + corte - descTotal)
-    const totalPagos = pagos.reduce((sum, p) => sum + (Number(p.monto) || 0), 0)
-    const diferencia = Math.round((total - totalPagos) * 100) / 100
-    const estaCuadrado = Math.abs(diferencia) < 0.01
-    return { subtotal, total, totalPagos, diferencia, estaCuadrado }
-  }, [items, despacho, pagos])
-
-  const cxcItem = pagos.find(f => f.metodo === 'Cta por cobrar');
-  const cxcVencimientoValido = !cxcItem || esVendedorSinComision || (
-    cxcItem.diasVencimiento !== undefined &&
-    cxcItem.diasVencimiento !== null &&
-    cxcItem.diasVencimiento !== '' &&
-    !isNaN(cxcItem.diasVencimiento) &&
-    Number(cxcItem.diasVencimiento) > 0
-  );
-
-  async function handleSave() {
-    if (items.length === 0) {
-      showToast('El despacho debe tener al menos un producto', 'error')
-      return
-    }
-    if (!cxcVencimientoValido) {
-      showToast('Los días de vencimiento son obligatorios para cuentas por cobrar', 'error')
-      return
-    }
-    if (!totales.estaCuadrado) {
-      showToast(`Los pagos no cuadran con el total. Diferencia: ${fmtUsd(totales.diferencia)}`, 'error')
-      return
-    }
-    const itemsApi = items.map((it, idx) => {
-      const esExterno = it.origen === 'externo' || !it.productoId || String(it.productoId).startsWith('manual-') || String(it.productoId).startsWith('ext-')
-      return {
-        producto_id: esExterno ? null : it.productoId,
-        codigo_snap: it.codigoSnap || null,
-        nombre_snap: it.nombreSnap,
-        unidad_snap: it.unidadSnap || 'und',
-        cantidad: Number(it.cantidad),
-        precio_unit_usd: Number(it.precioUnitUsd),
-        descuento_pct: Number(it.descuentoPct || 0),
-        orden: idx,
-        origen: esExterno ? 'externo' : (it.origen || 'inventario')
+    }, [isOpen, despacho?.id, despacho?.forma_pago, despacho?.forma_pago_cliente, despacho?.total_usd, setItems, setPagosInmediatos, setPropuestaCod])
+  
+    // 2. Sincronizar stock map
+    useEffect(() => {
+      if (productos.length > 0) {
+        const map = {}
+        productos.forEach(p => { map[p.id] = Number(p.stock_actual) || 0 })
+        setStockMap(map)
       }
-    })
-    try {
-      await editarItems.mutateAsync({ 
-        despachoId: despacho.id, 
-        items: itemsApi, 
-        pagos: JSON.stringify(pagos)
+    }, [productos, setStockMap])
+  
+    // 3. Filtrar productos
+    const productosFiltrados = useProductSearch(productos, busqueda)
+  
+    // 4. Calcular totales
+    const totales = useMemo(() => {
+      let subtotal = 0
+      items.forEach(it => {
+        if (it.esPrestamo || it.es_prestamo) return
+        subtotal += round4(it.cantidad * it.precioUnitUsd * (1 - (it.descuentoPct || 0) / 100))
       })
-      onClose()
-    } catch {
-      // El hook ya muestra el toast
+      const total = totalConFlete
+      const totalPagos = esCod 
+        ? totalInmediato + montoCodRequerido 
+        : totalInmediato
+      const diferencia = esCod
+        ? Math.round((montoCodRequerido - totalPropuestaCod) * 100) / 100
+        : Math.round((total - totalInmediato) * 100) / 100
+      const estaCuadrado = esCod
+        ? (montoCodRequerido <= 0.015 || propuestaCodCuadrado)
+        : pagoInmediatoCuadrado
+      return { subtotal, total, totalPagos, diferencia, estaCuadrado }
+    }, [items, totalConFlete, esCod, totalInmediato, montoCodRequerido, totalPropuestaCod, propuestaCodCuadrado, pagoInmediatoCuadrado])
+  
+    const cxcItem = pagosInmediatos.find(f => f.metodo === 'Cta por cobrar');
+    const cxcVencimientoValido = !cxcItem || esVendedorSinComision || (
+      cxcItem.diasVencimiento !== undefined &&
+      cxcItem.diasVencimiento !== null &&
+      cxcItem.diasVencimiento !== '' &&
+      !isNaN(cxcItem.diasVencimiento) &&
+      Number(cxcItem.diasVencimiento) > 0
+    );
+  
+    const formasPagoFinales = useMemo(() => {
+      if (esCod) {
+        return [
+          ...pagosInmediatos,
+          {
+            metodo: "Cobro a destino",
+            monto: montoCodRequerido,
+            diasVencimiento: 0,
+            cobro_destino_pagado: false,
+            metodo_propuesto: propuestaCod
+          }
+        ]
+      } else {
+        return pagosInmediatos
+      }
+    }, [esCod, pagosInmediatos, propuestaCod, totalConFlete, totalInmediato, montoCodRequerido])
+
+    async function handleSave() {
+      if (items.length === 0) {
+        showToast('El despacho debe tener al menos un producto', 'error')
+        return
+      }
+      if (!cxcVencimientoValido) {
+        showToast('Los días de vencimiento son obligatorios para cuentas por cobrar', 'error')
+        return
+      }
+      if (!totales.estaCuadrado) {
+        showToast(`Los pagos no cuadran con el total. Diferencia: ${fmtUsd(totales.diferencia)}`, 'error')
+        return
+      }
+      const itemsApi = items.map((it, idx) => {
+        const esExterno = it.origen === 'externo' || !it.productoId || String(it.productoId).startsWith('manual-') || String(it.productoId).startsWith('ext-')
+        return {
+          producto_id: esExterno ? null : it.productoId,
+          codigo_snap: it.codigoSnap || null,
+          nombre_snap: it.nombreSnap,
+          unidad_snap: it.unidadSnap || 'und',
+          cantidad: Number(it.cantidad),
+          precio_unit_usd: Number(it.precioUnitUsd),
+          descuento_pct: Number(it.descuentoPct || 0),
+          orden: idx,
+          origen: esExterno ? 'externo' : (it.origen || 'inventario'),
+          es_prestamo: it.esPrestamo || false
+        }
+      })
+      try {
+        await editarItems.mutateAsync({ 
+          despachoId: despacho.id, 
+          items: itemsApi, 
+          pagos: JSON.stringify(formasPagoFinales)
+        })
+        onClose()
+      } catch {
+        // El hook ya muestra el toast
+      }
     }
-  }
+  
+  // 4.5. Memoizar el catálogo izquierdo para evitar re-renderizados pesados en cada pulsación o cambio de pagos
+  const catalogoIzquierdo = useMemo(() => {
+    return (
+      <div className="w-full md:w-5/12 border-r border-slate-100 flex flex-col bg-slate-50/50">
+        <div className="p-4 bg-white border-b border-slate-100 space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Buscar producto..."
+                value={busqueda}
+                onChange={e => setBusqueda(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:bg-white text-sm transition-all"
+              />
+            </div>
+            <button
+              onClick={() => setShowManual(!showManual)}
+              className={`shrink-0 p-2.5 rounded-xl border-2 transition-all active:scale-95 flex items-center justify-center ${showManual ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-indigo-100 text-indigo-600 hover:border-indigo-300'}`}
+              title="Agregar producto manual"
+            >
+              <Plus size={18} strokeWidth={3} />
+            </button>
+          </div>
+
+          {/* Formulario de producto manual */}
+          {showManual && (
+            <div className="p-3 bg-indigo-50/50 border border-indigo-100 rounded-xl space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 bg-indigo-100 rounded-lg flex items-center justify-center">
+                  <Plus size={12} className="text-indigo-600" />
+                </div>
+                <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Nuevo Producto Manual</span>
+              </div>
+              
+              <input
+                type="text"
+                placeholder="Nombre del producto *"
+                value={manualNombre}
+                onChange={e => setManualNombre(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs focus:outline-none focus:border-indigo-400"
+                autoFocus
+              />
+              
+              <div className="grid grid-cols-3 gap-2">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-slate-400 uppercase ml-1">Unidad</label>
+                  <input
+                    type="text"
+                    placeholder="und"
+                    value={manualUnidad}
+                    onChange={e => setManualUnidad(e.target.value)}
+                    className="w-full px-2 py-2 rounded-lg border border-slate-200 text-xs text-center focus:outline-none focus:border-indigo-400"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-slate-400 uppercase ml-1">Precio $ *</label>
+                  <input
+                    type="number"
+                    placeholder="0.00"
+                    value={manualPrecio}
+                    onChange={e => setManualPrecio(e.target.value)}
+                    className="w-full px-2 py-2 rounded-lg border border-slate-200 text-xs text-center focus:outline-none focus:border-indigo-400"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-slate-400 uppercase ml-1">Cant. *</label>
+                  <input
+                    type="number"
+                    value={manualCantidad}
+                    onChange={e => setManualCantidad(e.target.value)}
+                    className="w-full px-2 py-2 rounded-lg border border-slate-200 text-xs text-center focus:outline-none focus:border-indigo-400"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowManual(false)}
+                  className="flex-1 py-2 text-[10px] font-bold text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  CANCELAR
+                </button>
+                <button
+                  onClick={handleAgregarManual}
+                  className="flex-1 py-2 bg-indigo-600 text-white text-[10px] font-black rounded-lg hover:bg-indigo-700 shadow-md shadow-indigo-100 transition-all active:scale-95"
+                >
+                  AGREGAR
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+          {loadingInv ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-3">
+              <Loader2 size={24} className="animate-spin text-indigo-500" />
+              <p className="text-xs text-slate-400">Cargando catálogo...</p>
+            </div>
+          ) : productosFiltrados.length === 0 ? (
+            <p className="text-center py-10 text-xs text-slate-400 italic">No se encontraron productos</p>
+          ) : (
+            productosFiltrados.map(p => {
+              const enCarrito = items.some(it => it.productoId === p.id)
+              const stock = Number(p.stock_actual) || 0
+              return (
+                <div
+                  key={p.id}
+                  onClick={() => !enCarrito && stock > 0 && agregarItem(p)}
+                  className={`group p-3 rounded-xl border transition-all cursor-pointer flex flex-col gap-1 ${enCarrito ? 'bg-indigo-50 border-indigo-200 opacity-60 cursor-default' :
+                      stock <= 0 ? 'bg-slate-50 border-slate-100 opacity-50 cursor-not-allowed' :
+                        'bg-white border-slate-200 hover:border-indigo-300 hover:shadow-md'
+                    }`}
+                >
+                  <div className="flex justify-between gap-2">
+                    <p className="text-xs font-bold text-slate-700 leading-tight">{p.nombre}</p>
+                    <span className="text-xs font-black text-slate-900 shrink-0">{fmtUsd(p.precio_usd)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-[10px]">
+                    <span className="font-mono text-slate-400 uppercase">{p.codigo || 'S/C'}</span>
+                    <div className="flex items-center gap-1.5">
+                      {esDesarrollador && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            agregarComoExterno(p);
+                          }}
+                          className="px-1.5 py-0.5 bg-amber-100 hover:bg-amber-200 text-amber-800 text-[9px] font-black rounded uppercase transition-colors"
+                          title="Agregar copia como externo"
+                        >
+                          + Ext
+                        </button>
+                      )}
+                      <span className={`font-bold ${stock > 5 ? 'text-emerald-500' : stock > 0 ? 'text-amber-500' : 'text-red-500'}`}>
+                        Stock: {stock} {p.unidad || 'und'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
+      </div>
+    )
+  }, [productosFiltrados, loadingInv, busqueda, showManual, manualNombre, manualUnidad, manualPrecio, manualCantidad, items, esDesarrollador])
 
   if (!isOpen) return null
-
-  const metodosDisponibles = FORMAS_PAGO.filter(m => !pagos.some(pg => pg.metodo === m))
 
   return (
     <div
@@ -265,147 +505,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
         <div className="flex flex-col md:flex-row min-h-0 flex-1 overflow-hidden">
 
           {/* Columna Izquierda: Catálogo */}
-          <div className="w-full md:w-5/12 border-r border-slate-100 flex flex-col bg-slate-50/50">
-            <div className="p-4 bg-white border-b border-slate-100 space-y-3">
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1">
-                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Buscar producto..."
-                    value={busqueda}
-                    onChange={e => setBusqueda(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:bg-white text-sm transition-all"
-                  />
-                </div>
-                <button
-                  onClick={() => setShowManual(!showManual)}
-                  className={`shrink-0 p-2.5 rounded-xl border-2 transition-all active:scale-95 flex items-center justify-center ${showManual ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-indigo-100 text-indigo-600 hover:border-indigo-300'}`}
-                  title="Agregar producto manual"
-                >
-                  <Plus size={18} strokeWidth={3} />
-                </button>
-              </div>
-
-              {/* Formulario de producto manual */}
-              {showManual && (
-                <div className="p-3 bg-indigo-50/50 border border-indigo-100 rounded-xl space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 bg-indigo-100 rounded-lg flex items-center justify-center">
-                      <Plus size={12} className="text-indigo-600" />
-                    </div>
-                    <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Nuevo Producto Manual</span>
-                  </div>
-                  
-                  <input
-                    type="text"
-                    placeholder="Nombre del producto *"
-                    value={manualNombre}
-                    onChange={e => setManualNombre(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs focus:outline-none focus:border-indigo-400"
-                    autoFocus
-                  />
-                  
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-bold text-slate-400 uppercase ml-1">Unidad</label>
-                      <input
-                        type="text"
-                        placeholder="und"
-                        value={manualUnidad}
-                        onChange={e => setManualUnidad(e.target.value)}
-                        className="w-full px-2 py-2 rounded-lg border border-slate-200 text-xs text-center focus:outline-none focus:border-indigo-400"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-bold text-slate-400 uppercase ml-1">Precio $ *</label>
-                      <input
-                        type="number"
-                        placeholder="0.00"
-                        value={manualPrecio}
-                        onChange={e => setManualPrecio(e.target.value)}
-                        className="w-full px-2 py-2 rounded-lg border border-slate-200 text-xs text-center focus:outline-none focus:border-indigo-400"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-bold text-slate-400 uppercase ml-1">Cant. *</label>
-                      <input
-                        type="number"
-                        value={manualCantidad}
-                        onChange={e => setManualCantidad(e.target.value)}
-                        className="w-full px-2 py-2 rounded-lg border border-slate-200 text-xs text-center focus:outline-none focus:border-indigo-400"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setShowManual(false)}
-                      className="flex-1 py-2 text-[10px] font-bold text-slate-400 hover:text-slate-600 transition-colors"
-                    >
-                      CANCELAR
-                    </button>
-                    <button
-                      onClick={handleAgregarManual}
-                      className="flex-1 py-2 bg-indigo-600 text-white text-[10px] font-black rounded-lg hover:bg-indigo-700 shadow-md shadow-indigo-100 transition-all active:scale-95"
-                    >
-                      AGREGAR
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-2">
-              {loadingInv ? (
-                <div className="flex flex-col items-center justify-center py-10 gap-3">
-                  <Loader2 size={24} className="animate-spin text-indigo-500" />
-                  <p className="text-xs text-slate-400">Cargando catálogo...</p>
-                </div>
-              ) : productosFiltrados.length === 0 ? (
-                <p className="text-center py-10 text-xs text-slate-400 italic">No se encontraron productos</p>
-              ) : (
-                productosFiltrados.map(p => {
-                  const enCarrito = items.some(it => it.productoId === p.id)
-                  const stock = Number(p.stock_actual) || 0
-                  return (
-                    <div
-                      key={p.id}
-                      onClick={() => !enCarrito && stock > 0 && agregarItem(p)}
-                      className={`group p-3 rounded-xl border transition-all cursor-pointer flex flex-col gap-1 ${enCarrito ? 'bg-indigo-50 border-indigo-200 opacity-60 cursor-default' :
-                          stock <= 0 ? 'bg-slate-50 border-slate-100 opacity-50 cursor-not-allowed' :
-                            'bg-white border-slate-200 hover:border-indigo-300 hover:shadow-md'
-                        }`}
-                    >
-                      <div className="flex justify-between gap-2">
-                        <p className="text-xs font-bold text-slate-700 leading-tight">{p.nombre}</p>
-                        <span className="text-xs font-black text-slate-900 shrink-0">{fmtUsd(p.precio_usd)}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-[10px]">
-                        <span className="font-mono text-slate-400 uppercase">{p.codigo || 'S/C'}</span>
-                        <div className="flex items-center gap-1.5">
-                          {esDesarrollador && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                agregarComoExterno(p);
-                              }}
-                              className="px-1.5 py-0.5 bg-amber-100 hover:bg-amber-200 text-amber-800 text-[9px] font-black rounded uppercase transition-colors"
-                              title="Agregar copia como externo"
-                            >
-                              + Ext
-                            </button>
-                          )}
-                          <span className={`font-bold ${stock > 5 ? 'text-emerald-500' : stock > 0 ? 'text-amber-500' : 'text-red-500'}`}>
-                            Stock: {stock} {p.unidad || 'und'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })
-              )}
-            </div>
-          </div>
+          {catalogoIzquierdo}
 
           {/* Columna Derecha: Carrito */}
           <div className="w-full md:w-7/12 flex flex-col bg-white">
@@ -432,17 +532,46 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                 </div>
               ) : (
                 items.map((it) => (
-                  <div key={it._key} className="px-3 py-2.5 rounded-xl border border-slate-100 bg-white shadow-sm flex flex-col gap-2">
+                  <div key={it._key} className={`px-3 py-2.5 rounded-xl border transition-all shadow-sm flex flex-col gap-2 ${it.esPrestamo || it.es_prestamo ? 'bg-emerald-50/50 border-emerald-200/60 my-1' : 'border-slate-100 bg-white'}`}>
                     {/* Nombre + eliminar */}
                     <div className="flex justify-between gap-2">
                       <div className="min-w-0">
                         <p className="text-sm font-bold text-slate-800 leading-tight">
                           {it.nombreSnap}
+                          {(it.esPrestamo || it.es_prestamo) && (
+                            <span className="inline-flex items-center gap-1 ml-1.5 align-middle text-[9px] uppercase font-black bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-md"><Handshake size={10} /> Préstamo</span>
+                          )}
                           {(it.origen === 'externo' || !it.productoId) && (
                             <span className="inline-block ml-1.5 align-middle text-[9px] uppercase font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">EXT</span>
                           )}
                         </p>
                         <p className="text-[10px] text-slate-400 font-mono">{it.codigoSnap || 'SIN CÓDIGO'}</p>
+                        {['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol) && (
+                          <div className="flex items-center gap-1 mt-1.5 bg-slate-100 p-0.5 rounded-full w-fit">
+                            <button
+                              type="button"
+                              onClick={() => (it.esPrestamo || it.es_prestamo) && togglePrestamo(it.productoId)}
+                              className={`px-2.5 py-0.5 text-[10px] font-bold rounded-full transition-all ${
+                                !(it.esPrestamo || it.es_prestamo)
+                                  ? 'bg-white text-slate-800 shadow-sm'
+                                  : 'text-slate-500 hover:text-slate-700'
+                              }`}
+                            >
+                              Venta
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => !(it.esPrestamo || it.es_prestamo) && togglePrestamo(it.productoId)}
+                              className={`px-2.5 py-0.5 text-[10px] font-black rounded-full transition-all flex items-center gap-0.5 ${
+                                (it.esPrestamo || it.es_prestamo)
+                                  ? 'bg-emerald-600 text-white shadow-sm'
+                                  : 'text-slate-500 hover:text-emerald-700'
+                              }`}
+                            >
+                              <Handshake size={11} /> Préstamo
+                            </button>
+                          </div>
+                        )}
                       </div>
                       <div className="flex gap-1.5 shrink-0 self-start">
                         {esDesarrollador && (
@@ -510,20 +639,75 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
         {/* ── SECCIÓN PAGOS — franja full-width debajo de las columnas ── */}
         <div className="shrink-0 border-t-2 border-slate-100 bg-gradient-to-b from-slate-50 to-white">
 
-          {/* Header pagos */}
-          <div className="flex items-center justify-between px-6 pt-3 pb-2">
-            <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-              <CreditCard size={13} /> Métodos de Pago
-            </span>
+          {/* Header pagos + COD Toggle */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between px-6 pt-3 pb-2 gap-2 border-b border-slate-100/80 bg-slate-50/50">
+            <div className="flex items-center gap-3.5 flex-wrap">
+              <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                <CreditCard size={13} /> Métodos de Pago
+              </span>
+
+              {/* Toggle Cobro a destino (COD) */}
+              <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 shadow-sm">
+                <span className="p-0.5 rounded bg-rose-50 text-rose-600">
+                  <Truck size={12} />
+                </span>
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-bold text-slate-700 leading-tight">¿Cobro a destino (COD)?</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleToggleCod}
+                  className={`relative inline-flex h-4.5 w-8.5 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    esCod ? 'bg-rose-500' : 'bg-slate-200'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      esCod ? 'translate-x-4' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Control Segmentado (Tabs) */}
+              {esCod && (
+                <div className="flex p-0.5 bg-slate-100 rounded-xl border border-slate-200/50">
+                  <button
+                    type="button"
+                    onClick={() => setTabActiva('inmediato')}
+                    className={`px-3 py-1 text-[10px] font-black rounded-lg transition-all ${
+                      tabActiva === 'inmediato'
+                        ? 'bg-white text-indigo-600 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    Adelanto (${fmtUsd(totalInmediato)})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTabActiva('cod')}
+                    className={`px-3 py-1 text-[10px] font-black rounded-lg transition-all ${
+                      tabActiva === 'cod'
+                        ? 'bg-rose-500 text-white shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    En Destino (${fmtUsd(montoCodRequerido)})
+                  </button>
+                </div>
+              )}
+            </div>
+
             {totales.estaCuadrado ? (
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full shrink-0">
                 <CheckCircle size={12} /> Pagos cuadrados ✓
               </span>
             ) : (
-              <span className={`inline-flex items-center gap-1.5 text-[11px] font-black px-3 py-1 rounded-full border ${totales.diferencia > 0
+              <span className={`inline-flex items-center gap-1.5 text-[11px] font-black px-3 py-1 rounded-full border shrink-0 ${
+                totales.diferencia > 0
                   ? 'bg-amber-50 text-amber-700 border-amber-200'
                   : 'bg-red-50 text-red-600 border-red-200'
-                }`}>
+              }`}>
                 <AlertCircle size={12} />
                 {totales.diferencia > 0
                   ? `Pendiente: ${fmtUsd(totales.diferencia)}`
@@ -532,115 +716,220 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
             )}
           </div>
 
-          {/* Grilla de pagos — inteligente y horizontal */}
-          <div className="px-6 pb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {pagos.map((p, i) => (
-              <div key={i} className="flex flex-col gap-2 bg-white rounded-2xl border border-slate-200 p-3 shadow-sm hover:border-indigo-200 transition-colors group relative">
-                
-                {/* Fila Principal: Método + Monto */}
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{p.metodo}</p>
-                    <div className="flex items-center gap-1">
-                      <span className="text-slate-400 text-xs font-bold">$</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={p.monto}
-                        onChange={e => {
-                          const newPagos = [...pagos]
-                          newPagos[i] = { ...p, monto: e.target.value }
-                          setPagos(newPagos)
-                        }}
-                        className="w-full py-1 px-2 rounded-lg border border-slate-100 text-sm font-black text-slate-800 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-all bg-slate-50 focus:bg-white"
-                        placeholder="0.00"
-                      />
-                    </div>
-                  </div>
+          {/* Área de la grilla de pagos (intercambiable) */}
+          <div className="px-6 py-4">
+            {(!esCod || tabActiva === 'inmediato') ? (
+              // VISTA: PAGO INMEDIATO (ADELANTO)
+              <div className="space-y-2">
+                {esCod && (
+                  <p className="text-[10px] font-black text-indigo-500/80 uppercase tracking-widest pl-1">
+                    1. Registrar abonos o adelantos inmediatos
+                  </p>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {pagosInmediatos.map((p, i) => {
+                    const restante = totalConFlete - totalInmediato
+                    return (
+                      <div key={p.metodo} className="flex flex-col gap-2 bg-white rounded-2xl border border-slate-200 p-3 shadow-sm hover:border-indigo-200 transition-colors group relative">
+                        {/* Fila Principal: Método + Monto */}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{p.metodo}</p>
+                            <div className="flex items-center gap-1">
+                              <span className="text-slate-400 text-xs font-bold">$</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={p.monto}
+                                onChange={e => setMontoPagoInmediato(p.metodo, e.target.value)}
+                                onFocus={e => e.target.select()}
+                                className="w-full py-1 px-2 rounded-lg border border-slate-100 text-sm font-black text-slate-800 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-all bg-slate-50 focus:bg-white"
+                                placeholder="0.00"
+                              />
+                            </div>
+                          </div>
 
-                  {/* Acciones compactas */}
-                  <div className="flex flex-col items-end gap-1">
-                    {pagos.length > 1 && (
-                      <button
-                        onClick={() => setPagos(pagos.filter((_, idx) => idx !== i))}
-                        className="text-slate-300 hover:text-red-500 transition-colors p-1"
-                        title="Eliminar este método"
-                      >
-                        <X size={14} />
-                      </button>
-                    )}
-                    {!totales.estaCuadrado && totales.diferencia > 0 && (
-                      <button
-                        onClick={() => {
-                          const newPagos = [...pagos]
-                          newPagos[i] = { ...p, monto: Math.round((Number(p.monto) + totales.diferencia) * 100) / 100 }
-                          setPagos(newPagos)
-                        }}
-                        className="text-[9px] font-black text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100 hover:bg-amber-100 transition-colors whitespace-nowrap"
-                      >
-                        + RESTO
-                      </button>
-                    )}
-                  </div>
+                          {/* Acciones compactas */}
+                          <div className="flex flex-col items-end gap-1">
+                            <button
+                              onClick={() => togglePagoInmediato(p.metodo)}
+                              className="text-slate-300 hover:text-red-500 transition-colors p-1"
+                              title="Eliminar este método"
+                            >
+                              <X size={14} />
+                            </button>
+                            {restante > 0.01 && (
+                              <button
+                                onClick={() => setMontoPagoInmediato(p.metodo, Number(((Number(p.monto) || 0) + restante).toFixed(2)))}
+                                className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 hover:bg-emerald-100 transition-colors whitespace-nowrap"
+                              >
+                                + RESTO
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Fila Secundaria: Días Vencimiento (si aplica) */}
+                        {p.metodo === 'Cta por cobrar' && (
+                          <div className="flex items-center gap-2 mt-1 pt-1 border-t border-slate-50">
+                            <span className="text-[9px] font-bold text-slate-400 uppercase">
+                              Días venc. {esVendedorSinComision ? '(opcional)' : '(obligatorio) *'}:
+                            </span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
+                              value={p.diasVencimiento || ''}
+                              onChange={e => updatePagoInmediato(p.metodo, { diasVencimiento: e.target.value ? parseInt(e.target.value) : null })}
+                              className="flex-1 py-1 px-2 rounded-lg text-[11px] font-bold border border-slate-100 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:bg-white transition-all"
+                              placeholder={esVendedorSinComision ? 'Opcional' : 'Obligatorio'}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+
+                  {/* Selector / Añadir pago inmediato */}
+                  {((!esCod && !pagoInmediatoCuadrado) || (esCod && totalInmediato < totalConFlete)) && (
+                    <div className="flex flex-col h-full min-h-[62px]">
+                      {mostrarSelectorInmediato ? (
+                        <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-2.5 h-full flex flex-col justify-center">
+                          <div className="flex flex-wrap gap-1">
+                            {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && (m !== 'Donación' || perfil?.rol !== 'vendedor'))
+                              .filter(m => !pagosInmediatos.some(f => f.metodo === m))
+                              .map(metodo => (
+                                <button
+                                  key={metodo}
+                                  onClick={() => {
+                                    togglePagoInmediato(metodo)
+                                    setMostrarSelectorInmediato(false)
+                                  }}
+                                  className="px-2 py-1 rounded-lg text-[9px] font-bold bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
+                                >
+                                  {metodo}
+                                </button>
+                              ))}
+                          </div>
+                          <button
+                            onClick={() => setMostrarSelectorInmediato(false)}
+                            className="mt-1.5 text-[9px] text-indigo-400 hover:text-indigo-600 transition-colors font-bold text-center"
+                          >
+                            CANCELAR
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setMostrarSelectorInmediato(true)}
+                          className="h-full flex items-center justify-center gap-1.5 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 text-[10px] font-bold hover:border-indigo-300 hover:text-indigo-500 hover:bg-indigo-50/50 transition-all p-3"
+                        >
+                          <Plus size={12} /> AÑADIR PAGO
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                {/* Fila Secundaria: Días Vencimiento (si aplica) */}
-                {p.metodo === 'Cta por cobrar' && (
-                  <div className="flex items-center gap-2 mt-1 pt-1 border-t border-slate-50">
-                    <span className="text-[9px] font-bold text-slate-400 uppercase">
-                      Días venc. {esVendedorSinComision ? '(opcional)' : '(obligatorio) *'}:
-                    </span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={p.diasVencimiento || ''}
-                      onChange={e => {
-                        const newPagos = [...pagos]
-                        newPagos[i] = { ...p, diasVencimiento: e.target.value }
-                        setPagos(newPagos)
-                      }}
-                      className="flex-1 py-1 px-2 rounded-lg text-[11px] font-bold border border-slate-100 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:bg-white transition-all"
-                      placeholder={esVendedorSinComision ? 'Opcional' : 'Obligatorio'}
-                    />
-                  </div>
+                {esCod && pagosInmediatos.length === 0 && (
+                  <p className="text-xs text-slate-400 italic pl-1 pt-1">No se registraron adelantos inmediatos.</p>
                 )}
               </div>
-            ))}
+            ) : (
+              // VISTA: COBRO EN DESTINO (COD PROPUESTA)
+              <div className="space-y-2">
+                <p className="text-[10px] font-black text-rose-500/80 uppercase tracking-widest pl-1">
+                  2. Definir propuesta de cobro al recibir en destino
+                </p>
+                {montoCodRequerido > 0.015 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {propuestaCod.map((p, i) => {
+                      const restanteCod = Math.max(0, round2(montoCodRequerido - totalPropuestaCod))
+                      return (
+                        <div key={p.metodo} className="flex flex-col gap-2 bg-white rounded-2xl border border-rose-100 p-3 shadow-sm hover:border-rose-200 transition-colors group relative">
+                          {/* Fila Principal: Método + Monto */}
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[9px] font-black text-rose-500 uppercase tracking-widest leading-none mb-1">{p.metodo}</p>
+                              <div className="flex items-center gap-1">
+                                <span className="text-rose-400 text-xs font-bold">$</span>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={p.monto}
+                                  onChange={e => setMontoPropuestaCod(p.metodo, e.target.value)}
+                                  onFocus={e => e.target.select()}
+                                  className="w-full py-1 px-2 rounded-lg border border-rose-100 text-sm font-black text-slate-800 focus:outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-50 transition-all bg-slate-50 focus:bg-white"
+                                  placeholder="0.00"
+                                />
+                              </div>
+                            </div>
 
-            {/* Añadir método — se integra en la grilla */}
-            {!totales.estaCuadrado && Math.abs(totales.diferencia) > 0.01 && (
-              <div className="flex flex-col h-full">
-                {mostrarSelectorMetodo ? (
-                  <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-3 h-full flex flex-col justify-center">
-                    <div className="flex flex-wrap gap-1.5">
-                      {metodosDisponibles.map(metodo => (
-                        <button
-                          key={metodo}
-                          onClick={() => {
-                            setPagos([...pagos, { metodo, monto: Math.max(0, totales.diferencia) }])
-                            setMostrarSelectorMetodo(false)
-                          }}
-                          className="px-2 py-1.5 rounded-lg text-[10px] font-bold bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
-                        >
-                          {metodo}
-                        </button>
-                      ))}
-                    </div>
-                    <button
-                      onClick={() => setMostrarSelectorMetodo(false)}
-                      className="mt-2 text-[10px] text-indigo-400 hover:text-indigo-600 transition-colors font-bold text-center"
-                    >
-                      CANCELAR
-                    </button>
+                            {/* Acciones compactas */}
+                            <div className="flex flex-col items-end gap-1">
+                              <button
+                                onClick={() => togglePropuestaCod(p.metodo)}
+                                className="text-slate-300 hover:text-red-500 transition-colors p-1"
+                                title="Eliminar esta propuesta"
+                              >
+                                <X size={14} />
+                              </button>
+                              {restanteCod > 0.01 && (
+                                <button
+                                  onClick={() => setMontoPropuestaCod(p.metodo, Number(((Number(p.monto) || 0) + restanteCod).toFixed(2)))}
+                                  className="text-[9px] font-black text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded border border-rose-100 hover:bg-rose-200 transition-colors whitespace-nowrap"
+                                >
+                                  + RESTO
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+
+                    {/* Selector / Añadir propuesta COD */}
+                    {!propuestaCodCuadrado && (
+                      <div className="flex flex-col h-full min-h-[62px]">
+                        {mostrarSelectorCod ? (
+                          <div className="bg-rose-50 border border-rose-100 rounded-2xl p-2.5 h-full flex flex-col justify-center">
+                            <div className="flex flex-wrap gap-1">
+                              {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && m !== 'Cta por cobrar' && m !== 'Donación')
+                                .filter(m => !propuestaCod.some(f => f.metodo === m))
+                                .map(metodo => (
+                                  <button
+                                    key={metodo}
+                                    onClick={() => {
+                                      togglePropuestaCod(metodo)
+                                      setMostrarSelectorCod(false)
+                                    }}
+                                    className="px-2 py-1 rounded-lg text-[9px] font-bold bg-white border border-rose-200 text-rose-700 hover:bg-rose-600 hover:text-white transition-all shadow-sm"
+                                  >
+                                    {metodo}
+                                  </button>
+                                ))}
+                            </div>
+                            <button
+                              onClick={() => setMostrarSelectorCod(false)}
+                              className="mt-1.5 text-[9px] text-rose-400 hover:text-rose-600 transition-colors font-bold text-center"
+                            >
+                              CANCELAR
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setMostrarSelectorCod(true)}
+                            className="h-full flex items-center justify-center gap-1.5 border-2 border-dashed border-rose-200 rounded-2xl text-rose-400 text-[10px] font-bold hover:border-rose-300 hover:text-rose-500 hover:bg-rose-50/50 transition-all p-3"
+                          >
+                            <Plus size={12} /> PROPONER PAGO
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ) : (
-                  <button
-                    onClick={() => setMostrarSelectorMetodo(true)}
-                    className="h-full min-h-[60px] flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 text-[11px] font-bold hover:border-indigo-300 hover:text-indigo-500 hover:bg-indigo-50/50 transition-all p-4"
-                  >
-                    <Plus size={14} /> AÑADIR PAGO
-                  </button>
+                  <p className="text-[10px] text-amber-600 font-bold bg-amber-50 border border-amber-200/60 p-2.5 rounded-xl inline-block">
+                    El monto asignado en pagos inmediatos ya cubre el total.
+                  </p>
                 )}
               </div>
             )}
@@ -679,7 +968,13 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
               <button
                 onClick={handleSave}
                 disabled={editarItems.isPending || items.length === 0 || !totales.estaCuadrado || !cxcVencimientoValido}
-                title={!cxcVencimientoValido ? 'Días de vencimiento obligatorios para cuentas por cobrar' : undefined}
+                title={
+                  !cxcVencimientoValido
+                    ? 'Días de vencimiento obligatorios para cuentas por cobrar'
+                    : esCod
+                    ? (!propuestaCodCuadrado ? 'La propuesta COD no está cuadrada' : undefined)
+                    : (!pagoInmediatoCuadrado ? 'Los montos no cuadran con el total' : undefined)
+                }
                 className="px-6 py-3 rounded-2xl bg-indigo-600 text-white font-black text-sm shadow-lg shadow-indigo-200 hover:bg-indigo-700 active:scale-[0.98] transition-all flex items-center gap-2 disabled:opacity-50"
               >
                 {editarItems.isPending ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}

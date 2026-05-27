@@ -1,6 +1,6 @@
 // src/components/inventario/ProductoCard.jsx
 import { useState } from 'react'
-import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle, Package, Trash2, ClipboardList, TrendingUp, Eye, Building2, Zap } from 'lucide-react'
+import { Hash, Tag, Layers, Pencil, EyeOff, AlertTriangle, Package, Trash2, ClipboardList, TrendingUp, Eye, Building2, Zap, Copy } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import { usePrecioVendedor } from '../../hooks/usePrecioVendedor'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
@@ -62,7 +62,7 @@ function StockBadge({ actual, minimo, comprometido = 0, productoId }) {
   )
 }
 
-export default function ProductoCard({ producto, onEditar, onDesactivar, onBorrar, onKardex, onDetalle, tasa = 0, comprometido = 0 }) {
+export default function ProductoCard({ producto, onEditar, onClonar, onDesactivar, onBorrar, onKardex, onDetalle, tasa = 0, comprometido = 0 }) {
   const { perfil } = useAuthStore()
   const [copiado, setCopiado] = useState(false)
   const { tasaBcv, tasaUsdt, tasaEfectiva } = useTasaCambio()
@@ -298,6 +298,10 @@ export default function ProductoCard({ producto, onEditar, onDesactivar, onBorra
                 <button onClick={() => onEditar(producto)} title="Editar"
                   className="flex items-center justify-center p-1.5 rounded-lg text-sky-600 hover:bg-sky-50 transition-colors shrink-0">
                   <Pencil size={13} />
+                </button>
+                <button onClick={() => onClonar?.(producto)} title="Crear producto similar"
+                  className="flex items-center justify-center p-1.5 rounded-lg text-violet-600 hover:bg-violet-50 transition-colors shrink-0">
+                  <Copy size={13} />
                 </button>
                 <button onClick={() => onDesactivar(producto)} title="Desactivar"
                   className="flex items-center justify-center p-1.5 rounded-lg text-amber-500 hover:bg-amber-50 transition-colors shrink-0">

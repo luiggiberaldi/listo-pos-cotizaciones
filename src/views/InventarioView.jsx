@@ -4,7 +4,7 @@
 // — Supervisor: vista completa + crear/editar/desactivar
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Package, Plus, Search, RefreshCw, X, Filter, LayoutGrid, List, AlertTriangle, ArrowLeftRight, FileText, ClipboardPaste, TrendingUp } from 'lucide-react'
+import { Package, Plus, Search, RefreshCw, X, Filter, LayoutGrid, List, AlertTriangle, ArrowLeftRight, FileText, ClipboardPaste, TrendingUp, FileSpreadsheet } from 'lucide-react'
 import { smartSearchProductos } from '../utils/smartSearch'
 import useAuthStore from '../store/useAuthStore'
 import { useTasaCambio } from '../hooks/useTasaCambio'
@@ -24,6 +24,7 @@ import BusquedaListaModal from '../components/inventario/BusquedaListaModal'
 import ModalBatchPrice from '../components/ModalBatchPrice'
 import ModalTransformacion from '../components/inventario/ModalTransformacion'
 import IngresoLoteHubModal from '../components/inventario/IngresoLoteHubModal'
+import ImportadorModal from '../components/inventario/ImportadorModal'
 import { Modal }     from '../components/ui/Modal'
 import ConfirmModal  from '../components/ui/ConfirmModal'
 import EmptyState    from '../components/ui/EmptyState'
@@ -104,6 +105,9 @@ export default function InventarioView() {
   const [showBatchPrice, setShowBatchPrice] = useState(false)
   const [showTransformacion, setShowTransformacion] = useState(false)
   const [showIngresoLote, setShowIngresoLote] = useState(false)
+  const [productoAClonar,  setProductoAClonar]  = useState(null)
+  const [modalCloneMode,   setModalCloneMode]   = useState(false)
+  const [showImportador,   setShowImportador]   = useState(false)
 
   // Data — todos los productos (sin filtro de búsqueda, filtro client-side con smartSearch)
   const { data: inventarioData, isLoading, isError, refetch } = useInventario({ categoria, pageSize: 1000 })
@@ -175,11 +179,19 @@ export default function InventarioView() {
 
   function abrirCrear() {
     setProductoEditando(null)
+    setModalCloneMode(false)
     setModalFormOpen(true)
   }
 
   function abrirEditar(producto) {
     setProductoEditando(producto)
+    setModalCloneMode(false)
+    setModalFormOpen(true)
+  }
+
+  function abrirClonar(producto) {
+    setProductoEditando(producto)
+    setModalCloneMode(true)
     setModalFormOpen(true)
   }
 
@@ -262,6 +274,7 @@ export default function InventarioView() {
               <ArrowLeftRight size={16} />
               <span className="hidden sm:inline">Transformar</span>
             </button>
+
             <button onClick={abrirCrear} className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98]"
               style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
               <Plus size={16} />Nuevo producto
@@ -424,6 +437,7 @@ export default function InventarioView() {
                 key={p.id}
                 producto={p}
                 onEditar={abrirEditar}
+                onClonar={abrirClonar}
                 onDesactivar={abrirDesactivar}
                 onBorrar={abrirBorrar}
                 onKardex={setKardexProducto}
@@ -440,6 +454,7 @@ export default function InventarioView() {
                 key={p.id}
                 producto={p}
                 onEditar={abrirEditar}
+                onClonar={abrirClonar}
                 onDesactivar={abrirDesactivar}
                 onBorrar={abrirBorrar}
                 onKardex={setKardexProducto}
@@ -465,14 +480,15 @@ export default function InventarioView() {
       {puedeGestionarInventario && (
         <Modal
           isOpen={modalFormOpen}
-          onClose={() => setModalFormOpen(false)}
-          title={productoEditando ? 'Editar producto' : 'Nuevo producto'}
+          onClose={() => { setModalFormOpen(false); setModalCloneMode(false) }}
+          title={modalCloneMode ? '📋 Crear producto similar' : productoEditando ? 'Editar producto' : 'Nuevo producto'}
           className="sm:max-w-4xl"
         >
           <ProductoForm
             producto={productoEditando}
-            onSuccess={() => setModalFormOpen(false)}
-            onCancel={() => setModalFormOpen(false)}
+            isClone={modalCloneMode}
+            onSuccess={() => { setModalFormOpen(false); setModalCloneMode(false) }}
+            onCancel={() => { setModalFormOpen(false); setModalCloneMode(false) }}
           />
         </Modal>
       )}
@@ -564,6 +580,12 @@ export default function InventarioView() {
         onClose={() => setShowIngresoLote(false)}
         productos={todosProductos}
         categorias={categoriasBatch}
+        onSuccess={refetch}
+      />
+
+      <ImportadorModal
+        isOpen={showImportador}
+        onClose={() => setShowImportador(false)}
         onSuccess={refetch}
       />
     </div>

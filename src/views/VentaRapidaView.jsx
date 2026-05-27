@@ -6,7 +6,7 @@ import {
   Zap, User, X, Plus, Minus, Package, ArrowLeft, ArrowRight, Loader2,
   Search, CheckCircle, ShoppingCart, DollarSign, Truck, CreditCard,
   AlertCircle, ChevronRight, ChevronLeft, UserPlus, ChevronUp, Hash, FileText, Trash2, Save,
-  Download, Printer, MessageCircle, Clock, Check, Edit2
+  Download, Printer, MessageCircle, Clock, Check, Edit2, Handshake
 } from 'lucide-react'
 import { compartirPorWhatsApp, generarMensaje } from '../utils/whatsapp'
 import { useClientes } from '../hooks/useClientes'
@@ -378,7 +378,7 @@ export default function VentaRapidaView() {
   const [clienteOpen, setClienteOpen] = useState(false)
   const [productoBusqueda, setProductoBusqueda] = useState('')
   const [catActiva, setCatActiva] = useState('')
-  const { items, setItems, agregarItem: _agregarItem, eliminarPorId: quitarItem, cambiarCantidad, setCantidadDirecta, cambiarPrecio, setStockMap } = useLineItems({ checkStock: true })
+  const { items, setItems, agregarItem: _agregarItem, eliminarPorId: quitarItem, cambiarCantidad, setCantidadDirecta, cambiarPrecio, togglePrestamo, setStockMap } = useLineItems({ checkStock: true })
   const [editItemIdx, setEditItemIdx] = useState(null)
   const comisionEstimada = useMemo(() => calcComisionEstimada(items, config, perfil), [items, config, perfil])
 
@@ -533,7 +533,12 @@ export default function VentaRapidaView() {
     pagoCuadrado: propuestaCodCuadrado,
   } = useFormasPago(montoCodRequerido)
 
+  const esPrestamoPuro = items.length > 0 && items.every(it => it.esPrestamo);
+
   const formasPagoFinales = useMemo(() => {
+    if (esPrestamoPuro) {
+      return [{ metodo: "Préstamo", monto: 0.00, diasVencimiento: 0 }]
+    }
     if (esCod) {
       return [
         ...pagosInmediatos,
@@ -548,7 +553,7 @@ export default function VentaRapidaView() {
     } else {
       return pagosInmediatos
     }
-  }, [esCod, pagosInmediatos, propuestaCod, totalConFlete, totalInmediato, montoCodRequerido])
+  }, [esPrestamoPuro, esCod, pagosInmediatos, propuestaCod, totalConFlete, totalInmediato, montoCodRequerido])
 
   const handleToggleCod = () => {
     setEsCod(prev => {
@@ -594,6 +599,7 @@ export default function VentaRapidaView() {
     clienteSeleccionado?.vendedor?.rol === 'vendedor_sin_comision' ||
     (clienteSeleccionado?.vendedor_id === perfil?.id && perfil?.rol === 'vendedor_sin_comision');
 
+
   const cxcItem = pagosInmediatos.find(f => f.metodo === 'Cta por cobrar');
   const cxcVencimientoValido = !cxcItem || (
     cxcItem.diasVencimiento !== undefined &&
@@ -602,9 +608,9 @@ export default function VentaRapidaView() {
     Number(cxcItem.diasVencimiento) > 0
   );
 
-  const step2Valid = (esCod
+  const step2Valid = esPrestamoPuro || ((esCod
     ? (pagoInmediatoCuadrado || (montoCodRequerido > 0.015 && propuestaCodCuadrado))
-    : pagoInmediatoCuadrado) && cxcVencimientoValido;
+    : pagoInmediatoCuadrado) && cxcVencimientoValido);
 
   // Close cliente dropdown on outside click
   useEffect(() => {
@@ -687,6 +693,7 @@ export default function VentaRapidaView() {
         unidadSnap: it.unidadSnap,
         codigoSnap: it.codigoSnap,
         origen: it.origen,
+        es_prestamo: it.esPrestamo || false,
       })),
       costoEnvioUsd,
       tasaBcv: tasa,
@@ -831,6 +838,8 @@ export default function VentaRapidaView() {
             onSiguiente={() => setStep(1)}
             productos={productos}
             setEditItemIdx={setEditItemIdx}
+            esVendedorSinComision={esVendedorSinComision}
+            togglePrestamo={togglePrestamo}
           />
         )}
 
@@ -869,6 +878,7 @@ export default function VentaRapidaView() {
             esCod={esCod}
             setEsCod={handleToggleCod}
             clienteSeleccionado={clienteSeleccionado}
+            esPrestamoPuro={esPrestamoPuro}
           />
         )}
 
@@ -1036,6 +1046,8 @@ function Step1Productos({
   preciosMap = {},
   productos = [],
   setEditItemIdx,
+  esVendedorSinComision,
+  togglePrestamo,
 }) {
   const { aplicarMarkup, esExterno } = usePrecioVendedor()
   const [sheetState, setSheetState] = useState('closed')
@@ -1369,19 +1381,50 @@ function Step1Productos({
           <>
             <div className="flex-1 overflow-y-auto min-h-0 px-3 py-2 divide-y divide-slate-50">
               {items.map(it => {
-                const linea = round2(it.precioUnitUsd * it.cantidad)
+                const linea = it.esPrestamo ? 0 : round2(it.precioUnitUsd * it.cantidad)
                 return (
-                  <div key={it.productoId} className="py-2">
+                  <div key={it.productoId} className={`py-2 px-2 rounded-xl transition-all ${it.esPrestamo ? 'bg-emerald-50/50 border border-emerald-100/60 my-1 shadow-sm' : 'border-b border-slate-50 last:border-0'}`}>
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <div className="flex-1 min-w-0">
                         <p className="text-[12px] font-bold text-slate-700 leading-snug">
                           {it.nombreSnap}
+                          {it.esPrestamo && (
+                            <span className="inline-flex items-center gap-1 ml-1 align-middle text-[8px] uppercase tracking-wider font-black bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-md">
+                              <Handshake size={10} /> Préstamo
+                            </span>
+                          )}
                           {it.origen === 'externo' && (
                             <span className="inline-block ml-1 align-middle text-[8px] uppercase tracking-wider font-bold bg-amber-100 text-amber-700 px-1 py-0.5 rounded">
                               Ext - {it.codigoSnap}
                             </span>
                           )}
                         </p>
+                        {esVendedorSinComision && (
+                          <div className="flex items-center gap-1 mt-1 mb-1.5 bg-slate-100 p-0.5 rounded-full w-fit">
+                            <button
+                              type="button"
+                              onClick={() => it.esPrestamo && togglePrestamo(it.productoId)}
+                              className={`px-2 py-0.5 text-[9px] font-bold rounded-full transition-all ${
+                                !it.esPrestamo
+                                  ? 'bg-white text-slate-800 shadow-sm'
+                                  : 'text-slate-500 hover:text-slate-700'
+                              }`}
+                            >
+                              Venta
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => !it.esPrestamo && togglePrestamo(it.productoId)}
+                              className={`px-2 py-0.5 text-[9px] font-black rounded-full transition-all flex items-center gap-0.5 ${
+                                it.esPrestamo
+                                  ? 'bg-emerald-600 text-white shadow-sm'
+                                  : 'text-slate-500 hover:text-emerald-700'
+                              }`}
+                            >
+                              <Handshake size={10} /> Préstamo
+                            </button>
+                          </div>
+                        )}
                         {(() => {
                           const esExterno = it.origen === 'externo' || !it.productoId || String(it.productoId).startsWith('manual-') || String(it.codigoSnap).startsWith('EXT')
                           return !esExterno && it.cantidad > getStockHelper(it.productoId, productos)
@@ -1581,19 +1624,50 @@ function Step1Productos({
             {/* Items list */}
             <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-2 divide-y divide-slate-50" style={{ WebkitOverflowScrolling: 'touch' }}>
               {items.map(it => {
-                const linea = round2(it.precioUnitUsd * it.cantidad)
+                const linea = it.esPrestamo ? 0 : round2(it.precioUnitUsd * it.cantidad)
                 return (
-                  <div key={it.productoId} className="py-2">
+                  <div key={it.productoId} className={`py-2 px-2 rounded-xl transition-all ${it.esPrestamo ? 'bg-emerald-50/50 border border-emerald-100/60 my-1 shadow-sm' : 'border-b border-slate-50 last:border-0'}`}>
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <div className="flex-1 min-w-0">
                         <p className="text-[12px] font-bold text-slate-700 leading-snug">
                           {it.nombreSnap}
+                          {it.esPrestamo && (
+                            <span className="inline-flex items-center gap-1 ml-1 align-middle text-[8px] uppercase tracking-wider font-black bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-md">
+                              <Handshake size={10} /> Préstamo
+                            </span>
+                          )}
                           {it.origen === 'externo' && (
                             <span className="inline-block ml-1 align-middle text-[8px] uppercase tracking-wider font-bold bg-amber-100 text-amber-700 px-1 py-0.5 rounded">
                               Ext - {it.codigoSnap}
                             </span>
                           )}
                         </p>
+                        {esVendedorSinComision && (
+                          <div className="flex items-center gap-1 mt-1 mb-1.5 bg-slate-100 p-0.5 rounded-full w-fit">
+                            <button
+                              type="button"
+                              onClick={() => it.esPrestamo && togglePrestamo(it.productoId)}
+                              className={`px-2 py-0.5 text-[9px] font-bold rounded-full transition-all ${
+                                !it.esPrestamo
+                                  ? 'bg-white text-slate-800 shadow-sm'
+                                  : 'text-slate-500 hover:text-slate-700'
+                              }`}
+                            >
+                              Venta
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => !it.esPrestamo && togglePrestamo(it.productoId)}
+                              className={`px-2 py-0.5 text-[9px] font-black rounded-full transition-all flex items-center gap-0.5 ${
+                                it.esPrestamo
+                                  ? 'bg-emerald-600 text-white shadow-sm'
+                                  : 'text-slate-500 hover:text-emerald-700'
+                              }`}
+                            >
+                              <Handshake size={10} /> Préstamo
+                            </button>
+                          </div>
+                        )}
                         {(() => {
                           const esExterno = it.origen === 'externo' || !it.productoId || String(it.productoId).startsWith('manual-') || String(it.codigoSnap).startsWith('EXT')
                           return !esExterno && it.cantidad > getStockHelper(it.productoId, productos)
@@ -1697,7 +1771,8 @@ function Step2Pago({
   transportistas, transportistaId, setTransportistaId,
   fleteUsd, setFleteUsd, corteUsd, setCorteUsd, notas, setNotas,
   tasa, esCod, setEsCod,
-  clienteSeleccionado
+  clienteSeleccionado,
+  esPrestamoPuro
 }) {
   const [showNuevoTransp, setShowNuevoTransp] = useState(false)
   const crearTransp = useCrearTransportista()
@@ -1783,194 +1858,211 @@ function Step2Pago({
       <div className="flex flex-col lg:flex-row lg:gap-6">
         {/* Columna izquierda: Formas de pago */}
         <div className="flex-1 min-w-0">
-          <div className="mb-2">
-            {/* Toggle Cobro a destino (COD) */}
-            <div className="mb-4 flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl p-3 shadow-sm max-w-md">
-              <div className="flex items-center gap-2">
-                <span className="p-1.5 rounded-lg bg-rose-100 text-rose-600">
-                  <Truck size={16} />
-                </span>
-                <div>
-                  <span className="text-xs font-bold text-slate-700 block">¿Cobro a destino (COD)?</span>
-                  <span className="text-[10px] text-slate-400">El cliente pagará al recibir la mercancía</span>
-                </div>
+          {esPrestamoPuro ? (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 flex flex-col items-center justify-center text-center gap-4 max-w-md mx-auto shadow-sm animate-in zoom-in-95 duration-200 my-4">
+              <div className="w-16 h-16 rounded-full bg-emerald-100/80 flex items-center justify-center text-emerald-600 shadow-inner">
+                <Handshake size={32} />
               </div>
-              <button
-                type="button"
-                onClick={setEsCod}
-                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                  esCod ? 'bg-rose-500' : 'bg-slate-200'
-                }`}
-              >
-                <span
-                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                    esCod ? 'translate-x-5' : 'translate-x-0'
-                  }`}
-                />
-              </button>
+              <div className="space-y-1.5">
+                <h4 className="text-base font-black text-emerald-800">Préstamo de Material</h4>
+                <p className="text-xs text-emerald-600 font-semibold leading-relaxed">
+                  Esta transacción es de tipo <strong>Préstamo Puro</strong> (monto financiero de referencia $0.00). Los productos saldrán del stock físico y se registrarán en la ficha de control del cliente para su posterior retorno o facturación.
+                </p>
+              </div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100/60 text-emerald-800 font-bold rounded-xl text-xs border border-emerald-200">
+                <CheckCircle size={14} className="text-emerald-600" /> Transacción validada
+              </div>
             </div>
+          ) : (
+            <>
+              <div className="mb-2">
+              {/* Toggle Cobro a destino (COD) */}
+              <div className="mb-4 flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl p-3 shadow-sm max-w-md">
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 rounded-lg bg-rose-100 text-rose-600">
+                    <Truck size={16} />
+                  </span>
+                  <div>
+                    <span className="text-xs font-bold text-slate-700 block">¿Cobro a destino (COD)?</span>
+                    <span className="text-[10px] text-slate-400">El cliente pagará al recibir la mercancía</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={setEsCod}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    esCod ? 'bg-rose-500' : 'bg-slate-200'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      esCod ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
 
-            {/* SECCIÓN 1: PAGO INMEDIATO (ADELANTO) */}
-            <div className="space-y-3">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
-                {esCod ? 'Pago Inmediato (Adelanto / Seña)' : 'Formas de pago *'}
-              </label>
+              {/* SECCIÓN 1: PAGO INMEDIATO (ADELANTO) */}
+              <div className="space-y-3">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+                  {esCod ? 'Pago Inmediato (Adelanto / Seña)' : 'Formas de pago *'}
+                </label>
 
-              {/* Métodos activos — fila con monto inline */}
-              <div className="space-y-2">
-                {pagosInmediatos.map(fp => {
-                  const restante = totalConFlete - totalInmediato - totalPropuestaCod
-                  return (
-                    <div key={fp.metodo} className="space-y-2">
-                      <div className="flex items-center gap-2 bg-sky-50 border border-sky-300 rounded-xl px-3 py-2">
-                        <span className="text-sm font-bold text-sky-700 w-32 shrink-0 truncate">{fp.metodo}</span>
-                        <div className="relative flex-1 flex items-center">
-                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">$</span>
-                          <input
-                            type="number" min="0" step="0.01"
-                            value={fp.monto}
-                            onChange={e => setMontoPagoInmediato(fp.metodo, e.target.value)}
-                            onFocus={e => e.target.select()}
-                            placeholder="0.00"
-                            className="w-full pl-6 pr-2 py-1.5 rounded-lg text-sm font-semibold border border-sky-200 bg-white focus:outline-none focus:ring-2 focus:ring-sky-300 text-slate-800"
-                          />
-                          {restante > 0.01 && (
-                            <button type="button"
-                              onClick={() => setMontoPagoInmediato(fp.metodo, Number(((Number(fp.monto) || 0) + restante).toFixed(2)))}
-                              className="ml-1.5 px-2 py-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition-colors shrink-0"
-                              title={`Completar con $${restante.toFixed(2)} restante`}>
-                              Restante
-                            </button>
-                          )}
+                {/* Métodos activos — fila con monto inline */}
+                <div className="space-y-2">
+                  {pagosInmediatos.map(fp => {
+                    const restante = totalConFlete - totalInmediato - totalPropuestaCod
+                    return (
+                      <div key={fp.metodo} className="space-y-2">
+                        <div className="flex items-center gap-2 bg-sky-50 border border-sky-300 rounded-xl px-3 py-2">
+                          <span className="text-sm font-bold text-sky-700 w-32 shrink-0 truncate">{fp.metodo}</span>
+                          <div className="relative flex-1 flex items-center">
+                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">$</span>
+                            <input
+                              type="number" min="0" step="0.01"
+                              value={fp.monto}
+                              onChange={e => setMontoPagoInmediato(fp.metodo, e.target.value)}
+                              onFocus={e => e.target.select()}
+                              placeholder="0.00"
+                              className="w-full pl-6 pr-2 py-1.5 rounded-lg text-sm font-semibold border border-sky-200 bg-white focus:outline-none focus:ring-2 focus:ring-sky-300 text-slate-800"
+                            />
+                            {restante > 0.01 && (
+                              <button type="button"
+                                onClick={() => setMontoPagoInmediato(fp.metodo, Number(((Number(fp.monto) || 0) + restante).toFixed(2)))}
+                                className="ml-1.5 px-2 py-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition-colors shrink-0"
+                                title={`Completar con $${restante.toFixed(2)} restante`}>
+                                Restante
+                              </button>
+                            )}
+                          </div>
+                          <button type="button" onClick={() => togglePagoInmediato(fp.metodo)}
+                            className="p-1 rounded-lg hover:bg-sky-100 text-sky-400 hover:text-sky-600 transition-colors shrink-0">
+                            <X size={14} />
+                          </button>
                         </div>
-                        <button type="button" onClick={() => togglePagoInmediato(fp.metodo)}
-                          className="p-1 rounded-lg hover:bg-sky-100 text-sky-400 hover:text-sky-600 transition-colors shrink-0">
-                          <X size={14} />
+
+                        {/* Opción de días de vencimiento para CxC */}
+                        {fp.metodo === 'Cta por cobrar' && (
+                          <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50/50 border border-amber-200/50 rounded-lg ml-6">
+                            <Clock size={12} className="text-amber-500 shrink-0" />
+                            <span className="text-[11px] font-medium text-amber-700 whitespace-nowrap">
+                              Días de vencimiento (obligatorio) *:
+                            </span>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              value={fp.diasVencimiento ?? ''}
+                              onChange={e => {
+                                const val = e.target.value;
+                                if (val === '' || /^[0-9]+$/.test(val)) {
+                                  updatePagoInmediato(fp.metodo, { diasVencimiento: val ? parseInt(val, 10) : null });
+                                }
+                              }}
+                              placeholder="Obligatorio"
+                              className="w-20 px-2 py-1 rounded border border-amber-200 bg-white focus:outline-none focus:ring-2 focus:ring-amber-300 text-slate-800 text-center font-bold text-xs"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Chips para agregar métodos de pago inmediato */}
+                {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && (m !== 'Donación' || perfil?.rol !== 'vendedor'))
+                  .some(m => !pagosInmediatos.some(f => f.metodo === m)) && (
+                  <div className="flex flex-wrap gap-2">
+                    {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && (m !== 'Donación' || perfil?.rol !== 'vendedor'))
+                      .filter(m => !pagosInmediatos.some(f => f.metodo === m))
+                      .map(m => (
+                        <button key={m} type="button" onClick={() => togglePagoInmediato(m)}
+                          className="px-3.5 py-1.5 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:text-sky-600 transition-all duration-200 shadow-sm active:scale-95">
+                          {m}
                         </button>
+                      ))}
+                  </div>
+                )}
+
+                {esCod && pagosInmediatos.length === 0 && (
+                  <p className="text-xs text-slate-400 italic">No se registraron adelantos inmediatos.</p>
+                )}
+              </div>
+
+              {/* SECCIÓN 2: PAGO AL RECIBIR (COD) */}
+              {esCod && (
+                <div className="mt-5 p-4 bg-rose-50/40 border border-rose-200/50 rounded-2xl space-y-4">
+                  <div className="flex items-center justify-between text-xs font-bold text-rose-800">
+                    <span>Monto a cobrar al recibir:</span>
+                    <span className="text-sm font-black text-rose-600">${montoCodRequerido.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+
+                  {montoCodRequerido > 0.015 ? (
+                    <div className="space-y-3 border-t border-rose-100/50 pt-3">
+                      <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                        ¿Cómo pagará al recibir? (Propuesta) *
+                      </label>
+
+                      {/* Métodos propuestos activos */}
+                      <div className="space-y-2">
+                        {propuestaCod.map(fp => {
+                          const restanteCod = Math.max(0, round2(montoCodRequerido - totalPropuestaCod))
+                          return (
+                            <div key={fp.metodo} className="space-y-2">
+                              <div className="flex items-center gap-2 bg-rose-50/60 border border-rose-200/80 rounded-xl px-3 py-2">
+                                <span className="text-sm font-bold text-rose-700 w-32 shrink-0 truncate">{fp.metodo}</span>
+                                <div className="relative flex-1 flex items-center">
+                                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-rose-405 text-sm font-medium">$</span>
+                                  <input
+                                    type="number" min="0" step="0.01"
+                                    value={fp.monto}
+                                    onChange={e => setMontoPropuestaCod(fp.metodo, e.target.value)}
+                                    onFocus={e => e.target.select()}
+                                    placeholder="0.00"
+                                    className="w-full pl-6 pr-2 py-1.5 rounded-lg text-sm font-semibold border border-rose-200 bg-white focus:outline-none focus:ring-2 focus:ring-rose-300 text-slate-800"
+                                  />
+                                  {restanteCod > 0.01 && (
+                                    <button type="button"
+                                      onClick={() => setMontoPropuestaCod(fp.metodo, Number(((Number(fp.monto) || 0) + restanteCod).toFixed(2)))}
+                                      className="ml-1.5 px-2 py-1 text-[10px] font-bold text-rose-700 bg-rose-100 hover:bg-rose-200 rounded-lg transition-colors shrink-0"
+                                      title={`Completar con $${restanteCod.toFixed(2)} restante`}>
+                                      Restante
+                                    </button>
+                                  )}
+                                </div>
+                                <button type="button" onClick={() => togglePropuestaCod(fp.metodo)}
+                                  className="p-1 rounded-lg hover:bg-rose-100 text-rose-400 hover:text-rose-600 transition-colors shrink-0">
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
 
-                      {/* Opción de días de vencimiento para CxC */}
-                      {fp.metodo === 'Cta por cobrar' && (
-                        <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50/50 border border-amber-200/50 rounded-lg ml-6">
-                          <Clock size={12} className="text-amber-500 shrink-0" />
-                          <span className="text-[11px] font-medium text-amber-700 whitespace-nowrap">
-                            Días de vencimiento (obligatorio) *:
-                          </span>
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            pattern="[0-9]*"
-                            value={fp.diasVencimiento ?? ''}
-                            onChange={e => {
-                              const val = e.target.value;
-                              if (val === '' || /^[0-9]+$/.test(val)) {
-                                updatePagoInmediato(fp.metodo, { diasVencimiento: val ? parseInt(val, 10) : null });
-                              }
-                            }}
-                            placeholder="Obligatorio"
-                            className="w-20 px-2 py-1 rounded border border-amber-200 bg-white focus:outline-none focus:ring-2 focus:ring-amber-300 text-slate-800 text-center font-bold text-xs"
-                          />
+                      {/* Chips de propuestaCod */}
+                      {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && m !== 'Cta por cobrar' && m !== 'Donación')
+                        .some(m => !propuestaCod.some(f => f.metodo === m)) && (
+                        <div className="flex flex-wrap gap-2">
+                          {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && m !== 'Cta por cobrar' && m !== 'Donación')
+                            .filter(m => !propuestaCod.some(f => f.metodo === m))
+                            .map(m => (
+                              <button key={m} type="button" onClick={() => togglePropuestaCod(m)}
+                                className="px-3.5 py-1.5 rounded-xl text-xs font-bold border border-rose-200 bg-white text-rose-600 hover:border-rose-300 hover:text-rose-700 transition-all duration-200 shadow-sm active:scale-95">
+                                {m}
+                              </button>
+                            ))}
                         </div>
                       )}
-                    </div>
-                  );
-                })}
-              </div>
 
-              {/* Chips para agregar métodos de pago inmediato */}
-              {FORMAS_PAGO.filter(m => m !== 'Cobro a destino')
-                .some(m => !pagosInmediatos.some(f => f.metodo === m)) && (
-                <div className="flex flex-wrap gap-2">
-                  {FORMAS_PAGO.filter(m => m !== 'Cobro a destino')
-                    .filter(m => !pagosInmediatos.some(f => f.metodo === m))
-                    .map(m => (
-                      <button key={m} type="button" onClick={() => togglePagoInmediato(m)}
-                        className="px-3.5 py-1.5 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:text-sky-600 transition-all duration-200 shadow-sm active:scale-95">
-                        {m}
-                      </button>
-                    ))}
-                </div>
-              )}
-
-              {esCod && pagosInmediatos.length === 0 && (
-                <p className="text-xs text-slate-400 italic">No se registraron adelantos inmediatos.</p>
-              )}
-            </div>
-
-            {/* SECCIÓN 2: PAGO AL RECIBIR (COD) */}
-            {esCod && (
-              <div className="mt-5 p-4 bg-rose-50/40 border border-rose-200/50 rounded-2xl space-y-4">
-                <div className="flex items-center justify-between text-xs font-bold text-rose-800">
-                  <span>Monto a cobrar al recibir:</span>
-                  <span className="text-sm font-black text-rose-600">${montoCodRequerido.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                </div>
-
-                {montoCodRequerido > 0.015 ? (
-                  <div className="space-y-3 border-t border-rose-100/50 pt-3">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
-                      ¿Cómo pagará al recibir? (Propuesta) *
-                    </label>
-
-                    {/* Métodos propuestos activos */}
-                    <div className="space-y-2">
-                      {propuestaCod.map(fp => {
-                        const restanteCod = Math.max(0, round2(montoCodRequerido - totalPropuestaCod))
-                        return (
-                          <div key={fp.metodo} className="space-y-2">
-                            <div className="flex items-center gap-2 bg-rose-50/60 border border-rose-200/80 rounded-xl px-3 py-2">
-                              <span className="text-sm font-bold text-rose-700 w-32 shrink-0 truncate">{fp.metodo}</span>
-                              <div className="relative flex-1 flex items-center">
-                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-rose-405 text-sm font-medium">$</span>
-                                <input
-                                  type="number" min="0" step="0.01"
-                                  value={fp.monto}
-                                  onChange={e => setMontoPropuestaCod(fp.metodo, e.target.value)}
-                                  onFocus={e => e.target.select()}
-                                  placeholder="0.00"
-                                  className="w-full pl-6 pr-2 py-1.5 rounded-lg text-sm font-semibold border border-rose-200 bg-white focus:outline-none focus:ring-2 focus:ring-rose-300 text-slate-800"
-                                />
-                                {restanteCod > 0.01 && (
-                                  <button type="button"
-                                    onClick={() => setMontoPropuestaCod(fp.metodo, Number(((Number(fp.monto) || 0) + restanteCod).toFixed(2)))}
-                                    className="ml-1.5 px-2 py-1 text-[10px] font-bold text-rose-700 bg-rose-100 hover:bg-rose-200 rounded-lg transition-colors shrink-0"
-                                    title={`Completar con $${restanteCod.toFixed(2)} restante`}>
-                                    Restante
-                                  </button>
-                                )}
-                              </div>
-                              <button type="button" onClick={() => togglePropuestaCod(fp.metodo)}
-                                className="p-1 rounded-lg hover:bg-rose-100 text-rose-400 hover:text-rose-600 transition-colors shrink-0">
-                                <X size={14} />
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {/* Chips de propuestaCod */}
-                    {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && m !== 'Cta por cobrar')
-                      .some(m => !propuestaCod.some(f => f.metodo === m)) && (
-                      <div className="flex flex-wrap gap-2">
-                        {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && m !== 'Cta por cobrar')
-                          .filter(m => !propuestaCod.some(f => f.metodo === m))
-                          .map(m => (
-                            <button key={m} type="button" onClick={() => togglePropuestaCod(m)}
-                              className="px-3.5 py-1.5 rounded-xl text-xs font-bold border border-rose-200 bg-white text-rose-600 hover:border-rose-300 hover:text-rose-700 transition-all duration-200 shadow-sm active:scale-95">
-                              {m}
-                            </button>
-                          ))}
-                      </div>
-                    )}
-
-                    {/* Validador de propuesta COD */}
-                    <div className={`flex items-center justify-between px-3 py-2 rounded-xl text-sm font-semibold border ${
-                      propuestaCodCuadrado
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        : (totalPropuestaCod - montoCodRequerido > 0.02)
-                          ? 'bg-amber-50 text-amber-700 border-amber-200'
-                          : 'bg-rose-50 text-rose-700 border-rose-200'
-                    }`}>
+                      {/* Validador de propuesta COD */}
+                      <div className={`flex items-center justify-between px-3 py-2 rounded-xl text-sm font-semibold border ${
+                        propuestaCodCuadrado
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : (totalPropuestaCod - montoCodRequerido > 0.02)
+                            ? 'bg-amber-50 text-amber-700 border-amber-200'
+                            : 'bg-rose-50 text-rose-700 border-rose-200'
+                      }`}>
                       <span>Asignado COD: ${totalPropuestaCod.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       {propuestaCodCuadrado ? (
                         <CheckCircle size={16} className="text-emerald-500" />
@@ -2026,7 +2118,9 @@ function Step2Pago({
               </div>
             )}
           </div>
-        </div>{/* Fin columna izquierda */}
+        </>
+      )}
+    </div>{/* Fin columna izquierda */}
 
       {/* ── Columna derecha: Resumen + Notas ── */}
       <div className="lg:w-80 xl:w-96 shrink-0 flex flex-col gap-4">
@@ -2040,10 +2134,17 @@ function Step2Pago({
             {items.map(it => (
               <div key={it.productoId || it._key} className="flex items-center justify-between text-xs py-1 border-b border-slate-50 last:border-0">
                 <div className="flex-1 min-w-0">
-                  <span className="text-slate-700 block font-medium truncate">{it.nombreSnap}</span>
+                  <span className="text-slate-700 block font-medium truncate">
+                    {it.nombreSnap}
+                    {it.esPrestamo && (
+                      <span className="inline-flex items-center gap-1 ml-1 align-middle text-[8px] uppercase font-black bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded">
+                        <Handshake size={10} /> Préstamo
+                      </span>
+                    )}
+                  </span>
                   <span className="text-[11px] text-slate-400">{it.cantidad} × {fmtUsd(it.precioUnitUsd)}</span>
                 </div>
-                <span className="font-bold text-slate-700 shrink-0 ml-2">{fmtUsd(it.cantidad * it.precioUnitUsd)}</span>
+                <span className="font-bold text-slate-700 shrink-0 ml-2">{fmtUsd(it.esPrestamo ? 0 : it.cantidad * it.precioUnitUsd)}</span>
               </div>
             ))}
           </div>
@@ -2267,10 +2368,17 @@ function Step3Confirmar({
             {items.map(it => (
               <div key={it.productoId} className="flex items-center justify-between text-sm py-1">
                 <div className="flex-1 min-w-0">
-                  <span className="text-slate-700 block text-sm">{it.nombreSnap}</span>
+                  <span className="text-slate-700 block text-sm">
+                    {it.nombreSnap}
+                    {it.esPrestamo && (
+                      <span className="inline-flex items-center gap-1 ml-1 align-middle text-[8px] uppercase font-black bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded">
+                        <Handshake size={10} /> Préstamo
+                      </span>
+                    )}
+                  </span>
                   <span className="text-xs text-slate-400">{it.cantidad} × {fmtUsd(it.precioUnitUsd)}</span>
                 </div>
-                <span className="font-semibold text-slate-800 shrink-0 ml-2">{fmtUsd(round2(it.cantidad * it.precioUnitUsd))}</span>
+                <span className="font-semibold text-slate-800 shrink-0 ml-2">{fmtUsd(it.esPrestamo ? 0 : round2(it.cantidad * it.precioUnitUsd))}</span>
               </div>
             ))}
           </div>

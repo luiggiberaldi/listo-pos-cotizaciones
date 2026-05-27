@@ -1,12 +1,13 @@
 // src/components/inventario/ProductoForm.jsx
 // Formulario para crear/editar productos — solo supervisor
 import { useState, useEffect, useRef } from 'react'
-import { Hash, Package, Tag, Layers, DollarSign, BarChart2, Loader2, Camera, X } from 'lucide-react'
+import { Hash, Package, Tag, Layers, DollarSign, BarChart2, Loader2, Camera, X, Clipboard } from 'lucide-react'
 import { useCrearProducto, useActualizarProducto, useCategorias } from '../../hooks/useInventario'
 import { comprimirImagen, subirImagenProducto } from '../../utils/imageCompress'
 import supabase from '../../services/supabase/client'
 import CustomSelect from '../ui/CustomSelect'
 import useAuthStore from '../../store/useAuthStore'
+import { LINEAS, MATERIALES, FORMAS, RESTRICCIONES, obtenerCategoriaDesdeEstructura, calcularSiguienteCodigo } from '../../utils/codigosHelper'
 
 function Campo({ label, icono: Icono, error, children }) {
   return (
@@ -100,10 +101,10 @@ function PrecioBlock({ label, precioName, pctName, campos, cambiar, esAdmin, err
   )
 }
 
-export default function ProductoForm({ producto = null, onSuccess, onCancel }) {
+export default function ProductoForm({ producto = null, isClone = false, onSuccess, onCancel }) {
   const { perfil } = useAuthStore()
   const esAdmin = perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador'
-  const esEdicion = !!producto
+  const esEdicion = !!producto && !isClone
   const [campos, setCampos] = useState(VACIO)
   const [errores, setErrores] = useState({})
   const [errorGeneral, setErrorGeneral] = useState('')
@@ -121,10 +122,37 @@ export default function ProductoForm({ producto = null, onSuccess, onCancel }) {
   const mutation  = esEdicion ? actualizar : crear
   const cargando  = mutation.isPending
 
+  // Estados del generador de códigos
+  const [genLinea, setGenLinea] = useState('')
+  const [genMaterial, setGenMaterial] = useState('')
+  const [genForma, setGenForma] = useState('')
+  const [generando, setGenerando] = useState(false)
+
+  // Control de modificaciones manuales de los selectores para evitar que la auto-sugerencia los sobrescriba
+  const [manuales, setManuales] = useState({ linea: false, material: false, forma: false })
+
+  // Ref para acceder al código actual sin causar re-ejecuciones de efectos circulares
+  const codigoRef = useRef(campos.codigo)
+  // Ref para bloquear el efecto cascada de genLinea durante la inicialización del producto
+  const inicializandoRef = useRef(false)
+  useEffect(() => {
+    codigoRef.current = campos.codigo
+  }, [campos.codigo])
+
+  // Filtrar materiales y formas según la línea seleccionada (cascada)
+  const restrict = genLinea ? RESTRICCIONES[genLinea] : null
+  const materialesFiltrados = restrict
+    ? MATERIALES.filter(m => restrict.materiales.includes(m.value))
+    : []
+  const formasFiltradas = restrict
+    ? FORMAS.filter(f => restrict.formas.includes(f.value))
+    : []
+
+  // Inicializar/actualizar formulario cuando cambia el producto (modo edición/clonación)
   useEffect(() => {
     if (producto) {
       setCampos({
-        codigo:       producto.codigo       ?? '',
+        codigo:       isClone ? '' : (producto.codigo ?? ''),
         nombre:       producto.nombre       ?? '',
         descripcion:  producto.descripcion  ?? '',
         categoria:    producto.categoria    ?? '',
@@ -136,12 +164,123 @@ export default function ProductoForm({ producto = null, onSuccess, onCancel }) {
         precio2_porcentaje: producto.precio2_porcentaje != null ? String(producto.precio2_porcentaje) : '',
         precio3_porcentaje: producto.precio3_porcentaje != null ? String(producto.precio3_porcentaje) : '',
         costo_usd:    producto.costo_usd  != null ? String(producto.costo_usd)  : '',
-        stock_actual: producto.stock_actual != null ? String(producto.stock_actual) : '0',
-        stock_minimo: producto.stock_minimo != null ? String(producto.stock_minimo) : '0',
+        stock_actual: '0',
+        stock_minimo: isClone ? '0' : (producto.stock_minimo != null ? String(producto.stock_minimo) : '0'),
       })
-      if (producto.imagen_url) setImagenPreview(producto.imagen_url)
+      if (producto.imagen_url && !isClone) setImagenPreview(producto.imagen_url)
+
+      // Cargar valores iniciales en los selectores del generador de códigos
+      if (producto.codigo) {
+        const match = producto.codigo.trim().toUpperCase().match(/^([A-Z]{2,3})(\d{2})(\d{2})(\d{3})$/)
+        if (match) {
+          // Bloquear el efecto cascada de genLinea para que no limpie material/forma
+          inicializandoRef.current = true
+          setGenLinea(match[1])
+          setGenMaterial(match[2])
+          setGenForma(match[3])
+          setManuales({ linea: true, material: true, forma: true })
+          // Liberar el bloqueo en el próximo ciclo (después de que los efectos se ejecuten)
+          Promise.resolve().then(() => { inicializandoRef.current = false })
+        }
+      }
     }
-  }, [producto])
+  }, [producto, isClone])
+
+
+
+  // Limpiar selectores al cambiar la línea por acción del usuario (no durante inicialización)
+  useEffect(() => {
+    if (inicializandoRef.current) return   // está inicializando, no tocar material/forma
+    if (!genLinea) {
+      setGenMaterial('')
+      setGenForma('')
+      return
+    }
+    const r = RESTRICCIONES[genLinea]
+    if (r) {
+      // Validar/actualizar Material
+      if (!r.materiales.includes(genMaterial)) {
+        setGenMaterial(r.materiales.length === 1 ? r.materiales[0] : '')
+      }
+      // Validar/actualizar Forma
+      if (!r.formas.includes(genForma)) {
+        setGenForma(r.formas.length === 1 ? r.formas[0] : '')
+      }
+    }
+  }, [genLinea])
+
+
+  // Auto-sincronizar categoría basada en la estructura del código y nombre
+  useEffect(() => {
+    if (!genLinea || !genMaterial || !genForma) return
+    const catSugerida = obtenerCategoriaDesdeEstructura(genLinea, genMaterial, genForma, campos.nombre)
+    if (catSugerida && campos.categoria !== catSugerida) {
+      setCampos(p => ({ ...p, categoria: catSugerida }))
+    }
+  }, [genLinea, genMaterial, genForma, campos.nombre])
+
+
+  // Sincronizar selectores si se edita manualmente el código en el input
+  useEffect(() => {
+    if (!campos.codigo) return
+    const match = campos.codigo.trim().toUpperCase().match(/^([A-Z]{2,3})(\d{2})(\d{2})(\d{3})$/)
+    if (match) {
+      const [, line, mat, form] = match
+      
+      // Validar si la combinación es teóricamente permitida antes de forzarla en los selectores
+      const r = RESTRICCIONES[line]
+      if (r && r.materiales.includes(mat) && r.formas.includes(form)) {
+        if (line !== genLinea) {
+          setGenLinea(line)
+          setManuales(m => ({ ...m, linea: true }))
+        }
+        if (mat !== genMaterial) {
+          setGenMaterial(mat)
+          setManuales(m => ({ ...m, material: true }))
+        }
+        if (form !== genForma) {
+          setGenForma(form)
+          setManuales(m => ({ ...m, forma: true }))
+        }
+      }
+    }
+  }, [campos.codigo])
+
+  // Calcular código sugerido de forma reactiva al cambiar los selectores
+  useEffect(() => {
+    if (!genLinea || !genMaterial || !genForma) return
+    
+    // Si el código actual ya está completo (10 caracteres) y coincide con los selectores,
+    // asumimos que el usuario lo ingresó manualmente o ya está establecido, así que no lo sobrescribimos.
+    const actualUpper = codigoRef.current ? codigoRef.current.trim().toUpperCase() : ''
+    const prefijoDeseado = `${genLinea}${genMaterial}${genForma}`
+    if (actualUpper.startsWith(prefijoDeseado) && actualUpper.length === 10) {
+      return
+    }
+
+    let active = true
+    async function updateCode() {
+      setGenerando(true)
+      const code = await calcularSiguienteCodigo(supabase, genLinea, genMaterial, genForma)
+      if (active && code) {
+        if (esEdicion && producto?.codigo && producto.codigo.startsWith(prefijoDeseado)) {
+          setCampos(p => ({ ...p, codigo: producto.codigo }))
+        } else {
+          setCampos(p => ({ ...p, codigo: code }))
+        }
+      }
+      setGenerando(false)
+    }
+    
+    const delayDebounce = setTimeout(() => {
+      updateCode()
+    }, 400)
+    
+    return () => {
+      active = false
+      clearTimeout(delayDebounce)
+    }
+  }, [genLinea, genMaterial, genForma, esEdicion, producto])
 
   // Cleanup preview URLs on unmount
   useEffect(() => {
@@ -149,6 +288,36 @@ export default function ProductoForm({ producto = null, onSuccess, onCancel }) {
       if (imagenPreview && imagenPreview.startsWith('blob:')) URL.revokeObjectURL(imagenPreview)
     }
   }, [imagenPreview])
+
+  // Pegar imagen desde portapapeles (Ctrl+V)
+  useEffect(() => {
+    async function handlePaste(e) {
+      if (cargando) return
+      const items = e.clipboardData?.items
+      if (!items) return
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile()
+          if (!file) continue
+          setComprimiendo(true)
+          try {
+            const { blob, dataUrl } = await comprimirImagen(file)
+            if (imagenPreview?.startsWith('blob:')) URL.revokeObjectURL(imagenPreview)
+            setImagenBlob(blob)
+            setImagenPreview(dataUrl)
+            setImagenEliminada(false)
+          } catch (err) {
+            setErrorGeneral('Error al pegar imagen: ' + err.message)
+          } finally {
+            setComprimiendo(false)
+          }
+          break
+        }
+      }
+    }
+    window.addEventListener('paste', handlePaste)
+    return () => window.removeEventListener('paste', handlePaste)
+  }, [cargando, imagenPreview])
 
   async function handleImagen(e) {
     const file = e.target.files?.[0]
@@ -264,6 +433,14 @@ export default function ProductoForm({ producto = null, onSuccess, onCancel }) {
       errs.costo_usd = 'Costo inválido'
     if (isNaN(Number(campos.stock_actual)))
       errs.stock_actual = 'Stock inválido'
+    
+    // Validar estructura de código estructurado
+    if (campos.codigo && campos.codigo.trim() !== '') {
+      const validPattern = /^([A-Z]{2,3})(\d{2})(\d{2})(\d{3})$/
+      if (!validPattern.test(campos.codigo.trim().toUpperCase())) {
+        errs.codigo = 'Código inválido (Formato ej: VIG0106001 o VI0156001)'
+      }
+    }
     return errs
   }
 
@@ -332,6 +509,10 @@ export default function ProductoForm({ producto = null, onSuccess, onCancel }) {
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-slate-700">Foto del producto</p>
           <p className="text-xs text-slate-400">JPG, PNG o WebP. Se comprime automáticamente.</p>
+          <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
+            <Clipboard size={10} className="shrink-0" />
+            También puedes <span className="font-semibold text-slate-600">pegar (Ctrl+V)</span> desde el portapapeles
+          </p>
           {tieneImagen && (
             <button type="button" onClick={quitarImagen} disabled={cargando}
               className="flex items-center gap-1 mt-1 text-xs text-red-500 hover:text-red-700 transition-colors">
@@ -342,18 +523,162 @@ export default function ProductoForm({ producto = null, onSuccess, onCancel }) {
       </div>
 
       {/* Nombre */}
-      <Campo label="Nombre *" icono={Package} error={errores.nombre}>
-        <input type="text" name="nombre" value={campos.nombre}
-          onChange={cambiar} placeholder="Ej: Cemento Gris Bolsa 42kg"
-          className={inputClass} disabled={cargando} autoFocus />
-      </Campo>
+      <div className="space-y-1.5">
+        <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+          <Package size={14} className="text-slate-400" />
+          Nombre *
+        </label>
+        <input
+          type="text"
+          name="nombre"
+          value={campos.nombre}
+          onChange={cambiar}
+          placeholder="Ej: Viga IPE 100x50mm"
+          className={inputClass}
+          disabled={cargando}
+          autoFocus
+        />
+        {errores.nombre && <p className="text-xs text-red-500 mt-1">{errores.nombre}</p>}
+      </div>
 
-      {/* Código */}
-      <Campo label="Código" icono={Hash} error={errores.codigo}>
-        <input type="text" name="codigo" value={campos.codigo}
-          onChange={cambiar} placeholder="Ej: CEM-001"
-          className={inputClass} disabled={cargando} />
-      </Campo>
+      {/* Código y Asistente */}
+      <div className="space-y-3 border border-slate-100 rounded-2xl p-4 bg-slate-50/50">
+        <Campo label="Código" icono={Hash} error={errores.codigo}>
+          <div className="relative">
+            <input type="text" name="codigo" value={campos.codigo}
+              onChange={cambiar} placeholder="Ej: VIG0106001"
+              className={`${inputClass} bg-white pr-20`} disabled={cargando} />
+            {generando && (
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-[11px] text-slate-400">
+                <Loader2 size={12} className="animate-spin text-primary" /> Consultando...
+              </span>
+            )}
+          </div>
+        </Campo>
+
+        <div className="border-t border-slate-200/60 pt-3 mt-1">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Asistente de Código Estructurado</p>
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label className="text-[10px] font-medium text-slate-500 block mb-1">Línea</label>
+              <select
+                value={genLinea}
+                onChange={e => {
+                  const val = e.target.value
+                  setGenLinea(val)
+                  if (!val) {
+                    setManuales({ linea: false, material: false, forma: false })
+                  } else {
+                    setManuales(m => ({ ...m, linea: true }))
+                  }
+                }}
+                disabled={cargando}
+                className="w-full text-xs bg-white border border-slate-200 rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary transition-colors text-slate-800"
+              >
+                <option value="">-- Línea --</option>
+                {LINEAS.map((l, idx) => (
+                  <option key={`${l.value}-${idx}`} value={l.value}>{l.value} - {l.label.split(' ')[0]}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-medium text-slate-500 block mb-1">Material</label>
+              <select
+                value={genMaterial}
+                onChange={e => {
+                  const val = e.target.value
+                  setGenMaterial(val)
+                  setManuales(m => ({ ...m, material: !!val }))
+                }}
+                disabled={cargando || !genLinea}
+                className="w-full text-xs bg-white border border-slate-200 rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary transition-colors text-slate-800 disabled:opacity-60 disabled:bg-slate-100"
+              >
+                <option value="">{!genLinea ? 'Selecciona Línea' : '-- Material --'}</option>
+                {materialesFiltrados.map(m => (
+                  <option key={m.value} value={m.value}>{m.value} - {m.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-medium text-slate-500 block mb-1">Forma</label>
+              <select
+                value={genForma}
+                onChange={e => {
+                  const val = e.target.value
+                  setGenForma(val)
+                  setManuales(m => ({ ...m, forma: !!val }))
+                }}
+                disabled={cargando || !genLinea}
+                className="w-full text-xs bg-white border border-slate-200 rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary transition-colors text-slate-800 disabled:opacity-60 disabled:bg-slate-100"
+              >
+                <option value="">{!genLinea ? 'Selecciona Línea' : '-- Forma --'}</option>
+                {formasFiltradas.map(f => (
+                  <option key={f.value} value={f.value}>{f.value} - {f.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Desglose visual del código en tiempo real */}
+        {(() => {
+          const match = campos.codigo?.trim().toUpperCase().match(/^([A-Z]{2,3})(\d{2})(\d{2})(\d{3})$/)
+          if (!match) return null
+          const [, lCode, mCode, fCode, cCode] = match
+          const lineaLabel = LINEAS.find(l => l.value === lCode)?.label?.split(' ')[0] || 'Desconocido'
+          const matLabel = MATERIALES.find(m => m.value === mCode)?.label || 'Desconocido'
+          const formaLabel = FORMAS.find(f => f.value === fCode)?.label || 'Desconocido'
+          const catSugerida = obtenerCategoriaDesdeEstructura(lCode, mCode, fCode, campos.nombre)
+
+          return (
+            <div className="mt-2.5 p-3 bg-white border border-slate-200/60 rounded-xl space-y-2.5 animate-fadeIn">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+                <span className="text-[11px] font-semibold text-slate-700">Desglose del Código Estructurado</span>
+                <span className="text-[9px] bg-emerald-50 text-emerald-600 border border-emerald-200/50 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                  Código Válido
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 text-xs">
+                {/* Línea */}
+                <div className="flex-1 min-w-[65px] bg-slate-50 border border-slate-200/60 rounded-lg p-2 flex flex-col">
+                  <span className="text-[8px] text-slate-400 font-bold uppercase tracking-wider">Línea</span>
+                  <span className="font-mono text-slate-800 font-bold text-sm mt-0.5">{lCode}</span>
+                  <span className="text-slate-500 truncate text-[10px] mt-0.5" title={lineaLabel}>{lineaLabel}</span>
+                </div>
+                <div className="text-slate-300 font-bold text-sm select-none">-</div>
+                {/* Material */}
+                <div className="flex-1 min-w-[65px] bg-slate-50 border border-slate-200/60 rounded-lg p-2 flex flex-col">
+                  <span className="text-[8px] text-slate-400 font-bold uppercase tracking-wider">Material</span>
+                  <span className="font-mono text-slate-800 font-bold text-sm mt-0.5">{mCode}</span>
+                  <span className="text-slate-500 truncate text-[10px] mt-0.5" title={matLabel}>{matLabel}</span>
+                </div>
+                <div className="text-slate-300 font-bold text-sm select-none">-</div>
+                {/* Forma */}
+                <div className="flex-1 min-w-[65px] bg-slate-50 border border-slate-200/60 rounded-lg p-2 flex flex-col">
+                  <span className="text-[8px] text-slate-400 font-bold uppercase tracking-wider">Forma</span>
+                  <span className="font-mono text-slate-800 font-bold text-sm mt-0.5">{fCode}</span>
+                  <span className="text-slate-500 truncate text-[10px] mt-0.5" title={formaLabel}>{formaLabel}</span>
+                </div>
+                <div className="text-slate-300 font-bold text-sm select-none">-</div>
+                {/* Correlativo */}
+                <div className="flex-1 min-w-[65px] bg-primary/5 border border-primary/10 rounded-lg p-2 flex flex-col">
+                  <span className="text-[8px] text-primary/70 font-bold uppercase tracking-wider">Correlativo</span>
+                  <span className="font-mono text-primary font-bold text-sm mt-0.5">{cCode}</span>
+                  <span className="text-primary/70 text-[9px] mt-0.5 font-medium">Auto</span>
+                </div>
+              </div>
+              {catSugerida && (
+                <div className="text-[10px] text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-150 flex items-center justify-between">
+                  <span>Categoría auto-sincronizada:</span>
+                  <span className="font-bold text-slate-800 bg-white border border-slate-200 px-1.5 py-0.5 rounded shadow-sm">
+                    {catSugerida}
+                  </span>
+                </div>
+              )}
+            </div>
+          )
+        })()}
+      </div>
 
       {/* Categoría + Unidad (fila) */}
       <div className="grid grid-cols-2 gap-3">

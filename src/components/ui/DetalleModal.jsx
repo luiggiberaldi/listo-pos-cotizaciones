@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { X, Package, Loader2, Calendar, User, FileText, CreditCard, Hash, Truck, DollarSign, Pencil, AlertTriangle, Clock, MessageSquare } from 'lucide-react'
+import { X, Package, Loader2, Calendar, User, FileText, CreditCard, Hash, Truck, DollarSign, Pencil, AlertTriangle, Clock, MessageSquare, Handshake } from 'lucide-react'
 import EditarItemsDespachoModal from '../despachos/EditarItemsDespachoModal'
 import supabase from '../../services/supabase/client'
 import SeguimientoTimeline from './SeguimientoTimeline'
@@ -32,7 +32,7 @@ function ItemRow({ item, descuento, fmt, config, tipo, perfil, vendedorPerfil })
   const pct = showComision ? getComisionPctForItem(item, config, vendedorPerfil ?? null) : 0
 
   return (
-    <tr className={`border-b border-slate-100 last:border-0 ${descMonto > 0 ? 'bg-amber-50/70' : ''} ${sinStock ? 'bg-red-50/60' : ''}`}>
+    <tr className={`border-b border-slate-100 last:border-0 ${item.es_prestamo ? 'bg-emerald-50/60' : ''} ${descMonto > 0 ? 'bg-amber-50/70' : ''} ${sinStock ? 'bg-red-50/60' : ''}`}>
       <td className="py-3 pr-3">
         <p className="text-sm font-medium text-slate-800 leading-tight">{item.nombre_snap}</p>
         <div className="flex items-center gap-2 mt-0.5">
@@ -53,6 +53,11 @@ function ItemRow({ item, descuento, fmt, config, tipo, perfil, vendedorPerfil })
             <AlertTriangle size={10} /> Stock insuficiente ({item.producto?.stock_actual || 0} disp.)
           </p>
         )}
+        {item.es_prestamo && (
+          <span className="inline-flex items-center gap-1 mt-1 text-[9px] uppercase tracking-wider font-black bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-md">
+            <Handshake size={9} /> Préstamo
+          </span>
+        )}
       </td>
       <td className="py-3 px-3 text-center text-sm text-slate-600 whitespace-nowrap">
         {cant} <span className="text-slate-400 text-[11px]">{item.unidad_snap || 'und'}</span>
@@ -66,7 +71,9 @@ function ItemRow({ item, descuento, fmt, config, tipo, perfil, vendedorPerfil })
         ) : fmt(precio)}
       </td>
       <td className="py-3 pl-3 text-right text-sm font-bold whitespace-nowrap">
-        {descMonto > 0 ? (
+        {item.es_prestamo ? (
+          <span className="text-emerald-600">$0,00</span>
+        ) : descMonto > 0 ? (
           <span>
             <span className="line-through text-slate-400 font-normal text-xs">{fmt(total)}</span>
             <br /><span className="text-amber-700">{fmt(totalFinal)}</span>
@@ -91,7 +98,7 @@ function ItemCard({ item, descuento, fmt, config, tipo, perfil, vendedorPerfil }
   const pct = showComision ? getComisionPctForItem(item, config, vendedorPerfil ?? null) : 0
 
   return (
-    <div className={`py-3 border-b border-slate-100 last:border-0 ${descMonto > 0 ? 'bg-amber-50/70 -mx-3 px-3 rounded-lg' : ''} ${sinStock ? 'bg-red-50/60 -mx-3 px-3 rounded-lg' : ''}`}>
+    <div className={`py-3 border-b border-slate-100 last:border-0 ${item.es_prestamo ? 'bg-emerald-50/60 -mx-3 px-3 rounded-lg my-0.5' : ''} ${descMonto > 0 ? 'bg-amber-50/70 -mx-3 px-3 rounded-lg' : ''} ${sinStock ? 'bg-red-50/60 -mx-3 px-3 rounded-lg' : ''}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-slate-800 leading-tight">{item.nombre_snap}</p>
@@ -108,12 +115,19 @@ function ItemCard({ item, descuento, fmt, config, tipo, perfil, vendedorPerfil }
               <AlertTriangle size={10} /> Stock insuficiente ({item.producto?.stock_actual || 0} disp.)
             </p>
           )}
+          {item.es_prestamo && (
+            <span className="inline-flex items-center gap-1 mt-1 text-[9px] uppercase tracking-wider font-black bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-md">
+              <Handshake size={9} /> Préstamo
+            </span>
+          )}
         </div>
         {descMonto > 0 ? (
           <div className="text-right shrink-0">
             <span className="text-xs text-slate-400 line-through">{fmt(total)}</span>
             <p className="text-sm font-bold text-amber-700">{fmt(totalFinal)}</p>
           </div>
+        ) : item.es_prestamo ? (
+          <span className="text-sm font-bold text-emerald-600 shrink-0">$0,00</span>
         ) : (
           <span className="text-sm font-bold text-slate-800 shrink-0">{fmt(total)}</span>
         )}
@@ -227,6 +241,24 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
   }, [isOpen, registro?.id, tipo])
 
   if (!isOpen || !registro) return null
+
+  const tienePrestamos = tipo === 'despacho' && (() => {
+    let isPrestamo = !!registro?.tiene_prestamos
+    try {
+      const fp = typeof registro?.forma_pago === 'string' ? JSON.parse(registro.forma_pago) : (registro?.forma_pago || [])
+      if (Array.isArray(fp) && fp.some(f => f.metodo === 'Préstamo' || f.metodo === 'Prestamo')) {
+        isPrestamo = true
+      }
+    } catch (e) {}
+    // Fallback: revisar si algún ítem ya cargado tiene es_prestamo
+    if (!isPrestamo && items.some(x => x.es_prestamo)) isPrestamo = true
+    return isPrestamo
+  })()
+
+  // Si tienePrestamos=true pero los items aún no tienen es_prestamo, marcarlos todos
+  const itemsConFallback = tipo === 'despacho' && tienePrestamos && items.length > 0 && !items.some(x => x.es_prestamo)
+    ? items.map(it => ({ ...it, es_prestamo: true }))
+    : items
 
   const numDisplay = esCot
     ? `COT-${String(registro.numero).padStart(5, '0')}`
@@ -373,6 +405,57 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
 
         {/* Tabla de productos */}
         <div className="flex-1 overflow-y-auto px-5 py-4">
+          {/* Loan banner — shown when despacho tiene prestamos (flag OR items) */}
+          {tipo === 'despacho' && tienePrestamos && (() => {
+            const itemsPrestamo = itemsConFallback.filter(it => it.es_prestamo);
+            const todosPrestamo = itemsPrestamo.length > 0 && itemsPrestamo.length === itemsConFallback.length;
+            const aunCargando = cargando || (items.length === 0 && tienePrestamos);
+            return (
+              <div className={`mb-3 rounded-xl border p-3 flex items-start gap-3 ${
+                todosPrestamo
+                  ? 'bg-emerald-50 border-emerald-200'
+                  : 'bg-teal-50 border-teal-200'
+              }`}>
+                <div className={`mt-0.5 p-1.5 rounded-lg shrink-0 ${
+                  todosPrestamo ? 'bg-emerald-100 text-emerald-700' : 'bg-teal-100 text-teal-700'
+                }`}>
+                  <Handshake size={14} />
+                </div>
+                <div className="min-w-0">
+                  <p className={`text-[11px] font-black uppercase tracking-wider ${
+                    todosPrestamo ? 'text-emerald-700' : 'text-teal-700'
+                  }`}>
+                    {aunCargando
+                      ? 'Despacho con Préstamos'
+                      : todosPrestamo
+                        ? 'Préstamo Puro'
+                        : `Despacho Mixto · ${itemsPrestamo.length} artículo${itemsPrestamo.length !== 1 ? 's' : ''} en préstamo`
+                    }
+                  </p>
+                  <p className={`text-[10px] mt-0.5 leading-snug ${
+                    todosPrestamo ? 'text-emerald-600' : 'text-teal-600'
+                  }`}>
+                    {aunCargando
+                      ? 'Este despacho contiene artículos en préstamo.'
+                      : todosPrestamo
+                        ? 'Todos los artículos son de préstamo. El total financiero es $0,00.'
+                        : 'Los artículos marcados con el icono préstamo fueron prestados al cliente y deben ser retornados o facturados.'
+                    }
+                  </p>
+                  {!aunCargando && itemsPrestamo.length > 0 && !todosPrestamo && (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {itemsPrestamo.map(it => (
+                        <span key={it.id} className="inline-flex items-center gap-1 text-[9px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-md">
+                          <Handshake size={8} /> {it.nombre_snap} ({it.cantidad} {it.unidad_snap || 'und'})
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
           <div className="flex items-center justify-between mb-3">
             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
               <Package size={12} />Productos
@@ -391,7 +474,7 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
             <div className="flex items-center justify-center py-10 text-slate-400">
               <Loader2 size={20} className="animate-spin mr-2" />Cargando productos...
             </div>
-          ) : items.length === 0 ? (
+          ) : itemsConFallback.length === 0 ? (
             <p className="text-sm text-slate-400 text-center py-8">Sin productos registrados</p>
           ) : (
             <>
@@ -407,13 +490,13 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
                     </tr>
                   </thead>
                   <tbody>
-                    {items.map(it => <ItemRow key={it.id} item={it} descuento={descuentos[it.id]} fmt={fmt} config={config} tipo={tipo} perfil={perfil} vendedorPerfil={registro.vendedor} />)}
+                    {itemsConFallback.map(it => <ItemRow key={it.id} item={it} descuento={descuentos[it.id]} fmt={fmt} config={config} tipo={tipo} perfil={perfil} vendedorPerfil={registro.vendedor} />)}
                   </tbody>
                 </table>
               </div>
               {/* Mobile card layout */}
               <div className="sm:hidden">
-                {items.map(it => <ItemCard key={it.id} item={it} descuento={descuentos[it.id]} fmt={fmt} config={config} tipo={tipo} perfil={perfil} vendedorPerfil={registro.vendedor} />)}
+                {itemsConFallback.map(it => <ItemCard key={it.id} item={it} descuento={descuentos[it.id]} fmt={fmt} config={config} tipo={tipo} perfil={perfil} vendedorPerfil={registro.vendedor} />)}
               </div>
             </>
           )}
@@ -474,14 +557,15 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
           </div>
         )}
         {!esCot && (() => {
-          const flete = Number(registro.flete_usd || 0)
+          const isPrestamoPuro = itemsConFallback.length > 0 && itemsConFallback.every(it => it.es_prestamo)
+          const flete = isPrestamoPuro ? 0 : Number(registro.flete_usd || 0)
           // Usar corte_usd del registro si existe, o sumar ítems detectados como corte
-          const corteDesc = Number(registro.corte_usd || 0) || corteDesdeItems
-          const descuento = Number(registro.descuento_total_usd || 0)
-          const totalConServicios = total // total_usd ya incluye el flete y corte
-          const subtotal = total - flete - corteDesc // total de productos sin flete ni corte
-          const totalFinal = totalConServicios - descuento
-          const hayDesglose = descuento > 0 || flete > 0 || corteDesc > 0
+          const corteDesc = isPrestamoPuro ? 0 : (Number(registro.corte_usd || 0) || corteDesdeItems)
+          const descuento = isPrestamoPuro ? 0 : Number(registro.descuento_total_usd || 0)
+          const totalConServicios = isPrestamoPuro ? 0 : total // total_usd ya incluye el flete y corte
+          const subtotal = isPrestamoPuro ? 0 : total - flete - corteDesc // total de productos sin flete ni corte
+          const totalFinal = isPrestamoPuro ? 0 : totalConServicios - descuento
+          const hayDesglose = !isPrestamoPuro && (descuento > 0 || flete > 0 || corteDesc > 0)
 
           return (
           <div className="border-t border-slate-100 px-5 py-3 bg-slate-50 shrink-0 space-y-1.5">

@@ -28,7 +28,7 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false } = {}
       let query = supabase
         .from('notas_despacho')
         .select(`
-          id, numero, cotizacion_id, estado,
+          id, numero, cotizacion_id, estado, tiene_prestamos,
           total_usd, flete_usd, corte_usd, descuento_total_usd, notas, forma_pago,
           referencia_pago, forma_pago_cliente,
           creado_en, actualizado_en, despachada_en, entregada_en, aprobado_por_nombre,
@@ -38,7 +38,7 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false } = {}
           cotizacion:cotizaciones!notas_despacho_cotizacion_id_fkey(id, numero, version),
           seguimiento:seguimiento_operativo(id, prioridad, fijada)
         `)
-        .order('actualizado_en', { ascending: false })
+        .order(estado ? 'actualizado_en' : 'numero', { ascending: false })
         .limit(200)
 
       if (estado) query = query.eq('estado', estado)

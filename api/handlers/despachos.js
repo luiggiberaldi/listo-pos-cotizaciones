@@ -317,7 +317,25 @@ export async function handleEditarPagoDespacho(request, env) {
     const [vendRol2] = await vendRolRes2.json();
     console.log('[COMISION][EDITAR_PAGO] rol vendedor:', vendRol2?.rol, 'markup:', vendRol2?.markup_pct);
 
-    if (!['jefe', 'logistica', 'administracion', 'desarrollador'].includes(vendRol2?.rol) && (vendRol2?.rol !== 'vendedor_sin_comision' || parseFloat(vendRol2?.markup_pct || 0) > 0)) {
+    let esDonacion = false;
+    const fpToCheck = formaPago !== undefined ? formaPago : despacho.forma_pago;
+    if (fpToCheck) {
+      try {
+        const fps = typeof fpToCheck === 'string' ? JSON.parse(fpToCheck) : fpToCheck;
+        if (Array.isArray(fps)) {
+          esDonacion = fps.some(f => f.metodo === 'Donación');
+        } else if (typeof fps === 'string') {
+          esDonacion = fps === 'Donación';
+        }
+      } catch (e) {}
+    }
+
+    if (esDonacion || ['jefe', 'logistica', 'administracion', 'desarrollador'].includes(vendRol2?.rol) || (vendRol2?.rol === 'vendedor_sin_comision' && parseFloat(vendRol2?.markup_pct || 0) <= 0)) {
+      await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}`, {
+        method: 'DELETE', headers: h,
+      });
+      console.log('[COMISION][EDITAR_PAGO] Comisión eliminada por ser método Donación o rol exento.');
+    } else {
       await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}`, {
         method: 'DELETE', headers: h,
       });
@@ -395,14 +413,40 @@ export async function handleActualizarEstadoDespacho(request, env) {
       }
     }
 
-    // 2e. Devolver (despachada/entregada→pendiente): logistica, jefe, desarrollador
+    // 2e. Devolver (despachada/entregada→pendiente): logistica, jefe, desarrollador, administracion
     if (['despachada', 'entregada'].includes(desp.estado) && nuevoEstado === 'pendiente') {
-      const rolesPermitidos = ['logistica', 'jefe', 'desarrollador'];
+      const rolesPermitidos = ['logistica', 'jefe', 'desarrollador', 'administracion'];
       if (!rolesPermitidos.includes(rolOp)) {
         return jsonError('No tiene permiso para devolver este despacho a pendiente', 403, request);
       }
       if (!body.motivo_devolucion || body.motivo_devolucion.trim() === '') {
         return jsonError('Debe proporcionar el motivo de devolución', 400, request);
+      }
+    }
+
+    // Bloquear reversión o anulación si el despacho tiene préstamos activos que ya han sido devueltos o facturados
+    // Excluyendo a administración, jefe y desarrollador de este bloqueo
+    if (['pendiente', 'anulada'].includes(nuevoEstado) && ['despachada', 'entregada'].includes(desp.estado)) {
+      if (!['administracion', 'jefe', 'desarrollador'].includes(rolOp)) {
+        const prestRes = await fetch(
+          `${env.SUPABASE_URL}/rest/v1/cliente_prestamos?despacho_id=eq.${despachoId}&select=cantidad_devuelta,cantidad_facturada`,
+          { headers }
+        );
+        if (prestRes.ok) {
+          const prestList = await prestRes.json();
+          if (Array.isArray(prestList) && prestList.length > 0) {
+            const tieneActividad = prestList.some(
+              p => Number(p.cantidad_devuelta || 0) > 0 || Number(p.cantidad_facturada || 0) > 0
+            );
+            if (tieneActividad) {
+              return jsonError(
+                'No se puede revertir o anular un despacho que tiene préstamos asociados con devoluciones o facturaciones ya registradas.',
+                400,
+                request
+              );
+            }
+          }
+        }
       }
     }
 
@@ -714,7 +758,19 @@ export async function handleActualizarEstadoDespacho(request, env) {
         const [vendRol] = await vendRolRes.json();
         console.log('[COMISION] rol vendedor:', vendRol?.rol, 'markup:', vendRol?.markup_pct);
 
-        if (!['jefe', 'logistica', 'administracion', 'desarrollador'].includes(vendRol?.rol) && (vendRol?.rol !== 'vendedor_sin_comision' || parseFloat(vendRol?.markup_pct || 0) > 0)) {
+        let esDonacion = false;
+        if (desp.forma_pago) {
+          try {
+            const fps = typeof desp.forma_pago === 'string' ? JSON.parse(desp.forma_pago) : desp.forma_pago;
+            if (Array.isArray(fps)) {
+              esDonacion = fps.some(f => f.metodo === 'Donación');
+            } else if (typeof fps === 'string') {
+              esDonacion = fps === 'Donación';
+            }
+          } catch (e) {}
+        }
+
+        if (!esDonacion && !['jefe', 'logistica', 'administracion', 'desarrollador'].includes(vendRol?.rol) && (vendRol?.rol !== 'vendedor_sin_comision' || parseFloat(vendRol?.markup_pct || 0) > 0)) {
           const comRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcularcomisiondespacho`, {
             method: 'POST', headers,
             body: JSON.stringify({ p_despachoid: despachoId }),
@@ -727,7 +783,7 @@ export async function handleActualizarEstadoDespacho(request, env) {
             console.log('[COMISION] Creada con id:', comisionId);
           }
         } else {
-          console.log('[COMISION] Vendedor sin comisión o rol administrativo, se omite el cálculo.');
+          console.log('[COMISION] Vendedor sin comisión, rol administrativo o donación, se omite el cálculo.');
         }
       } catch (comEx) {
         console.error('[COMISION] Error al calcular:', comEx?.message);

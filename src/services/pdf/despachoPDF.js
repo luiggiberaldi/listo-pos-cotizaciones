@@ -364,7 +364,8 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     // Calcular cuántas líneas necesita la descripción (optimizado lineH = 3.6)
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
-    const descLines = doc.splitTextToSize((item.nombre_snap || '').toUpperCase(), COLS[2].w - 4)
+    const baseNombre = item.es_prestamo ? `${item.nombre_snap || ''} (PRÉSTAMO)` : (item.nombre_snap || '')
+    const descLines = doc.splitTextToSize(baseNombre.toUpperCase(), COLS[2].w - 4)
     const lineH = 3.6
     const ROW_H = Math.max(ROW_H_BASE, descLines.length * lineH + 1.2)
 

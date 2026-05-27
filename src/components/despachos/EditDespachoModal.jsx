@@ -406,10 +406,10 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
               </div>
 
               {/* Chips para agregar métodos inmediatos */}
-              {FORMAS_PAGO.filter(m => m !== 'Cobro a destino')
+              {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && (m !== 'Donación' || perfil?.rol !== 'vendedor'))
                 .some(m => !pagosInmediatos.some(f => f.metodo === m)) && (
                 <div className="flex flex-wrap gap-2">
-                  {FORMAS_PAGO.filter(m => m !== 'Cobro a destino')
+                  {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && (m !== 'Donación' || perfil?.rol !== 'vendedor'))
                     .filter(m => !pagosInmediatos.some(f => f.metodo === m))
                     .map(m => (
                       <button key={m} type="button"
@@ -505,10 +505,10 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
                     </div>
 
                     {/* Chips de propuestaCod */}
-                    {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && m !== 'Cta por cobrar')
+                    {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && m !== 'Cta por cobrar' && m !== 'Donación')
                       .some(m => !propuestaCod.some(f => f.metodo === m)) && (
                       <div className="flex flex-wrap gap-2">
-                        {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && m !== 'Cta por cobrar')
+                        {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && m !== 'Cta por cobrar' && m !== 'Donación')
                           .filter(m => !propuestaCod.some(f => f.metodo === m))
                           .map(m => (
                             <button key={m} type="button"

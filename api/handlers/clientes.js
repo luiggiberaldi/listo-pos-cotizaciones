@@ -53,13 +53,35 @@ export async function handleListarClientes(request, env) {
     baseUrl += `&vendedor_id=eq.${operador.id}`;
   }
 
-  const res = await fetch(baseUrl, { headers: supaHeaders });
-  if (!res.ok) {
-    const errText = await res.text();
-    return jsonError(`Error al cargar clientes: ${errText}`, res.status, request);
+  // Fetch active loans in parallel to detect which clients have pending/partial loans
+  const prestamosUrl = `${env.SUPABASE_URL}/rest/v1/cliente_prestamos?estado=in.("pendiente","devuelto_parcial")&select=cliente_id`;
+
+  const [clientesRes, prestamosRes] = await Promise.all([
+    fetch(baseUrl, { headers: supaHeaders }),
+    fetch(prestamosUrl, { headers: supaHeaders })
+  ]);
+
+  if (!clientesRes.ok) {
+    const errText = await clientesRes.text();
+    return jsonError(`Error al cargar clientes: ${errText}`, clientesRes.status, request);
   }
 
-  let data = await res.json();
+  const rawClientes = await clientesRes.json();
+  const clientesConPrestamosActivos = new Set();
+
+  if (prestamosRes.ok) {
+    const prestamosList = await prestamosRes.json();
+    if (Array.isArray(prestamosList)) {
+      prestamosList.forEach(p => {
+        if (p.cliente_id) clientesConPrestamosActivos.add(p.cliente_id);
+      });
+    }
+  }
+
+  let data = rawClientes.map(c => ({
+    ...c,
+    tiene_prestamos_activos: clientesConPrestamosActivos.has(c.id)
+  }));
 
   if (busqueda.trim()) {
     const raw  = busqueda.trim().toLowerCase();
@@ -483,5 +505,342 @@ export async function handleReasignarClientesBulk(request, env) {
     return json({ ok: true, reasignados: clientes.length }, 200, request);
   } catch (e) {
     return jsonError(e.message || 'Error al reasignar clientes', 500, request);
+  }
+}
+
+// ─── LÓGICA DE PRÉSTAMO DE ARTÍCULOS ─────────────────────────────────────────
+
+// Helper local para sincronizar saldo pendiente del cliente
+async function recalcularSaldoPendienteCliente(clienteId, env, headers) {
+  try {
+    const cxcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?cliente_id=eq.${clienteId}&select=tipo,monto_usd`, { headers });
+    if (!cxcRes.ok) return;
+    const cxcList = await cxcRes.json();
+    
+    let saldoReal = 0;
+    if (Array.isArray(cxcList)) {
+      cxcList.forEach(item => {
+        const monto = Number(item.monto_usd) || 0;
+        if (item.tipo === 'cargo') {
+          saldoReal += monto;
+        } else {
+          saldoReal -= monto;
+        }
+      });
+    }
+    
+    saldoReal = Math.max(0, Math.round(saldoReal * 10000) / 10000);
+    
+    await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteId}`, {
+      method: 'PATCH',
+      headers: { ...headers, Prefer: 'return=minimal' },
+      body: JSON.stringify({ saldo_pendiente: saldoReal }),
+    });
+    
+    console.log(`[RECALCULO-SALDO] Cliente ${clienteId} saldo sincronizado a $${saldoReal}`);
+  } catch (err) {
+    console.error(`[RECALCULO-SALDO] Error al recalcular saldo para cliente ${clienteId}:`, err?.message);
+  }
+}
+
+// Endpoint para consultar préstamos
+export async function handleGetPrestamosCliente(request, env) {
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { headers } = v;
+
+  const url = new URL(request.url);
+  const clienteId = url.searchParams.get('clienteId');
+  if (!clienteId || !isValidUuid(clienteId)) {
+    return jsonError('clienteId inválido', 400, request);
+  }
+
+  try {
+    const res = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/cliente_prestamos?cliente_id=eq.${clienteId}&select=*,producto:productos(codigo,nombre,unidad,precio_usd),despacho:notas_despacho(numero)&order=creado_en.desc`,
+      { headers }
+    );
+    if (!res.ok) {
+      const err = await res.text();
+      return jsonError(`Error al consultar préstamos: ${err}`, res.status, request);
+    }
+    const data = await res.json();
+    return new Response(JSON.stringify(data), {
+      headers: { 'Content-Type': 'application/json', ...corsHeaders(request) }
+    });
+  } catch (e) {
+    return jsonError(e.message || 'Error en consulta de préstamos', 500, request);
+  }
+}
+
+// Endpoint para devolver préstamo físico
+export async function handleDevolverPrestamo(request, env) {
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { user, operador, headers, ip } = v;
+
+  // Permitido únicamente para administración (administracion, jefe, desarrollador)
+  const rolesAbil = ['administracion', 'jefe', 'desarrollador'];
+  if (!rolesAbil.includes(operador.rol)) {
+    return jsonError('No tienes permisos para registrar devoluciones de préstamo', 403, request);
+  }
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+
+  const { prestamoId, cantidad } = body;
+  const cant = Number(cantidad);
+  if (!prestamoId || !isValidUuid(prestamoId)) return jsonError('prestamoId inválido', 400, request);
+  if (isNaN(cant) || cant <= 0) return jsonError('Cantidad a devolver inválida', 400, request);
+
+  try {
+    // 1. Obtener registro de préstamo actual
+    const lpRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/cliente_prestamos?id=eq.${prestamoId}&select=*,producto:productos(id,stock_actual,nombre,unidad),despacho:notas_despacho(numero)`,
+      { headers }
+    );
+    const [prestamo] = await lpRes.json();
+    if (!prestamo) return jsonError('Préstamo no encontrado', 404, request);
+
+    const cantPrestada = Number(prestamo.cantidad_prestada);
+    const cantDevueltaActual = Number(prestamo.cantidad_devuelta || 0);
+    const cantFacturada = Number(prestamo.cantidad_facturada || 0);
+    const restante = Math.max(0, cantPrestada - cantDevueltaActual - cantFacturada);
+
+    if (cant > restante + 0.0001) {
+      return jsonError(`La cantidad ingresada (${cant}) supera el saldo pendiente del préstamo (${restante})`, 400, request);
+    }
+
+    const nuevaCantDevuelta = cantDevueltaActual + cant;
+    let nuevoEstado = 'pendiente';
+    if (nuevaCantDevuelta + cantFacturada >= cantPrestada - 0.0001) {
+      nuevoEstado = 'devuelto';
+    } else if (nuevaCantDevuelta > 0) {
+      nuevoEstado = 'devuelto_parcial';
+    }
+
+    // 2. Transacción: Actualizar préstamo
+    const patchLp = await fetch(`${env.SUPABASE_URL}/rest/v1/cliente_prestamos?id=eq.${prestamoId}`, {
+      method: 'PATCH',
+      headers: { ...headers, Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        cantidad_devuelta: nuevaCantDevuelta,
+        estado: nuevoEstado
+      })
+    });
+    if (!patchLp.ok) {
+      const err = await patchLp.text();
+      return jsonError(`Error al actualizar préstamo: ${err}`, 500, request);
+    }
+
+    // 3. Transacción: Regresar stock al inventario
+    if (prestamo.producto_id && prestamo.producto) {
+      const stockAnterior = Number(prestamo.producto.stock_actual);
+      const nuevoStock = stockAnterior + cant;
+      const patchProd = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${prestamo.producto_id}`, {
+        method: 'PATCH',
+        headers: { ...headers, Prefer: 'return=minimal' },
+        body: JSON.stringify({ stock_actual: nuevoStock })
+      });
+
+      if (patchProd.ok) {
+        try {
+          const loteId = crypto.randomUUID();
+          const despachoNum = prestamo.despacho?.numero ? `DES-${String(prestamo.despacho.numero).padStart(5, '0')}` : 'Préstamo';
+          
+          // Buscar el nombre del cliente para el motivo del Kardex
+          const cliRes = await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${prestamo.cliente_id}&select=nombre`, { headers });
+          let clienteNombre = 'Cliente';
+          if (cliRes.ok) {
+            const cliData = await cliRes.json();
+            if (cliData && cliData[0]) clienteNombre = cliData[0].nombre;
+          }
+
+          const movPayload = {
+            lote_id: loteId,
+            tipo: 'ingreso',
+            motivo: `Devolución de préstamo (${despachoNum}) - Cliente: ${clienteNombre}`,
+            motivo_tipo: 'devolucion',
+            producto_id: prestamo.producto_id,
+            producto_nombre: prestamo.producto.nombre,
+            cantidad: cant,
+            stock_anterior: stockAnterior,
+            stock_nuevo: nuevoStock,
+            usuario_id: operador.id,
+            usuario_nombre: operador.nombre,
+            usuario_color: operador.color || null
+          };
+
+          await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos`, {
+            method: 'POST',
+            headers: { ...headers, Prefer: 'return=minimal' },
+            body: JSON.stringify(movPayload)
+          });
+        } catch (movErr) {
+          console.error('[DEVOLVER-PRESTAMO] Error al registrar movimiento en inventario_movimientos:', movErr?.message);
+        }
+      }
+    }
+
+    // 4. Registrar en seguimiento_operativo
+    const timelinesPayload = {
+      cliente_id: prestamo.cliente_id,
+      despacho_id: prestamo.despacho_id,
+      usuario_id: operador.id,
+      tipo: 'seguimiento',
+      prioridad: 'informativa',
+      titulo: 'Devolución de préstamo',
+      contenido: `Se registraron de vuelta ${cant} ${prestamo.producto?.unidad || 'und'} de "${prestamo.producto?.nombre || 'Producto'}". Estado del préstamo: ${nuevoEstado.toUpperCase()}.`,
+      imagenes: [],
+      fijada: false,
+      cuenta_id: user.id
+    };
+    await fetch(`${env.SUPABASE_URL}/rest/v1/seguimiento_operativo`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(timelinesPayload)
+    });
+
+    // 5. Auditoría
+    await registrarAuditoria(env, headers, {
+      usuarioId: operador.id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
+      categoria: 'FINANZAS', accion: 'DEVOLVER_PRESTAMO',
+      descripcion: `Devolución de préstamo #${prestamoId}: ${cant} und de ${prestamo.producto?.nombre}`,
+      entidadTipo: 'cliente', entidadId: prestamo.cliente_id,
+      meta: { prestamo_id: prestamoId, cantidad: cant, estado_nuevo: nuevoEstado }, ip
+    });
+
+    return json({ ok: true, nuevoEstado, cantidad_devuelta: nuevaCantDevuelta }, 200, request);
+  } catch (e) {
+    return jsonError(e.message || 'Error en devolución', 500, request);
+  }
+}
+
+// Endpoint para facturar préstamo (convertir a venta con saldo en cuentas por cobrar)
+export async function handleFacturarPrestamo(request, env) {
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { user, operador, headers, ip } = v;
+
+  // Permitido para administración, jefes y desarrolladores
+  const rolesAbil = ['administracion', 'jefe', 'desarrollador'];
+  if (!rolesAbil.includes(operador.rol)) {
+    return jsonError('Solo administración o jefes pueden facturar préstamos', 403, request);
+  }
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+
+  const { prestamoId, cantidad } = body;
+  const cant = Number(cantidad);
+  if (!prestamoId || !isValidUuid(prestamoId)) return jsonError('prestamoId inválido', 400, request);
+  if (isNaN(cant) || cant <= 0) return jsonError('Cantidad a facturar inválida', 400, request);
+
+  try {
+    // 1. Obtener registro de préstamo actual
+    const lpRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/cliente_prestamos?id=eq.${prestamoId}&select=*,producto:productos(id,precio_usd,nombre,unidad),despacho:notas_despacho(numero)`,
+      { headers }
+    );
+    const [prestamo] = await lpRes.json();
+    if (!prestamo) return jsonError('Préstamo no encontrado', 404, request);
+
+    const cantPrestada = Number(prestamo.cantidad_prestada);
+    const cantDevuelta = Number(prestamo.cantidad_devuelta || 0);
+    const cantFacturadaActual = Number(prestamo.cantidad_facturada || 0);
+    const restante = Math.max(0, cantPrestada - cantDevuelta - cantFacturadaActual);
+
+    if (cant > restante + 0.0001) {
+      return jsonError(`La cantidad ingresada (${cant}) supera el saldo pendiente del préstamo (${restante})`, 400, request);
+    }
+
+    const nuevaCantFacturada = cantFacturadaActual + cant;
+    let nuevoEstado = 'pendiente';
+    if (cantDevuelta + nuevaCantFacturada >= cantPrestada - 0.0001) {
+      nuevoEstado = 'facturado';
+    }
+
+    const precioUnitario = Number(prestamo.producto?.precio_usd || 0);
+    const totalCargo = Math.round((cant * precioUnitario) * 100) / 100;
+
+    if (totalCargo <= 0) {
+      return jsonError('El costo del artículo es cero. No se puede facturar un préstamo sin valor de referencia.', 400, request);
+    }
+
+    // 2. Obtener saldo pendiente actual del cliente
+    const cliRes = await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${prestamo.cliente_id}&select=saldo_pendiente`, { headers });
+    const [cliente] = await cliRes.json();
+    const saldoActual = Number(cliente?.saldo_pendiente || 0);
+    const nuevoSaldo = saldoActual + totalCargo;
+
+    // 3. Crear cargo en Cuentas por Cobrar (CxC)
+    const despachoNum = prestamo.despacho?.numero ? `DES-${String(prestamo.despacho.numero).padStart(5, '0')}` : 'Préstamo';
+    const cargoBody = {
+      cliente_id: prestamo.cliente_id,
+      despacho_id: prestamo.despacho_id,
+      tipo: 'cargo',
+      monto_usd: totalCargo,
+      saldo_usd: nuevoSaldo,
+      descripcion: `Facturación de préstamo de ${cant} und ${prestamo.producto?.nombre || 'Producto'} (Orig: ${despachoNum})`,
+      registrado_por: operador.id
+    };
+    const cxcPost = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
+      method: 'POST',
+      headers: { ...headers, Prefer: 'return=minimal' },
+      body: JSON.stringify(cargoBody)
+    });
+    if (!cxcPost.ok) {
+      const err = await cxcPost.text();
+      return jsonError(`Error al crear cargo de cuentas por cobrar: ${err}`, 500, request);
+    }
+
+    // 4. Actualizar préstamo a facturado
+    const patchLp = await fetch(`${env.SUPABASE_URL}/rest/v1/cliente_prestamos?id=eq.${prestamoId}`, {
+      method: 'PATCH',
+      headers: { ...headers, Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        cantidad_facturada: nuevaCantFacturada,
+        estado: nuevoEstado
+      })
+    });
+    if (!patchLp.ok) {
+      const err = await patchLp.text();
+      return jsonError(`Error al actualizar préstamo: ${err}`, 500, request);
+    }
+
+    // 5. Sincronizar saldo de clientes
+    await recalcularSaldoPendienteCliente(prestamo.cliente_id, env, headers);
+
+    // 6. Registrar en seguimiento_operativo
+    const timelinesPayload = {
+      cliente_id: prestamo.cliente_id,
+      despacho_id: prestamo.despacho_id,
+      usuario_id: operador.id,
+      tipo: 'seguimiento',
+      prioridad: 'informativa',
+      titulo: 'Conversión de préstamo a venta',
+      contenido: `Se facturaron y cargaron a cuenta ${cant} ${prestamo.producto?.unidad || 'und'} de "${prestamo.producto?.nombre || 'Producto'}" por un total de $${totalCargo.toFixed(2)} USD.`,
+      imagenes: [],
+      fijada: false,
+      cuenta_id: user.id
+    };
+    await fetch(`${env.SUPABASE_URL}/rest/v1/seguimiento_operativo`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(timelinesPayload)
+    });
+
+    // 7. Auditoría
+    await registrarAuditoria(env, headers, {
+      usuarioId: operador.id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
+      categoria: 'FINANZAS', accion: 'FACTURAR_PRESTAMO',
+      descripcion: `Facturación de préstamo #${prestamoId}: ${cant} und de ${prestamo.producto?.nombre} por $${totalCargo}`,
+      entidadTipo: 'cliente', entidadId: prestamo.cliente_id,
+      meta: { prestamo_id: prestamoId, cantidad: cant, monto: totalCargo, estado_nuevo: nuevoEstado }, ip
+    });
+
+    return json({ ok: true, nuevoEstado, cantidad_facturada: nuevaCantFacturada, cargo: totalCargo }, 200, request);
+  } catch (e) {
+    return jsonError(e.message || 'Error al facturar préstamo', 500, request);
   }
 }

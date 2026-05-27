@@ -144,6 +144,7 @@ export function calcComisionEstimada(items = [], config = {}, perfil = null) {
                               String(prodId).startsWith('ext-') || 
                               String(codSnap).startsWith('EXT');
     
+    if (item.esPrestamo || item.es_prestamo) continue;
     const monto = Number(item.total_linea_usd) || Number(item.total) || (Number(item.cantidad) * Number(item.precioUnitUsd || item.precio_unit_usd)) || 0;
     if (monto <= 0) continue;
 

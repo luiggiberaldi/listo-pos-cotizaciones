@@ -1,13 +1,16 @@
 // src/components/clientes/FichaClienteModal.jsx
 // Modal ficha del cliente: historial de crédito + formulario de abono
 import { useState, useEffect } from 'react'
-import { X, CreditCard, ArrowUpCircle, ArrowDownCircle, AlertCircle, RefreshCw, DollarSign, Hash, Phone, FileText, ChevronRight, MessageSquare } from 'lucide-react'
+import { X, CreditCard, ArrowUpCircle, ArrowDownCircle, AlertCircle, RefreshCw, DollarSign, Hash, Phone, FileText, ChevronRight, MessageSquare, Handshake } from 'lucide-react'
 import { useCuentasCobrar, useRegistrarAbono } from '../../hooks/useCuentasCobrar'
 import { useCotizacionesCliente } from '../../hooks/useClientes'
 import SeguimientoTimeline from '../ui/SeguimientoTimeline'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtUsdSimple as fmtUsd } from '../../utils/format'
 import EstadoBadge from '../cotizaciones/EstadoBadge'
+import { showToast } from '../ui/Toast'
+import { apiUrl } from '../../services/apiBase'
+import { authFetch } from '../../services/authFetch'
 
 function fmtFecha(iso) {
   if (!iso) return '—'
@@ -262,6 +265,85 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
   const puedeRegistrarAbono = ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)
   const { data: movimientos = [], isLoading, refetch } = useCuentasCobrar(isOpen ? cliente?.id : null)
 
+  const [activeTab, setActiveTab] = useState('cuenta')
+  const [prestamos, setPrestamos] = useState([])
+  const [cargandoPrestamos, setCargandoPrestamos] = useState(false)
+  const [busquedaPrestamos, setBusquedaPrestamos] = useState('')
+  const [activeAction, setActiveAction] = useState(null)
+  const [actionQty, setActionQty] = useState('')
+  const [actionLoading, setActionLoading] = useState(false)
+
+  const [cargadoUnaVez, setCargadoUnaVez] = useState(false)
+
+  const fetchPrestamos = async () => {
+    if (!cliente?.id) return
+    setCargandoPrestamos(true)
+    try {
+      const res = await authFetch(`/api/clientes/prestamos?clienteId=${cliente.id}`)
+      if (res.ok) {
+        const data = await res.json()
+        setPrestamos(data || [])
+        setCargadoUnaVez(true)
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setCargandoPrestamos(false)
+    }
+  }
+
+  useEffect(() => {
+    if (isOpen && cliente?.id) {
+      fetchPrestamos()
+    } else if (!isOpen) {
+      setCargadoUnaVez(false)
+      setPrestamos([])
+    }
+  }, [isOpen, cliente?.id])
+
+  const handleActionSubmit = async (prestamo, type) => {
+    const qty = Number(actionQty)
+    if (isNaN(qty) || qty <= 0) {
+      showToast('Cantidad inválida', 'error')
+      return
+    }
+    setActionLoading(true)
+    try {
+      const url = type === 'devolver' ? '/api/clientes/prestamos/devolver' : '/api/clientes/prestamos/facturar'
+      const res = await authFetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          prestamoId: prestamo.id,
+          cantidad: qty
+        })
+      })
+      const result = await res.json()
+      if (!res.ok) {
+        showToast(result.error || 'Error al procesar la acción', 'error')
+      } else {
+        showToast(type === 'devolver' ? 'Devolución física registrada con éxito ✓' : 'Conversión a venta registrada con éxito ✓', 'success')
+        setActiveAction(null)
+        setActionQty('')
+        fetchPrestamos()
+        refetch()
+      }
+    } catch (e) {
+      showToast(e.message, 'error')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const prestamosFiltrados = prestamos.filter(p => {
+    const term = busquedaPrestamos.toLowerCase()
+    const pName = (p.producto?.nombre || '').toLowerCase()
+    const pCode = (p.producto?.codigo || '').toLowerCase()
+    return pName.includes(term) || pCode.includes(term)
+  })
+
   // Saldo local para actualización inmediata tras abonar (sin esperar cache del padre)
   const [saldoLocal, setSaldoLocal] = useState(null)
 
@@ -274,6 +356,10 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
 
   const saldo = saldoLocal ?? Number(cliente.saldo_pendiente || 0)
   const color = cliente.vendedor?.color || '#64748b'
+
+  const tienePrestamosActivos = cargadoUnaVez
+    ? prestamos.some(p => p.estado === 'pendiente' || p.estado === 'devuelto_parcial')
+    : !!cliente.tiene_prestamos_activos
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -321,101 +407,335 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
             </button>
           </div>
 
-          {/* Saldo */}
-          <div className={`mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm font-black ${
-            saldo > 0 ? 'bg-red-500/30 text-white border border-red-300/40' : 'bg-white/20 text-white border border-white/30'
-          }`}>
-            {saldo > 0 ? <AlertCircle size={14} /> : <DollarSign size={14} />}
-            {saldo > 0 ? `Deuda: ${fmtUsd(saldo)}` : 'Sin deuda pendiente'}
-          </div>
-        </div>
-
-        {/* Body scrollable */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-
-          {/* Formulario abono (supervisor o administración si hay deuda) */}
-          {puedeRegistrarAbono && saldo > 0 && (
-            <FormAbono
-              clienteId={cliente.id}
-              saldo={saldo}
-              onSuccess={(montoAbonado) => {
-                setSaldoLocal(prev => Math.max(0, (prev ?? saldo) - montoAbonado))
-                refetch()
-              }}
-            />
-          )}
-
-          {/* Historial */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
-                <CreditCard size={14} className="text-slate-500" />
-                Historial de cuenta
-              </h3>
-              <button onClick={refetch} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
-                <RefreshCw size={13} className={isLoading ? 'animate-spin' : ''} />
-              </button>
+          {/* Saldo y Préstamos */}
+          <div className="flex gap-2 flex-wrap mt-3">
+            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm font-black ${
+              saldo > 0 ? 'bg-red-500/30 text-white border border-red-300/40' : 'bg-white/20 text-white border border-white/30'
+            }`}>
+              {saldo > 0 ? <AlertCircle size={14} /> : <DollarSign size={14} />}
+              {saldo > 0 ? `Deuda: ${fmtUsd(saldo)}` : 'Sin deuda pendiente'}
             </div>
-
-            {isLoading ? (
-              <div className="space-y-2">
-                {[1,2,3].map(i => (
-                  <div key={i} className="h-14 bg-slate-100 rounded-xl animate-pulse" />
-                ))}
-              </div>
-            ) : movimientos.length === 0 ? (
-              <div className="text-center py-8 text-slate-400">
-                <CreditCard size={28} className="mx-auto mb-2 opacity-30" />
-                <p className="text-sm">Sin movimientos registrados</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {movimientos.map(mov => (
-                  <div key={mov.id} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border ${
-                    mov.tipo === 'cargo'
-                      ? 'bg-red-50 border-red-100'
-                      : 'bg-emerald-50 border-emerald-100'
-                  }`}>
-                    {mov.tipo === 'cargo'
-                      ? <ArrowUpCircle size={18} className="text-red-500 shrink-0" />
-                      : <ArrowDownCircle size={18} className="text-emerald-500 shrink-0" />
-                    }
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-slate-700 truncate">{mov.descripcion}</p>
-                      <p className="text-[10px] text-slate-400">{fmtFecha(mov.creado_en)}</p>
-                      {mov.referencia && (
-                        <p className="text-[10px] text-slate-400">Ref: {mov.referencia}</p>
-                      )}
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className={`text-sm font-black ${mov.tipo === 'cargo' ? 'text-red-600' : 'text-emerald-600'}`}>
-                        {mov.tipo === 'cargo' ? '+' : '-'}{fmtUsd(mov.monto_usd)}
-                      </p>
-                      <p className="text-[10px] text-slate-400">Saldo: {fmtUsd(mov.saldo_usd)}</p>
-                    </div>
-                  </div>
-                ))}
+            {tienePrestamosActivos && (
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm font-black bg-emerald-500/30 text-white border border-emerald-300/40 animate-pulse">
+                <Handshake size={14} className="text-emerald-200" />
+                Tiene préstamos activos
               </div>
             )}
           </div>
+        </div>
 
-          {/* Historial de cotizaciones */}
-          <div>
-            <h3 className="text-sm font-black text-slate-800 flex items-center gap-2 mb-3">
-              <FileText size={14} className="text-slate-500" />
-              Cotizaciones del cliente
-            </h3>
-            <HistorialCotizaciones clienteId={cliente.id} />
-          </div>
+        {/* Tabs Bar */}
+        <div className="flex border-b border-slate-100 bg-slate-50/50 p-1 gap-1 shrink-0">
+          <button
+            onClick={() => setActiveTab('cuenta')}
+            className={`flex-1 py-2 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+              activeTab === 'cuenta'
+                ? 'bg-white text-slate-800 shadow-sm border border-slate-100'
+                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/50'
+            }`}
+          >
+            <CreditCard size={13} />
+            Cuenta
+          </button>
+          <button
+            onClick={() => setActiveTab('cotizaciones')}
+            className={`flex-1 py-2 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+              activeTab === 'cotizaciones'
+                ? 'bg-white text-slate-800 shadow-sm border border-slate-100'
+                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/50'
+            }`}
+          >
+            <FileText size={13} />
+            Cotizaciones
+          </button>
+          <button
+            onClick={() => setActiveTab('prestamos')}
+            className={`flex-1 py-2 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+              activeTab === 'prestamos'
+                ? 'bg-emerald-600 text-white shadow-md'
+                : 'text-slate-500 hover:text-emerald-700 hover:bg-emerald-50'
+            }`}
+          >
+            <Handshake size={13} />
+            Préstamos
+          </button>
+          <button
+            onClick={() => setActiveTab('seguimiento')}
+            className={`flex-1 py-2 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+              activeTab === 'seguimiento'
+                ? 'bg-white text-slate-800 shadow-sm border border-slate-100'
+                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/50'
+            }`}
+          >
+            <MessageSquare size={13} />
+            Bitácora
+          </button>
+        </div>
 
-          {/* ── Seguimiento y Novedades del Cliente ── */}
-          <div className="pt-4 border-t border-slate-100">
-            <h3 className="text-sm font-black text-slate-800 flex items-center gap-2 mb-3">
-              <MessageSquare size={14} className="text-slate-500" />
-              Seguimiento Operativo
-            </h3>
-            <SeguimientoTimeline clienteId={cliente.id} />
-          </div>
+        {/* Body scrollable */}
+        <div className="flex-1 overflow-y-auto p-4">
+          
+          {/* PESTAÑA: CUENTA Y MOVIMIENTOS */}
+          {activeTab === 'cuenta' && (
+            <div className="space-y-4">
+              {/* Formulario abono (supervisor o administración si hay deuda) */}
+              {puedeRegistrarAbono && saldo > 0 && (
+                <FormAbono
+                  clienteId={cliente.id}
+                  saldo={saldo}
+                  onSuccess={(montoAbonado) => {
+                    setSaldoLocal(prev => Math.max(0, (prev ?? saldo) - montoAbonado))
+                    refetch()
+                  }}
+                />
+              )}
+
+              {/* Historial */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                    <CreditCard size={14} className="text-slate-500" />
+                    Historial de cuenta
+                  </h3>
+                  <button onClick={refetch} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+                    <RefreshCw size={13} className={isLoading ? 'animate-spin' : ''} />
+                  </button>
+                </div>
+
+                {isLoading ? (
+                  <div className="space-y-2">
+                    {[1,2,3].map(i => (
+                      <div key={i} className="h-14 bg-slate-100 rounded-xl animate-pulse" />
+                    ))}
+                  </div>
+                ) : movimientos.length === 0 ? (
+                  <div className="text-center py-8 text-slate-400">
+                    <CreditCard size={28} className="mx-auto mb-2 opacity-30" />
+                    <p className="text-sm">Sin movimientos registrados</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {movimientos.map(mov => (
+                      <div key={mov.id} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border ${
+                        mov.tipo === 'cargo'
+                          ? 'bg-red-50 border-red-100'
+                          : 'bg-emerald-50 border-emerald-100'
+                      }`}>
+                        {mov.tipo === 'cargo'
+                          ? <ArrowUpCircle size={18} className="text-red-500 shrink-0" />
+                          : <ArrowDownCircle size={18} className="text-emerald-500 shrink-0" />
+                        }
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-slate-700 truncate">{mov.descripcion}</p>
+                          <p className="text-[10px] text-slate-400">{fmtFecha(mov.creado_en)}</p>
+                          {mov.referencia && (
+                            <p className="text-[10px] text-slate-400">Ref: {mov.referencia}</p>
+                          )}
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className={`text-sm font-black ${mov.tipo === 'cargo' ? 'text-red-600' : 'text-emerald-600'}`}>
+                            {mov.tipo === 'cargo' ? '+' : '-'}{fmtUsd(mov.monto_usd)}
+                          </p>
+                          <p className="text-[10px] text-slate-400">Saldo: {fmtUsd(mov.saldo_usd)}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* PESTAÑA: COTIZACIONES */}
+          {activeTab === 'cotizaciones' && (
+            <div>
+              <h3 className="text-sm font-black text-slate-800 flex items-center gap-2 mb-3">
+                <FileText size={14} className="text-slate-500" />
+                Cotizaciones del cliente
+              </h3>
+              <HistorialCotizaciones clienteId={cliente.id} />
+            </div>
+          )}
+
+          {/* PESTAÑA: SEGUIMIENTO / TIMELINE */}
+          {activeTab === 'seguimiento' && (
+            <div>
+              <h3 className="text-sm font-black text-slate-800 flex items-center gap-2 mb-3">
+                <MessageSquare size={14} className="text-slate-500" />
+                Seguimiento Operativo
+              </h3>
+              <SeguimientoTimeline clienteId={cliente.id} />
+            </div>
+          )}
+
+          {/* PESTAÑA: PRÉSTAMOS (NUEVA) */}
+          {activeTab === 'prestamos' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                  <Handshake size={14} className="text-emerald-600 animate-pulse" />
+                  Artículos en Préstamo
+                </h3>
+                <button 
+                  onClick={fetchPrestamos} 
+                  disabled={cargandoPrestamos}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  <RefreshCw size={13} className={cargandoPrestamos ? 'animate-spin' : ''} />
+                </button>
+              </div>
+
+              {/* Buscador local */}
+              <input
+                type="text"
+                placeholder="Buscar artículo en préstamo..."
+                value={busquedaPrestamos}
+                onChange={e => setBusquedaPrestamos(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:outline-none focus:border-emerald-400 focus:bg-white transition-all focus:ring-2 focus:ring-emerald-50"
+              />
+
+              {cargandoPrestamos ? (
+                <div className="space-y-2">
+                  {[1,2].map(i => (
+                    <div key={i} className="h-16 bg-slate-100 rounded-xl animate-pulse" />
+                  ))}
+                </div>
+              ) : prestamosFiltrados.length === 0 ? (
+                <div className="text-center py-8 text-slate-400 border border-dashed border-slate-200 rounded-2xl">
+                  <RefreshCw size={28} className="mx-auto mb-2 opacity-30 text-slate-300" />
+                  <p className="text-xs">No se encontraron artículos en préstamo</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {prestamosFiltrados.map(p => {
+                    const cantPrestada = Number(p.cantidad_prestada)
+                    const cantDevuelta = Number(p.cantidad_devuelta || 0)
+                    const cantFacturada = Number(p.cantidad_facturada || 0)
+                    const restante = Math.max(0, cantPrestada - cantDevuelta - cantFacturada)
+                    
+                    const isActionActive = activeAction?.id === p.id
+                    const isDevolver = activeAction?.type === 'devolver'
+                    const isFacturar = activeAction?.type === 'facturar'
+
+                    return (
+                      <div 
+                        key={p.id} 
+                        className={`p-3.5 rounded-xl border transition-all ${
+                          p.estado === 'pendiente' 
+                            ? 'bg-white border-slate-200 shadow-sm'
+                            : p.estado === 'devuelto_parcial'
+                            ? 'bg-amber-50/20 border-amber-200'
+                            : p.estado === 'facturado'
+                            ? 'bg-sky-50/10 border-sky-100'
+                            : 'bg-emerald-50/20 border-emerald-100 opacity-80'
+                        }`}
+                      >
+                        <div className="flex justify-between items-start gap-2">
+                          <div className="min-w-0 flex-1">
+                            <h4 className="text-xs font-black text-slate-800 leading-snug">
+                              {p.producto?.nombre || 'Producto sin nombre'}
+                            </h4>
+                            <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                              Cód: {p.producto?.codigo || 'S/C'} · F. Préstamo: {new Date(p.creado_en).toLocaleDateString('es-VE')}
+                            </p>
+                            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-[11px] font-bold text-slate-500">
+                              <span>Préstamo: <strong className="text-slate-700">{cantPrestada} {p.producto?.unidad || 'und'}</strong></span>
+                              {cantDevuelta > 0 && <span className="text-emerald-600">Devuelto: <strong>{cantDevuelta}</strong></span>}
+                              {cantFacturada > 0 && <span className="text-sky-600">Facturado: <strong>{cantFacturada}</strong></span>}
+                              {restante > 0 && <span className="text-rose-500">Pendiente: <strong>{restante}</strong></span>}
+                            </div>
+                            <p className="text-[10px] text-slate-400 mt-1">
+                              Despacho: <span className="font-mono text-slate-600">DES-{String(p.despacho?.numero || '').padStart(5, '0')}</span> · Valor ref: ${p.producto?.precio_usd ? (restante * p.producto.precio_usd).toFixed(2) : '0.00'}
+                            </p>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase shrink-0 ${
+                            p.estado === 'pendiente'
+                              ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                              : p.estado === 'devuelto_parcial'
+                              ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                              : p.estado === 'facturado'
+                              ? 'bg-sky-100 text-sky-800 border border-sky-200'
+                              : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                          }`}>
+                            {p.estado === 'pendiente' ? 'Pendiente' : p.estado === 'devuelto_parcial' ? 'Parcial' : p.estado === 'facturado' ? 'Facturado' : 'Devuelto'}
+                          </span>
+                        </div>
+
+                        {/* Botones de acción inline */}
+                        {restante > 0 && !isActionActive && puedeRegistrarAbono && (
+                          <div className="flex gap-2 mt-3 pt-2.5 border-t border-slate-100">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveAction({ id: p.id, type: 'devolver' })
+                                setActionQty(String(restante))
+                              }}
+                              className="flex-1 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold transition-all active:scale-[0.98]"
+                            >
+                              Devolver
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveAction({ id: p.id, type: 'facturar' })
+                                setActionQty(String(restante))
+                              }}
+                              className="flex-1 py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 text-[10px] font-bold transition-all active:scale-[0.98]"
+                            >
+                              Facturar
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Formulario de Acción Inline */}
+                        {isActionActive && (
+                          <div className="mt-3 pt-2.5 border-t border-slate-100 space-y-2 animate-in slide-in-from-top-1 duration-150">
+                            <div className="flex items-center justify-between text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                              <span>{isDevolver ? 'Registrar devolución física' : 'Facturar a cuenta del cliente'}</span>
+                              <span className="text-slate-500 font-mono">Max: {restante}</span>
+                            </div>
+                            <div className="flex gap-2">
+                              <input
+                                type="number"
+                                step="any"
+                                min="0.0001"
+                                max={restante}
+                                value={actionQty}
+                                onChange={e => setActionQty(e.target.value)}
+                                placeholder="0.00"
+                                className="w-20 px-2 py-1 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-slate-400"
+                                autoFocus
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setActiveAction(null)}
+                                className="px-2.5 py-1 text-[10px] text-slate-500 hover:text-slate-700 font-bold transition-all"
+                              >
+                                Cancelar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleActionSubmit(p, activeAction.type)}
+                                disabled={actionLoading}
+                                className={`flex-1 py-1 text-[10px] font-black text-white rounded-lg transition-all flex items-center justify-center gap-1 shadow-sm active:scale-95 ${
+                                  isDevolver 
+                                    ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-100' 
+                                    : 'bg-sky-600 hover:bg-sky-700 shadow-sky-100'
+                                }`}
+                              >
+                                {actionLoading ? '...' : isDevolver ? 'Devolver ✓' : 'Facturar 💳'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
         </div>
       </div>
     </div>

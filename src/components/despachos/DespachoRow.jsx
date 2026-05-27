@@ -1,7 +1,7 @@
 // src/components/despachos/DespachoRow.jsx
 // Fila compacta de despacho para vista de lista
 import { memo } from 'react'
-import { Calendar, Eye, FileText, Pencil, Mail } from 'lucide-react'
+import { Calendar, Eye, FileText, Pencil, Mail, Handshake } from 'lucide-react'
 import EstadoBadge from '../cotizaciones/EstadoBadge'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtFechaHora, fmtBs, usdToBs } from '../../utils/format'
@@ -17,6 +17,14 @@ export default memo(function DespachoRow({ despacho, onVer, onEditar, tasa = 0 }
   const numDisplay = despacho.cotizacion
     ? `DES-${String(despacho.cotizacion.numero).padStart(5, '0')}`
     : `DES-${String(despacho.numero).padStart(5, '0')}`
+
+  let tienePrestamos = !!despacho.tiene_prestamos
+  try {
+    const fp = typeof despacho.forma_pago === 'string' ? JSON.parse(despacho.forma_pago) : (despacho.forma_pago || [])
+    if (Array.isArray(fp) && fp.some(f => f.metodo === 'Préstamo' || f.metodo === 'Prestamo')) {
+      tienePrestamos = true
+    }
+  } catch (e) {}
 
   const cotNum = despacho.cotizacion
     ? `COT-${String(despacho.cotizacion.numero).padStart(5, '0')}`
@@ -46,6 +54,11 @@ export default memo(function DespachoRow({ despacho, onVer, onEditar, tasa = 0 }
               </button>
             )}
             <EstadoBadge estado={despacho.estado} rol={perfil?.rol} />
+            {tienePrestamos && (
+              <span className={`inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded ${Number(despacho.total_usd) <= 0.015 ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-teal-50 text-teal-700 border border-teal-100'}`} title={Number(despacho.total_usd) <= 0.015 ? "Préstamo Puro" : "Despacho Mixto"}>
+                <Handshake size={10} /> Préstamo
+              </span>
+            )}
             {cotNum && (
               <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 font-mono">
                 <FileText size={9} />{cotNum}

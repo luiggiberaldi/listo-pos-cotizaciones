@@ -157,14 +157,14 @@ export default function ClientesView() {
     }
   }
 
-  // Filtrado local y ordenamiento (clientes con deuda primero)
+  // Filtrado local y ordenamiento (clientes con deuda o préstamos activos primero)
   const clientesFiltrados = useMemo(() => {
     const list = clientes.filter(c => {
       // Supervisor/dev con toggle en "Mis datos": solo ver propios
       if (mostrarToggle && !verTodos && c.vendedor_id !== perfil?.id) return false
       if (filtroTipo     && c.tipo_cliente !== filtroTipo)               return false
       if (filtroVendedor && c.vendedor_id  !== filtroVendedor)           return false
-      if (filtroConDeuda && !(Number(c.saldo_pendiente || 0) > 0))      return false
+      if (filtroConDeuda && !(Number(c.saldo_pendiente || 0) > 0 || c.tiene_prestamos_activos)) return false
       
       if (filtroEstado === 'activos' && !c.activo) return false
       if (filtroEstado === 'desactivados' && c.activo) return false
@@ -172,16 +172,29 @@ export default function ClientesView() {
       return true
     })
 
-    // Ordenar: Clientes con deuda primero (de mayor a menor), luego orden alfabético
+    // Ordenar: Clientes con deuda o préstamos activos primero, luego orden alfabético
     return [...list].sort((a, b) => {
       const deudaA = Number(a.saldo_pendiente || 0)
       const deudaB = Number(b.saldo_pendiente || 0)
+      const prestamoA = !!a.tiene_prestamos_activos
+      const prestamoB = !!b.tiene_prestamos_activos
 
-      if (deudaA > 0 && deudaB === 0) return -1
-      if (deudaB > 0 && deudaA === 0) return 1
-      if (deudaA > 0 && deudaB > 0) {
-        return deudaB - deudaA // De mayor a menor deuda
+      const esDeudorA = deudaA > 0 || prestamoA
+      const esDeudorB = deudaB > 0 || prestamoB
+
+      if (esDeudorA && !esDeudorB) return -1
+      if (!esDeudorA && esDeudorB) return 1
+
+      if (esDeudorA && esDeudorB) {
+        // Priorizar por mayor deuda de dinero
+        if (deudaA !== deudaB) {
+          return deudaB - deudaA
+        }
+        // Desempatar poniendo primero al que tiene préstamos
+        if (prestamoA && !prestamoB) return -1
+        if (!prestamoA && prestamoB) return 1
       }
+
       return (a.nombre || '').localeCompare(b.nombre || '')
     })
   }, [clientes, filtroTipo, filtroVendedor, filtroConDeuda, filtroEstado, mostrarToggle, verTodos, perfil?.id])
@@ -440,7 +453,7 @@ export default function ClientesView() {
           />
         )}
 
-        {/* Solo con deuda */}
+        {/* Solo con deuda o préstamo */}
         <button
           onClick={() => { setFiltroConDeuda(v => !v); setPagina(1) }}
           className={`flex items-center gap-1.5 text-xs font-bold rounded-xl px-3 py-2.5 transition-all min-h-[44px] border ${
@@ -450,7 +463,7 @@ export default function ClientesView() {
           }`}
         >
           <AlertCircle size={12} />
-          Con deuda
+          Con deuda / Préstamos
         </button>
 
         {/* Limpiar filtros */}
