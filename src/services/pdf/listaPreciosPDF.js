@@ -110,6 +110,65 @@ function corregirCategoriaCruzada(categoriaActual, nombre) {
   return categoriaActual
 }
 
+function obtenerSubcategoria(nombre) {
+  if (!nombre) return 'OTROS'
+  const n = nombre.toUpperCase().trim()
+
+  // Detección de abreviaturas comunes de ferretería para tornillería
+  if (n.startsWith('TOR ') || n.includes(' TOR ') || n.includes('TORNILLO')) {
+    return 'TORNILLOS'
+  }
+  if (n.startsWith('TUE ') || n.includes(' TUE ') || n.includes('TUERCA')) {
+    return 'TUERCAS'
+  }
+  if (n.includes('CAJA DE PASO') || n.includes('CAJA PASO')) {
+    return 'CAJAS DE PASO ELÉCTRICAS'
+  }
+  if (n.includes('CAJA DE MEDIDOR') || n.includes('CAJA MEDIDOR')) {
+    return 'CAJAS DE MEDIDOR'
+  }
+  if ((n.startsWith('LLAVE') || n.includes(' LLAVE ')) && !n.includes('KIT DE FREGADERO') && !n.includes('KIT FREGADERO')) {
+    return 'LLAVES'
+  }
+  
+  const subcats = [
+    { key: 'CODO', label: 'CODOS' },
+    { key: 'ANILLO', label: 'ANILLOS' },
+    { key: 'REDUCCION', label: 'REDUCCIONES' },
+    { key: 'TEE', label: 'TEES' },
+    { key: 'SIFON', label: 'SIFONES' },
+    { key: 'REJILLA', label: 'REJILLAS' },
+    { key: 'TAPON', label: 'TAPONES' },
+    { key: 'ADAPTADOR', label: 'ADAPTADORES' },
+    { key: 'CURVA', label: 'CURVAS' },
+    { key: 'NIPLE', label: 'NIPLES' },
+    { key: 'UNION', label: 'UNIONES' },
+    { key: 'YEE', label: 'YEES' },
+    { key: 'ABRAZADERA', label: 'ABRAZADERAS' },
+    { key: 'VALVULA', label: 'VALVULAS' },
+    { key: 'PEGAMENTO', label: 'PEGAMENTOS' },
+    { key: 'PEGA ', label: 'PEGAMENTOS' },
+    { key: 'FLANCHE', label: 'FLANCHES' },
+    { key: 'COLLARIN', label: 'COLLARINES' },
+    { key: 'DISCO', label: 'DISCOS' },
+    { key: 'ELECTRODO', label: 'ELECTRODOS' },
+    { key: 'CABLE', label: 'CABLES' },
+    { key: 'BREAKER', label: 'BREAKERS' },
+    { key: 'CAJETIN', label: 'CAJETINES' },
+    { key: 'TABLERO', label: 'TABLEROS' },
+    { key: 'LOTE', label: 'LOTES' },
+    { key: 'MARCO', label: 'MARCOS' }
+  ]
+  
+  for (const item of subcats) {
+    if (n.includes(item.key)) {
+      return item.label
+    }
+  }
+  
+  return 'OTROS'
+}
+
 function normalizarCategoria(cat) {
   if (!cat) return 'PRODUCTOS EXTERNOS'
   let upper = cat.toUpperCase().trim()
@@ -119,6 +178,11 @@ function normalizarCategoria(cat) {
   if (upper.includes('AGUA') && upper.includes('FRIA') && upper.includes('PVC')) upper = 'TUBOS PVC AGUAS FRIAS'
   if (upper.includes('PVC') && upper.includes('ELECTRIC')) upper = 'TUBOS PVC ELECTRICIDAD'
   if (upper === 'TUBOS ESTRUCTURAL' || upper === 'TUBO ESTRUCTURAL') upper = 'TUBOS ESTRUCTURALES'
+
+  // Estandarizar todas las categorías de ferretería en una sola
+  if (upper.startsWith('FERRETERIA')) {
+    return 'FERRETERIA'
+  }
 
   // Estandarizar plurales iniciales
   if (upper.startsWith('TUBO ')) upper = upper.replace('TUBO ', 'TUBOS ')
@@ -445,6 +509,21 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
   categoriasOrdenadas.forEach(cat => {
     const items = grupos[cat]
 
+    // 1. Agrupar items de la categoría por subcategoría
+    const subgrupos = {}
+    items.forEach(p => {
+      const sub = obtenerSubcategoria(p.nombre)
+      if (!subgrupos[sub]) subgrupos[sub] = []
+      subgrupos[sub].push(p)
+    })
+
+    const subcats = Object.keys(subgrupos).sort((a, b) => {
+      if (a === 'OTROS') return 1
+      if (b === 'OTROS') return -1
+      return a.localeCompare(b)
+    })
+    const catIndex = categoriasOrdenadas.indexOf(cat) + 1
+
     // Subtítulo de categoría
     let prevY = y
     const bottomMargin = doc.internal.getNumberOfPages() === 1 ? 35 : 12
@@ -469,91 +548,323 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(7.5)
     doc.setTextColor(0, 0, 0)
-    const indexStr = String(categoriasOrdenadas.indexOf(cat) + 1)
+    const indexStr = String(catIndex)
     doc.text(indexStr, MARGIN + 2, y + 3.7)
     doc.text(cat.toUpperCase(), MARGIN + 10, y + 3.7)
-    y += (isGrid ? 5.5 : 6.0)
+        y += (isGrid ? 5.5 : 6.0)
 
-    // Filas de productos
-    items.forEach((p, idx) => {
-      let prevYItem = y
-      const bottomMarginItem = doc.internal.getNumberOfPages() === 1 ? 35 : 12
-      y = checkPage(doc, y, ROW_H, (d) => drawSimplifiedHeader(d, HEADER_LOGO_WHITE || logoData, config, 'Lista de Precios (Cont.)'), bottomMarginItem)
-      if (y < prevYItem) {
-        y = drawTableHeader(y, isGrid)
-        needsHeader = false
-      }
+    // Filtrar subcategorías válidas para numeración ordenada
+    const subcatsValidas = subcats.filter(s => s !== 'OTROS')
+    const tieneSubcategorias = subcatsValidas.length > 0 && items.length > 1
 
-      if (isGrid) {
-        if (idx % 2 === 0) {
-          doc.setFillColor(252, 252, 255)
-          doc.rect(MARGIN, y, CONTENT_W, ROW_H, 'FD')
-        } else {
-          doc.rect(MARGIN, y, CONTENT_W, ROW_H, 'S')
-        }
-        cols.forEach(col => {
-          if (col.x > MARGIN) doc.line(col.x, y, col.x, y + ROW_H)
-        })
-      } else {
-        if (idx % 2 === 0) {
-          doc.setFillColor(252, 252, 253)
-          doc.rect(MARGIN, y, CONTENT_W, ROW_H, 'F')
-        }
-      }
+    if (tieneSubcategorias) {
+      // 1. Dibujar primero los items generales (OTROS) directamente bajo la categoría principal
+      const otrosItems = subgrupos['OTROS'] || []
+      if (otrosItems.length > 0) {
+        otrosItems.forEach((p, idx) => {
+          const nombreColDef = cols.find(c => c.key === 'nombre')
+          const nombreMaxW = nombreColDef ? nombreColDef.w - 2 : 50
+          const nombreLines = doc.splitTextToSize(p.nombre || '—', nombreMaxW)
+          const hRow = 5.2 + (nombreLines.length - 1) * 3.5
 
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(7)
-      doc.setTextColor(...C_DARK)
+          let prevYItem = y
+          const bottomMarginItem = doc.internal.getNumberOfPages() === 1 ? 35 : 12
+          y = checkPage(doc, y, hRow, (d) => drawSimplifiedHeader(d, HEADER_LOGO_WHITE || logoData, config, 'Lista de Precios (Cont.)'), bottomMarginItem)
+          if (y < prevYItem) {
+            y = drawTableHeader(y, isGrid)
+            needsHeader = false
+          }
 
-      cols.forEach(col => {
-        let val = ''
-        const align = ['precio', 'precio2', 'stock'].includes(col.key) ? 'right' : 'left'
-        let tx = align === 'right' ? col.x + col.w - 2 : col.x + 1
-        if (isGrid && align === 'left') tx = col.x + 2
-
-        const colMaxW = col.w - 2 // 1mm padding each side
-
-        switch (col.key) {
-          case 'codigo':
-            val = fitText(doc, p.codigo || '—', colMaxW)
-            break
-          case 'nombre':
-            val = fitText(doc, p.nombre || '—', colMaxW)
-            break
-          case 'unidad':
-            val = (p.unidad || 'Und')
-            val = val.charAt(0).toUpperCase() + val.slice(1).toLowerCase()
-            break
-          case 'stock':
-            val = p.stock_actual != null ? Number(p.stock_actual).toLocaleString('es-VE') : '—'
-            if (p.stock_actual <= 0) doc.setTextColor(185, 28, 28)
-            break
-          case 'precio':
-          case 'precio2':
-            const basePrecio = col.key === 'precio' ? p.precio_usd : p.precio_2;
-            if (basePrecio != null) {
-              const usd = Number(basePrecio)
-              if (moneda === 'bs' && tasa > 0) {
-                 val = 'Bs ' + (usd * tasa).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-              } else {
-                 val = '$' + usd.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-              }
+          if (isGrid) {
+            if (idx % 2 === 0) {
+              doc.setFillColor(252, 252, 255)
+              doc.rect(MARGIN, y, CONTENT_W, hRow, 'FD')
             } else {
-              val = '—'
+              doc.rect(MARGIN, y, CONTENT_W, hRow, 'S')
             }
-            break
+            cols.forEach(col => {
+              if (col.x > MARGIN) doc.line(col.x, y, col.x, y + hRow)
+            })
+          } else {
+            if (idx % 2 === 0) {
+              doc.setFillColor(252, 252, 253)
+              doc.rect(MARGIN, y, CONTENT_W, hRow, 'F')
+            }
+          }
+
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(7)
+          doc.setTextColor(...C_DARK)
+
+          cols.forEach(col => {
+            let val = ''
+            const align = ['precio', 'precio2', 'stock'].includes(col.key) ? 'right' : 'left'
+            let tx = align === 'right' ? col.x + col.w - 2 : col.x + 1
+            if (isGrid && align === 'left') tx = col.x + 2
+
+            const colMaxW = col.w - 2 // 1mm padding each side
+
+            switch (col.key) {
+              case 'codigo':
+                val = fitText(doc, p.codigo || '—', colMaxW)
+                break
+              case 'unidad':
+                val = (p.unidad || 'Und')
+                val = val.charAt(0).toUpperCase() + val.slice(1).toLowerCase()
+                break
+              case 'stock':
+                val = p.stock_actual != null ? Number(p.stock_actual).toLocaleString('es-VE') : '—'
+                if (p.stock_actual <= 0) doc.setTextColor(185, 28, 28)
+                break
+              case 'precio':
+              case 'precio2':
+                const basePrecio = col.key === 'precio' ? p.precio_usd : p.precio_2;
+                if (basePrecio != null) {
+                  const usd = Number(basePrecio)
+                  if (moneda === 'bs' && tasa > 0) {
+                     val = 'Bs ' + (usd * tasa).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                  } else {
+                     val = '$' + usd.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                  }
+                } else {
+                  val = '—'
+                }
+                break
+            }
+
+            const textY = y + 3.8
+            if (isGrid && ['precio', 'precio2', 'stock'].includes(col.key) && val !== '—') doc.setFont('helvetica', 'bold')
+
+            if (col.key === 'nombre') {
+              nombreLines.forEach((lineText, lineIdx) => {
+                doc.text(lineText, tx, y + 3.8 + lineIdx * 3.5)
+              })
+            } else {
+              doc.text(val, tx, textY, { align })
+            }
+
+            doc.setFont('helvetica', 'normal')
+            doc.setTextColor(...C_DARK)
+          })
+
+          y += hRow
+        })
+      }
+
+      // 2. Luego, iterar solo las subcategorías válidas (con cabecera numerada)
+      subcatsValidas.forEach((subcat, subIdx) => {
+        const subItems = subgrupos[subcat]
+        const visibleIdx = subIdx + 1
+        const subIndexStr = `${catIndex}.${visibleIdx}`
+
+        // Sub-encabezado de subcategoría
+        let prevYSub = y
+        y = checkPage(doc, y, 12, (d) => drawSimplifiedHeader(d, HEADER_LOGO_WHITE || logoData, config, 'Lista de Precios (Cont.)'), bottomMargin)
+        if (y < prevYSub) {
+          y = drawTableHeader(y, isGrid)
         }
 
-        const textY = y + 3.8
-        if (isGrid && ['precio', 'precio2', 'stock'].includes(col.key) && val !== '—') doc.setFont('helvetica', 'bold')
+        const SUBCAT_H = 4.4
+        if (isGrid) {
+          doc.setFillColor(220, 225, 230)
+          doc.rect(MARGIN, y, CONTENT_W, SUBCAT_H, 'F')
+          doc.setDrawColor(180, 180, 180)
+          doc.setLineWidth(0.3)
+          doc.rect(MARGIN, y, CONTENT_W, SUBCAT_H, 'S')
+        } else {
+          doc.setFillColor(230, 232, 235)
+          doc.rect(MARGIN, y, CONTENT_W, SUBCAT_H, 'F')
+        }
 
-        doc.text(val, tx, textY, { align })
-        doc.setFont('helvetica', 'normal')
-        doc.setTextColor(...C_DARK)
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(7.0)
+        doc.setTextColor(50, 50, 50)
+        doc.text(subIndexStr, MARGIN + 4, y + 3.1)
+        doc.text(subcat.toUpperCase(), MARGIN + 13, y + 3.1)
+        y += (isGrid ? 4.9 : 5.2)
+
+        // Filas de productos de la subcategoría
+        subItems.forEach((p, idx) => {
+          const nombreColDef = cols.find(c => c.key === 'nombre')
+          const nombreMaxW = nombreColDef ? nombreColDef.w - 2 : 50
+          const nombreLines = doc.splitTextToSize(p.nombre || '—', nombreMaxW)
+          const hRow = 5.2 + (nombreLines.length - 1) * 3.5
+
+          let prevYItem = y
+          const bottomMarginItem = doc.internal.getNumberOfPages() === 1 ? 35 : 12
+          y = checkPage(doc, y, hRow, (d) => drawSimplifiedHeader(d, HEADER_LOGO_WHITE || logoData, config, 'Lista de Precios (Cont.)'), bottomMarginItem)
+          if (y < prevYItem) {
+            y = drawTableHeader(y, isGrid)
+            needsHeader = false
+          }
+
+          if (isGrid) {
+            if (idx % 2 === 0) {
+              doc.setFillColor(252, 252, 255)
+              doc.rect(MARGIN, y, CONTENT_W, hRow, 'FD')
+            } else {
+              doc.rect(MARGIN, y, CONTENT_W, hRow, 'S')
+            }
+            cols.forEach(col => {
+              if (col.x > MARGIN) doc.line(col.x, y, col.x, y + hRow)
+            })
+          } else {
+            if (idx % 2 === 0) {
+              doc.setFillColor(252, 252, 253)
+              doc.rect(MARGIN, y, CONTENT_W, hRow, 'F')
+            }
+          }
+
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(7)
+          doc.setTextColor(...C_DARK)
+
+          cols.forEach(col => {
+            let val = ''
+            const align = ['precio', 'precio2', 'stock'].includes(col.key) ? 'right' : 'left'
+            let tx = align === 'right' ? col.x + col.w - 2 : col.x + 1
+            if (isGrid && align === 'left') tx = col.x + 2
+
+            const colMaxW = col.w - 2 // 1mm padding each side
+
+            switch (col.key) {
+              case 'codigo':
+                val = fitText(doc, p.codigo || '—', colMaxW)
+                break
+              case 'unidad':
+                val = (p.unidad || 'Und')
+                val = val.charAt(0).toUpperCase() + val.slice(1).toLowerCase()
+                break
+              case 'stock':
+                val = p.stock_actual != null ? Number(p.stock_actual).toLocaleString('es-VE') : '—'
+                if (p.stock_actual <= 0) doc.setTextColor(185, 28, 28)
+                break
+              case 'precio':
+              case 'precio2':
+                const basePrecio = col.key === 'precio' ? p.precio_usd : p.precio_2;
+                if (basePrecio != null) {
+                  const usd = Number(basePrecio)
+                  if (moneda === 'bs' && tasa > 0) {
+                     val = 'Bs ' + (usd * tasa).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                  } else {
+                     val = '$' + usd.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                  }
+                } else {
+                  val = '—'
+                }
+                break
+            }
+
+            const textY = y + 3.8
+            if (isGrid && ['precio', 'precio2', 'stock'].includes(col.key) && val !== '—') doc.setFont('helvetica', 'bold')
+
+            if (col.key === 'nombre') {
+              nombreLines.forEach((lineText, lineIdx) => {
+                doc.text(lineText, tx, y + 3.8 + lineIdx * 3.5)
+              })
+            } else {
+              doc.text(val, tx, textY, { align })
+            }
+
+            doc.setFont('helvetica', 'normal')
+            doc.setTextColor(...C_DARK)
+          })
+
+          y += hRow
+        })
       })
+    } else {
+      // Filas de productos normales si no hay subcategorías
+      items.forEach((p, idx) => {
+        const nombreColDef = cols.find(c => c.key === 'nombre')
+        const nombreMaxW = nombreColDef ? nombreColDef.w - 2 : 50
+        const nombreLines = doc.splitTextToSize(p.nombre || '—', nombreMaxW)
+        const hRow = 5.2 + (nombreLines.length - 1) * 3.5
 
-      y += ROW_H
-    })
+        let prevYItem = y
+        const bottomMarginItem = doc.internal.getNumberOfPages() === 1 ? 35 : 12
+        y = checkPage(doc, y, hRow, (d) => drawSimplifiedHeader(d, HEADER_LOGO_WHITE || logoData, config, 'Lista de Precios (Cont.)'), bottomMarginItem)
+        if (y < prevYItem) {
+          y = drawTableHeader(y, isGrid)
+          needsHeader = false
+        }
+
+        if (isGrid) {
+          if (idx % 2 === 0) {
+            doc.setFillColor(252, 252, 255)
+            doc.rect(MARGIN, y, CONTENT_W, hRow, 'FD')
+          } else {
+            doc.rect(MARGIN, y, CONTENT_W, hRow, 'S')
+          }
+          cols.forEach(col => {
+            if (col.x > MARGIN) doc.line(col.x, y, col.x, y + hRow)
+          })
+        } else {
+          if (idx % 2 === 0) {
+            doc.setFillColor(252, 252, 253)
+            doc.rect(MARGIN, y, CONTENT_W, hRow, 'F')
+          }
+        }
+
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(7)
+        doc.setTextColor(...C_DARK)
+
+        cols.forEach(col => {
+          let val = ''
+          const align = ['precio', 'precio2', 'stock'].includes(col.key) ? 'right' : 'left'
+          let tx = align === 'right' ? col.x + col.w - 2 : col.x + 1
+          if (isGrid && align === 'left') tx = col.x + 2
+
+          const colMaxW = col.w - 2 // 1mm padding each side
+
+          switch (col.key) {
+            case 'codigo':
+              val = fitText(doc, p.codigo || '—', colMaxW)
+              break
+            case 'unidad':
+              val = (p.unidad || 'Und')
+              val = val.charAt(0).toUpperCase() + val.slice(1).toLowerCase()
+              break
+            case 'stock':
+              val = p.stock_actual != null ? Number(p.stock_actual).toLocaleString('es-VE') : '—'
+              if (p.stock_actual <= 0) doc.setTextColor(185, 28, 28)
+              break
+            case 'precio':
+            case 'precio2':
+              const basePrecio = col.key === 'precio' ? p.precio_usd : p.precio_2;
+              if (basePrecio != null) {
+                const usd = Number(basePrecio)
+                if (moneda === 'bs' && tasa > 0) {
+                   val = 'Bs ' + (usd * tasa).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                } else {
+                   val = '$' + usd.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                }
+              } else {
+                val = '—'
+              }
+              break
+          }
+
+          const textY = y + 3.8
+          if (isGrid && ['precio', 'precio2', 'stock'].includes(col.key) && val !== '—') doc.setFont('helvetica', 'bold')
+
+          if (col.key === 'nombre') {
+            nombreLines.forEach((lineText, lineIdx) => {
+              doc.text(lineText, tx, y + 3.8 + lineIdx * 3.5)
+            })
+          } else {
+            doc.text(val, tx, textY, { align })
+          }
+
+          doc.setFont('helvetica', 'normal')
+          doc.setTextColor(...C_DARK)
+        })
+
+        y += hRow
+      })
+    }
+
     y += (isGrid ? 0 : 2)
   })
 
