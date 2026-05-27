@@ -7,7 +7,7 @@ import { comprimirImagen, subirImagenProducto } from '../../utils/imageCompress'
 import supabase from '../../services/supabase/client'
 import CustomSelect from '../ui/CustomSelect'
 import useAuthStore from '../../store/useAuthStore'
-import { LINEAS, MATERIALES, FORMAS, RESTRICCIONES, obtenerCategoriaDesdeEstructura, calcularSiguienteCodigo } from '../../utils/codigosHelper'
+import { LINEAS, MATERIALES, FORMAS, RESTRICCIONES, obtenerCategoriaDesdeEstructura, calcularSiguienteCodigo, sugerirEstructuraDesdeNombre } from '../../utils/codigosHelper'
 
 function Campo({ label, icono: Icono, error, children }) {
   return (
@@ -207,10 +207,7 @@ export default function ProductoForm({ producto = null, isClone = false, onSucce
         setGenForma(r.formas.length === 1 ? r.formas[0] : '')
       }
     }
-  }, [genLinea])
-
-
-  // Auto-sincronizar categoría basada en la estructura del código y nombre
+  }, [genLinea])  // Auto-sincronizar categoría basada en la estructura del código y nombre
   useEffect(() => {
     if (!genLinea || !genMaterial || !genForma) return
     const catSugerida = obtenerCategoriaDesdeEstructura(genLinea, genMaterial, genForma, campos.nombre)
@@ -218,6 +215,24 @@ export default function ProductoForm({ producto = null, isClone = false, onSucce
       setCampos(p => ({ ...p, categoria: catSugerida }))
     }
   }, [genLinea, genMaterial, genForma, campos.nombre])
+
+  // Auto-sugerir estructura del código (Línea, Material, Forma) basándose en el nombre
+  useEffect(() => {
+    if (esEdicion || !campos.nombre.trim()) return
+
+    const sug = sugerirEstructuraDesdeNombre(campos.nombre)
+    if (sug) {
+      if (sug.linea && !manuales.linea && sug.linea !== genLinea) {
+        setGenLinea(sug.linea)
+      }
+      if (sug.material && !manuales.material && sug.material !== genMaterial) {
+        setGenMaterial(sug.material)
+      }
+      if (sug.forma && !manuales.forma && sug.forma !== genForma) {
+        setGenForma(sug.forma)
+      }
+    }
+  }, [campos.nombre, esEdicion, manuales, genLinea, genMaterial, genForma])
 
 
   // Sincronizar selectores si se edita manualmente el código en el input

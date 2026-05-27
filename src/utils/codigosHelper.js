@@ -200,57 +200,63 @@ export function obtenerCategoriaDesdeEstructura(linea, material, forma, nombre =
     return 'VIGAS';
   } else if (linea === 'TUB') {
     if (['05', '06', '07', '08', '09', '15'].includes(material)) {
-      return 'TUBERIAS PVC';
-    } else if (['01', '02', '03', '04'].includes(material)) {
-      return 'TUBERIAS ACERO';
+      if (name.includes('agua') && name.includes('fria')) return 'TUBOS PVC AGUAS FRIAS';
+      if (name.includes('elec') || name.includes('electric')) return 'TUBOS PVC ELECTRICIDAD';
+      if (name.includes('negra') || name.includes('an') || name.includes('a/n')) return 'TUBOS PVC AGUAS NEGRAS';
+      return 'TUBOS PVC';
     } else if (material === '14') {
-      return 'TUBERIAS VENTILACION';
+      return 'TUBOS DE VENTILACION';
+    } else if (material === '04') {
+      return 'TUBOS GALVANIZADO';
+    } else if (material === '02') {
+      if (forma === '01') return 'TUBOS PULIDO CUADRADO';
+      if (forma === '02') return 'TUBOS PULIDO RECTANGULAR';
+      return 'TUBOS REDONDOS';
+    } else if (['01', '03'].includes(material)) {
+      if (forma === '01') return 'TUBOS ESTRUCTURALES CUADRADO';
+      if (forma === '02') return 'TUBOS ESTRUCTURALES RECTANGULAR';
+      if (forma === '03') return 'TUBOS REDONDOS';
+      return 'TUBOS ESTRUCTURALES';
     }
-    return 'TUBERIAS ACERO';
+    return 'TUBOS';
   } else if (linea === 'PER') {
     if (forma === '11') return 'PERFILES ANGULOS';
     if (forma === '12') return 'PERFILES PLETINA';
-    if (forma === '44') return 'PERFILES PORTONES DECORATIVOS';
-    if (name.includes('vigueta')) return 'PERFILES VIGUETA TIPO C';
-    return 'PERFILES HERRERIA';
+    return 'PERFILES';
   } else if (linea === 'BAR') {
     if (forma === '01') return 'BARRAS CUADRADA LISA';
     if (forma === '03') return 'BARRAS REDONDA LISA';
-    return 'BARRAS REDONDA LISA';
+    return 'BARRAS';
   } else if (linea === 'CAB') {
-    return 'CABILLAS ACERO ESTRIADAS';
+    return 'CABILLAS';
   } else if (linea === 'LAM') {
-    if (material === '11') return 'LAMINAS DRYWALL';
-    if (material === '12' || material === '19') return 'LAMINAS TECHO';
-    if (name.includes('losacero')) return 'LAMINAS LOSACERO';
-    return 'LAMINAS ACERO';
+    return 'LAMINAS';
   } else if (linea === 'MAL') {
-    return 'MALLAS TRUCKSON';
+    return 'MALLAS';
   } else if (linea === 'CON') {
-    if (material === '04') return 'CONEXIONES EMT';
-    return 'CONEXIONES PVC';
+    if (material === '04') {
+      if (name.includes('galv') || name.includes('hg')) return 'CONEXIONES GALVANIZADAS';
+      return 'CONEXIONES EMT';
+    }
+    if (material === '08') return 'CONEXIONES PVC AGUAS NEGRAS';
+    if (['05', '06', '07'].includes(material)) return 'CONEXIONES PVC AGUA FRIA';
+    return 'CONEXIONES';
   } else if (linea === 'ELE') {
-    if (forma === '32') return 'ELECTRICIDAD CABLE';
-    if (forma === '33') return 'ELECTRICIDAD CAJAS Y CAJETINES';
-    if (forma === '34') return 'ELECTRICIDAD TABLEROS';
-    if (material === '18') return 'ELECTRICIDAD DISPOSITIVOS DE PROTECCION';
+    if (forma === '32') return 'CABLES';
+    if (forma === '33' || forma === '34' || material === '18') return 'CAJAS Y TABLEROS';
     return 'ELECTRICIDAD';
   } else if (linea === 'FER') {
-    if (forma === '36') return 'FERRETERIA ELECTRODOS';
-    if (forma === '35') return 'FERRETERIA DISCOS';
-    if (forma === '37' || forma === '42') return 'FERRETERIA TORNILLERIA';
-    if (material === '13' || material === '20') return 'FERRETERIA QUIMICOS Y PINTURA';
-    return 'FERRETERIA ACCESORIOS';
+    return 'FERRETERIA';
   } else if (linea === 'FLA') {
     return 'FLANCHES';
   } else if (linea === 'CEM') {
-    return 'CEMENTOS';
+    return 'CEMENTO';
   } else if (linea === 'CER') {
     return 'CERCHAS';
   } else if (linea === 'ALA') {
-    return 'ALAMBRE';
+    return 'ALAMBRES';
   } else if (linea === 'ALB') {
-    return 'ALAMBRON';
+    return 'ALAMBRONES';
   } else if (linea === 'ZUN') {
     return 'ZUNCHOS';
   }
@@ -295,12 +301,12 @@ export function sugerirEstructuraDesdeNombre(nombre) {
   // 2. Detección de Material
   if (n.includes('galv') || n.includes('galvanizado')) sugerencia.material = '04';
   else if (n.includes('pvc ele')) sugerencia.material = '09';
-  else if (n.includes('pvc af')) sugerencia.material = '06';
+  else if (n.includes('pvc af') || n.includes('agua fria')) sugerencia.material = '06';
   else if (n.includes('pvc ac')) sugerencia.material = '07';
-  else if (n.includes('pvc an')) sugerencia.material = '08';
+  else if (n.includes('pvc an') || n.includes('aguas negras') || n.includes('a/n')) sugerencia.material = '08';
   else if (n.includes('pvc')) sugerencia.material = '05';
-  else if (n.includes('hierro negro') || n.includes('pulido') || n.includes('negro')) sugerencia.material = '01';
-  else if (n.includes('pulido')) sugerencia.material = '02';
+  else if (n.includes('pulido') || n.includes(' hp') || n.includes('hp ') || n.startsWith('hp')) sugerencia.material = '02';
+  else if (n.includes('hierro negro') || n.includes('negro') || n.includes(' hn') || n.includes('hn ') || n.startsWith('hn')) sugerencia.material = '01';
   else if (n.includes('estruc') || n.includes('estructural')) sugerencia.material = '03';
   else if (n.includes('drywall') || n.includes('draywall')) sugerencia.material = '11';
   else if (n.includes('termopanel')) sugerencia.material = '12';
@@ -310,7 +316,7 @@ export function sugerirEstructuraDesdeNombre(nombre) {
   else if (n.includes('aluminio')) sugerencia.material = '16';
   else if (n.includes('cobre')) sugerencia.material = '17';
   else if (n.includes('breaker')) sugerencia.material = '18';
-  else if (n.includes('techo') || n.includes('acerolit')) sugerencia.material = '19';
+  else if (n.includes('techo') || n.includes('acerolit') || n.includes('losacero') || n.includes('galvatecho') || n.includes('prepintado')) sugerencia.material = '19';
   else if (n.includes('pega') || n.includes('pegamento')) sugerencia.material = '20';
   else if (n.includes('bronce')) sugerencia.material = '21';
   else if (n.includes('griferia') || n.includes('fregadero')) sugerencia.material = '22';
