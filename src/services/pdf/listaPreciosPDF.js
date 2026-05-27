@@ -342,26 +342,31 @@ function drawFooter(doc, config) {
     if (p === 1) {
       // Franja negra superior con las diagonales
       const hazardY = ph - 30
-      doc.setFillColor(...C_DARK)
+      doc.setFillColor(...LP_ACCENT)
       doc.rect(0, hazardY, PAGE_W, 4, 'F')
 
-      doc.setDrawColor(...C_PRIMARY)
+      doc.setDrawColor(...LP_BG)
       doc.setLineWidth(0.8)
       for(let k = 1; k < 20; k++) {
         doc.line(k * 4, hazardY, k * 4 - 3, hazardY + 4)
         doc.line(PAGE_W - k * 4, hazardY, PAGE_W - k * 4 + 3, hazardY + 4)
       }
 
-      // Franja principal azul
-      doc.setFillColor(...C_PRIMARY)
+      // Franja principal blanca
+      doc.setFillColor(...LP_BG)
       doc.rect(0, ph - 29, PAGE_W, 29, 'F')
 
+      // Borde superior sutil para separar del contenido
+      doc.setLineWidth(0.3)
+      doc.setDrawColor(...LP_ACCENT)
+      doc.line(0, ph - 29, PAGE_W, ph - 29)
+
       // ── Icono pin ubicación + dirección ──
-      doc.setFillColor(...C_WHITE)
-      doc.setDrawColor(...C_WHITE)
+      doc.setFillColor(...LP_TEXT)
+      doc.setDrawColor(...LP_TEXT)
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(8.5)
-      doc.setTextColor(...C_WHITE)
+      doc.setTextColor(...LP_TEXT)
 
       const addr1 = 'Av. 76, (Calle S-3) Nro. 70-C-766, Local Galpón Nro. 3 Edificio Centro Industrial Massico II'
       const addr2 = 'Parcela MB-6 y Mb7, Urb. Industrial Aeropuerto Vía Flor Amarillo, Valencia, Edo. Carabobo, Zona Postal 2003'
@@ -396,8 +401,8 @@ function drawFooter(doc, config) {
         const cy = ph - 7
 
         parts.forEach((p, i) => {
-          doc.setFillColor(...C_WHITE)
-          doc.setDrawColor(...C_WHITE)
+          doc.setFillColor(...LP_TEXT)
+          doc.setDrawColor(...LP_TEXT)
           if (p.icon === 'phone') {
              doc.setLineWidth(0.4)
              doc.roundedRect(cx, cy - 2.2, 1.6, 2.8, 0.3, 0.3, 'S')
@@ -409,7 +414,7 @@ function drawFooter(doc, config) {
              doc.line(cx, cy - 1.8, cx + 1.2, cy - 0.6)
              doc.line(cx + 2.4, cy - 1.8, cx + 1.2, cy - 0.6)
           }
-          doc.setTextColor(...C_WHITE)
+          doc.setTextColor(...LP_TEXT)
           doc.text(p.text, cx + 4, cy)
           cx += 5 + doc.getTextWidth(p.text) + gap
         })
@@ -417,19 +422,20 @@ function drawFooter(doc, config) {
 
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(6)
+      doc.setTextColor(...LP_TEXT)
       doc.text(`Página ${p} de ${totalPages}`, PAGE_W - 10, ph - 4, { align: 'right' })
     } else {
       // Footer simplificado para páginas > 1
       const fHeight = 8
-      doc.setFillColor(...C_PRIMARY)
+      doc.setFillColor(...LP_BG)
       doc.rect(0, ph - fHeight, PAGE_W, fHeight, 'F')
       
-      doc.setFillColor(...C_DARK)
+      doc.setFillColor(...LP_ACCENT)
       doc.rect(0, ph - fHeight - 1.5, PAGE_W, 1.5, 'F')
 
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(6)
-      doc.setTextColor(...C_WHITE)
+      doc.setTextColor(...LP_TEXT)
       doc.text(`Página ${p} de ${totalPages}`, PAGE_W - 10, ph - 2.5, { align: 'right' })
     }
   }
