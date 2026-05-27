@@ -2161,7 +2161,14 @@ function TabCredito() {
             {alertasVencimiento.map(alerta => (
               <div key={alerta.id} className="flex items-center justify-between bg-white border border-orange-100 rounded-lg p-2.5">
                 <div>
-                  <div className="text-xs font-bold text-slate-800">{alerta.cliente_nombre}</div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="text-xs font-bold text-slate-800">{alerta.cliente_nombre}</div>
+                    {alerta.metodo_pago === 'cod' && (
+                      <span className="bg-blue-100 text-blue-800 text-[8px] font-black px-1.5 py-0.5 rounded uppercase border border-blue-200 shrink-0">
+                        COD
+                      </span>
+                    )}
+                  </div>
                   <div className="text-[10px] text-slate-500">
                     Cargo: {new Date(alerta.creado_en).toLocaleDateString()}
                   </div>
@@ -2282,7 +2289,14 @@ function TabCredito() {
                   <tr key={c.id} className={`border-b border-slate-50 hover:bg-slate-50/60 transition-colors ${i % 2 === 0 ? '' : 'bg-slate-50/20'}`}>
                     {/* Cliente */}
                     <td className="px-4 py-3">
-                      <p className="font-bold text-slate-800 leading-tight">{c.nombre}</p>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <p className="font-bold text-slate-800 leading-tight">{c.nombre}</p>
+                        {c.cargosActivos && c.cargosActivos.some(car => car.metodo_pago === 'cod') && (
+                          <span className="bg-blue-100 text-blue-800 text-[8px] font-black px-1.5 py-0.5 rounded border border-blue-200 shrink-0">
+                            COD
+                          </span>
+                        )}
+                      </div>
                       {c.rif_cedula && <p className="text-[10px] text-slate-400 font-mono mt-0.5">{c.rif_cedula}</p>}
                       {/* Mini barra de saldo relativo */}
                       <div className="mt-1.5 h-1 rounded-full bg-slate-100 w-24 overflow-hidden">

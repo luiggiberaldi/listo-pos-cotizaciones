@@ -669,30 +669,42 @@ export async function handleActualizarEstadoDespacho(request, env) {
     if (nuevoEstado === 'despachada') {
       try {
         const fpRaw = desp.forma_pago_cliente || desp.forma_pago || '[]';
-        let montoCxC = 0;
-        let diasVencimiento = null;
+        let itemsCargos = []; // [{ monto: number, dias: number|null, metodo: 'cxc'|'cod', desc: string }]
         try {
           const fps = typeof fpRaw === 'string' ? JSON.parse(fpRaw) : fpRaw;
           if (Array.isArray(fps)) {
             const cxc = fps.find(f => f.metodo === 'Cta por cobrar');
             const cod = fps.find(f => f.metodo === 'Cobro a destino');
-            if (cxc) {
-              montoCxC += Number(cxc.monto) || 0;
-              if (cxc.diasVencimiento) {
-                diasVencimiento = parseInt(cxc.diasVencimiento, 10);
-              }
+            if (cxc && Number(cxc.monto) > 0) {
+              itemsCargos.push({
+                monto: Number(cxc.monto),
+                dias: cxc.diasVencimiento ? parseInt(cxc.diasVencimiento, 10) : null,
+                metodo: 'cxc',
+                desc: ' (Crédito)'
+              });
             }
-            if (cod) {
-              montoCxC += Number(cod.monto) || 0;
-              if (cod.diasVencimiento && !diasVencimiento) {
-                diasVencimiento = parseInt(cod.diasVencimiento, 10);
-              }
+            if (cod && Number(cod.monto) > 0) {
+              itemsCargos.push({
+                monto: Number(cod.monto),
+                dias: cod.diasVencimiento ? parseInt(cod.diasVencimiento, 10) : null,
+                metodo: 'cod',
+                desc: ' (COD)'
+              });
             }
           }
-        } catch { if (fpRaw === 'Cta por cobrar') montoCxC = Number(desp.total_usd) || 0; }
+        } catch {
+          if (fpRaw === 'Cta por cobrar' && Number(desp.total_usd) > 0) {
+            itemsCargos.push({
+              monto: Number(desp.total_usd),
+              dias: null,
+              metodo: 'cxc',
+              desc: ' (Crédito)'
+            });
+          }
+        }
 
-        if (montoCxC > 0) {
-          // Verificar si ya existe un cargo CxC para este despacho (idempotente)
+        if (itemsCargos.length > 0) {
+          // Verificar si ya existe algún cargo CxC para este despacho (idempotente)
           const cxcExistRes = await fetch(
             `${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?despacho_id=eq.${despachoId}&tipo=eq.cargo&select=id`,
             { headers }
@@ -706,38 +718,42 @@ export async function handleActualizarEstadoDespacho(request, env) {
             const [cot] = await cotRes.json();
             if (cot) {
               const clienteCxCId = desp.cliente_factura_id || cot.cliente_id;
-              const saldoRes = await fetch(
-                `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteCxCId}&select=saldo_pendiente`,
-                { headers }
-              );
-              const [clienteSaldo] = await saldoRes.json();
-              const saldoActual = Number(clienteSaldo?.saldo_pendiente || 0);
-              const nuevoSaldo = saldoActual + montoCxC;
+              
+              for (const item of itemsCargos) {
+                const saldoRes = await fetch(
+                  `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteCxCId}&select=saldo_pendiente`,
+                  { headers }
+                );
+                const [clienteSaldo] = await saldoRes.json();
+                const saldoActual = Number(clienteSaldo?.saldo_pendiente || 0);
+                const nuevoSaldo = saldoActual + item.monto;
 
-              let fecha_vencimiento = null;
-              if (diasVencimiento && !isNaN(diasVencimiento)) {
-                const date = new Date();
-                date.setDate(date.getDate() + diasVencimiento);
-                fecha_vencimiento = date.toISOString().split('T')[0];
-              }
+                let fecha_vencimiento = null;
+                if (item.dias && !isNaN(item.dias)) {
+                  const date = new Date();
+                  date.setDate(date.getDate() + item.dias);
+                  fecha_vencimiento = date.toISOString().split('T')[0];
+                }
 
-              const cargoPost = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
-                method: 'POST', headers,
-                body: JSON.stringify({
-                  cliente_id: clienteCxCId,
-                  despacho_id: despachoId,
-                  tipo: 'cargo',
-                  monto_usd: montoCxC,
-                  saldo_usd: nuevoSaldo,
-                  descripcion: `Orden de despacho #${cot.numero}`,
-                  registrado_por: user.operator_id,
-                  fecha_vencimiento: fecha_vencimiento
-                }),
-              });
+                const cargoPost = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
+                  method: 'POST', headers,
+                  body: JSON.stringify({
+                    cliente_id: clienteCxCId,
+                    despacho_id: despachoId,
+                    tipo: 'cargo',
+                    monto_usd: item.monto,
+                    saldo_usd: nuevoSaldo,
+                    descripcion: `Orden de despacho #${cot.numero}${item.desc}`,
+                    registrado_por: user.operator_id,
+                    fecha_vencimiento: fecha_vencimiento,
+                    metodo_pago: item.metodo
+                  }),
+                });
 
-              if (cargoPost.ok) {
-                await recalcularSaldoPendienteCliente(clienteCxCId, env, headers);
-                console.log('[CXC] Cargo CxC registrado al aprobar y saldo recalculado. Monto:', montoCxC);
+                if (cargoPost.ok) {
+                  await recalcularSaldoPendienteCliente(clienteCxCId, env, headers);
+                  console.log(`[CXC] Cargo CxC (${item.metodo}) registrado al aprobar y saldo recalculado. Monto:`, item.monto);
+                }
               }
             }
           }
@@ -965,97 +981,109 @@ export async function handleEditarItemsDespacho(request, env) {
         
         if (updatedDesp.estado === 'despachada') {
           const fpRaw = updatedDesp.forma_pago_cliente || updatedDesp.forma_pago || '[]';
-          let nuevoMontoCxC = 0;
-          let diasVencimiento = null;
+          let itemsCargos = [];
           try {
             const fps = typeof fpRaw === 'string' ? JSON.parse(fpRaw) : fpRaw;
             if (Array.isArray(fps)) {
               const cxc = fps.find(f => f.metodo === 'Cta por cobrar');
               const cod = fps.find(f => f.metodo === 'Cobro a destino');
-              if (cxc) {
-                nuevoMontoCxC += Number(cxc.monto) || 0;
-                if (cxc.diasVencimiento) {
-                  diasVencimiento = parseInt(cxc.diasVencimiento, 10);
-                }
+              if (cxc && Number(cxc.monto) > 0) {
+                itemsCargos.push({
+                  monto: Number(cxc.monto),
+                  dias: cxc.diasVencimiento ? parseInt(cxc.diasVencimiento, 10) : null,
+                  metodo: 'cxc',
+                  desc: ' (Crédito)'
+                });
               }
-              if (cod) {
-                nuevoMontoCxC += Number(cod.monto) || 0;
-                if (cod.diasVencimiento && !diasVencimiento) {
-                  diasVencimiento = parseInt(cod.diasVencimiento, 10);
-                }
+              if (cod && Number(cod.monto) > 0) {
+                itemsCargos.push({
+                  monto: Number(cod.monto),
+                  dias: cod.diasVencimiento ? parseInt(cod.diasVencimiento, 10) : null,
+                  metodo: 'cod',
+                  desc: ' (COD)'
+                });
               }
             }
           } catch {
-            if (fpRaw === 'Cta por cobrar') nuevoMontoCxC = Number(updatedDesp.total_usd) || 0;
+            if (fpRaw === 'Cta por cobrar' && Number(updatedDesp.total_usd) > 0) {
+              itemsCargos.push({
+                monto: Number(updatedDesp.total_usd),
+                dias: null,
+                metodo: 'cxc',
+                desc: ' (Crédito)'
+              });
+            }
           }
 
-          // Buscar cargo existente en CxC
+          // Buscar cargos existentes en CxC
           const cxcExistRes = await fetch(
-            `${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?despacho_id=eq.${despachoId}&tipo=eq.cargo&select=id,monto_usd,cliente_id`,
+            `${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?despacho_id=eq.${despachoId}&tipo=eq.cargo&select=id,monto_usd,cliente_id,metodo_pago`,
             { headers }
           );
           const cxcExist = await cxcExistRes.json();
-          const tieneCargoPrevio = Array.isArray(cxcExist) && cxcExist.length > 0;
+          const dbCargos = Array.isArray(cxcExist) ? cxcExist : [];
 
-          if (tieneCargoPrevio) {
-            const cargo = cxcExist[0];
-            const oldMonto = Number(cargo.monto_usd) || 0;
-            const diff = nuevoMontoCxC - oldMonto;
+          const cotRes = await fetch(
+            `${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${updatedDesp.cotizacion_id}&select=cliente_id,numero`,
+            { headers }
+          );
+          const [cot] = await cotRes.json();
+          const clienteCxCId = updatedDesp.cliente_factura_id || updatedDesp.cliente_id || (cot ? cot.cliente_id : null);
 
-            if (diff !== 0) {
-              if (nuevoMontoCxC === 0) {
-                // Si el nuevo monto es 0, eliminamos el cargo de CxC
-                await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?id=eq.${cargo.id}`, {
-                  method: 'DELETE', headers,
+          if (clienteCxCId) {
+            const metodos = ['cxc', 'cod'];
+            for (const met of metodos) {
+              const target = itemsCargos.find(it => it.metodo === met);
+              const existing = dbCargos.find(c => c.metodo_pago === met);
+
+              if (existing) {
+                if (!target) {
+                  // Si ya no existe este método de pago, eliminamos el cargo de CxC
+                  await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?id=eq.${existing.id}`, {
+                    method: 'DELETE', headers,
+                  });
+                  console.log(`[CXC-DEEP-EDIT] Cargo CxC (${met}) eliminado en edición profunda por quedar en $0.`);
+                } else {
+                  // Si existe y cambió el monto, actualizamos
+                  const diff = target.monto - Number(existing.monto_usd);
+                  if (diff !== 0) {
+                    await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?id=eq.${existing.id}`, {
+                      method: 'PATCH',
+                      headers: { ...headers, Prefer: 'return=minimal' },
+                      body: JSON.stringify({ monto_usd: Math.round(target.monto * 10000) / 10000 }),
+                    });
+                    console.log(`[CXC-DEEP-EDIT] Ajustado cargo (${met}) de despacho ${despachoId} a $${target.monto}.`);
+                  }
+                }
+              } else if (target) {
+                // Si no existía pero ahora sí requiere uno
+                let fecha_vencimiento = null;
+                if (target.dias && !isNaN(target.dias)) {
+                  const date = new Date();
+                  date.setDate(date.getDate() + target.dias);
+                  fecha_vencimiento = date.toISOString().split('T')[0];
+                }
+
+                await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
+                  method: 'POST', headers,
+                  body: JSON.stringify({
+                    cliente_id: clienteCxCId,
+                    despacho_id: despachoId,
+                    tipo: 'cargo',
+                    monto_usd: target.monto,
+                    saldo_usd: target.monto, // saldo transitorio
+                    descripcion: `Orden de despacho #${cot ? cot.numero : despachoId}${target.desc} (Creado en edición profunda)`,
+                    registrado_por: user.operator_id,
+                    fecha_vencimiento: fecha_vencimiento,
+                    metodo_pago: target.metodo
+                  }),
                 });
-                console.log(`[CXC-DEEP-EDIT] Cargo CxC eliminado en edición profunda por quedar en $0.`);
-              } else {
-                // Actualizar monto del cargo CxC
-                await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?id=eq.${cargo.id}`, {
-                  method: 'PATCH',
-                  headers: { ...headers, Prefer: 'return=minimal' },
-                  body: JSON.stringify({ monto_usd: Math.round(nuevoMontoCxC * 10000) / 10000 }),
-                });
+                console.log(`[CXC-DEEP-EDIT] Cargo CxC (${met}) creado en edición profunda por monto $${target.monto}.`);
               }
-
-              // Ajustar el saldo pendiente del cliente de forma unificada
-              await recalcularSaldoPendienteCliente(cargo.cliente_id, env, headers);
-              console.log(`[CXC-DEEP-EDIT] Ajustado cargo de despacho ${despachoId} de $${oldMonto} a $${nuevoMontoCxC}.`);
             }
-          } else if (nuevoMontoCxC > 0) {
-            // Si no existía cargo previo pero ahora sí requiere uno
-            const cotRes = await fetch(
-              `${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${updatedDesp.cotizacion_id}&select=cliente_id,numero`,
-              { headers }
-            );
-            const [cot] = await cotRes.json();
-            if (cot) {
-              const clienteCxCId = updatedDesp.cliente_factura_id || updatedDesp.cliente_id || cot.cliente_id;
-              
-              let fecha_vencimiento = null;
-              if (diasVencimiento && !isNaN(diasVencimiento)) {
-                const date = new Date();
-                date.setDate(date.getDate() + diasVencimiento);
-                fecha_vencimiento = date.toISOString().split('T')[0];
-              }
 
-              await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
-                method: 'POST', headers,
-                body: JSON.stringify({
-                  cliente_id: clienteCxCId,
-                  despacho_id: despachoId,
-                  tipo: 'cargo',
-                  monto_usd: nuevoMontoCxC,
-                  saldo_usd: nuevoMontoCxC, // saldo transitorio
-                  descripcion: `Orden de despacho #${cot.numero} (Creado en edición profunda)`,
-                  registrado_por: user.operator_id,
-                  fecha_vencimiento: fecha_vencimiento
-                }),
-              });
-
-              await recalcularSaldoPendienteCliente(clienteCxCId, env, headers);
-              console.log(`[CXC-DEEP-EDIT] Cargo CxC creado en edición profunda. Monto: $${nuevoMontoCxC}`);
-            }
+            // Al final recalculamos una sola vez el saldo
+            await recalcularSaldoPendienteCliente(clienteCxCId, env, headers);
           }
         }
       }
@@ -1200,12 +1228,12 @@ export async function handleGuardarDescuentos(request, env) {
     const diffDescuento = descTotalRounded - descuentoPrevio;
     if (diffDescuento !== 0) {
       const cxcRes = await fetch(
-        `${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?despacho_id=eq.${despachoId}&tipo=eq.cargo&select=id,monto_usd,cliente_id`,
+        `${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?despacho_id=eq.${despachoId}&tipo=eq.cargo&select=id,monto_usd,cliente_id,metodo_pago`,
         { headers }
       );
       const cxcEntries = await cxcRes.json();
       if (Array.isArray(cxcEntries) && cxcEntries.length > 0) {
-        const cxc = cxcEntries[0];
+        const cxc = cxcEntries.find(c => c.metodo_pago === 'cxc') || cxcEntries[0];
         const nuevoMontoCxc = Math.max(0, Number(cxc.monto_usd) - diffDescuento);
         // Actualizar monto del cargo CxC
         await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?id=eq.${cxc.id}`, {

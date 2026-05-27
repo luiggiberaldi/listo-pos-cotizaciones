@@ -95,7 +95,8 @@ export async function handleRegistrarAbono(request, env) {
           monto_usd: montoCargo,
           saldo_usd: saldoActual + montoCargo,
           descripcion: `Cargo COD auto-generado (Legacy DES)`,
-          registrado_por: operador.id
+          registrado_por: operador.id,
+          metodo_pago: 'cod'
         };
 
         const postCargo = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {

@@ -342,7 +342,12 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
         // Calcular estatus / plazo
         let estatusStr = '—'
         let estColor = C_DARK
-        if (car.fecha_vencimiento) {
+        const esCOD = car.metodo_pago === 'cod' || (car.descripcion && car.descripcion.includes('(COD)'));
+        
+        if (esCOD) {
+          estatusStr = 'COD (Cobro a destino)'
+          estColor = C_CXC_PRIMARY
+        } else if (car.fecha_vencimiento) {
           const now = new Date()
           const fv = new Date(car.fecha_vencimiento)
           const diffDays = Math.ceil((fv - now) / (1000 * 60 * 60 * 24))

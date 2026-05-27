@@ -20,7 +20,7 @@ export function useCuentasCobrar(clienteId) {
         .select(`
           id, cliente_id, despacho_id, tipo, monto_usd, saldo_usd,
           forma_pago_abono, referencia, descripcion, fecha_vencimiento,
-          registrado_por, creado_en
+          registrado_por, creado_en, metodo_pago
         `)
         .eq('cliente_id', clienteId)
         .order('creado_en', { ascending: false })
@@ -71,7 +71,7 @@ export function useResumenCxC() {
           const batch = clienteIds.slice(i, i + 50)
           const { data } = await supabase
             .from('cuentas_por_cobrar')
-            .select('id, cliente_id, monto_usd, saldo_usd, fecha_vencimiento, creado_en')
+            .select('id, cliente_id, monto_usd, saldo_usd, fecha_vencimiento, creado_en, metodo_pago, descripcion')
             .eq('tipo', 'cargo')
             .in('cliente_id', batch)
             .order('creado_en', { ascending: false })

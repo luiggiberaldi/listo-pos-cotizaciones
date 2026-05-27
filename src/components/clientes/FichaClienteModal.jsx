@@ -526,7 +526,14 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
                           : <ArrowDownCircle size={18} className="text-emerald-500 shrink-0" />
                         }
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-slate-700 truncate">{mov.descripcion}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-xs font-semibold text-slate-700 truncate">{mov.descripcion}</p>
+                            {mov.metodo_pago === 'cod' && (
+                              <span className="bg-blue-100 text-blue-800 text-[8.5px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider shrink-0 border border-blue-200">
+                                COD
+                              </span>
+                            )}
+                          </div>
                           <p className="text-[10px] text-slate-400">{fmtFecha(mov.creado_en)}</p>
                           {mov.referencia && (
                             <p className="text-[10px] text-slate-400">Ref: {mov.referencia}</p>
