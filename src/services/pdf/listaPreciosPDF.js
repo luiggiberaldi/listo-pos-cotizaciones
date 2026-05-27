@@ -1,13 +1,19 @@
 // src/services/pdf/listaPreciosPDF.js
 // Genera PDF "Lista de Precios" para enviar a clientes — Construacero Carabobo
 import { jsPDF } from 'jspdf'
-import { cargarLogo } from './pdfLogo'
-import { WATERMARK_LOGO, HEADER_LOGO_WHITE } from './watermarkBase64'
+import { WATERMARK_LOGO } from './watermarkBase64'
+import { LOGO_LISTA_PRECIOS } from './logoListaPreciosBase64'
 import { 
   PAGE_W, PAGE_H, MARGIN, CONTENT_W, 
   C_PRIMARY, C_DARK, C_WHITE, C_GRAY,
   drawSimplifiedHeader, checkPage, drawWatermark, drawPremiumHeader
 } from './pdfShared'
+
+// ─── Colores personalizados para Lista de Precios (blanco/negro) ─────────────
+const LP_BG      = [255, 255, 255]  // Fondo blanco
+const LP_ACCENT  = [0, 0, 0]        // Rayas y detalles negros
+const LP_TEXT    = [0, 0, 0]        // Texto negro
+const LP_BORDER  = [0, 0, 0]        // Borde de línea base negro
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function extraerDimensiones(nombre) {
@@ -302,14 +308,20 @@ function fitText(doc, text, maxW) {
 }
 
 // ─── Dibujar cabecera ────────────────────────────────────────────────────────
-function drawHeader(doc, logoData, config, moneda, tasa) {
+function drawHeader(doc, _logoData, config, moneda, tasa) {
   const fechaTxt = new Date().toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })
   return drawPremiumHeader({
     doc,
-    logoData,
+    logoData: LOGO_LISTA_PRECIOS,
     config,
     title: 'Lista de Precios',
-    subtitle: fechaTxt
+    subtitle: fechaTxt,
+    customBgColor:       LP_BG,
+    customAccentColor:   LP_ACCENT,
+    customTextColor:     LP_TEXT,
+    customSubtitleColor: LP_TEXT,
+    customBorderColor:   LP_BORDER,
+    centerBusinessName:  true
   })
 }
 
@@ -433,10 +445,10 @@ function drawFooter(doc, config) {
 export async function generarListaPreciosPDF({ productos, config = {}, opciones = {} }) {
   const { moneda = 'usd', tasa = 0, columnas = {}, formato = 'lista' } = opciones
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
-  const logoData = await cargarLogo(config.logo_url)
 
-  let y = drawHeader(doc, logoData, config, moneda, tasa)
+  let y = drawHeader(doc, null, config, moneda, tasa)
   drawWatermark(doc)
+
 
 
   // Agrupar por categoría usando el normalizador para corregir errores de tipeo
@@ -640,7 +652,7 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
     // Subtítulo de categoría
     let prevY = y
     const bottomMargin = doc.internal.getNumberOfPages() === 1 ? 35 : 12
-    y = checkPage(doc, y, 15, (d) => drawSimplifiedHeader(d, HEADER_LOGO_WHITE || logoData, config, 'Lista de Precios (Cont.)'), bottomMargin)
+    y = checkPage(doc, y, 15, (d) => drawSimplifiedHeader(d, LOGO_LISTA_PRECIOS, config, 'Lista de Precios (Cont.)', LP_BG, LP_TEXT), bottomMargin)
     if (needsHeader || y < prevY) {
       y = drawTableHeader(y, isGrid)
       needsHeader = false
@@ -682,7 +694,7 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
 
           let prevYItem = y
           const bottomMarginItem = doc.internal.getNumberOfPages() === 1 ? 35 : 12
-          y = checkPage(doc, y, hRow, (d) => drawSimplifiedHeader(d, HEADER_LOGO_WHITE || logoData, config, 'Lista de Precios (Cont.)'), bottomMarginItem)
+          y = checkPage(doc, y, hRow, (d) => drawSimplifiedHeader(d, LOGO_LISTA_PRECIOS, config, 'Lista de Precios (Cont.)', LP_BG, LP_TEXT), bottomMarginItem)
           if (y < prevYItem) {
             y = drawTableHeader(y, isGrid)
             needsHeader = false
@@ -772,7 +784,7 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
 
         // Sub-encabezado de subcategoría
         let prevYSub = y
-        y = checkPage(doc, y, 12, (d) => drawSimplifiedHeader(d, HEADER_LOGO_WHITE || logoData, config, 'Lista de Precios (Cont.)'), bottomMargin)
+        y = checkPage(doc, y, 12, (d) => drawSimplifiedHeader(d, LOGO_LISTA_PRECIOS, config, 'Lista de Precios (Cont.)', LP_BG, LP_TEXT), bottomMargin)
         if (y < prevYSub) {
           y = drawTableHeader(y, isGrid)
         }
@@ -805,7 +817,7 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
 
           let prevYItem = y
           const bottomMarginItem = doc.internal.getNumberOfPages() === 1 ? 35 : 12
-          y = checkPage(doc, y, hRow, (d) => drawSimplifiedHeader(d, HEADER_LOGO_WHITE || logoData, config, 'Lista de Precios (Cont.)'), bottomMarginItem)
+          y = checkPage(doc, y, hRow, (d) => drawSimplifiedHeader(d, LOGO_LISTA_PRECIOS, config, 'Lista de Precios (Cont.)', LP_BG, LP_TEXT), bottomMarginItem)
           if (y < prevYItem) {
             y = drawTableHeader(y, isGrid)
             needsHeader = false
@@ -896,7 +908,7 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
 
         let prevYItem = y
         const bottomMarginItem = doc.internal.getNumberOfPages() === 1 ? 35 : 12
-        y = checkPage(doc, y, hRow, (d) => drawSimplifiedHeader(d, HEADER_LOGO_WHITE || logoData, config, 'Lista de Precios (Cont.)'), bottomMarginItem)
+        y = checkPage(doc, y, hRow, (d) => drawSimplifiedHeader(d, LOGO_LISTA_PRECIOS, config, 'Lista de Precios (Cont.)', LP_BG, LP_TEXT), bottomMarginItem)
         if (y < prevYItem) {
           y = drawTableHeader(y, isGrid)
           needsHeader = false

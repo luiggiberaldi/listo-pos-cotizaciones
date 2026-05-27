@@ -191,10 +191,10 @@ export function checkPage(doc, y, needed = 30, onPageAdd = null, customBottomMar
  * @param {Object} config - Configuración del negocio
  * @param {string} rightTitle - Texto a mostrar a la derecha (ej: "Cotización Nº- 00001" o "Lista de Precios (Cont.)")
  */
-export function drawSimplifiedHeader(doc, logoData, config, rightTitle = '', customPrimary = null) {
+export function drawSimplifiedHeader(doc, logoData, config, rightTitle = '', customBgColor = null, customTextColor = null) {
   const SHDR_H = 12
   const pageWidth = doc.internal.pageSize.getWidth()
-  doc.setFillColor(...(customPrimary || C_PRIMARY))
+  doc.setFillColor(...(customBgColor || C_PRIMARY))
   doc.rect(0, 0, pageWidth, SHDR_H, 'F')
 
   if (logoData) {
@@ -206,13 +206,21 @@ export function drawSimplifiedHeader(doc, logoData, config, rightTitle = '', cus
   
   doc.setFont('times', 'bold')
   doc.setFontSize(15.5)
-  doc.setTextColor(...C_WHITE)
+  doc.setTextColor(...(customTextColor || C_WHITE))
   doc.text(n.toUpperCase(), pageWidth / 2, 8.5, { align: 'center' })
 
   if (rightTitle) {
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(8)
+    doc.setTextColor(...(customTextColor || C_WHITE))
     doc.text(rightTitle, pageWidth - MARGIN, 8.5, { align: 'right' })
+  }
+
+  // Si el fondo es blanco, agregamos una línea negra de borde para separar la cabecera simplificada del contenido
+  if (customBgColor && customBgColor[0] === 255 && customBgColor[1] === 255 && customBgColor[2] === 255) {
+    doc.setLineWidth(0.3)
+    doc.setDrawColor(0, 0, 0)
+    doc.line(0, SHDR_H, pageWidth, SHDR_H)
   }
 
   return SHDR_H + 4
@@ -227,18 +235,24 @@ export function drawPremiumHeader({
   config,
   title,
   subtitle,
-  dotColor = null
+  dotColor = null,
+  customBgColor = null,
+  customAccentColor = null,
+  customTextColor = null,
+  customSubtitleColor = null,
+  customBorderColor = null,
+  centerBusinessName = false
 }) {
   const W = doc.internal.pageSize.getWidth()
   const H = doc.internal.pageSize.getHeight()
   const HDR_H = 40
 
   // Banner primario
-  doc.setFillColor(...C_PRIMARY)
+  doc.setFillColor(...(customBgColor || C_PRIMARY))
   doc.rect(0, 0, W, HDR_H, 'F')
 
   // Puntos decorativos izquierdo
-  const dotsCol = dotColor || C_ACCENT
+  const dotsCol = customAccentColor || dotColor || C_ACCENT
   doc.setFillColor(...dotsCol)
   for(let i = 0; i < 4; i++) {
     for(let j = 0; j < 6; j++) {
@@ -247,14 +261,14 @@ export function drawPremiumHeader({
   }
 
   // Hazard stripe superior derecho
-  doc.setFillColor(...C_ACCENT)
+  doc.setFillColor(...(customAccentColor || C_ACCENT))
   const solidStartX = W - 25.2
   const solidStartBottomX = solidStartX - 2.5
   doc.rect(solidStartX, 0, W - solidStartX, 6, 'F')
   doc.triangle(solidStartX, 0, solidStartBottomX, 6, solidStartX, 6, 'F')
   
   doc.setLineWidth(0.5)
-  doc.setDrawColor(...C_ACCENT)
+  doc.setDrawColor(...(customAccentColor || C_ACCENT))
   doc.line(solidStartX, 0.5, solidStartX, 5.5)
 
   // Diagonales amarillas mostaza
@@ -268,7 +282,11 @@ export function drawPremiumHeader({
     doc.line(lx + stripeWidth - 0.2, 0.5, lx - stripeSlant + 0.2, 5.5)
   }
 
-  // Micro-dots negros en zona amarilla
+  // Micro-dots en zona amarilla (blancos si el fondo del banner es blanco/diagonales negras para contraste)
+  const microDotsColor = customBgColor && customBgColor[0] === 255 && customBgColor[1] === 255 && customBgColor[2] === 255
+    ? [255, 255, 255]
+    : [0, 0, 0]
+  doc.setFillColor(...microDotsColor)
   for (let i = 0; i < 5; i++) {
     for (let j = 0; j < 2; j++) {
       doc.circle(W - 16 + i * 3.0, 9.5 + j * 2.5, 0.3, 'F')
@@ -277,7 +295,7 @@ export function drawPremiumHeader({
 
   // Línea base del header
   doc.setLineWidth(1.0)
-  doc.setDrawColor(...C_ACCENT)
+  doc.setDrawColor(...(customBorderColor || customAccentColor || C_ACCENT))
   doc.line(0, HDR_H, W, HDR_H)
 
   // Blueprint micro-indicadores
@@ -304,21 +322,26 @@ export function drawPremiumHeader({
   const main = (words[0] || 'CONSTRUACERO').toUpperCase()
   const secondary = words.slice(1).join(' ').toUpperCase() || 'CARABOBO C.A.'
   
-  // Alinear el nombre de la empresa a la izquierda, al lado del logo
-  const businessTextX = MARGIN + 48
-  doc.setFont('times', 'bold'); doc.setTextColor(...C_WHITE)
-  doc.setFontSize(20); doc.text(main, businessTextX, 17, { align: 'left' })
-  doc.setFontSize(13); doc.text(secondary, businessTextX, 24, { align: 'left' })
+  doc.setFont('times', 'bold'); doc.setTextColor(...(customTextColor || C_WHITE))
+  if (centerBusinessName) {
+    doc.setFontSize(20); doc.text(main, W / 2, 17, { align: 'center' })
+    doc.setFontSize(13); doc.text(secondary, W / 2, 24, { align: 'center' })
+  } else {
+    // Alinear el nombre de la empresa a la izquierda, al lado del logo
+    const businessTextX = MARGIN + 48
+    doc.setFontSize(20); doc.text(main, businessTextX, 17, { align: 'left' })
+    doc.setFontSize(13); doc.text(secondary, businessTextX, 24, { align: 'left' })
+  }
 
   // Títulos del reporte derecha (con un tamaño y posición refinados para que se vean espectaculares)
   if (title) {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(12)
-    doc.setTextColor(...C_WHITE)
+    doc.setTextColor(...(customTextColor || C_WHITE))
     doc.text(title, W - MARGIN, HDR_H - 13, { align: 'right' })
   }
   if (subtitle) {
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5)
-    doc.setTextColor(...C_ACCENT) // Color mostaza/amarillo de contraste para subtítulos (periodo/fecha)
+    doc.setTextColor(...(customSubtitleColor || C_ACCENT)) // Color mostaza/amarillo de contraste para subtítulos (periodo/fecha) o color personalizado
     doc.text(subtitle, W - MARGIN, HDR_H - 6, { align: 'right' })
   }
 
