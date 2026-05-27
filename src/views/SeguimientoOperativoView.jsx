@@ -8,7 +8,7 @@ import {
   TrendingUp, Clock, Eye, AlertOctagon, Download
 } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
-import { useSeguimiento } from '../hooks/useSeguimiento'
+import { useSeguimiento, useActualizarSeguimiento, useBorrarSeguimiento } from '../hooks/useSeguimiento'
 import supabase from '../services/supabase/client'
 import { showToast } from '../components/ui/Toast'
 
@@ -22,7 +22,7 @@ const TIPO_CONFIG = {
   incidencia: { label: 'Incidencia', color: 'bg-rose-50 text-rose-700 border-rose-200', icon: AlertCircle },
   aclaratoria: { label: 'Aclaratoria', color: 'bg-indigo-50 text-indigo-700 border-indigo-200', icon: FileText },
   seguimiento: { label: 'Seguimiento', color: 'bg-sky-50 text-sky-700 border-sky-200', icon: CheckCircle2 },
-  evidencia: { label: 'Evidencia', color: 'bg-amber-50 text-amber-700 border-amber-200', icon: ImageIcon },
+  evidencia: { label: 'Evidencia', color: 'bg-amber-55 text-amber-700 border-amber-200', icon: ImageIcon },
   resolucion: { label: 'Resolución', color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
 }
 
@@ -41,6 +41,40 @@ export default function SeguimientoOperativoView() {
   const [filtroTipo, setFiltroTipo] = useState('')
   const [filtroPrioridad, setFiltroPrioridad] = useState('')
   const [filtroOrigen, setFiltroOrigen] = useState('') // 'cliente', 'cotizacion', 'despacho'
+
+  // Collapsible entries state
+  const [expandedEntries, setExpandedEntries] = useState({})
+  
+  const toggleExpand = (id) => {
+    setExpandedEntries(prev => ({ ...prev, [id]: !prev[id] }))
+  }
+
+  // Mutations for resolver and delete actions
+  const resolverMutation = useActualizarSeguimiento()
+  const borrarMutation = useBorrarSeguimiento()
+
+  const handleResolver = async (entry) => {
+    try {
+      await resolverMutation.mutateAsync({
+        id: entry.id,
+        prioridad: 'resuelta',
+        tipo: 'resolucion'
+      })
+      showToast.success('Seguimiento marcado como resuelto.')
+    } catch (err) {
+      showToast.error(err.message || 'Error al resolver el seguimiento')
+    }
+  }
+
+  const handleBorrar = async (id) => {
+    if (!window.confirm('¿Confirmas que deseas eliminar permanentemente esta entrada de seguimiento?')) return
+    try {
+      await borrarMutation.mutateAsync(id)
+      showToast.success('Entrada de seguimiento eliminada.')
+    } catch (err) {
+      showToast.error(err.message || 'Error al eliminar el seguimiento')
+    }
+  }
 
   // Query global (sin filtrar por IDs específicos para cargarlo todo)
   const { data: entradas = [], isLoading, isError, refetch } = useSeguimiento()
@@ -481,14 +515,10 @@ export default function SeguimientoOperativoView() {
                   {/* Fila 2: Título (opcional) y Contenido */}
                   <div className="mt-3">
                     {entry.titulo && (
-                      <h4 className="text-xs font-black text-slate-800 leading-snug tracking-tight mb-1">{entry.titulo}</h4>
+                      <h4 className="text-xs font-bold text-slate-800 tracking-tight leading-tight mb-1">{entry.titulo}</h4>
                     )}
-                    <p className="text-xs font-medium text-slate-700 leading-relaxed whitespace-pre-line">
-                      {entry.contenido}
-                    </p>
-                  </div>
-
-                  {/* Evidencias visuales adjuntas (Lightbox Premium) */}
+                    <p className="text-xs font-medium text-slate-650 leading-relaxed whitespace-pre-line">{entry.contenido}</p>
+                  </div>                  {/* Evidencias visuales adjuntas (Lightbox Premium) */}
                   {entry.imagenes && entry.imagenes.length > 0 && (
                     <div className="mt-3.5 flex flex-wrap gap-2">
                       {entry.imagenes.map((imgUrl, idx) => (
@@ -504,238 +534,309 @@ export default function SeguimientoOperativoView() {
                     </div>
                   )}
 
-                  {/* Fila 3: Entidades Relacionadas (Fichas Detalladas Premium) */}
+                  {/* Fila 3: Entidades Relacionadas (Fichas Detalladas Collapsibles) */}
                   {(entry.cliente_id || entry.cotizacion_id || entry.despacho_id) && (
-                    <div className="mt-4 p-4 bg-slate-50/50 border border-slate-200/50 rounded-2xl space-y-3">
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-1.5 h-3 rounded bg-indigo-500"></span>
-                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Registros Relacionados</span>
-                      </div>
+                    <div className="mt-3.5 p-3.5 bg-slate-50/60 border border-slate-200/50 rounded-2xl">
+                      {!expandedEntries[entry.id] ? (
+                        /* ── Vista Compacta (Colapsada) ── */
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                          <div className="flex flex-wrap items-center gap-2 min-w-0">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded shrink-0">
+                              Relacionados
+                            </span>
+                            
+                            {entry.cliente && (
+                              <button
+                                type="button"
+                                onClick={() => abrirFichaCliente(entry.cliente_id)}
+                                className="inline-flex items-center gap-1.5 bg-indigo-50/80 hover:bg-indigo-100 text-indigo-700 font-extrabold px-2.5 py-1 rounded-xl border border-indigo-100 shadow-sm transition-all active:scale-95 text-[11px]"
+                              >
+                                <User size={11} className="shrink-0" />
+                                <span className="truncate max-w-[130px] sm:max-w-[200px]" title={entry.cliente.nombre}>
+                                  {entry.cliente.nombre}
+                                </span>
+                              </button>
+                            )}
+                            
+                            {entry.despacho && (
+                              <button
+                                type="button"
+                                onClick={() => abrirDetalle(entry.despacho_id, 'despacho')}
+                                className="inline-flex items-center gap-1 bg-sky-50/80 hover:bg-sky-100 text-sky-700 font-extrabold px-2.5 py-1 rounded-xl border border-sky-100 shadow-sm transition-all active:scale-95 font-mono text-[11px]"
+                              >
+                                <span>DES-{String(entry.despacho.numero).padStart(5, '0')}</span>
+                                <span className="text-[9px] px-1.5 py-0.2 bg-sky-200/50 text-sky-850 rounded font-black uppercase ml-1">
+                                  {entry.despacho.estado === 'despachada' ? 'En Ruta' : entry.despacho.estado === 'entregada' ? 'Entregada' : entry.despacho.estado}
+                                </span>
+                              </button>
+                            )}
+                            
+                            {entry.cotizacion && !entry.despacho && (
+                              <button
+                                type="button"
+                                onClick={() => abrirDetalle(entry.cotizacion_id, 'cotizacion')}
+                                className="inline-flex items-center gap-1 bg-slate-100/80 hover:bg-slate-200/80 text-slate-700 font-extrabold px-2.5 py-1 rounded-xl border border-slate-250 shadow-sm transition-all active:scale-95 font-mono text-[11px]"
+                              >
+                                <FileText size={11} className="shrink-0" />
+                                <span>COT-{String(entry.cotizacion.numero).padStart(5, '0')}</span>
+                              </button>
+                            )}
+                          </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* Ficha Detallada de Cliente */}
-                        {entry.cliente && (
-                          <div className="bg-white border border-slate-150 hover:border-indigo-200 hover:shadow-sm rounded-xl p-4 flex flex-col justify-between transition-all duration-300 group/client relative overflow-hidden">
-                            <div>
-                              <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5 mb-2.5">
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-650 shrink-0">
-                                    <User size={14} />
-                                  </div>
-                                  <div className="min-w-0">
-                                    <h5 className="text-[11px] font-black text-slate-800 leading-tight truncate" title={entry.cliente.nombre}>
-                                      {entry.cliente.nombre}
-                                    </h5>
-                                    <span className="text-[9px] font-bold text-slate-400">Cliente Registrado</span>
-                                  </div>
-                                </div>
-                                {entry.cliente.codigo_cliente && (
-                                  <span className="text-[9px] font-bold bg-indigo-50 border border-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-mono shrink-0">
-                                    {entry.cliente.codigo_cliente}
-                                  </span>
-                                )}
-                              </div>
+                          <button
+                            type="button"
+                            onClick={() => toggleExpand(entry.id)}
+                            className="text-[10px] font-black text-indigo-650 hover:text-indigo-800 bg-indigo-50 border border-indigo-100 hover:border-indigo-200 px-3 py-1.5 rounded-xl transition-all shadow-sm active:scale-95 shrink-0 self-end sm:self-center ml-auto"
+                          >
+                            Expandir detalles
+                          </button>
+                        </div>
+                      ) : (
+                        /* ── Vista Expandida (Fichas Completas) ── */
+                        <div className="space-y-3.5">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-1.5 h-3 rounded bg-indigo-500"></span>
+                              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Registros Relacionados</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => toggleExpand(entry.id)}
+                              className="text-[10px] font-black text-slate-500 hover:text-slate-750 bg-white border border-slate-200 hover:border-slate-350 px-3 py-1.5 rounded-xl transition-all shadow-sm active:scale-95 shrink-0"
+                            >
+                              Contraer detalles
+                            </button>
+                          </div>
 
-                              <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-[10px]">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Ficha Detallada de Cliente */}
+                            {entry.cliente && (
+                              <div className="bg-white border border-slate-150 hover:border-indigo-200 hover:shadow-sm rounded-xl p-4 flex flex-col justify-between transition-all duration-300 group/client relative overflow-hidden">
                                 <div>
-                                  <span className="text-slate-400 font-semibold block leading-none">RIF / Cédula</span>
-                                  <span className="text-slate-700 font-bold mt-1 block">{entry.cliente.rif_cedula || '—'}</span>
-                                </div>
-                                <div>
-                                  <span className="text-slate-400 font-semibold block leading-none">Teléfono</span>
-                                  <span className="text-slate-700 font-bold mt-1 block">{entry.cliente.telefono || '—'}</span>
-                                </div>
-                                <div className="col-span-2">
-                                  <span className="text-slate-400 font-semibold block leading-none">Ubicación</span>
-                                  <span className="text-slate-700 font-bold mt-1 block truncate">
-                                    {entry.cliente.ciudad || entry.cliente.estado 
-                                      ? `${entry.cliente.ciudad || ''}${entry.cliente.ciudad && entry.cliente.estado ? ', ' : ''}${entry.cliente.estado || ''}`
-                                      : entry.cliente.direccion || '—'}
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-slate-400 font-semibold block leading-none">Vendedor</span>
-                                  <span className="text-slate-700 font-bold mt-1 flex items-center gap-1.5">
-                                    <span 
-                                      className="w-1.5 h-1.5 rounded-full shrink-0" 
-                                      style={{ backgroundColor: entry.cliente.vendedor?.color || '#94a3b8' }}
-                                    />
-                                    <span className="truncate">{entry.cliente.vendedor?.nombre || 'No asignado'}</span>
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-slate-400 font-semibold block leading-none">Estado de Cuenta</span>
-                                  <span className="mt-1 block">
-                                    {Number(entry.cliente.saldo_pendiente || 0) > 0 ? (
-                                      <span className="inline-flex text-[9px] font-black text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded">
-                                        Deuda: ${Number(entry.cliente.saldo_pendiente).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                                      </span>
-                                    ) : (
-                                      <span className="inline-flex text-[9px] font-black text-emerald-700 bg-emerald-50 border border-emerald-250 px-1.5 py-0.5 rounded">
-                                        Al día ✓
+                                  <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5 mb-2.5">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-655 shrink-0">
+                                        <User size={14} />
+                                      </div>
+                                      <div className="min-w-0">
+                                        <h5 className="text-[11px] font-black text-slate-800 leading-tight truncate" title={entry.cliente.nombre}>
+                                          {entry.cliente.nombre}
+                                        </h5>
+                                        <span className="text-[9px] font-bold text-slate-400">Cliente Registrado</span>
+                                      </div>
+                                    </div>
+                                    {entry.cliente.codigo_cliente && (
+                                      <span className="text-[9px] font-bold bg-indigo-50 border border-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-mono shrink-0">
+                                        {entry.cliente.codigo_cliente}
                                       </span>
                                     )}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-
-                            <button
-                              onClick={() => abrirFichaCliente(entry.cliente_id)}
-                              className="mt-3.5 w-full flex items-center justify-between text-[10px] font-black text-indigo-650 bg-indigo-50/40 hover:bg-indigo-50 border border-indigo-100 hover:border-indigo-200 px-3 py-2 rounded-xl transition-all shadow-sm active:scale-[0.98]"
-                            >
-                              <span>Ver Ficha de Cliente</span>
-                              <ChevronRight size={12} className="text-indigo-500" />
-                            </button>
-                          </div>
-                        )}
-
-                        {/* Ficha Detallada de Despacho */}
-                        {entry.despacho && (
-                          <div className="bg-white border border-slate-150 hover:border-sky-200 hover:shadow-sm rounded-xl p-4 flex flex-col justify-between transition-all duration-300 group/dispatch relative overflow-hidden">
-                            <div>
-                              <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5 mb-2.5">
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <div className="w-7 h-7 rounded-lg bg-sky-50 flex items-center justify-center text-sky-600 shrink-0">
-                                    <ImageIcon size={14} />
                                   </div>
-                                  <div className="min-w-0">
-                                    <h5 className="text-[11px] font-black text-slate-800 leading-tight font-mono">
-                                      DES-{String(entry.despacho.numero).padStart(5, '0')}
-                                    </h5>
-                                    <span className="text-[9px] font-bold text-slate-400">Orden de Despacho</span>
+
+                                  <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-[10px]">
+                                    <div>
+                                      <span className="text-slate-400 font-semibold block leading-none">RIF / Cédula</span>
+                                      <span className="text-slate-700 font-bold mt-1 block">{entry.cliente.rif_cedula || '—'}</span>
+                                    </div>
+                                    <div>
+                                      <span className="text-slate-400 font-semibold block leading-none">Teléfono</span>
+                                      <span className="text-slate-700 font-bold mt-1 block">{entry.cliente.telefono || '—'}</span>
+                                    </div>
+                                    <div className="col-span-2">
+                                      <span className="text-slate-400 font-semibold block leading-none">Ubicación</span>
+                                      <span className="text-slate-700 font-bold mt-1 block truncate">
+                                        {entry.cliente.ciudad || entry.cliente.estado 
+                                          ? `${entry.cliente.ciudad || ''}${entry.cliente.ciudad && entry.cliente.estado ? ', ' : ''}${entry.cliente.estado || ''}`
+                                          : entry.cliente.direccion || '—'}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <span className="text-slate-400 font-semibold block leading-none">Vendedor</span>
+                                      <span className="text-slate-700 font-bold mt-1 flex items-center gap-1.5">
+                                        <span 
+                                          className="w-1.5 h-1.5 rounded-full shrink-0" 
+                                          style={{ backgroundColor: entry.cliente.vendedor?.color || '#94a3b8' }}
+                                        />
+                                        <span className="truncate">{entry.cliente.vendedor?.nombre || 'No asignado'}</span>
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <span className="text-slate-400 font-semibold block leading-none">Estado de Cuenta</span>
+                                      <span className="mt-1 block">
+                                        {Number(entry.cliente.saldo_pendiente || 0) > 0 ? (
+                                          <span className="inline-flex text-[9px] font-black text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded">
+                                            Deuda: ${Number(entry.cliente.saldo_pendiente).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                          </span>
+                                        ) : (
+                                          <span className="inline-flex text-[9px] font-black text-emerald-700 bg-emerald-50 border border-emerald-250 px-1.5 py-0.5 rounded">
+                                            Al día ✓
+                                          </span>
+                                        )}
+                                      </span>
+                                    </div>
                                   </div>
                                 </div>
-                                {(() => {
-                                  const config = {
-                                    pendiente: 'bg-amber-55 text-amber-800 border-amber-200',
-                                    despachada: 'bg-blue-50 text-blue-800 border-blue-200',
-                                    entregada: 'bg-emerald-50 text-emerald-850 border-emerald-250',
-                                    anulada: 'bg-rose-50 text-rose-800 border-rose-200'
-                                  }[entry.despacho.estado] || 'bg-slate-50 text-slate-700 border-slate-200'
 
-                                  const label = {
-                                    pendiente: 'Pendiente',
-                                    despachada: 'En Ruta',
-                                    entregada: 'Entregada',
-                                    anulada: 'Anulada'
-                                  }[entry.despacho.estado] || entry.despacho.estado
-
-                                  return (
-                                    <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full border uppercase tracking-wider ${config}`}>
-                                      {label}
-                                    </span>
-                                  )
-                                })()}
+                                <button
+                                  type="button"
+                                  onClick={() => abrirFichaCliente(entry.cliente_id)}
+                                  className="mt-3.5 w-full flex items-center justify-between text-[10px] font-black text-indigo-650 bg-indigo-50/40 hover:bg-indigo-50 border border-indigo-100 hover:border-indigo-200 px-3 py-2 rounded-xl transition-all shadow-sm active:scale-[0.98]"
+                                >
+                                  <span>Ver Ficha de Cliente</span>
+                                  <ChevronRight size={12} className="text-indigo-500" />
+                                </button>
                               </div>
+                            )}
 
-                              <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-[10px]">
+                            {/* Ficha Detallada de Despacho */}
+                            {entry.despacho && (
+                              <div className="bg-white border border-slate-150 hover:border-sky-200 hover:shadow-sm rounded-xl p-4 flex flex-col justify-between transition-all duration-300 group/dispatch relative overflow-hidden">
                                 <div>
-                                  <span className="text-slate-400 font-semibold block leading-none">Monto Total</span>
-                                  <span className="text-slate-900 font-black mt-1 block">
-                                    ${Number(entry.despacho.total_usd || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-slate-400 font-semibold block leading-none">Flete / Corte</span>
-                                  <span className="text-slate-700 font-bold mt-1 block">
-                                    F: ${Number(entry.despacho.flete_usd || 0).toFixed(1)} | C: ${Number(entry.despacho.corte_usd || 0).toFixed(1)}
-                                  </span>
-                                </div>
-                                <div className="col-span-2">
-                                  <span className="text-slate-400 font-semibold block leading-none">Forma de Pago</span>
-                                  <span className="text-slate-700 font-bold mt-1 block truncate" title={(() => {
-                                    if (!entry.despacho.forma_pago) return 'No especificada'
-                                    try {
-                                      const parsed = typeof entry.despacho.forma_pago === 'string' 
-                                        ? JSON.parse(entry.despacho.forma_pago) 
-                                        : entry.despacho.forma_pago
-                                      if (Array.isArray(parsed)) {
-                                        return parsed.map(f => `${f.metodo}: $${Number(f.monto || 0).toFixed(1)}`).join(' | ')
-                                      }
-                                    } catch {}
-                                    return String(entry.despacho.forma_pago)
-                                  })()}>
+                                  <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5 mb-2.5">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <div className="w-7 h-7 rounded-lg bg-sky-50 flex items-center justify-center text-sky-600 shrink-0">
+                                        <ImageIcon size={14} />
+                                      </div>
+                                      <div className="min-w-0">
+                                        <h5 className="text-[11px] font-black text-slate-800 leading-tight font-mono">
+                                          DES-{String(entry.despacho.numero).padStart(5, '0')}
+                                        </h5>
+                                        <span className="text-[9px] font-bold text-slate-400">Orden de Despacho</span>
+                                      </div>
+                                    </div>
                                     {(() => {
-                                      if (!entry.despacho.forma_pago) return 'No especificada'
-                                      try {
-                                        const parsed = typeof entry.despacho.forma_pago === 'string' 
-                                          ? JSON.parse(entry.despacho.forma_pago) 
-                                          : entry.despacho.forma_pago
-                                        if (Array.isArray(parsed)) {
-                                          return parsed.map(f => `${f.metodo}: $${Number(f.monto || 0).toFixed(0)}`).join(', ')
-                                        }
-                                      } catch {}
-                                      return String(entry.despacho.forma_pago)
+                                      const config = {
+                                        pendiente: 'bg-amber-55 text-amber-800 border-amber-200',
+                                        despachada: 'bg-blue-50 text-blue-800 border-blue-200',
+                                        entregada: 'bg-emerald-50 text-emerald-850 border-emerald-250',
+                                        anulada: 'bg-rose-50 text-rose-800 border-rose-200'
+                                      }[entry.despacho.estado] || 'bg-slate-50 text-slate-700 border-slate-200'
+
+                                      const label = {
+                                        pendiente: 'Pendiente',
+                                        despachada: 'En Ruta',
+                                        entregada: 'Entregada',
+                                        anulada: 'Anulada'
+                                      }[entry.despacho.estado] || entry.despacho.estado
+
+                                      return (
+                                        <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full border uppercase tracking-wider ${config}`}>
+                                          {label}
+                                        </span>
+                                      )
                                     })()}
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-slate-400 font-semibold block leading-none">Vendedor</span>
-                                  <span className="text-slate-700 font-bold mt-1 flex items-center gap-1.5">
-                                    <span 
-                                      className="w-1.5 h-1.5 rounded-full shrink-0" 
-                                      style={{ backgroundColor: entry.despacho.vendedor?.color || '#94a3b8' }}
-                                    />
-                                    <span className="truncate">{entry.despacho.vendedor?.nombre || '—'}</span>
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-slate-400 font-semibold block leading-none">Fecha de Creación</span>
-                                  <span className="text-slate-700 font-bold mt-1 block">
-                                    {new Date(entry.despacho.creado_en).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-
-                            <button
-                              onClick={() => abrirDetalle(entry.despacho_id, 'despacho')}
-                              className="mt-3.5 w-full flex items-center justify-between text-[10px] font-black text-sky-700 bg-sky-50/40 hover:bg-sky-50 border border-sky-100 hover:border-sky-200 px-3 py-2 rounded-xl transition-all shadow-sm active:scale-[0.98]"
-                            >
-                              <span>Ver Detalle de Despacho</span>
-                              <ChevronRight size={12} className="text-sky-655" />
-                            </button>
-                          </div>
-                        )}
-
-                        {/* Ficha de Cotización (Borrador/Historial - solo si no hay despacho activo que la remplace) */}
-                        {entry.cotizacion && !entry.despacho && (
-                          <div className="bg-white border border-slate-150 hover:border-indigo-200 hover:shadow-sm rounded-xl p-4 flex flex-col justify-between transition-all duration-300 group/cotizacion relative overflow-hidden col-span-1">
-                            <div>
-                              <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5 mb-2.5">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-750">
-                                    <FileText size={14} />
                                   </div>
-                                  <div>
-                                    <h5 className="text-[11px] font-black text-slate-800 leading-none font-mono">
-                                      COT-{String(entry.cotizacion.numero).padStart(5, '0')}
-                                    </h5>
-                                    <span className="text-[9px] font-bold text-slate-400">Documento de Cotización</span>
+
+                                  <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-[10px]">
+                                    <div>
+                                      <span className="text-slate-400 font-semibold block leading-none">Monto Total</span>
+                                      <span className="text-slate-900 font-black mt-1 block">
+                                        ${Number(entry.despacho.total_usd || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <span className="text-slate-400 font-semibold block leading-none">Flete / Corte</span>
+                                      <span className="text-slate-700 font-bold mt-1 block">
+                                        F: ${Number(entry.despacho.flete_usd || 0).toFixed(1)} | C: ${Number(entry.despacho.corte_usd || 0).toFixed(1)}
+                                      </span>
+                                    </div>
+                                    <div className="col-span-2">
+                                      <span className="text-slate-400 font-semibold block leading-none">Forma de Pago</span>
+                                      <span className="text-slate-700 font-bold mt-1 block truncate" title={(() => {
+                                        if (!entry.despacho.forma_pago) return 'No especificada'
+                                        try {
+                                          const parsed = typeof entry.despacho.forma_pago === 'string' 
+                                            ? JSON.parse(entry.despacho.forma_pago) 
+                                            : entry.despacho.forma_pago
+                                          if (Array.isArray(parsed)) {
+                                            return parsed.map(f => `${f.metodo}: $${Number(f.monto || 0).toFixed(1)}`).join(' | ')
+                                          }
+                                        } catch {}
+                                        return String(entry.despacho.forma_pago)
+                                      })()}>
+                                        {(() => {
+                                          if (!entry.despacho.forma_pago) return 'No especificada'
+                                          try {
+                                            const parsed = typeof entry.despacho.forma_pago === 'string' 
+                                              ? JSON.parse(entry.despacho.forma_pago) 
+                                              : entry.despacho.forma_pago
+                                            if (Array.isArray(parsed)) {
+                                              return parsed.map(f => `${f.metodo}: $${Number(f.monto || 0).toFixed(0)}`).join(', ')
+                                            }
+                                          } catch {}
+                                          return String(entry.despacho.forma_pago)
+                                        })()}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <span className="text-slate-400 font-semibold block leading-none">Vendedor</span>
+                                      <span className="text-slate-700 font-bold mt-1 flex items-center gap-1.5">
+                                        <span 
+                                          className="w-1.5 h-1.5 rounded-full shrink-0" 
+                                          style={{ backgroundColor: entry.despacho.vendedor?.color || '#94a3b8' }}
+                                        />
+                                        <span className="truncate">{entry.despacho.vendedor?.nombre || '—'}</span>
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <span className="text-slate-400 font-semibold block leading-none">Fecha de Creación</span>
+                                      <span className="text-slate-700 font-bold mt-1 block">
+                                        {new Date(entry.despacho.creado_en).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                      </span>
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                              <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
-                                Esta novedad está vinculada a una cotización de origen. Pulse el botón inferior para abrir la vista interactiva con el desglose de productos y versiones.
-                              </p>
-                            </div>
 
-                            <button
-                              onClick={() => abrirDetalle(entry.cotizacion_id, 'cotizacion')}
-                              className="mt-3.5 w-full flex items-center justify-between text-[10px] font-black text-indigo-650 bg-indigo-50/40 hover:bg-indigo-50 border border-indigo-100 hover:border-indigo-200 px-3 py-2 rounded-xl transition-all shadow-sm active:scale-[0.98]"
-                            >
-                              <span>Ver Detalle de Cotización</span>
-                              <ChevronRight size={12} className="text-indigo-500" />
-                            </button>
+                                <button
+                                  type="button"
+                                  onClick={() => abrirDetalle(entry.despacho_id, 'despacho')}
+                                  className="mt-3.5 w-full flex items-center justify-between text-[10px] font-black text-sky-700 bg-sky-50/40 hover:bg-sky-50 border border-sky-100 hover:border-sky-200 px-3 py-2 rounded-xl transition-all shadow-sm active:scale-[0.98]"
+                                >
+                                  <span>Ver Detalle de Despacho</span>
+                                  <ChevronRight size={12} className="text-sky-655" />
+                                </button>
+                              </div>
+                            )}
+
+                            {/* Ficha de Cotización (Borrador/Historial - solo si no hay despacho activo que la remplace) */}
+                            {entry.cotizacion && !entry.despacho && (
+                              <div className="bg-white border border-slate-150 hover:border-indigo-200 hover:shadow-sm rounded-xl p-4 flex flex-col justify-between transition-all duration-300 group/cotizacion relative overflow-hidden col-span-1">
+                                <div>
+                                  <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5 mb-2.5">
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-750">
+                                        <FileText size={14} />
+                                      </div>
+                                      <div>
+                                        <h5 className="text-[11px] font-black text-slate-800 leading-none font-mono">
+                                          COT-{String(entry.cotizacion.numero).padStart(5, '0')}
+                                        </h5>
+                                        <span className="text-[9px] font-bold text-slate-400">Documento de Cotización</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
+                                    Esta novedad está vinculada a una cotización de origen. Pulse el botón inferior para abrir la vista interactiva con el desglose de productos y versiones.
+                                  </p>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => abrirDetalle(entry.cotizacion_id, 'cotizacion')}
+                                  className="mt-3.5 w-full flex items-center justify-between text-[10px] font-black text-indigo-650 bg-indigo-50/40 hover:bg-indigo-50 border border-indigo-100 hover:border-indigo-200 px-3 py-2 rounded-xl transition-all shadow-sm active:scale-[0.98]"
+                                >
+                                  <span>Ver Detalle de Cotización</span>
+                                  <ChevronRight size={12} className="text-indigo-500" />
+                                </button>
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
-                  {/* Fila 4: Autor de la Nota */}
-                  <div className="mt-3.5 pt-3 border-t border-slate-100 flex items-center justify-between text-[10px]">
+                  {/* Fila 4: Autor de la Nota y Acciones de Administración */}
+                  <div className="mt-3.5 pt-3 border-t border-slate-100 flex items-center justify-between text-[10px] flex-wrap gap-2">
                     <span className="inline-flex items-center gap-2">
                       <span className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] text-white font-extrabold shadow-sm shrink-0" style={{ backgroundColor: userColor }}>
                         {entry.usuario?.nombre?.substring(0, 1).toUpperCase() || 'S'}
@@ -747,6 +848,32 @@ export default function SeguimientoOperativoView() {
                         {entry.usuario?.rol || 'operador'}
                       </span>
                     </span>
+
+                    {/* Acciones para Administración */}
+                    {['supervisor', 'administracion', 'jefe', 'desarrollador'].includes(perfil?.rol) && (
+                      <div className="flex items-center gap-2">
+                        {entry.prioridad !== 'resuelta' && (
+                          <button
+                            type="button"
+                            onClick={() => handleResolver(entry)}
+                            disabled={resolverMutation.isPending}
+                            className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-600 hover:text-white bg-emerald-50 hover:bg-emerald-600 border border-emerald-250 hover:border-emerald-600 px-2.5 py-1 rounded-lg transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                          >
+                            <CheckCircle2 size={11} className="shrink-0" />
+                            Aceptar / Resolver
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleBorrar(entry.id)}
+                          disabled={borrarMutation.isPending}
+                          className="inline-flex items-center gap-1 text-[10px] font-black text-rose-600 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-200 hover:border-rose-600 px-2.5 py-1 rounded-lg transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                        >
+                          <X size={11} className="shrink-0" />
+                          Eliminar
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                 </div>

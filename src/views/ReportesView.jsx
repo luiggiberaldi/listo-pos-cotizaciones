@@ -112,6 +112,8 @@ function FormaPagoSection({ data = [], kpis }) {
     'Transferencia': '#14b8a6',
     'Cruce': '#ec4899',
     'Donación': '#a855f7',
+    'Préstamo': '#eab308',
+    'Prestamo': '#eab308',
     'Cta por cobrar': '#ef4444',
     'Sin especificar': '#94a3b8'
   }
@@ -392,7 +394,9 @@ function filtrarReporteVentas(reporte, tipoFiltro) {
       formaPagoMap[fallback].pagos.push({
         cliente: d.cliente_nombre || 'Sin cliente',
         numero: d.despacho_numero || d.despacho_id?.slice(0, 8),
-        monto: Number(d.venta_neta_usd || 0)
+        monto: Number(d.venta_neta_usd || 0),
+        es_prestamo_puro: d.es_prestamo_puro,
+        es_prestamo_mixto: d.es_prestamo_mixto
       })
     } else {
       formas.forEach(f => {
@@ -404,7 +408,9 @@ function filtrarReporteVentas(reporte, tipoFiltro) {
         formaPagoMap[nombre].pagos.push({
           cliente: d.cliente_nombre || 'Sin cliente',
           numero: d.despacho_numero || d.despacho_id?.slice(0, 8),
-          monto: monto
+          monto: monto,
+          es_prestamo_puro: d.es_prestamo_puro,
+          es_prestamo_mixto: d.es_prestamo_mixto
         })
       })
     }
@@ -507,6 +513,8 @@ function TabVentas({ configNeg }) {
     'Transferencia': 'bg-teal-50 text-teal-700 border-teal-100',
     'Cruce': 'bg-pink-50 text-pink-700 border-pink-100',
     'Donación': 'bg-purple-50 text-purple-700 border-purple-100',
+    'Préstamo': 'bg-amber-50 text-amber-700 border-amber-100',
+    'Prestamo': 'bg-amber-50 text-amber-700 border-amber-100',
     'Cta por cobrar': 'bg-red-50 text-red-700 border-red-100',
     'Sin especificar': 'bg-slate-50 text-slate-600 border-slate-100',
   }
@@ -683,9 +691,21 @@ function TabVentas({ configNeg }) {
                   {despachos.slice(0, 15).map((d, i) => (
                     <tr key={i} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                       <td className="px-3 py-2.5 text-center">
-                        <span className="inline-block px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded-md font-mono font-bold text-[11px]">
-                          {d.despacho_numero || '—'}
-                        </span>
+                        <div className="flex flex-col items-center gap-0.5 justify-center">
+                          <span className="inline-block px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded-md font-mono font-bold text-[11px]">
+                            {d.despacho_numero || '—'}
+                          </span>
+                          {d.es_prestamo_puro && (
+                            <span className="text-[8px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-1 py-0.2 rounded uppercase tracking-wide leading-none">
+                              Préstamo
+                            </span>
+                          )}
+                          {d.es_prestamo_mixto && (
+                            <span className="text-[8px] font-black text-indigo-600 bg-indigo-50 border border-indigo-200 px-1 py-0.2 rounded uppercase tracking-wide leading-none">
+                              Mixto
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-3 py-2.5 text-center">
                         <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-bold ${ESTADO_STYLES[d.estado] || 'bg-slate-100 text-slate-600'}`}>

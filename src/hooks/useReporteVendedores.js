@@ -129,8 +129,8 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
       // Fetch notas_despacho_items and despacho_descuentos
       const allDispatchIds = [
         ...new Set([
-          ...despachos.map(d => d.id),
-          ...prevDespachos.map(d => d.id)
+          ...despachos.map(d => d.despacho_id),
+          ...prevDespachos.map(d => d.despacho_id)
         ].filter(Boolean))
       ]
 
@@ -142,7 +142,7 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
           const batch = allDispatchIds.slice(i, i + 50)
           const { data: itemsData } = await supabase
             .from('notas_despacho_items')
-            .select('despacho_id, producto_id, nombre_snap, codigo_snap, cantidad, precio_unit_usd, total_linea_usd, origen')
+            .select('despacho_id, producto_id, nombre_snap, codigo_snap, cantidad, precio_unit_usd, total_linea_usd, origen, es_prestamo')
             .in('despacho_id', batch)
           if (itemsData) ndItems = ndItems.concat(itemsData)
 
@@ -154,11 +154,46 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
         }
       }
 
+      // ── 4.5. Unificación e Identificación de Préstamos/Donaciones en Items ──
+      const itemsFinales = []
+      despachos.forEach(d => {
+        const dispatchItems = ndItems.filter(it => it.despacho_id === d.despacho_id)
+        const fp = Array.isArray(d.forma_pago) ? d.forma_pago : []
+        const tienePrestamoFp = fp.some(f => f.metodo === 'Préstamo' || f.metodo === 'Prestamo')
+        const esDonacion = fp.some(f => f.metodo === 'Donación')
+
+        if (dispatchItems.length > 0) {
+          dispatchItems.forEach(it => {
+            const esItemPrestamo = !!it.es_prestamo || tienePrestamoFp
+            itemsFinales.push({
+              ...it,
+              cotizacion_id: d.cotizacion_id,
+              total_linea_usd: esItemPrestamo ? 0 : Number(it.total_linea_usd || 0),
+              es_prestamo: esItemPrestamo,
+              es_donacion: esDonacion
+            })
+          })
+        } else {
+          const cotItems = items.filter(it => it.cotizacion_id === d.cotizacion_id)
+          cotItems.forEach(it => {
+            const desc = despachoDescuentos.find(dd => dd.despacho_id === d.despacho_id && dd.cotizacion_item_id === it.id)
+            const descMonto = desc ? Number(desc.monto_usd || 0) : 0
+            const totalNeto = Math.max(Number(it.total_linea_usd || 0) - descMonto, 0)
+            const esItemPrestamo = tienePrestamoFp
+            itemsFinales.push({
+              ...it,
+              total_linea_usd: esItemPrestamo ? 0 : totalNeto,
+              es_prestamo: esItemPrestamo,
+              es_donacion: esDonacion
+            })
+          })
+        }
+      })
+
       // Fetch product categories
       const allProductIds = [
         ...new Set([
-          ...items.map(i => i.producto_id),
-          ...ndItems.map(i => i.producto_id)
+          ...itemsFinales.map(i => i.producto_id)
         ].filter(Boolean))
       ]
       const productCategories = {}
@@ -205,7 +240,7 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
           }
         }
 
-        const existing = comList.find(c => c.despachoid === d.id)
+        const existing = comList.find(c => c.despachoid === d.despacho_id)
         if (existing) {
           return {
             totalcomision: Number(existing.totalcomision || 0),
@@ -232,7 +267,7 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
           return null
         }
 
-        const dispatchItems = ndItems.filter(it => it.despacho_id === d.id)
+        const dispatchItems = ndItems.filter(it => it.despacho_id === d.despacho_id)
         let comisionCabilla = 0
         let comisionOtros = 0
 
@@ -275,7 +310,7 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
         } else {
           const cotItems = items.filter(it => it.cotizacion_id === d.cotizacion_id)
           cotItems.forEach(it => {
-            const desc = despachoDescuentos.find(dd => dd.despacho_id === d.id && dd.cotizacion_item_id === it.id)
+            const desc = despachoDescuentos.find(dd => dd.despacho_id === d.despacho_id && dd.cotizacion_item_id === it.id)
             const descMonto = desc ? Number(desc.monto_usd || 0) : 0
             const totalNeto = Math.max(Number(it.total_linea_usd || 0) - descMonto, 0)
             processItem(it, totalNeto)
@@ -307,7 +342,7 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
           return {
             ...calculated,
             vendedorid: d.asesor_id || d.vendedor_id,
-            despachoid: d.id,
+            despachoid: d.despacho_id,
             vendedor: seller
           }
         }
@@ -321,7 +356,7 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
           return {
             ...calculated,
             vendedorid: d.asesor_id || d.vendedor_id,
-            despachoid: d.id,
+            despachoid: d.despacho_id,
             vendedor: seller
           }
         }
@@ -357,34 +392,51 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
 
       // Pre-populamos todos los vendedores activos para que siempre aparezcan en el reporte
       Object.values(vendedoresInfo).forEach(v => {
-        const esVendedorActivo = v.activo && (v.rol === 'vendedor' || !!v.es_externo || (v.markup_pct != null && Number(v.markup_pct) > 0))
+        const esVendedorActivo = v.activo && (v.rol === 'vendedor' || v.rol === 'vendedor_sin_comision' || !!v.es_externo || (v.markup_pct != null && Number(v.markup_pct) > 0))
         if (esVendedorActivo) {
           getOrCreate(v.id)
         }
       })
 
-      // Despachos actuales → ventas
-      despachos.forEach(d => {
-        const v = getOrCreate(d.asesor_id)
-        const neta = ventaNeta(d)
-        v.totalUsd += neta
-        v.numDespachos++
-        v.historial.push({
-          id: d.despacho_id,
-          numero: d.despacho_numero,
-          fecha: d.fecha,
-          cliente: d.cliente_nombre ?? '—',
-          estado: d.estado,
-          formaPago: Array.isArray(d.forma_pago) ? d.forma_pago : [],
-          totalUsd: neta,
-        })
-        const cid = d.cliente_nombre
-        if (cid) {
-          if (!v.clienteMap[cid]) v.clienteMap[cid] = { id: cid, nombre: cid, compras: 0, totalUsd: 0 }
-          v.clienteMap[cid].compras++
-          v.clienteMap[cid].totalUsd += neta
-        }
-      })
+       // Map dispatch prestamo metadata based on itemsFinales
+       const despachosMapeados = despachos.map(d => {
+         const dispatchItems = itemsFinales.filter(it => it.despacho_id === d.despacho_id)
+         const hasPrestamos = dispatchItems.some(it => it.es_prestamo)
+         const esPrestamoPuro = hasPrestamos && Number(d.venta_neta_usd || 0) === 0
+         const esPrestamoMixto = hasPrestamos && Number(d.venta_neta_usd || 0) > 0
+ 
+         return {
+           ...d,
+           tiene_prestamos: hasPrestamos,
+           es_prestamo_puro: esPrestamoPuro,
+           es_prestamo_mixto: esPrestamoMixto
+         }
+       })
+ 
+       // Despachos actuales → ventas
+       despachosMapeados.forEach(d => {
+         const v = getOrCreate(d.asesor_id)
+         const neta = ventaNeta(d)
+         v.totalUsd += neta
+         v.numDespachos++
+         v.historial.push({
+           id: d.despacho_id,
+           numero: d.despacho_numero,
+           fecha: d.fecha,
+           cliente: d.cliente_nombre ?? '—',
+           estado: d.estado,
+           formaPago: Array.isArray(d.forma_pago) ? d.forma_pago : [],
+           totalUsd: neta,
+           es_prestamo_puro: d.es_prestamo_puro,
+           es_prestamo_mixto: d.es_prestamo_mixto
+         })
+         const cid = d.cliente_nombre
+         if (cid) {
+           if (!v.clienteMap[cid]) v.clienteMap[cid] = { id: cid, nombre: cid, compras: 0, totalUsd: 0 }
+           v.clienteMap[cid].compras++
+           v.clienteMap[cid].totalUsd += neta
+         }
+       })
 
       // Despachos previos → comparativo
       prevDespachos.forEach(d => {
@@ -432,7 +484,7 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
       })
 
       // Items → Top productos por vendedor
-      items.forEach(it => {
+      itemsFinales.forEach(it => {
         const vid = cotToVendedor[it.cotizacion_id]
         if (!vid || !vendedorMap[vid]) return
         const v = vendedorMap[vid]
@@ -454,7 +506,8 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
           // Jefes y supervisores tampoco aparecen en este reporte
           if (v.rol === 'jefe' || v.rol === 'supervisor') return false
           
-          return v.rol !== 'vendedor_sin_comision' || v.es_externo || (v.markup_pct && v.markup_pct > 0)
+          // Incluir vendedores sin comisión (como "EMPRESA" para ventas y préstamos)
+          return true
         })
         .map(v => {
           const enviadas = v.cotizaciones.enviada + v.cotizaciones.aceptada + v.cotizaciones.rechazada

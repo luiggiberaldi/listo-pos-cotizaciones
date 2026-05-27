@@ -131,8 +131,8 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
 
       const allDispatchIds = [
         ...new Set([
-          ...despachos.map(d => d.id),
-          ...prevDespachos.map(d => d.id)
+          ...despachos.map(d => d.despacho_id),
+          ...prevDespachos.map(d => d.despacho_id)
         ].filter(Boolean))
       ]
 
@@ -144,7 +144,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
           const batch = allDispatchIds.slice(i, i + 50)
           const { data: itemsData } = await supabase
             .from('notas_despacho_items')
-            .select('despacho_id, producto_id, nombre_snap, codigo_snap, cantidad, precio_unit_usd, total_linea_usd, origen')
+            .select('despacho_id, producto_id, nombre_snap, codigo_snap, cantidad, precio_unit_usd, total_linea_usd, origen, es_prestamo')
             .in('despacho_id', batch)
           if (itemsData) ndItems = ndItems.concat(itemsData)
 
@@ -172,11 +172,46 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
         }
       }
 
+      // ── 2.5. Unificación e Identificación de Préstamos/Donaciones en Items ──
+      const itemsFinales = []
+      despachos.forEach(d => {
+        const dispatchItems = ndItems.filter(it => it.despacho_id === d.despacho_id)
+        const fp = Array.isArray(d.forma_pago) ? d.forma_pago : []
+        const tienePrestamoFp = fp.some(f => f.metodo === 'Préstamo' || f.metodo === 'Prestamo')
+        const esDonacion = fp.some(f => f.metodo === 'Donación')
+
+        if (dispatchItems.length > 0) {
+          dispatchItems.forEach(it => {
+            const esItemPrestamo = !!it.es_prestamo || tienePrestamoFp
+            itemsFinales.push({
+              ...it,
+              cotizacion_id: d.cotizacion_id,
+              total_linea_usd: esItemPrestamo ? 0 : Number(it.total_linea_usd || 0),
+              es_prestamo: esItemPrestamo,
+              es_donacion: esDonacion
+            })
+          })
+        } else {
+          const cotItems = items.filter(it => it.cotizacion_id === d.cotizacion_id)
+          cotItems.forEach(it => {
+            const desc = despachoDescuentos.find(dd => dd.despacho_id === d.despacho_id && dd.cotizacion_item_id === it.id)
+            const descMonto = desc ? Number(desc.monto_usd || 0) : 0
+            const totalNeto = Math.max(Number(it.total_linea_usd || 0) - descMonto, 0)
+            const esItemPrestamo = tienePrestamoFp
+            itemsFinales.push({
+              ...it,
+              total_linea_usd: esItemPrestamo ? 0 : totalNeto,
+              es_prestamo: esItemPrestamo,
+              es_donacion: esDonacion
+            })
+          })
+        }
+      })
+
       // Fetch product categories
       const allProductIds = [
         ...new Set([
-          ...items.map(i => i.producto_id),
-          ...ndItems.map(i => i.producto_id)
+          ...itemsFinales.map(i => i.producto_id)
         ].filter(Boolean))
       ]
       const productCategories = {}
@@ -213,7 +248,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
           }
         }
 
-        const existing = comList.find(c => c.despachoid === d.id)
+        const existing = comList.find(c => c.despachoid === d.despacho_id)
         if (existing) {
           return {
             totalcomision: Number(existing.totalcomision || 0),
@@ -240,7 +275,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
           return null
         }
 
-        const dispatchItems = ndItems.filter(it => it.despacho_id === d.id)
+        const dispatchItems = ndItems.filter(it => it.despacho_id === d.despacho_id)
         let comisionCabilla = 0
         let comisionOtros = 0
 
@@ -283,7 +318,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
         } else {
           const cotItems = items.filter(it => it.cotizacion_id === d.cotizacion_id)
           cotItems.forEach(it => {
-            const desc = despachoDescuentos.find(dd => dd.despacho_id === d.id && dd.cotizacion_item_id === it.id)
+            const desc = despachoDescuentos.find(dd => dd.despacho_id === d.despacho_id && dd.cotizacion_item_id === it.id)
             const descMonto = desc ? Number(desc.monto_usd || 0) : 0
             const totalNeto = Math.max(Number(it.total_linea_usd || 0) - descMonto, 0)
             processItem(it, totalNeto)
@@ -315,7 +350,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
           return {
             ...calculated,
             vendedorid: d.asesor_id || d.vendedor_id,
-            despachoid: d.id,
+            despachoid: d.despacho_id,
             vendedor: seller
           }
         }
@@ -329,7 +364,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
           return {
             ...calculated,
             vendedorid: d.asesor_id || d.vendedor_id,
-            despachoid: d.id,
+            despachoid: d.despacho_id,
             vendedor: seller
           }
         }
@@ -366,7 +401,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
 
       // Pre-populamos todos los vendedores activos para que siempre aparezcan en el reporte
       dbVendedores.forEach(u => {
-        const esVendedorActivo = u.activo && (u.rol === 'vendedor' || !!u.es_externo || (u.markup_pct != null && Number(u.markup_pct) > 0))
+        const esVendedorActivo = u.activo && (u.rol === 'vendedor' || u.rol === 'vendedor_sin_comision' || !!u.es_externo || (u.markup_pct != null && Number(u.markup_pct) > 0))
         if (esVendedorActivo) {
           vendedorMap[u.id] = {
             id: u.id,
@@ -443,8 +478,8 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
           if (v.rol === 'desarrollador') return false
           if (v.rol === 'administracion' || v.rol === 'logistica') return false
           
-          // Excluir vendedores sin comisión (a menos que sean externos)
-          return v.rol !== 'vendedor_sin_comision' || v.es_externo || (v.markup_pct && v.markup_pct > 0)
+          // Mantener a todos los vendedores, incluidos los "vendedores sin comisión" (como "EMPRESA") en el reporte de ventas, ya que sus despachos representan ventas de la empresa reales
+          return true
         })
         .sort((a, b) => b.totalUsd - a.totalUsd)
 
@@ -469,7 +504,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
 
       // Por producto
       const productoMap = {}
-      items.forEach(it => {
+      itemsFinales.forEach(it => {
         const key = it.producto_id || it.nombre_snap
         if (!productoMap[key]) {
           productoMap[key] = {
@@ -483,10 +518,15 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
         productoMap[key].unidades += Number(it.cantidad || 0)
         productoMap[key].totalUsd += Number(it.total_linea_usd || 0)
       })
-      const porProducto = Object.values(productoMap).sort((a, b) => b.totalUsd - a.totalUsd).slice(0, 15)
+      const porProducto = Object.values(productoMap)
+        .sort((a, b) => {
+          if (b.totalUsd !== a.totalUsd) return b.totalUsd - a.totalUsd
+          return b.unidades - a.unidades
+        })
+        .slice(0, 100)
 
       // Por categoría (necesitamos los nombres de categoría de los productos)
-      const productoIds = [...new Set(items.map(i => i.producto_id).filter(Boolean))]
+      const productoIds = [...new Set(itemsFinales.map(i => i.producto_id).filter(Boolean))]
       let categoriaMap = {}
       if (productoIds.length > 0) {
         const cats = {}
@@ -495,59 +535,79 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
           const { data } = await supabase.from('productos').select('id, categoria').in('id', batch)
           if (data) data.forEach(p => { cats[p.id] = p.categoria || 'PRODUCTOS EXTERNOS' })
         }
-        items.forEach(it => {
+        itemsFinales.forEach(it => {
           const cat = cats[it.producto_id] || 'PRODUCTOS EXTERNOS'
           if (!categoriaMap[cat]) categoriaMap[cat] = { categoria: cat, unidades: 0, totalUsd: 0 }
           categoriaMap[cat].unidades += Number(it.cantidad || 0)
           categoriaMap[cat].totalUsd += Number(it.total_linea_usd || 0)
         })
       }
-      const porCategoria = Object.values(categoriaMap).sort((a, b) => b.totalUsd - a.totalUsd)
-
-      // Forma de pago
-      const formaPagoMap = {}
-      despachos.forEach(d => {
-        const formas = Array.isArray(d.forma_pago) ? d.forma_pago : []
-        if (formas.length === 0) {
-          const fallback = 'Pendiente'
-          if (!formaPagoMap[fallback]) formaPagoMap[fallback] = { formaPago: fallback, count: 0, totalUsd: 0, pagos: [] }
-          formaPagoMap[fallback].count++
-          formaPagoMap[fallback].totalUsd += ventaNeta(d)
-          formaPagoMap[fallback].pagos.push({
-            cliente: d.cliente_nombre || 'Sin cliente',
-            numero: d.despacho_numero || d.despacho_id?.slice(0, 8),
-            monto: ventaNeta(d)
-          })
-        } else {
-          formas.forEach(f => {
-            const nombre = f.metodo || 'Sin especificar'
-            const monto = Number(f.monto) || 0
-            if (!formaPagoMap[nombre]) formaPagoMap[nombre] = { formaPago: nombre, count: 0, totalUsd: 0, pagos: [] }
-            formaPagoMap[nombre].count++
-            formaPagoMap[nombre].totalUsd += monto
-            formaPagoMap[nombre].pagos.push({
-              cliente: d.cliente_nombre || 'Sin cliente',
-              numero: d.despacho_numero || d.despacho_id?.slice(0, 8),
-              monto: monto
-            })
-          })
-        }
-      })
-      const porFormaPago = Object.values(formaPagoMap).sort((a, b) => b.totalUsd - a.totalUsd)
-
-      return {
-        kpis: {
-          totalVentas, totalFlete, totalDescuentos, numDespachos, ticketPromedio, totalComisiones,
-          comisionesPagadas, comisionesPendientes, comisionCabilla2, comisionCabilla3, comisionOtros,
-          prevTotalVentas, prevNumDespachos, prevTicketPromedio, prevTotalComisiones,
-        },
-        porVendedor,
-        porCliente,
-        porProducto,
-        porCategoria,
-        porFormaPago,
-        despachos,
-      }
+       const porCategoria = Object.values(categoriaMap).sort((a, b) => b.totalUsd - a.totalUsd)
+ 
+        // Map dispatch prestamo metadata based on itemsFinales
+        const despachosMapeados = despachos.map(d => {
+          const dispatchItems = itemsFinales.filter(it => it.despacho_id === d.despacho_id)
+          const hasPrestamos = dispatchItems.some(it => it.es_prestamo)
+          const esPrestamoPuro = hasPrestamos && Number(d.venta_neta_usd || 0) === 0
+          const esPrestamoMixto = hasPrestamos && Number(d.venta_neta_usd || 0) > 0
+  
+          return {
+            ...d,
+            tiene_prestamos: hasPrestamos,
+            es_prestamo_puro: esPrestamoPuro,
+            es_prestamo_mixto: esPrestamoMixto,
+            items: dispatchItems
+          }
+        })
+ 
+       // Forma de pago
+       const formaPagoMap = {}
+       despachosMapeados.forEach(d => {
+         const formas = Array.isArray(d.forma_pago) ? d.forma_pago : []
+         if (formas.length === 0) {
+           const fallback = 'Pendiente'
+           if (!formaPagoMap[fallback]) formaPagoMap[fallback] = { formaPago: fallback, count: 0, totalUsd: 0, pagos: [] }
+           formaPagoMap[fallback].count++
+           formaPagoMap[fallback].totalUsd += ventaNeta(d)
+           formaPagoMap[fallback].pagos.push({
+             cliente: d.cliente_nombre || 'Sin cliente',
+             numero: d.despacho_numero || d.despacho_id?.slice(0, 8),
+             monto: ventaNeta(d),
+             es_prestamo_puro: d.es_prestamo_puro,
+             es_prestamo_mixto: d.es_prestamo_mixto
+           })
+         } else {
+           formas.forEach(f => {
+             const nombre = f.metodo || 'Sin especificar'
+             const monto = Number(f.monto) || 0
+             if (!formaPagoMap[nombre]) formaPagoMap[nombre] = { formaPago: nombre, count: 0, totalUsd: 0, pagos: [] }
+             formaPagoMap[nombre].count++
+             formaPagoMap[nombre].totalUsd += monto
+             formaPagoMap[nombre].pagos.push({
+               cliente: d.cliente_nombre || 'Sin cliente',
+               numero: d.despacho_numero || d.despacho_id?.slice(0, 8),
+               monto: monto,
+               es_prestamo_puro: d.es_prestamo_puro,
+               es_prestamo_mixto: d.es_prestamo_mixto
+             })
+           })
+         }
+       })
+       const porFormaPago = Object.values(formaPagoMap).sort((a, b) => b.totalUsd - a.totalUsd)
+ 
+       return {
+         kpis: {
+           totalVentas, totalFlete, totalDescuentos, numDespachos, ticketPromedio, totalComisiones,
+           comisionesPagadas, comisionesPendientes, comisionCabilla2, comisionCabilla3, comisionOtros,
+           prevTotalVentas, prevNumDespachos, prevTicketPromedio, prevTotalComisiones,
+         },
+         porVendedor,
+         porCliente,
+         porProducto,
+         porCategoria,
+         porFormaPago,
+         despachos: despachosMapeados,
+       }
     },
     enabled: !!perfil && !!from && !!to,
     staleTime: 1000 * 60 * 5,

@@ -1177,7 +1177,7 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
         y = checkPage(doc, y, 22);
 
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8.5);
+        doc.setFontSize(10.5); // Aumentado de 8.5 a 10.5
         doc.setTextColor(...C_DARK);
 
         const esVendedorExterno = !!v.es_externo || (v.markup_pct != null && Number(v.markup_pct) > 0);
@@ -1192,49 +1192,78 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
           doc.circle(MARGIN + 3, y + 2.5, 1.8, 'F');
         }
         doc.text(displayName || '—', MARGIN + 7, y + 3.5);
-        y += 6;
+        y += 7;
 
         // Cabecera de la sub-tabla de documentos
         doc.setFillColor(242, 244, 247);
-        doc.rect(MARGIN, y, CONTENT_W, 6, 'F');
+        doc.rect(MARGIN, y, CONTENT_W, 7, 'F');
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(7.5);
-        doc.setTextColor(100, 110, 125);
+        doc.setFontSize(9); // Aumentado de 7.5 a 9
+        doc.setTextColor(71, 85, 105);
         
-        doc.text('Documento / Correlativo', MARGIN + 4, y + 4);
-        doc.text('Cliente', MARGIN + 45, y + 4);
-        doc.text('Monto de la Venta (USD)', MARGIN + CONTENT_W - 4, y + 4, { align: 'right' });
-        y += 6.5;
+        doc.text('Documento / Correlativo', MARGIN + 4, y + 4.5);
+        doc.text('Cliente', MARGIN + 52, y + 4.5); // Movido a 52 para evitar colisión
+        doc.text('Monto de la Venta (USD)', MARGIN + CONTENT_W - 4, y + 4.5, { align: 'right' });
+        y += 8;
 
         // Dibujar transacciones
         susDespachos.forEach((d, dIdx) => {
-          y = checkPage(doc, y, 7);
+          y = checkPage(doc, y, 8);
 
           // Alternar fila
           if (dIdx % 2 === 1) {
             doc.setFillColor(250, 251, 253);
-            doc.rect(MARGIN, y - 0.5, CONTENT_W, 6, 'F');
+            doc.rect(MARGIN, y - 0.5, CONTENT_W, 7, 'F');
           }
 
           doc.setFont('helvetica', 'normal');
-          doc.setFontSize(7.5);
-          doc.setTextColor(80, 90, 100);
+          doc.setFontSize(9); // Aumentado de 7.5 a 9
+          doc.setTextColor(51, 65, 85);
 
           const numDoc = d.despacho_numero ? `#${d.despacho_numero}` : 'S/N';
+          const suffixPrestamo = d.es_prestamo_puro 
+            ? ' (Préstamo)' 
+            : (d.es_prestamo_mixto ? ' (Mixto/Prést.)' : '');
           const cliente = d.cliente_nombre ? String(d.cliente_nombre).toUpperCase() : 'CLIENTE SIN NOMBRE';
           
           // Truncar cliente para seguridad espacial
-          const maxChars = 48;
+          const maxChars = 44;
           const truncatedCliente = cliente.length > maxChars ? `${cliente.substring(0, maxChars)}...` : cliente;
 
-          doc.text(`Doc ${numDoc}`, MARGIN + 4, y + 3.5);
-          doc.text(truncatedCliente, MARGIN + 45, y + 3.5);
+          if (d.es_prestamo_puro || d.es_prestamo_mixto) {
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(194, 120, 3); // Tono ámbar/dorado para préstamo
+          } else {
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(51, 65, 85);
+          }
+          doc.text(`Doc ${numDoc}${suffixPrestamo}`, MARGIN + 4, y + 4.5);
+          
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(51, 65, 85);
+          doc.text(truncatedCliente, MARGIN + 52, y + 4.5);
 
+          // Totales (Monto) siempre en negrita
           doc.setFont('helvetica', 'bold');
           doc.setTextColor(...C_DARK);
-          doc.text(fmtUsd(d.venta_neta_usd || 0), MARGIN + CONTENT_W - 4, y + 3.5, { align: 'right' });
+          doc.text(fmtUsd(d.venta_neta_usd || 0), MARGIN + CONTENT_W - 4, y + 4.5, { align: 'right' });
 
-          y += 5.5;
+          y += 6.5;
+
+          // Si tiene productos en préstamo, mostrarlos debajo de la fila del documento
+          const prestamosItems = (d.items || []).filter(it => it.es_prestamo);
+          if (prestamosItems.length > 0) {
+            prestamosItems.forEach(it => {
+              y = checkPage(doc, y, 6);
+              // Materiales de préstamo también en negrita
+              doc.setFont('helvetica', 'bold');
+              doc.setFontSize(8); // Aumentado de 6.5 a 8
+              doc.setTextColor(71, 85, 105); // Tono gris oscuro muy legible
+              const itemText = `      • [PRÉSTAMO] ${Number(it.cantidad).toLocaleString('es-VE')} unds.  ·  ${it.nombre_snap || 'PRODUCTO SIN NOMBRE'}`;
+              doc.text(itemText, MARGIN + 8, y + 3.5);
+              y += 5;
+            });
+          }
         });
 
         y += 4; // Espacio entre vendedores
@@ -1277,8 +1306,11 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
           doc.setTextColor(110, 120, 130)
 
           const numDoc = p.numero ? `#${p.numero}` : 'S/N'
-          const cliente = p.cliente ? String(p.cliente).toUpperCase().substring(0, 48) : 'CLIENTE SIN NOMBRE'
-          const labelText = `    • Doc ${numDoc}  ·  ${cliente}  ·  `
+          const suffixPrestamo = p.es_prestamo_puro 
+            ? ' (Préstamo)' 
+            : (p.es_prestamo_mixto ? ' (Mixto/Prést.)' : '');
+          const cliente = p.cliente ? String(p.cliente).toUpperCase().substring(0, 36) : 'CLIENTE SIN NOMBRE'
+          const labelText = `    • Doc ${numDoc}${suffixPrestamo}  ·  ${cliente}  ·  `
 
           doc.setFont('helvetica', 'normal')
           doc.text(labelText, MARGIN + 2, y + 2)
