@@ -2117,7 +2117,7 @@ function TabCredito() {
     )
   }
 
-  const { kpis, clientesConDeuda, aging, alertasVencimiento } = data
+  const { kpis, clientesConDeuda, aging, alertasVencimiento, abonos } = data
 
   const clientesOrdenados = [...clientesConDeuda].sort((a, b) => {
     let va, vb
@@ -2364,6 +2364,72 @@ function TabCredito() {
           </span>
         </div>
       </div>
+
+      {/* Tabla de Abonos Recientes */}
+      {abonos && abonos.length > 0 && (
+        <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 overflow-hidden shadow-sm mt-4">
+          <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <DollarSign size={14} className="text-emerald-500" />
+              <h3 className="text-xs sm:text-sm font-black text-slate-800">Historial de Cobranza (Abonos Recientes)</h3>
+              <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 text-[10px] font-bold">{abonos.length}</span>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-[10px] text-slate-400 uppercase bg-slate-50 border-b border-slate-100">
+                  <th className="px-4 py-2.5 text-left font-semibold">Fecha</th>
+                  <th className="px-3 py-2.5 text-left font-semibold">Cliente</th>
+                  <th className="px-3 py-2.5 text-center font-semibold">Método</th>
+                  <th className="px-3 py-2.5 text-left font-semibold">Ref / Descripción</th>
+                  <th className="px-3 py-2.5 text-center font-semibold">Despacho</th>
+                  <th className="px-4 py-2.5 text-right font-semibold">Monto</th>
+                </tr>
+              </thead>
+              <tbody>
+                {abonos.map((a) => {
+                  const numDes = a.despacho?.numero 
+                    ? `DES-${String(a.despacho.numero).padStart(5, '0')}` 
+                    : (a.despacho?.cotizacion?.numero 
+                        ? `COT-${String(a.despacho.cotizacion.numero).padStart(5, '0')}` 
+                        : '—')
+
+                  return (
+                    <tr key={a.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                      <td className="px-4 py-2.5 text-slate-500 font-medium">
+                        {new Date(a.creado_en).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </td>
+                      <td className="px-3 py-2.5 font-bold text-slate-700">
+                        {a.cliente?.nombre || 'Desconocido'}
+                      </td>
+                      <td className="px-3 py-2.5 text-center font-semibold text-slate-600">
+                        {a.metodo_pago || a.forma_pago_abono || '—'}
+                      </td>
+                      <td className="px-3 py-2.5 text-slate-500 italic max-w-xs truncate" title={a.descripcion}>
+                        {a.referencia ? `Ref: ${a.referencia} · ` : ''}{a.descripcion || 'Sin descripción'}
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        {numDes !== '—' ? (
+                          <span className="inline-block px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded font-mono font-bold text-[10px]">
+                            {numDes}
+                          </span>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-black text-emerald-600 text-sm">
+                        +${Number(a.monto_usd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

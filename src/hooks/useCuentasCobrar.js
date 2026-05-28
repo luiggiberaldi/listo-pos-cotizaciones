@@ -150,6 +150,21 @@ export function useResumenCxC() {
         cargosActivos: cargos.filter(car => car.cliente_id === c.id && car.saldo_usd > 0)
       }))
 
+      // Obtener abonos recientes
+      const { data: abonosRaw, error: abonosError } = await supabase
+        .from('cuentas_por_cobrar')
+        .select(`
+          id, cliente_id, despacho_id, tipo, monto_usd, saldo_usd,
+          forma_pago_abono, referencia, descripcion, creado_en, metodo_pago,
+          cliente:clientes(nombre),
+          despacho:notas_despacho(numero, cotizacion:cotizaciones(numero))
+        `)
+        .eq('tipo', 'abono')
+        .order('creado_en', { ascending: false })
+        .limit(50)
+
+      if (abonosError) throw abonosError
+
       return {
         kpis: {
           totalDeuda,
@@ -160,7 +175,8 @@ export function useResumenCxC() {
         },
         clientesConDeuda: clientesEnriquecidos,
         aging,
-        alertasVencimiento
+        alertasVencimiento,
+        abonos: abonosRaw || []
       }
     },
     enabled: !!perfil,
@@ -196,6 +212,30 @@ export function useRegistrarAbono() {
       qc.invalidateQueries({ queryKey: CLIENTES_KEY })
       qc.invalidateQueries({ queryKey: ['despachos'] })
       showToast('Abono registrado exitosamente', 'success')
+    },
+  })
+}
+
+// ─── Revertir abono (Worker API) ─────────────────────────────────────────────
+export function useRevertirAbono() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ abonoId }) => {
+      const res = await authFetch('/api/cxc/revertir-abono', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ abonoId }),
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Error al revertir abono')
+      return result
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: CXC_KEY })
+      qc.invalidateQueries({ queryKey: CLIENTES_KEY })
+      qc.invalidateQueries({ queryKey: ['despachos'] })
+      showToast('Abono revertido exitosamente', 'success')
     },
   })
 }

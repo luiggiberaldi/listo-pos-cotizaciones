@@ -19,7 +19,7 @@ import { handlePush } from './api/handlers/push.js'
 import { handleLogFromClient, handleGetLogs, handleGetLogStats, handleDownloadLogs, handleAnalyzeLogs, handlePurgeLogs } from './api/handlers/logs.js'
 import { handleGetAudit, handleGetAuditStats, handleAnalyzeAudit } from './api/handlers/audit.js'
 import { handleMarcarComisionPagada, handleActualizarEstadoComision, handleGetComisionesConfig, handleGetComisiones, handleGetComisionesResumen } from './api/handlers/comisiones.js'
-import { handleRegistrarAbono } from './api/handlers/cxc.js'
+import { handleRegistrarAbono, handleRevertirAbono } from './api/handlers/cxc.js'
 import { handleSwitchOperator, handleClearOperator, handleGetOperators, handleSuperAdmin } from './api/handlers/auth-operators.js'
 import { handleBuscarProductosHibrido, handleSyncEmbeddings, handleParseMaterialText, handleScanMaterialList, handleAplicarMovimientoLote, handleBatchIngest, handleTransformacionInventario, handleBatchPriceUpdate, handleClearInventory, handlePdfTemp } from './api/handlers/inventario.js'
 import { handleGuardarCotizacion, handleReciclarCotizacion, handleReabrirCotizacion, handleCrearVersion, handleEnviarCotizacion, handleVentaRapida } from './api/handlers/cotizaciones.js'
@@ -218,6 +218,11 @@ export default {
     // ── API: registrar abono CxC (bypass RLS) ──────────────────────────────
     if (url.pathname === '/api/cxc/abono' && request.method === 'POST') {
       return handleRegistrarAbono(request, env);
+    }
+
+    // ── API: revertir abono CxC (bypass RLS) ──────────────────────────────
+    if (url.pathname === '/api/cxc/revertir-abono' && request.method === 'POST') {
+      return handleRevertirAbono(request, env);
     }
 
     // ── API: crear transportista (bypass RLS) ───────────────────────────────

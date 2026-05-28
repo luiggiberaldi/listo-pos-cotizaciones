@@ -1,8 +1,8 @@
 // src/components/clientes/FichaClienteModal.jsx
 // Modal ficha del cliente: historial de crédito + formulario de abono
 import { useState, useEffect } from 'react'
-import { X, CreditCard, ArrowUpCircle, ArrowDownCircle, AlertCircle, RefreshCw, DollarSign, Hash, Phone, FileText, ChevronRight, MessageSquare, Handshake } from 'lucide-react'
-import { useCuentasCobrar, useRegistrarAbono } from '../../hooks/useCuentasCobrar'
+import { X, CreditCard, ArrowUpCircle, ArrowDownCircle, AlertCircle, RefreshCw, DollarSign, Hash, Phone, FileText, ChevronRight, MessageSquare, Handshake, RotateCcw } from 'lucide-react'
+import { useCuentasCobrar, useRegistrarAbono, useRevertirAbono } from '../../hooks/useCuentasCobrar'
 import { useCotizacionesCliente } from '../../hooks/useClientes'
 import SeguimientoTimeline from '../ui/SeguimientoTimeline'
 import useAuthStore from '../../store/useAuthStore'
@@ -11,6 +11,7 @@ import EstadoBadge from '../cotizaciones/EstadoBadge'
 import { showToast } from '../ui/Toast'
 import { apiUrl } from '../../services/apiBase'
 import { authFetch } from '../../services/authFetch'
+import ConfirmModal from '../ui/ConfirmModal'
 
 function fmtFecha(iso) {
   if (!iso) return '—'
@@ -263,9 +264,12 @@ function HistorialCotizaciones({ clienteId, onVerCotizacion }) {
 export default function FichaClienteModal({ cliente, isOpen, onClose }) {
   const { perfil } = useAuthStore()
   const puedeRegistrarAbono = ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)
+  const puedeRevertirAbono = ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)
   const { data: movimientos = [], isLoading, refetch } = useCuentasCobrar(isOpen ? cliente?.id : null)
 
   const [activeTab, setActiveTab] = useState('cuenta')
+  const [abonoARevertir, setAbonoARevertir] = useState(null)
+  const revertirMutation = useRevertirAbono()
   const [prestamos, setPrestamos] = useState([])
   const [cargandoPrestamos, setCargandoPrestamos] = useState(false)
   const [busquedaPrestamos, setBusquedaPrestamos] = useState('')
@@ -539,11 +543,23 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
                             <p className="text-[10px] text-slate-400">Ref: {mov.referencia}</p>
                           )}
                         </div>
-                        <div className="text-right shrink-0">
-                          <p className={`text-sm font-black ${mov.tipo === 'cargo' ? 'text-red-600' : 'text-emerald-600'}`}>
-                            {mov.tipo === 'cargo' ? '+' : '-'}{fmtUsd(mov.monto_usd)}
-                          </p>
-                          <p className="text-[10px] text-slate-400">Saldo: {fmtUsd(mov.saldo_usd)}</p>
+                        <div className="text-right shrink-0 flex items-center gap-2">
+                          <div>
+                            <p className={`text-sm font-black ${mov.tipo === 'cargo' ? 'text-red-600' : 'text-emerald-600'}`}>
+                              {mov.tipo === 'cargo' ? '+' : '-'}{fmtUsd(mov.monto_usd)}
+                            </p>
+                            <p className="text-[10px] text-slate-400">Saldo: {fmtUsd(mov.saldo_usd)}</p>
+                          </div>
+                          {mov.tipo === 'abono' && puedeRevertirAbono && (
+                            <button
+                              type="button"
+                              onClick={() => setAbonoARevertir(mov)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors shrink-0"
+                              title="Revertir abono"
+                            >
+                              <RotateCcw size={14} />
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -745,6 +761,22 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
 
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={!!abonoARevertir}
+        onClose={() => setAbonoARevertir(null)}
+        onConfirm={async () => {
+          if (!abonoARevertir) return
+          await revertirMutation.mutateAsync({ abonoId: abonoARevertir.id })
+          setSaldoLocal(prev => (prev !== null ? prev : Number(cliente.saldo_pendiente || 0)) + Number(abonoARevertir.monto_usd))
+          setAbonoARevertir(null)
+        }}
+        title="¿Revertir abono?"
+        message={`¿Estás seguro de que deseas revertir este abono por valor de ${fmtUsd(abonoARevertir?.monto_usd)}?`}
+        details="Esta acción eliminará el abono y aumentará la deuda del cliente."
+        confirmText="Revertir"
+        variant="danger"
+      />
     </div>
   )
 }

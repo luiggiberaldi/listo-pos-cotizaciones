@@ -177,3 +177,65 @@ export async function handleRegistrarAbono(request, env) {
     return jsonError(e.message || 'Error al registrar abono', 500, request);
   }
 }
+
+export async function handleRevertirAbono(request, env) {
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { user, operador, headers, ip } = v;
+
+  // Restringir a administración, jefe y desarrollador
+  const ROLES_REVERTIR = ['administracion', 'jefe', 'desarrollador'];
+  if (!ROLES_REVERTIR.includes(operador.rol)) {
+    return jsonError('Solo administración, jefe o desarrollador pueden revertir abonos', 403, request);
+  }
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+
+  const { abonoId } = body;
+  if (!abonoId || !isValidUuid(abonoId)) return jsonError('abonoId inválido', 400, request);
+
+  try {
+    // 1. Obtener el abono para verificar que existe y es de tipo abono
+    const abonoRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?id=eq.${abonoId}`, { headers });
+    const abonos = await abonoRes.json();
+    if (!Array.isArray(abonos) || abonos.length === 0) {
+      return jsonError('El abono no existe', 404, request);
+    }
+    const abono = abonos[0];
+    if (abono.tipo !== 'abono') {
+      return jsonError('Solo se pueden revertir transacciones de tipo abono', 400, request);
+    }
+
+    const { cliente_id: clienteId, monto_usd: montoAbonado } = abono;
+
+    // 2. Eliminar el abono (los triggers de la BD actualizarán saldo_pendiente en la tabla clientes automáticamente, pero correremos recalcularSaldoPendienteCliente para sincronizar de manera robusta)
+    const delRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?id=eq.${abonoId}`, {
+      method: 'DELETE',
+      headers: { ...headers, Prefer: 'return=minimal' },
+    });
+    if (!delRes.ok) {
+      const err = await delRes.text();
+      return jsonError(`Error al eliminar abono: ${err}`, 500, request);
+    }
+
+    // 3. Recalcular saldo pendiente del cliente para sincronizar
+    await recalcularSaldoPendienteCliente(clienteId, env, headers);
+
+    // 4. Auditoría
+    try {
+      await registrarAuditoria(env, headers, {
+        usuarioId: operador.id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
+        categoria: 'FINANZAS', accion: 'REVERTIR_ABONO',
+        descripcion: `Abono de $${montoAbonado} revertido para cliente ${clienteId}`,
+        entidadTipo: 'cliente', entidadId: clienteId,
+        meta: { abonoId, monto: montoAbonado }, ip,
+      });
+    } catch {}
+
+    return json({ success: true }, 200, request);
+  } catch (e) {
+    return jsonError(e.message || 'Error al revertir abono', 500, request);
+  }
+}
+
