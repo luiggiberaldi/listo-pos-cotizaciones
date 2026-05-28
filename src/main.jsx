@@ -8,6 +8,30 @@ import App from './App.jsx'
 import './index.css'
 import './modo-accesible.css'
 
+// Manejar errores de carga de chunks dinámicos (cuando hay un nuevo despliegue y los hashes de los assets cambian)
+window.addEventListener('error', (e) => {
+  const msg = e.message || '';
+  const isChunkError = 
+    msg.includes('Failed to fetch dynamically imported module') ||
+    msg.includes('error loading dynamically imported module') ||
+    (e.target && (e.target.tagName === 'SCRIPT' || e.target.tagName === 'LINK') && String(e.target.src || e.target.href).includes('/assets/'));
+  if (isChunkError) {
+    console.warn('Fallo de importación dinámica detectado. Recargando página...');
+    window.location.reload();
+  }
+}, true);
+
+window.addEventListener('unhandledrejection', (e) => {
+  const msg = e.reason?.message || String(e.reason || '');
+  const isChunkError = 
+    msg.includes('Failed to fetch dynamically imported module') ||
+    msg.includes('error loading dynamically imported module');
+  if (isChunkError) {
+    console.warn('Fallo de importación dinámica detectado en promesa. Recargando página...');
+    window.location.reload();
+  }
+});
+
 // Aplicar modo accesible antes del render para evitar flash visual
 if (localStorage.getItem('modo-accesible') === '1') {
   document.documentElement.classList.add('modo-accesible')
