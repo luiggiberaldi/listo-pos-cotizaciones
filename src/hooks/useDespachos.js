@@ -13,7 +13,7 @@ import { sendPushNotification } from './usePushNotifications'
 export const DESPACHOS_KEY = ['despachos']
 
 // ─── Lista de despachos ─────────────────────────────────────────────────────
-export function useDespachos({ estado = '', veTodos: veTodosParam = false } = {}) {
+export function useDespachos({ estado = '', veTodos: veTodosParam = false, busqueda = '', esHoy = false } = {}) {
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
   const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
   const esLogistica = perfil?.rol === 'logistica'
@@ -23,8 +23,80 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false } = {}
   const veTodos = esAdmin || esLogistica || ((esSupervisor || esDesarrollador) && veTodosParam)
 
   return useQuery({
-    queryKey: [...DESPACHOS_KEY, estado, veTodos, perfil?.id],
+    queryKey: [...DESPACHOS_KEY, estado, veTodos, perfil?.id, busqueda, esHoy],
     queryFn: async () => {
+      let matchedIds = null
+
+      if (busqueda && busqueda.trim()) {
+        const q = busqueda.trim()
+        const promises = []
+
+        // 1. Search by dispatch/quotation numbers
+        const numberClean = q.replace(/^(des|cot|dsp|odc)[\.\-\s]*/i, '').replace(/^0+/g, '')
+        const isNum = numberClean && !isNaN(numberClean)
+        const numVal = isNum ? parseInt(numberClean, 10) : null
+
+        if (isNum) {
+          promises.push(
+            supabase.from('notas_despacho').select('id').eq('numero', numVal).then(r => r.data?.map(d => d.id) || [])
+          )
+          promises.push(
+            supabase.from('cotizaciones').select('id').eq('numero', numVal).then(async r => {
+              const cotIds = r.data?.map(c => c.id) || []
+              if (cotIds.length === 0) return []
+              const despRes = await supabase.from('notas_despacho').select('id').in('cotizacion_id', cotIds)
+              return despRes.data?.map(d => d.id) || []
+            })
+          )
+        }
+
+        // 2. Search by client via lookup
+        const sessionRes = await supabase.auth.getSession()
+        const session = sessionRes.data?.session
+        if (session?.access_token) {
+          promises.push(
+            fetch(apiUrl(`/api/clientes?busqueda=${encodeURIComponent(q)}`), {
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` }
+            })
+            .then(r => r.ok ? r.json() : [])
+            .then(async clients => {
+              const clientIds = clients.map(c => c.id).filter(Boolean)
+              if (clientIds.length === 0) return []
+              const despRes = await supabase.from('notas_despacho')
+                .select('id')
+                .or(`cliente_id.in.(${clientIds.join(',')}),cliente_factura_id.in.(${clientIds.join(',')})`)
+              return despRes.data?.map(d => d.id) || []
+            })
+            .catch(err => {
+              console.error('Error fetching clients in search:', err)
+              return []
+            })
+          )
+        }
+
+        // 3. Search by vendor
+        promises.push(
+          supabase.from('usuarios').select('id').ilike('nombre', `%${q}%`).then(async r => {
+            const uIds = r.data?.map(u => u.id) || []
+            if (uIds.length === 0) return []
+            const despRes = await supabase.from('notas_despacho').select('id').in('vendedor_id', uIds)
+            return despRes.data?.map(d => d.id) || []
+          })
+        )
+
+        // 4. Match in notes/references
+        promises.push(
+          supabase.from('notas_despacho').select('id').or(`notas.ilike.%${q}%,referencia_pago.ilike.%${q}%`).then(r => r.data?.map(d => d.id) || [])
+        )
+
+        const results = await Promise.all(promises)
+        matchedIds = [...new Set(results.flat())]
+      }
+
+      if (matchedIds !== null && matchedIds.length === 0) {
+        return []
+      }
+
       let query = supabase
         .from('notas_despacho')
         .select(`
@@ -39,7 +111,22 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false } = {}
           seguimiento:seguimiento_operativo(id, prioridad, fijada)
         `)
         .order(estado ? 'actualizado_en' : 'numero', { ascending: false })
-        .limit(200)
+
+      if (matchedIds !== null) {
+        query = query.in('id', matchedIds)
+      }
+
+      if (esHoy) {
+        const start = new Date()
+        start.setHours(0, 0, 0, 0)
+        const end = new Date()
+        end.setHours(23, 59, 59, 999)
+        query = query.gte('creado_en', start.toISOString()).lte('creado_en', end.toISOString())
+      }
+
+      if (matchedIds === null && !esHoy) {
+        query = query.limit(200)
+      }
 
       if (estado) query = query.eq('estado', estado)
 

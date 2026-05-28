@@ -142,6 +142,7 @@ export default function DespachosView() {
   const [estadoFiltro, setEstadoFiltro] = useState('hoy')
   const [vendedorFiltro, setVendedorFiltro] = useState('')
   const [busquedaGlobal, setBusquedaGlobal] = useState('')
+  const [debouncedBusqueda, setDebouncedBusqueda] = useState('')
   const [verTodos, setVerTodos] = useState(false)
   const [pagina, setPagina] = useState(1)
   const [vistaMode, setVistaMode] = useState(() => {
@@ -154,7 +155,19 @@ export default function DespachosView() {
   const [despachoDetalle, setDespachoDetalle] = useState(null)
   const [despachoEditar, setDespachoEditar] = useState(null)
 
-  const { data: despachos = [], isLoading, isError, refetch } = useDespachos({ estado: estadoFiltro === 'hoy' ? '' : estadoFiltro, veTodos: verTodos })
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedBusqueda(busquedaGlobal)
+    }, 450)
+    return () => clearTimeout(handler)
+  }, [busquedaGlobal])
+
+  const { data: despachos = [], isLoading, isError, refetch } = useDespachos({
+    estado: estadoFiltro === 'hoy' ? '' : estadoFiltro,
+    veTodos: verTodos,
+    busqueda: debouncedBusqueda,
+    esHoy: estadoFiltro === 'hoy'
+  })
   const cambiarEstado = useActualizarEstadoDespacho()
   const reciclar = useReciclarDespacho()
 
