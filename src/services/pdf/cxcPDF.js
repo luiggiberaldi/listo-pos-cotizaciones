@@ -46,7 +46,12 @@ function obtenerRiesgo(dias) {
 }
 
 export async function generarReporteCxCPDF({ data, config = {}, action = 'download', tipo = 'detallado' }) {
-  const { kpis = {}, clientesConDeuda = [], aging = [] } = data
+  const { kpis = {}, clientesConDeuda = [], aging = [], abonos = [] } = data
+
+  // Filtrar abonos: Mostrar únicamente los realizados en el día de hoy
+  const inicioHoy = new Date()
+  inicioHoy.setHours(0, 0, 0, 0)
+  const abonosDelDia = abonos.filter(a => a.creado_en && new Date(a.creado_en) >= inicioHoy)
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
   const logoData = await cargarLogo(config.logo_url)
   let y = 0
@@ -393,6 +398,68 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
       doc.text(fmtUsd(c.saldo_pendiente), MARGIN + 185, y + 3.5, { align: 'right' })
 
       y += 10
+    })
+  }
+
+  // ═══ HISTORIAL DE COBRANZA (ABONOS DE HOY) ═══════════════════════════════════
+  if (abonosDelDia && abonosDelDia.length > 0) {
+    y = checkPage(doc, y, 20, onNewPage, 22)
+    y = drawSectionTitle(doc, 'Cobranza del Día (Abonos Recibidos Hoy)', y)
+
+    const abonosCols = [
+      { label: 'Fecha / Hora',            x: MARGIN + 4,   align: 'left' },
+      { label: 'Cliente',                 x: MARGIN + 40,  align: 'left' },
+      { label: 'Método de Pago',          x: MARGIN + 95,  align: 'center' },
+      { label: 'Referencia / Descripción', x: MARGIN + 125, align: 'left' },
+      { label: 'Monto USD',               x: MARGIN + 185, align: 'right' },
+    ]
+    y = drawTableHeader(doc, abonosCols, y)
+
+    abonosDelDia.forEach((a, idx) => {
+      y = checkPage(doc, y, 8, onNewPage, 22)
+
+      if (idx % 2 === 0) {
+        doc.setFillColor(250, 251, 255)
+        doc.rect(MARGIN, y - 0.8, CONTENT_W, 6, 'F')
+      }
+
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(6.5)
+      doc.setTextColor(...C_DARK)
+
+      // Fecha
+      const fechaStr = a.creado_en 
+        ? new Date(a.creado_en).toLocaleDateString('es-VE', { 
+            day: '2-digit', month: '2-digit', year: 'numeric', 
+            hour: '2-digit', minute: '2-digit' 
+          })
+        : '—'
+      doc.text(fechaStr, MARGIN + 4, y + 3.2)
+
+      // Cliente
+      const clienteNombre = a.cliente?.nombre || 'Desconocido'
+      doc.setFont('helvetica', 'bold')
+      doc.text(clienteNombre.substring(0, 24).toUpperCase(), MARGIN + 40, y + 3.2)
+      doc.setFont('helvetica', 'normal')
+
+      // Método
+      const metodo = a.metodo_pago || a.forma_pago_abono || '—'
+      doc.text(metodo, MARGIN + 95, y + 3.2, { align: 'center' })
+
+      // Referencia / Descripción
+      const refDesc = [
+        a.referencia ? `Ref: ${a.referencia}` : '',
+        a.descripcion || ''
+      ].filter(Boolean).join(' - ')
+      doc.text(refDesc.substring(0, 32), MARGIN + 125, y + 3.2)
+
+      // Monto
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(16, 185, 129) // Emerald-500
+      doc.text(`+${fmtUsd(a.monto_usd)}`, MARGIN + 185, y + 3.2, { align: 'right' })
+      doc.setTextColor(...C_DARK) // Reset color
+
+      y += 6
     })
   }
 
