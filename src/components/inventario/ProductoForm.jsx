@@ -164,7 +164,7 @@ export default function ProductoForm({ producto = null, isClone = false, onSucce
         precio2_porcentaje: producto.precio2_porcentaje != null ? String(producto.precio2_porcentaje) : '',
         precio3_porcentaje: producto.precio3_porcentaje != null ? String(producto.precio3_porcentaje) : '',
         costo_usd:    producto.costo_usd  != null ? String(producto.costo_usd)  : '',
-        stock_actual: '0',
+        stock_actual: isClone ? '0' : (producto.stock_actual != null ? String(producto.stock_actual) : '0'),
         stock_minimo: isClone ? '0' : (producto.stock_minimo != null ? String(producto.stock_minimo) : '0'),
       })
       if (producto.imagen_url && !isClone) setImagenPreview(producto.imagen_url)
