@@ -45,7 +45,7 @@ const ESTADOS_CIUDADES = {
   ],
   'Falcón': [
     'Churuguara', 'Coro (Miranda)', 'Dabajuro', 'La Vela de Coro', 'Pueblo Nuevo', 'Punto Fijo (Carirubana)', 
-    'San Luis', 'Santa Cruz de Bucaral', 'Tucacas (Silva)', 'Urumaco'
+    'San Francisco (Mirimire)', 'San Luis', 'Santa Cruz de Bucaral', 'Tucacas (Silva)', 'Urumaco'
   ],
   'Guárico': [
     'Altagracia de Orituco', 'Calabozo', 'Chaguaramas', 'El Socorro', 'El Sombrero', 'Las Mercedes', 
