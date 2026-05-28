@@ -274,7 +274,7 @@ export default function CustomSelect({
                           >
                             {OptIcon && <OptIcon size={18} className={isSelected ? 'text-primary shrink-0' : 'text-slate-400 shrink-0'} />}
                             <div className="flex-1 min-w-0">
-                              <div className="truncate text-base">{opt.label}</div>
+                              <div className="text-base whitespace-normal break-words leading-tight">{opt.label}</div>
                               {opt.sub && <div className="text-[13px] text-slate-400 truncate mt-0.5">{opt.sub}</div>}
                             </div>
                             {isSelected && <Check size={18} className="text-primary shrink-0" />}
@@ -358,7 +358,7 @@ export default function CustomSelect({
                         }`}
                       >
                         {OptIcon && <OptIcon size={14} className={isSelected ? 'text-primary shrink-0' : 'text-slate-400 shrink-0'} />}
-                        <span className="flex-1 truncate">{opt.label}</span>
+                        <span className="flex-1 whitespace-normal break-words leading-tight py-0.5">{opt.label}</span>
                         {opt.sub && <span className="text-xs text-slate-400 truncate max-w-[140px]">{opt.sub}</span>}
                         {isSelected && <Check size={14} className="text-primary shrink-0" />}
                       </button>
