@@ -15,7 +15,7 @@ import {
 const C_PRIMARY = [26, 54, 93]      // Azul de Acero Oscuro (Corporativo e industrial)
 const C_ACCENT  = [245, 158, 11]    // Amarillo Mostaza Cálido de Cerrajería (Acento de alta visibilidad)
 
-export async function generarPDF({ cotizacion, items = [], config = {}, returnBlob = false, monedaPDF = '$', tasa = 0, tasaUsdt = 0, tasaBcv = 0 }) {
+export async function generarPDF({ cotizacion, items = [], config = {}, returnBlob = false, monedaPDF = '$', tasa = 0, tasaUsdt = 0, tasaBcv = 0, conIVA = false }) {
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
   let y = 0
 
@@ -386,11 +386,26 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   const bTot = Number(cotizacion.total_usd || 0)
   const bTasa = tasa > 0 ? tasa : Number(cotizacion.tasa_bcv_snapshot || 0)
   const bExento = Number(cotizacion.costo_envio_usd || 0) + Number(cotizacion.corte_usd || 0)
-  
-  const bLines = [{ label: 'Subtotal:', val: fmtPrecio(bSub, monedaPDF, bTasa, factorBcv) }]
-  if (bDesc > 0) bLines.push({ label: 'Descuento:', val: '-' + fmtPrecio(bDesc, monedaPDF, bTasa, factorBcv), color: [220, 38, 38] })
-  if (bExento > 0) bLines.push({ label: 'Exento:', val: fmtPrecio(bExento, monedaPDF, bTasa, factorBcv), color: [50, 100, 180] })
-  
+
+  // Cálculo del IVA (16% sumado)
+  const ivaPct = config.iva_pct !== undefined && config.iva_pct !== null ? Number(config.iva_pct) : 16
+  const baseImponible = bTot - bExento
+  const ivaAmount = baseImponible * (ivaPct / 100)
+  const totalFacturaFinal = conIVA ? (bTot + ivaAmount) : bTot
+
+  const bLines = []
+  if (conIVA) {
+    bLines.push({ label: 'Subtotal:', val: fmtPrecio(bSub, monedaPDF, bTasa, factorBcv) })
+    if (bDesc > 0) bLines.push({ label: 'Descuento:', val: '-' + fmtPrecio(bDesc, monedaPDF, bTasa, factorBcv), color: [220, 38, 38] })
+    if (bExento > 0) bLines.push({ label: 'Exento:', val: fmtPrecio(bExento, monedaPDF, bTasa, factorBcv), color: [50, 100, 180] })
+    bLines.push({ label: 'Base Gravable:', val: fmtPrecio(baseImponible, monedaPDF, bTasa, factorBcv) })
+    bLines.push({ label: `IVA ${ivaPct}%:`, val: fmtPrecio(ivaAmount, monedaPDF, bTasa, factorBcv) })
+  } else {
+    bLines.push({ label: 'Subtotal:', val: fmtPrecio(bSub, monedaPDF, bTasa, factorBcv) })
+    if (bDesc > 0) bLines.push({ label: 'Descuento:', val: '-' + fmtPrecio(bDesc, monedaPDF, bTasa, factorBcv), color: [220, 38, 38] })
+    if (bExento > 0) bLines.push({ label: 'Exento:', val: fmtPrecio(bExento, monedaPDF, bTasa, factorBcv), color: [50, 100, 180] })
+  }
+
   const bLH = 7
   const bTH = (bLines.length + 1) * bLH + 4
   const totalsTotalH = bTH + 10 - 2 // La caja redondeada + la caja azul de Total
@@ -466,8 +481,8 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   })
   doc.setFillColor(...C_PRIMARY); doc.rect(bTotX, bTy - 2, bTotW, 10, 'F')
   doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(...C_WHITE)
-  doc.text('Total:', bTotX + 4, bTy + 5)
-  doc.text(fmtTotal(bTot, monedaPDF, bTasa, factorBcv), bTotX + bTotW - 4, bTy + 5, { align: 'right' })
+  doc.text(conIVA ? 'Total Cotiz.' : 'Total:', bTotX + 4, bTy + 5)
+  doc.text(fmtTotal(totalFacturaFinal, monedaPDF, bTasa, factorBcv), bTotX + bTotW - 4, bTy + 5, { align: 'right' })
 
   // DIBUJAR SLOGAN
   doc.setFont('helvetica', 'bolditalic')

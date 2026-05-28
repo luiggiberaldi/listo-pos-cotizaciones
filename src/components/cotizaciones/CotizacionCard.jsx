@@ -60,6 +60,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
   const [showWhatsAppMenu, setShowWhatsAppMenu] = useState(false)
   const [showAdminMenu, setShowAdminMenu] = useState(false)
   const [monedaPdf, setMonedaPdf] = useState(() => localStorage.getItem('construacero_moneda_pdf') || '$')
+  const [conIva, setConIva] = useState(() => localStorage.getItem('construacero_con_iva') === 'true')
   const { data: config = {} } = useConfigNegocio()
   const { tasaBcv, tasaUsdt } = useTasaCambio()
   const printBtnRef = useRef(null)
@@ -97,7 +98,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         cliente: clienteData || cotizacion.cliente,
         vendedor: vendedorRes.data || cotizacion.vendedor,
       }
-      await generarPDF({ cotizacion: cotConDatos, items: itemsRes.data ?? [], config, monedaPDF: monedaPdf, tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio })
+      await generarPDF({ cotizacion: cotConDatos, items: itemsRes.data ?? [], config, monedaPDF: monedaPdf, tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio, conIVA: conIva })
     } catch (err) {
       showToast('Error al generar PDF: ' + (err.message || 'Error desconocido'), 'error')
     } finally {
@@ -149,7 +150,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         cliente: clienteData || cotizacion.cliente,
         vendedor: vendedorRes.data || cotizacion.vendedor,
       }
-      const blob = await generarPDF({ cotizacion: cotConDatos, items: itemsRes.data ?? [], config, monedaPDF: monedaPdf, tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio, returnBlob: true })
+      const blob = await generarPDF({ cotizacion: cotConDatos, items: itemsRes.data ?? [], config, monedaPDF: monedaPdf, tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio, returnBlob: true, conIVA: conIva })
       printOrDownloadPdf(blob, `${numDisplay.replace(/\s+/g, '_')}.pdf`)
     } catch (err) {
       showToast('Error al imprimir: ' + (err.message || 'Error desconocido'), 'error')
@@ -171,13 +172,16 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
       const cliente = clienteData || cotizacion.cliente
       const vendedor = vendedorRes.data || cotizacion.vendedor
       const cotConDatos = { ...cotizacion, cliente, vendedor }
-      const pdfBlob = await generarPDF({ cotizacion: cotConDatos, items: itemsRes.data ?? [], config, returnBlob: true, monedaPDF: monedaPdf, tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio })
+      const pdfBlob = await generarPDF({ cotizacion: cotConDatos, items: itemsRes.data ?? [], config, returnBlob: true, monedaPDF: monedaPdf, tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio, conIVA: conIva })
+      const totalConIva = conIva 
+        ? (cotizacion.total_usd + (cotizacion.subtotal_usd - cotizacion.descuento_usd) * 0.16)
+        : cotizacion.total_usd
       const mensajeParams = {
         nombreNegocio: config.nombre_negocio,
         nombreCliente: cliente?.nombre,
         nombreVendedor: vendedor?.nombre,
         numDisplay,
-        totalUsd: cotizacion.total_usd,
+        totalUsd: totalConIva,
         items: itemsRes.data ?? [],
       }
       const mensaje = generarMensaje(mensajeParams)
@@ -189,11 +193,14 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         mensajeParams,
       })
     } catch (err) {
+      const totalConIva = conIva 
+        ? (cotizacion.total_usd + (cotizacion.subtotal_usd - cotizacion.descuento_usd) * 0.16)
+        : cotizacion.total_usd
       const texto = generarMensaje({
         nombreNegocio: config.nombre_negocio,
         nombreCliente: cotizacion.cliente?.nombre,
         numDisplay,
-        totalUsd: cotizacion.total_usd,
+        totalUsd: totalConIva,
       })
       window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank', 'noopener')
     } finally {
@@ -260,6 +267,15 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
             {monedaPdf === opt.key && <Check size={14} className="ml-auto text-emerald-500" />}
           </button>
         ))}
+        <div className="border-t border-slate-100 mt-1 pt-1 px-3 py-1.5 flex items-center justify-between">
+          <label className="text-xs font-semibold text-slate-600 cursor-pointer flex items-center gap-2 select-none w-full">
+            <input type="checkbox" checked={conIva} onChange={e => {
+              setConIva(e.target.checked)
+              localStorage.setItem('construacero_con_iva', e.target.checked ? 'true' : 'false')
+            }} className="rounded text-primary focus:ring-primary h-3.5 w-3.5 border-slate-300" />
+            Incluir IVA (16%)
+          </label>
+        </div>
       </div>
     )
   }

@@ -506,6 +506,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
   const [waLoading, setWaLoading]   = useState(false)
   const [showResumen, setShowResumen] = useState(false)
   const [editItemIdx, setEditItemIdx] = useState(null)
+  const [conIva, setConIva] = useState(() => localStorage.getItem('construacero_con_iva') === 'true')
 
   // ── Auto-guardado: restaurar borrador al montar ────────────────────────────
   const [showDraftBanner, setShowDraftBanner] = useState(false)
@@ -853,6 +854,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
         tasa: tasaHook.tasaEfectiva,
         tasaUsdt: tasaHook.tasaUsdt?.precio || 0,
         tasaBcv: tasaHook.tasaBcv?.precio || 0,
+        conIVA: conIva,
       })
     } catch (e) {
       console.error(e)
@@ -900,6 +902,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
         tasa: tasaHook.tasaEfectiva,
         tasaUsdt: tasaHook.tasaUsdt?.precio || 0,
         tasaBcv: tasaHook.tasaBcv?.precio || 0,
+        conIVA: conIva,
       })
       printOrDownloadPdf(blob, `${numDisplay.replace(/\s+/g, '_')}.pdf`)
     } catch (err) {
@@ -924,13 +927,17 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
         tasa: tasaHook.tasaEfectiva,
         tasaUsdt: tasaHook.tasaUsdt?.precio || 0,
         tasaBcv: tasaHook.tasaBcv?.precio || 0,
+        conIVA: conIva,
       })
 
+      const totalConIva = conIva 
+        ? (totalUsd + (subtotal - descuentoUsd) * 0.16)
+        : totalUsd
       const mensajeParams = {
         nombreNegocio: config.nombre_negocio,
         nombreCliente: clienteSeleccionado?.nombre,
         numDisplay,
-        totalUsd,
+        totalUsd: totalConIva,
         nombreVendedor: cot.vendedor?.nombre || perfil?.nombre,
         items: itms,
       }
@@ -944,11 +951,14 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
         mensajeParams,
       })
     } catch (err) {
+      const totalConIva = conIva 
+        ? (totalUsd + (subtotal - descuentoUsd) * 0.16)
+        : totalUsd
       const texto = generarMensaje({
         nombreNegocio: config.nombre_negocio,
         nombreCliente: clienteSeleccionado?.nombre,
         numDisplay,
-        totalUsd,
+        totalUsd: totalConIva,
         nombreVendedor: perfil?.nombre,
       })
       window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank', 'noopener')
@@ -1225,6 +1235,16 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                     )}
                 </div>
 
+                <div className="border-t border-slate-100 pt-3 flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-600 cursor-pointer flex items-center gap-2 select-none w-full">
+                    <input type="checkbox" checked={conIva} onChange={e => {
+                      setConIva(e.target.checked)
+                      localStorage.setItem('construacero_con_iva', e.target.checked ? 'true' : 'false')
+                    }} className="rounded text-primary focus:ring-primary h-3.5 w-3.5 border-slate-300" />
+                    Incluir IVA (16%) en el PDF
+                  </label>
+                </div>
+
                 {/* Servicios Extras */}
                 <div className="space-y-3">
                   <SectionH3 icon={Truck}>Servicios Adicionales (USD)</SectionH3>
@@ -1390,15 +1410,21 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                     <span className="font-medium text-slate-700">+{fmtMoneda(corteUsd)}</span>
                   </div>
                 )}
+                {conIva && (
+                  <div className="flex justify-between text-sm text-slate-500">
+                    <span>IVA (16%)</span>
+                    <span className="font-medium text-slate-700">+{fmtMoneda((subtotal - descuentoUsd) * 0.16)}</span>
+                  </div>
+                )}
 
                 <div className="border-t border-slate-100 pt-3 mt-1">
                   <div className="flex justify-between items-baseline">
                     <span className="text-sm font-bold text-slate-500 uppercase tracking-wide">Total</span>
-                    <span className="text-2xl font-black text-slate-900">{fmtMoneda(totalUsd)}</span>
+                    <span className="text-2xl font-black text-slate-900">{fmtMoneda(conIva ? (totalUsd + (subtotal - descuentoUsd) * 0.16) : totalUsd)}</span>
                   </div>
                   {monedaPDF !== 'bs' && tasaHook.tasaEfectiva > 0 && totalUsd > 0 && (
                     <p className="text-right text-xs text-slate-400 mt-0.5 font-mono">
-                      Bs {new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(totalBs)}
+                      Bs {new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(conIva ? ((totalUsd + (subtotal - descuentoUsd) * 0.16) * tasaHook.tasaEfectiva) : totalBs)}
                     </p>
                   )}
                 </div>
@@ -1508,7 +1534,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                     <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Items</span>
                     <span className="font-medium text-slate-700 text-xs">{items.length} producto{items.length !== 1 ? 's' : ''}</span>
                   </div>
-                  {subtotal !== totalUsd && (
+                  {(subtotal !== totalUsd || conIva) && (
                     <>
                       <div className="flex justify-between py-1.5">
                         <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Subtotal</span>
@@ -1518,6 +1544,12 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                         <div className="flex justify-between py-1.5">
                           <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Descuento</span>
                           <span className="font-medium text-red-500 text-xs">-{fmtMoneda(descuentoUsd)}</span>
+                        </div>
+                      )}
+                      {conIva && (
+                        <div className="flex justify-between py-1.5">
+                          <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">IVA (16%)</span>
+                          <span className="font-medium text-emerald-600 text-xs">+{fmtMoneda((subtotal - descuentoUsd) * 0.16)}</span>
                         </div>
                       )}
                       {costoEnvioUsd > 0 && (
@@ -1537,10 +1569,10 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                   <div className="flex justify-between py-1.5 last:pb-0">
                     <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Total</span>
                     <div className="text-right">
-                      <span className="font-bold text-slate-900 text-sm">{fmtMoneda(totalUsd)}</span>
+                      <span className="font-bold text-slate-900 text-sm">{fmtMoneda(conIva ? (totalUsd + (subtotal - descuentoUsd) * 0.16) : totalUsd)}</span>
                       {monedaPDF !== 'bs' && tasaHook.tasaEfectiva > 0 && totalUsd > 0 && (
                         <p className="text-[10px] text-slate-400 font-mono">
-                          Bs {new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(totalBs)}
+                          Bs {new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(conIva ? ((totalUsd + (subtotal - descuentoUsd) * 0.16) * tasaHook.tasaEfectiva) : totalBs)}
                         </p>
                       )}
                     </div>
