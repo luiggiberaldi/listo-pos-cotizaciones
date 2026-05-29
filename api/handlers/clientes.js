@@ -182,6 +182,23 @@ export async function handleReasignarCliente(request, env) {
       }),
     });
 
+    // 3.5. Reasignar comisiones no pagadas del cliente al nuevo vendedor
+    const dRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?cliente_id=eq.${clienteId}&select=id`, { headers });
+    if (dRes.ok) {
+      const despachos = await dRes.json();
+      const despIds = despachos.map(d => d.id);
+      if (despIds.length > 0) {
+        await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=in.(${despIds.join(',')})&estado=in.(pendiente,cta_cobrar)`, {
+          method: 'PATCH',
+          headers: { ...headers, Prefer: 'return=minimal' },
+          body: JSON.stringify({
+            vendedorid: nuevoVendedorId,
+            actualizadoen: new Date().toISOString()
+          })
+        });
+      }
+    }
+
     // 4. Insertar registro de reasignación
     await fetch(`${env.SUPABASE_URL}/rest/v1/reasignaciones_clientes`, {
       method: 'POST', headers,
@@ -479,6 +496,26 @@ export async function handleReasignarClientesBulk(request, env) {
         actualizado_en: ahora,
       }),
     });
+
+    // 3.5. Reasignar masivamente comisiones no pagadas de los clientes al nuevo vendedor
+    const clientIds = clientes.map(c => c.id);
+    if (clientIds.length > 0) {
+      const dRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?cliente_id=in.(${clientIds.join(',')})&select=id`, { headers });
+      if (dRes.ok) {
+        const despachos = await dRes.json();
+        const despIds = despachos.map(d => d.id);
+        if (despIds.length > 0) {
+          await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=in.(${despIds.join(',')})&estado=in.(pendiente,cta_cobrar)`, {
+            method: 'PATCH',
+            headers: { ...headers, Prefer: 'return=minimal' },
+            body: JSON.stringify({
+              vendedorid: vendedorDestinoId,
+              actualizadoen: ahora
+            })
+          });
+        }
+      }
+    }
 
     // 4. Registrar en reasignaciones_clientes (una por cliente)
     const registros = clientes.map(c => ({
