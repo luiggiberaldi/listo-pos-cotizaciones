@@ -12,7 +12,7 @@ import {
 
 // ─── Generar Reporte de Comisiones ───────────────────────────────────────────
 // ─── Generar Reporte de Comisiones ───────────────────────────────────────────
-export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVendedor = null, resumen = null, rango = null, config = {}, action = 'download' }) {
+export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVendedor = null, resumen = null, rango = null, config = {}, action = 'download', formato = 'detallado' }) {
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
   let y = 0
 
@@ -411,6 +411,109 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
     return yPos + 9
   }
 
+  function dibujarTablaResumida(sellers) {
+    y = checkPage(doc, y, 15, handlePageAdd);
+    
+    // Header
+    doc.setDrawColor(210, 215, 225)
+    doc.setLineWidth(0.3)
+    doc.line(MARGIN, y, MARGIN + CONTENT_W, y)
+    doc.line(MARGIN, y + 7, MARGIN + CONTENT_W, y + 7)
+    
+    const sumCols = [
+      { label: 'Asesor / Vendedor', x: MARGIN, w: 60, align: 'left' },
+      { label: 'Tipo', x: MARGIN + 60, w: 25, align: 'left' },
+      { label: 'Comisiones', x: MARGIN + 85, w: 20, align: 'center' },
+      { label: 'Generado ($)', x: MARGIN + 105, w: 27, align: 'right' },
+      { label: 'Pagado ($)', x: MARGIN + 132, w: 27, align: 'right' },
+      { label: 'Pendiente ($)', x: MARGIN + 159, w: 29, align: 'right' }
+    ]
+    
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8.5)
+    doc.setTextColor(80, 90, 110)
+    sumCols.forEach(col => {
+      const align = col.align
+      let posX = col.x + 1
+      if (align === 'right') posX = col.x + col.w - 2
+      if (align === 'center') posX = col.x + (col.w / 2)
+      doc.text(col.label, posX, y + 5, { align })
+    })
+    y += 9
+    
+    let totalCant = 0
+    let totalGen = 0
+    let totalPag = 0
+    let totalPen = 0
+    
+    sellers.forEach((s, idx) => {
+      y = checkPage(doc, y, 7.5, handlePageAdd)
+      
+      if (idx % 2 === 0) {
+        doc.setFillColor(252, 252, 253)
+        doc.rect(MARGIN, y - 0.8, CONTENT_W, 6.5, 'F')
+      }
+      
+      const rgbColor = hexToRgb(s.color || '#1B365D')
+      doc.setFillColor(rgbColor[0], rgbColor[1], rgbColor[2])
+      doc.circle(MARGIN + 3, y + 2.2, 1.3, 'F')
+      
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8.5)
+      doc.setTextColor(...C_DARK)
+      doc.text(s.nombre, MARGIN + 7, y + 3.2)
+      
+      doc.setFont('helvetica', 'normal')
+      doc.text(s.esExterno ? 'Externo' : 'Interno', MARGIN + 61, y + 3.2)
+      doc.text(String(s.count), MARGIN + 85 + 10, y + 3.2, { align: 'center' })
+      
+      doc.text(fmtUsd(s.generadoUsd), MARGIN + 105 + 25, y + 3.2, { align: 'right' })
+      doc.setTextColor(...C_EMERALD)
+      doc.text(s.pagadoUsd > 0 ? fmtUsd(s.pagadoUsd) : '—', MARGIN + 132 + 25, y + 3.2, { align: 'right' })
+      if (s.pendienteUsd > 0) {
+        doc.setTextColor(180, 83, 9)
+      } else {
+        doc.setTextColor(...C_DARK)
+      }
+      doc.setFont('helvetica', 'bold')
+      doc.text(fmtUsd(s.pendienteUsd), MARGIN + 159 + 27, y + 3.2, { align: 'right' })
+      
+      totalCant += s.count
+      totalGen += s.generadoUsd
+      totalPag += s.pagadoUsd
+      totalPen += s.pendienteUsd
+      
+      y += 6.5
+    })
+    
+    // Total Row
+    y = checkPage(doc, y, 10, handlePageAdd)
+    doc.setDrawColor(210, 215, 225)
+    doc.setLineWidth(0.4)
+    doc.line(MARGIN, y, MARGIN + CONTENT_W, y)
+    y += 4.5
+    
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9.5)
+    doc.setTextColor(...C_PRIMARY)
+    doc.text('TOTAL GENERAL:', MARGIN + 2, y)
+    
+    doc.setFontSize(9.0)
+    doc.setTextColor(...C_DARK)
+    doc.text(String(totalCant), MARGIN + 85 + 10, y, { align: 'center' })
+    doc.text(fmtUsd(totalGen), MARGIN + 105 + 25, y, { align: 'right' })
+    doc.setTextColor(...C_EMERALD)
+    doc.text(fmtUsd(totalPag), MARGIN + 132 + 25, y, { align: 'right' })
+    if (totalPen > 0) {
+      doc.setTextColor(185, 28, 28)
+    } else {
+      doc.setTextColor(...C_DARK)
+    }
+    doc.text(fmtUsd(totalPen), MARGIN + 159 + 27, y, { align: 'right' })
+    
+    y += 8
+  }
+
   // Clasificación de comisiones en internos y externos
   const comisionesInternos = comisionesNorm.filter(c => {
     const esExterno = !!c.vendedor?.es_externo || (c.vendedor?.markup_pct != null && Number(c.vendedor.markup_pct) > 0);
@@ -746,63 +849,93 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
     return { totalUsd: groupTotalUsd, cabillaUsd: groupCabillaUsd, otrosUsd: groupOtrosUsd, abonadoUsd: groupAbonadoUsd, totalBs: groupTotalBs };
   }
 
-  let sumCabillaUsd = 0;
-  let sumOtrosUsd = 0;
-  let sumTotalUsd = 0;
-  let sumAbonadoUsd = 0;
-  let sumTotalBs = 0;
-
-  if (vendedor) {
-    const res = dibujarGrupoTabla("Comisiones", comisionesNorm);
-    sumCabillaUsd = res.cabillaUsd;
-    sumOtrosUsd = res.otrosUsd;
-    sumTotalUsd = res.totalUsd;
-    sumAbonadoUsd = res.abonadoUsd;
-    sumTotalBs = res.totalBs;
+  if (formato === 'resumido') {
+    const resumenSellers = {}
+    comisionesNorm.forEach(c => {
+      if (c.estado === 'cta_cobrar') return; // Excluir cuentas por cobrar (cxc) del resumido
+      const vId = c.vendedor?.id || 'sin_asesor'
+      const vName = c.vendedor?.nombre || 'Sin asesor'
+      const esExterno = !!c.vendedor?.es_externo || (c.vendedor?.markup_pct != null && Number(c.vendedor.markup_pct) > 0)
+      
+      if (!resumenSellers[vId]) {
+        resumenSellers[vId] = {
+          nombre: vName,
+          esExterno,
+          color: c.vendedor?.color || '#1B365D',
+          count: 0,
+          generadoUsd: 0,
+          pagadoUsd: 0,
+          pendienteUsd: 0
+        }
+      }
+      
+      resumenSellers[vId].count += 1
+      resumenSellers[vId].generadoUsd += c.totalcomision
+      resumenSellers[vId].pagadoUsd += c.montopagado || 0
+      resumenSellers[vId].pendienteUsd += Math.max(c.totalcomision - (c.montopagado || 0), 0)
+    })
+    const sellersList = Object.values(resumenSellers).sort((a, b) => a.nombre.localeCompare(b.nombre))
+    
+    dibujarTablaResumida(sellersList)
   } else {
-    if (tipoVendedor !== 'externos') {
-      const resInt = dibujarGrupoTabla("Vendedores Internos", comisionesInternos);
-      sumCabillaUsd += resInt.cabillaUsd;
-      sumOtrosUsd += resInt.otrosUsd;
-      sumTotalUsd += resInt.totalUsd;
-      sumAbonadoUsd += resInt.abonadoUsd;
-      sumTotalBs += resInt.totalBs;
-    }
-    if (tipoVendedor !== 'internos') {
-      const resExt = dibujarGrupoTabla("Vendedores Externos", comisionesExternos);
-      sumCabillaUsd += resExt.cabillaUsd;
-      sumOtrosUsd += resExt.otrosUsd;
-      sumTotalUsd += resExt.totalUsd;
-      sumAbonadoUsd += resExt.abonadoUsd;
-      sumTotalBs += resExt.totalBs;
-    }
-  }
+    let sumCabillaUsd = 0;
+    let sumOtrosUsd = 0;
+    let sumTotalUsd = 0;
+    let sumAbonadoUsd = 0;
+    let sumTotalBs = 0;
 
-  // Línea final y TOTALIZACIÓN
-  y = checkPage(doc, y, 12, handlePageAdd);
-  doc.setDrawColor(210, 215, 225);
-  doc.setLineWidth(0.5);
-  doc.line(MARGIN, y, MARGIN + CONTENT_W, y);
-  y += 5;
+    if (vendedor) {
+      const res = dibujarGrupoTabla("Comisiones", comisionesNorm);
+      sumCabillaUsd = res.cabillaUsd;
+      sumOtrosUsd = res.otrosUsd;
+      sumTotalUsd = res.totalUsd;
+      sumAbonadoUsd = res.abonadoUsd;
+      sumTotalBs = res.totalBs;
+    } else {
+      if (tipoVendedor !== 'externos') {
+        const resInt = dibujarGrupoTabla("Vendedores Internos", comisionesInternos);
+        sumCabillaUsd += resInt.cabillaUsd;
+        sumOtrosUsd += resInt.otrosUsd;
+        sumTotalUsd += resInt.totalUsd;
+        sumAbonadoUsd += resInt.abonadoUsd;
+        sumTotalBs += resInt.totalBs;
+      }
+      if (tipoVendedor !== 'internos') {
+        const resExt = dibujarGrupoTabla("Vendedores Externos", comisionesExternos);
+        sumCabillaUsd += resExt.cabillaUsd;
+        sumOtrosUsd += resExt.otrosUsd;
+        sumTotalUsd += resExt.totalUsd;
+        sumAbonadoUsd += resExt.abonadoUsd;
+        sumTotalBs += resExt.totalBs;
+      }
+    }
 
-  // Fila de gran total
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10.0);
-  doc.setTextColor(...C_DARK);
-  doc.text('TOTAL GENERAL:', MARGIN + 2, y + 1.5);
-  
-  if (esDetallado) {
-    doc.text(fmtUsd(sumTotalUsd), cols[5].x + cols[5].w - 2, y + 1.5, { align: 'right' });
-    doc.text(fmtBs(sumTotalBs), cols[7].x + cols[7].w - 2, y + 1.5, { align: 'right' });
-  } else {
-    doc.text(fmtUsd(sumCabillaUsd), cols[2].x + cols[2].w - 2, y + 1.5, { align: 'right' });
-    doc.text(fmtUsd(sumOtrosUsd), cols[3].x + cols[3].w - 2, y + 1.5, { align: 'right' });
-    doc.text(fmtUsd(sumTotalUsd), cols[4].x + cols[4].w - 2, y + 1.5, { align: 'right' });
-    doc.text(fmtUsd(sumAbonadoUsd), cols[5].x + cols[5].w - 2, y + 1.5, { align: 'right' });
-    doc.text(fmtBs(sumTotalBs), cols[7].x + cols[7].w - 2, y + 1.5, { align: 'right' });
+    // Línea final y TOTALIZACIÓN
+    y = checkPage(doc, y, 12, handlePageAdd);
+    doc.setDrawColor(210, 215, 225);
+    doc.setLineWidth(0.5);
+    doc.line(MARGIN, y, MARGIN + CONTENT_W, y);
+    y += 5;
+
+    // Fila de gran total
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10.0);
+    doc.setTextColor(...C_DARK);
+    doc.text('TOTAL GENERAL:', MARGIN + 2, y + 1.5);
+    
+    if (esDetallado) {
+      doc.text(fmtUsd(sumTotalUsd), cols[5].x + cols[5].w - 2, y + 1.5, { align: 'right' });
+      doc.text(fmtBs(sumTotalBs), cols[7].x + cols[7].w - 2, y + 1.5, { align: 'right' });
+    } else {
+      doc.text(fmtUsd(sumCabillaUsd), cols[2].x + cols[2].w - 2, y + 1.5, { align: 'right' });
+      doc.text(fmtUsd(sumOtrosUsd), cols[3].x + cols[3].w - 2, y + 1.5, { align: 'right' });
+      doc.text(fmtUsd(sumTotalUsd), cols[4].x + cols[4].w - 2, y + 1.5, { align: 'right' });
+      doc.text(fmtUsd(sumAbonadoUsd), cols[5].x + cols[5].w - 2, y + 1.5, { align: 'right' });
+      doc.text(fmtBs(sumTotalBs), cols[7].x + cols[7].w - 2, y + 1.5, { align: 'right' });
+    }
+    
+    y += 8;
   }
-  
-  y += 8;
 
   // ══════════════════════════════════════════════════════════════════════════
   // 7. FOOTER
@@ -811,9 +944,14 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
 
   // Guardar o Imprimir
   const suffix = tipoVendedor ? `_${tipoVendedor}` : ''
-  const titulo = vendedor
+  let titulo = vendedor
     ? `Comisiones_${vendedor.nombre.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}`
     : `Comisiones_General${suffix}_${new Date().toISOString().slice(0, 10)}`
+  if (formato === 'resumido') {
+    titulo = vendedor
+      ? `Comisiones_Resumido_${vendedor.nombre.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}`
+      : `Comisiones_Resumido_General${suffix}_${new Date().toISOString().slice(0, 10)}`
+  }
 
   if (action === 'print') {
     doc.autoPrint();

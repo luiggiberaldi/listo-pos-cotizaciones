@@ -871,6 +871,7 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
   }, { totalUsd: 0, comBs: 0 })
 
   const [exportando, setExportando] = useState(false)
+  const [formatoReporte, setFormatoReporte] = useState('detallado') // 'detallado', 'resumido'
 
   async function exportarPDF(action = 'download') {
     setExportando(true)
@@ -922,7 +923,8 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
         vendedor: { nombre: vendedor?.nombre, color: vendedor?.color, markup_pct: vendedor?.markup_pct, es_externo: vendedor?.es_externo },
         rango,
         config: configNeg ?? {},
-        action
+        action,
+        formato: formatoReporte
       })
     } catch (e) {
       console.error('Error generando PDF individual:', e)
@@ -977,6 +979,19 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
               {exportando ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} className="group-hover:scale-110 transition-transform" />}
               <span>Imprimir</span>
             </button>
+
+            <div className="flex p-0.5 bg-slate-100 rounded-xl h-9 min-w-[180px] border border-slate-200 ml-auto">
+              <button
+                type="button"
+                onClick={() => setFormatoReporte('detallado')}
+                className={`flex-1 text-[11px] font-bold rounded-lg transition-all ${formatoReporte === 'detallado' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
+              >Detallado</button>
+              <button
+                type="button"
+                onClick={() => setFormatoReporte('resumido')}
+                className={`flex-1 text-[11px] font-bold rounded-lg transition-all ${formatoReporte === 'resumido' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
+              >Resumido</button>
+            </div>
 
             {/* Pagar seleccionadas (cuando hay selección) */}
             {puedePagarComisiones && someSelected && (
@@ -1254,8 +1269,9 @@ function TabComisiones({ configNeg }) {
     const r = getWeekRange(0)
     return { from: r.from, to: r.to }
   })
-  const [filtroEstado, setFiltroEstado] = useState('') // '', 'pendiente', 'pagada'
+  const [filtroEstado, setFiltroEstado] = useState('pendiente') // Inicializado con 'pendiente'
   const [filtroVendedor, setFiltroVendedor] = useState('')
+  const [formatoReporte, setFormatoReporte] = useState('detallado') // 'detallado', 'resumido'
   const [exportando, setExportando] = useState(false)
   const [showPrintMenu, setShowPrintMenu] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
@@ -1470,7 +1486,8 @@ function TabComisiones({ configNeg }) {
         tipoVendedor: tipoFiltro === 'todos' ? null : tipoFiltro,
         rango,
         config: configNeg ?? {},
-        action: accion === 'imprimir' ? 'print' : 'download'
+        action: accion === 'imprimir' ? 'print' : 'download',
+        formato: formatoReporte
       })
     } catch (e) {
       console.error('Error generando PDF general:', e)
@@ -1531,7 +1548,8 @@ function TabComisiones({ configNeg }) {
         comisiones: detalleVendedor || [],
         vendedor: { nombre: vendedor.nombre, color: vendedor.color, markup_pct: vendedor.markup_pct, es_externo: vendedor.es_externo },
         rango,
-        config: configNeg ?? {}
+        config: configNeg ?? {},
+        formato: formatoReporte
       })
     } catch (e) {
       console.error('Error generando PDF individual:', e)
@@ -1588,6 +1606,22 @@ function TabComisiones({ configNeg }) {
                   onClick={() => setFiltroEstado('pagada')}
                   className={`flex-1 text-xs font-black rounded-lg transition-all ${filtroEstado === 'pagada' ? 'bg-white shadow-md text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}
                 >Pagadas</button>
+              </div>
+            </div>
+
+            <div className="flex-1 min-w-[200px]">
+              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">Formato Reporte</label>
+              <div className="flex p-1 bg-slate-100/80 rounded-xl h-11">
+                <button
+                  type="button"
+                  onClick={() => setFormatoReporte('detallado')}
+                  className={`flex-1 text-xs font-black rounded-lg transition-all ${formatoReporte === 'detallado' ? 'bg-white shadow-md text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                >Detallado</button>
+                <button
+                  type="button"
+                  onClick={() => setFormatoReporte('resumido')}
+                  className={`flex-1 text-xs font-black rounded-lg transition-all ${formatoReporte === 'resumido' ? 'bg-white shadow-md text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                >Resumido</button>
               </div>
             </div>
 

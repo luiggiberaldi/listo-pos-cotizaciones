@@ -338,11 +338,12 @@ export default function ComisionesView() {
   const puedeGestionarPagos = ['administracion', 'supervisor', 'jefe', 'desarrollador'].includes(perfil?.rol)
   const puedePagarComisiones = ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)
 
-  const [filtroEstado,   setFiltroEstado]   = useState('')
+  const [filtroEstado,   setFiltroEstado]   = useState('pendiente')
   const [filtroVendedor, setFiltroVendedor] = useState('')
   const [fechaDesde,     setFechaDesde]     = useState('')
   const [fechaHasta,     setFechaHasta]     = useState('')
   const [page,           setPage]           = useState(1)
+  const [formatoReporte, setFormatoReporte] = useState('detallado') // 'detallado', 'resumido'
   const pageSize = 48 // Agrupamos de a 48 para que la cuadrícula sea simétrica (3 col x 16 filas)
 
   const [comisionAPagar, setComisionAPagar] = useState(null)
@@ -419,7 +420,8 @@ export default function ComisionesView() {
         vendedor: activeVendedor ? { id: activeVendedor.id, nombre: activeVendedor.nombre, color: activeVendedor.color } : null, 
         tipoVendedor,
         rango, 
-        config: configNeg ?? {} 
+        config: configNeg ?? {},
+        formato: formatoReporte
       })
     } catch (e) { console.error('Error PDF:', e) }
     setExportando(false)
@@ -511,6 +513,19 @@ export default function ComisionesView() {
                 {o.l}
               </button>
             ))}
+          </div>
+
+          <div className="flex p-0.5 bg-slate-100 rounded-xl h-9 min-w-[180px] border border-slate-200">
+            <button
+              type="button"
+              onClick={() => setFormatoReporte('detallado')}
+              className={`flex-1 text-[11px] font-bold rounded-lg transition-all ${formatoReporte === 'detallado' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
+            >Detallado</button>
+            <button
+              type="button"
+              onClick={() => setFormatoReporte('resumido')}
+              className={`flex-1 text-[11px] font-bold rounded-lg transition-all ${formatoReporte === 'resumido' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
+            >Resumido</button>
           </div>
 
           {puedeGestionarPagos && (
