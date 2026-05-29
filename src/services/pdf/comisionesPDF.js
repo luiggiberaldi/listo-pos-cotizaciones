@@ -616,16 +616,30 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
         let subTotalBs = 0;
 
         itemsParaTabla.forEach((c, idx) => {
-          let rowH = 9.5;
           let splitDesc = [];
           if (esDetallado) {
             const desc = `${c.codigo ? '['+c.codigo+'] ' : ''}${c.descripcion || '—'}`;
             doc.setFontSize(8.0);
             splitDesc = doc.splitTextToSize(desc, cols[2].w - 9);
             doc.setFontSize(9.0);
-            if (splitDesc.length > 2) {
-              rowH = 12.0;
-            }
+          }
+
+          // Dividir el nombre del cliente en múltiples líneas según el ancho de la columna
+          doc.setFontSize(7.5);
+          const cliDisplay = (c.clienteNombre || '---').toUpperCase();
+          const splitCli = doc.splitTextToSize(cliDisplay, cols[1].w - 2);
+          doc.setFontSize(9.0);
+
+          // Calcular la altura dinámica de la fila según el máximo de líneas de texto
+          const linesCli = splitCli.length + 1; // líneas de cliente + 1 (número de documento)
+          const linesDesc = esDetallado ? splitDesc.length : 1;
+          const maxLines = Math.max(linesCli, linesDesc);
+
+          let rowH = 9.5;
+          if (maxLines === 3) {
+            rowH = 12.0;
+          } else if (maxLines > 3) {
+            rowH = 12.0 + (maxLines - 3) * 3.0;
           }
 
           y = checkPage(doc, y, rowH + 2, handlePageAdd);
@@ -665,18 +679,17 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
             doc.text(fmtFechaCorta(c.creadoen), cols[0].x + 1, y + 3.8);
             doc.setFontSize(9.0);
             
-            // Cliente y Documento apilados (Cliente primero)
+            // Cliente en múltiples líneas y Documento abajo
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(7.5);
-            const maxLen = 18;
-            const cliDisplay = (c.clienteNombre || '---').toUpperCase();
-            const cliTrunc = cliDisplay.length > maxLen ? cliDisplay.substring(0, maxLen - 2) + '..' : cliDisplay;
-            doc.text(cliTrunc, cols[1].x + 1, y + 3.8);
+            splitCli.forEach((line, lineIdx) => {
+              doc.text(line, cols[1].x + 1, y + 3.8 + (lineIdx * 3.4));
+            });
             
             doc.setFont('helvetica', 'normal');
             doc.setFontSize(7.0);
             doc.setTextColor(100, 116, 139); // Slate 500
-            doc.text(`#${c.despachonumero}`, cols[1].x + 1, y + 7.5);
+            doc.text(`#${c.despachonumero}`, cols[1].x + 1, y + 3.8 + (splitCli.length * 3.4));
             
             // Restaurar estilos
             doc.setFont('helvetica', 'normal');
@@ -706,18 +719,17 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
             doc.text(fmtFechaCorta(c.creadoen), cols[0].x + 1, y + 3.8);
             doc.setFontSize(9.0);
             
-            // Cliente y Documento apilados (Cliente primero)
+            // Cliente en múltiples líneas y Documento abajo
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(7.5);
-            const maxLen = 18;
-            const cliDisplay = (c.clienteNombre || '---').toUpperCase();
-            const cliTrunc = cliDisplay.length > maxLen ? cliDisplay.substring(0, maxLen - 2) + '..' : cliDisplay;
-            doc.text(cliTrunc, cols[1].x + 1, y + 3.8);
+            splitCli.forEach((line, lineIdx) => {
+              doc.text(line, cols[1].x + 1, y + 3.8 + (lineIdx * 3.4));
+            });
             
             doc.setFont('helvetica', 'normal');
             doc.setFontSize(7.0);
             doc.setTextColor(100, 116, 139); // Slate 500
-            doc.text(`#${c.despachonumero}`, cols[1].x + 1, y + 7.5);
+            doc.text(`#${c.despachonumero}`, cols[1].x + 1, y + 3.8 + (splitCli.length * 3.4));
             
             // Restaurar estilos
             doc.setFont('helvetica', 'normal');
