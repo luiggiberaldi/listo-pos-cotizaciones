@@ -307,8 +307,8 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(8.5)
     doc.setTextColor(79, 70, 229) // Indigo 600
-    doc.text(`Tasa de Referencia Euro BCV: ${fmtBs(tasaEuro)}`, MARGIN + 1, y - 1.5)
-    y += 5.5
+    doc.text(`Tasa de Referencia Euro BCV: ${fmtBs(tasaEuro)}`, MARGIN + 1, y + 1.5)
+    y += 7.0
   }
 
   // DRAW VISUAL BREAKDOWN BAR (Barra de progreso)
