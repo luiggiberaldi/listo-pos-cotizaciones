@@ -2,11 +2,12 @@
 // Generador de PDF profesional para Reporte de Cuentas por Cobrar (CxC)
 import { jsPDF } from 'jspdf'
 import { cargarLogo } from './pdfLogo'
+import { LOGO_LISTA_PRECIOS } from './logoListaPreciosBase64'
 import {
   PAGE_W, PAGE_H, MARGIN, CONTENT_W,
   C_DARK, C_WHITE, C_EMERALD, C_AMBER, C_RED, C_GRAY,
   fmtUsd, fmtFecha, hexToRgb, drawWatermark, checkPage,
-  C_PRIMARY, C_ACCENT, drawPremiumHeader, drawSimplifiedHeader
+  C_PRIMARY, C_ACCENT, drawPremiumHeader, drawSimplifiedHeader, drawPremiumFooter
 } from './pdfShared'
 
 // Color primario del reporte CxC heredado del corporate design
@@ -53,14 +54,14 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
   inicioHoy.setHours(0, 0, 0, 0)
   const abonosDelDia = abonos.filter(a => a.creado_en && new Date(a.creado_en) >= inicioHoy)
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
-  const logoData = await cargarLogo(config.logo_url)
+  const logoData = LOGO_LISTA_PRECIOS
   let y = 0
   const HDR_H = 40 // Altura del header premium
   const nombreNeg = config.nombre_negocio || config.empresa || 'Mi Empresa'
 
   // Callback: header compacto en páginas de continuación (ahorra ~30mm por página)
   const onNewPage = (d) => {
-    const y2 = drawSimplifiedHeader(d, logoData, config, 'Reporte CxC (Cont.)')
+    const y2 = drawSimplifiedHeader(d, logoData, config, 'Reporte CxC (Cont.)', [255, 255, 255], [0, 0, 0])
     drawWatermark(d)
     return y2
   }
@@ -71,7 +72,13 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
     logoData,
     config,
     title: 'Reporte de Cuentas por Cobrar (CxC)',
-    subtitle: `Fecha de Emisión: ${new Date().toLocaleDateString('es-VE')}`
+    subtitle: `Fecha de Emisión: ${new Date().toLocaleDateString('es-VE')}`,
+    customBgColor:       [255, 255, 255],
+    customAccentColor:   [0, 0, 0],
+    customTextColor:     [0, 0, 0],
+    customSubtitleColor: [0, 0, 0],
+    customBorderColor:   [0, 0, 0],
+    centerBusinessName:  true
   })
 
   drawWatermark(doc)
@@ -177,7 +184,7 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
   const maxSaldo = Math.max(...clientesConDeuda.map(c => Number(c.saldo_pendiente || 0)), 1)
 
   clientesConDeuda.forEach((c, idx) => {
-    y = checkPage(doc, y, 9, onNewPage, 22)
+    y = checkPage(doc, y, 9, onNewPage, doc.internal.getNumberOfPages() === 1 ? 35 : 22)
 
     if (idx % 2 === 0) {
       doc.setFillColor(250, 251, 255)
@@ -281,7 +288,7 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
   })
 
   // Total consolidado
-  y = checkPage(doc, y, 9, onNewPage, 22)
+  y = checkPage(doc, y, 9, onNewPage, doc.internal.getNumberOfPages() === 1 ? 35 : 22)
   doc.setLineWidth(0.4)
   doc.setDrawColor(...C_CXC_PRIMARY)
   doc.line(MARGIN, y - 1, MARGIN + CONTENT_W, y - 1)
@@ -303,7 +310,7 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
       const cargosActivos = c.cargosActivos || []
       if (cargosActivos.length === 0) return
 
-      y = checkPage(doc, y, 22, onNewPage, 22)
+      y = checkPage(doc, y, 22, onNewPage, doc.internal.getNumberOfPages() === 1 ? 35 : 22)
 
       // Divisor elegante para el cliente
       doc.setFillColor(241, 245, 249) // slate-100
@@ -331,7 +338,7 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
       y = drawTableHeader(doc, detCols, y)
 
       cargosActivos.forEach((car, cIdx) => {
-        y = checkPage(doc, y, 7.5, onNewPage, 22)
+        y = checkPage(doc, y, 7.5, onNewPage, doc.internal.getNumberOfPages() === 1 ? 35 : 22)
 
         if (cIdx % 2 === 0) {
           doc.setFillColor(252, 252, 253)
@@ -403,7 +410,7 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
 
   // ═══ HISTORIAL DE COBRANZA (ABONOS DE HOY) ═══════════════════════════════════
   if (abonosDelDia && abonosDelDia.length > 0) {
-    y = checkPage(doc, y, 20, onNewPage, 22)
+    y = checkPage(doc, y, 20, onNewPage, doc.internal.getNumberOfPages() === 1 ? 35 : 22)
     y = drawSectionTitle(doc, 'Cobranza del Día (Abonos Recibidos Hoy)', y)
 
     const abonosCols = [
@@ -416,7 +423,7 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
     y = drawTableHeader(doc, abonosCols, y)
 
     abonosDelDia.forEach((a, idx) => {
-      y = checkPage(doc, y, 8, onNewPage, 22)
+      y = checkPage(doc, y, 8, onNewPage, doc.internal.getNumberOfPages() === 1 ? 35 : 22)
 
       if (idx % 2 === 0) {
         doc.setFillColor(250, 251, 255)
@@ -464,20 +471,7 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
   }
 
   // ═══ FOOTER EN TODAS LAS PÁGINAS ════════════════════════════════════════════
-  const totalPages = doc.internal.getNumberOfPages()
-  for (let p = 1; p <= totalPages; p++) {
-    doc.setPage(p)
-    doc.setDrawColor(...C_CXC_PRIMARY)
-    doc.setLineWidth(0.5)
-    doc.line(MARGIN, PAGE_H - 15, MARGIN + CONTENT_W, PAGE_H - 15)
-    
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(6)
-    doc.setTextColor(...C_GRAY)
-    doc.text(nombreNeg, MARGIN, PAGE_H - 10)
-    doc.text(`Generado: ${new Date().toLocaleString('es-VE')} — CONFIDENCIAL`, MARGIN, PAGE_H - 6)
-    doc.text(`Página ${p} de ${totalPages}`, PAGE_W - MARGIN, PAGE_H - 10, { align: 'right' })
-  }
+  drawPremiumFooter(doc, config, [255, 255, 255], [0, 0, 0], [0, 0, 0], `Generado: ${new Date().toLocaleString('es-VE')} — CONFIDENCIAL`)
 
   // Guardar o imprimir según acción
   const safeName = `Reporte_CxC_${tipo.toUpperCase()}_${new Date().toISOString().slice(0, 10)}.pdf`

@@ -2,10 +2,11 @@
 // Genera PDF profesional del Reporte de Vendedores — solo supervisores/jefes
 import { jsPDF } from 'jspdf'
 import { cargarLogo } from './pdfLogo'
+import { LOGO_LISTA_PRECIOS } from './logoListaPreciosBase64'
 import {
   PAGE_W, PAGE_H, MARGIN, CONTENT_W,
   C_PRIMARY, C_DARK, C_WHITE, C_EMERALD, C_AMBER, C_RED, C_GRAY,
-  fmtUsd, fmtFecha, hexToRgb, drawWatermark, checkPage, drawPremiumHeader,
+  fmtUsd, fmtFecha, hexToRgb, drawWatermark, checkPage, drawPremiumHeader, drawSimplifiedHeader, drawPremiumFooter
 } from './pdfShared'
 
 // ─── Utilidades locales ────────────────────────────────────────────────────────
@@ -63,7 +64,15 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
     : null
 
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
-  const logoData = await cargarLogo(config.logo_url)
+  const logoData = LOGO_LISTA_PRECIOS
+
+  const originalAddPage = doc.addPage.bind(doc)
+  doc.addPage = function(...args) {
+    originalAddPage(...args)
+    drawWatermark(doc)
+    drawSimplifiedHeader(doc, logoData, config, 'Reporte Vendedores (Cont.)', [255, 255, 255], [0, 0, 0])
+  }
+
   let y = 0
   const HDR_H = 40
   const nombreNeg = config.nombre_negocio || config.empresa || 'Mi Empresa'
@@ -83,7 +92,13 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
     logoData,
     config,
     title: reportTitle,
-    subtitle: rangoLabel
+    subtitle: rangoLabel,
+    customBgColor:       [255, 255, 255],
+    customAccentColor:   [0, 0, 0],
+    customTextColor:     [0, 0, 0],
+    customSubtitleColor: [0, 0, 0],
+    customBorderColor:   [0, 0, 0],
+    centerBusinessName:  true
   })
 
   drawWatermark(doc)
@@ -229,7 +244,7 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
     if (list.length === 0) return
 
     // Draw Section Header
-    y = checkPage(doc, y, 15, null, 20)
+    y = checkPage(doc, y, 15, null, doc.internal.getNumberOfPages() === 1 ? 35 : 20)
     if (y < HDR_H) y = HDR_H + 6
 
     doc.setFillColor(isAmber ? 254 : 241, isAmber ? 243 : 245, isAmber ? 199 : 249) // #FEF3C7 or #F1F5F9
@@ -246,7 +261,7 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
     const maxVenta = list.length > 0 ? Math.max(...list.map(l => l.totalUsd)) : 1
 
     list.forEach((v, idx) => {
-      y = checkPage(doc, y, 11, null, 20)
+      y = checkPage(doc, y, 11, null, doc.internal.getNumberOfPages() === 1 ? 35 : 20)
       if (y < HDR_H) y = HDR_H + 6
 
       // Zebra striping
@@ -305,7 +320,7 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
     })
 
     // Subtotal Row
-    y = checkPage(doc, y, 11, null, 20)
+    y = checkPage(doc, y, 11, null, doc.internal.getNumberOfPages() === 1 ? 35 : 20)
     if (y < HDR_H) y = HDR_H + 6
 
     doc.setFillColor(isAmber ? 254 : 248, isAmber ? 249 : 250, isAmber ? 245 : 252)
@@ -343,7 +358,7 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
 
   // Consolidated Grand Total Row
   if (listToUse.length > 0 && (tipo === 'general' || tipo === 'completo')) {
-    y = checkPage(doc, y, 12, null, 20)
+    y = checkPage(doc, y, 12, null, doc.internal.getNumberOfPages() === 1 ? 35 : 20)
     if (y < HDR_H) y = HDR_H + 6
 
     doc.setFillColor(230, 235, 245)
@@ -379,7 +394,7 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
   if (tipo === 'completo' || tipo === 'individual' || tipo === 'general' || tipo === 'internos' || tipo === 'externos') {
   // ═══ PERFIL DETALLADO POR VENDEDOR ══════════════════════════════════════════
   listToUse.forEach((v) => {
-    y = checkPage(doc, y, 60, null, 20)
+    y = checkPage(doc, y, 60, null, doc.internal.getNumberOfPages() === 1 ? 35 : 20)
     if (y < HDR_H) y = HDR_H + 6
 
     // ── Encabezado del vendedor ──────────────────────────────────────────────
@@ -531,7 +546,7 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
       doc.text('Top Clientes', MARGIN, y + 4)
       y += 7
       v.topClientes.forEach((c, ci) => {
-        y = checkPage(doc, y, 7, null, 20)
+        y = checkPage(doc, y, 7, null, doc.internal.getNumberOfPages() === 1 ? 35 : 20)
         if (ci % 2 === 0) {
           doc.setFillColor(250, 251, 255)
           doc.rect(MARGIN, y - 0.5, col3W, 6, 'F')
@@ -547,14 +562,14 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
     }
 
     if (v.topProductos.length > 0) {
-      y = checkPage(doc, y, 11, null, 20)
+      y = checkPage(doc, y, 11, null, doc.internal.getNumberOfPages() === 1 ? 35 : 20)
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(8.5)
       doc.setTextColor(...C_DARK)
       doc.text('Top Productos', MARGIN, y + 4)
       y += 7
       v.topProductos.forEach((p, pi) => {
-        y = checkPage(doc, y, 7, null, 20)
+        y = checkPage(doc, y, 7, null, doc.internal.getNumberOfPages() === 1 ? 35 : 20)
         if (pi % 2 === 0) {
           doc.setFillColor(250, 251, 255)
           doc.rect(MARGIN, y - 0.5, CONTENT_W, 6, 'F')
@@ -573,7 +588,7 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
 
     // ── Historial de despachos (últimos) ──────────────────────────────────────
     if (v.historial.length > 0) {
-      y = checkPage(doc, y, 16, null, 20)
+      y = checkPage(doc, y, 16, null, doc.internal.getNumberOfPages() === 1 ? 35 : 20)
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(8.5)
       doc.setTextColor(...C_DARK)
@@ -591,7 +606,7 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
       y = drawTableHeader(doc, hCols, y)
 
       v.historial.slice(0, 10).forEach((h, hi) => {
-        y = checkPage(doc, y, 7.5, null, 20)
+        y = checkPage(doc, y, 7.5, null, doc.internal.getNumberOfPages() === 1 ? 35 : 20)
         if (hi % 2 === 0) {
           doc.setFillColor(252, 252, 253)
           doc.rect(MARGIN, y - 1, CONTENT_W, 6.5, 'F')
@@ -630,19 +645,7 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
   } // Fin if individual/completo
 
   // ═══ FOOTER EN TODAS LAS PÁGINAS ════════════════════════════════════════════
-  const totalPages = doc.internal.getNumberOfPages()
-  for (let p = 1; p <= totalPages; p++) {
-    doc.setPage(p)
-    doc.setDrawColor(...C_PRIMARY)
-    doc.setLineWidth(0.5)
-    doc.line(MARGIN, PAGE_H - 15, MARGIN + CONTENT_W, PAGE_H - 15)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(6)
-    doc.setTextColor(...C_GRAY)
-    doc.text(nombreNeg, MARGIN, PAGE_H - 10)
-    doc.text(`Generado: ${new Date().toLocaleString('es-VE')} — CONFIDENCIAL`, MARGIN, PAGE_H - 6)
-    doc.text(`Página ${p} de ${totalPages}`, PAGE_W - MARGIN, PAGE_H - 10, { align: 'right' })
-  }
+  drawPremiumFooter(doc, config, [255, 255, 255], [0, 0, 0], [0, 0, 0], `Generado: ${new Date().toLocaleString('es-VE')} — CONFIDENCIAL`)
 
   let safeName = `Reporte_Vendedores_${periodo.from ?? ''}_${periodo.to ?? ''}.pdf`
   if (tipo === 'individual' && listToUse.length > 0) {

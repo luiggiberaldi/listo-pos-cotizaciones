@@ -2,11 +2,12 @@
 // Genera PDF profesional de Reporte de Comisiones — formato Construacero Carabobo
 import { jsPDF } from 'jspdf'
 import { cargarLogo } from './pdfLogo'
+import { LOGO_LISTA_PRECIOS } from './logoListaPreciosBase64'
 import {
   PAGE_W, PAGE_H, MARGIN, CONTENT_W,
   C_PRIMARY, C_DARK, C_WHITE, C_EMERALD, C_AMBER, C_GRAY,
   fmtUsd, fmtBs, fmtFecha, fmtFechaCorta,
-  hexToRgb, drawWatermark, checkPage, drawSimplifiedHeader, drawPremiumHeader
+  hexToRgb, drawWatermark, checkPage, drawSimplifiedHeader, drawPremiumHeader, drawPremiumFooter
 } from './pdfShared'
 
 // ─── Generar Reporte de Comisiones ───────────────────────────────────────────
@@ -15,14 +16,14 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
   let y = 0
 
-  const logoData = await cargarLogo(config.logo_url)
+  const logoData = LOGO_LISTA_PRECIOS
 
   const handlePageAdd = (d) => {
     let rightTitle = 'Reporte de Comisiones'
     if (tipoVendedor === 'internos') rightTitle = 'Comisiones (Vendedores Internos)'
     else if (tipoVendedor === 'externos') rightTitle = 'Comisiones (Vendedores Externos)'
     else if (vendedor) rightTitle = `Comisiones - ${vendedor.nombre}`
-    return drawSimplifiedHeader(d, logoData, config, rightTitle)
+    return drawSimplifiedHeader(d, logoData, config, rightTitle, [255, 255, 255], [0, 0, 0])
   }
 
   function drawStatusBadge(d, estado, x, y, w, h) {
@@ -170,7 +171,13 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
     logoData,
     config,
     title: subTitleText,
-    subtitle: subHeaderDate
+    subtitle: subHeaderDate,
+    customBgColor:       [255, 255, 255],
+    customAccentColor:   [0, 0, 0],
+    customTextColor:     [0, 0, 0],
+    customSubtitleColor: [0, 0, 0],
+    customBorderColor:   [0, 0, 0],
+    centerBusinessName:  true
   })
 
   // Watermark
@@ -800,23 +807,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
   // ══════════════════════════════════════════════════════════════════════════
   // 7. FOOTER
   // ══════════════════════════════════════════════════════════════════════════
-  const totalPages = doc.internal.getNumberOfPages()
-  for (let p = 1; p <= totalPages; p++) {
-    doc.setPage(p)
-    // Línea footer
-    doc.setDrawColor(...C_PRIMARY)
-    doc.setLineWidth(0.5)
-    doc.line(MARGIN, PAGE_H - 15, MARGIN + CONTENT_W, PAGE_H - 15)
-    // Texto
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(6)
-    doc.setTextColor(...C_GRAY)
-    let fn1 = config.nombre_negocio || 'Construacero Carabobo C.A.'
-    if (fn1.trim().toUpperCase() === 'PRUEBA' || fn1.trim() === '') fn1 = 'Construacero Carabobo C.A.'
-    doc.text(fn1, MARGIN, PAGE_H - 10)
-    doc.text(`Generado: ${new Date().toLocaleString('es-VE')}`, MARGIN, PAGE_H - 6)
-    doc.text(`Página ${p} de ${totalPages}`, PAGE_W - MARGIN, PAGE_H - 10, { align: 'right' })
-  }
+  drawPremiumFooter(doc, config, [255, 255, 255], [0, 0, 0], [0, 0, 0])
 
   // Guardar o Imprimir
   const suffix = tipoVendedor ? `_${tipoVendedor}` : ''
@@ -856,7 +847,14 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
   let y = 0
 
-  const logoData = await cargarLogo(config.logo_url)
+  const logoData = LOGO_LISTA_PRECIOS
+
+  const originalAddPage = doc.addPage.bind(doc)
+  doc.addPage = function(...args) {
+    originalAddPage(...args)
+    drawWatermark(doc)
+    drawSimplifiedHeader(doc, logoData, config, 'Reporte Ventas (Cont.)', [255, 255, 255], [0, 0, 0])
+  }
 
   let labelTitle = 'Reporte de Ventas';
   if (reporte.tipoFiltro === 'internos') {
@@ -881,7 +879,13 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
     logoData,
     config,
     title: labelTitle,
-    subtitle: `${rango.from} — ${rango.to}`
+    subtitle: `${rango.from} — ${rango.to}`,
+    customBgColor:       [255, 255, 255],
+    customAccentColor:   [0, 0, 0],
+    customTextColor:     [0, 0, 0],
+    customSubtitleColor: [0, 0, 0],
+    customBorderColor:   [0, 0, 0],
+    centerBusinessName:  true
   })
 
   // Watermark
@@ -1483,21 +1487,7 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
   // ══════════════════════════════════════════════════════════════════════════
   // 7. FOOTER
   // ══════════════════════════════════════════════════════════════════════════
-  const totalPages = doc.internal.getNumberOfPages()
-  for (let p = 1; p <= totalPages; p++) {
-    doc.setPage(p)
-    doc.setDrawColor(...C_PRIMARY)
-    doc.setLineWidth(0.5)
-    doc.line(MARGIN, PAGE_H - 15, MARGIN + CONTENT_W, PAGE_H - 15)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(6)
-    doc.setTextColor(...C_GRAY)
-    let fn2 = config.nombre_negocio || 'Construacero Carabobo C.A.'
-    if (fn2.trim().toUpperCase() === 'PRUEBA' || fn2.trim() === '') fn2 = 'Construacero Carabobo C.A.'
-    doc.text(fn2, MARGIN, PAGE_H - 10)
-    doc.text(`Generado: ${new Date().toLocaleString('es-VE')}`, MARGIN, PAGE_H - 6)
-    doc.text(`Página ${p} de ${totalPages}`, PAGE_W - MARGIN, PAGE_H - 10, { align: 'right' })
-  }
+  drawPremiumFooter(doc, config, [255, 255, 255], [0, 0, 0], [0, 0, 0])
 
   let dynamicFilename = `Reporte_Ventas_${rango.from}_${rango.to}.pdf`;
   if (reporte.tipoFiltro === 'internos') {

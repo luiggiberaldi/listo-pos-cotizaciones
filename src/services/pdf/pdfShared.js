@@ -348,3 +348,129 @@ export function drawPremiumHeader({
   return HDR_H + 6
 }
 
+/**
+ * Dibuja el pie de página premium con el formato de la lista de precios (diagonales, dirección, contacto e iconos).
+ */
+export function drawPremiumFooter(doc, config, customBgColor = [255, 255, 255], customAccentColor = [0, 0, 0], customTextColor = [0, 0, 0], extraText = '') {
+  const totalPages = doc.internal.getNumberOfPages()
+  const ph = PAGE_H
+  const pw = PAGE_W
+
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p)
+
+    if (p === 1) {
+      // Franja superior con las diagonales
+      const hazardY = ph - 30
+      doc.setFillColor(...customAccentColor)
+      doc.rect(0, hazardY, pw, 4, 'F')
+
+      doc.setDrawColor(...customBgColor)
+      doc.setLineWidth(0.8)
+      for (let k = 1; k < 20; k++) {
+        doc.line(k * 4, hazardY, k * 4 - 3, hazardY + 4)
+        doc.line(pw - k * 4, hazardY, pw - k * 4 + 3, hazardY + 4)
+      }
+
+      // Franja principal
+      doc.setFillColor(...customBgColor)
+      doc.rect(0, ph - 29, pw, 29, 'F')
+
+      // Borde superior sutil para separar del contenido
+      doc.setLineWidth(0.3)
+      doc.setDrawColor(...customAccentColor)
+      doc.line(0, ph - 29, pw, ph - 29)
+
+      // Pin ubicación + dirección
+      doc.setFillColor(...customTextColor)
+      doc.setDrawColor(...customTextColor)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8.5)
+      doc.setTextColor(...customTextColor)
+
+      const addr1 = 'Av. 76, (Calle S-3) Nro. 70-C-766, Local Galpón Nro. 3 Edificio Centro Industrial Massico II'
+      const addr2 = 'Parcela MB-6 y Mb7, Urb. Industrial Aeropuerto Vía Flor Amarillo, Valencia, Edo. Carabobo, Zona Postal 2003'
+
+      const addr1W = doc.getTextWidth(addr1)
+      const addr1X = pw / 2 - addr1W / 2
+      const pinX = addr1X - 4
+      const pinY = ph - 21
+      doc.circle(pinX, pinY - 0.3, 1.4, 'F')
+      doc.triangle(pinX - 1.2, pinY, pinX + 1.2, pinY, pinX, pinY + 2.4, 'F')
+
+      doc.text(addr1, pw / 2, ph - 19.5, { align: 'center' })
+      doc.setFont('helvetica', 'normal')
+      doc.text(addr2, pw / 2, ph - 15, { align: 'center' })
+
+      const tel = fmtTelefono(config.telefono_negocio) || ''
+      const email = config.email_negocio || ''
+      if (tel && tel !== '—' || email) {
+        const parts = []
+        if (tel && tel !== '—') parts.push({ icon: 'phone', text: tel })
+        if (email) parts.push({ icon: 'mail', text: email })
+
+        doc.setFont('helvetica', 'normal')
+        const gap = 12
+        let totalW = 0
+        parts.forEach((part, idx) => {
+          totalW += 5 + doc.getTextWidth(part.text)
+          if (idx < parts.length - 1) totalW += gap
+        })
+
+        let cx = pw / 2 - totalW / 2
+        const cy = ph - 7
+
+        parts.forEach((part, idx) => {
+          doc.setFillColor(...customTextColor)
+          doc.setDrawColor(...customTextColor)
+          if (part.icon === 'phone') {
+             doc.setLineWidth(0.4)
+             doc.roundedRect(cx, cy - 2.2, 1.6, 2.8, 0.3, 0.3, 'S')
+             doc.setLineWidth(0.3)
+             doc.line(cx + 0.3, cy + 0.2, cx + 1.3, cy + 0.2)
+          } else {
+             doc.setLineWidth(0.3)
+             doc.rect(cx, cy - 1.8, 2.4, 1.8, 'S')
+             doc.line(cx, cy - 1.8, cx + 1.2, cy - 0.6)
+             doc.line(cx + 2.4, cy - 1.8, cx + 1.2, cy - 0.6)
+          }
+          doc.setTextColor(...customTextColor)
+          doc.text(part.text, cx + 4, cy)
+          cx += 5 + doc.getTextWidth(part.text) + gap
+        })
+      }
+
+      if (extraText) {
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(6)
+        doc.setTextColor(...customTextColor)
+        doc.text(extraText, MARGIN, ph - 4)
+      }
+
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(6)
+      doc.setTextColor(...customTextColor)
+      doc.text(`Página ${p} de ${totalPages}`, pw - 10, ph - 4, { align: 'right' })
+    } else {
+      // Footer simplificado para páginas > 1
+      const fHeight = 8
+      doc.setFillColor(...customBgColor)
+      doc.rect(0, ph - fHeight, pw, fHeight, 'F')
+      
+      doc.setFillColor(...customAccentColor)
+      doc.rect(0, ph - fHeight - 1.5, pw, 1.5, 'F')
+
+      if (extraText) {
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(6)
+        doc.setTextColor(...customTextColor)
+        doc.text(extraText, MARGIN, ph - 2.5)
+      }
+
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(6)
+      doc.setTextColor(...customTextColor)
+      doc.text(`Página ${p} de ${totalPages}`, pw - 10, ph - 2.5, { align: 'right' })
+    }
+  }
+}
