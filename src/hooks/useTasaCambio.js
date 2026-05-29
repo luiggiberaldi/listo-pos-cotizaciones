@@ -9,6 +9,7 @@ import useAuthStore from '../store/useAuthStore'
 
 const STORAGEKEY = 'construacero_tasa_v1'
 const STORAGEKEYUSDT = 'construacero_tasa_usdt_v1'
+const STORAGEKEYEURO = 'construacero_tasa_euro_v1'
 const STORAGEKEYMODE_BASE = 'construacero_tasa_modo_v2'
 const STORAGEKEYMANUAL_BASE = 'construacero_tasa_manual'
 const UPDATE_INTERVAL = 5 * 60 * 1000 // 5 minutos
@@ -64,35 +65,65 @@ async function fetchConTimeout(url, timeout = 8000) {
 }
 
 async function _fetchBcvRaw() {
+  let bcvPrice = null
+  let euroPrice = null
+  let fuente = 'BCV Oficial'
+
+  // 1. Google Script (Scraper directo bcv.org.ve)
   try {
     const data = await fetchConTimeout('https://script.google.com/macros/s/AKfycbzUmj0Tug-pa3Y6jLEMT8tijNFvYb4_CLWhBZ0vDW7YsuP-QXjAcelOH5r-Mip3FJ-_7A/exec?token=Lvbp1994', 10000)
-    if (data?.ok && data?.bcv?.price) {
-      const precio = parseSafeFloat(data.bcv.price)
-      if (precio > 0) return { precio, fuente: 'BCV Oficial (GS)' }
+    if (data?.ok) {
+      if (data.bcv?.price) bcvPrice = parseSafeFloat(data.bcv.price)
+      if (data.euro?.price) euroPrice = parseSafeFloat(data.euro.price)
+      if (bcvPrice > 0) {
+        return { usd: bcvPrice, eur: euroPrice || (bcvPrice * 1.165), fuente: 'BCV Oficial (GS)' }
+      }
     }
   } catch { /* intenta siguiente fuente */ }
 
+  // 2. DolarAPI (Dólares + Euros en paralelo)
   try {
-    const data = await fetchConTimeout('https://ve.dolarapi.com/v1/dolares', 8000)
-    if (data && Array.isArray(data)) {
-      const oficial = data.find(d =>
+    const [dataDolar, dataEuro] = await Promise.all([
+      fetchConTimeout('https://ve.dolarapi.com/v1/dolares', 8000),
+      fetchConTimeout('https://ve.dolarapi.com/v1/euros', 8000)
+    ])
+
+    if (dataDolar && Array.isArray(dataDolar)) {
+      const oficial = dataDolar.find(d =>
         d.fuente === 'oficial' || d.nombre === 'Oficial' || d.casa === 'oficial'
       )
-      const precio = parseSafeFloat(oficial?.promedio)
-      if (precio > 0) return { precio, fuente: 'BCV Oficial' }
+      if (oficial?.promedio) bcvPrice = parseSafeFloat(oficial.promedio)
+    }
+
+    if (dataEuro && Array.isArray(dataEuro)) {
+      const oficial = dataEuro.find(d =>
+        d.fuente === 'oficial' || d.nombre === 'Oficial' || d.casa === 'oficial'
+      )
+      if (oficial?.promedio) euroPrice = parseSafeFloat(oficial.promedio)
+    }
+
+    if (bcvPrice > 0) {
+      return { usd: bcvPrice, eur: euroPrice || (bcvPrice * 1.165), fuente: 'BCV Oficial' }
     }
   } catch { /* intenta siguiente fuente */ }
 
+  // 3. PyDolarVE (Dólares con fallback de Euro cruzado)
   try {
     const data = await fetchConTimeout('https://pydolarve.org/api/v1/dollar?monitor=bcv', 8000)
     const precio = parseSafeFloat(data?.price)
-    if (precio > 0) return { precio, fuente: 'BCV Oficial' }
+    if (precio > 0) {
+      return { usd: precio, eur: precio * 1.165, fuente: 'BCV Oficial' }
+    }
   } catch { /* intenta siguiente fuente */ }
 
+  // 4. ExchangeDynamics (Dólares y Euros)
   try {
     const data = await fetchConTimeout('https://api.exchangedynamics.com/rates/VES', 8000)
     const precio = parseSafeFloat(data?.USD)
-    if (precio > 0) return { precio, fuente: 'BCV Oficial' }
+    const eur = parseSafeFloat(data?.EUR)
+    if (precio > 0) {
+      return { usd: precio, eur: eur || (precio * 1.165), fuente: 'BCV Oficial' }
+    }
   } catch { /* sin más fuentes */ }
 
   return null
@@ -171,6 +202,15 @@ export function useTasaCambio() {
     return DEFAULT_RATE
   })
 
+  // Tasa Euro BCV
+  const [tasaEuro, setTasaEuro] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGEKEYEURO))
+      if (saved?.precio > 0) return saved
+    } catch {}
+    return DEFAULT_RATE
+  })
+
   // Modo: 'usdt' | 'manual' (bcv se mantiene internamente pero no como modo visible)
   const [modoTasa, setModoTasa] = useState(() => {
     const saved = localStorage.getItem(STORAGEKEYMODE)
@@ -216,6 +256,7 @@ export function useTasaCambio() {
   const [error, setError] = useState('')
   const tasaRef = useRef(tasaBcv)
   const tasaUsdtRef = useRef(tasaUsdt)
+  const tasaEuroRef = useRef(tasaEuro)
 
   // ID único por pestaña/dispositivo para distinguir eco propio vs cambio ajeno
   const deviceIdRef = useRef(Math.random().toString(36).slice(2, 10))
@@ -252,6 +293,11 @@ export function useTasaCambio() {
   }, [tasaUsdt])
 
   useEffect(() => {
+    tasaEuroRef.current = tasaEuro
+    if (tasaEuro.precio > 0) localStorage.setItem(STORAGEKEYEURO, JSON.stringify(tasaEuro))
+  }, [tasaEuro])
+
+  useEffect(() => {
     if (STORAGEKEYMODE) localStorage.setItem(STORAGEKEYMODE, modoTasa)
   }, [modoTasa, STORAGEKEYMODE])
 
@@ -271,12 +317,25 @@ export function useTasaCambio() {
 
   // Helper: procesar resultado de fetch global
   const handleFetchResult = useCallback(({ bcvData, usdtData, esAutoUpdate }) => {
-    if (bcvData && bcvData.precio > 0) {
-      setTasaBcv({
-        precio: bcvData.precio,
-        fuente: bcvData.fuente,
-        ultimaActualizacion: new Date().toISOString(),
-      })
+    if (bcvData) {
+      const usdVal = bcvData.usd || bcvData.precio || 0
+      const eurVal = bcvData.eur || 0
+
+      if (usdVal > 0) {
+        setTasaBcv({
+          precio: usdVal,
+          fuente: bcvData.fuente,
+          ultimaActualizacion: new Date().toISOString(),
+        })
+      }
+
+      if (eurVal > 0) {
+        setTasaEuro({
+          precio: eurVal,
+          fuente: bcvData.fuente,
+          ultimaActualizacion: new Date().toISOString(),
+        })
+      }
     } else if (!esAutoUpdate && tasaRef.current?.precio <= 0) {
       setError('No se pudo obtener la tasa BCV')
     }
@@ -424,6 +483,7 @@ export function useTasaCambio() {
   return {
     tasaBcv,
     tasaUsdt,
+    tasaEuro,
     tasaEfectiva,
     modoTasa,
     setModoTasa: setModoTasaSync,

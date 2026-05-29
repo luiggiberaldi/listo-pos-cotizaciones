@@ -16,6 +16,7 @@ import { getDayRange, getWeekRange, getMonthRange } from '../utils/dateHelpers'
 import { fmtUsd, fmtBs } from '../utils/format'
 import useAuthStore from '../store/useAuthStore'
 import Skeleton from '../components/ui/Skeleton'
+import { useTasaCambio } from '../hooks/useTasaCambio'
 import EmptyState from '../components/ui/EmptyState'
 import { Modal } from '../components/ui/Modal'
 import DateRangeSelector from '../components/reportes/DateRangeSelector'
@@ -794,6 +795,7 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
 
   const marcar = useMarcarComisionPagada()
   const { perfil } = useAuthStore()
+  const { tasaEuro } = useTasaCambio()
   const esAdmin = perfil?.rol === 'administracion'
   const esJefe = perfil?.rol === 'jefe'
   const esDev = perfil?.rol === 'desarrollador'
@@ -860,7 +862,7 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
     }
   }
 
-  const tasaComision = (item) => Number(item.despacho?.tasa_snapshot || item.cotizacion?.tasa_bcv_snapshot || 0)
+  const tasaComision = (item) => tasaEuro?.precio || Number(item.despacho?.tasa_snapshot || item.cotizacion?.tasa_bcv_snapshot || 0)
 
   // Calcular totales del detalle
   const totales = detalle.reduce((acc, item) => {
@@ -924,7 +926,8 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
         rango,
         config: configNeg ?? {},
         action,
-        formato: formatoReporte
+        formato: formatoReporte,
+        tasaEuro: tasaEuro?.precio || 0
       })
     } catch (e) {
       console.error('Error generando PDF individual:', e)
@@ -1104,7 +1107,7 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
                     <th className="px-2 sm:px-4 py-2 font-semibold text-right">{labelCabillaHeader}</th>
                     <th className="px-2 sm:px-4 py-2 font-semibold text-right">Otros</th>
                     <th className="px-2 sm:px-4 py-2 font-semibold text-right">Com. ($)</th>
-                    <th className="px-2 sm:px-4 py-2 font-semibold text-right">Tasa BCV</th>
+                    <th className="px-2 sm:px-4 py-2 font-semibold text-right">Tasa Euro</th>
                     <th className="px-2 sm:px-4 py-2 font-semibold text-right">Com. (Bs)</th>
                     <th className="px-2 sm:px-4 py-2 font-semibold text-center">Estado</th>
                   </tr>
@@ -1272,6 +1275,7 @@ function TabComisiones({ configNeg }) {
   const [filtroEstado, setFiltroEstado] = useState('pendiente') // Inicializado con 'pendiente'
   const [filtroVendedor, setFiltroVendedor] = useState('')
   const [formatoReporte, setFormatoReporte] = useState('detallado') // 'detallado', 'resumido'
+  const { tasaEuro } = useTasaCambio()
   const [exportando, setExportando] = useState(false)
   const [showPrintMenu, setShowPrintMenu] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
@@ -1342,7 +1346,7 @@ function TabComisiones({ configNeg }) {
         }
       }
       const m = Number(c.totalcomision || 0)
-      const tasa = Number(c.despacho?.tasa_snapshot || c.cotizacion?.tasa_bcv_snapshot || 0)
+      const tasa = tasaEuro?.precio || Number(c.despacho?.tasa_snapshot || c.cotizacion?.tasa_bcv_snapshot || 0)
       const mBs = m * tasa
 
       map[vId].totalUsd += m
@@ -1487,7 +1491,8 @@ function TabComisiones({ configNeg }) {
         rango,
         config: configNeg ?? {},
         action: accion === 'imprimir' ? 'print' : 'download',
-        formato: formatoReporte
+        formato: formatoReporte,
+        tasaEuro: tasaEuro?.precio || 0
       })
     } catch (e) {
       console.error('Error generando PDF general:', e)
@@ -1549,7 +1554,8 @@ function TabComisiones({ configNeg }) {
         vendedor: { nombre: vendedor.nombre, color: vendedor.color, markup_pct: vendedor.markup_pct, es_externo: vendedor.es_externo },
         rango,
         config: configNeg ?? {},
-        formato: formatoReporte
+        formato: formatoReporte,
+        tasaEuro: tasaEuro?.precio || 0
       })
     } catch (e) {
       console.error('Error generando PDF individual:', e)
@@ -1624,6 +1630,12 @@ function TabComisiones({ configNeg }) {
                 >Resumido</button>
               </div>
             </div>
+            {tasaEuro?.precio > 0 && (
+              <div className="flex items-center gap-1.5 px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-xl text-indigo-800 text-xs font-bold shrink-0 self-end h-11">
+                <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+                <span>Tasa Euro BCV: <b>{fmtBs(tasaEuro.precio)}</b></span>
+              </div>
+            )}
 
             <div className="flex items-center gap-3 relative shrink-0">
               {/* BOTÓN IMPRIMIR PDF */}

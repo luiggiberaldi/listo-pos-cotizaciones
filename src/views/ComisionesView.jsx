@@ -7,11 +7,12 @@ import { useComisiones, useComisionesResumen, useMarcarComisionPagada } from '..
 import { useVendedores } from '../hooks/useClientes'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import useAuthStore from '../store/useAuthStore'
-import { fmtUsd, fmtFecha } from '../utils/format'
+import { fmtUsd, fmtFecha, fmtBs } from '../utils/format'
 import PageHeader    from '../components/ui/PageHeader'
 import Skeleton      from '../components/ui/Skeleton'
 import EmptyState    from '../components/ui/EmptyState'
 import ConfirmModal  from '../components/ui/ConfirmModal'
+import { useTasaCambio } from '../hooks/useTasaCambio'
 
 // ─── Tarjeta de resumen ───────────────────────────────────────────────────────
 function ResumenCard({ icon: Icon, label, value, sub, gradient, border }) {
@@ -344,6 +345,7 @@ export default function ComisionesView() {
   const [fechaHasta,     setFechaHasta]     = useState('')
   const [page,           setPage]           = useState(1)
   const [formatoReporte, setFormatoReporte] = useState('detallado') // 'detallado', 'resumido'
+  const { tasaEuro } = useTasaCambio()
   const pageSize = 48 // Agrupamos de a 48 para que la cuadrícula sea simétrica (3 col x 16 filas)
 
   const [comisionAPagar, setComisionAPagar] = useState(null)
@@ -421,7 +423,8 @@ export default function ComisionesView() {
         tipoVendedor,
         rango, 
         config: configNeg ?? {},
-        formato: formatoReporte
+        formato: formatoReporte,
+        tasaEuro: tasaEuro?.precio || 0
       })
     } catch (e) { console.error('Error PDF:', e) }
     setExportando(false)
@@ -534,6 +537,13 @@ export default function ComisionesView() {
               <option value="00000000-0000-0000-0000-000000000000">Sin Asignar</option>
               {vendedores.map(v => <option key={v.id} value={v.id}>{v.nombre}</option>)}
             </select>
+          )}
+
+          {tasaEuro?.precio > 0 && (
+            <div className="flex items-center gap-1.5 px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-xl text-indigo-800 text-xs font-bold shrink-0 h-9">
+              <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+              <span>Tasa Euro BCV: <b>{fmtBs(tasaEuro.precio)}</b></span>
+            </div>
           )}
 
           {comisiones.length > 0 && (

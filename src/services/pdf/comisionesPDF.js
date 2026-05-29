@@ -12,7 +12,7 @@ import {
 
 // ─── Generar Reporte de Comisiones ───────────────────────────────────────────
 // ─── Generar Reporte de Comisiones ───────────────────────────────────────────
-export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVendedor = null, resumen = null, rango = null, config = {}, action = 'download', formato = 'detallado' }) {
+export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVendedor = null, resumen = null, rango = null, config = {}, action = 'download', formato = 'detallado', tasaEuro = null }) {
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
   let y = 0
 
@@ -104,6 +104,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
       montopagado: Number(c.despacho_comision_liberada ?? c.montopagado ?? 0),
       // Tasa
       tasa_snapshot: Number(
+        tasaEuro ??
         c.tasa ??
         c.tasa_snapshot ?? 
         c.despacho?.tasa_snapshot ?? 
@@ -302,6 +303,14 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
 
   y += boxH + 4
 
+  if (tasaEuro && Number(tasaEuro) > 0) {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8.5)
+    doc.setTextColor(79, 70, 229) // Indigo 600
+    doc.text(`Tasa de Referencia Euro BCV: ${fmtBs(tasaEuro)}`, MARGIN + 1, y - 1.5)
+    y += 5.5
+  }
+
   // DRAW VISUAL BREAKDOWN BAR (Barra de progreso)
   if (totalGeneral > 0) {
     const barH = 5
@@ -367,7 +376,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
       { label: 'Valor ($)', x: MARGIN + 98, w: 14, align: 'right' },
       { label: '%', x: MARGIN + 112, w: 6, align: 'right' },
       { label: 'Com ($)', x: MARGIN + 118, w: 13, align: 'right' },
-      { label: 'Tasa', x: MARGIN + 131, w: 8, align: 'right' },
+      { label: 'Tasa EUR', x: MARGIN + 131, w: 8, align: 'right' },
       { label: 'Com (Bs)', x: MARGIN + 139, w: 27, align: 'right' },
       { label: 'Estado', x: MARGIN + 166, w: 22, align: 'center' },
     ]
@@ -385,7 +394,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
       { label: 'Otros ($)', x: MARGIN + 78, w: 15, align: 'right' },
       { label: 'Total Com ($)', x: MARGIN + 93, w: 20, align: 'right' },
       { label: 'Abonado ($)', x: MARGIN + 113, w: 20, align: 'right' },
-      { label: 'Tasa', x: MARGIN + 133, w: 8, align: 'right' },
+      { label: 'Tasa EUR', x: MARGIN + 133, w: 8, align: 'right' },
       { label: 'Com. (Bs)', x: MARGIN + 141, w: 27, align: 'right' },
       { label: 'Estado', x: MARGIN + 168, w: 20, align: 'center' },
     ]
