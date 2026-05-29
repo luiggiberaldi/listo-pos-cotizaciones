@@ -142,7 +142,10 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
     return descA.localeCompare(descB);
   };
 
-  const comisionesNorm = (comisiones || []).map(normalizarComision).sort(ordenarPorVendedorYDocumento)
+  const comisionesNorm = (comisiones || [])
+    .map(normalizarComision)
+    .filter(c => c.estado !== 'cta_cobrar')
+    .sort(ordenarPorVendedorYDocumento)
   console.log('[generarComisionesPDF] Comisiones normalizadas para el PDF:', comisionesNorm.map(c => ({
     id: c.id,
     doc: c.despachonumero,
