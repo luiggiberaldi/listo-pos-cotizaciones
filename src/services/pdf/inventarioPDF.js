@@ -3,10 +3,11 @@
 import { jsPDF } from 'jspdf'
 import { cargarLogo } from './pdfLogo'
 import { WATERMARK_LOGO } from './watermarkBase64'
+import { LOGO_LISTA_PRECIOS } from './logoListaPreciosBase64'
 import {
   PAGE_W, PAGE_H, MARGIN, CONTENT_W,
   C_PRIMARY, C_DARK, C_WHITE, C_EMERALD, C_AMBER, C_RED, C_GRAY,
-  drawPremiumHeader, fmtUsd
+  drawPremiumHeader, drawSimplifiedHeader, drawPremiumFooter, checkPage, fmtUsd
 } from './pdfShared'
 
 // ─── Helpers locales ──────────────────────────────────────────────────────────
@@ -14,64 +15,39 @@ function fmtNum(n) {
   return Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
 }
 
-function checkPage(doc, y, needed = 30) {
-  if (y + needed > PAGE_H - 25) {
-    doc.addPage()
-    try {
-      const gState = new doc.GState({ opacity: 0.06 })
-      doc.setGState(gState)
-      doc.addImage(WATERMARK_LOGO, 'PNG', (PAGE_W - 140) / 2, (PAGE_H - 140) / 2, 140, 140)
-      doc.setGState(new doc.GState({ opacity: 1 }))
-    } catch (_) {}
-    return MARGIN + 10
-  }
-  return y
-}
-
 // ─── Dibujar cabecera ────────────────────────────────────────────────────────
 function drawHeader(doc, logoData, config, titulo) {
   return drawPremiumHeader({
     doc,
-    logoData,
+    logoData: LOGO_LISTA_PRECIOS,
     config,
     title: titulo,
-    subtitle: new Date().toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })
+    subtitle: new Date().toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' }),
+    customBgColor:       [255, 255, 255],
+    customAccentColor:   [0, 0, 0],
+    customTextColor:     [0, 0, 0],
+    customSubtitleColor: [0, 0, 0],
+    customBorderColor:   [0, 0, 0],
+    centerBusinessName:  true
   })
-}
-
-// ─── Dibujar footer en todas las páginas ─────────────────────────────────────
-function drawFooter(doc, config) {
-  const totalPages = doc.internal.getNumberOfPages()
-  for (let p = 1; p <= totalPages; p++) {
-    doc.setPage(p)
-    doc.setDrawColor(...C_PRIMARY)
-    doc.setLineWidth(0.5)
-    doc.line(MARGIN, PAGE_H - 15, MARGIN + CONTENT_W, PAGE_H - 15)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(6)
-    doc.setTextColor(...C_GRAY)
-    let footName = config.nombre_negocio || 'Construacero Carabobo C.A.'
-    if (footName.trim().toUpperCase() === 'PRUEBA' || footName.trim() === '') footName = 'Construacero Carabobo C.A.'
-    doc.text(footName, MARGIN, PAGE_H - 10)
-    doc.text(`Generado: ${new Date().toLocaleString('es-VE')}`, MARGIN, PAGE_H - 6)
-    doc.text(`Página ${p} de ${totalPages}`, PAGE_W - MARGIN, PAGE_H - 10, { align: 'right' })
-  }
 }
 
 // ─── Generar Reporte de Inventario ──────────────────────────────────────────
 export async function generarInventarioPDF({ reporte, config = {} }) {
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
-  const logoData = await cargarLogo(config.logo_url)
+  const logoData = LOGO_LISTA_PRECIOS
+
+  const originalAddPage = doc.addPage.bind(doc)
+  doc.addPage = function(...args) {
+    originalAddPage(...args)
+    drawWatermark(doc)
+    drawSimplifiedHeader(doc, logoData, config, 'Inventario (Cont.)', [255, 255, 255], [0, 0, 0])
+  }
 
   let y = drawHeader(doc, logoData, config, 'Inventario Valorizado')
 
   // Watermark
-  try {
-    const gState = new doc.GState({ opacity: 0.06 })
-    doc.setGState(gState)
-    doc.addImage(WATERMARK_LOGO, 'PNG', (PAGE_W - 140) / 2, (PAGE_H - 140) / 2, 140, 140)
-    doc.setGState(new doc.GState({ opacity: 1 }))
-  } catch (_) {}
+  drawWatermark(doc)
 
   const { kpis, items, productosBajoStock, productosSinMov90, porCategoria } = reporte
 
@@ -138,7 +114,7 @@ export async function generarInventarioPDF({ reporte, config = {} }) {
   y = drawCatHeader(y)
 
   porCategoria.forEach((cat, idx) => {
-    y = checkPage(doc, y, 8)
+    y = checkPage(doc, y, 8, null, doc.internal.getNumberOfPages() === 1 ? 35 : 20)
     if (y < MARGIN + 12) y = drawCatHeader(y)
 
     if (idx % 2 === 0) {
@@ -191,7 +167,7 @@ export async function generarInventarioPDF({ reporte, config = {} }) {
 
   // ═══ Productos con Stock Bajo ═══
   if (productosBajoStock.length > 0) {
-    y = checkPage(doc, y, 20)
+    y = checkPage(doc, y, 20, null, doc.internal.getNumberOfPages() === 1 ? 35 : 20)
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(9)
     doc.setTextColor(...C_RED)
@@ -216,7 +192,7 @@ export async function generarInventarioPDF({ reporte, config = {} }) {
     y += 9
 
     productosBajoStock.slice(0, 30).forEach((p, idx) => {
-      y = checkPage(doc, y, 7)
+      y = checkPage(doc, y, 7, null, doc.internal.getNumberOfPages() === 1 ? 35 : 20)
       if (idx % 2 === 0) {
         doc.setFillColor(255, 249, 249)
         doc.rect(MARGIN, y - 1, CONTENT_W, 6, 'F')
@@ -265,7 +241,7 @@ export async function generarInventarioPDF({ reporte, config = {} }) {
     y += 9
 
     productosSinMov90.sort((a, b) => b.valorVenta - a.valorVenta).slice(0, 30).forEach((p, idx) => {
-      y = checkPage(doc, y, 7)
+      y = checkPage(doc, y, 7, null, doc.internal.getNumberOfPages() === 1 ? 35 : 20)
       if (idx % 2 === 0) {
         doc.setFillColor(255, 252, 245)
         doc.rect(MARGIN, y - 1, CONTENT_W, 6, 'F')
@@ -285,6 +261,6 @@ export async function generarInventarioPDF({ reporte, config = {} }) {
     })
   }
 
-  drawFooter(doc, config)
+  drawPremiumFooter(doc, config, [255, 255, 255], [0, 0, 0], [0, 0, 0])
   doc.save(`Inventario_Valorizado_${new Date().toISOString().slice(0, 10)}.pdf`)
 }

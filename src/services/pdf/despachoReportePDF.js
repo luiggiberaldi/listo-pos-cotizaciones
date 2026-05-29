@@ -2,11 +2,12 @@
 // Genera PDF profesional de Reporte de Despachos y Cobranza — formato Construacero Carabobo
 import { jsPDF } from 'jspdf'
 import { cargarLogo } from './pdfLogo'
+import { LOGO_LISTA_PRECIOS } from './logoListaPreciosBase64'
 import {
   PAGE_W, PAGE_H, MARGIN, CONTENT_W,
   C_PRIMARY, C_DARK, C_WHITE, C_EMERALD, C_AMBER, C_RED, C_GRAY,
   fmtUsd,
-  hexToRgb, drawWatermark, checkPage, drawPremiumHeader,
+  hexToRgb, drawWatermark, checkPage, drawPremiumHeader, drawSimplifiedHeader, drawPremiumFooter,
 } from './pdfShared'
 
 // ─── Colores específicos de este reporte ────────────────────────────────────
@@ -33,7 +34,15 @@ const FP_COLORS = {
 // ─── Generar Reporte de Despachos ───────────────────────────────────────────
 export async function generarDespachoReportePDF({ reporte, rango, config = {} }) {
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
-  const logoData = await cargarLogo(config.logo_url)
+  const logoData = LOGO_LISTA_PRECIOS
+
+  const originalAddPage = doc.addPage.bind(doc)
+  doc.addPage = function(...args) {
+    originalAddPage(...args)
+    drawWatermark(doc)
+    drawSimplifiedHeader(doc, logoData, config, 'Despachos y Cobranza (Cont.)', [255, 255, 255], [0, 0, 0])
+  }
+
   let y = 0
 
   // ═══ CABECERA ═══
@@ -42,7 +51,13 @@ export async function generarDespachoReportePDF({ reporte, rango, config = {} })
     logoData,
     config,
     title: 'Despachos y Cobranza',
-    subtitle: `${rango.from} — ${rango.to}`
+    subtitle: `${rango.from} — ${rango.to}`,
+    customBgColor:       [255, 255, 255],
+    customAccentColor:   [0, 0, 0],
+    customTextColor:     [0, 0, 0],
+    customSubtitleColor: [0, 0, 0],
+    customBorderColor:   [0, 0, 0],
+    centerBusinessName:  true
   })
 
   // Watermark
@@ -89,7 +104,7 @@ export async function generarDespachoReportePDF({ reporte, rango, config = {} })
   const totalDesp = porEstado.reduce((s, e) => s + e.count, 0) || 1
   porEstado.forEach(e => {
     if (e.count === 0) return
-    y = checkPage(doc, y, 10)
+    y = checkPage(doc, y, 10, null, doc.internal.getNumberOfPages() === 1 ? 35 : 20)
     const pct = ((e.count / totalDesp) * 100).toFixed(1)
     const eColor = ESTADO_COLORS[e.estado] || C_GRAY
 
@@ -130,7 +145,7 @@ export async function generarDespachoReportePDF({ reporte, rango, config = {} })
 
     const fpTotal = porFormaPago.reduce((s, fp) => s + fp.totalUsd, 0)
     porFormaPago.forEach(fp => {
-      y = checkPage(doc, y, 10)
+      y = checkPage(doc, y, 10, null, doc.internal.getNumberOfPages() === 1 ? 35 : 20)
       const pct = fpTotal > 0 ? ((fp.totalUsd / fpTotal) * 100).toFixed(1) : '0.0'
       const color = FP_COLORS[fp.formaPago] || C_GRAY
 
@@ -290,22 +305,7 @@ export async function generarDespachoReportePDF({ reporte, rango, config = {} })
     })
   }
 
-  // ═══ FOOTER ═══
-  const totalPages = doc.internal.getNumberOfPages()
-  for (let p = 1; p <= totalPages; p++) {
-    doc.setPage(p)
-    doc.setDrawColor(...C_PRIMARY)
-    doc.setLineWidth(0.5)
-    doc.line(MARGIN, PAGE_H - 15, MARGIN + CONTENT_W, PAGE_H - 15)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(6)
-    doc.setTextColor(...C_GRAY)
-    let footName = config.nombre_negocio || 'Construacero Carabobo C.A.'
-    if (footName.trim().toUpperCase() === 'PRUEBA' || footName.trim() === '') footName = 'Construacero Carabobo C.A.'
-    doc.text(footName, MARGIN, PAGE_H - 10)
-    doc.text(`Generado: ${new Date().toLocaleString('es-VE')}`, MARGIN, PAGE_H - 6)
-    doc.text(`Página ${p} de ${totalPages}`, PAGE_W - MARGIN, PAGE_H - 10, { align: 'right' })
-  }
+  drawPremiumFooter(doc, config, [255, 255, 255], [0, 0, 0], [0, 0, 0])
 
   doc.save(`Despachos_Cobranza_${rango.from}_${rango.to}.pdf`)
 }
