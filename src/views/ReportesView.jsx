@@ -1571,201 +1571,208 @@ function TabComisiones({ configNeg }) {
   return (
     <div className="space-y-4">
       {/* Filtros */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="flex flex-col gap-6">
+      <div className="bg-white px-4 py-3 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex flex-col gap-3.5">
           {/* Fila Superior: Periodo (con mucho espacio) */}
           <div className="w-full">
-            <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-2 block tracking-wider">Rango de Periodo</label>
+            <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">Rango de Periodo</label>
             <DateRangeSelector value={rango} onChange={setRango} />
           </div>
 
           {/* Fila Inferior: Otros Filtros y Acciones */}
-          <div className="flex flex-wrap lg:flex-nowrap items-end gap-4 border-t border-slate-50 pt-4">
-            {esAdmin && (
-              <div className="flex-1 min-w-[200px]">
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">Vendedor</label>
-                <select
-                  value={filtroVendedor}
-                  onChange={e => setFiltroVendedor(e.target.value)}
-                  className="w-full h-11 px-4 rounded-xl border border-slate-200 text-sm font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none bg-slate-50/50 appearance-none cursor-pointer hover:border-indigo-300 transition-all"
-                >
-                  <option value="">Todos los Asesores</option>
-                  {vendedoresDisponibles.map(v => (
-                    <option key={v.id} value={v.id}>{v.nombre}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            <div className="flex-1 min-w-[240px]">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">Estado de Comisión</label>
-              <div className="flex p-1 bg-slate-100/80 rounded-xl h-11">
-                <button
-                  onClick={() => setFiltroEstado('')}
-                  className={`flex-1 text-xs font-black rounded-lg transition-all ${!filtroEstado ? 'bg-white shadow-md text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
-                >Todas</button>
-                <button
-                  onClick={() => setFiltroEstado('pendiente')}
-                  className={`flex-1 text-xs font-black rounded-lg transition-all ${filtroEstado === 'pendiente' ? 'bg-white shadow-md text-amber-600' : 'text-slate-500 hover:text-slate-700'}`}
-                >Pendientes</button>
-                <button
-                  onClick={() => setFiltroEstado('pagada')}
-                  className={`flex-1 text-xs font-black rounded-lg transition-all ${filtroEstado === 'pagada' ? 'bg-white shadow-md text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}
-                >Pagadas</button>
-              </div>
-            </div>
-
-            <div className="flex-1 min-w-[200px]">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">Formato Reporte</label>
-              <div className="flex p-1 bg-slate-100/80 rounded-xl h-11">
-                <button
-                  type="button"
-                  onClick={() => setFormatoReporte('detallado')}
-                  className={`flex-1 text-xs font-black rounded-lg transition-all ${formatoReporte === 'detallado' ? 'bg-white shadow-md text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
-                >Detallado</button>
-                <button
-                  type="button"
-                  onClick={() => setFormatoReporte('resumido')}
-                  className={`flex-1 text-xs font-black rounded-lg transition-all ${formatoReporte === 'resumido' ? 'bg-white shadow-md text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
-                >Resumido</button>
-              </div>
-            </div>
-            {tasaEuro?.precio > 0 && (
-              <div className="flex items-center gap-1.5 px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-xl text-indigo-800 text-xs font-bold shrink-0 self-end h-11">
-                <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
-                <span>Tasa Euro BCV: <b>{fmtBs(tasaEuro.precio)}</b></span>
-              </div>
-            )}
-
-            <div className="flex items-center gap-3 relative shrink-0">
-              {/* BOTÓN IMPRIMIR PDF */}
-              <div className="relative">
-                {filtroVendedor ? (
-                  <button
-                    onClick={() => exportarPDF('todos', 'imprimir')}
-                    disabled={exportando || comisiones.length === 0}
-                    className="flex items-center gap-2 text-xs font-black px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm h-11"
+          <div className="flex flex-wrap items-end gap-3 border-t border-slate-50 pt-3 w-full justify-between">
+            {/* Grupo de Filtros */}
+            <div className="flex flex-wrap items-end gap-3">
+              {esAdmin && (
+                <div className="w-52">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">Vendedor</label>
+                  <select
+                    value={filtroVendedor}
+                    onChange={e => setFiltroVendedor(e.target.value)}
+                    className="w-full h-9 px-3 rounded-xl border border-slate-200 text-xs font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none bg-slate-50/50 appearance-none cursor-pointer hover:border-indigo-300 transition-all"
                   >
-                    <Printer size={13} className="text-slate-500" />
-                    {exportando ? 'Generando...' : 'Imprimir PDF'}
-                  </button>
-                ) : (
-                  <>
+                    <option value="">Todos los Asesores</option>
+                    {vendedoresDisponibles.map(v => (
+                      <option key={v.id} value={v.id}>{v.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="w-60">
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">Estado de Comisión</label>
+                <div className="flex p-0.5 bg-slate-100/80 rounded-xl h-9">
+                  <button
+                    onClick={() => setFiltroEstado('')}
+                    className={`flex-1 text-[11px] font-bold rounded-lg transition-all ${!filtroEstado ? 'bg-white shadow-md text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                  >Todas</button>
+                  <button
+                    onClick={() => setFiltroEstado('pendiente')}
+                    className={`flex-1 text-[11px] font-bold rounded-lg transition-all ${filtroEstado === 'pendiente' ? 'bg-white shadow-md text-amber-600' : 'text-slate-500 hover:text-slate-700'}`}
+                  >Pendientes</button>
+                  <button
+                    onClick={() => setFiltroEstado('pagada')}
+                    className={`flex-1 text-[11px] font-bold rounded-lg transition-all ${filtroEstado === 'pagada' ? 'bg-white shadow-md text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}
+                  >Pagadas</button>
+                </div>
+              </div>
+
+              <div className="w-44">
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">Formato Reporte</label>
+                <div className="flex p-0.5 bg-slate-100/80 rounded-xl h-9">
+                  <button
+                    type="button"
+                    onClick={() => setFormatoReporte('detallado')}
+                    className={`flex-1 text-[11px] font-bold rounded-lg transition-all ${formatoReporte === 'detallado' ? 'bg-white shadow-md text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                  >Detallado</button>
+                  <button
+                    type="button"
+                    onClick={() => setFormatoReporte('resumido')}
+                    className={`flex-1 text-[11px] font-bold rounded-lg transition-all ${formatoReporte === 'resumido' ? 'bg-white shadow-md text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                  >Resumido</button>
+                </div>
+              </div>
+            </div>
+
+            {/* Grupo de Acciones y Tasa Euro */}
+            <div className="flex flex-wrap items-center gap-2.5 ml-auto shrink-0 self-end">
+              {tasaEuro?.precio > 0 && (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 border border-indigo-100 rounded-xl text-indigo-800 text-[11px] font-bold shrink-0 h-9">
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                  <span>Tasa Euro BCV: <b>{fmtBs(tasaEuro.precio)}</b></span>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2.5 relative shrink-0">
+                {/* BOTÓN IMPRIMIR PDF */}
+                <div className="relative">
+                  {filtroVendedor ? (
                     <button
-                      onClick={() => setShowPrintMenu(!showPrintMenu)}
+                      onClick={() => exportarPDF('todos', 'imprimir')}
                       disabled={exportando || comisiones.length === 0}
-                      className="flex items-center gap-2 text-xs font-black px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm h-11"
+                      className="flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm h-9"
                     >
-                      <Printer size={13} className="text-slate-500" />
+                      <Printer size={12} className="text-slate-500" />
                       {exportando ? 'Generando...' : 'Imprimir PDF'}
-                      <ChevronDown size={13} className={`transition-transform duration-200 ${showPrintMenu ? 'rotate-180' : ''}`} />
                     </button>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => setShowPrintMenu(!showPrintMenu)}
+                        disabled={exportando || comisiones.length === 0}
+                        className="flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm h-9"
+                      >
+                        <Printer size={12} className="text-slate-500" />
+                        {exportando ? 'Generando...' : 'Imprimir PDF'}
+                        <ChevronDown size={12} className={`transition-transform duration-200 ${showPrintMenu ? 'rotate-180' : ''}`} />
+                      </button>
 
-                    {showPrintMenu && (
-                      <>
-                        <div className="fixed inset-0 z-10" onClick={() => setShowPrintMenu(false)} />
-                        <div className="absolute right-0 mt-2 w-56 rounded-xl bg-white border border-slate-200 shadow-xl z-20 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
-                          <button
-                            onClick={() => {
-                              setShowPrintMenu(false)
-                              exportarPDF('todos', 'imprimir')
-                            }}
-                            className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors"
-                          >
-                            <FileText size={14} className="text-slate-400" />
-                            Imprimir PDF Completo
-                          </button>
-                          <button
-                            onClick={() => {
-                              setShowPrintMenu(false)
-                              exportarPDF('internos', 'imprimir')
-                            }}
-                            className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors border-t border-slate-50"
-                          >
-                            <UserCheck size={14} className="text-indigo-500" />
-                            Imprimir Solo Internos
-                          </button>
-                          <button
-                            onClick={() => {
-                              setShowPrintMenu(false)
-                              exportarPDF('externos', 'imprimir')
-                            }}
-                            className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors border-t border-slate-50"
-                          >
-                            <Globe size={14} className="text-amber-500" />
-                            Imprimir Solo Externos
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </>
-                )}
-              </div>
+                      {showPrintMenu && (
+                        <>
+                          <div className="fixed inset-0 z-10" onClick={() => setShowPrintMenu(false)} />
+                          <div className="absolute right-0 mt-1 w-56 rounded-xl bg-white border border-slate-200 shadow-xl z-20 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+                            <button
+                              onClick={() => {
+                                setShowPrintMenu(false)
+                                exportarPDF('todos', 'imprimir')
+                              }}
+                              className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
+                            >
+                              <FileText size={13} className="text-slate-400" />
+                              Imprimir PDF Completo
+                            </button>
+                            <button
+                              onClick={() => {
+                                setShowPrintMenu(false)
+                                exportarPDF('internos', 'imprimir')
+                              }}
+                              className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors border-t border-slate-50"
+                            >
+                              <UserCheck size={13} className="text-indigo-500" />
+                              Imprimir Solo Internos
+                            </button>
+                            <button
+                              onClick={() => {
+                                setShowPrintMenu(false)
+                                exportarPDF('externos', 'imprimir')
+                              }}
+                              className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors border-t border-slate-50"
+                            >
+                              <Globe size={13} className="text-amber-500" />
+                              Imprimir Solo Externos
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
 
-              {/* BOTÓN DESCARGAR PDF */}
-              <div className="relative">
-                {filtroVendedor ? (
-                  <button
-                    onClick={() => exportarPDF('todos', 'descargar')}
-                    disabled={exportando || comisiones.length === 0}
-                    className="flex items-center gap-2 text-xs font-black px-5 py-2.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-lg shadow-indigo-100/40 h-11"
-                    style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
-                  >
-                    <Download size={13} />
-                    {exportando ? 'Generando...' : 'Descargar PDF'}
-                  </button>
-                ) : (
-                  <>
+                {/* BOTÓN DESCARGAR PDF */}
+                <div className="relative">
+                  {filtroVendedor ? (
                     <button
-                      onClick={() => setShowExportMenu(!showExportMenu)}
+                      onClick={() => exportarPDF('todos', 'descargar')}
                       disabled={exportando || comisiones.length === 0}
-                      className="flex items-center gap-2 text-xs font-black px-5 py-2.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-lg shadow-indigo-100/40 h-11"
+                      className="flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md h-9"
                       style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
                     >
-                      <Download size={13} />
+                      <Download size={12} />
                       {exportando ? 'Generando...' : 'Descargar PDF'}
-                      <ChevronDown size={13} className={`transition-transform duration-200 ${showExportMenu ? 'rotate-180' : ''}`} />
                     </button>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => setShowExportMenu(!showExportMenu)}
+                        disabled={exportando || comisiones.length === 0}
+                        className="flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md h-9"
+                        style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
+                      >
+                        <Download size={12} />
+                        {exportando ? 'Generando...' : 'Descargar PDF'}
+                        <ChevronDown size={12} className={`transition-transform duration-200 ${showExportMenu ? 'rotate-180' : ''}`} />
+                      </button>
 
-                    {showExportMenu && (
-                      <>
-                        <div className="fixed inset-0 z-10" onClick={() => setShowExportMenu(false)} />
-                        <div className="absolute right-0 mt-2 w-56 rounded-xl bg-white border border-slate-200 shadow-xl z-20 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
-                          <button
-                            onClick={() => {
-                              setShowExportMenu(false)
-                              exportarPDF('todos', 'descargar')
-                            }}
-                            className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors"
-                          >
-                            <FileText size={14} className="text-slate-400" />
-                            Descargar PDF Completo
-                          </button>
-                          <button
-                            onClick={() => {
-                              setShowExportMenu(false)
-                              exportarPDF('internos', 'descargar')
-                            }}
-                            className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors border-t border-slate-50"
-                          >
-                            <UserCheck size={14} className="text-indigo-500" />
-                            Descargar Solo Internos
-                          </button>
-                          <button
-                            onClick={() => {
-                              setShowExportMenu(false)
-                              exportarPDF('externos', 'descargar')
-                            }}
-                            className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors border-t border-slate-50"
-                          >
-                            <Globe size={14} className="text-amber-500" />
-                            Descargar Solo Externos
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </>
-                )}
+                      {showExportMenu && (
+                        <>
+                          <div className="fixed inset-0 z-10" onClick={() => setShowExportMenu(false)} />
+                          <div className="absolute right-0 mt-1 w-56 rounded-xl bg-white border border-slate-200 shadow-xl z-20 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+                            <button
+                              onClick={() => {
+                                setShowExportMenu(false)
+                                exportarPDF('todos', 'descargar')
+                              }}
+                              className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
+                            >
+                              <FileText size={13} className="text-slate-400" />
+                              Descargar PDF Completo
+                            </button>
+                            <button
+                              onClick={() => {
+                                setShowExportMenu(false)
+                                exportarPDF('internos', 'descargar')
+                              }}
+                              className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors border-t border-slate-50"
+                            >
+                              <UserCheck size={13} className="text-indigo-500" />
+                              Descargar Solo Internos
+                            </button>
+                            <button
+                              onClick={() => {
+                                setShowExportMenu(false)
+                                exportarPDF('externos', 'descargar')
+                              }}
+                              className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors border-t border-slate-50"
+                            >
+                              <Globe size={13} className="text-amber-500" />
+                              Descargar Solo Externos
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </div>
