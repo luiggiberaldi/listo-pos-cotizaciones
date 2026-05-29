@@ -371,11 +371,11 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
   if (esDetallado) {
     cols = [
       { label: 'Fecha', x: MARGIN, w: 12 },
-      { label: 'Doc / Cliente', x: MARGIN + 12, w: 32 },
-      { label: 'Producto / Descripción', x: MARGIN + 44, w: 44 },
-      { label: 'Valor ($)', x: MARGIN + 88, w: 16, align: 'right' },
-      { label: '%', x: MARGIN + 104, w: 6, align: 'right' },
-      { label: 'Com ($)', x: MARGIN + 110, w: 16, align: 'right' },
+      { label: 'Doc / Cliente', x: MARGIN + 12, w: 35 },
+      { label: 'Producto / Descripción', x: MARGIN + 47, w: 45 },
+      { label: 'Valor ($)', x: MARGIN + 92, w: 14, align: 'right' },
+      { label: '%', x: MARGIN + 106, w: 6, align: 'right' },
+      { label: 'Com ($)', x: MARGIN + 112, w: 14, align: 'right' },
       { label: 'Tasa EUR', x: MARGIN + 126, w: 15, align: 'right' },
       { label: 'Com (Bs)', x: MARGIN + 141, w: 25, align: 'right' },
       { label: 'Estado', x: MARGIN + 166, w: 22, align: 'center' },
@@ -389,11 +389,11 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
 
     cols = [
       { label: 'Fecha', x: MARGIN, w: 12 },
-      { label: 'Doc / Cliente', x: MARGIN + 12, w: 32 },
-      { label: cabLabel, x: MARGIN + 44, w: 28, align: 'right' },
-      { label: 'Otros ($)', x: MARGIN + 72, w: 15, align: 'right' },
-      { label: 'Total Com ($)', x: MARGIN + 87, w: 20, align: 'right' },
-      { label: 'Abonado ($)', x: MARGIN + 107, w: 18, align: 'right' },
+      { label: 'Doc / Cliente', x: MARGIN + 12, w: 35 },
+      { label: cabLabel, x: MARGIN + 47, w: 28, align: 'right' },
+      { label: 'Otros ($)', x: MARGIN + 75, w: 15, align: 'right' },
+      { label: 'Total Com ($)', x: MARGIN + 90, w: 18, align: 'right' },
+      { label: 'Abonado ($)', x: MARGIN + 108, w: 17, align: 'right' },
       { label: 'Tasa EUR', x: MARGIN + 125, w: 16, align: 'right' },
       { label: 'Com. (Bs)', x: MARGIN + 141, w: 27, align: 'right' },
       { label: 'Estado', x: MARGIN + 168, w: 20, align: 'center' },
@@ -668,7 +668,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
             // Cliente y Documento apilados (Cliente primero)
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(7.5);
-            const maxLen = 22;
+            const maxLen = 18;
             const cliDisplay = (c.clienteNombre || '---').toUpperCase();
             const cliTrunc = cliDisplay.length > maxLen ? cliDisplay.substring(0, maxLen - 2) + '..' : cliDisplay;
             doc.text(cliTrunc, cols[1].x + 1, y + 3.8);
@@ -709,7 +709,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
             // Cliente y Documento apilados (Cliente primero)
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(7.5);
-            const maxLen = 22;
+            const maxLen = 18;
             const cliDisplay = (c.clienteNombre || '---').toUpperCase();
             const cliTrunc = cliDisplay.length > maxLen ? cliDisplay.substring(0, maxLen - 2) + '..' : cliDisplay;
             doc.text(cliTrunc, cols[1].x + 1, y + 3.8);
