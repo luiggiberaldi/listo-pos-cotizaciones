@@ -503,11 +503,11 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
     y += 4.5
     
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9.5)
+    doc.setFontSize(11.5)
     doc.setTextColor(...C_PRIMARY)
     doc.text('TOTAL GENERAL:', MARGIN + 2, y)
     
-    doc.setFontSize(9.0)
+    doc.setFontSize(11.0)
     doc.setTextColor(...C_DARK)
     doc.text(String(totalCant), MARGIN + 85 + 10, y, { align: 'center' })
     doc.text(fmtUsd(totalGen), MARGIN + 105 + 25, y, { align: 'right' })
@@ -940,7 +940,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
 
     // Fila de gran total
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10.0);
+    doc.setFontSize(12.0);
     doc.setTextColor(...C_DARK);
     doc.text('TOTAL GENERAL:', MARGIN + 2, y + 1.5);
     
@@ -1257,7 +1257,7 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
     const totalOtros = rInt.comisionOtros + rExt.comisionOtros;
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
+    doc.setFontSize(11);
     doc.setTextColor(...C_DARK);
     doc.text('TOTAL GENERAL', MARGIN + 7, y + 4.5);
     
