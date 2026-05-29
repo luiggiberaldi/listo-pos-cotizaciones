@@ -6,7 +6,7 @@ import { LOGO_LISTA_PRECIOS } from './logoListaPreciosBase64'
 import {
   PAGE_W, PAGE_H, MARGIN, CONTENT_W,
   C_PRIMARY, C_DARK, C_WHITE, C_EMERALD, C_AMBER, C_GRAY,
-  fmtUsd, fmtBs, fmtFecha, fmtFechaCorta,
+  fmtUsd, fmtBs, fmtBsShort, fmtFecha, fmtFechaCorta,
   hexToRgb, drawWatermark, checkPage, drawSimplifiedHeader, drawPremiumHeader, drawPremiumFooter
 } from './pdfShared'
 
@@ -371,13 +371,13 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
   if (esDetallado) {
     cols = [
       { label: 'Fecha', x: MARGIN, w: 12 },
-      { label: 'Doc / Cliente', x: MARGIN + 12, w: 38 },
-      { label: 'Producto / Descripción', x: MARGIN + 50, w: 48 },
-      { label: 'Valor ($)', x: MARGIN + 98, w: 14, align: 'right' },
-      { label: '%', x: MARGIN + 112, w: 6, align: 'right' },
-      { label: 'Com ($)', x: MARGIN + 118, w: 13, align: 'right' },
-      { label: 'Tasa EUR', x: MARGIN + 131, w: 8, align: 'right' },
-      { label: 'Com (Bs)', x: MARGIN + 139, w: 27, align: 'right' },
+      { label: 'Doc / Cliente', x: MARGIN + 12, w: 32 },
+      { label: 'Producto / Descripción', x: MARGIN + 44, w: 44 },
+      { label: 'Valor ($)', x: MARGIN + 88, w: 16, align: 'right' },
+      { label: '%', x: MARGIN + 104, w: 6, align: 'right' },
+      { label: 'Com ($)', x: MARGIN + 110, w: 16, align: 'right' },
+      { label: 'Tasa EUR', x: MARGIN + 126, w: 15, align: 'right' },
+      { label: 'Com (Bs)', x: MARGIN + 141, w: 25, align: 'right' },
       { label: 'Estado', x: MARGIN + 166, w: 22, align: 'center' },
     ]
   } else {
@@ -389,12 +389,12 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
 
     cols = [
       { label: 'Fecha', x: MARGIN, w: 12 },
-      { label: 'Doc / Cliente', x: MARGIN + 12, w: 38 },
-      { label: cabLabel, x: MARGIN + 50, w: 28, align: 'right' },
-      { label: 'Otros ($)', x: MARGIN + 78, w: 15, align: 'right' },
-      { label: 'Total Com ($)', x: MARGIN + 93, w: 20, align: 'right' },
-      { label: 'Abonado ($)', x: MARGIN + 113, w: 20, align: 'right' },
-      { label: 'Tasa EUR', x: MARGIN + 133, w: 8, align: 'right' },
+      { label: 'Doc / Cliente', x: MARGIN + 12, w: 32 },
+      { label: cabLabel, x: MARGIN + 44, w: 28, align: 'right' },
+      { label: 'Otros ($)', x: MARGIN + 72, w: 15, align: 'right' },
+      { label: 'Total Com ($)', x: MARGIN + 87, w: 20, align: 'right' },
+      { label: 'Abonado ($)', x: MARGIN + 107, w: 18, align: 'right' },
+      { label: 'Tasa EUR', x: MARGIN + 125, w: 16, align: 'right' },
       { label: 'Com. (Bs)', x: MARGIN + 141, w: 27, align: 'right' },
       { label: 'Estado', x: MARGIN + 168, w: 20, align: 'center' },
     ]
@@ -695,7 +695,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
             doc.text(fmtUsd(c.totalcomision), cols[5].x + cols[5].w - 2, y + (rowH / 2) + 0.7, { align: 'right' });
             
             doc.setFont('helvetica', 'normal');
-            doc.text(tasa > 0 ? String(tasa) : 'N/D', cols[6].x + cols[6].w - 2, y + (rowH / 2) + 0.7, { align: 'right' });
+            doc.text(tasa > 0 ? fmtBsShort(tasa) : 'N/D', cols[6].x + cols[6].w - 2, y + (rowH / 2) + 0.7, { align: 'right' });
             
             doc.setFont('helvetica', 'bold');
             doc.text(tasa > 0 ? fmtBs(comBs) : 'N/D', cols[7].x + cols[7].w - 2, y + (rowH / 2) + 0.7, { align: 'right' });
@@ -733,7 +733,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
             doc.setFont('helvetica', 'normal');
             doc.text(c.montopagado > 0 ? fmtUsd(c.montopagado) : '—', cols[5].x + cols[5].w - 2, y + (rowH / 2) + 0.7, { align: 'right' });
             
-            doc.text(tasa > 0 ? String(tasa) : 'N/D', cols[6].x + cols[6].w - 2, y + (rowH / 2) + 0.7, { align: 'right' });
+            doc.text(tasa > 0 ? fmtBsShort(tasa) : 'N/D', cols[6].x + cols[6].w - 2, y + (rowH / 2) + 0.7, { align: 'right' });
             
             doc.setFont('helvetica', 'bold');
             doc.text(tasa > 0 ? fmtBs(comBs) : 'N/D', cols[7].x + cols[7].w - 2, y + (rowH / 2) + 0.7, { align: 'right' });
