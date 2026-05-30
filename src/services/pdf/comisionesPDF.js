@@ -405,19 +405,27 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
     doc.setDrawColor(210, 215, 225)
     doc.setLineWidth(0.3)
     doc.line(MARGIN, yPos, MARGIN + CONTENT_W, yPos)
-    doc.line(MARGIN, yPos + 7, MARGIN + CONTENT_W, yPos + 7)
+    doc.line(MARGIN, yPos + 8, MARGIN + CONTENT_W, yPos + 8)
     
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8.0)
+    doc.setFontSize(7.5)
     doc.setTextColor(80, 90, 110)
     cols.forEach(col => {
       const align = col.align || 'left'
       let posX = col.x + 1
       if (align === 'right') posX = col.x + col.w - 2
       if (align === 'center') posX = col.x + (col.w / 2)
-      doc.text(col.label, posX, yPos + 5, { align })
+      
+      const lines = doc.splitTextToSize(col.label, col.w - 2)
+      if (lines.length > 1) {
+        lines.forEach((line, lineIdx) => {
+          doc.text(line, posX, yPos + 3.2 + (lineIdx * 3.0), { align })
+        })
+      } else {
+        doc.text(col.label, posX, yPos + 5, { align })
+      }
     })
-    return yPos + 9
+    return yPos + 9.5
   }
 
   function dibujarTablaResumida(sellers) {
@@ -940,19 +948,19 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
 
     // Fila de gran total
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12.0);
+    doc.setFontSize(10.0);
     doc.setTextColor(...C_DARK);
-    doc.text('TOTAL GENERAL:', MARGIN + 2, y + 1.5);
+    doc.text('TOTAL GENERAL:', MARGIN + 2, y + 1.2);
     
     if (esDetallado) {
-      doc.text(fmtUsd(sumTotalUsd), cols[5].x + cols[5].w - 2, y + 1.5, { align: 'right' });
-      doc.text(fmtBs(sumTotalBs), cols[7].x + cols[7].w - 2, y + 1.5, { align: 'right' });
+      doc.text(fmtUsd(sumTotalUsd), cols[5].x + cols[5].w - 2, y + 1.2, { align: 'right' });
+      doc.text(fmtBs(sumTotalBs), cols[7].x + cols[7].w - 2, y + 1.2, { align: 'right' });
     } else {
-      doc.text(fmtUsd(sumCabillaUsd), cols[2].x + cols[2].w - 2, y + 1.5, { align: 'right' });
-      doc.text(fmtUsd(sumOtrosUsd), cols[3].x + cols[3].w - 2, y + 1.5, { align: 'right' });
-      doc.text(fmtUsd(sumTotalUsd), cols[4].x + cols[4].w - 2, y + 1.5, { align: 'right' });
-      doc.text(fmtUsd(sumAbonadoUsd), cols[5].x + cols[5].w - 2, y + 1.5, { align: 'right' });
-      doc.text(fmtBs(sumTotalBs), cols[7].x + cols[7].w - 2, y + 1.5, { align: 'right' });
+      doc.text(fmtUsd(sumCabillaUsd), cols[2].x + cols[2].w - 2, y + 1.2, { align: 'right' });
+      doc.text(fmtUsd(sumOtrosUsd), cols[3].x + cols[3].w - 2, y + 1.2, { align: 'right' });
+      doc.text(fmtUsd(sumTotalUsd), cols[4].x + cols[4].w - 2, y + 1.2, { align: 'right' });
+      doc.text(fmtUsd(sumAbonadoUsd), cols[5].x + cols[5].w - 2, y + 1.2, { align: 'right' });
+      doc.text(fmtBs(sumTotalBs), cols[7].x + cols[7].w - 2, y + 1.2, { align: 'right' });
     }
     
     y += 8;
