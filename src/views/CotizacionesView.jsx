@@ -339,8 +339,8 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                 <div className="flex items-center gap-2 text-red-700 font-semibold text-sm">
                   <AlertCircle size={14} className="shrink-0" /> Stock insuficiente
                 </div>
-                {stockIssues.map(item => (
-                  <p key={item.id} className="text-xs text-red-600 ml-5">
+                {stockIssues.map((item, idx) => (
+                  <p key={item.id || item.producto_id || idx} className="text-xs text-red-600 ml-5">
                     <span className="font-medium">{item.nombre_snap}</span>: necesita {Number(item.cantidad)} — disponible {stockMap[item.producto_id] ?? 0}
                   </p>
                 ))}

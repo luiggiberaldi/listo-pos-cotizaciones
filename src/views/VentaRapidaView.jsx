@@ -6,7 +6,7 @@ import {
   Zap, User, X, Plus, Minus, Package, ArrowLeft, ArrowRight, Loader2,
   Search, CheckCircle, ShoppingCart, DollarSign, Truck, CreditCard,
   AlertCircle, ChevronRight, ChevronLeft, UserPlus, ChevronUp, Hash, FileText, Trash2, Save,
-  Download, Printer, MessageCircle, Clock, Check, Edit2, Handshake
+  Download, Printer, MessageCircle, Clock, Check, Edit2, Handshake, Undo2
 } from 'lucide-react'
 import { compartirPorWhatsApp, generarMensaje } from '../utils/whatsapp'
 import { useClientes } from '../hooks/useClientes'
@@ -338,7 +338,17 @@ function getDraftKey(userId) {
 
 function saveDraft(state, userId) {
   try {
-    localStorage.setItem(getDraftKey(userId), JSON.stringify({ ...state, _ts: Date.now(), _userId: userId }))
+    const clienteNombre = state._clienteNombre || ''
+    const totalUsd = state._totalUsd ?? 0
+    const itemsCount = state._itemsCount ?? state.items?.length ?? 0
+    localStorage.setItem(getDraftKey(userId), JSON.stringify({
+      ...state,
+      _ts: Date.now(),
+      _userId: userId,
+      _clienteNombre: clienteNombre,
+      _totalUsd: totalUsd,
+      _itemsCount: itemsCount,
+    }))
   } catch { /* ignorar */ }
 }
 
@@ -355,6 +365,18 @@ function loadDraft(userId) {
 
 function clearDraft(userId) {
   try { localStorage.removeItem(getDraftKey(userId)) } catch { /* ignorar */ }
+}
+
+function formatRelativeTime(ts) {
+  if (!ts) return ''
+  const diffMs = Date.now() - ts
+  const diffSec = Math.floor(diffMs / 1000)
+  if (diffSec < 60) return 'hace un instante'
+  const diffMin = Math.floor(diffSec / 60)
+  if (diffMin < 60) return `hace ${diffMin} min`
+  const diffH = Math.floor(diffMin / 60)
+  if (diffH < 24) return `hace ${diffH}h`
+  return 'hace más de 1 día'
 }
 
 export default function VentaRapidaView() {
@@ -452,20 +474,27 @@ export default function VentaRapidaView() {
   const clienteRef = useRef(null)
   const productoInputRef = useRef(null)
 
-  // ─── Draft (retomar) ───────────────────────────────────────────────────────
+  // ─── Draft (retomar) ─────────────────────────────────────────────────────────
   const [showDraftBanner, setShowDraftBanner] = useState(false)
+  const [borradorInfo, setBorradorInfo] = useState(null)
   const draftRef = useRef(null)
+  const [undoDraft, setUndoDraft] = useState(null)
+  const undoTimerRef = useRef(null)
 
   // Restaurar borrador al montar
   useEffect(() => {
     const draft = loadDraft(perfil?.id)
     if (draft && (draft.items?.length > 0 || draft.clienteId)) {
       draftRef.current = draft
+      setBorradorInfo(draft)
       setShowDraftBanner(true)
     }
   }, [])
 
-
+  // Cleanup undo timer on unmount
+  useEffect(() => {
+    return () => { if (undoTimerRef.current) clearTimeout(undoTimerRef.current) }
+  }, [])
 
   function restoreDraft() {
     const d = draftRef.current
@@ -496,13 +525,32 @@ export default function VentaRapidaView() {
     if (d.notas) setNotas(d.notas)
     if (d.step != null && d.step >= 0 && d.step <= 2) setStep(d.step)
     setShowDraftBanner(false)
+    setBorradorInfo(null)
     draftRef.current = null
   }
 
   function discardDraft() {
+    // Save draft in memory for undo
+    const savedDraft = draftRef.current
+    setUndoDraft(savedDraft)
     clearDraft(perfil?.id)
     setShowDraftBanner(false)
+    setBorradorInfo(null)
     draftRef.current = null
+    // Auto-dismiss undo after 6 seconds
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current)
+    undoTimerRef.current = setTimeout(() => setUndoDraft(null), 6000)
+  }
+
+  function undoDiscard() {
+    if (!undoDraft) return
+    // Re-save to localStorage and restore banner
+    saveDraft(undoDraft, perfil?.id)
+    draftRef.current = undoDraft
+    setBorradorInfo(undoDraft)
+    setShowDraftBanner(true)
+    setUndoDraft(null)
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current)
   }
 
   const costoEnvioUsd = 0
@@ -578,7 +626,13 @@ export default function VentaRapidaView() {
     if (ventaRapida.isPending) return
     const timer = setTimeout(() => {
       if (items.length > 0 || clienteId) {
-        saveDraft({ step, clienteId, items, formasPago: formasPagoFinales, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, esCod }, perfil?.id)
+        const clienteObj = clientes.find(c => c.id === clienteId)
+        saveDraft({
+          step, clienteId, items, formasPago: formasPagoFinales, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, esCod,
+          _clienteNombre: clienteObj?.nombre || '',
+          _totalUsd: totalUsd,
+          _itemsCount: items.length,
+        }, perfil?.id)
       }
     }, 1500)
     return () => clearTimeout(timer)
@@ -770,15 +824,92 @@ export default function VentaRapidaView() {
         icon={Zap}
       />
 
-      {showDraftBanner && (
-        <div className="flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 rounded-xl mx-4 mt-3 px-4 py-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <Save size={16} className="text-amber-600 shrink-0" />
-            <span className="text-sm font-medium text-amber-800 truncate">Tienes una venta sin terminar</span>
+      {showDraftBanner && borradorInfo && (
+        <div className="relative overflow-hidden rounded-2xl border border-white/30 mx-4 mt-3 p-4 animate-in fade-in slide-in-from-top-2 duration-500"
+          style={{
+            background: 'linear-gradient(135deg, rgba(255,255,255,0.85) 0%, rgba(248,250,252,0.9) 100%)',
+            backdropFilter: 'blur(16px)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.6)',
+          }}>
+          {/* Animated accent bar */}
+          <div className="absolute top-0 left-0 right-0 h-1 rounded-t-2xl" style={{ background: 'linear-gradient(90deg, #f59e0b, #d97706, #b45309)' }} />
+          {/* Pulsing indicator */}
+          <div className="absolute top-3 right-3">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500" />
+            </span>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button onClick={restoreDraft} className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg">Retomar</button>
-            <button onClick={discardDraft} className="px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-700">Descartar</button>
+
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            {/* Icon + Info */}
+            <div className="flex items-start gap-3 flex-1 min-w-0">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: 'linear-gradient(135deg, #fbbf24, #d97706)', boxShadow: '0 4px 12px rgba(217,119,6,0.3)' }}>
+                <Zap size={18} className="text-white" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-bold text-slate-800">Venta sin terminar</p>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
+                  <span className="text-xs text-slate-500 flex items-center gap-1 truncate">
+                    <User size={11} className="shrink-0" />
+                    {borradorInfo._clienteNombre || 'Cliente sin especificar'}
+                  </span>
+                  {(borradorInfo._itemsCount || borradorInfo.items?.length > 0) && (
+                    <span className="text-xs text-slate-500 flex items-center gap-1">
+                      <ShoppingCart size={11} className="shrink-0" />
+                      {borradorInfo._itemsCount || borradorInfo.items?.length} artículo{(borradorInfo._itemsCount || borradorInfo.items?.length) !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                  {borradorInfo._totalUsd > 0 && (
+                    <span className="text-xs font-semibold text-emerald-600 flex items-center gap-1">
+                      <DollarSign size={11} className="shrink-0" />
+                      {fmtUsd(borradorInfo._totalUsd)}
+                    </span>
+                  )}
+                  {borradorInfo._ts && (
+                    <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                      <Clock size={10} className="shrink-0" />
+                      {formatRelativeTime(borradorInfo._ts)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-2 shrink-0 sm:self-center">
+              <button type="button" onClick={restoreDraft}
+                className="px-4 py-2 rounded-xl text-white text-xs font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
+                style={{ background: 'linear-gradient(135deg, #d97706, #b45309)', boxShadow: '0 4px 12px rgba(180,83,9,0.3)' }}>
+                Retomar
+              </button>
+              <button type="button" onClick={discardDraft}
+                className="px-3 py-2 text-xs font-semibold text-slate-400 hover:text-red-500 rounded-xl hover:bg-red-50 transition-all">
+                Descartar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Undo toast — flotante al descartar borrador */}
+      {undoDraft && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] animate-in fade-in slide-in-from-bottom-3 duration-300"
+          style={{ maxWidth: 'calc(100vw - 2rem)' }}>
+          <div className="flex items-center gap-3 px-4 py-3 rounded-2xl border border-slate-700/40"
+            style={{
+              background: 'rgba(15,23,42,0.92)',
+              backdropFilter: 'blur(16px)',
+              boxShadow: '0 12px 40px rgba(0,0,0,0.4)',
+            }}>
+            <Trash2 size={15} className="text-slate-400 shrink-0" />
+            <span className="text-sm text-white/90 font-medium whitespace-nowrap">Borrador descartado</span>
+            <button onClick={undoDiscard}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 transition-all">
+              <Undo2 size={13} />
+              Deshacer
+            </button>
           </div>
         </div>
       )}
