@@ -262,3 +262,31 @@ export function useVendedores() {
     gcTime: 1000 * 60 * 30,
   })
 }
+
+// ─── Query: ventas/despachos aprobados de un cliente (historial de ventas) ───
+export function useVentasCliente(clienteId) {
+  return useQuery({
+    queryKey: ['ventas-cliente', clienteId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('notas_despacho')
+        .select(`
+          id, numero, estado, total_usd, flete_usd, corte_usd, descuento_total_usd, creado_en, forma_pago,
+          vendedor:usuarios!notas_despacho_vendedor_id_fkey(id, nombre, color),
+          items:notas_despacho_items(
+            id, codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, total_linea_usd, es_prestamo
+          )
+        `)
+        .or(`cliente_id.eq.${clienteId},cliente_factura_id.eq.${clienteId}`)
+        .in('estado', ['despachada', 'entregada'])
+        .order('creado_en', { ascending: false })
+        .limit(50)
+
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: !!clienteId,
+    staleTime: 1000 * 60 * 5,
+  })
+}
+

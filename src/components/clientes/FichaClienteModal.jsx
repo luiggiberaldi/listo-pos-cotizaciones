@@ -1,9 +1,9 @@
 // src/components/clientes/FichaClienteModal.jsx
 // Modal ficha del cliente: historial de crédito + formulario de abono
 import { useState, useEffect } from 'react'
-import { X, CreditCard, ArrowUpCircle, ArrowDownCircle, AlertCircle, RefreshCw, DollarSign, Hash, Phone, FileText, ChevronRight, MessageSquare, Handshake, RotateCcw } from 'lucide-react'
+import { X, CreditCard, ArrowUpCircle, ArrowDownCircle, AlertCircle, RefreshCw, DollarSign, Hash, Phone, FileText, ChevronRight, MessageSquare, Handshake, RotateCcw, ShoppingBag, ChevronDown } from 'lucide-react'
 import { useCuentasCobrar, useRegistrarAbono, useRevertirAbono } from '../../hooks/useCuentasCobrar'
-import { useCotizacionesCliente } from '../../hooks/useClientes'
+import { useVentasCliente } from '../../hooks/useClientes'
 import SeguimientoTimeline from '../ui/SeguimientoTimeline'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtUsdSimple as fmtUsd } from '../../utils/format'
@@ -196,9 +196,10 @@ function FormAbono({ clienteId, saldo, onSuccess }) {
 }
 
 
-// ─── Historial de cotizaciones ───────────────────────────────────────────────
-function HistorialCotizaciones({ clienteId, onVerCotizacion }) {
-  const { data: cotizaciones = [], isLoading } = useCotizacionesCliente(clienteId)
+// ─── Historial de Ventas Aprobadas con Acordeón ──────────────────────────────
+function HistorialVentas({ clienteId }) {
+  const { data: ventas = [], isLoading } = useVentasCliente(clienteId)
+  const [expandedId, setExpandedId] = useState(null)
 
   if (isLoading) {
     return (
@@ -210,52 +211,94 @@ function HistorialCotizaciones({ clienteId, onVerCotizacion }) {
     )
   }
 
-  if (cotizaciones.length === 0) {
+  if (ventas.length === 0) {
     return (
-      <div className="text-center py-8 text-slate-400">
-        <FileText size={28} className="mx-auto mb-2 opacity-30" />
-        <p className="text-sm">Sin cotizaciones registradas</p>
+      <div className="text-center py-8 text-slate-400 border border-dashed border-slate-200 rounded-2xl">
+        <ShoppingBag size={28} className="mx-auto mb-2 opacity-30 text-slate-300" />
+        <p className="text-sm">Sin ventas aprobadas registradas</p>
       </div>
     )
   }
 
-  function fmtNumero(cot) {
-    const num = `COT-${String(cot.numero).padStart(5, '0')}`
-    return num
-  }
-
-  function fmtFechaCorta(iso) {
-    if (!iso) return '—'
-    return new Date(iso).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })
+  function toggleExpand(id) {
+    setExpandedId(prev => prev === id ? null : id)
   }
 
   return (
     <div className="space-y-2">
-      {cotizaciones.map(cot => (
-        <button
-          key={cot.id}
-          onClick={() => onVerCotizacion?.(cot)}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border border-slate-100 bg-slate-50 hover:bg-slate-100 transition-colors text-left"
-        >
-          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-            <FileText size={14} className="text-primary" />
+      {ventas.map(v => {
+        const totalFinal = Number(v.total_usd || 0) - Number(v.descuento_total_usd || 0)
+        const totalItems = v.items?.reduce((acc, it) => acc + (Number(it.cantidad) || 0), 0) || 0
+        const displayNum = `DES-${String(v.numero).padStart(5, '0')}`
+        const isExpanded = expandedId === v.id
+
+        return (
+          <div key={v.id} className="border border-slate-100 rounded-xl bg-slate-50 overflow-hidden transition-all shadow-sm">
+            {/* Header del Item / Botón de Toggle */}
+            <button
+              onClick={() => toggleExpand(v.id)}
+              className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-100/70 transition-colors text-left focus:outline-none"
+            >
+              <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
+                <ShoppingBag size={14} className="text-emerald-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-bold text-slate-800 font-mono">{displayNum}</span>
+                  <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase shrink-0 ${
+                    v.estado === 'entregada'
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-200/50'
+                      : 'bg-blue-100 text-blue-800 border border-blue-200/50'
+                  }`}>
+                    {v.estado}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-0.5 animate-fade-in duration-100">
+                  {new Date(v.creado_en).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  {v.vendedor?.nombre ? ` · ${v.vendedor.nombre}` : ''}
+                  {` · ${v.items?.length || 0} arts (${totalItems} unds)`}
+                </p>
+              </div>
+              <div className="text-right shrink-0 flex items-center gap-2">
+                <span className="text-sm font-black text-slate-700">${totalFinal.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <ChevronDown size={14} className={`text-slate-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+              </div>
+            </button>
+
+            {/* Contenido Desplegable (Artículos) */}
+            {isExpanded && (
+              <div className="bg-white border-t border-slate-100 px-4 py-3 animate-fade-in duration-150">
+                <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">
+                  Detalle de Artículos
+                </div>
+                <div className="space-y-1.5 max-h-[200px] overflow-y-auto pr-1">
+                  {v.items?.map(it => (
+                    <div key={it.id} className="flex justify-between items-center text-xs py-1 border-b border-slate-50 last:border-0 gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold text-slate-800 truncate uppercase">
+                          {it.nombre_snap || 'Artículo sin nombre'}
+                          {it.es_prestamo && (
+                            <span className="ml-1.5 bg-amber-100 text-amber-800 text-[8px] font-black px-1.5 py-0.5 rounded uppercase">
+                              Préstamo
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-[9px] font-mono text-slate-400 mt-0.5">Cód: {it.codigo_snap || 'S/C'}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="font-black text-slate-700">
+                          {it.cantidad} {it.unidad_snap?.toLowerCase()} x ${Number(it.precio_unit_usd || 0).toFixed(2)}
+                        </p>
+                        <p className="text-[10px] text-slate-400 font-bold">${Number(it.total_linea_usd || 0).toFixed(2)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-800 font-mono">{fmtNumero(cot)}</span>
-              <EstadoBadge estado={cot.estado} />
-            </div>
-            <p className="text-[10px] text-slate-400 mt-0.5">
-              {fmtFechaCorta(cot.creado_en)}
-              {cot.vendedor?.nombre ? ` · ${cot.vendedor.nombre}` : ''}
-            </p>
-          </div>
-          <div className="text-right shrink-0 flex items-center gap-2">
-            <span className="text-sm font-black text-slate-700">{fmtUsd(cot.total_usd)}</span>
-            <ChevronRight size={14} className="text-slate-300" />
-          </div>
-        </button>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -442,15 +485,15 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
             Cuenta
           </button>
           <button
-            onClick={() => setActiveTab('cotizaciones')}
+            onClick={() => setActiveTab('ventas')}
             className={`flex-1 py-2 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-              activeTab === 'cotizaciones'
+              activeTab === 'ventas'
                 ? 'bg-white text-slate-800 shadow-sm border border-slate-100'
                 : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/50'
             }`}
           >
-            <FileText size={13} />
-            Cotizaciones
+            <ShoppingBag size={13} />
+            Ventas
           </button>
           <button
             onClick={() => setActiveTab('prestamos')}
@@ -569,14 +612,14 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
             </div>
           )}
 
-          {/* PESTAÑA: COTIZACIONES */}
-          {activeTab === 'cotizaciones' && (
+          {/* PESTAÑA: HISTORIAL DE VENTAS */}
+          {activeTab === 'ventas' && (
             <div>
               <h3 className="text-sm font-black text-slate-800 flex items-center gap-2 mb-3">
-                <FileText size={14} className="text-slate-500" />
-                Cotizaciones del cliente
+                <ShoppingBag size={14} className="text-slate-500" />
+                Historial de Ventas Aprobadas
               </h3>
-              <HistorialCotizaciones clienteId={cliente.id} />
+              <HistorialVentas clienteId={cliente.id} />
             </div>
           )}
 
