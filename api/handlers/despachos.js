@@ -43,7 +43,7 @@ export async function handleCrearDespacho(request, env) {
 
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
-  const { cotizacionId, notas, formaPago, transportistaId, fleteUsd, corteUsd, clienteFacturaId } = body;
+  const { cotizacionId, notas, formaPago, transportistaId, fleteUsd, corteUsd, clienteFacturaId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado } = body;
   const flete = Math.max(0, Number(fleteUsd) || 0);
   const corte = Math.max(0, Number(corteUsd) || 0);
   if (!cotizacionId) return jsonError('Falta cotizacionId', 400, request);
@@ -133,6 +133,9 @@ export async function handleCrearDespacho(request, env) {
         notas: notas || null,
         forma_pago: formaPago || null,
         creado_por: user.operator_id,
+        direccion_envio_direccion: direccionEnvioDireccion || null,
+        direccion_envio_ciudad:    direccionEnvioCiudad || null,
+        direccion_envio_estado:    direccionEnvioEstado || null,
       }),
     });
 
@@ -203,7 +206,7 @@ export async function handleEditarPagoDespacho(request, env) {
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
 
-  const { despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, clienteId } = body;
+  const { despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, clienteId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado } = body;
   if (!despachoId) return jsonError('Falta despachoId', 400, request);
 
   const checkRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&select=id,estado,vendedor_id,flete_usd,corte_usd,total_usd,cotizacion_id,cliente_id`, { headers: h });
@@ -267,6 +270,9 @@ export async function handleEditarPagoDespacho(request, env) {
   if (formaPago !== undefined) campos.forma_pago = formaPago;
   if (formaPagoCliente !== undefined) campos.forma_pago_cliente = formaPagoCliente;
   if (referenciaPago !== undefined) campos.referencia_pago = referenciaPago;
+  if (direccionEnvioDireccion !== undefined) campos.direccion_envio_direccion = direccionEnvioDireccion || null;
+  if (direccionEnvioCiudad !== undefined) campos.direccion_envio_ciudad = direccionEnvioCiudad || null;
+  if (direccionEnvioEstado !== undefined) campos.direccion_envio_estado = direccionEnvioEstado || null;
   if (transportistaId !== undefined) campos.transportista_id = transportistaId || null;
   if (fleteUsd !== undefined || corteUsd !== undefined) {
     const nuevoFlete = fleteUsd !== undefined ? (Number(fleteUsd) || 0) : Number(despacho.flete_usd || 0);

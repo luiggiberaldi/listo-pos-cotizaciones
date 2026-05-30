@@ -14,6 +14,8 @@ import ClienteForm from '../clientes/ClienteForm'
 import { Modal } from '../ui/Modal'
 import { showToast } from '../ui/Toast'
 import useAuthStore from '../../store/useAuthStore'
+import { ESTADOS, getCiudades } from '../../data/venezuelaGeo'
+import { MapPin, Building } from 'lucide-react'
 
 import { FORMAS_PAGO } from '../../constants/formasPago'
 
@@ -37,6 +39,10 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
   const [showNuevoCliente, setShowNuevoCliente] = useState(false)
   const [nuevoError, setNuevoError] = useState('')
   const [esCod, setEsCod] = useState(false)
+  const [direccionEnvioActiva, setDireccionEnvioActiva] = useState(false)
+  const [direccionEnvioEstado, setDireccionEnvioEstado] = useState('')
+  const [direccionEnvioCiudad, setDireccionEnvioCiudad] = useState('')
+  const [direccionEnvioDireccion, setDireccionEnvioDireccion] = useState('')
   const perfil = useAuthStore(s => s.perfil)
   const selectedCliente = useMemo(() => {
     return clientes.find(c => c.id === clienteId) || despacho?.cliente
@@ -149,6 +155,11 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
     setCorteUsd(despacho.corte_usd ? String(Number(despacho.corte_usd)) : '')
     setNotas(despacho.notas || '')
     setClienteId(despacho.cliente_id || '')
+    const dirAct = !!(despacho.direccion_envio_direccion || despacho.direccion_envio_ciudad || despacho.direccion_envio_estado)
+    setDireccionEnvioActiva(dirAct)
+    setDireccionEnvioEstado(despacho.direccion_envio_estado || '')
+    setDireccionEnvioCiudad(despacho.direccion_envio_ciudad || '')
+    setDireccionEnvioDireccion(despacho.direccion_envio_direccion || '')
   }, [despacho, isOpen, setPagosInmediatos, setPropuestaCod])
 
   if (!isOpen || !despacho) return null
@@ -170,6 +181,9 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
       corteUsd: Number(corteUsd) || 0,
       notas: notas || null,
       clienteId: clienteId || null,
+      direccionEnvioDireccion: direccionEnvioActiva ? direccionEnvioDireccion : null,
+      direccionEnvioCiudad: direccionEnvioActiva ? direccionEnvioCiudad : null,
+      direccionEnvioEstado: direccionEnvioActiva ? direccionEnvioEstado : null,
     })
     onClose()
   }
@@ -548,6 +562,81 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
             )}
           </div>
 
+          {/* Dirección de Envío Opcional */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600">
+                  <MapPin size={15} />
+                </span>
+                <div>
+                  <span className="text-[11px] font-bold text-slate-700 block">¿Enviar a otra dirección?</span>
+                  <span className="text-[9px] text-slate-400">Especificar dirección alternativa de entrega</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDireccionEnvioActiva(v => !v)}
+                disabled={cargando}
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  direccionEnvioActiva ? 'bg-indigo-500' : 'bg-slate-200'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    direccionEnvioActiva ? 'translate-x-4' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {direccionEnvioActiva && (
+              <div className="space-y-3 border-t border-slate-200/60 pt-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Estado *</label>
+                    <CustomSelect
+                      options={ESTADOS.map(e => ({ value: e, label: e }))}
+                      value={direccionEnvioEstado}
+                      onChange={val => {
+                        setDireccionEnvioEstado(val)
+                        setDireccionEnvioCiudad('')
+                      }}
+                      placeholder="Elegir..."
+                      icon={MapPin}
+                      searchable
+                      disabled={cargando}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Ciudad *</label>
+                    <CustomSelect
+                      options={(direccionEnvioEstado ? getCiudades(direccionEnvioEstado) : []).map(c => ({ value: c, label: c }))}
+                      value={direccionEnvioCiudad}
+                      onChange={setDireccionEnvioCiudad}
+                      placeholder={direccionEnvioEstado ? 'Elegir...' : 'Falta estado'}
+                      icon={Building}
+                      disabled={cargando || !direccionEnvioEstado}
+                      searchable
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Dirección (Opcional)</label>
+                  <input
+                    type="text"
+                    value={direccionEnvioDireccion}
+                    onChange={e => setDireccionEnvioDireccion(e.target.value)}
+                    placeholder="Ej: Av. Principal, Local 4..."
+                    className="w-full px-3 py-1.5 rounded-lg text-xs border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                    disabled={cargando}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* ── 4. Notas ── */}
 
           <div className="space-y-2">
@@ -572,10 +661,17 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
             className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-700 font-semibold text-base hover:bg-slate-50 transition-colors disabled:opacity-50">
             Cancelar
           </button>
-          <button onClick={handleGuardar} disabled={cargando || !(esCod ? (montoCodRequerido > 0.015 && propuestaCodCuadrado) : pagoInmediatoCuadrado) || !cxcVencimientoValido}
+          <button onClick={handleGuardar} disabled={
+            cargando ||
+            !(esCod ? (montoCodRequerido > 0.015 && propuestaCodCuadrado) : pagoInmediatoCuadrado) ||
+            !cxcVencimientoValido ||
+            (direccionEnvioActiva && (!direccionEnvioEstado || !direccionEnvioCiudad))
+          }
             title={
               !cxcVencimientoValido
                 ? 'Días de vencimiento obligatorios para cuentas por cobrar'
+                : direccionEnvioActiva && (!direccionEnvioEstado || !direccionEnvioCiudad)
+                ? 'Debe seleccionar un Estado y una Ciudad para el envío'
                 : esCod
                 ? (!propuestaCodCuadrado ? 'La propuesta COD no está cuadrada' : undefined)
                 : (!pagoInmediatoCuadrado ? 'Los montos no cuadran con el total' : undefined)

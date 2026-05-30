@@ -37,6 +37,8 @@ import { OnboardingSequence } from '../components/ui/OnboardingTooltip'
 import { getAction } from '../utils/cotizacionActions'
 import ClienteFacturaBuscador from '../components/clientes/ClienteFacturaBuscador'
 import TransportistaFormCompact from '../components/transportistas/TransportistaFormCompact'
+import { ESTADOS, getCiudades } from '../data/venezuelaGeo'
+import { MapPin, Building } from 'lucide-react'
 
 // ─── Filtros de estado ────────────────────────────────────────────────────────
 const ESTADOS_FILTRO = [
@@ -124,6 +126,10 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
   const [notas, setNotas] = useState('')
   const [showNotas, setShowNotas] = useState(false)
   const [clienteFacturaId, setClienteFacturaId] = useState('')
+  const [direccionEnvioActiva, setDireccionEnvioActiva] = useState(false)
+  const [direccionEnvioEstado, setDireccionEnvioEstado] = useState('')
+  const [direccionEnvioCiudad, setDireccionEnvioCiudad] = useState('')
+  const [direccionEnvioDireccion, setDireccionEnvioDireccion] = useState('')
   const { data: transportistas = [] } = useTransportistas()
   const crearTransp = useCrearTransportista()
   const [showNuevoTransp, setShowNuevoTransp] = useState(false)
@@ -642,6 +648,78 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
               onSelect={setClienteFacturaId}
             />
 
+            {/* Dirección de Envío Opcional */}
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 shadow-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600">
+                    <MapPin size={15} />
+                  </span>
+                  <div>
+                    <span className="text-[11px] font-bold text-slate-700 block">¿Enviar a otra dirección?</span>
+                    <span className="text-[9px] text-slate-400">Especificar dirección alternativa de entrega</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDireccionEnvioActiva(v => !v)}
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    direccionEnvioActiva ? 'bg-indigo-500' : 'bg-slate-200'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      direccionEnvioActiva ? 'translate-x-4' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {direccionEnvioActiva && (
+                <div className="space-y-3 border-t border-slate-200/60 pt-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Estado *</label>
+                      <CustomSelect
+                        options={ESTADOS.map(e => ({ value: e, label: e }))}
+                        value={direccionEnvioEstado}
+                        onChange={val => {
+                          setDireccionEnvioEstado(val)
+                          setDireccionEnvioCiudad('')
+                        }}
+                        placeholder="Elegir..."
+                        icon={MapPin}
+                        searchable
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Ciudad *</label>
+                      <CustomSelect
+                        options={(direccionEnvioEstado ? getCiudades(direccionEnvioEstado) : []).map(c => ({ value: c, label: c }))}
+                        value={direccionEnvioCiudad}
+                        onChange={setDireccionEnvioCiudad}
+                        placeholder={direccionEnvioEstado ? 'Elegir...' : 'Falta estado'}
+                        icon={Building}
+                        disabled={!direccionEnvioEstado}
+                        searchable
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Dirección (Opcional)</label>
+                    <input
+                      type="text"
+                      value={direccionEnvioDireccion}
+                      onChange={e => setDireccionEnvioDireccion(e.target.value)}
+                      placeholder="Ej: Av. Principal, Local 4..."
+                      className="w-full px-3 py-1.5 rounded-lg text-xs border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
           </div>{/* fin col derecha */}
         </div>{/* fin body */}
 
@@ -677,11 +755,31 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
             </button>
             <button onClick={() => {
                 const fpJson = JSON.stringify(formasPagoFinales)
-                onConfirm(fpJson, transportistaId || null, Number(fleteUsd) || 0, Number(corteUsd) || 0, referenciaPago, fpJson, notas, clienteFacturaId || null)
-              }} disabled={cargando || items.length === 0 || !(esCod ? (montoCodRequerido > 0.015 && propuestaCodCuadrado) : pagoInmediatoCuadrado) || !cxcVencimientoValido}
+                onConfirm(
+                  fpJson,
+                  transportistaId || null,
+                  Number(fleteUsd) || 0,
+                  Number(corteUsd) || 0,
+                  referenciaPago,
+                  fpJson,
+                  notas,
+                  clienteFacturaId || null,
+                  direccionEnvioActiva ? direccionEnvioDireccion : null,
+                  direccionEnvioActiva ? direccionEnvioCiudad : null,
+                  direccionEnvioActiva ? direccionEnvioEstado : null
+                )
+              }} disabled={
+                cargando ||
+                items.length === 0 ||
+                !(esCod ? (montoCodRequerido > 0.015 && propuestaCodCuadrado) : pagoInmediatoCuadrado) ||
+                !cxcVencimientoValido ||
+                (direccionEnvioActiva && (!direccionEnvioEstado || !direccionEnvioCiudad))
+              }
               title={
                 !cxcVencimientoValido
                   ? 'Días de vencimiento obligatorios para cuentas por cobrar'
+                  : direccionEnvioActiva && (!direccionEnvioEstado || !direccionEnvioCiudad)
+                  ? 'Debe seleccionar un Estado y una Ciudad para el envío'
                   : esCod
                   ? (!propuestaCodCuadrado ? 'La propuesta COD no está cuadrada' : undefined)
                   : (!pagoInmediatoCuadrado ? 'Los montos no cuadran con el total' : undefined)
@@ -852,7 +950,7 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
     setCotizacionAAnular(null)
   }
 
-  async function confirmarDespachar(formaPago = '', transportistaId = null, fleteUsd = 0, corteUsd = 0, referenciaPago = '', formaPagoCliente = '', notas = '', clienteFacturaId = null) {
+  async function confirmarDespachar(formaPago = '', transportistaId = null, fleteUsd = 0, corteUsd = 0, referenciaPago = '', formaPagoCliente = '', notas = '', clienteFacturaId = null, dirEnvio = null, ciudadEnvio = null, estadoEnvio = null) {
     if (!cotizacionADespachar) return
     try {
       await crearDespacho.mutateAsync({
@@ -867,6 +965,9 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
         formaPagoCliente: formaPagoCliente || null,
         notas: notas || null,
         clienteFacturaId: clienteFacturaId || null,
+        direccionEnvioDireccion: dirEnvio || null,
+        direccionEnvioCiudad: ciudadEnvio || null,
+        direccionEnvioEstado: estadoEnvio || null,
       })
       // Notificar si se asignó un cliente de facturación diferente al de la cotización
       if (clienteFacturaId && clienteFacturaId !== cotizacionADespachar.cliente_id) {

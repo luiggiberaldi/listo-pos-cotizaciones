@@ -31,8 +31,13 @@ export default function ClienteSelector({ clientes, clienteId, onSelect }) {
   }, [abierto])
 
   const clientesActivos = useMemo(() => {
-    return clientes.filter(c => c.activo !== false || c.id === clienteId)
-  }, [clientes, clienteId])
+    const filtradosActivos = clientes.filter(c => c.activo !== false || c.id === clienteId)
+    return [...filtradosActivos].sort((a, b) => {
+      const aEsMio = a.vendedor_id === perfil?.id ? 1 : 0
+      const bEsMio = b.vendedor_id === perfil?.id ? 1 : 0
+      return bEsMio - aEsMio
+    })
+  }, [clientes, clienteId, perfil?.id])
 
   const seleccionado = clientesActivos.find(c => c.id === clienteId) || clientes.find(c => c.id === clienteId)
   const filtrados = busqueda.trim()

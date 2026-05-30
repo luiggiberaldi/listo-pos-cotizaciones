@@ -23,6 +23,8 @@ import { useFormasPago } from '../hooks/useFormasPago'
 import CustomSelect from '../components/ui/CustomSelect'
 import useAuthStore from '../store/useAuthStore'
 import supabase from '../services/supabase/client'
+import { ESTADOS, getCiudades } from '../data/venezuelaGeo'
+import { MapPin, Building } from 'lucide-react'
 import { apiUrl } from '../services/apiBase'
 import { round2, mulR } from '../utils/dinero'
 import { calcTotales } from '../utils/calcTotales'
@@ -442,6 +444,10 @@ export default function VentaRapidaView() {
   const [corteUsd, setCorteUsd] = useState('')
   const [notas, setNotas] = useState('')
   const [esCod, setEsCod] = useState(false)
+  const [direccionEnvioActiva, setDireccionEnvioActiva] = useState(false)
+  const [direccionEnvioEstado, setDireccionEnvioEstado] = useState('')
+  const [direccionEnvioCiudad, setDireccionEnvioCiudad] = useState('')
+  const [direccionEnvioDireccion, setDireccionEnvioDireccion] = useState('')
 
   const clienteRef = useRef(null)
   const productoInputRef = useRef(null)
@@ -608,9 +614,9 @@ export default function VentaRapidaView() {
     Number(cxcItem.diasVencimiento) > 0
   );
 
-  const step2Valid = esPrestamoPuro || ((esCod
+  const step2Valid = (esPrestamoPuro || ((esCod
     ? (pagoInmediatoCuadrado || (montoCodRequerido > 0.015 && propuestaCodCuadrado))
-    : pagoInmediatoCuadrado) && cxcVencimientoValido);
+    : pagoInmediatoCuadrado) && cxcVencimientoValido)) && (!direccionEnvioActiva || (direccionEnvioEstado && direccionEnvioCiudad));
 
   // Close cliente dropdown on outside click
   useEffect(() => {
@@ -632,13 +638,21 @@ export default function VentaRapidaView() {
   // Filtrar clientes (excluir inactivos, preservando el seleccionado)
   const clientesFiltrados = useMemo(() => {
     const activos = clientes.filter(c => c.activo !== false || c.id === clienteId)
-    if (!clienteBusqueda.trim()) return activos.slice(0, 8)
-    return activos.filter(c =>
+    
+    // Ordenar de modo que los del vendedor actual salgan primero
+    const ordenados = [...activos].sort((a, b) => {
+      const aEsMio = a.vendedor_id === perfil?.id ? 1 : 0
+      const bEsMio = b.vendedor_id === perfil?.id ? 1 : 0
+      return bEsMio - aEsMio
+    })
+
+    if (!clienteBusqueda.trim()) return ordenados.slice(0, 8)
+    return ordenados.filter(c =>
       c.nombre.toLowerCase().includes(clienteBusqueda.toLowerCase()) ||
       (c.rif_cedula ?? '').toLowerCase().includes(clienteBusqueda.toLowerCase()) ||
       (c.telefono ?? '').includes(clienteBusqueda)
     ).slice(0, 8)
-  }, [clientes, clienteBusqueda, clienteId])
+  }, [clientes, clienteBusqueda, clienteId, perfil?.id])
 
   // Filtrar productos con smart search (ranking por relevancia)
   const productosFiltrados = useProductSearch(productos, productoBusqueda, catActiva)
@@ -697,6 +711,9 @@ export default function VentaRapidaView() {
       })),
       costoEnvioUsd,
       tasaBcv: tasa,
+      direccionEnvioDireccion: direccionEnvioActiva ? direccionEnvioDireccion : null,
+      direccionEnvioCiudad: direccionEnvioActiva ? direccionEnvioCiudad : null,
+      direccionEnvioEstado: direccionEnvioActiva ? direccionEnvioEstado : null,
     }, {
       onSuccess: (result) => {
         clearDraft(perfil?.id)
@@ -879,6 +896,14 @@ export default function VentaRapidaView() {
             setEsCod={handleToggleCod}
             clienteSeleccionado={clienteSeleccionado}
             esPrestamoPuro={esPrestamoPuro}
+            direccionEnvioActiva={direccionEnvioActiva}
+            setDireccionEnvioActiva={setDireccionEnvioActiva}
+            direccionEnvioEstado={direccionEnvioEstado}
+            setDireccionEnvioEstado={setDireccionEnvioEstado}
+            direccionEnvioCiudad={direccionEnvioCiudad}
+            setDireccionEnvioCiudad={setDireccionEnvioCiudad}
+            direccionEnvioDireccion={direccionEnvioDireccion}
+            setDireccionEnvioDireccion={setDireccionEnvioDireccion}
           />
         )}
 
@@ -1772,7 +1797,11 @@ function Step2Pago({
   fleteUsd, setFleteUsd, corteUsd, setCorteUsd, notas, setNotas,
   tasa, esCod, setEsCod,
   clienteSeleccionado,
-  esPrestamoPuro
+  esPrestamoPuro,
+  direccionEnvioActiva, setDireccionEnvioActiva,
+  direccionEnvioEstado, setDireccionEnvioEstado,
+  direccionEnvioCiudad, setDireccionEnvioCiudad,
+  direccionEnvioDireccion, setDireccionEnvioDireccion
 }) {
   const [showNuevoTransp, setShowNuevoTransp] = useState(false)
   const crearTransp = useCrearTransportista()
@@ -2214,6 +2243,78 @@ function Step2Pago({
           className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-sky-200 focus:border-sky-400 outline-none" />
       </div>
       )}
+
+      {/* Dirección de Envío Opcional */}
+      <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="p-1.5 rounded-lg bg-sky-100 text-sky-600">
+              <MapPin size={16} />
+            </span>
+            <div>
+              <span className="text-xs font-bold text-slate-700 block">¿Enviar a otra dirección?</span>
+              <span className="text-[10px] text-slate-400">Especificar dirección alternativa de entrega</span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setDireccionEnvioActiva(!direccionEnvioActiva)}
+            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+              direccionEnvioActiva ? 'bg-sky-500' : 'bg-slate-200'
+            }`}
+          >
+            <span
+              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                direccionEnvioActiva ? 'translate-x-5' : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </div>
+
+        {direccionEnvioActiva && (
+          <div className="space-y-3 border-t border-slate-200/60 pt-3 animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Estado *</label>
+                <CustomSelect
+                  options={ESTADOS.map(e => ({ value: e, label: e }))}
+                  value={direccionEnvioEstado}
+                  onChange={val => {
+                    setDireccionEnvioEstado(val)
+                    setDireccionEnvioCiudad('')
+                  }}
+                  placeholder="Seleccionar..."
+                  icon={MapPin}
+                  searchable
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Ciudad *</label>
+                <CustomSelect
+                  options={(direccionEnvioEstado ? getCiudades(direccionEnvioEstado) : []).map(c => ({ value: c, label: c }))}
+                  value={direccionEnvioCiudad}
+                  onChange={setDireccionEnvioCiudad}
+                  placeholder={direccionEnvioEstado ? 'Seleccionar...' : 'Elige estado'}
+                  icon={Building}
+                  disabled={!direccionEnvioEstado}
+                  searchable
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Dirección (Opcional)</label>
+              <input
+                type="text"
+                value={direccionEnvioDireccion}
+                onChange={e => setDireccionEnvioDireccion(e.target.value)}
+                placeholder="Ej: Av. Principal, Local 4..."
+                className="w-full px-3 py-2 rounded-xl text-xs border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-sky-200"
+              />
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Notas */}
       <div className="flex flex-col flex-1 min-h-0">

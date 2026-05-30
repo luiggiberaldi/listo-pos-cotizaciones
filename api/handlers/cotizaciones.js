@@ -537,6 +537,7 @@ export async function handleVentaRapida(request, env) {
     formaPago, formaPagoCliente, referenciaPago,
     notas, notasCliente, items,
     descuentoGlobalPct, costoEnvioUsd, tasaBcv,
+    direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado,
   } = body;
 
   if (!clienteId) return jsonError('Falta clienteId', 400, request);
@@ -671,6 +672,9 @@ export async function handleVentaRapida(request, env) {
         forma_pago_cliente: formaPagoCliente || formaPago || null,
         referencia_pago: referenciaPago || null,
         creado_por: user.operator_id,
+        direccion_envio_direccion: direccionEnvioDireccion || null,
+        direccion_envio_ciudad:    direccionEnvioCiudad || null,
+        direccion_envio_estado:    direccionEnvioEstado || null,
       }),
     });
     if (!despRes.ok) {
