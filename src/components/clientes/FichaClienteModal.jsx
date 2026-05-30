@@ -232,6 +232,24 @@ function HistorialVentas({ clienteId }) {
         const displayNum = `DES-${String(v.numero).padStart(5, '0')}`
         const isExpanded = expandedId === v.id
 
+        // Detección robusta de préstamos del despacho
+        let tienePrestamos = false
+        try {
+          const fp = typeof v.forma_pago === 'string' ? JSON.parse(v.forma_pago) : (v.forma_pago || [])
+          if (Array.isArray(fp) && fp.some(f => f.metodo === 'Préstamo' || f.metodo === 'Prestamo')) {
+            tienePrestamos = true
+          }
+        } catch (e) {
+          if (typeof v.forma_pago === 'string' && (v.forma_pago === 'Préstamo' || v.forma_pago === 'Prestamo')) {
+            tienePrestamos = true
+          }
+        }
+
+        // Aplicar fallback si el despacho completo es de tipo préstamo pero los ítems individuales no lo tienen marcado
+        const itemsConFallback = tienePrestamos && !v.items?.some(x => x.es_prestamo)
+          ? v.items?.map(it => ({ ...it, es_prestamo: true }))
+          : v.items
+
         return (
           <div key={v.id} className="border border-slate-100 rounded-xl bg-slate-50 overflow-hidden transition-all shadow-sm">
             {/* Header del Item / Botón de Toggle */}
@@ -272,17 +290,17 @@ function HistorialVentas({ clienteId }) {
                   Detalle de Artículos
                 </div>
                 <div className="space-y-1.5 max-h-[200px] overflow-y-auto pr-1">
-                  {v.items?.map(it => (
+                  {itemsConFallback?.map(it => (
                     <div key={it.id} className="flex justify-between items-center text-xs py-1 border-b border-slate-50 last:border-0 gap-2">
                       <div className="min-w-0 flex-1">
-                        <p className="font-bold text-slate-800 truncate uppercase">
-                          {it.nombre_snap || 'Artículo sin nombre'}
+                        <div className="font-bold text-slate-800 uppercase leading-snug break-words">
+                          <span>{it.nombre_snap || 'Artículo sin nombre'}</span>
                           {it.es_prestamo && (
-                            <span className="ml-1.5 bg-amber-100 text-amber-800 text-[8px] font-black px-1.5 py-0.5 rounded uppercase">
+                            <span className="inline-flex items-center ml-2 bg-amber-100 text-amber-800 text-[9px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider shrink-0 border border-amber-200 select-none">
                               Préstamo
                             </span>
                           )}
-                        </p>
+                        </div>
                         <p className="text-[9px] font-mono text-slate-400 mt-0.5">Cód: {it.codigo_snap || 'S/C'}</p>
                       </div>
                       <div className="text-right shrink-0">
