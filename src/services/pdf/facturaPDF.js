@@ -485,26 +485,7 @@ export async function generarFacturaPDF({ despacho, items = [], config = {}, for
   const dataRowH = 3.6
   const comboTop = comboBottom - totalBarH - numComboRows * dataRowH
 
-  // Notas Adicionales
-  if (despacho.notes?.trim() || despacho.notas?.trim()) {
-    const notasTexto = (despacho.notes || despacho.notas || '').trim()
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(9)
-    const notasLineas = doc.splitTextToSize(notasTexto, CONTENT_W)
-    const notasH = 3 + notasLineas.length * 4.5
-    const notasStartY = comboTop - 2 - notasH
 
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
-    doc.setTextColor(...C_DARK)
-    doc.text('NOTAS:', MARGIN, notasStartY + 3)
-
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8.5)
-    notasLineas.forEach((lin, i) => {
-      doc.text(lin, MARGIN, notasStartY + 3 + 4.5 + i * 4.5)
-    })
-  }
 
   // Dibujar desglose
   const comboLeftW = CONTENT_W - 90

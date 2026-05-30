@@ -21,7 +21,7 @@ Write-Host "🚀 Iniciando Build..." -ForegroundColor Cyan
 npm run build
 
 Write-Host "🚀 Iniciando Deploy..." -ForegroundColor Cyan
-npx wrangler deploy `
+npx wrangler deploy --dispatch-namespace chiridion `
   --var SUPABASE_SERVICE_KEY:"$($env:SUPABASE_SERVICE_KEY)" `
   --var VAPID_PUBLIC_KEY:"$($env:VAPID_PUBLIC_KEY)" `
   --var VAPID_PRIVATE_KEY:"$($env:VAPID_PRIVATE_KEY)" `
@@ -32,3 +32,4 @@ npx wrangler deploy `
   --var DEV_MASTER_PIN_6:"$($env:DEV_MASTER_PIN_6)"
 
 Write-Host "✅ Desplegado con secrets inyectados" -ForegroundColor Green
+
