@@ -364,7 +364,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     // Calcular cuántas líneas necesita la descripción (optimizado lineH = 3.6)
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
-    const baseNombre = item.es_prestamo ? `${item.nombre_snap || ''} (PRÉSTAMO)` : (item.nombre_snap || '')
+    const baseNombre = item.nombre_snap || ''
     const descLines = doc.splitTextToSize(baseNombre.toUpperCase(), COLS[2].w - 4)
     const lineH = 3.6
     const ROW_H = Math.max(ROW_H_BASE, descLines.length * lineH + 1.2)
@@ -451,7 +451,8 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     doc.text(uniText, COLS[3].x + COLS[3].w / 2, midY, { align: 'center' })
 
     const precioText = fmtPrecio(item.precio_unit_usd, monedaPDF, tasa, factorBcv)
-    const totalText = fmtPrecio(item.total_linea_usd, monedaPDF, tasa, factorBcv)
+    const totalLinea = item.es_prestamo ? (Number(item.cantidad || 0) * Number(item.precio_unit_usd || 0)) : Number(item.total_linea_usd || 0)
+    const totalText = fmtPrecio(totalLinea, monedaPDF, tasa, factorBcv)
 
     // Auto-reducir fuente si el texto no cabe
     const fitTextCol = (text, col, baseFontSize, bold) => {
@@ -483,7 +484,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
 
   const sloganY = esMembrete ? PAGE_H - 21 : PAGE_H - 33
 
-  const total = Number(despacho.total_usd || 0)
+  const total = items.reduce((acc, it) => acc + (it.es_prestamo ? (Number(it.cantidad || 0) * Number(it.precio_unit_usd || 0)) : Number(it.total_linea_usd || 0)), 0)
   const flete = Number(despacho.flete_usd || 0)
   const corte = Number(despacho.corte_usd || 0)
   const montoExento = flete + corte

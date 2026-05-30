@@ -412,7 +412,8 @@ export async function generarFacturaPDF({ despacho, items = [], config = {}, for
     doc.text(uniText, COLS[3].x + COLS[3].w / 2, midY, { align: 'center' })
 
     const precioText = fmtPrecioFac(item.precio_unit_usd, monedaPDF, tasa, factorBcv)
-    const totalText = fmtPrecioFac(item.total_linea_usd, monedaPDF, tasa, factorBcv)
+    const totalLinea = item.es_prestamo ? (Number(item.cantidad || 0) * Number(item.precio_unit_usd || 0)) : Number(item.total_linea_usd || 0)
+    const totalText = fmtPrecioFac(totalLinea, monedaPDF, tasa, factorBcv)
 
     const fitTextCol = (text, col, baseFontSize, bold) => {
       const maxW = col.w - 4
@@ -442,7 +443,7 @@ export async function generarFacturaPDF({ despacho, items = [], config = {}, for
   const sloganY = PAGE_H - 21
 
   // ── Cálculo del IVA (16% sumado) ──
-  const total = Number(despacho.total_usd || 0)
+  const total = items.reduce((acc, it) => acc + (it.es_prestamo ? (Number(it.cantidad || 0) * Number(it.precio_unit_usd || 0)) : Number(it.total_linea_usd || 0)), 0)
   const flete = Number(despacho.flete_usd || 0)
   const corte = Number(despacho.corte_usd || 0)
   const montoExento = flete + corte
