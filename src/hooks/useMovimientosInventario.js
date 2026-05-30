@@ -54,7 +54,8 @@ export function useKardex(productoId) {
         .from('inventario_movimientos')
         .select('*')
         .eq('producto_id', productoId)
-        .order('creado_en', { ascending: true })
+        .order('creado_en', { ascending: false })
+        .order('numero', { ascending: false })
 
       if (error) throw error
       return data ?? []

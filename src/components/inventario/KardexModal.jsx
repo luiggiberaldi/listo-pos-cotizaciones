@@ -50,9 +50,14 @@ export default function KardexModal({ isOpen, onClose, producto }) {
   const [fechaHasta, setFechaHasta] = useState('')
   const [expandedRows, setExpandedRows] = useState(new Set())
 
-  // Filtrar por fechas (client-side)
+  // Filtrar por fechas y ordenar por fecha descendente (más nuevos primero)
   const movimientosFiltrados = useMemo(() => {
-    let result = movimientos
+    let result = [...movimientos].sort((a, b) => {
+      const dateA = new Date(a.creado_en).getTime()
+      const dateB = new Date(b.creado_en).getTime()
+      if (dateB !== dateA) return dateB - dateA
+      return (b.numero || 0) - (a.numero || 0)
+    })
     if (fechaDesde) result = result.filter(m => m.creado_en >= fechaDesde + 'T00:00:00')
     if (fechaHasta) result = result.filter(m => m.creado_en <= fechaHasta + 'T23:59:59')
     return result
