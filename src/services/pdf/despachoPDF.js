@@ -28,7 +28,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
       return 50 // Margen superior 5cm para hoja pre-impresa
     }
     const HDR_H = 20
-    try { doc.addImage(LOGO_DESPACHO, 'PNG', MARGIN - 2, 6, 22, 22) } catch (_) {}
+    try { doc.addImage(LOGO_DESPACHO, 'PNG', MARGIN - 2, 6, 22, 22) } catch (_) { /* ignore */ }
     const centerX = PAGE_W / 2
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(17)
@@ -495,7 +495,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const corte = Number(despacho.corte_usd || 0)
   const montoExento = flete + corte
   const descuentoTotal = Number(despacho.descuento_total_usd || 0)
-  const totalFinal = total - descuentoTotal
+  const totalFinal = total - descuentoTotal + montoExento
   const hasExento = montoExento > 0
   const hasFlete = flete > 0
   const hasDescuento = descuentoTotal > 0

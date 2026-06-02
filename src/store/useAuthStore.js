@@ -265,10 +265,19 @@ const useAuthStore = create((set, get) => ({
           // Supabase puede disparar este evento cuando falla el refresco del token por red,
           // lo que borraría el cache y expulsaría al usuario innecesariamente.
           const esManual = get()._logoutManual
-          if (!navigator.onLine && !esManual) {
-            console.log('[AUTH] SIGNED_OUT ignorado — offline y no fue logout manual')
-            return
+          if (!esManual) {
+            console.log('[AUTH] SIGNED_OUT detectado de Supabase (sin logout manual). Verificando si podemos conservar la sesión...')
+            
+            // Si hay un perfil de operador activo en el store, ignoramos el deslogueo automático de Supabase.
+            // Esto previene que micro-cortes de red o fallos momentáneos de Supabase expulsen al usuario.
+            if (get().perfil) {
+              console.log('[AUTH] micro-corte o refresh fallido detectado. Manteniendo sesión local activa.')
+              set({ error: 'Conexión inestable detectada. Operando en modo de respaldo local.' })
+              return
+            }
           }
+
+          // Si es manual, o si no hay perfil de operador activo (limpieza real)
           const wasLoggedIn = get().user !== null && !esManual
           const userId = get().user?.id
           guardarPerfilCache(null, userId)
@@ -466,18 +475,12 @@ const useAuthStore = create((set, get) => ({
             res = await callWorker(freshToken)
             result = await res.json()
           } else {
-            // Refresh falló — forzar logout completo
-            console.log('[AUTH] switchOperator: refresh falló, forzando logout')
-            guardarPerfilCache(null, get().user?.id)
-            set({ user: null, perfil: null, loading: false, error: 'Tu sesión expiró. Inicia sesión nuevamente.' })
-            await supabase.auth.signOut()
-            return { ok: false }
+            // El refresh falló, lanzamos error para disparar la validación offline de respaldo en el catch
+            throw new Error('refresh_failed_offline_fallback')
           }
-        } catch {
-          guardarPerfilCache(null, get().user?.id)
-          set({ user: null, perfil: null, loading: false, error: 'Tu sesión expiró. Inicia sesión nuevamente.' })
-          await supabase.auth.signOut()
-          return { ok: false }
+        } catch (e) {
+          // Lanzamos error para disparar la validación offline en el catch principal
+          throw new Error(e.message || 'refresh_failed_offline_fallback')
         }
       }
 
@@ -530,6 +533,7 @@ const useAuthStore = create((set, get) => ({
 
       return { ok: true }
     } catch (err) {
+      console.warn('[AUTH] Error en switchOperator, intentando fallback offline:', err.message);
       // Error de red — intentar validación local con PBKDF2 usando operadores cacheados
       const userId = get().user?.id
       const operators = leerOperadoresCache(userId)

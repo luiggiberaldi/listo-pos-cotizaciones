@@ -62,7 +62,7 @@ export async function generarFacturaPDF({ despacho, items = [], config = {}, for
     if (pageNum > 1) {
       const HDR_H = 15
       if (!esMembrete) {
-        try { doc.addImage(LOGO_DESPACHO, 'PNG', MARGIN - 2, 4, 12, 12) } catch (_) {}
+        try { doc.addImage(LOGO_DESPACHO, 'PNG', MARGIN - 2, 4, 12, 12) } catch (_) { /* ignore */ }
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(11)
         doc.setTextColor(...C_DARK)
@@ -153,7 +153,7 @@ export async function generarFacturaPDF({ despacho, items = [], config = {}, for
 
   // Si no es membrete, dibujamos el logo y los datos de la empresa arriba del recuadro
   if (!esMembrete) {
-    try { doc.addImage(LOGO_DESPACHO, 'PNG', MARGIN, 11, 15, 15) } catch (_) {}
+    try { doc.addImage(LOGO_DESPACHO, 'PNG', MARGIN, 11, 15, 15) } catch (_) { /* ignore */ }
     
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(11)
@@ -456,7 +456,7 @@ export async function generarFacturaPDF({ despacho, items = [], config = {}, for
   const descuentoTotal = Number(despacho.descuento_total_usd || 0)
   const totalFinal = total - descuentoTotal
 
-  const baseImponible = totalFinal - montoExento  // El total de los productos (después de descuentos, excluyendo flete/corte) es la Base Imponible
+  const baseImponible = totalFinal  // El total de los productos (después de descuentos, excluyendo flete/corte) es la Base Imponible
   const ivaPct = config.iva_pct !== undefined && config.iva_pct !== null ? Number(config.iva_pct) : 16
   const ivaAmount = baseImponible * (ivaPct / 100)  // Se le suma el % de IVA configurado
   const totalFacturaFinal = baseImponible + ivaAmount + montoExento
