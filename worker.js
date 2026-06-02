@@ -22,7 +22,7 @@ import { handleMarcarComisionPagada, handleActualizarEstadoComision, handleGetCo
 import { handleRegistrarAbono, handleRevertirAbono } from './api/handlers/cxc.js'
 import { handleSwitchOperator, handleClearOperator, handleGetOperators, handleSuperAdmin } from './api/handlers/auth-operators.js'
 import { handleBuscarProductosHibrido, handleSyncEmbeddings, handleParseMaterialText, handleScanMaterialList, handleAplicarMovimientoLote, handleBatchIngest, handleTransformacionInventario, handleBatchPriceUpdate, handleClearInventory, handlePdfTemp } from './api/handlers/inventario.js'
-import { handleGuardarCotizacion, handleReciclarCotizacion, handleReabrirCotizacion, handleCrearVersion, handleEnviarCotizacion, handleVentaRapida } from './api/handlers/cotizaciones.js'
+import { handleGuardarCotizacion, handleReciclarCotizacion, handleReabrirCotizacion, handleCrearVersion, handleEnviarCotizacion, handleVentaRapida, runCleanupCotizaciones } from './api/handlers/cotizaciones.js'
 import { handleCrearDespacho, handleActualizarEstadoDespacho, handleEditarItemsDespacho, handleReciclarDespacho, handleGuardarDescuentos, handleObtenerDescuentos, handleEditarPagoDespacho } from './api/handlers/despachos.js'
 import { handleDevTools } from './api/handlers/dev.js'
 import { handleAdmin, handleBackup, handleRestore, handleSaveConfig, handleGetConfig, handleResetOperacional, handleTesterClearAll, handleTesterSeedDemo, handleTesterStressSeed, handleCrearTransportista, handleActualizarTransportista } from './api/handlers/admin.js'
@@ -454,13 +454,19 @@ export default {
 
   async scheduled(event, env, ctx) {
     ctx.waitUntil(
-      runPurgeTrackingImages(env)
-        .then(result => {
-          console.log('[CRON PURGE] Completed successfully:', result);
-        })
-        .catch(err => {
-          console.error('[CRON PURGE] Failed with error:', err);
-        })
+      Promise.allSettled([
+        runPurgeTrackingImages(env),
+        runCleanupCotizaciones(env)
+      ]).then(results => {
+        results.forEach((res, idx) => {
+          const cronName = idx === 0 ? 'PURGE_IMAGES' : 'CLEANUP_COTIZACIONES';
+          if (res.status === 'fulfilled') {
+            console.log(`[CRON ${cronName}] Completado con éxito:`, res.value);
+          } else {
+            console.error(`[CRON ${cronName}] Falló con error:`, res.reason);
+          }
+        });
+      })
     );
   },
 };
