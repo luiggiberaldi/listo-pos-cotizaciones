@@ -1076,7 +1076,7 @@ export async function handleCrearTransportista(request, env) {
   }
 
   const body = await request.json();
-  const { nombre, rif, telefono, zona_cobertura, tarifa_base, notas, color, vehiculo, placa_chuto, placa_batea, capacidad } = body;
+  const { nombre, rif, telefono, zona_cobertura, tarifa_base, notas, color, vehiculo, placa_chuto, placa_batea, capacidad, color_batea } = body;
   if (!nombre) return jsonError('Nombre es requerido', 400, request);
 
   const res = await fetch(`${env.SUPABASE_URL}/rest/v1/transportistas`, {
@@ -1089,7 +1089,7 @@ export async function handleCrearTransportista(request, env) {
     },
     body: JSON.stringify({
       nombre, rif, telefono, zona_cobertura, tarifa_base, notas,
-      color, vehiculo, placa_chuto, placa_batea, capacidad,
+      color, vehiculo, placa_chuto, placa_batea, capacidad, color_batea,
       cuenta_id: operador.cuenta_id,
       creado_por: operador.id,
       activo: true

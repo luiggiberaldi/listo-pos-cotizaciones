@@ -597,7 +597,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     { label: 'VEHÍCULO',    val: (transportista?.vehiculo    || '').toUpperCase(), w: col4W },
     { label: 'PLACA CHUTO', val: (transportista?.placa_chuto || '').toUpperCase(), w: col4W },
     { label: 'PLACA BATEA', val: (transportista?.placa_batea || '').toUpperCase(), w: col4W },
-    { label: 'FLETE',       val: hasFlete ? 'EN TABLA' : '—',                     w: col4W },
+    { label: 'COLOR BATEA', val: (transportista?.color_batea || '').toUpperCase(), w: col4W },
   ]
 
   function drawChoferRow(fields, ry) {

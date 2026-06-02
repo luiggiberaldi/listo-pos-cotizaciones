@@ -107,7 +107,7 @@ function ModalVentaExitosa({ data, onClose, config }) {
         body: JSON.stringify({ ids: [data.clienteId].filter(Boolean) }),
       }).then(r => r.ok ? r.json() : []),
       supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', data.vendedorId).single(),
-      data.transportistaId ? supabase.from('transportistas').select('id, nombre, rif, telefono, vehiculo, placa_chuto, placa_batea, color, zona_cobertura, capacidad').eq('id', data.transportistaId).single() : Promise.resolve({ data: null }),
+      data.transportistaId ? supabase.from('transportistas').select('id, nombre, rif, telefono, vehiculo, placa_chuto, placa_batea, color, color_batea, zona_cobertura, capacidad').eq('id', data.transportistaId).single() : Promise.resolve({ data: null }),
     ])
     if (itemsRes.error) throw itemsRes.error
     const despachoObj = {

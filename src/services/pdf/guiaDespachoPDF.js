@@ -27,7 +27,7 @@ export async function generarGuiaDespachoPDF({ despacho, items = [], config = {}
       return 50 // Margen superior 5cm para hoja pre-impresa
     }
     const HDR_H = 20
-    try { doc.addImage(LOGO_DESPACHO, 'PNG', MARGIN - 2, 6, 22, 22) } catch (_) {}
+    try { doc.addImage(LOGO_DESPACHO, 'PNG', MARGIN - 2, 6, 22, 22) } catch (_) { /* ignore */ }
     const centerX = PAGE_W / 2
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(20)
@@ -403,7 +403,7 @@ export async function generarGuiaDespachoPDF({ despacho, items = [], config = {}
     { label: 'VEHÍCULO',    val: (transportista?.vehiculo    || '').toUpperCase(), w: col4W },
     { label: 'PLACA CHUTO', val: (transportista?.placa_chuto || '').toUpperCase(), w: col4W },
     { label: 'PLACA BATEA', val: (transportista?.placa_batea || '').toUpperCase(), w: col4W },
-    { label: '',            val: '',                                              w: col4W },
+    { label: 'COLOR BATEA', val: (transportista?.color_batea || '').toUpperCase(), w: col4W },
   ]
 
   function drawRow(fields, ry) {

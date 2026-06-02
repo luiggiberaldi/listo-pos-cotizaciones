@@ -20,7 +20,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
 
   const drawHeader = (doc, num) => {
     const HDR_H = 20
-    try { doc.addImage(LOGO_DESPACHO, 'PNG', MARGIN - 2, 6, 22, 22) } catch (_) {}
+    try { doc.addImage(LOGO_DESPACHO, 'PNG', MARGIN - 2, 6, 22, 22) } catch (_) { /* ignore */ }
     const centerX = PAGE_W / 2
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(20)
@@ -630,7 +630,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
     { label: 'VEHÍCULO',    val: (transportista?.vehiculo    || '').toUpperCase(), w: col4W },
     { label: 'PLACA CHUTO', val: (transportista?.placa_chuto || '').toUpperCase(), w: col4W },
     { label: 'PLACA BATEA', val: (transportista?.placa_batea || '').toUpperCase(), w: col4W },
-    { label: 'FLETE',       val: hasFleteReal ? 'EN TABLA' : '—',                 w: col4W },
+    { label: 'COLOR BATEA', val: (transportista?.color_batea || '').toUpperCase(), w: col4W },
   ]
   function drawRow(fields, ry) {
     let currentX = MARGIN
