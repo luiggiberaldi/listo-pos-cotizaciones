@@ -1313,3 +1313,309 @@ export async function handleObtenerDescuentos(request, env, url) {
     return jsonError(e.message || 'Error al obtener descuentos', 500, request);
   }
 }
+
+export async function handleDevolucionParcialDespacho(request, env) {
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { user, operador, headers, ip } = v;
+
+  if (!['administracion', 'logistica', 'desarrollador', 'jefe'].includes(operador.rol)) {
+    return jsonError('No tienes permiso para realizar una devolución parcial', 403, request);
+  }
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+  const { despachoId, items, motivo, generarReemplazo } = body;
+
+  if (!despachoId || !isValidUuid(despachoId)) return jsonError('despachoId inválido o ausente', 400, request);
+  if (!Array.isArray(items) || items.length === 0) return jsonError('items debe ser un array no vacío', 400, request);
+  if (!motivo || motivo.trim() === '') return jsonError('El motivo es requerido', 400, request);
+
+  try {
+    // 1. Obtener despacho
+    const dRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&select=*`, { headers });
+    const [desp] = await dRes.json();
+    if (!desp) return jsonError('Despacho no encontrado', 404, request);
+
+    if (desp.estado !== 'entregada') {
+      return jsonError('El despacho debe estar en estado entregada para registrar una devolución parcial', 400, request);
+    }
+
+    // 2. Obtener ítems originales
+    const diRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho_items?despacho_id=eq.${despachoId}&select=*`, { headers });
+    const originalItems = await diRes.json();
+    const origItemMap = Object.fromEntries(originalItems.map(i => [i.id, i]));
+
+    // 3. Obtener devoluciones previas
+    const prevDevRes = await fetch(`${env.SUPABASE_URL}/rest/v1/despacho_devoluciones?despacho_id=eq.${despachoId}&select=despacho_item_id,cantidad_devuelta`, { headers });
+    const prevDevoluciones = await prevDevRes.json();
+
+    const returnedQtyMap = {};
+    if (Array.isArray(prevDevoluciones)) {
+      prevDevoluciones.forEach(d => {
+        returnedQtyMap[d.despacho_item_id] = (returnedQtyMap[d.despacho_item_id] || 0) + Number(d.cantidad_devuelta);
+      });
+    }
+
+    // 4. Validar ítems y cantidades
+    const processedItems = [];
+    let totalDevueltoUsd = 0;
+
+    for (const it of items) {
+      const { despacho_item_id, cantidad_devuelta } = it;
+      if (!despacho_item_id || !origItemMap[despacho_item_id]) {
+        return jsonError(`Ítem con ID ${despacho_item_id} no pertenece a este despacho`, 400, request);
+      }
+
+      const origItem = origItemMap[despacho_item_id];
+      const qty = Number(cantidad_devuelta);
+      if (isNaN(qty) || qty <= 0) {
+        return jsonError(`Cantidad a devolver inválida para el producto: ${origItem.nombre_snap}`, 400, request);
+      }
+
+      const alreadyReturned = returnedQtyMap[despacho_item_id] || 0;
+      const maxReturnable = Number(origItem.cantidad) - alreadyReturned;
+
+      if (qty > maxReturnable) {
+        return jsonError(`La cantidad a devolver (${qty}) supera el saldo disponible (${maxReturnable}) para el producto: ${origItem.nombre_snap}`, 400, request);
+      }
+
+      const unitPriceAfterDiscount = Number(origItem.precio_unit_usd) * (1 - Number(origItem.descuento_pct || 0) / 100);
+      const lineTotalRefund = Math.round((unitPriceAfterDiscount * qty) * 10000) / 10000;
+
+      totalDevueltoUsd += lineTotalRefund;
+
+      processedItems.push({
+        despacho_item_id,
+        producto_id: origItem.producto_id,
+        nombre_snap: origItem.nombre_snap,
+        codigo_snap: origItem.codigo_snap,
+        unidad_snap: origItem.unidad_snap,
+        cantidad_devuelta: qty,
+        precio_unit_usd: origItem.precio_unit_usd,
+        total_devuelto_usd: lineTotalRefund,
+        origen: origItem.origen
+      });
+    }
+
+    totalDevueltoUsd = Math.round(totalDevueltoUsd * 10000) / 10000;
+
+    // 5. Devolver stock e insertar movimientos Kardex
+    const loteId = crypto.randomUUID();
+    const movimientos = [];
+    for (const item of processedItems) {
+      if (item.producto_id && item.origen === 'inventario') {
+        const pRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${item.producto_id}&select=stock_actual,nombre`, { headers });
+        const [prod] = await pRes.json();
+        if (prod) {
+          const stockAnterior = Number(prod.stock_actual);
+          const nuevoStock = stockAnterior + item.cantidad_devuelta;
+
+          await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${item.producto_id}`, {
+            method: 'PATCH',
+            headers: { ...headers, Prefer: 'return=minimal' },
+            body: JSON.stringify({ stock_actual: nuevoStock }),
+          });
+
+          movimientos.push({
+            lote_id: loteId,
+            tipo: 'ingreso',
+            motivo: `Devolución parcial de despacho #${desp.numero}`,
+            motivo_tipo: 'devolucion',
+            producto_id: item.producto_id,
+            producto_nombre: item.nombre_snap || prod.nombre,
+            cantidad: item.cantidad_devuelta,
+            stock_anterior: stockAnterior,
+            stock_nuevo: nuevoStock,
+            usuario_id: user.operator_id,
+            usuario_nombre: operador.nombre,
+            usuario_color: operador.color || null,
+          });
+        }
+      }
+    }
+
+    if (movimientos.length > 0) {
+      const kardexRes = await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(movimientos),
+      });
+      if (!kardexRes.ok) {
+        console.error('[DEVOLUCION] Error al insertar Kardex:', await kardexRes.text());
+      }
+    }
+
+    // 6. Generar cotización de reemplazo si se solicita
+    let cotizacionReemplazoId = null;
+    if (generarReemplazo) {
+      const cotBody = {
+        version: 1,
+        cliente_id: desp.cliente_id,
+        vendedor_id: desp.vendedor_id,
+        transportista_id: desp.transportista_id || null,
+        estado: 'borrador',
+        subtotal_usd: totalDevueltoUsd,
+        descuento_global_pct: 0,
+        descuento_usd: 0,
+        costo_envio_usd: 0,
+        total_usd: totalDevueltoUsd,
+        notas_cliente: `Reemplazo por devolución en Despacho #${desp.numero}`,
+        notas_internas: `Generada automáticamente por devolución parcial de Despacho #${desp.numero}. Motivo: ${motivo}`
+      };
+
+      const newCotRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?select=id`, {
+        method: 'POST',
+        headers: { ...headers, Prefer: 'return=representation' },
+        body: JSON.stringify(cotBody),
+      });
+
+      if (newCotRes.ok) {
+        const [newCot] = await newCotRes.json();
+        cotizacionReemplazoId = newCot.id;
+
+        const cotItems = processedItems.map((item, idx) => ({
+          cotizacion_id: cotizacionReemplazoId,
+          producto_id: item.producto_id,
+          nombre_snap: item.nombre_snap,
+          codigo_snap: item.codigo_snap,
+          unidad_snap: item.unidad_snap,
+          origen: item.origen || 'inventario',
+          cantidad: item.cantidad_devuelta,
+          precio_unit_usd: item.precio_unit_usd,
+          descuento_pct: 0,
+          total_linea_usd: item.total_devuelto_usd,
+          orden: idx
+        }));
+
+        const insItemsRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizacion_items`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(cotItems)
+        });
+
+        if (!insItemsRes.ok) {
+          console.error('[DEVOLUCION] Error al insertar ítems de cotización de reemplazo:', await insItemsRes.text());
+        }
+      } else {
+        console.error('[DEVOLUCION] Error al crear cotización de reemplazo:', await newCotRes.text());
+      }
+    }
+
+    // 7. Guardar registros en despacho_devoluciones
+    const devolucionesRows = processedItems.map(item => ({
+      despacho_id: despachoId,
+      despacho_item_id: item.despacho_item_id,
+      producto_id: item.producto_id,
+      nombre_snap: item.nombre_snap,
+      codigo_snap: item.codigo_snap,
+      unidad_snap: item.unidad_snap,
+      cantidad_devuelta: item.cantidad_devuelta,
+      precio_unit_usd: item.precio_unit_usd,
+      total_devuelto_usd: item.total_devuelto_usd,
+      motivo: motivo,
+      registrado_por: user.operator_id,
+      registrado_por_nombre: operador.nombre,
+      cotizacion_reemplazo_id: cotizacionReemplazoId
+    }));
+
+    const devInsRes = await fetch(`${env.SUPABASE_URL}/rest/v1/despacho_devoluciones`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(devolucionesRows)
+    });
+
+    if (!devInsRes.ok) {
+      const devInsErr = await devInsRes.text();
+      return jsonError(`Error al registrar devoluciones en BD: ${devInsErr}`, 500, request);
+    }
+
+    // 8. Actualizar flag en notas_despacho
+    await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}`, {
+      method: 'PATCH',
+      headers: { ...headers, Prefer: 'return=minimal' },
+      body: JSON.stringify({ tiene_devoluciones: true })
+    });
+
+    // 9. CxC abono proporcional
+    let abonoRegistrado = false;
+    let abonoMonto = 0;
+    const cargoRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?despacho_id=eq.${despachoId}&tipo=eq.cargo&select=monto_usd`, { headers });
+    const cargos = await cargoRes.json();
+
+    if (Array.isArray(cargos) && cargos.length > 0) {
+      const totalCargo = cargos.reduce((sum, c) => sum + Number(c.monto_usd), 0);
+      abonoMonto = Math.min(totalDevueltoUsd, totalCargo);
+      abonoMonto = Math.round(abonoMonto * 10000) / 10000;
+
+      if (abonoMonto > 0) {
+        const clienteCxCId = desp.cliente_factura_id || desp.cliente_id;
+        const cRes = await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteCxCId}&select=saldo_pendiente`, { headers });
+        const [cliente] = await cRes.json();
+        const saldoActual = Number(cliente?.saldo_pendiente || 0);
+        const nuevoSaldo = Math.max(0, Math.round((saldoActual - abonoMonto) * 10000) / 10000);
+
+        const abonoRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
+          method: 'POST',
+          headers: { ...headers, Prefer: 'return=minimal' },
+          body: JSON.stringify({
+            cliente_id: clienteCxCId,
+            despacho_id: despachoId,
+            tipo: 'abono',
+            monto_usd: abonoMonto,
+            forma_pago_abono: 'Devolución',
+            referencia: `Despacho #${desp.numero}`,
+            saldo_usd: nuevoSaldo,
+            descripcion: `Abono por devolución parcial — Despacho #${desp.numero}`,
+            registrado_por: user.operator_id
+          })
+        });
+
+        if (abonoRes.ok) {
+          abonoRegistrado = true;
+          await recalcularSaldoPendienteCliente(clienteCxCId, env, headers);
+        } else {
+          console.error('[DEVOLUCION] Error al registrar abono CxC:', await abonoRes.text());
+        }
+      }
+    }
+
+    // 10. Auditoría
+    try {
+      await registrarAuditoria(env, headers, {
+        usuarioId: user.operator_id,
+        usuarioNombre: operador.nombre,
+        usuarioRol: operador.rol,
+        categoria: 'DESPACHO',
+        accion: 'DEVOLUCION_PARCIAL',
+        descripcion: `Devolución parcial en despacho #${desp.numero}. Motivo: ${motivo}. Total devuelto: $${totalDevueltoUsd.toFixed(2)}`,
+        entidadTipo: 'nota_despacho',
+        entidadId: despachoId,
+        meta: {
+          despacho_id: despachoId,
+          items_devueltos: processedItems.map(i => ({ producto: i.nombre_snap, cantidad: i.cantidad_devuelta })),
+          total_devuelto_usd: totalDevueltoUsd,
+          cotizacion_reemplazo_id: cotizacionReemplazoId,
+          abono_cxc_registrado: abonoRegistrado,
+          abono_cxc_monto: abonoMonto
+        },
+        ip
+      });
+    } catch (auditErr) {
+      console.error('[DEVOLUCION] Error al registrar auditoría:', auditErr.message);
+    }
+
+    return json({
+      ok: true,
+      cotizacionReemplazoId,
+      totalDevueltoUsd,
+      abonoRegistrado,
+      abonoMonto
+    }, 200, request);
+
+  } catch (e) {
+    console.error('[DEVOLUCION] Error unhandled:', e);
+    return jsonError(e.message || 'Error interno al registrar devolución parcial', 500, request);
+  }
+}
+

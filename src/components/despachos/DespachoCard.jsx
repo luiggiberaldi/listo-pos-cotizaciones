@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, memo, Fragment } from 'react'
-import { FileText, Calendar, Truck, CheckCircle, Ban, RefreshCcw, RefreshCw, Download, Loader2, Eye, MoreHorizontal, MoreVertical, ChevronDown, Printer, Tag, Pencil, RotateCcw, AlertTriangle, Clock, CreditCard, DollarSign, Check, PackageCheck, Mail, Handshake } from 'lucide-react'
+import { FileText, Calendar, Truck, CheckCircle, Ban, RefreshCcw, RefreshCw, Download, Loader2, Eye, MoreHorizontal, MoreVertical, ChevronDown, Printer, Tag, Pencil, RotateCcw, AlertTriangle, Clock, CreditCard, DollarSign, Check, PackageCheck, Mail, Handshake, PackageX } from 'lucide-react'
 import EstadoBadge from '../cotizaciones/EstadoBadge'
 import MobileActionSheet from '../cotizaciones/MobileActionSheet'
 import ConfirmModal from '../ui/ConfirmModal'
@@ -16,6 +16,7 @@ import DevolverAnularModal from './DevolverAnularModal'
 import CambiarTransportistaModal from './CambiarTransportistaModal'
 import ConciliarCodModal from './ConciliarCodModal'
 import FacturaModal from './FacturaModal'
+import DevolucionParcialModal from './DevolucionParcialModal'
 import { showToast } from '../ui/Toast'
 import { MessageCircle } from 'lucide-react'
 import SeguimientoFijadoModal from '../ui/SeguimientoFijadoModal'
@@ -55,6 +56,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const [showCambiarTransportista, setShowCambiarTransportista] = useState(false)
   const [showConciliarCod, setShowConciliarCod] = useState(false)
   const [showFacturaModal, setShowFacturaModal] = useState(false)
+  const [showDevolucionParcial, setShowDevolucionParcial] = useState(false)
   const [facturaActionType, setFacturaActionType] = useState('download')
   const esLogistica = perfil?.rol === 'logistica' || perfil?.rol === 'jefe' || perfil?.rol === 'desarrollador'
   const { tasaBcv, tasaUsdt } = useTasaCambio()
@@ -233,11 +235,12 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     ? `COT-${String(despacho.cotizacion.numero).padStart(5, '0')}`
     : '—'
 
-  const canDespachar = (esAdministracion || esDesarrollador) && despacho.estado === 'pendiente'
+  const canDespachar = (esAdministracion || esDesarrollador || rol === 'jefe') && despacho.estado === 'pendiente'
   const canEntregar = (perfil?.rol === 'logistica' || esDesarrollador) && despacho.estado === 'despachada'
   const esVendedorPropio = perfil?.id === despacho.vendedor_id
   const canAnular = despacho.estado === 'pendiente' && (esDesarrollador || esAdministracion || esSupervisor || esVendedorPropio)
   const canDevolver = (despacho.estado === 'despachada' || despacho.estado === 'entregada') && ['logistica', 'jefe', 'desarrollador'].includes(perfil?.rol)
+  const canDevolucionParcial = despacho.estado === 'entregada' && ['administracion', 'logistica', 'desarrollador', 'jefe'].includes(perfil?.rol)
   const canReciclar = ((esSupervisor || esDesarrollador) && despacho.estado === 'anulada' && onReciclar)
     || (['vendedor', 'vendedor_sin_comision'].includes(rol) && despacho.estado === 'anulada' && esVendedorPropio && onReciclar)
   const canDescuento = (esAdministracion || esDesarrollador) && ['pendiente', 'despachada'].includes(despacho.estado)
@@ -688,6 +691,15 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       })
     }
 
+    if (canDevolucionParcial) {
+      actions.push({
+        label: 'Devolución Parcial',
+        icon: PackageX,
+        onClick: () => setShowDevolucionParcial(true),
+        textColor: 'text-amber-600 font-medium'
+      })
+    }
+
     return actions
   }
 
@@ -698,7 +710,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     act.label !== 'No entregado / Devolver' &&
     act.label !== 'Cambiar Transportista' &&
     act.label !== 'Agregar Transportista' &&
-    act.label !== 'Marcar COD como pagado'
+    act.label !== 'Marcar COD como pagado' &&
+    act.label !== 'Devolución Parcial'
   )
 
   // Resolver config del confirm modal
@@ -758,6 +771,11 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
                   <Handshake size={10} /> Mixto
                 </span>
               )
+            )}
+            {despacho.tiene_devoluciones && (
+              <span className="inline-flex items-center gap-1 bg-amber-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded border border-amber-400/50 shadow-sm uppercase tracking-wider leading-none shrink-0 select-none" title="Este despacho tiene devoluciones parciales registradas">
+                Devolución
+              </span>
             )}
           </div>
           {/* Kebab ⋮ — acciones secundarias */}
@@ -1460,6 +1478,12 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         onConfirm={generarFacturaConDatos}
         actionType={facturaActionType}
         loading={pdfLoading || printLoading}
+      />
+
+      <DevolucionParcialModal
+        isOpen={showDevolucionParcial}
+        onClose={() => setShowDevolucionParcial(false)}
+        despacho={despacho}
       />
 
       {/* ── Menú kebab ⋮ — nivel raíz, fixed para escapar overflow:hidden ── */}

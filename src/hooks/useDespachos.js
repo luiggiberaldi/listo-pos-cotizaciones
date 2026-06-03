@@ -100,7 +100,7 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false, busqu
       let query = supabase
         .from('notas_despacho')
         .select(`
-          id, numero, cotizacion_id, estado, tiene_prestamos,
+          id, numero, cotizacion_id, estado, tiene_prestamos, tiene_devoluciones,
           total_usd, flete_usd, corte_usd, descuento_total_usd, notas, forma_pago,
           referencia_pago, forma_pago_cliente,
           creado_en, actualizado_en, despachada_en, entregada_en, aprobado_por_nombre,
@@ -435,3 +435,35 @@ export function useReciclarDespacho() {
     },
   })
 }
+
+// ─── Devolución parcial de despacho entregado (administracion/logistica) ────
+export function useDevolucionParcialDespacho() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ despachoId, items, motivo, generarReemplazo }) => {
+      const res = await authFetch('/api/despachos/devolucion-parcial', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ despachoId, items, motivo, generarReemplazo }),
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Error al registrar devolución parcial')
+      return result
+    },
+    onSuccess: async () => {
+      showToast('Devolución parcial registrada con éxito', 'success')
+      qc.invalidateQueries({ queryKey: ['despachos'], exact: false })
+      qc.invalidateQueries({ queryKey: ['inventario'], exact: false })
+      qc.invalidateQueries({ queryKey: ['clientes'], exact: false })
+      qc.invalidateQueries({ queryKey: ['cuentas-cobrar'], exact: false })
+      qc.invalidateQueries({ queryKey: ['cotizaciones'], exact: false })
+      qc.invalidateQueries({ queryKey: ['dashboard_metrics'] })
+      qc.invalidateQueries({ queryKey: ['reporte-ventas'] })
+    },
+    onError: (error) => {
+      showToast(error.message || 'Error al registrar devolución', 'error')
+    },
+  })
+}
+

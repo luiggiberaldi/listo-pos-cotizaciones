@@ -23,7 +23,7 @@ import { handleRegistrarAbono, handleRevertirAbono } from './api/handlers/cxc.js
 import { handleSwitchOperator, handleClearOperator, handleGetOperators, handleSuperAdmin } from './api/handlers/auth-operators.js'
 import { handleBuscarProductosHibrido, handleSyncEmbeddings, handleParseMaterialText, handleScanMaterialList, handleAplicarMovimientoLote, handleBatchIngest, handleTransformacionInventario, handleBatchPriceUpdate, handleClearInventory, handlePdfTemp } from './api/handlers/inventario.js'
 import { handleGuardarCotizacion, handleReciclarCotizacion, handleReabrirCotizacion, handleCrearVersion, handleEnviarCotizacion, handleVentaRapida, runCleanupCotizaciones } from './api/handlers/cotizaciones.js'
-import { handleCrearDespacho, handleActualizarEstadoDespacho, handleEditarItemsDespacho, handleReciclarDespacho, handleGuardarDescuentos, handleObtenerDescuentos, handleEditarPagoDespacho } from './api/handlers/despachos.js'
+import { handleCrearDespacho, handleActualizarEstadoDespacho, handleEditarItemsDespacho, handleReciclarDespacho, handleGuardarDescuentos, handleObtenerDescuentos, handleEditarPagoDespacho, handleDevolucionParcialDespacho } from './api/handlers/despachos.js'
 import { handleDevTools } from './api/handlers/dev.js'
 import { handleAdmin, handleBackup, handleRestore, handleSaveConfig, handleGetConfig, handleResetOperacional, handleTesterClearAll, handleTesterSeedDemo, handleTesterStressSeed, handleCrearTransportista, handleActualizarTransportista } from './api/handlers/admin.js'
 import { handleGetSeguimiento, handleCrearSeguimiento, handleActualizarSeguimiento, handleBorrarSeguimiento, runPurgeTrackingImages } from './api/handlers/seguimiento.js'
@@ -178,6 +178,11 @@ export default {
     // ── API: editar forma de pago del despacho ──────────────────────────
     if (url.pathname === '/api/despachos/editar-pago' && request.method === 'POST') {
       return handleEditarPagoDespacho(request, env);
+    }
+
+    // ── API: devolución parcial de despacho (administracion/logistica) ────
+    if (url.pathname === '/api/despachos/devolucion-parcial' && request.method === 'POST') {
+      return handleDevolucionParcialDespacho(request, env);
     }
 
     // ── API: obtener descuentos de un despacho ────────────────────────────
