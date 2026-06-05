@@ -35,6 +35,22 @@ async function recalcularSaldoPendienteCliente(clienteId, env, headers) {
   }
 }
 
+async function obtenerVendedorComisionId(despacho, headers, env) {
+  if (despacho.cliente_id) {
+    const cliRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${despacho.cliente_id}&select=vendedor_id`,
+      { headers }
+    );
+    if (cliRes.ok) {
+      const cliData = await cliRes.json();
+      if (cliData && cliData[0]?.vendedor_id) {
+        return cliData[0].vendedor_id;
+      }
+    }
+  }
+  return despacho.vendedor_id;
+}
+
 
 export async function handleCrearDespacho(request, env) {
   const v = await validateOperator(request, env);
@@ -316,8 +332,9 @@ export async function handleEditarPagoDespacho(request, env) {
   const comRes = await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}&select=id`, { headers: h });
   const comEntries = await comRes.json();
   if (Array.isArray(comEntries) && comEntries.length > 0) {
+    const vendedorIdComision = await obtenerVendedorComisionId(despacho, h, env);
     const vendRolRes2 = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${despacho.vendedor_id}&select=rol,markup_pct`,
+      `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${vendedorIdComision}&select=rol,markup_pct`,
       { headers: h }
     );
     const [vendRol2] = await vendRolRes2.json();
@@ -773,8 +790,9 @@ export async function handleActualizarEstadoDespacho(request, env) {
     // 5b. Calcular comisión al aprobar o entregar
     if (nuevoEstado === 'despachada' || nuevoEstado === 'entregada') {
       try {
+        const vendedorIdComision = await obtenerVendedorComisionId(desp, headers, env);
         const vendRolRes = await fetch(
-          `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${desp.vendedor_id}&select=rol,markup_pct`,
+          `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${vendedorIdComision}&select=rol,markup_pct`,
           { headers }
         );
         const [vendRol] = await vendRolRes.json();
@@ -1103,12 +1121,13 @@ export async function handleEditarItemsDespacho(request, env) {
     const comEntries = await comRes.json();
     if (Array.isArray(comEntries) && comEntries.length > 0) {
       const dResCheck = await fetch(
-        `${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&select=vendedor_id`,
+        `${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&select=vendedor_id,cliente_id`,
         { headers }
       );
       const [despCheck] = await dResCheck.json();
+      const vendedorIdComision = await obtenerVendedorComisionId(despCheck, headers, env);
       const vendRolRes4 = await fetch(
-        `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${despCheck?.vendedor_id}&select=rol,markup_pct`,
+        `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${vendedorIdComision}&select=rol,markup_pct`,
         { headers }
       );
       const [vendRol4] = await vendRolRes4.json();
@@ -1257,8 +1276,9 @@ export async function handleGuardarDescuentos(request, env) {
       );
       const comEntries = await comRes.json();
       if (Array.isArray(comEntries) && comEntries.length > 0) {
+        const vendedorIdComision = await obtenerVendedorComisionId(desp, headers, env);
         const vendRolRes3 = await fetch(
-          `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${desp.vendedor_id}&select=rol,markup_pct`,
+          `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${vendedorIdComision}&select=rol,markup_pct`,
           { headers }
         );
         const [vendRol3] = await vendRolRes3.json();
