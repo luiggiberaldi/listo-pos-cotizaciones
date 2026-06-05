@@ -364,7 +364,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     })
   }
 
-  const isLargeDoc = itemsToRender.length >= 23
+  const isLargeDoc = itemsToRender.length >= 23 || (itemsToRender.length >= 18 && despacho.notas?.trim())
 
   itemsToRender.forEach((item) => {
     // Calcular cuántas líneas necesita la descripción (optimizado lineH = 3.6)
@@ -527,7 +527,25 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const dataRowH = 3.6
   const comboTop = comboBottom - totalBarH - numComboRows * dataRowH
 
+  // Notas Adicionales — se renderizan ancladas sobre el bloque de totales
+  if (despacho.notas?.trim()) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    const notasLineas = doc.splitTextToSize(despacho.notas.trim(), CONTENT_W)
+    const notasH = 5 + notasLineas.length * 5
+    const notasStartY = comboTop - 2 - notasH
 
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9.5)
+    doc.setTextColor(...C_DARK)
+    doc.text('NOTAS:', MARGIN, notasStartY + 4)
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    notasLineas.forEach((lin, i) => {
+      doc.text(lin, MARGIN, notasStartY + 4 + 5 + i * 5)
+    })
+  }
 
   // Dibujar filas de datos
   const comboLeftW = CONTENT_W - 90

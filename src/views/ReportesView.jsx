@@ -12,6 +12,7 @@ import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import { useComisiones, useComisionesResumen, useMarcarComisionPagada } from '../hooks/useComisiones'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import { useResumenCxC } from '../hooks/useCuentasCobrar'
+import { useProveedores } from '../hooks/useProveedores'
 import { getDayRange, getWeekRange, getMonthRange } from '../utils/dateHelpers'
 import { fmtUsd, fmtBs } from '../utils/format'
 import useAuthStore from '../store/useAuthStore'
@@ -2127,7 +2128,10 @@ function AgingBars({ aging }) {
 }
 
 function TabCredito() {
-  const { data, isLoading, isError, refetch } = useResumenCxC()
+  const { data: cxcData, isLoading: cxcLoading, isError: cxcError, refetch: refetchCxc } = useResumenCxC()
+  const { data: proveedores = [], isLoading: provLoading, isError: provError, refetch: refetchProv } = useProveedores()
+
+  const [seccionCredito, setSeccionCredito] = useState('cxc') // 'cxc' | 'cxp'
   const [sortBy, setSortBy] = useState('saldo') // 'saldo' | 'dias' | 'diasRestantes'
   const [sortDir, setSortDir] = useState('desc')
   const { perfil } = useAuthStore()
@@ -2136,12 +2140,20 @@ function TabCredito() {
   const [exportandoCxC, setExportandoCxC] = useState(false)
   const { data: configNeg = {} } = useConfigNegocio()
 
+  const isLoading = cxcLoading || provLoading
+  const isError = cxcError || provError
+
+  const refetch = () => {
+    refetchCxc()
+    refetchProv()
+  }
+
   async function exportarCxCPDF(tipoReporte = 'detallado', accion = 'descargar') {
     setExportandoCxC(true)
     try {
       const { generarReporteCxCPDF } = await import('../services/pdf/cxcPDF')
       await generarReporteCxCPDF({
-        data,
+        data: cxcData,
         config: configNeg,
         action: accion === 'imprimir' ? 'print' : 'download',
         tipo: tipoReporte
@@ -2160,17 +2172,29 @@ function TabCredito() {
 
   if (isLoading) return <SkeletonReporte />
   if (isError) return <ErrorMsg onRetry={refetch} />
-  if (!data || data.kpis.numClientesConDeuda === 0) {
+
+  // Normalizar datos de CxC
+  const kpis = cxcData?.kpis || { totalDeuda: 0, numClientesConDeuda: 0, promedioDeuda: 0, diasMasAntiguo: 0, numCargos: 0 }
+  const clientesConDeuda = cxcData?.clientesConDeuda || []
+  const aging = cxcData?.aging || []
+  const alertasVencimiento = cxcData?.alertasVencimiento || []
+  const abonos = cxcData?.abonos || []
+
+  // Calcular métricas de CxP (Proveedores)
+  const proveedoresConDeuda = proveedores.filter(p => Number(p.saldo_pendiente || 0) > 0)
+  const totalCxC = Number(kpis.totalDeuda || 0)
+  const totalCxP = proveedores.reduce((sum, p) => sum + (p.activo ? Number(p.saldo_pendiente || 0) : 0), 0)
+  const balanceNeto = totalCxC - totalCxP
+
+  if (totalCxC === 0 && proveedoresConDeuda.length === 0) {
     return (
       <EmptyState
         icon={CreditCard}
-        title="Sin créditos pendientes"
-        description="No hay clientes con saldo pendiente actualmente."
+        title="Sin saldos pendientes"
+        description="No hay deudas de clientes (CxC) ni cuentas por pagar a proveedores (CxP) actualmente."
       />
     )
   }
-
-  const { kpis, clientesConDeuda, aging, alertasVencimiento, abonos } = data
 
   const clientesOrdenados = [...clientesConDeuda].sort((a, b) => {
     let va, vb
@@ -2185,6 +2209,12 @@ function TabCredito() {
       vb = b.diasSinPago ?? 0
     }
     return sortDir === 'desc' ? vb - va : va - vb
+  })
+
+  const proveedoresOrdenados = [...proveedoresConDeuda].sort((a, b) => {
+    const sa = Number(a.saldo_pendiente)
+    const sb = Number(b.saldo_pendiente)
+    return sb - sa // Mayor deuda primero
   })
 
   const maxSaldo = Math.max(...clientesConDeuda.map(c => Number(c.saldo_pendiente)), 1)
@@ -2229,7 +2259,7 @@ function TabCredito() {
                 </div>
                 <div className="text-right">
                   <div className="text-xs font-black text-orange-600">
-                    ${Number(alerta.saldo_usd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {fmtUsd(alerta.saldo_usd)}
                   </div>
                   <div className="text-[10px] font-semibold text-orange-500">
                     {alerta.diasRestantes < 0 
@@ -2249,183 +2279,268 @@ function TabCredito() {
       {/* KPIs — 4 tarjetas */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard
-          icon={DollarSign} label="Total por cobrar"
-          value={`$${Number(kpis.totalDeuda).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+          icon={DollarSign} label="Total por cobrar (CxC)"
+          value={fmtUsd(totalCxC)}
+          sub={`${kpis.numClientesConDeuda} clientes con deuda`}
           gradient="linear-gradient(135deg, #991b1b, #b91c1c)" border="rgba(255,255,255,0.10)"
         />
         <KpiCard
-          icon={Users} label="Clientes con deuda"
-          value={String(kpis.numClientesConDeuda)}
-          sub={kpis.promedioDeuda > 0 ? `Prom. $${Number(kpis.promedioDeuda).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : undefined}
-          gradient="linear-gradient(135deg, #92400e, #B8860B)" border="rgba(255,255,255,0.10)"
+          icon={Briefcase} label="Total por pagar (CxP)"
+          value={fmtUsd(totalCxP)}
+          sub={`${proveedoresConDeuda.length} proveedores con deuda`}
+          gradient="linear-gradient(135deg, #7c3aed, #6d28d9)" border="rgba(255,255,255,0.10)"
+        />
+        <KpiCard
+          icon={DollarSign} label="Balance Neto (CxC - CxP)"
+          value={fmtUsd(balanceNeto)}
+          sub={balanceNeto >= 0 ? "Superávit de cartera" : "Déficit de cartera"}
+          gradient={balanceNeto >= 0 ? "linear-gradient(135deg, #065f46, #047857)" : "linear-gradient(135deg, #b45309, #92400e)"} border="rgba(255,255,255,0.10)"
         />
         <KpiCard
           icon={Clock} label="Deuda más antigua"
-          value={`${kpis.diasMasAntiguo}d`}
-          sub="días sin pago"
-          gradient={kpis.diasMasAntiguo > 60 ? "linear-gradient(135deg, #7c3aed, #6d28d9)" : "linear-gradient(135deg, #1e3a5f, #1B365D)"} border="rgba(255,255,255,0.07)"
-        />
-        <KpiCard
-          icon={CreditCard} label="Total cargos"
-          value={String(kpis.numCargos)}
-          sub="órdenes a crédito"
-          gradient="linear-gradient(135deg, #065f46, #047857)" border="rgba(255,255,255,0.10)"
+          value={`${kpis.diasMasAntiguo || 0}d`}
+          sub="días transcurridos"
+          gradient="linear-gradient(135deg, #1e3a5f, #1B365D)" border="rgba(255,255,255,0.07)"
         />
       </div>
 
-      {/* Aging con barras */}
-      <AgingBars aging={aging} />
+      {/* Selector de Sección: CxC Clientes vs CxP Proveedores */}
+      <div className="flex p-0.5 bg-slate-100/80 rounded-xl max-w-md h-9">
+        <button
+          onClick={() => setSeccionCredito('cxc')}
+          className={`flex-1 text-xs font-bold rounded-lg transition-all ${seccionCredito === 'cxc' ? 'bg-white shadow-md text-primary font-black' : 'text-slate-500 hover:text-slate-700'}`}
+        >
+          Clientes (CxC)
+        </button>
+        <button
+          onClick={() => setSeccionCredito('cxp')}
+          className={`flex-1 text-xs font-bold rounded-lg transition-all ${seccionCredito === 'cxp' ? 'bg-white shadow-md text-primary font-black' : 'text-slate-500 hover:text-slate-700'}`}
+        >
+          Proveedores (CxP)
+        </button>
+      </div>
 
-      {/* Tabla de clientes mejorada */}
-      <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 overflow-hidden">
-        <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Users size={14} className="text-red-500" />
-            <h3 className="text-xs sm:text-sm font-black text-slate-800">Clientes con saldo pendiente</h3>
-            <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-[10px] font-bold">{clientesConDeuda.length}</span>
-          </div>
+      {seccionCredito === 'cxc' ? (
+        <>
+          {/* Aging con barras */}
+          <AgingBars aging={aging} />
 
-          <div className="flex items-center gap-2">
-            {/* BOTÓN IMPRIMIR */}
-            <button
-              onClick={() => exportarCxCPDF('detallado', 'imprimir')}
-              disabled={exportandoCxC}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all text-xs font-bold active:scale-[0.98] disabled:opacity-50 shadow-sm"
-              title="Imprimir Reporte CxC"
-            >
-              <Printer size={13} className="text-slate-500" />
-              <span className="hidden sm:inline">Imprimir</span>
-            </button>
+          {/* Tabla de clientes mejorada */}
+          <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Users size={14} className="text-red-500" />
+                <h3 className="text-xs sm:text-sm font-black text-slate-800">Clientes con saldo pendiente</h3>
+                <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-[10px] font-bold">{clientesConDeuda.length}</span>
+              </div>
 
-            {/* BOTÓN DESCARGAR */}
-            <button
-              onClick={() => exportarCxCPDF('detallado', 'descargar')}
-              disabled={exportandoCxC}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white transition-all text-xs font-bold active:scale-[0.98] disabled:opacity-50 shadow-sm"
-              title="Descargar Reporte CxC"
-            >
-              {exportandoCxC ? (
-                <Loader2 size={13} className="animate-spin text-white" />
-              ) : (
-                <Download size={13} className="text-white" />
-              )}
-              <span className="hidden sm:inline">{exportandoCxC ? 'Generando...' : 'Descargar'}</span>
-            </button>
-          </div>
-        </div>
+              <div className="flex items-center gap-2">
+                {/* BOTÓN IMPRIMIR */}
+                <button
+                  onClick={() => exportarCxCPDF('detallado', 'imprimir')}
+                  disabled={exportandoCxC}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all text-xs font-bold active:scale-[0.98] disabled:opacity-50 shadow-sm"
+                  title="Imprimir Reporte CxC"
+                >
+                  <Printer size={13} className="text-slate-500" />
+                  <span className="hidden sm:inline">Imprimir</span>
+                </button>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-[10px] text-slate-400 uppercase bg-slate-50 border-b border-slate-100">
-                <th className="px-4 py-2.5 text-left font-semibold">Cliente</th>
-                <th className="px-3 py-2.5 text-left font-semibold">Vendedor</th>
-                <th className="px-3 py-2.5 text-center font-semibold">Riesgo</th>
-                <th className="px-3 py-2.5 text-center">
-                  <SortBtn col="dias" label="Antigüedad" />
-                </th>
-                <th className="px-3 py-2.5 text-center">
-                  <SortBtn col="diasRestantes" label="Días Restantes" />
-                </th>
-                <th className="px-3 py-2.5 text-right">
-                  <SortBtn col="saldo" label="Saldo USD" />
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {clientesOrdenados.map((c, i) => {
-                const saldo = Number(c.saldo_pendiente)
-                const dias = c.diasSinPago ?? 0
-                const riesgo = riesgoCliente(dias)
-                const barPct = Math.min((saldo / maxSaldo) * 100, 100)
+                {/* BOTÓN DESCARGAR */}
+                <button
+                  onClick={() => exportarCxCPDF('detallado', 'descargar')}
+                  disabled={exportandoCxC}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white transition-all text-xs font-bold active:scale-[0.98] disabled:opacity-50 shadow-sm"
+                  title="Descargar Reporte CxC"
+                >
+                  {exportandoCxC ? (
+                    <Loader2 size={13} className="animate-spin text-white" />
+                  ) : (
+                    <Download size={13} className="text-white" />
+                  )}
+                  <span className="hidden sm:inline">{exportandoCxC ? 'Generando...' : 'Descargar'}</span>
+                </button>
+              </div>
+            </div>
 
-                return (
-                  <tr key={c.id} className={`border-b border-slate-50 hover:bg-slate-50/60 transition-colors ${i % 2 === 0 ? '' : 'bg-slate-50/20'}`}>
-                    {/* Cliente */}
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <p className="font-bold text-slate-800 leading-tight">{c.nombre}</p>
-                        {c.cargosActivos && c.cargosActivos.some(car => car.metodo_pago === 'cod') && (
-                          <span className="bg-blue-100 text-blue-800 text-[8px] font-black px-1.5 py-0.5 rounded border border-blue-200 shrink-0">
-                            COD
-                          </span>
-                        )}
-                      </div>
-                      {c.rif_cedula && <p className="text-[10px] text-slate-400 font-mono mt-0.5">{c.rif_cedula}</p>}
-                      {/* Mini barra de saldo relativo */}
-                      <div className="mt-1.5 h-1 rounded-full bg-slate-100 w-24 overflow-hidden">
-                        <div className="h-full rounded-full" style={{ width: `${barPct}%`, background: riesgo.bar }} />
-                      </div>
-                    </td>
-                    {/* Vendedor */}
-                    <td className="px-3 py-3">
-                      {c.vendedor ? (
-                        <span className="flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: c.vendedor.color || '#64748b' }} />
-                          <span className="text-slate-600 font-medium">{c.vendedor.nombre}</span>
-                        </span>
-                      ) : <span className="text-slate-300">—</span>}
-                    </td>
-                    {/* Riesgo badge */}
-                    <td className="px-3 py-3 text-center">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${riesgo.bg} ${riesgo.text}`}>
-                        {riesgo.label}
-                      </span>
-                    </td>
-                    {/* Antigüedad */}
-                    <td className="px-3 py-3 text-center">
-                      <span className={`font-black text-sm ${dias > 60 ? 'text-red-600' : dias > 30 ? 'text-amber-600' : 'text-slate-600'}`}>
-                        {dias}d
-                      </span>
-                    </td>
-                    {/* Días Restantes */}
-                    <td className="px-3 py-3 text-center">
-                      {c.diasRestantes === null ? (
-                        <span className="text-slate-300">—</span>
-                      ) : c.diasRestantes < 0 ? (
-                        <span className="inline-flex px-2 py-1 rounded-full text-[10px] font-black bg-red-100 text-red-700">
-                          Vencido ({Math.abs(c.diasRestantes)}d)
-                        </span>
-                      ) : c.diasRestantes === 0 ? (
-                        <span className="inline-flex px-2 py-1 rounded-full text-[10px] font-black bg-amber-100 text-amber-700">
-                          Vence hoy
-                        </span>
-                      ) : (
-                        <span className="inline-flex px-2 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700">
-                          {c.diasRestantes}d restantes
-                        </span>
-                      )}
-                    </td>
-                    {/* Saldo */}
-                    <td className="px-3 py-3 text-right">
-                      <span className="font-black text-red-600 text-sm">
-                        ${saldo.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </span>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-[10px] text-slate-400 uppercase bg-slate-50 border-b border-slate-100">
+                    <th className="px-4 py-2.5 text-left font-semibold">Cliente</th>
+                    <th className="px-3 py-2.5 text-left font-semibold">Vendedor</th>
+                    <th className="px-3 py-2.5 text-center font-semibold">Riesgo</th>
+                    <th className="px-3 py-2.5 text-center">
+                      <SortBtn col="dias" label="Antigüedad" />
+                    </th>
+                    <th className="px-3 py-2.5 text-center">
+                      <SortBtn col="diasRestantes" label="Días Restantes" />
+                    </th>
+                    <th className="px-3 py-2.5 text-right">
+                      <SortBtn col="saldo" label="Saldo USD" />
+                    </th>
                   </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody>
+                  {clientesOrdenados.map((c, i) => {
+                    const saldo = Number(c.saldo_pendiente)
+                    const dias = c.diasSinPago ?? 0
+                    const riesgo = riesgoCliente(dias)
+                    const barPct = Math.min((saldo / maxSaldo) * 100, 100)
 
-        {/* Footer resumen */}
-        <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-          <span className="text-[10px] text-slate-400">{clientesConDeuda.length} cliente{clientesConDeuda.length !== 1 ? 's' : ''} con deuda activa</span>
-          <span className="text-xs font-black text-red-600">
-            Total: ${Number(kpis.totalDeuda).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </span>
-        </div>
-      </div>
+                    return (
+                      <tr key={c.id} className={`border-b border-slate-50 hover:bg-slate-50/60 transition-colors ${i % 2 === 0 ? '' : 'bg-slate-50/20'}`}>
+                        {/* Cliente */}
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="font-bold text-slate-800 leading-tight">{c.nombre}</p>
+                            {c.cargosActivos && c.cargosActivos.some(car => car.metodo_pago === 'cod') && (
+                              <span className="bg-blue-100 text-blue-800 text-[8px] font-black px-1.5 py-0.5 rounded border border-blue-200 shrink-0">
+                                COD
+                              </span>
+                            )}
+                          </div>
+                          {c.rif_cedula && <p className="text-[10px] text-slate-400 font-mono mt-0.5">{c.rif_cedula}</p>}
+                          {/* Mini barra de saldo relativo */}
+                          <div className="mt-1.5 h-1 rounded-full bg-slate-100 w-24 overflow-hidden">
+                            <div className="h-full rounded-full" style={{ width: `${barPct}%`, background: riesgo.bar }} />
+                          </div>
+                        </td>
+                        {/* Vendedor */}
+                        <td className="px-3 py-3">
+                          {c.vendedor ? (
+                            <span className="flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: c.vendedor.color || '#64748b' }} />
+                              <span className="text-slate-600 font-medium">{c.vendedor.nombre}</span>
+                            </span>
+                          ) : <span className="text-slate-300">—</span>}
+                        </td>
+                        {/* Riesgo badge */}
+                        <td className="px-3 py-3 text-center">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${riesgo.bg} ${riesgo.text}`}>
+                            {riesgo.label}
+                          </span>
+                        </td>
+                        {/* Antigüedad */}
+                        <td className="px-3 py-3 text-center">
+                          <span className={`font-black text-sm ${dias > 60 ? 'text-red-600' : dias > 30 ? 'text-amber-600' : 'text-slate-600'}`}>
+                            {dias}d
+                          </span>
+                        </td>
+                        {/* Días Restantes */}
+                        <td className="px-3 py-3 text-center">
+                          {c.diasRestantes === null ? (
+                            <span className="text-slate-300">—</span>
+                          ) : c.diasRestantes < 0 ? (
+                            <span className="inline-flex px-2 py-1 rounded-full text-[10px] font-black bg-red-100 text-red-700">
+                              Vencido ({Math.abs(c.diasRestantes)}d)
+                            </span>
+                          ) : c.diasRestantes === 0 ? (
+                            <span className="inline-flex px-2 py-1 rounded-full text-[10px] font-black bg-amber-100 text-amber-700">
+                              Vence hoy
+                            </span>
+                          ) : (
+                            <span className="inline-flex px-2 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700">
+                              {c.diasRestantes}d restantes
+                            </span>
+                          )}
+                        </td>
+                        {/* Saldo */}
+                        <td className="px-3 py-3 text-right">
+                          <span className="font-black text-red-600 text-sm">
+                            {fmtUsd(saldo)}
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
 
-      {/* Tabla de Abonos Recientes */}
-      {abonos && abonos.length > 0 && (
-        <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 overflow-hidden shadow-sm mt-4">
+            {/* Footer resumen */}
+            <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+              <span className="text-[10px] text-slate-400">{clientesConDeuda.length} cliente{clientesConDeuda.length !== 1 ? 's' : ''} con deuda activa</span>
+              <span className="text-xs font-black text-red-600">
+                Total por cobrar: {fmtUsd(totalCxC)}
+              </span>
+            </div>
+          </div>
+
+          {/* Tabla de Abonos Recientes */}
+          {abonos && abonos.length > 0 && (
+            <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 overflow-hidden shadow-sm mt-4">
+              <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <DollarSign size={14} className="text-emerald-500" />
+                  <h3 className="text-xs sm:text-sm font-black text-slate-800">Historial de Cobranza (Abonos Recientes)</h3>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 text-[10px] font-bold">{abonos.length}</span>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-[10px] text-slate-400 uppercase bg-slate-50 border-b border-slate-100">
+                      <th className="px-4 py-2.5 text-left font-semibold">Fecha</th>
+                      <th className="px-3 py-2.5 text-left font-semibold">Cliente</th>
+                      <th className="px-3 py-2.5 text-center font-semibold">Método</th>
+                      <th className="px-3 py-2.5 text-left font-semibold">Ref / Descripción</th>
+                      <th className="px-3 py-2.5 text-center font-semibold">Despacho</th>
+                      <th className="px-4 py-2.5 text-right font-semibold">Monto</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {abonos.map((a) => {
+                      const numDes = a.despacho?.numero 
+                        ? `DES-${String(a.despacho.numero).padStart(5, '0')}` 
+                        : (a.despacho?.cotizacion?.numero 
+                            ? `COT-${String(a.despacho.cotizacion.numero).padStart(5, '0')}` 
+                            : '—')
+
+                      return (
+                        <tr key={a.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                          <td className="px-4 py-2.5 text-slate-500 font-medium">
+                            {new Date(a.creado_en).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </td>
+                          <td className="px-3 py-2.5 font-bold text-slate-700">
+                            {a.cliente?.nombre || 'Desconocido'}
+                          </td>
+                          <td className="px-3 py-2.5 text-center font-semibold text-slate-600">
+                            {a.metodo_pago || a.forma_pago_abono || '—'}
+                          </td>
+                          <td className="px-3 py-2.5 text-slate-500 italic max-w-xs truncate" title={a.descripcion}>
+                            {a.referencia ? `Ref: ${a.referencia} · ` : ''}{a.descripcion || 'Sin descripción'}
+                          </td>
+                          <td className="px-3 py-2.5 text-center">
+                            {numDes !== '—' ? (
+                              <span className="inline-block px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded font-mono font-bold text-[10px]">
+                                {numDes}
+                              </span>
+                            ) : (
+                              <span className="text-slate-300">—</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2.5 text-right font-black text-emerald-600 text-sm">
+                            +{fmtUsd(a.monto_usd)}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        /* Tabla de Proveedores con Cuentas por Pagar (CxP) */
+        <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 overflow-hidden shadow-sm animate-in fade-in duration-200">
           <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <DollarSign size={14} className="text-emerald-500" />
-              <h3 className="text-xs sm:text-sm font-black text-slate-800">Historial de Cobranza (Abonos Recientes)</h3>
-              <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 text-[10px] font-bold">{abonos.length}</span>
+              <Briefcase size={14} className="text-purple-500" />
+              <h3 className="text-xs sm:text-sm font-black text-slate-800">Proveedores con saldo pendiente (CxP)</h3>
+              <span className="px-2 py-0.5 rounded-full bg-purple-50 text-purple-600 text-[10px] font-bold">{proveedoresConDeuda.length}</span>
             </div>
           </div>
 
@@ -2433,53 +2548,55 @@ function TabCredito() {
             <table className="w-full text-xs">
               <thead>
                 <tr className="text-[10px] text-slate-400 uppercase bg-slate-50 border-b border-slate-100">
-                  <th className="px-4 py-2.5 text-left font-semibold">Fecha</th>
-                  <th className="px-3 py-2.5 text-left font-semibold">Cliente</th>
-                  <th className="px-3 py-2.5 text-center font-semibold">Método</th>
-                  <th className="px-3 py-2.5 text-left font-semibold">Ref / Descripción</th>
-                  <th className="px-3 py-2.5 text-center font-semibold">Despacho</th>
-                  <th className="px-4 py-2.5 text-right font-semibold">Monto</th>
+                  <th className="px-4 py-2.5 text-left font-semibold">Proveedor</th>
+                  <th className="px-3 py-2.5 text-left font-semibold">Tipo</th>
+                  <th className="px-3 py-2.5 text-left font-semibold">Contacto</th>
+                  <th className="px-3 py-2.5 text-left font-semibold">Ubicación</th>
+                  <th className="px-4 py-2.5 text-right font-semibold">Saldo USD (CxP)</th>
                 </tr>
               </thead>
               <tbody>
-                {abonos.map((a) => {
-                  const numDes = a.despacho?.numero 
-                    ? `DES-${String(a.despacho.numero).padStart(5, '0')}` 
-                    : (a.despacho?.cotizacion?.numero 
-                        ? `COT-${String(a.despacho.cotizacion.numero).padStart(5, '0')}` 
-                        : '—')
-
+                {proveedoresOrdenados.map((p, i) => {
+                  const saldo = Number(p.saldo_pendiente)
                   return (
-                    <tr key={a.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                      <td className="px-4 py-2.5 text-slate-500 font-medium">
-                        {new Date(a.creado_en).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    <tr key={p.id} className={`border-b border-slate-50 hover:bg-slate-50/60 transition-colors ${i % 2 === 0 ? '' : 'bg-slate-50/20'}`}>
+                      {/* Proveedor */}
+                      <td className="px-4 py-3 font-bold text-slate-800">
+                        <p>{p.nombre}</p>
+                        {p.rif_cedula && <p className="text-[10px] text-slate-400 font-mono mt-0.5">{p.rif_cedula}</p>}
                       </td>
-                      <td className="px-3 py-2.5 font-bold text-slate-700">
-                        {a.cliente?.nombre || 'Desconocido'}
+                      {/* Tipo */}
+                      <td className="px-3 py-3 capitalize text-slate-600 font-medium">
+                        {p.tipo_proveedor}
                       </td>
-                      <td className="px-3 py-2.5 text-center font-semibold text-slate-600">
-                        {a.metodo_pago || a.forma_pago_abono || '—'}
+                      {/* Contacto */}
+                      <td className="px-3 py-3 text-slate-500">
+                        {p.telefono && <p>{p.telefono}</p>}
+                        {p.email && <p className="text-[10px]">{p.email}</p>}
                       </td>
-                      <td className="px-3 py-2.5 text-slate-500 italic max-w-xs truncate" title={a.descripcion}>
-                        {a.referencia ? `Ref: ${a.referencia} · ` : ''}{a.descripcion || 'Sin descripción'}
+                      {/* Ubicación */}
+                      <td className="px-3 py-3 text-slate-500">
+                        {p.ciudad ? `${p.ciudad}, ${p.estado}` : '—'}
                       </td>
-                      <td className="px-3 py-2.5 text-center">
-                        {numDes !== '—' ? (
-                          <span className="inline-block px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded font-mono font-bold text-[10px]">
-                            {numDes}
-                          </span>
-                        ) : (
-                          <span className="text-slate-300">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2.5 text-right font-black text-emerald-600 text-sm">
-                        +${Number(a.monto_usd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {/* Saldo */}
+                      <td className="px-4 py-3 text-right">
+                        <span className="font-black text-purple-600 text-sm">
+                          {fmtUsd(saldo)}
+                        </span>
                       </td>
                     </tr>
                   )
                 })}
               </tbody>
             </table>
+          </div>
+
+          {/* Footer resumen */}
+          <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+            <span className="text-[10px] text-slate-400">{proveedoresConDeuda.length} proveedor{proveedoresConDeuda.length !== 1 ? 'es' : ''} con saldo pendiente</span>
+            <span className="text-xs font-black text-purple-600">
+              Total por pagar: {fmtUsd(totalCxP)}
+            </span>
           </div>
         </div>
       )}

@@ -27,6 +27,15 @@ import { handleCrearDespacho, handleActualizarEstadoDespacho, handleEditarItemsD
 import { handleDevTools } from './api/handlers/dev.js'
 import { handleAdmin, handleBackup, handleRestore, handleSaveConfig, handleGetConfig, handleResetOperacional, handleTesterClearAll, handleTesterSeedDemo, handleTesterStressSeed, handleCrearTransportista, handleActualizarTransportista } from './api/handlers/admin.js'
 import { handleGetSeguimiento, handleCrearSeguimiento, handleActualizarSeguimiento, handleBorrarSeguimiento, runPurgeTrackingImages } from './api/handlers/seguimiento.js'
+import {
+  handleListarProveedores,
+  handleCheckRifProveedor,
+  handleCrearProveedor,
+  handleActualizarProveedor,
+  handleBorrarProveedor,
+  handleGetCuentasPorPagar,
+  handleRegistrarTransaccionCxP
+} from './api/handlers/proveedores.js'
 
 
 export default {
@@ -218,6 +227,29 @@ export default {
     // ── API: actualizar cliente (bypass RLS) ───────────────────────────────
     if (url.pathname === '/api/clientes/actualizar' && request.method === 'POST') {
       return handleActualizarCliente(request, env);
+    }
+
+    // ── API: Proveedores ───────────────────────────────────────────────────
+    if (url.pathname === '/api/proveedores' && request.method === 'GET') {
+      return handleListarProveedores(request, env);
+    }
+    if (url.pathname === '/api/proveedores/check-rif' && request.method === 'GET') {
+      return handleCheckRifProveedor(request, env);
+    }
+    if (url.pathname === '/api/proveedores' && request.method === 'POST') {
+      return handleCrearProveedor(request, env);
+    }
+    if (url.pathname === '/api/proveedores' && request.method === 'PUT') {
+      return handleActualizarProveedor(request, env);
+    }
+    if (url.pathname === '/api/proveedores' && request.method === 'DELETE') {
+      return handleBorrarProveedor(request, env);
+    }
+    if (url.pathname === '/api/cuentas-por-pagar' && request.method === 'GET') {
+      return handleGetCuentasPorPagar(request, env);
+    }
+    if (url.pathname === '/api/cuentas-por-pagar' && request.method === 'POST') {
+      return handleRegistrarTransaccionCxP(request, env);
     }
 
     // ── API: registrar abono CxC (bypass RLS) ──────────────────────────────

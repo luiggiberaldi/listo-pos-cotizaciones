@@ -495,25 +495,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
     formasPagoArr[0].monto = totalFinal
   }
 
-  // Notas Adicionales — ancladas 2mm sobre el recuadro de forma de pago
-  if (despacho.notas?.trim()) {
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(9)
-    const notasLineas = doc.splitTextToSize(despacho.notas.trim(), CONTENT_W)
-    const notasH = 5 + notasLineas.length * 5
-    const notasStartY = ty - 2 - notasH
-
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9.5)
-    doc.setTextColor(...C_DARK)
-    doc.text('NOTAS:', MARGIN, notasStartY + 4)
-
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(9)
-    notasLineas.forEach((lin, i) => {
-      doc.text(lin, MARGIN, notasStartY + 4 + 5 + i * 5)
-    })
-  }
+  // Notas Adicionales — Eliminado para que no se muestre en Orden de Despacho
 
   // Fila FORMA DE PAGO — solo los elegidos con checkbox y palomita
   const fpY = ty

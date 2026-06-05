@@ -4,12 +4,14 @@ import EstadoBadge from '../cotizaciones/EstadoBadge'
 import MobileActionSheet from '../cotizaciones/MobileActionSheet'
 import ConfirmModal from '../ui/ConfirmModal'
 import useAuthStore from '../../store/useAuthStore'
+import { useEditarDespacho } from '../../hooks/useDespachos'
 import { getDespachoAction, PRIMARY_ACTION_COLORS } from '../../utils/despachoActions'
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtFechaHora, fmtBs, usdToBs } from '../../utils/format'
 import supabase from '../../services/supabase/client'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import DetalleModal from '../ui/DetalleModal'
+import { Modal } from '../ui/Modal'
 import DescuentoModal from './DescuentoModal'
 import EditDespachoModal from './EditDespachoModal'
 import DevolverAnularModal from './DevolverAnularModal'
@@ -60,6 +62,34 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const [facturaActionType, setFacturaActionType] = useState('download')
   const esLogistica = perfil?.rol === 'logistica' || perfil?.rol === 'jefe' || perfil?.rol === 'desarrollador'
   const { tasaBcv, tasaUsdt } = useTasaCambio()
+
+  const editarDespacho = useEditarDespacho()
+  const [showNotaModal, setShowNotaModal] = useState(false)
+  const [nuevaNota, setNuevaNota] = useState('')
+
+  async function handleGuardarNota() {
+    try {
+      await editarDespacho.mutateAsync({
+        despachoId: despacho.id,
+        notas: nuevaNota || null
+      })
+      setShowNotaModal(false)
+    } catch (err) {
+      // useEditarDespacho handles its own toast error display
+    }
+  }
+
+  async function handleEliminarNota() {
+    try {
+      await editarDespacho.mutateAsync({
+        despachoId: despacho.id,
+        notas: null
+      })
+      setShowNotaModal(false)
+    } catch (err) {
+      // useEditarDespacho handles its own toast error display
+    }
+  }
 
   const tasaImpresion = (esLogistica && (monedaPdf === 'bs' || monedaPdf === 'bcv') && Number(tasaPersonalizada) > 0)
     ? Number(tasaPersonalizada)
@@ -700,6 +730,19 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       })
     }
 
+    if (perfil?.rol === 'logistica' || perfil?.rol === 'desarrollador') {
+      const tieneNota = !!despacho.notas?.trim()
+      actions.push({
+        label: tieneNota ? 'Editar/Eliminar observación' : 'Agregar observación',
+        icon: MessageCircle,
+        onClick: () => {
+          setNuevaNota(despacho.notas || '')
+          setShowNotaModal(true)
+        },
+        textColor: 'text-slate-700'
+      })
+    }
+
     return actions
   }
 
@@ -711,7 +754,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     act.label !== 'Cambiar Transportista' &&
     act.label !== 'Agregar Transportista' &&
     act.label !== 'Marcar COD como pagado' &&
-    act.label !== 'Devolución Parcial'
+    act.label !== 'Devolución Parcial' &&
+    !act.label.includes('observación')
   )
 
   // Resolver config del confirm modal
@@ -1485,6 +1529,68 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         onClose={() => setShowDevolucionParcial(false)}
         despacho={despacho}
       />
+
+      {/* Modal para agregar/editar observación (Solo Logística) */}
+      <Modal
+        isOpen={showNotaModal}
+        onClose={() => setShowNotaModal(false)}
+        title={`${despacho?.notas ? 'Editar/Eliminar' : 'Agregar'} observación — Despacho #${despacho?.numero}`}
+        className="sm:max-w-md"
+      >
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              Observación / Nota interna:
+            </p>
+            <textarea
+              value={nuevaNota}
+              onChange={e => setNuevaNota(e.target.value)}
+              placeholder="Escribe la observación para esta nota de entrega..."
+              rows={4}
+              disabled={editarDespacho.isPending}
+              className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium resize-none"
+            />
+          </div>
+
+          <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 shrink-0">
+            {despacho.notas ? (
+              <button
+                type="button"
+                onClick={handleEliminarNota}
+                disabled={editarDespacho.isPending}
+                className="px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              >
+                Eliminar Nota
+              </button>
+            ) : <div />}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowNotaModal(false)}
+                disabled={editarDespacho.isPending}
+                className="px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleGuardarNota}
+                disabled={editarDespacho.isPending}
+                className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:scale-95 disabled:opacity-50 rounded-lg transition-all"
+              >
+                {editarDespacho.isPending ? (
+                  <>
+                    <Loader2 size={12} className="animate-spin" />
+                    Guardando...
+                  </>
+                ) : (
+                  'Guardar Observación'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Modal>
 
       {/* ── Menú kebab ⋮ — nivel raíz, fixed para escapar overflow:hidden ── */}
       {showAdminMenu && (moreActions.length > 0 || canAnular) && (() => {

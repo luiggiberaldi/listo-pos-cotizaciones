@@ -65,6 +65,7 @@ const AuditoriaView     = lazyRetry(() => import('./views/AuditoriaView'))
 const ConfiguracionView = lazyRetry(() => import('./views/ConfiguracionView'))
 const ComisionesView    = lazyRetry(() => import('./views/ComisionesView'))
 const ReportesView      = lazyRetry(() => import('./views/ReportesView'))
+const ProveedoresView   = lazyRetry(() => import('./views/ProveedoresView'))
 const LogsView              = lazyRetry(() => import('./views/LogsView'))
 const ReporteVendedoresView = lazyRetry(() => import('./views/ReporteVendedoresView'))
 const OrdenCompraView       = lazyRetry(() => import('./views/OrdenCompraView'))
@@ -288,6 +289,7 @@ function AppRoutes() {
             {/* Reportes: solo administracion y desarrollador */}
             <Route element={<RutaSoloAdmin />}>
               <Route path="/reportes"      element={<ReportesView />} />
+              <Route path="/proveedores"   element={<ProveedoresView />} />
             </Route>
 
             {/* Configuración y Seguimiento Operativo: supervisor y administracion */}

@@ -268,7 +268,21 @@ export async function handleEditarPagoDespacho(request, env) {
     (['administracion', 'desarrollador', 'supervisor', 'jefe'].includes(operador.rol));
 
   if (despacho.estado === 'entregada' && !esConciliacionCod) {
-    return jsonError('No se pueden editar despachos en estado entregado', 400, request);
+    const editandoSoloNotas = notas !== undefined && 
+      formaPago === undefined && 
+      formaPagoCliente === undefined && 
+      referenciaPago === undefined && 
+      transportistaId === undefined && 
+      fleteUsd === undefined && 
+      corteUsd === undefined && 
+      clienteId === undefined && 
+      direccionEnvioDireccion === undefined && 
+      direccionEnvioCiudad === undefined && 
+      direccionEnvioEstado === undefined;
+
+    if (!editandoSoloNotas) {
+      return jsonError('No se pueden editar despachos en estado entregado', 400, request);
+    }
   }
 
   if (despacho.estado !== 'pendiente' && !esConciliacionCod) {
