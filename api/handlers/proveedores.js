@@ -79,9 +79,7 @@ export async function handleListarProveedores(request, env) {
       });
     }
 
-    return new Response(JSON.stringify(data), {
-      headers: { 'Content-Type': 'application/json', ...headers },
-    });
+    return json(data, 200, request);
   } catch (e) {
     return jsonError(e.message || 'Error al listar proveedores', 500, request);
   }
@@ -362,9 +360,7 @@ export async function handleGetCuentasPorPagar(request, env) {
       return jsonError(`Error al cargar movimientos de CxP: ${err}`, res.status, request);
     }
     const data = await res.json();
-    return new Response(JSON.stringify(data), {
-      headers: { 'Content-Type': 'application/json', ...headers }
-    });
+    return json(data, 200, request);
   } catch (e) {
     return jsonError(e.message || 'Error en consulta de CxP', 500, request);
   }
