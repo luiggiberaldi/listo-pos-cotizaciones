@@ -429,106 +429,139 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
   }
 
   function dibujarTablaResumida(sellers) {
-    y = checkPage(doc, y, 15, handlePageAdd);
+    y = checkPage(doc, y, 18, handlePageAdd);
     
-    // Header
-    doc.setDrawColor(210, 215, 225)
-    doc.setLineWidth(0.3)
-    doc.line(MARGIN, y, MARGIN + CONTENT_W, y)
-    doc.line(MARGIN, y + 7, MARGIN + CONTENT_W, y + 7)
-    
+    const rateVal = Number(tasaEuro || 0);
+    const tasaLabel = rateVal > 0 ? fmtBsShort(rateVal) : 'N/D';
+
+    const colDateLabel = rango && (rango.from || rango.to)
+      ? `COMISIÓN DEL\n${rango.from ? fmtFechaCorta(rango.from) : 'INICIO'} AL ${rango.to ? fmtFechaCorta(rango.to) : 'FIN'}`
+      : 'COMISIÓN DEL\nPERIODO ($)';
+
     const sumCols = [
-      { label: 'Asesor / Vendedor', x: MARGIN, w: 60, align: 'left' },
-      { label: 'Tipo', x: MARGIN + 60, w: 25, align: 'left' },
-      { label: 'Comisiones', x: MARGIN + 85, w: 20, align: 'center' },
-      { label: 'Generado ($)', x: MARGIN + 105, w: 27, align: 'right' },
-      { label: 'Pagado ($)', x: MARGIN + 132, w: 27, align: 'right' },
-      { label: 'Pendiente ($)', x: MARGIN + 159, w: 29, align: 'right' }
-    ]
-    
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8.5)
-    doc.setTextColor(80, 90, 110)
+      { label: 'VENDEDOR', x: MARGIN, w: 32, align: 'left' },
+      { label: colDateLabel, x: MARGIN + 32, w: 38, align: 'right' },
+      { label: 'COMISIÓN CUENTAS\nPOR COBRAR ($)', x: MARGIN + 70, w: 38, align: 'center', highlight: true },
+      { label: 'DESCUENTO\nCARRO ($)', x: MARGIN + 108, w: 26, align: 'center' },
+      { label: 'TOTAL A\nPAGAR ($)', x: MARGIN + 134, w: 26, align: 'right' },
+      { label: `TOTAL EN Bs\n(TASA: ${tasaLabel})`, x: MARGIN + 160, w: 28, align: 'right' }
+    ];
+
+    // Pintar fondo amarillo en cabecera de Comisión CxC primero
     sumCols.forEach(col => {
-      const align = col.align
-      let posX = col.x + 1
-      if (align === 'right') posX = col.x + col.w - 2
-      if (align === 'center') posX = col.x + (col.w / 2)
-      doc.text(col.label, posX, y + 5, { align })
-    })
-    y += 9
+      if (col.highlight) {
+        doc.setFillColor(254, 240, 138); // Amarillo suave (yellow 200)
+        doc.rect(col.x, y + 0.1, col.w, 9.3, 'F');
+      }
+    });
+
+    // Líneas de cabecera
+    doc.setDrawColor(210, 215, 225);
+    doc.setLineWidth(0.3);
+    doc.line(MARGIN, y, MARGIN + CONTENT_W, y);
+    doc.line(MARGIN, y + 9.5, MARGIN + CONTENT_W, y + 9.5);
     
-    let totalCant = 0
-    let totalGen = 0
-    let totalPag = 0
-    let totalPen = 0
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(80, 90, 110);
+    sumCols.forEach(col => {
+      const align = col.align;
+      let posX = col.x + 1;
+      if (align === 'right') posX = col.x + col.w - 2;
+      if (align === 'center') posX = col.x + (col.w / 2);
+      
+      const lines = doc.splitTextToSize(col.label, col.w - 2);
+      if (lines.length > 1) {
+        lines.forEach((line, lineIdx) => {
+          doc.text(line, posX, y + 3.5 + (lineIdx * 3.2), { align });
+        });
+      } else {
+        doc.text(col.label, posX, y + 5.5, { align });
+      }
+    });
+    y += 9.5;
+    
+    let totalGen = 0;
+    let totalBs = 0;
     
     sellers.forEach((s, idx) => {
-      y = checkPage(doc, y, 7.5, handlePageAdd)
+      y = checkPage(doc, y, 9.5, handlePageAdd);
       
       if (idx % 2 === 0) {
-        doc.setFillColor(252, 252, 253)
-        doc.rect(MARGIN, y - 0.8, CONTENT_W, 6.5, 'F')
+        doc.setFillColor(252, 252, 253);
+        doc.rect(MARGIN, y - 0.8, CONTENT_W, 8.5, 'F');
       }
       
-      const rgbColor = hexToRgb(s.color || '#1B365D')
-      doc.setFillColor(rgbColor[0], rgbColor[1], rgbColor[2])
-      doc.circle(MARGIN + 3, y + 2.2, 1.3, 'F')
+      const rgbColor = hexToRgb(s.color || '#1B365D');
+      doc.setFillColor(rgbColor[0], rgbColor[1], rgbColor[2]);
+      doc.circle(MARGIN + 3, y + 3.2, 1.5, 'F');
       
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(8.5)
-      doc.setTextColor(...C_DARK)
-      doc.text(s.nombre, MARGIN + 7, y + 3.2)
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      doc.setTextColor(...C_DARK);
+      doc.text(s.nombre, MARGIN + 7, y + 4.2);
       
-      doc.setFont('helvetica', 'normal')
-      doc.text(s.esExterno ? 'Externo' : 'Interno', MARGIN + 61, y + 3.2)
-      doc.text(String(s.count), MARGIN + 85 + 10, y + 3.2, { align: 'center' })
+      // Comisión del periodo ($)
+      doc.setFont('helvetica', 'normal');
+      doc.text(fmtUsd(s.generadoUsd), MARGIN + 32 + 38 - 2, y + 4.2, { align: 'right' });
       
-      doc.text(fmtUsd(s.generadoUsd), MARGIN + 105 + 25, y + 3.2, { align: 'right' })
-      doc.setTextColor(...C_EMERALD)
-      doc.text(s.pagadoUsd > 0 ? fmtUsd(s.pagadoUsd) : '—', MARGIN + 132 + 25, y + 3.2, { align: 'right' })
-      if (s.pendienteUsd > 0) {
-        doc.setTextColor(180, 83, 9)
-      } else {
-        doc.setTextColor(...C_DARK)
-      }
-      doc.setFont('helvetica', 'bold')
-      doc.text(fmtUsd(s.pendienteUsd), MARGIN + 159 + 27, y + 3.2, { align: 'right' })
+      // Comisión Cuentas por Cobrar ($) (Líneas punteadas)
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(200, 200, 200);
+      doc.text('. . . . . . . . . . . .', MARGIN + 70 + 19, y + 4.2, { align: 'center' });
       
-      totalCant += s.count
-      totalGen += s.generadoUsd
-      totalPag += s.pagadoUsd
-      totalPen += s.pendienteUsd
+      // Descuento Carro ($) (Líneas punteadas)
+      doc.text('. . . . . . . . . .', MARGIN + 108 + 13, y + 4.2, { align: 'center' });
       
-      y += 6.5
-    })
+      doc.setTextColor(...C_DARK);
+      
+      // Total a pagar ($)
+      doc.setFont('helvetica', 'bold');
+      doc.text(fmtUsd(s.generadoUsd), MARGIN + 134 + 26 - 2, y + 4.2, { align: 'right' });
+      
+      // Total en Bs
+      const totalFilaBs = rateVal > 0 ? s.generadoUsd * rateVal : 0;
+      doc.text(rateVal > 0 ? fmtBs(totalFilaBs) : 'N/D', MARGIN + 160 + 28 - 2, y + 4.2, { align: 'right' });
+      
+      totalGen += s.generadoUsd;
+      totalBs += totalFilaBs;
+      
+      y += 8.5;
+    });
     
-    // Total Row
-    y = checkPage(doc, y, 10, handlePageAdd)
-    doc.setDrawColor(210, 215, 225)
-    doc.setLineWidth(0.4)
-    doc.line(MARGIN, y, MARGIN + CONTENT_W, y)
-    y += 4.5
+    // Fila del Total General
+    y = checkPage(doc, y, 12, handlePageAdd);
+    doc.setDrawColor(210, 215, 225);
+    doc.setLineWidth(0.4);
+    doc.line(MARGIN, y, MARGIN + CONTENT_W, y);
+    y += 5;
     
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(11.5)
-    doc.setTextColor(...C_PRIMARY)
-    doc.text('TOTAL GENERAL:', MARGIN + 2, y)
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10.5);
+    doc.setTextColor(...C_PRIMARY);
+    doc.text('TOTAL GENERAL:', MARGIN + 2, y + 1);
     
-    doc.setFontSize(11.0)
-    doc.setTextColor(...C_DARK)
-    doc.text(String(totalCant), MARGIN + 85 + 10, y, { align: 'center' })
-    doc.text(fmtUsd(totalGen), MARGIN + 105 + 25, y, { align: 'right' })
-    doc.setTextColor(...C_EMERALD)
-    doc.text(fmtUsd(totalPag), MARGIN + 132 + 25, y, { align: 'right' })
-    if (totalPen > 0) {
-      doc.setTextColor(185, 28, 28)
-    } else {
-      doc.setTextColor(...C_DARK)
-    }
-    doc.text(fmtUsd(totalPen), MARGIN + 159 + 27, y, { align: 'right' })
+    doc.setTextColor(...C_DARK);
+    // Total Comisión periodo
+    doc.text(fmtUsd(totalGen), MARGIN + 32 + 38 - 2, y + 1, { align: 'right' });
     
-    y += 8
+    // CxC Manual lines
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(200, 200, 200);
+    doc.text('. . . . . . . . . . . .', MARGIN + 70 + 19, y + 1, { align: 'center' });
+    
+    // Descuento Carro manual lines
+    doc.text('. . . . . . . . . .', MARGIN + 108 + 13, y + 1, { align: 'center' });
+    
+    // Total a pagar USD
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...C_DARK);
+    doc.text(fmtUsd(totalGen), MARGIN + 134 + 26 - 2, y + 1, { align: 'right' });
+    
+    // Total en Bs
+    doc.text(rateVal > 0 ? fmtBs(totalBs) : 'N/D', MARGIN + 160 + 28 - 2, y + 1, { align: 'right' });
+    
+    y += 8;
   }
 
   // Clasificación de comisiones en internos y externos
