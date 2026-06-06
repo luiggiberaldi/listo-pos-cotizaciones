@@ -98,7 +98,9 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
                 const metodosDefinitivos = Array.isArray(f.metodos_pagados) ? f.metodos_pagados : (Array.isArray(f.metodo_propuesto) ? f.metodo_propuesto : []);
                 if (metodosDefinitivos.length > 0) {
                   metodosDefinitivos.forEach(p => {
-                    processedFormas.push({ metodo: p.metodo === 'Efectivo' ? 'Efectivo $' : (p.metodo || 'Efectivo $'), monto: Number(p.monto) || 0 })
+                    const rawMetodo = p.metodo === 'Efectivo' ? 'Efectivo $' : (p.metodo || 'Efectivo $')
+                    const finalMetodo = (rawMetodo === 'Transferencia' || rawMetodo === 'Pago Móvil') ? 'Transf. / Pago Móvil' : rawMetodo
+                    processedFormas.push({ metodo: finalMetodo, monto: Number(p.monto) || 0 })
                   })
                 } else {
                   processedFormas.push({ metodo: 'Efectivo $', monto: Number(f.monto) || 0 })
@@ -107,7 +109,8 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
                 processedFormas.push({ metodo: 'Cobro a destino', monto: Number(f.monto) || 0 })
               }
             } else {
-              const metodoNorm = f.metodo === 'Efectivo' ? 'Efectivo $' : (f.metodo || 'Sin especificar')
+              const rawMetodo = f.metodo === 'Efectivo' ? 'Efectivo $' : (f.metodo || 'Sin especificar')
+              const metodoNorm = (rawMetodo === 'Transferencia' || rawMetodo === 'Pago Móvil') ? 'Transf. / Pago Móvil' : rawMetodo
               processedFormas.push({ ...f, metodo: metodoNorm })
             }
           })

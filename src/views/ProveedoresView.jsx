@@ -110,7 +110,7 @@ function EditarMovimientoForm({ movimiento, proveedorId, onSuccess, onCancel }) 
   const [referencia, setReferencia] = useState(movimiento.referencia || '')
   const [error, setError] = useState('')
 
-  const FORM_PAGOS = ['Efectivo $', 'Efectivo Bs', 'Zelle', 'Pago Móvil', 'USDT', 'Transferencia', 'Cruce']
+  const FORM_PAGOS = ['Efectivo $', 'Efectivo Bs', 'Zelle', 'Transf. / Pago Móvil', 'USDT', 'Cruce']
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -238,7 +238,7 @@ function FichaProveedorModal({ proveedor, isOpen, onClose, onEditar, onBorrar, o
   const [transDiasVencimiento, setTransDiasVencimiento] = useState('0')
   const [errorTrans, setErrorTrans] = useState('')
 
-  const FORM_PAGOS = ['Efectivo $', 'Efectivo Bs', 'Zelle', 'Pago Móvil', 'USDT', 'Transferencia', 'Cruce']
+  const FORM_PAGOS = ['Efectivo $', 'Efectivo Bs', 'Zelle', 'Transf. / Pago Móvil', 'USDT', 'Cruce']
 
   useEffect(() => {
     if (proveedor) {
