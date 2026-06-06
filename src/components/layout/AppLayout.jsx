@@ -636,6 +636,15 @@ export default function AppLayout() {
         <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-300">
           <div className="relative overflow-hidden bg-slate-900/95 border border-slate-700/50 rounded-3xl p-6 max-w-md w-full shadow-[0_20px_50px_rgba(0,0,0,0.5)] animate-in zoom-in-95 duration-200">
             
+            {/* Botón de cerrar (X) */}
+            <button
+              onClick={() => setUrgentNotif(null)}
+              className="absolute top-4 right-4 z-10 p-1.5 rounded-xl bg-white/5 border border-white/10 text-white/50 hover:text-white hover:bg-white/10 transition-colors"
+              aria-label="Cerrar"
+            >
+              <X size={16} />
+            </button>
+
             {/* Animated breathing pulse background glow */}
             {urgentNotif.type === 'despacho_en_ruta' ? (
               <>
@@ -689,6 +698,13 @@ export default function AppLayout() {
               </p>
               
               <div className="flex flex-col sm:flex-row gap-3 w-full">
+                <button
+                  type="button"
+                  onClick={() => setUrgentNotif(null)}
+                  className="flex-1 px-5 py-3 rounded-xl text-sm font-bold text-white/70 bg-white/5 border border-white/10 hover:bg-white/10 transition-all select-none hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  Cerrar
+                </button>
                 <button
                   onClick={() => {
                     setUrgentNotif(null)
