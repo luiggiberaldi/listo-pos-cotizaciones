@@ -12,7 +12,7 @@ import {
 
 // ─── Generar Reporte de Comisiones ───────────────────────────────────────────
 // ─── Generar Reporte de Comisiones ───────────────────────────────────────────
-export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVendedor = null, resumen = null, rango = null, config = {}, action = 'download', formato = 'detallado', tasaEuro = null }) {
+export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVendedor = null, resumen = null, rango = null, config = {}, action = 'download', formato = 'detallado', tasaEuro = null, ajustesManuales = {} }) {
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
   let y = 0
 
@@ -482,6 +482,9 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
     y += 9.5;
     
     let totalGen = 0;
+    let totalCxC = 0;
+    let totalDescCarro = 0;
+    let totalPagarUsd = 0;
     let totalBs = 0;
     
     sellers.forEach((s, idx) => {
@@ -505,25 +508,50 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
       doc.setFont('helvetica', 'normal');
       doc.text(fmtUsd(s.generadoUsd), MARGIN + 32 + 38 - 2, y + 4.2, { align: 'right' });
       
-      // Comisión Cuentas por Cobrar ($) (Líneas punteadas)
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(200, 200, 200);
-      doc.text('. . . . . . . . . . . .', MARGIN + 70 + 19, y + 4.2, { align: 'center' });
+      // Ajustes manuales
+      const ajuste = ajustesManuales[s.id] || { cxc: 0, descuentoCarro: 0 };
+      const valCxC = Number(ajuste.cxc || 0);
+      const valDescCarro = Number(ajuste.descuentoCarro || 0);
       
-      // Descuento Carro ($) (Líneas punteadas)
-      doc.text('. . . . . . . . . .', MARGIN + 108 + 13, y + 4.2, { align: 'center' });
+      // Comisión Cuentas por Cobrar ($) (Valor si > 0, si no líneas punteadas)
+      if (valCxC > 0) {
+        doc.setFont('helvetica', 'bold');
+        doc.text(fmtUsd(valCxC), MARGIN + 70 + 38 - 2, y + 4.2, { align: 'right' });
+      } else {
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(200, 200, 200);
+        doc.text('. . . . . . . . . . . .', MARGIN + 70 + 19, y + 4.2, { align: 'center' });
+        doc.setTextColor(...C_DARK);
+      }
+      
+      // Descuento Carro ($)
+      if (valDescCarro > 0) {
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...C_RED);
+        doc.text(fmtUsd(valDescCarro), MARGIN + 108 + 26 - 2, y + 4.2, { align: 'right' });
+        doc.setTextColor(...C_DARK);
+      } else {
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(200, 200, 200);
+        doc.text('. . . . . . . . . .', MARGIN + 108 + 13, y + 4.2, { align: 'center' });
+        doc.setTextColor(...C_DARK);
+      }
       
       doc.setTextColor(...C_DARK);
       
       // Total a pagar ($)
+      const filaTotalUsd = s.generadoUsd + valCxC - valDescCarro;
       doc.setFont('helvetica', 'bold');
-      doc.text(fmtUsd(s.generadoUsd), MARGIN + 134 + 26 - 2, y + 4.2, { align: 'right' });
+      doc.text(fmtUsd(filaTotalUsd), MARGIN + 134 + 26 - 2, y + 4.2, { align: 'right' });
       
       // Total en Bs
-      const totalFilaBs = rateVal > 0 ? s.generadoUsd * rateVal : 0;
+      const totalFilaBs = rateVal > 0 ? filaTotalUsd * rateVal : 0;
       doc.text(rateVal > 0 ? fmtBs(totalFilaBs) : 'N/D', MARGIN + 160 + 28 - 2, y + 4.2, { align: 'right' });
       
       totalGen += s.generadoUsd;
+      totalCxC += valCxC;
+      totalDescCarro += valDescCarro;
+      totalPagarUsd += filaTotalUsd;
       totalBs += totalFilaBs;
       
       y += 8.5;
@@ -545,18 +573,32 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
     // Total Comisión periodo
     doc.text(fmtUsd(totalGen), MARGIN + 32 + 38 - 2, y + 1, { align: 'right' });
     
-    // CxC Manual lines
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(200, 200, 200);
-    doc.text('. . . . . . . . . . . .', MARGIN + 70 + 19, y + 1, { align: 'center' });
+    // Total CxC
+    if (totalCxC > 0) {
+      doc.text(fmtUsd(totalCxC), MARGIN + 70 + 38 - 2, y + 1, { align: 'right' });
+    } else {
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(200, 200, 200);
+      doc.text('. . . . . . . . . . . .', MARGIN + 70 + 19, y + 1, { align: 'center' });
+      doc.setTextColor(...C_DARK);
+      doc.setFont('helvetica', 'bold');
+    }
     
-    // Descuento Carro manual lines
-    doc.text('. . . . . . . . . .', MARGIN + 108 + 13, y + 1, { align: 'center' });
+    // Total Descuento Carro
+    if (totalDescCarro > 0) {
+      doc.setTextColor(...C_RED);
+      doc.text(fmtUsd(totalDescCarro), MARGIN + 108 + 26 - 2, y + 1, { align: 'right' });
+      doc.setTextColor(...C_DARK);
+    } else {
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(200, 200, 200);
+      doc.text('. . . . . . . . . .', MARGIN + 108 + 13, y + 1, { align: 'center' });
+      doc.setTextColor(...C_DARK);
+      doc.setFont('helvetica', 'bold');
+    }
     
     // Total a pagar USD
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...C_DARK);
-    doc.text(fmtUsd(totalGen), MARGIN + 134 + 26 - 2, y + 1, { align: 'right' });
+    doc.text(fmtUsd(totalPagarUsd), MARGIN + 134 + 26 - 2, y + 1, { align: 'right' });
     
     // Total en Bs
     doc.text(rateVal > 0 ? fmtBs(totalBs) : 'N/D', MARGIN + 160 + 28 - 2, y + 1, { align: 'right' });
@@ -921,6 +963,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
       
       if (!resumenSellers[vId]) {
         resumenSellers[vId] = {
+          id: vId,
           nombre: vName,
           esExterno,
           color: c.vendedor?.color || '#1B365D',

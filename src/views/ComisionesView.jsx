@@ -331,6 +331,138 @@ function SkeletonComisiones() {
   )
 }
 
+// ─── Tabla interactiva para reporte resumido ─────────────────────────────────
+function TablaLiquidacionInteractiva({ sellers, ajustes, onChange, tasaEuro }) {
+  const rate = Number(tasaEuro?.precio || 0)
+  
+  // Calcular Totales
+  const totalPeriodo = sellers.reduce((acc, s) => acc + s.generadoUsd, 0)
+  const totalCxC = sellers.reduce((acc, s) => acc + Number(ajustes[s.id]?.cxc || 0), 0)
+  const totalDesc = sellers.reduce((acc, s) => acc + Number(ajustes[s.id]?.descuentoCarro || 0), 0)
+  const totalGeneralUsd = totalPeriodo + totalCxC - totalDesc
+  const totalGeneralBs = totalGeneralUsd * rate
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden animate-in fade-in duration-200">
+      <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-1.5 h-4 bg-indigo-600 rounded-full" />
+          <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider">Ajustes de Liquidación de Comisiones</h4>
+        </div>
+        <p className="text-[10px] text-slate-400 font-bold uppercase">Ingresa los valores manuales para el PDF</p>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr className="border-b border-slate-100 text-[10px] text-slate-400 uppercase font-black tracking-wider bg-slate-50/30">
+              <th className="px-4 py-3 font-black">Vendedor</th>
+              <th className="px-4 py-3 text-right font-black">Comisión Periodo ($)</th>
+              <th className="px-4 py-3 text-center font-black bg-amber-50/40 text-amber-700 w-44">Comisión CxC ($)</th>
+              <th className="px-4 py-3 text-center font-black bg-slate-50/80 w-44">Descuento Carro ($)</th>
+              <th className="px-4 py-3 text-right font-black">Total a Pagar ($)</th>
+              <th className="px-4 py-3 text-right font-black">Total en Bs</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {sellers.map((s) => {
+              const cxcVal = s.id in ajustes ? ajustes[s.id].cxc : ''
+              const descVal = s.id in ajustes ? ajustes[s.id].descuentoCarro : ''
+              
+              const totalRowUsd = s.generadoUsd + Number(ajustes[s.id]?.cxc || 0) - Number(ajustes[s.id]?.descuentoCarro || 0)
+              const totalRowBs = totalRowUsd * rate
+
+              return (
+                <tr key={s.id} className="hover:bg-slate-50/50 transition-colors">
+                  {/* Vendedor */}
+                  <td className="px-4 py-3 flex items-center gap-2.5">
+                    <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-white text-[10px] font-black"
+                      style={{ background: s.color || '#1B365D' }}>
+                      {s.nombre[0].toUpperCase()}
+                    </div>
+                    <span className="font-bold text-slate-800">
+                      {s.nombre} {s.esExterno && ' (E)'}
+                    </span>
+                  </td>
+
+                  {/* Comisión Periodo */}
+                  <td className="px-4 py-3 text-right font-bold text-slate-700">
+                    {fmtUsd(s.generadoUsd)}
+                  </td>
+
+                  {/* Comisión CxC (Input) */}
+                  <td className="px-4 py-3 bg-amber-55/10 text-center">
+                    <div className="inline-flex items-center rounded-lg border border-amber-200 bg-white px-2 py-0.5 focus-within:ring-2 focus-within:ring-amber-500/20 focus-within:border-amber-500 shadow-sm w-36">
+                      <span className="text-[10px] font-bold text-amber-600 mr-1">$</span>
+                      <input
+                        type="number"
+                        placeholder="0.00"
+                        step="0.01"
+                        min="0"
+                        value={cxcVal}
+                        onChange={(e) => onChange(s.id, 'cxc', e.target.value)}
+                        className="w-full bg-transparent border-0 p-0 text-xs font-black text-amber-700 focus:ring-0 outline-none text-right placeholder-amber-300"
+                      />
+                    </div>
+                  </td>
+
+                  {/* Descuento Carro (Input) */}
+                  <td className="px-4 py-3 bg-slate-50/20 text-center">
+                    <div className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-2 py-0.5 focus-within:ring-2 focus-within:ring-red-500/10 focus-within:border-red-400 shadow-sm w-36">
+                      <span className="text-[10px] font-bold text-slate-400 mr-1">$</span>
+                      <input
+                        type="number"
+                        placeholder="0.00"
+                        step="0.01"
+                        min="0"
+                        value={descVal}
+                        onChange={(e) => onChange(s.id, 'descuentoCarro', e.target.value)}
+                        className="w-full bg-transparent border-0 p-0 text-xs font-black text-slate-700 focus:ring-0 outline-none text-right placeholder-slate-300"
+                      />
+                    </div>
+                  </td>
+
+                  {/* Total a Pagar */}
+                  <td className="px-4 py-3 text-right font-black text-slate-800 text-sm">
+                    {fmtUsd(totalRowUsd)}
+                  </td>
+
+                  {/* Total Bs */}
+                  <td className="px-4 py-3 text-right font-black text-slate-500">
+                    {rate > 0 ? fmtBs(totalRowBs) : 'N/D'}
+                  </td>
+                </tr>
+              )
+            })}
+
+            {/* Totales */}
+            <tr className="bg-slate-50 font-bold border-t-2 border-slate-200 text-slate-850">
+              <td className="px-4 py-3 text-left font-black text-indigo-900">
+                TOTAL GENERAL
+              </td>
+              <td className="px-4 py-3 text-right font-black">
+                {fmtUsd(totalPeriodo)}
+              </td>
+              <td className="px-4 py-3 text-center bg-amber-50/20">
+                <span className="font-black text-amber-700">{fmtUsd(totalCxC)}</span>
+              </td>
+              <td className="px-4 py-3 text-center bg-slate-50/45">
+                <span className="font-black text-slate-600">{fmtUsd(totalDesc)}</span>
+              </td>
+              <td className="px-4 py-3 text-right font-black text-slate-900 text-sm">
+                {fmtUsd(totalGeneralUsd)}
+              </td>
+              <td className="px-4 py-3 text-right font-black text-slate-700">
+                {rate > 0 ? fmtBs(totalGeneralBs) : 'N/D'}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 // ─── Vista principal ──────────────────────────────────────────────────────────
 export default function ComisionesView() {
   const navigate = useNavigate()
@@ -351,6 +483,18 @@ export default function ComisionesView() {
   const [comisionAPagar, setComisionAPagar] = useState(null)
   const [pagoMasivoData, setPagoMasivoData] = useState(null)
   const [pagandoMasivo, setPagandoMasivo] = useState(false)
+
+  const [ajustesManuales, setAjustesManuales] = useState({})
+
+  const handleAjusteChange = useCallback((sellerId, field, val) => {
+    setAjustesManuales(prev => ({
+      ...prev,
+      [sellerId]: {
+        ...(prev[sellerId] || { cxc: '', descuentoCarro: '' }),
+        [field]: val === '' ? '' : Number(val)
+      }
+    }))
+  }, [])
 
   // Reset de página al cambiar filtros
   useEffect(() => { setPage(1) }, [filtroEstado, filtroVendedor, fechaDesde, fechaHasta])
@@ -391,6 +535,25 @@ export default function ComisionesView() {
     return [...mapa.values()]
   }, [comisiones])
 
+  // Resumen de vendedores para la tabla interactiva
+  const sellersSummary = useMemo(() => {
+    return comisionesPorVendedor.map(g => {
+      const vendedor = g.vendedor || { nombre: 'Sin Asignar', color: '#64748b' }
+      const esExterno = !!vendedor?.es_externo || (vendedor?.markup_pct != null && Number(vendedor.markup_pct) > 0)
+      
+      const validItems = g.items.filter(c => c.estado !== 'cta_cobrar')
+      const generadoUsd = validItems.reduce((acc, c) => acc + Number(c.totalcomision || 0), 0)
+      
+      return {
+        id: g.id,
+        nombre: vendedor.nombre,
+        color: vendedor.color,
+        esExterno,
+        generadoUsd
+      }
+    }).sort((a, b) => a.nombre.localeCompare(b.nombre))
+  }, [comisionesPorVendedor])
+
   async function exportarPDF(vendedorFiltro = null, tipoVendedor = null) {
     setExportando(true)
     try {
@@ -424,7 +587,8 @@ export default function ComisionesView() {
         rango, 
         config: configNeg ?? {},
         formato: formatoReporte,
-        tasaEuro: tasaEuro?.precio || 0
+        tasaEuro: tasaEuro?.precio || 0,
+        ajustesManuales
       })
     } catch (e) { console.error('Error PDF:', e) }
     setExportando(false)
@@ -602,7 +766,14 @@ export default function ComisionesView() {
         <EmptyState icon={DollarSign} title="Sin resultados" description="No se encontraron comisiones con los filtros actuales." />
       ) : (
         <>
-          {(() => {
+          {formatoReporte === 'resumido' ? (
+            <TablaLiquidacionInteractiva
+              sellers={sellersSummary}
+              ajustes={ajustesManuales}
+              onChange={handleAjusteChange}
+              tasaEuro={tasaEuro}
+            />
+          ) : (() => {
             const comisionesInternos = comisionesPorVendedor.filter(g => !(!!g.vendedor?.es_externo || (g.vendedor?.markup_pct != null && Number(g.vendedor.markup_pct) > 0)))
             const comisionesExternos = comisionesPorVendedor.filter(g => !!g.vendedor?.es_externo || (g.vendedor?.markup_pct != null && Number(g.vendedor.markup_pct) > 0))
             return (
