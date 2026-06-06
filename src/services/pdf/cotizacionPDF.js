@@ -4,16 +4,17 @@ import { jsPDF } from 'jspdf'
 import { cargarLogo } from './pdfLogo'
 import {
   PAGE_W, PAGE_H, MARGIN, CONTENT_W,
-  C_DARK, C_WHITE,
+  C_WHITE,
   CUENTAS_BANCARIAS,
   fmtFecha, fmtPrecio, fmtTotal, fmtTelefono,
   hexToRgb, drawWatermark, drawSimplifiedHeader,
   checkPage
 } from './pdfShared'
 
-// Nueva paleta de colores premium: Fusión Industrial de Alta Gama (Azul Acero & Amarillo Mostaza Cerrajería)
-const C_PRIMARY = [26, 54, 93]      // Azul de Acero Oscuro (Corporativo e industrial)
-const C_ACCENT  = [245, 158, 11]    // Amarillo Mostaza Cálido de Cerrajería (Acento de alta visibilidad)
+// Nueva paleta de colores premium: Fusión Industrial de Alta Gama (Amarillo Principal & Charcoal de Cerrajería)
+const C_PRIMARY = [255, 242, 0]    // Amarillo de alta visibilidad (Color principal de la marca)
+const C_ACCENT  = [59, 59, 59]      // Gris #3b3b3b (Acento de la marca)
+const C_DARK    = [59, 59, 59]      // Gris #3b3b3b para texto legible
 
 export async function generarPDF({ cotizacion, items = [], config = {}, returnBlob = false, monedaPDF = '$', tasa = 0, tasaUsdt = 0, tasaBcv = 0, conIVA = false }) {
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
@@ -31,8 +32,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     doc.rect(0, 0, PAGE_W, HDR_H, 'F')
 
     // Decoraciones: Cuadrícula de puntos
-    const vColor = hexToRgb(cotizacion.vendedor?.color)
-    doc.setFillColor(...vColor)
+    doc.setFillColor(...C_ACCENT)
     for(let i = 0; i < 4; i++) {
       for(let j = 0; j < 6; j++) {
         doc.circle(MARGIN + i * 2.5, 4 + j * 2.5, 0.4, 'F')
@@ -109,7 +109,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     // Títulos Negocio
     const textCenterX = (MARGIN + 44 + PAGE_W - MARGIN - 40) / 2
     doc.setFont('times', 'bold')
-    doc.setTextColor(...C_WHITE)
+    doc.setTextColor(...C_ACCENT)
     doc.setFontSize(24)
     doc.text('CONSTRUACERO', textCenterX, 18, { align: 'center' })
     doc.setFontSize(16)
@@ -252,7 +252,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(9.5)
-  doc.setTextColor(...C_WHITE)
+  doc.setTextColor(...C_ACCENT)
   COLS.forEach(col => {
     let tx = col.x + 2
     if (col.align === 'center') tx = col.x + col.w/2
@@ -299,7 +299,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
        doc.rect(MARGIN, y, CONTENT_W, 9, 'F')
        doc.setFont('helvetica', 'bold')
        doc.setFontSize(9.5)
-       doc.setTextColor(...C_WHITE)
+       doc.setTextColor(...C_ACCENT)
        COLS.forEach(col => {
          let tx = col.x + 2
          if (col.align === 'center') tx = col.x + col.w / 2
@@ -423,7 +423,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
 
   // Verificamos si todo esto cabe
   const totalNeededH = (notasH > 0 ? notasH + 2 : 0) + blockH + 2 + 8 // 8 = altura slogan
-  y = checkPage(doc, y, totalNeededH, (d) => drawSimplifiedHeader(d, logoData, config, `Cotización (Cont.) ${numDisplay}`, C_PRIMARY))
+  y = checkPage(doc, y, totalNeededH, (d) => drawSimplifiedHeader(d, logoData, config, `Cotización (Cont.) ${numDisplay}`, C_PRIMARY, C_ACCENT))
 
   // ── Slogan — fijo 10mm sobre el footer (PAGE_H - 35) ──
   const sloganY = PAGE_H - 35
@@ -440,7 +440,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     const notasStartY = finalY - 2 - notasH
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(9.5)
-    doc.setTextColor(...C_ACCENT)
+    doc.setTextColor(...C_PRIMARY)
     doc.text('NOTAS:', MARGIN, notasStartY + 4)
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
@@ -451,7 +451,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   }
 
   // DIBUJAR CONDICIONES (Modular card de Formalismo Industrial con barra lateral sólida)
-  doc.setFillColor(248, 250, 252) // Fondo gris/azul muy suave
+  doc.setFillColor(255, 255, 255) // Fondo blanco
   doc.setDrawColor(226, 232, 240) // Borde sutil
   doc.setLineWidth(0.3)
   doc.roundedRect(MARGIN, finalY, bLeftW, bBoxH, 1.5, 1.5, 'FD')
@@ -462,7 +462,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   
   // Ajustamos el padding horizontal (leftPad) para que el texto respete la barra de acento
   const leftPad = 4.5
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...C_PRIMARY)
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...C_DARK)
   doc.text('CONDICIONES GENERALES:', MARGIN + leftPad, finalY + bCP + 4.5)
   doc.setDrawColor(226, 232, 240); doc.setLineWidth(0.3)
   doc.line(MARGIN + leftPad, finalY + bCP + bCTH, MARGIN + bLeftW - bCP, finalY + bCP + bCTH)
@@ -480,7 +480,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     bTy += bLH
   })
   doc.setFillColor(...C_PRIMARY); doc.rect(bTotX, bTy - 2, bTotW, 10, 'F')
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(...C_WHITE)
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(...C_ACCENT)
   doc.text(conIVA ? 'Total Cotiz.' : 'Total:', bTotX + 4, bTy + 5)
   doc.text(fmtTotal(totalFacturaFinal, monedaPDF, bTasa, factorBcv), bTotX + bTotW - 4, bTy + 5, { align: 'right' })
 
@@ -524,7 +524,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
 
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(8.5)
-    doc.setTextColor(...C_WHITE)
+    doc.setTextColor(...C_DARK)
 
     const addr1 = 'Av. 76, (Calle S-3) Nro. 70-C-766, Local Galpón Nro. 3 Edificio Centro Industrial Massico II'
     const addr2 = 'Parcela MB-6 y Mb7, Urb. Industrial Aeropuerto Vía Flor Amarillo, Valencia, Edo. Carabobo, Zona Postal 2003'
@@ -576,7 +576,7 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
           doc.line(cx, cy - 1.8, cx + 1.2, cy - 0.6)
           doc.line(cx + 2.4, cy - 1.8, cx + 1.2, cy - 0.6)
         }
-        doc.setTextColor(...C_WHITE)
+        doc.setTextColor(...C_DARK)
         doc.text(p.text, cx + 4, cy)
         cx += 5 + doc.getTextWidth(p.text) + gap
       })
