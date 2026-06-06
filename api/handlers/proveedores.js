@@ -353,7 +353,7 @@ export async function handleGetCuentasPorPagar(request, env) {
   }
 
   try {
-    const queryUrl = `${env.SUPABASE_URL}/rest/v1/cuentas_por_pagar?proveedor_id=eq.${proveedorId}&order=creado_en.desc&select=id,tipo,monto_usd,saldo_usd,forma_pago_abono,referencia,descripcion,creado_en,registrado_por,registrador:usuarios!cuentas_por_pagar_registrado_por_fkey(nombre)`;
+    const queryUrl = `${env.SUPABASE_URL}/rest/v1/cuentas_por_pagar?proveedor_id=eq.${proveedorId}&order=creado_en.desc&select=id,tipo,monto_usd,saldo_usd,forma_pago_abono,referencia,descripcion,fecha_vencimiento,creado_en,registrado_por,registrador:usuarios!cuentas_por_pagar_registrado_por_fkey(nombre)`;
     const res = await fetch(queryUrl, { headers });
     if (!res.ok) {
       const err = await res.text();
@@ -380,7 +380,7 @@ export async function handleRegistrarTransaccionCxP(request, env) {
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
 
-  const { proveedorId, tipo, monto, formaPago, referencia, descripcion } = body;
+  const { proveedorId, tipo, monto, formaPago, referencia, descripcion, diasVencimiento } = body;
   if (!proveedorId || !isValidUuid(proveedorId)) return jsonError('proveedorId inválido', 400, request);
   if (!tipo || !['cargo', 'abono'].includes(tipo)) return jsonError('tipo de transacción inválido', 400, request);
   const montoNum = Number(monto);
@@ -420,6 +420,13 @@ export async function handleRegistrarTransaccionCxP(request, env) {
 
     nuevoSaldo = Math.max(0, Math.round(nuevoSaldo * 10000) / 10000);
 
+    let fechaVencimiento = null;
+    if (tipo === 'cargo' && typeof diasVencimiento === 'number' && diasVencimiento > 0) {
+      const date = new Date();
+      date.setDate(date.getDate() + diasVencimiento);
+      fechaVencimiento = date.toISOString();
+    }
+
     // 2. Insertar movimiento
     const payload = {
       proveedor_id: proveedorId,
@@ -429,6 +436,7 @@ export async function handleRegistrarTransaccionCxP(request, env) {
       forma_pago_abono: tipo === 'abono' ? (formaPago || 'Efectivo $') : null,
       referencia: tipo === 'abono' ? (referencia || null) : null,
       descripcion: descripcion || (tipo === 'cargo' ? 'Cargo (Deuda registrada)' : 'Abono (Pago registrado)'),
+      fecha_vencimiento: fechaVencimiento,
       registrado_por: operador.id,
       cuenta_id: user.id
     };
@@ -462,3 +470,104 @@ export async function handleRegistrarTransaccionCxP(request, env) {
     return jsonError(e.message || 'Error al registrar transacción contable', 500, request);
   }
 }
+
+// 8. Actualizar transacción en CxP
+export async function handleActualizarTransaccionCxP(request, env) {
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { user, operador, headers, ip } = v;
+
+  const rolesPermitidos = ['supervisor', 'administracion', 'jefe', 'desarrollador'];
+  if (!rolesPermitidos.includes(operador.rol)) {
+    return jsonError('No tienes permisos para actualizar transacciones de CxP', 403, request);
+  }
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+
+  const { id, monto, descripcion, fechaVencimiento, formaPago, referencia } = body;
+  if (!id || !isValidUuid(id)) return jsonError('id inválido', 400, request);
+
+  try {
+    // 1. Obtener la transacción actual
+    const tRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_pagar?id=eq.${id}`, { headers });
+    const [transaccion] = await tRes.json();
+    if (!transaccion) return jsonError('Transacción no encontrada', 404, request);
+
+    const proveedorId = transaccion.proveedor_id;
+    const tipo = transaccion.tipo;
+
+    // 2. Construir payload de actualización
+    const payload = {};
+    if (descripcion !== undefined) payload.descripcion = descripcion;
+    if (tipo === 'cargo' && fechaVencimiento !== undefined) payload.fecha_vencimiento = fechaVencimiento;
+    if (tipo === 'abono' && formaPago !== undefined) payload.forma_pago_abono = formaPago;
+    if (tipo === 'abono' && referencia !== undefined) payload.referencia = referencia;
+
+    if (monto !== undefined) {
+      const montoNum = Number(monto);
+      if (isNaN(montoNum) || montoNum <= 0) return jsonError('monto debe ser mayor a 0', 400, request);
+      payload.monto_usd = montoNum;
+    }
+
+    // 3. Guardar cambios de la transacción
+    const updateRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_pagar?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: { ...headers, Prefer: 'return=representation' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!updateRes.ok) {
+      const err = await updateRes.text();
+      return jsonError(`Error al actualizar transacción de CxP: ${err}`, updateRes.status, request);
+    }
+
+    // 4. Recalcular saldos de todos los movimientos de este proveedor chronológicamente si cambió el monto
+    if (monto !== undefined && Number(monto) !== Number(transaccion.monto_usd)) {
+      const getRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_pagar?proveedor_id=eq.${proveedorId}&order=creado_en.asc`, { headers });
+      if (getRes.ok) {
+        const list = await getRes.json();
+        let running = 0;
+        for (const item of list) {
+          const amt = Number(item.monto_usd) || 0;
+          if (item.tipo === 'cargo') {
+            running += amt;
+          } else {
+            running -= amt;
+          }
+          running = Math.max(0, Math.round(running * 10000) / 10000);
+          
+          if (Number(item.saldo_usd) !== running) {
+            await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_pagar?id=eq.${item.id}`, {
+              method: 'PATCH',
+              headers: { ...headers, Prefer: 'return=minimal' },
+              body: JSON.stringify({ saldo_usd: running })
+            });
+          }
+        }
+      }
+    }
+
+    // 5. Recalcular saldo total del proveedor en la tabla proveedores
+    await recalcularSaldoPendienteProveedor(proveedorId, env, headers);
+
+    // 6. Obtener saldo final del proveedor para retornar
+    const pRes = await fetch(`${env.SUPABASE_URL}/rest/v1/proveedores?id=eq.${proveedorId}&select=saldo_pendiente`, { headers });
+    const [proveedor] = await pRes.json();
+    const nuevoSaldo = proveedor ? Number(proveedor.saldo_pendiente || 0) : 0;
+
+    // 7. Auditoría
+    await registrarAuditoria(env, headers, {
+      usuarioId: operador.id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
+      categoria: 'FINANZAS', accion: 'ACTUALIZAR_TRANSACCION_CXP',
+      descripcion: `Transacción CxP de tipo ${tipo} ID ${id} editada por ${operador.nombre}`,
+      entidadTipo: 'proveedor', entidadId: proveedorId,
+      meta: { id, tipo, payload }, ip,
+    });
+
+    return json({ id, nuevoSaldo }, 200, request);
+  } catch (e) {
+    return jsonError(e.message || 'Error al actualizar transacción de CxP', 500, request);
+  }
+}
+

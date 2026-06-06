@@ -139,7 +139,7 @@ export function useRegistrarTransaccionCxP() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ proveedorId, tipo, monto, formaPago, referencia, descripcion }) => {
+    mutationFn: async ({ proveedorId, tipo, monto, formaPago, referencia, descripcion, diasVencimiento }) => {
       const res = await authFetch('/api/cuentas-por-pagar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -150,6 +150,7 @@ export function useRegistrarTransaccionCxP() {
           formaPago,
           referencia,
           descripcion,
+          diasVencimiento,
         })
       })
 
@@ -168,3 +169,39 @@ export function useRegistrarTransaccionCxP() {
     },
   })
 }
+
+// ─── Mutation: Actualizar transacción de CxP ──────────────────────────────────
+export function useActualizarTransaccionCxP() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ id, proveedorId, monto, descripcion, fechaVencimiento, formaPago, referencia }) => {
+      const res = await authFetch('/api/cuentas-por-pagar', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id,
+          monto,
+          descripcion,
+          fechaVencimiento,
+          formaPago,
+          referencia,
+        })
+      })
+
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Error al actualizar transacción')
+      return result
+    },
+    onSuccess: async (data, variables) => {
+      // Invalidamos lista de proveedores para reflejar el cambio de saldo_pendiente
+      await qc.cancelQueries({ queryKey: PROVEEDORES_KEY })
+      qc.invalidateQueries({ queryKey: PROVEEDORES_KEY, exact: false })
+
+      // Invalidamos historial de CxP para el proveedor específico
+      await qc.cancelQueries({ queryKey: [...CXP_KEY, variables.proveedorId] })
+      qc.invalidateQueries({ queryKey: [...CXP_KEY, variables.proveedorId], exact: true })
+    },
+  })
+}
+

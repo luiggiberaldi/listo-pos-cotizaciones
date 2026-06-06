@@ -1,9 +1,9 @@
 // src/views/ProveedoresView.jsx
 // Vista principal del módulo de Proveedores y Cuentas por Pagar (CxP)
 import { useState, useMemo, useEffect, useCallback } from 'react'
-import { Briefcase, Plus, Search, RefreshCw, X, LayoutGrid, List, Filter, ChevronDown, Check, AlertCircle, Trash2, ArrowUpCircle, ArrowDownCircle, PlusCircle, User, Hash, Phone, Mail, MapPin, StickyNote, Clock } from 'lucide-react'
+import { Briefcase, Plus, Search, RefreshCw, X, LayoutGrid, List, Filter, ChevronDown, Check, AlertCircle, Trash2, ArrowUpCircle, ArrowDownCircle, PlusCircle, User, Hash, Phone, Mail, MapPin, StickyNote, Clock, Pencil } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
-import { useProveedores, useBorrarProveedor, useCuentasPorPagar, useRegistrarTransaccionCxP } from '../hooks/useProveedores'
+import { useProveedores, useBorrarProveedor, useCuentasPorPagar, useRegistrarTransaccionCxP, useActualizarTransaccionCxP } from '../hooks/useProveedores'
 import ProveedorForm from '../components/proveedores/ProveedorForm'
 import { Modal } from '../components/ui/Modal'
 import ConfirmModal from '../components/ui/ConfirmModal'
@@ -100,8 +100,131 @@ function SkeletonProveedores() {
   )
 }
 
+// ─── Componente para Editar Movimiento Contable (CxP) ─────────────────────────
+function EditarMovimientoForm({ movimiento, proveedorId, onSuccess, onCancel }) {
+  const mutation = useActualizarTransaccionCxP()
+  const [monto, setMonto] = useState(movimiento.monto_usd || '')
+  const [descripcion, setDescripcion] = useState(movimiento.descripcion || '')
+  const [fechaVencimiento, setFechaVencimiento] = useState(movimiento.fecha_vencimiento ? movimiento.fecha_vencimiento.slice(0, 10) : '')
+  const [formaPago, setFormaPago] = useState(movimiento.forma_pago_abono || 'Efectivo $')
+  const [referencia, setReferencia] = useState(movimiento.referencia || '')
+  const [error, setError] = useState('')
+
+  const FORM_PAGOS = ['Efectivo $', 'Efectivo Bs', 'Zelle', 'Pago Móvil', 'USDT', 'Transferencia', 'Cruce']
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setError('')
+    const montoNum = Number(monto)
+    if (isNaN(montoNum) || montoNum <= 0) {
+      setError('El monto debe ser un número mayor a cero')
+      return
+    }
+
+    try {
+      await mutation.mutateAsync({
+        id: movimiento.id,
+        proveedorId,
+        monto: montoNum,
+        descripcion: descripcion.trim(),
+        fechaVencimiento: movimiento.tipo === 'cargo' && fechaVencimiento ? new Date(fechaVencimiento).toISOString() : null,
+        formaPago: movimiento.tipo === 'abono' ? formaPago : null,
+        referencia: movimiento.tipo === 'abono' ? referencia : null,
+      })
+      showToast('Movimiento actualizado con éxito', 'success')
+      onSuccess()
+    } catch (err) {
+      setError(err.message || 'Error al actualizar el movimiento')
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4 p-1">
+      <div>
+        <label className="block text-xs font-semibold text-slate-500 mb-1">Monto USD *</label>
+        <input
+          type="number"
+          step="0.01"
+          min="0.01"
+          value={monto}
+          onChange={e => setMonto(e.target.value)}
+          className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary text-slate-800"
+          required
+        />
+      </div>
+
+      <div>
+        <label className="block text-xs font-semibold text-slate-500 mb-1">Descripción / Concepto *</label>
+        <input
+          type="text"
+          value={descripcion}
+          onChange={e => setDescripcion(e.target.value)}
+          className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary text-slate-800"
+          required
+        />
+      </div>
+
+      {movimiento.tipo === 'cargo' && (
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 mb-1">Fecha de vencimiento</label>
+          <input
+            type="date"
+            value={fechaVencimiento}
+            onChange={e => setFechaVencimiento(e.target.value)}
+            className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary text-slate-800"
+          />
+        </div>
+      )}
+
+      {movimiento.tipo === 'abono' && (
+        <>
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 mb-1">Forma de pago *</label>
+            <select
+              value={formaPago}
+              onChange={e => setFormaPago(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary text-slate-800"
+            >
+              {FORM_PAGOS.map(fp => <option key={fp} value={fp}>{fp}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 mb-1">Referencia</label>
+            <input
+              type="text"
+              value={referencia}
+              onChange={e => setReferencia(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary text-slate-800"
+            />
+          </div>
+        </>
+      )}
+
+      {error && <p className="text-xs text-red-500 font-semibold">{error}</p>}
+
+      <div className="flex gap-2 justify-end pt-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-4 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-sm font-semibold text-slate-600 transition-colors"
+        >
+          Cancelar
+        </button>
+        <button
+          type="submit"
+          disabled={mutation.isPending}
+          className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-xl text-sm font-semibold transition-colors"
+        >
+          {mutation.isPending ? 'Guardando...' : 'Guardar Cambios'}
+        </button>
+      </div>
+    </form>
+  )
+}
+
 // ─── Modal Ficha del Proveedor (CxP) ──────────────────────────────────────────
-function FichaProveedorModal({ proveedor, isOpen, onClose, onEditar, onBorrar }) {
+function FichaProveedorModal({ proveedor, isOpen, onClose, onEditar, onBorrar, onEditarMovimiento }) {
   const { data: movimientos = [], isLoading, refetch } = useCuentasPorPagar(isOpen ? proveedor?.id : null)
   const registrarTransaccion = useRegistrarTransaccionCxP()
   const [saldoLocal, setSaldoLocal] = useState(0)
@@ -112,6 +235,7 @@ function FichaProveedorModal({ proveedor, isOpen, onClose, onEditar, onBorrar })
   const [transFormaPago, setTransFormaPago] = useState('Efectivo $')
   const [transReferencia, setTransReferencia] = useState('')
   const [transDescripcion, setTransDescripcion] = useState('')
+  const [transDiasVencimiento, setTransDiasVencimiento] = useState('0')
   const [errorTrans, setErrorTrans] = useState('')
 
   const FORM_PAGOS = ['Efectivo $', 'Efectivo Bs', 'Zelle', 'Pago Móvil', 'USDT', 'Transferencia', 'Cruce']
@@ -138,6 +262,8 @@ function FichaProveedorModal({ proveedor, isOpen, onClose, onEditar, onBorrar })
       return
     }
 
+    const diasNum = transTipo === 'cargo' ? parseInt(transDiasVencimiento, 10) : null;
+
     try {
       const result = await registrarTransaccion.mutateAsync({
         proveedorId: proveedor.id,
@@ -146,12 +272,14 @@ function FichaProveedorModal({ proveedor, isOpen, onClose, onEditar, onBorrar })
         formaPago: transTipo === 'abono' ? transFormaPago : null,
         referencia: transTipo === 'abono' ? transReferencia : null,
         descripcion: transDescripcion.trim() || undefined,
+        diasVencimiento: diasNum && !isNaN(diasNum) && diasNum > 0 ? diasNum : null,
       })
 
       setSaldoLocal(result.nuevoSaldo)
       setTransMonto('')
       setTransReferencia('')
       setTransDescripcion('')
+      setTransDiasVencimiento('0')
       showToast('Transacción registrada con éxito', 'success')
       refetch()
     } catch (err) {
@@ -206,9 +334,9 @@ function FichaProveedorModal({ proveedor, isOpen, onClose, onEditar, onBorrar })
               <p><strong>Ubicación:</strong> {proveedor.ciudad ? `${proveedor.ciudad}, ${proveedor.estado}` : '—'}</p>
               <p><strong>Dirección:</strong> {proveedor.direccion || '—'}</p>
             </div>
-            {proveedor.notas && (
-              <p className="border-t border-slate-200 pt-2 mt-2"><strong>Notas:</strong> {proveedor.notas}</p>
-            )}
+            {proveedor.notes || proveedor.notas ? (
+              <p className="border-t border-slate-200 pt-2 mt-2"><strong>Notas:</strong> {proveedor.notas || proveedor.notes}</p>
+            ) : null}
             
             {/* Acciones principales de ficha */}
             <div className="flex gap-2 pt-3 border-t border-slate-200 mt-2">
@@ -263,7 +391,7 @@ function FichaProveedorModal({ proveedor, isOpen, onClose, onEditar, onBorrar })
                   value={transMonto}
                   onChange={e => { setTransMonto(e.target.value); setErrorTrans('') }}
                   placeholder="0.00"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary text-slate-800"
                   required
                 />
               </div>
@@ -275,10 +403,25 @@ function FichaProveedorModal({ proveedor, isOpen, onClose, onEditar, onBorrar })
                   <select
                     value={transFormaPago}
                     onChange={e => setTransFormaPago(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary text-slate-800"
                   >
                     {FORM_PAGOS.map(fp => <option key={fp} value={fp}>{fp}</option>)}
                   </select>
+                </div>
+              )}
+
+              {/* Si es cargo, muestra días de vencimiento */}
+              {transTipo === 'cargo' && (
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-500 mb-1">Días de vencimiento</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={transDiasVencimiento}
+                    onChange={e => setTransDiasVencimiento(e.target.value)}
+                    placeholder="0 (inmediato)"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary text-slate-800"
+                  />
                 </div>
               )}
             </div>
@@ -291,7 +434,7 @@ function FichaProveedorModal({ proveedor, isOpen, onClose, onEditar, onBorrar })
                   value={transReferencia}
                   onChange={e => setTransReferencia(e.target.value)}
                   placeholder="Comprobante, transferencia..."
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary text-slate-800"
                 />
               </div>
             )}
@@ -303,7 +446,7 @@ function FichaProveedorModal({ proveedor, isOpen, onClose, onEditar, onBorrar })
                 value={transDescripcion}
                 onChange={e => setTransDescripcion(e.target.value)}
                 placeholder={transTipo === 'cargo' ? 'Cargo (Deuda registrada)' : 'Abono (Pago registrado)'}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary text-slate-800"
               />
             </div>
 
@@ -342,35 +485,54 @@ function FichaProveedorModal({ proveedor, isOpen, onClose, onEditar, onBorrar })
               </p>
             ) : (
               <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                {movimientos.map(mov => (
-                  <div key={mov.id} className={`flex items-center gap-3 px-3 py-2 rounded-xl border text-xs ${
-                    mov.tipo === 'cargo' ? 'bg-red-50 border-red-100' : 'bg-emerald-50 border-emerald-100'
-                  }`}>
-                    {mov.tipo === 'cargo' ? (
-                      <ArrowUpCircle size={16} className="text-red-500 shrink-0" />
-                    ) : (
-                      <ArrowDownCircle size={16} className="text-emerald-500 shrink-0" />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="font-bold text-slate-700 truncate">{mov.descripcion}</p>
-                      <p className="text-[10px] text-slate-400">
-                        {fmtFecha(mov.creado_en)}
-                        {mov.registrador?.nombre ? ` · por ${mov.registrador.nombre}` : ''}
-                      </p>
-                      {mov.forma_pago_abono && (
-                        <p className="text-[9px] text-slate-400 font-bold">
-                          FP: {mov.forma_pago_abono} {mov.referencia ? `· Ref: ${mov.referencia}` : ''}
-                        </p>
+                {movimientos.map(mov => {
+                  const isVencido = mov.fecha_vencimiento && new Date(mov.fecha_vencimiento) < new Date() && saldoLocal > 0;
+                  return (
+                    <div key={mov.id} className={`flex items-center gap-3 px-3 py-2 rounded-xl border text-xs ${
+                      mov.tipo === 'cargo' ? 'bg-red-50 border-red-100' : 'bg-emerald-50 border-emerald-100'
+                    }`}>
+                      {mov.tipo === 'cargo' ? (
+                        <ArrowUpCircle size={16} className="text-red-500 shrink-0" />
+                      ) : (
+                        <ArrowDownCircle size={16} className="text-emerald-500 shrink-0" />
                       )}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-slate-700 truncate">{mov.descripcion}</p>
+                        <p className="text-[10px] text-slate-400">
+                          {fmtFecha(mov.creado_en)}
+                          {mov.registrador?.nombre ? ` · por ${mov.registrador.nombre}` : ''}
+                        </p>
+                        {mov.forma_pago_abono && (
+                          <p className="text-[9px] text-slate-400 font-bold">
+                            FP: {mov.forma_pago_abono} {mov.referencia ? `· Ref: ${mov.referencia}` : ''}
+                          </p>
+                        )}
+                        {mov.fecha_vencimiento && mov.tipo === 'cargo' && (
+                          <p className={`text-[9px] font-bold mt-0.5 ${isVencido ? 'text-red-600 font-black' : 'text-slate-500'}`}>
+                            Vence: {new Date(mov.fecha_vencimiento).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            {isVencido ? ' (Vencido)' : ''}
+                          </p>
+                        )}
+                      </div>
+                      <div className="text-right shrink-0 flex items-center gap-2">
+                        <div>
+                          <p className={`font-black ${mov.tipo === 'cargo' ? 'text-red-600' : 'text-emerald-600'}`}>
+                            {mov.tipo === 'cargo' ? '+' : '-'}{fmtUsd(mov.monto_usd)}
+                          </p>
+                          <p className="text-[10px] text-slate-400">Saldo: {fmtUsd(mov.saldo_usd)}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onEditarMovimiento(mov)}
+                          className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-200/50 transition-colors shrink-0"
+                          title="Editar"
+                        >
+                          <Pencil size={11} />
+                        </button>
+                      </div>
                     </div>
-                    <div className="text-right shrink-0">
-                      <p className={`font-black ${mov.tipo === 'cargo' ? 'text-red-600' : 'text-emerald-600'}`}>
-                        {mov.tipo === 'cargo' ? '+' : '-'}{fmtUsd(mov.monto_usd)}
-                      </p>
-                      <p className="text-[10px] text-slate-400">Saldo: {fmtUsd(mov.saldo_usd)}</p>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -447,9 +609,15 @@ export default function ProveedoresView() {
 
   const [proveedorBorrando, setProveedorBorrando] = useState(null)
   const [confirmBorrarOpen, setConfirmBorrarOpen] = useState(false)
+  const [movimientoEditando, setMovimientoEditando] = useState(null)
 
   const { data: proveedores = [], isLoading, isError, refetch } = useProveedores(busqueda)
   const borrarProveedor = useBorrarProveedor()
+
+  const proveedorFichaLive = useMemo(() => {
+    if (!proveedorFicha) return null
+    return proveedores.find(p => p.id === proveedorFicha.id) || proveedorFicha
+  }, [proveedores, proveedorFicha])
 
   // Debounce búsqueda
   useEffect(() => {
@@ -657,12 +825,29 @@ export default function ProveedoresView() {
 
       {/* Modal Ficha / Detalle */}
       <FichaProveedorModal
-        proveedor={proveedorFicha}
+        proveedor={proveedorFichaLive}
         isOpen={fichaOpen}
         onClose={() => { setFichaOpen(false); setProveedorFicha(null) }}
         onEditar={(p) => { setFichaOpen(false); abrirEditar(p) }}
         onBorrar={(p) => abrirBorrar(p)}
+        onEditarMovimiento={setMovimientoEditando}
       />
+
+      {/* Modal Anidado para Editar el Movimiento */}
+      {movimientoEditando && (
+        <Modal
+          isOpen={!!movimientoEditando}
+          onClose={() => setMovimientoEditando(null)}
+          title="Editar Movimiento CxP"
+        >
+          <EditarMovimientoForm
+            movimiento={movimientoEditando}
+            proveedorId={proveedorFichaLive?.id}
+            onSuccess={() => setMovimientoEditando(null)}
+            onCancel={() => setMovimientoEditando(null)}
+          />
+        </Modal>
+      )}
 
       {/* Modal Confirmar Borrado */}
       <ConfirmModal

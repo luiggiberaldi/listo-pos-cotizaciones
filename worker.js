@@ -34,7 +34,8 @@ import {
   handleActualizarProveedor,
   handleBorrarProveedor,
   handleGetCuentasPorPagar,
-  handleRegistrarTransaccionCxP
+  handleRegistrarTransaccionCxP,
+  handleActualizarTransaccionCxP
 } from './api/handlers/proveedores.js'
 
 
@@ -250,6 +251,9 @@ export default {
     }
     if (url.pathname === '/api/cuentas-por-pagar' && request.method === 'POST') {
       return handleRegistrarTransaccionCxP(request, env);
+    }
+    if (url.pathname === '/api/cuentas-por-pagar' && request.method === 'PUT') {
+      return handleActualizarTransaccionCxP(request, env);
     }
 
     // ── API: registrar abono CxC (bypass RLS) ──────────────────────────────
