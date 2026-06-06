@@ -1527,26 +1527,28 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
     })
 
     // Fila de Total
-    y = checkPage(doc, y, 10)
-    doc.setFillColor(245, 247, 250)
-    doc.rect(MARGIN, y - 1, CONTENT_W, 9, 'F')
+    y = checkPage(doc, y, 14)
+    doc.setFillColor(240, 244, 250)
+    doc.rect(MARGIN, y - 1, CONTENT_W, 12, 'F')
 
-    doc.setDrawColor(200, 204, 210)
-    doc.setLineWidth(0.4)
+    doc.setDrawColor(180, 190, 210)
+    doc.setLineWidth(0.5)
     doc.line(MARGIN, y - 1, MARGIN + CONTENT_W, y - 1)
 
     const totalFpDespachos = porFormaPago.reduce((s, fp) => s + (fp.count || 0), 0)
 
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(10)
+    doc.setFontSize(12)
     doc.setTextColor(...C_DARK)
-    doc.text(`TOTAL RECAUDADO (${totalFpDespachos} desp.)`, MARGIN + 2, y + 5)
-    doc.text(fmtUsd(fpTotal), MARGIN + 80, y + 5)
+    doc.text(`TOTAL RECAUDADO (${totalFpDespachos} desp.)`, MARGIN + 2, y + 7)
+    doc.text(fmtUsd(fpTotal), MARGIN + 80, y + 7)
     doc.setFont('helvetica', 'normal')
-    doc.text('100.0%', MARGIN + 110, y + 5)
+    doc.setFontSize(11)
+    doc.text('100.0%', MARGIN + 110, y + 7)
 
-    doc.line(MARGIN, y + 8, MARGIN + CONTENT_W, y + 8)
-    y += 12
+    doc.setDrawColor(180, 190, 210)
+    doc.line(MARGIN, y + 11, MARGIN + CONTENT_W, y + 11)
+    y += 16
 
     // Bloque de Desglose de Flete / Diferencia
     const fpCxc = porFormaPago.find(fp => fp.formaPago === 'Cta por cobrar');
@@ -1554,21 +1556,21 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
     const totalCxC = (fpCxc ? fpCxc.totalUsd : 0) + (fpCod ? fpCod.totalUsd : 0);
     const ventasSinCxc = (kpis.totalVentas || 0) - totalCxC;
     const tieneCxC = totalCxC > 0;
-    const boxH = tieneCxC ? 21 : 14;
+    const boxH = tieneCxC ? 28 : 20;
 
     y = checkPage(doc, y, boxH + 4)
-    doc.setFillColor(250, 252, 255)
-    doc.setDrawColor(210, 225, 245)
-    doc.setLineWidth(0.3)
-    doc.roundedRect(MARGIN, y, CONTENT_W, boxH, 1.5, 1.5, 'FD')
+    doc.setFillColor(245, 250, 255)
+    doc.setDrawColor(190, 215, 245)
+    doc.setLineWidth(0.4)
+    doc.roundedRect(MARGIN, y, CONTENT_W, boxH, 2, 2, 'FD')
 
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
+    doc.setFontSize(10.5)
     doc.setTextColor(...C_PRIMARY)
-    doc.text('DESGLOSE DE LA DIFERENCIA (RECAUDACIÓN VS VENTAS NETAS):', MARGIN + 3.5, y + 5.5)
+    doc.text('DESGLOSE DE LA DIFERENCIA (RECAUDACIÓN VS VENTAS NETAS):', MARGIN + 3.5, y + 7)
 
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8.5)
+    doc.setFontSize(10)
     doc.setTextColor(...C_DARK)
 
     let curX = MARGIN + 3.5
@@ -1576,46 +1578,46 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
     // 1. Ventas Netas
     const lbl1 = 'Ventas Netas (Mercancía): '
     doc.setFont('helvetica', 'normal')
-    doc.text(lbl1, curX, y + 10.5)
+    doc.text(lbl1, curX, y + 14)
     curX += doc.getTextWidth(lbl1)
     
     const val1 = fmtUsd(kpis.totalVentas || 0)
     doc.setFont('helvetica', 'bold')
-    doc.text(val1, curX, y + 10.5)
+    doc.text(val1, curX, y + 14)
     curX += doc.getTextWidth(val1)
     
     // Separator 1
     const sep1 = '    |    '
     doc.setFont('helvetica', 'normal')
-    doc.text(sep1, curX, y + 10.5)
+    doc.text(sep1, curX, y + 14)
     curX += doc.getTextWidth(sep1)
     
     // 2. Flete
     const lbl2 = 'Flete/Envío Recaudado: '
     doc.setFont('helvetica', 'normal')
-    doc.text(lbl2, curX, y + 10.5)
+    doc.text(lbl2, curX, y + 14)
     curX += doc.getTextWidth(lbl2)
     
     const val2 = fmtUsd(kpis.totalFlete || 0)
     doc.setFont('helvetica', 'bold')
-    doc.text(val2, curX, y + 10.5)
+    doc.text(val2, curX, y + 14)
     curX += doc.getTextWidth(val2)
     
     // Separator 2
     const sep2 = '    |    '
     doc.setFont('helvetica', 'normal')
-    doc.text(sep2, curX, y + 10.5)
+    doc.text(sep2, curX, y + 14)
     curX += doc.getTextWidth(sep2)
     
     // 3. Total Recaudado
     const lbl3 = 'Total Recaudado: '
     doc.setFont('helvetica', 'normal')
-    doc.text(lbl3, curX, y + 10.5)
+    doc.text(lbl3, curX, y + 14)
     curX += doc.getTextWidth(lbl3)
     
     const val3 = fmtUsd(fpTotal)
     doc.setFont('helvetica', 'bold')
-    doc.text(val3, curX, y + 10.5)
+    doc.text(val3, curX, y + 14)
 
     // Linea 2 (solo si tiene CxC)
     if (tieneCxC) {
@@ -1623,29 +1625,30 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
       
       const lblCxC = 'CxC y COD Pendientes: ';
       doc.setFont('helvetica', 'normal')
-      doc.text(lblCxC, curX2, y + 16.5)
+      doc.setFontSize(10)
+      doc.text(lblCxC, curX2, y + 21)
       curX2 += doc.getTextWidth(lblCxC)
       
       const valCxC = `-${fmtUsd(totalCxC)}`;
       doc.setFont('helvetica', 'bold')
       doc.setTextColor(220, 38, 38) // Color rojo
-      doc.text(valCxC, curX2, y + 16.5)
+      doc.text(valCxC, curX2, y + 21)
       curX2 += doc.getTextWidth(valCxC)
       
       doc.setTextColor(...C_DARK) // restaurar color
       const sepCxC = '    |    ';
       doc.setFont('helvetica', 'normal')
-      doc.text(sepCxC, curX2, y + 16.5)
+      doc.text(sepCxC, curX2, y + 21)
       curX2 += doc.getTextWidth(sepCxC)
       
       const lblSinCxC = 'Ventas Netas sin CxC (Recaudación Real): ';
       doc.setFont('helvetica', 'normal')
-      doc.text(lblSinCxC, curX2, y + 16.5)
+      doc.text(lblSinCxC, curX2, y + 21)
       curX2 += doc.getTextWidth(lblSinCxC)
       
       const valSinCxC = fmtUsd(ventasSinCxc);
       doc.setFont('helvetica', 'bold')
-      doc.text(valSinCxC, curX2, y + 16.5)
+      doc.text(valSinCxC, curX2, y + 21)
     }
 
     y += boxH + 4
