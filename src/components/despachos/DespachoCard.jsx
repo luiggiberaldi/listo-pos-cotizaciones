@@ -266,14 +266,14 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     : '—'
 
   const canDespachar = (esAdministracion || esDesarrollador || rol === 'jefe') && despacho.estado === 'pendiente'
-  const canEntregar = (perfil?.rol === 'logistica' || esDesarrollador) && despacho.estado === 'despachada'
+  const canEntregar = (perfil?.rol === 'logistica' || perfil?.rol === 'jefe' || esDesarrollador) && despacho.estado === 'despachada'
   const esVendedorPropio = perfil?.id === despacho.vendedor_id
   const canAnular = despacho.estado === 'pendiente' && (esDesarrollador || esAdministracion || esSupervisor || esVendedorPropio)
   const canDevolver = (despacho.estado === 'despachada' || despacho.estado === 'entregada') && ['logistica', 'jefe', 'desarrollador'].includes(perfil?.rol)
   const canDevolucionParcial = despacho.estado === 'entregada' && ['administracion', 'logistica', 'desarrollador', 'jefe'].includes(perfil?.rol)
   const canReciclar = ((esSupervisor || esDesarrollador) && despacho.estado === 'anulada' && onReciclar)
     || (['vendedor', 'vendedor_sin_comision'].includes(rol) && despacho.estado === 'anulada' && esVendedorPropio && onReciclar)
-  const canDescuento = (esAdministracion || esDesarrollador) && ['pendiente', 'despachada'].includes(despacho.estado)
+  const canDescuento = (esAdministracion || esDesarrollador || perfil?.rol === 'jefe') && ['pendiente', 'despachada'].includes(despacho.estado)
   const canEditar = despacho.estado === 'pendiente' && (esPrivilegiado || perfil?.rol === 'logistica' || despacho.vendedor_id === perfil?.id)
   const descuentoTotal = Number(despacho.descuento_total_usd || 0)
   const fleteUsd = Number(despacho.flete_usd || 0)
@@ -730,8 +730,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       })
     }
 
-    if (perfil?.rol === 'logistica' || perfil?.rol === 'desarrollador') {
-      const tieneNota = !!despacho.notas?.trim()
+    if (perfil?.rol === 'logistica' || perfil?.rol === 'desarrollador' || perfil?.rol === 'jefe') {
+      const tieneNota = !!despacho.notes?.trim() || !!despacho.notas?.trim()
       actions.push({
         label: tieneNota ? 'Editar/Eliminar observación' : 'Agregar observación',
         icon: MessageCircle,

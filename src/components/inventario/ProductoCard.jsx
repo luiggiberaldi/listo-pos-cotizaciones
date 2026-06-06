@@ -77,6 +77,7 @@ export default function ProductoCard({ producto, onEditar, onClonar, onDesactiva
 
   const esAdministracion = perfil?.rol === 'administracion'
   const esPrivilegiado = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe') || esAdministracion
+  const puedeGestionarInventario = esAdministracion || perfil?.rol === 'desarrollador' || perfil?.rol === 'jefe'
   // Costo solo visible para administracion, jefe y desarrollador
   const puedeVerCosto = ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)
   const { fg, bg } = colorCategoria(producto.categoria || '')
@@ -293,7 +294,7 @@ export default function ProductoCard({ producto, onEditar, onClonar, onDesactiva
               className="flex items-center justify-center p-1.5 rounded-lg text-violet-600 hover:bg-violet-50 transition-colors shrink-0">
               <ClipboardList size={13} />
             </button>
-            {esAdministracion && (
+            {puedeGestionarInventario && (
               <>
                 <button onClick={() => onEditar(producto)} title="Editar"
                   className="flex items-center justify-center p-1.5 rounded-lg text-sky-600 hover:bg-sky-50 transition-colors shrink-0">

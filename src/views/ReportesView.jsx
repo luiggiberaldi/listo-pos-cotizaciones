@@ -1260,7 +1260,7 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
 // ═══════════════════════════════════════════════════════════════════════════
 function TabComisiones({ configNeg }) {
   const { perfil } = useAuthStore()
-  const esAdmin = perfil?.rol === 'administracion'
+  const esAdmin = perfil?.rol === 'administracion' || perfil?.rol === 'jefe' || perfil?.rol === 'desarrollador'
   const esJefe = perfil?.rol === 'jefe'
   const esDev = perfil?.rol === 'desarrollador'
   const puedePagarComisiones = esAdmin || esJefe || esDev
@@ -2135,7 +2135,7 @@ function TabCredito() {
   const [sortBy, setSortBy] = useState('saldo') // 'saldo' | 'dias' | 'diasRestantes'
   const [sortDir, setSortDir] = useState('desc')
   const { perfil } = useAuthStore()
-  const esAdmin = perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador'
+  const esAdmin = perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador' || perfil?.rol === 'jefe'
 
   const [exportandoCxC, setExportandoCxC] = useState(false)
   const { data: configNeg = {} } = useConfigNegocio()
