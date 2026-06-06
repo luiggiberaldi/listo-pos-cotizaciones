@@ -5,7 +5,7 @@ import { cargarLogo } from './pdfLogo'
 import { LOGO_LISTA_PRECIOS } from './logoListaPreciosBase64'
 import {
   PAGE_W, PAGE_H, MARGIN, CONTENT_W,
-  C_PRIMARY, C_DARK, C_WHITE, C_EMERALD, C_AMBER, C_GRAY,
+  C_PRIMARY, C_DARK, C_WHITE, C_EMERALD, C_AMBER, C_GRAY, C_RED,
   fmtUsd, fmtBs, fmtBsShort, fmtFecha, fmtFechaCorta,
   hexToRgb, drawWatermark, checkPage, drawSimplifiedHeader, drawPremiumHeader, drawPremiumFooter
 } from './pdfShared'

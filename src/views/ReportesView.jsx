@@ -783,7 +783,7 @@ function TabVentas({ configNeg }) {
 }
 
 // ─── Modal Detalle Vendedor ──────────────────────────────────────────────────
-function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
+function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, ajustesManuales = {} }) {
   const { data: comisionesRes, isLoading } = useComisiones({
     desde: rango?.from,
     hasta: rango?.to,
@@ -874,6 +874,21 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
   const [exportando, setExportando] = useState(false)
   const [formatoReporte, setFormatoReporte] = useState('detallado') // 'detallado', 'resumido'
 
+  const totalConAjustes = useMemo(() => {
+    if (!vendedor) return totales;
+    const aj = ajustesManuales[vendedor.id] || { cxc: '', descuentoCarro: '' };
+    const cxcVal = Number(aj.cxc) || 0;
+    const descVal = Number(aj.descuentoCarro) || 0;
+    const rate = tasaEuro?.precio || 0;
+
+    if (formatoReporte === 'resumido') {
+      const adjustedUsd = totales.totalUsd + cxcVal - descVal;
+      const adjustedBs = adjustedUsd * rate;
+      return { totalUsd: adjustedUsd, comBs: adjustedBs };
+    }
+    return totales;
+  }, [totales, vendedor, ajustesManuales, formatoReporte, tasaEuro])
+
   async function exportarPDF(action = 'download') {
     setExportando(true)
     try {
@@ -926,7 +941,8 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
         config: configNeg ?? {},
         action,
         formato: formatoReporte,
-        tasaEuro: tasaEuro?.precio || 0
+        tasaEuro: tasaEuro?.precio || 0,
+        ajustesManuales
       })
     } catch (e) {
       console.error('Error generando PDF individual:', e)
@@ -956,8 +972,8 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg }) {
         <div className="space-y-4">
           {/* Fila 1: KPIs - siempre en ancho completo */}
           <div className="grid grid-cols-2 gap-4">
-            <KpiCard icon={DollarSign} label="Total Comisión USD" value={fmtUsd(totales.totalUsd)} gradient="linear-gradient(135deg, #1e293b, #0f172a)" border="rgba(255,255,255,0.05)" />
-            <KpiCard icon={Percent} label="Total Comisión Bs" value={fmtBs(totales.comBs)} gradient="linear-gradient(135deg, #065f46, #064e3b)" border="rgba(255,255,255,0.05)" />
+            <KpiCard icon={DollarSign} label="Total Comisión USD" value={fmtUsd(totalConAjustes.totalUsd)} gradient="linear-gradient(135deg, #1e293b, #0f172a)" border="rgba(255,255,255,0.05)" />
+            <KpiCard icon={Percent} label="Total Comisión Bs" value={fmtBs(totalConAjustes.comBs)} gradient="linear-gradient(135deg, #065f46, #064e3b)" border="rgba(255,255,255,0.05)" />
           </div>
 
           {/* Fila 2: Acciones */}
@@ -1278,8 +1294,17 @@ function TabComisiones({ configNeg }) {
   const [exportando, setExportando] = useState(false)
   const [showPrintMenu, setShowPrintMenu] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
+  // ajustesManuales: { [vendedorId]: { cxc: string, descuentoCarro: string } }
+  const [ajustesManuales, setAjustesManuales] = useState({})
 
   const [vendedorSeleccionado, setVendedorSeleccionado] = useState(null)
+
+  const setAjuste = (vId, campo, valor) => {
+    setAjustesManuales(prev => ({
+      ...prev,
+      [vId]: { ...(prev[vId] || { cxc: '', descuentoCarro: '' }), [campo]: valor }
+    }))
+  }
 
   const { data: comisionesRes, isLoading: comisionesLoading, isError, refetch } = useComisiones({
     estado: filtroEstado,
@@ -1491,7 +1516,8 @@ function TabComisiones({ configNeg }) {
         config: configNeg ?? {},
         action: accion === 'imprimir' ? 'print' : 'download',
         formato: formatoReporte,
-        tasaEuro: tasaEuro?.precio || 0
+        tasaEuro: tasaEuro?.precio || 0,
+        ajustesManuales
       })
     } catch (e) {
       console.error('Error generando PDF general:', e)
@@ -1554,7 +1580,8 @@ function TabComisiones({ configNeg }) {
         rango,
         config: configNeg ?? {},
         formato: formatoReporte,
-        tasaEuro: tasaEuro?.precio || 0
+        tasaEuro: tasaEuro?.precio || 0,
+        ajustesManuales
       })
     } catch (e) {
       console.error('Error generando PDF individual:', e)
@@ -1777,6 +1804,82 @@ function TabComisiones({ configNeg }) {
           </div>
         </div>
       </div>
+
+      {/* Panel de Ajustes Manuales para Reporte Resumido */}
+      {formatoReporte === 'resumido' && !comisionesLoading && !isError && vendedoresAgrupados.length > 0 && (
+        <div className="bg-white rounded-2xl border border-amber-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-200 flex items-center gap-2">
+            <span className="text-base">✏️</span>
+            <div>
+              <p className="text-xs font-black text-amber-800 uppercase tracking-wide">Ajustes Manuales — Reporte Resumido</p>
+              <p className="text-[10px] text-amber-600 font-medium">Ingresa los montos de Comisión CxC y Descuento Carro por vendedor antes de generar el PDF.</p>
+            </div>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {vendedoresAgrupados.map(v => {
+              const aj = ajustesManuales[v.id] || { cxc: '', descuentoCarro: '' }
+              const comisionGen = v.totalUsd || 0
+              const cxcVal = Number(aj.cxc) || 0
+              const descVal = Number(aj.descuentoCarro) || 0
+              const totalPagar = comisionGen + cxcVal - descVal
+              const tasa = tasaEuro?.precio || 0
+              return (
+                <div key={v.id} className="flex flex-wrap items-center gap-3 px-4 py-2.5">
+                  {/* Nombre vendedor */}
+                  <div className="flex items-center gap-2 w-40 shrink-0">
+                    <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0" style={{ backgroundColor: v.color }}>
+                      {v.nombre.charAt(0).toUpperCase()}
+                    </div>
+                    <span className="text-xs font-bold text-slate-800 truncate">{v.nombre}</span>
+                  </div>
+                  {/* Comisión periodo (solo lectura) */}
+                  <div className="flex flex-col items-start">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-wide mb-0.5">Comisión Periodo</label>
+                    <span className="text-xs font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">${comisionGen.toFixed(2)}</span>
+                  </div>
+                  {/* CxC input */}
+                  <div className="flex flex-col items-start">
+                    <label className="text-[9px] font-black text-amber-600 uppercase tracking-wide mb-0.5">Comisión CxC ($)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={aj.cxc}
+                      onChange={e => setAjuste(v.id, 'cxc', e.target.value)}
+                      className="w-28 h-8 px-2 text-xs font-bold border border-amber-200 bg-amber-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 text-amber-800 placeholder-amber-300"
+                    />
+                  </div>
+                  {/* Descuento Carro input */}
+                  <div className="flex flex-col items-start">
+                    <label className="text-[9px] font-black text-red-600 uppercase tracking-wide mb-0.5">Descuento Carro ($)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={aj.descuentoCarro}
+                      onChange={e => setAjuste(v.id, 'descuentoCarro', e.target.value)}
+                      className="w-28 h-8 px-2 text-xs font-bold border border-red-200 bg-red-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400/40 focus:border-red-400 text-red-800 placeholder-red-300"
+                    />
+                  </div>
+                  {/* Total a pagar calculado */}
+                  <div className="flex flex-col items-start ml-auto">
+                    <label className="text-[9px] font-black text-indigo-500 uppercase tracking-wide mb-0.5">Total a Pagar</label>
+                    <span className="text-sm font-black text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg px-2.5 py-1">${totalPagar.toFixed(2)}</span>
+                  </div>
+                  {tasa > 0 && (
+                    <div className="flex flex-col items-start">
+                      <label className="text-[9px] font-black text-emerald-600 uppercase tracking-wide mb-0.5">Total en Bs</label>
+                      <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1">Bs {(totalPagar * tasa).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {comisionesLoading || resumenLoading ? (
         <SkeletonReporte />
@@ -2001,6 +2104,7 @@ function TabComisiones({ configNeg }) {
             vendedor={vendedorSeleccionado}
             rango={rango}
             configNeg={configNeg}
+            ajustesManuales={ajustesManuales}
           />
 
           {comisiones.length === 0 && (

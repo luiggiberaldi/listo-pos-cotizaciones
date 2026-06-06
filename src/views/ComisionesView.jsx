@@ -491,7 +491,7 @@ export default function ComisionesView() {
       ...prev,
       [sellerId]: {
         ...(prev[sellerId] || { cxc: '', descuentoCarro: '' }),
-        [field]: val === '' ? '' : Number(val)
+        [field]: val
       }
     }))
   }, [])
