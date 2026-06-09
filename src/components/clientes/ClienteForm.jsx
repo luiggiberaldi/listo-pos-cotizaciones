@@ -88,6 +88,8 @@ function formatearRif(prefijo, numero) {
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function ClienteForm({ cliente = null, onSuccess, onCancel, compact = false, forzarTipoCliente = null, forzarVendedorId = null, categoriasExistentes = [] }) {
   const esEdicion = !!cliente
+  const ROLES_SUGERIDOS = ['Administrador', 'Despachador', 'Facturador', 'Logística', 'Operario', 'Vendedor']
+  const listaRoles = Array.from(new Set([...ROLES_SUGERIDOS, ...categoriasExistentes])).sort()
 
   const [campos, setCampos] = useState(VACIO)
   const [rifPrefijo, setRifPrefijo] = useState('V')
@@ -342,23 +344,21 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
       {/* Papel / Rol de personal (Sólo si es tipo_cliente === 'personal') */}
       {campos.tipo_cliente === 'personal' && (
         <Campo label="Papel / Rol en la empresa *" icono={Briefcase} error={errores.categoria}>
-          <input
-            type="text"
-            list="roles-personal"
-            name="categoria"
+          <CustomSelect
+            options={listaRoles.map(role => ({ value: role, label: role }))}
             value={campos.categoria}
-            onChange={cambiar}
-            placeholder="Ej: Administrador, Logística, Vendedor..."
-            className={inputClass}
+            onChange={val => {
+              setCampos(prev => ({ ...prev, categoria: val }))
+              if (errores.categoria) setErrores(prev => ({ ...prev, categoria: '' }))
+              if (errorGeneral) setErrorGeneral('')
+            }}
+            placeholder="Seleccionar o escribir cargo..."
+            icon={Briefcase}
             disabled={cargando}
+            creatable={true}
+            createLabel="Crear cargo"
+            searchable={true}
           />
-          <datalist id="roles-personal">
-            {Array.from(new Set(['Administrador', 'Logística', 'Vendedor', 'Facturador', 'Despachador', 'Operario', ...categoriasExistentes]))
-              .sort()
-              .map(role => (
-                <option key={role} value={role} />
-              ))}
-          </datalist>
         </Campo>
       )}
 
