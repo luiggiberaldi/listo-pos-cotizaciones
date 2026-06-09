@@ -20,6 +20,7 @@ import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import { calcComisionEstimada } from '../utils/comisionUtils'
 import { useTransportistas, useCrearTransportista } from '../hooks/useTransportistas'
 import { useFormasPago } from '../hooks/useFormasPago'
+import { useSaldoFavorOrigen } from '../hooks/useCuentasCobrar'
 import CustomSelect from '../components/ui/CustomSelect'
 import useAuthStore from '../store/useAuthStore'
 import supabase from '../services/supabase/client'
@@ -392,12 +393,14 @@ export default function VentaRapidaView() {
   const { data: transportistas = [] } = useTransportistas()
   const tasaHook = useTasaCambio()
   const ventaRapida = useVentaRapida()
+  // Step 1: Cliente + Productos
+  const [clienteId, setClienteId] = useState('')
+
+  const { data: saldoFavorOrigen } = useSaldoFavorOrigen(clienteId)
 
   // Wizard step: 0=productos, 1=pago, 2=confirmar
   const [step, setStep] = useState(0)
 
-  // Step 1: Cliente + Productos
-  const [clienteId, setClienteId] = useState('')
   const [clienteBusqueda, setClienteBusqueda] = useState('')
   const [clienteOpen, setClienteOpen] = useState(false)
   const [productoBusqueda, setProductoBusqueda] = useState('')
@@ -470,6 +473,7 @@ export default function VentaRapidaView() {
   const [direccionEnvioEstado, setDireccionEnvioEstado] = useState('')
   const [direccionEnvioCiudad, setDireccionEnvioCiudad] = useState('')
   const [direccionEnvioDireccion, setDireccionEnvioDireccion] = useState('')
+  const [vueltoComoSaldoFavor, setVueltoComoSaldoFavor] = useState(false)
 
   const clienteRef = useRef(null)
   const productoInputRef = useRef(null)
@@ -571,6 +575,8 @@ export default function VentaRapidaView() {
     resetFormas: resetPagosInmediatos,
     totalAsignado: totalInmediato,
     pagoCuadrado: pagoInmediatoCuadrado,
+    hayVuelto: pagosInmediatosHayVuelto,
+    diferencia: pagosInmediatosDiferencia,
   } = useFormasPago(totalConFlete)
 
   // El monto COD requerido es el total restante
@@ -593,9 +599,17 @@ export default function VentaRapidaView() {
     if (esPrestamoPuro) {
       return [{ metodo: "Préstamo", monto: 0.00, diasVencimiento: 0 }]
     }
+
+    const inyectarVuelto = (fps) => {
+      if (pagosInmediatosHayVuelto && vueltoComoSaldoFavor) {
+        return fps.map((fp, i) => i === 0 ? { ...fp, vuelto_a_favor: true } : fp)
+      }
+      return fps
+    }
+
     if (esCod) {
       return [
-        ...pagosInmediatos,
+        ...inyectarVuelto(pagosInmediatos),
         {
           metodo: "Cobro a destino",
           monto: montoCodRequerido,
@@ -605,9 +619,9 @@ export default function VentaRapidaView() {
         }
       ]
     } else {
-      return pagosInmediatos
+      return inyectarVuelto(pagosInmediatos)
     }
-  }, [esPrestamoPuro, esCod, pagosInmediatos, propuestaCod, totalConFlete, totalInmediato, montoCodRequerido])
+  }, [esPrestamoPuro, esCod, pagosInmediatos, propuestaCod, totalConFlete, totalInmediato, montoCodRequerido, pagosInmediatosHayVuelto, vueltoComoSaldoFavor])
 
   const handleToggleCod = () => {
     setEsCod(prev => {
@@ -1035,6 +1049,11 @@ export default function VentaRapidaView() {
             setDireccionEnvioCiudad={setDireccionEnvioCiudad}
             direccionEnvioDireccion={direccionEnvioDireccion}
             setDireccionEnvioDireccion={setDireccionEnvioDireccion}
+            saldoFavorOrigen={saldoFavorOrigen}
+            vueltoComoSaldoFavor={vueltoComoSaldoFavor}
+            setVueltoComoSaldoFavor={setVueltoComoSaldoFavor}
+            pagosInmediatosHayVuelto={pagosInmediatosHayVuelto}
+            pagosInmediatosDiferencia={pagosInmediatosDiferencia}
           />
         )}
 
@@ -1932,7 +1951,10 @@ function Step2Pago({
   direccionEnvioActiva, setDireccionEnvioActiva,
   direccionEnvioEstado, setDireccionEnvioEstado,
   direccionEnvioCiudad, setDireccionEnvioCiudad,
-  direccionEnvioDireccion, setDireccionEnvioDireccion
+  direccionEnvioDireccion, setDireccionEnvioDireccion,
+  saldoFavorOrigen,
+  vueltoComoSaldoFavor, setVueltoComoSaldoFavor,
+  pagosInmediatosHayVuelto, pagosInmediatosDiferencia
 }) {
   const [showNuevoTransp, setShowNuevoTransp] = useState(false)
   const crearTransp = useCrearTransportista()
@@ -1944,6 +1966,38 @@ function Step2Pago({
     (clienteSeleccionado?.vendedor_id === perfil?.id && perfil?.rol === 'vendedor_sin_comision');
 
   const totalConFlete = totalParaPago + Math.max(0, Number(fleteUsd) || 0)
+
+  const handleTogglePagoInmediato = (metodo) => {
+    if (metodo === 'Saldo a Favor') {
+      const active = pagosInmediatos.some(f => f.metodo === 'Saldo a Favor')
+      if (!active) {
+        togglePagoInmediato('Saldo a Favor')
+        setTimeout(() => {
+          const available = Number(clienteSeleccionado?.saldo_a_favor || 0)
+          const actualAsignado = pagosInmediatos.reduce((s, fp) => s + (Number(fp.monto) || 0), 0)
+          const restante = totalConFlete - actualAsignado
+          const montoInicial = Math.min(restante > 0 ? restante : 0, available)
+          updatePagoInmediato('Saldo a Favor', {
+            monto: Number(montoInicial.toFixed(2)) || '',
+            forma_pago_origen: saldoFavorOrigen || 'Crédito'
+          })
+        }, 50)
+        return
+      }
+    }
+    togglePagoInmediato(metodo)
+  }
+
+  const handleSetMontoPagoInmediato = (metodo, val) => {
+    if (metodo === 'Saldo a Favor') {
+      const maxVal = Number(clienteSeleccionado?.saldo_a_favor || 0)
+      let numVal = Number(val)
+      if (numVal > maxVal) {
+        val = String(maxVal)
+      }
+    }
+    setMontoPagoInmediato(metodo, val)
+  }
 
   async function handleCrearTransportista(campos) {
     setTranspError('')
@@ -1969,7 +2023,7 @@ function Step2Pago({
             <div className="flex-1 min-w-0">
               <CustomSelect 
                 value={transportistaId} 
-                onChange={setTransportistaId} 
+                onChange={v => { setTransportistaId(v); if (!v) setFleteUsd(''); }} 
                 placeholder="— Sin transportista —" 
                 clearable 
                 icon={Truck}
@@ -2075,27 +2129,40 @@ function Step2Pago({
                     return (
                       <div key={fp.metodo} className="space-y-2">
                         <div className="flex items-center gap-2 bg-sky-50 border border-sky-300 rounded-xl px-3 py-2">
-                          <span className="text-sm font-bold text-sky-700 w-32 shrink-0 truncate">{fp.metodo}</span>
+                          <span className="text-sm font-bold text-sky-700 w-32 shrink-0 truncate">
+                            {fp.metodo === 'Saldo a Favor'
+                              ? `Saldo a Favor (${(fp.forma_pago_origen || 'Crédito').toUpperCase()})`
+                              : fp.metodo}
+                          </span>
                           <div className="relative flex-1 flex items-center">
                             <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">$</span>
                             <input
                               type="number" min="0" step="0.01"
                               value={fp.monto}
-                              onChange={e => setMontoPagoInmediato(fp.metodo, e.target.value)}
+                              onChange={e => handleSetMontoPagoInmediato(fp.metodo, e.target.value)}
                               onFocus={e => e.target.select()}
                               placeholder="0.00"
                               className="w-full pl-6 pr-2 py-1.5 rounded-lg text-sm font-semibold border border-sky-200 bg-white focus:outline-none focus:ring-2 focus:ring-sky-300 text-slate-800"
                             />
                             {restante > 0.01 && (
                               <button type="button"
-                                onClick={() => setMontoPagoInmediato(fp.metodo, Number(((Number(fp.monto) || 0) + restante).toFixed(2)))}
+                                onClick={() => {
+                                  let amountToAssign = (Number(fp.monto) || 0) + restante
+                                  if (fp.metodo === 'Saldo a Favor') {
+                                    const available = Number(clienteSeleccionado?.saldo_a_favor || 0)
+                                    if (amountToAssign > available) {
+                                      amountToAssign = available
+                                    }
+                                  }
+                                  handleSetMontoPagoInmediato(fp.metodo, Number(amountToAssign.toFixed(2)))
+                                }}
                                 className="ml-1.5 px-2 py-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition-colors shrink-0"
                                 title={`Completar con $${restante.toFixed(2)} restante`}>
                                 Restante
                               </button>
                             )}
                           </div>
-                          <button type="button" onClick={() => togglePagoInmediato(fp.metodo)}
+                          <button type="button" onClick={() => handleTogglePagoInmediato(fp.metodo)}
                             className="p-1 rounded-lg hover:bg-sky-100 text-sky-400 hover:text-sky-600 transition-colors shrink-0">
                             <X size={14} />
                           </button>
@@ -2130,22 +2197,68 @@ function Step2Pago({
                 </div>
 
                 {/* Chips para agregar métodos de pago inmediato */}
-                {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && (m !== 'Donación' || perfil?.rol !== 'vendedor'))
-                  .some(m => !pagosInmediatos.some(f => f.metodo === m)) && (
-                  <div className="flex flex-wrap gap-2">
-                    {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && (m !== 'Donación' || perfil?.rol !== 'vendedor'))
-                      .filter(m => !pagosInmediatos.some(f => f.metodo === m))
-                      .map(m => (
-                        <button key={m} type="button" onClick={() => togglePagoInmediato(m)}
-                          className="px-3.5 py-1.5 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:text-sky-600 transition-all duration-200 shadow-sm active:scale-95">
-                          {m}
-                        </button>
-                      ))}
-                  </div>
-                )}
+                <div className="flex flex-wrap gap-2">
+                  {/* Chip especial para Saldo a Favor */}
+                  {Number(clienteSeleccionado?.saldo_a_favor || 0) > 0 && !pagosInmediatos.some(f => f.metodo === 'Saldo a Favor') && (
+                    <button
+                      type="button"
+                      onClick={() => handleTogglePagoInmediato('Saldo a Favor')}
+                      className="px-3.5 py-1.5 rounded-xl text-xs font-black border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 hover:border-indigo-300 transition-all duration-200 shadow-sm active:scale-95 flex items-center gap-1"
+                    >
+                      <DollarSign size={13} />
+                      Saldo a Favor (${Number(clienteSeleccionado.saldo_a_favor).toFixed(2)})
+                    </button>
+                  )}
+
+                  {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && (m !== 'Donación' || perfil?.rol !== 'vendedor'))
+                    .filter(m => m !== 'Saldo a Favor')
+                    .filter(m => !pagosInmediatos.some(f => f.metodo === m))
+                    .map(m => (
+                      <button key={m} type="button" onClick={() => handleTogglePagoInmediato(m)}
+                        className="px-3.5 py-1.5 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:text-sky-600 transition-all duration-200 shadow-sm active:scale-95">
+                        {m}
+                      </button>
+                    ))}
+                </div>
 
                 {esCod && pagosInmediatos.length === 0 && (
                   <p className="text-xs text-slate-400 italic">No se registraron adelantos inmediatos.</p>
+                )}
+
+                {/* Banner de Vuelto / Excedente a Saldo a Favor */}
+                {pagosInmediatosHayVuelto && (
+                  <div className="mt-4 bg-indigo-50 border border-indigo-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm animate-in fade-in duration-200">
+                    <div className="flex items-start gap-2.5">
+                      <span className="p-1.5 rounded-lg bg-indigo-100 text-indigo-600 shrink-0 mt-0.5">
+                        <DollarSign size={16} />
+                      </span>
+                      <div>
+                        <span className="text-xs font-black text-indigo-900 block">
+                          El pago supera el total por ${pagosInmediatosDiferencia.toFixed(2)}
+                        </span>
+                        <span className="text-[10px] text-indigo-600 font-bold leading-normal">
+                          ¿Qué deseas hacer con la diferencia? {tasa > 0 && `(Equivale a ${fmtBs(pagosInmediatosDiferencia * tasa)})`}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2.5 self-end sm:self-center shrink-0">
+                      <span className="text-[11px] font-bold text-slate-500">Vuelto Físico</span>
+                      <button
+                        type="button"
+                        onClick={() => setVueltoComoSaldoFavor(!vueltoComoSaldoFavor)}
+                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          vueltoComoSaldoFavor ? 'bg-indigo-600' : 'bg-slate-200'
+                        }`}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                            vueltoComoSaldoFavor ? 'translate-x-5' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                      <span className="text-[11px] font-black text-indigo-700">Saldo a Favor</span>
+                    </div>
+                  </div>
                 )}
               </div>
 

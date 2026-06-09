@@ -477,6 +477,9 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
           } else {
             formasPagoArr.push({ metodo: 'Cobro a destino (COD)', monto: f.monto })
           }
+        } else if (f.metodo === 'Saldo a Favor') {
+          const origen = (f.forma_pago_origen || 'Crédito').toUpperCase()
+          formasPagoArr.push({ ...f, metodo: `SALDO A FAVOR (${origen})` })
         } else {
           const metodoNorm = f.metodo === 'Efectivo' ? 'Efectivo $' : f.metodo
           formasPagoArr.push({ ...f, metodo: metodoNorm })

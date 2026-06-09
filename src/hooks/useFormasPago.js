@@ -75,9 +75,9 @@ export function useFormasPago(totalRequerido = 0) {
     return formasPago.reduce((s, fp) => s + (Number(fp.monto) || 0), 0)
   }, [formasPago])
 
-  // Lógica de "pago cuadrado": diferencia menor a 0.02 (tolerancia de redondeo)
+  // Lógica de "pago cuadrado" o excedente: totalAsignado debe ser mayor o igual al totalRequerido (dentro de la tolerancia de centavos)
   const pagoCuadrado = useMemo(() => {
-    return formasPago.length > 0 && Math.abs(totalAsignado - totalRequerido) < 0.02
+    return formasPago.length > 0 && (totalAsignado - totalRequerido) >= -0.02
   }, [totalAsignado, totalRequerido, formasPago.length])
 
   const diferencia = useMemo(() => {

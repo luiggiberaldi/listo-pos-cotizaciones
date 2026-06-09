@@ -239,3 +239,80 @@ export function useRevertirAbono() {
     },
   })
 }
+
+// ─── Registrar saldo a favor (Worker API) ──────────────────────────────────
+export function useRegistrarSaldoFavor() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ clienteId, monto, formaPago, referencia, descripcion }) => {
+      const res = await authFetch('/api/cxc/saldo-favor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clienteId,
+          monto,
+          formaPago: formaPago || null,
+          referencia: referencia || null,
+          descripcion: descripcion || 'Saldo a favor registrado'
+        }),
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Error al registrar saldo a favor')
+      return result
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: CXC_KEY })
+      qc.invalidateQueries({ queryKey: CLIENTES_KEY })
+      showToast('Saldo a favor registrado exitosamente', 'success')
+    },
+  })
+}
+
+// ─── Cruzar saldo a favor contra deudas (Worker API) ─────────────────────────
+export function useCruzarSaldoFavor() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ clienteId, monto }) => {
+      const res = await authFetch('/api/cxc/cruzar-saldo-favor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clienteId,
+          monto
+        }),
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Error al cruzar saldo a favor')
+      return result
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: CXC_KEY })
+      qc.invalidateQueries({ queryKey: CLIENTES_KEY })
+      qc.invalidateQueries({ queryKey: ['despachos'] })
+      showToast('Saldo cruzado exitosamente', 'success')
+    },
+  })
+}
+
+// ─── Obtener origen de saldo a favor ──────────────────────────────────────────
+export function useSaldoFavorOrigen(clienteId) {
+  return useQuery({
+    queryKey: [...CXC_KEY, 'origen-saldo-favor', clienteId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('cuentas_por_cobrar')
+        .select('forma_pago_abono')
+        .eq('cliente_id', clienteId)
+        .eq('tipo', 'credito')
+        .order('creado_en', { ascending: false })
+        .limit(1)
+
+      if (error) throw error
+      return data?.[0]?.forma_pago_abono || 'Crédito'
+    },
+    enabled: !!clienteId,
+    staleTime: 1000 * 60 * 5,
+  })
+}

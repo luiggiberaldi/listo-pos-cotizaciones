@@ -47,7 +47,7 @@ export async function handleListarClientes(request, env) {
   // Fetch ALL active clients — filtrado en el Worker (in-memory, rápido)
   // limit=10000 evita el tope de 1000 filas de PostgREST
   // Fetch ALL clients (incluyendo inactivos) — filtrado en el Worker
-  let baseUrl = `${env.SUPABASE_URL}/rest/v1/clientes?cuenta_id=eq.${user.id}&order=nombre.asc&limit=10000&select=id,codigo_cliente,nombre,rif_cedula,telefono,email,direccion,estado,ciudad,notas,tipo_cliente,activo,vendedor_id,saldo_pendiente,creado_en,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color,rol)`;
+  let baseUrl = `${env.SUPABASE_URL}/rest/v1/clientes?cuenta_id=eq.${user.id}&order=nombre.asc&limit=10000&select=id,codigo_cliente,nombre,rif_cedula,telefono,email,direccion,estado,ciudad,notas,tipo_cliente,activo,vendedor_id,saldo_pendiente,saldo_a_favor,creado_en,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color,rol)`;
 
   if (esExterno) {
     baseUrl += `&vendedor_id=eq.${operador.id}`;
@@ -550,31 +550,38 @@ export async function handleReasignarClientesBulk(request, env) {
 // Helper local para sincronizar saldo pendiente del cliente
 async function recalcularSaldoPendienteCliente(clienteId, env, headers) {
   try {
-    const cxcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?cliente_id=eq.${clienteId}&select=tipo,monto_usd`, { headers });
+    const cxcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?cliente_id=eq.${clienteId}&select=tipo,monto_usd,forma_pago_abono`, { headers });
     if (!cxcRes.ok) return;
     const cxcList = await cxcRes.json();
     
     let saldoReal = 0;
+    let saldoFavor = 0;
     if (Array.isArray(cxcList)) {
       cxcList.forEach(item => {
         const monto = Number(item.monto_usd) || 0;
         if (item.tipo === 'cargo') {
           saldoReal += monto;
-        } else {
+        } else if (item.tipo === 'abono') {
           saldoReal -= monto;
+          if (item.forma_pago_abono === 'Saldo a favor') {
+            saldoFavor -= monto;
+          }
+        } else if (item.tipo === 'credito') {
+          saldoFavor += monto;
         }
       });
     }
     
     saldoReal = Math.max(0, Math.round(saldoReal * 10000) / 10000);
+    saldoFavor = Math.max(0, Math.round(saldoFavor * 10000) / 10000);
     
     await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteId}`, {
       method: 'PATCH',
       headers: { ...headers, Prefer: 'return=minimal' },
-      body: JSON.stringify({ saldo_pendiente: saldoReal }),
+      body: JSON.stringify({ saldo_pendiente: saldoReal, saldo_a_favor: saldoFavor }),
     });
     
-    console.log(`[RECALCULO-SALDO] Cliente ${clienteId} saldo sincronizado a $${saldoReal}`);
+    console.log(`[RECALCULO-SALDO] Cliente ${clienteId} saldo sincronizado a pendiente=$${saldoReal}, a_favor=$${saldoFavor}`);
   } catch (err) {
     console.error(`[RECALCULO-SALDO] Error al recalcular saldo para cliente ${clienteId}:`, err?.message);
   }

@@ -1,6 +1,4 @@
-// src/components/clientes/ClienteRow.jsx
-// Fila compacta de cliente para vista de lista — barra lateral color vendedor
-import { Phone, Mail, MapPin, Hash, Tag, Pencil, UserMinus, ArrowRightLeft, FileText, AlertCircle, BookOpen, Trash2, UserCheck, Handshake } from 'lucide-react'
+import { Phone, Mail, MapPin, Hash, Tag, Pencil, UserMinus, ArrowRightLeft, FileText, AlertCircle, BookOpen, Trash2, UserCheck, Handshake, DollarSign } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtUsdSimple as fmtUsd } from '../../utils/format'
 
@@ -46,13 +44,18 @@ export default function ClienteRow({ cliente, onEditar, onReasignar, onCotizar, 
             </span>
           )}
           {cliente.tiene_prestamos_activos && (
-            <span className="inline-flex items-center gap-1 text-[10px] font-black px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 uppercase tracking-wider animate-pulse">
+            <span className="inline-flex items-center gap-1 text-[10px] font-black px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 uppercase tracking-wider animate-pulse">
               <Handshake size={9} /> Préstamo
             </span>
           )}
           {Number(cliente.saldo_pendiente || 0) > 0 && !esAdministracion && (
             <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200">
               <AlertCircle size={9} /> Deuda: {fmtUsd(cliente.saldo_pendiente)}
+            </span>
+          )}
+          {Number(cliente.saldo_a_favor || 0) > 0 && !esAdministracion && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
+              <DollarSign size={9} className="text-emerald-500" /> Crédito: {fmtUsd(cliente.saldo_a_favor)}
             </span>
           )}
           {!cliente.activo && (
@@ -72,8 +75,14 @@ export default function ClienteRow({ cliente, onEditar, onReasignar, onCotizar, 
               Number(cliente.saldo_pendiente || 0) > 0 ? 'text-red-600' : 'text-emerald-600'
             }`}>
               <AlertCircle size={11} />
-              {fmtUsd(cliente.saldo_pendiente || 0)}
+              Deuda: {fmtUsd(cliente.saldo_pendiente || 0)}
             </span>
+            {Number(cliente.saldo_a_favor || 0) > 0 && (
+              <span className="flex items-center gap-1 text-xs font-bold text-emerald-600">
+                <DollarSign size={11} className="text-emerald-500" />
+                Crédito: {fmtUsd(cliente.saldo_a_favor || 0)}
+              </span>
+            )}
           </div>
         ) : (
           <div className="flex items-center gap-4 mt-1 flex-wrap">

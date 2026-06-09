@@ -4,7 +4,7 @@
 // — Supervisor: ve todos los clientes + puede reasignar
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Users, Plus, Search, RefreshCw, X, LayoutGrid, List, Filter, ChevronDown, Check, AlertCircle, Trash2, UserCheck, FileText, Printer } from 'lucide-react'
+import { Users, Plus, Search, RefreshCw, X, LayoutGrid, List, Filter, ChevronDown, Check, AlertCircle, Trash2, UserCheck, FileText, Printer, Handshake, DollarSign } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { useClientes, useVendedores, useBorrarCliente, useActivarCliente } from '../hooks/useClientes'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
@@ -111,6 +111,8 @@ export default function ClientesView() {
   const [filtroTipo, setFiltroTipo]         = useState('')
   const [filtroVendedor, setFiltroVendedor] = useState('')
   const [filtroConDeuda, setFiltroConDeuda] = useState(false)
+  const [filtroConPrestamo, setFiltroConPrestamo] = useState(false)
+  const [filtroSaldoFavor, setFiltroSaldoFavor] = useState(false)
   const [filtroEstado, setFiltroEstado]     = useState('activos')
   const [verTodos, setVerTodos] = useState(false)
   const [vistaMode, setVistaMode] = useState(() => {
@@ -164,7 +166,9 @@ export default function ClientesView() {
       if (mostrarToggle && !verTodos && c.vendedor_id !== perfil?.id) return false
       if (filtroTipo     && c.tipo_cliente !== filtroTipo)               return false
       if (filtroVendedor && c.vendedor_id  !== filtroVendedor)           return false
-      if (filtroConDeuda && !(Number(c.saldo_pendiente || 0) > 0 || c.tiene_prestamos_activos)) return false
+      if (filtroConDeuda && !(Number(c.saldo_pendiente || 0) > 0)) return false
+      if (filtroConPrestamo && !c.tiene_prestamos_activos) return false
+      if (filtroSaldoFavor && !(Number(c.saldo_a_favor || 0) > 0)) return false
       
       if (filtroEstado === 'activos' && !c.activo) return false
       if (filtroEstado === 'desactivados' && c.activo) return false
@@ -197,14 +201,16 @@ export default function ClientesView() {
 
       return (a.nombre || '').localeCompare(b.nombre || '')
     })
-  }, [clientes, filtroTipo, filtroVendedor, filtroConDeuda, filtroEstado, mostrarToggle, verTodos, perfil?.id])
+  }, [clientes, filtroTipo, filtroVendedor, filtroConDeuda, filtroConPrestamo, filtroSaldoFavor, filtroEstado, mostrarToggle, verTodos, perfil?.id])
 
-  const hayFiltros = filtroTipo || filtroVendedor || filtroConDeuda || filtroEstado !== 'activos'
+  const hayFiltros = filtroTipo || filtroVendedor || filtroConDeuda || filtroConPrestamo || filtroSaldoFavor || filtroEstado !== 'activos'
 
   function limpiarFiltros() {
     setFiltroTipo('')
     setFiltroVendedor('')
     setFiltroConDeuda(false)
+    setFiltroConPrestamo(false)
+    setFiltroSaldoFavor(false)
     setFiltroEstado('activos')
     setPagina(1)
   }
@@ -453,17 +459,73 @@ export default function ClientesView() {
           />
         )}
 
-        {/* Solo con deuda o préstamo */}
+        {/* Con deuda */}
         <button
-          onClick={() => { setFiltroConDeuda(v => !v); setPagina(1) }}
+          onClick={() => {
+            setFiltroConDeuda(v => {
+              const next = !v;
+              if (next) {
+                setFiltroConPrestamo(false);
+                setFiltroSaldoFavor(false);
+              }
+              return next;
+            });
+            setPagina(1);
+          }}
           className={`flex items-center gap-1.5 text-xs font-bold rounded-xl px-3 py-2.5 transition-all min-h-[44px] border ${
             filtroConDeuda
-              ? 'bg-red-500 text-white border-red-500'
+              ? 'bg-red-500 text-white border-red-500 shadow-sm'
               : 'bg-white text-slate-600 border-slate-200 hover:border-red-300 hover:text-red-600'
           }`}
         >
           <AlertCircle size={12} />
-          Con deuda / Préstamos
+          Con deuda
+        </button>
+
+        {/* Con préstamo */}
+        <button
+          onClick={() => {
+            setFiltroConPrestamo(v => {
+              const next = !v;
+              if (next) {
+                setFiltroConDeuda(false);
+                setFiltroSaldoFavor(false);
+              }
+              return next;
+            });
+            setPagina(1);
+          }}
+          className={`flex items-center gap-1.5 text-xs font-bold rounded-xl px-3 py-2.5 transition-all min-h-[44px] border ${
+            filtroConPrestamo
+              ? 'bg-amber-500 text-white border-amber-500 shadow-sm'
+              : 'bg-white text-slate-600 border-slate-200 hover:border-amber-300 hover:text-amber-600'
+          }`}
+        >
+          <Handshake size={12} />
+          Con préstamo
+        </button>
+
+        {/* Saldo a Favor */}
+        <button
+          onClick={() => {
+            setFiltroSaldoFavor(v => {
+              const next = !v;
+              if (next) {
+                setFiltroConDeuda(false);
+                setFiltroConPrestamo(false);
+              }
+              return next;
+            });
+            setPagina(1);
+          }}
+          className={`flex items-center gap-1.5 text-xs font-bold rounded-xl px-3 py-2.5 transition-all min-h-[44px] border ${
+            filtroSaldoFavor
+              ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm'
+              : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300 hover:text-emerald-600'
+          }`}
+        >
+          <DollarSign size={12} />
+          Saldo a Favor
         </button>
 
         {/* Limpiar filtros */}

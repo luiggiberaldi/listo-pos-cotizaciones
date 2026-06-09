@@ -5,31 +5,38 @@ import { registrarAuditoria } from '../lib/audit.js'
 
 async function recalcularSaldoPendienteCliente(clienteId, env, headers) {
   try {
-    const cxcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?cliente_id=eq.${clienteId}&select=tipo,monto_usd`, { headers });
+    const cxcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?cliente_id=eq.${clienteId}&select=tipo,monto_usd,forma_pago_abono`, { headers });
     if (!cxcRes.ok) return;
     const cxcList = await cxcRes.json();
     
     let saldoReal = 0;
+    let saldoFavor = 0;
     if (Array.isArray(cxcList)) {
       cxcList.forEach(item => {
         const monto = Number(item.monto_usd) || 0;
         if (item.tipo === 'cargo') {
           saldoReal += monto;
-        } else {
+        } else if (item.tipo === 'abono') {
           saldoReal -= monto;
+          if (item.forma_pago_abono === 'Saldo a favor') {
+            saldoFavor -= monto;
+          }
+        } else if (item.tipo === 'credito') {
+          saldoFavor += monto;
         }
       });
     }
     
     saldoReal = Math.max(0, Math.round(saldoReal * 10000) / 10000);
+    saldoFavor = Math.max(0, Math.round(saldoFavor * 10000) / 10000);
     
     await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteId}`, {
       method: 'PATCH',
       headers: { ...headers, Prefer: 'return=minimal' },
-      body: JSON.stringify({ saldo_pendiente: saldoReal }),
+      body: JSON.stringify({ saldo_pendiente: saldoReal, saldo_a_favor: saldoFavor }),
     });
     
-    console.log(`[RECALCULO-SALDO] Cliente ${clienteId} saldo sincronizado a $${saldoReal}`);
+    console.log(`[RECALCULO-SALDO] Cliente ${clienteId} saldo sincronizado a pendiente=$${saldoReal}, a_favor=$${saldoFavor}`);
   } catch (err) {
     console.error(`[RECALCULO-SALDO] Error al recalcular saldo para cliente ${clienteId}:`, err?.message);
   }
@@ -702,16 +709,19 @@ export async function handleActualizarEstadoDespacho(request, env) {
       return jsonError(`Error BD al actualizar despacho: ${err}`, 500, request);
     }
 
-    // 5. Al aprobar (despachada): registrar cargo CxC si hay saldo a crédito
+    // 5. Al aprobar (despachada): registrar cargo CxC si hay saldo a crédito / abono si hay Saldo a Favor
     if (nuevoEstado === 'despachada') {
       try {
         const fpRaw = desp.forma_pago_cliente || desp.forma_pago || '[]';
         let itemsCargos = []; // [{ monto: number, dias: number|null, metodo: 'cxc'|'cod', desc: string }]
+        let abonoSaldoFavor = null; // { monto: number, origen: string }
+        let fps = [];
         try {
-          const fps = typeof fpRaw === 'string' ? JSON.parse(fpRaw) : fpRaw;
+          fps = typeof fpRaw === 'string' ? JSON.parse(fpRaw) : fpRaw;
           if (Array.isArray(fps)) {
             const cxc = fps.find(f => f.metodo === 'Cta por cobrar');
             const cod = fps.find(f => f.metodo === 'Cobro a destino');
+            const sf = fps.find(f => f.metodo === 'Saldo a Favor');
             if (cxc && Number(cxc.monto) > 0) {
               itemsCargos.push({
                 monto: Number(cxc.monto),
@@ -728,6 +738,12 @@ export async function handleActualizarEstadoDespacho(request, env) {
                 desc: ' (COD)'
               });
             }
+            if (sf && Number(sf.monto) > 0) {
+              abonoSaldoFavor = {
+                monto: Number(sf.monto),
+                origen: sf.forma_pago_origen || 'Crédito'
+              };
+            }
           }
         } catch {
           if (fpRaw === 'Cta por cobrar' && Number(desp.total_usd) > 0) {
@@ -740,22 +756,28 @@ export async function handleActualizarEstadoDespacho(request, env) {
           }
         }
 
-        if (itemsCargos.length > 0) {
-          // Verificar si ya existe algún cargo CxC para este despacho (idempotente)
-          const cxcExistRes = await fetch(
-            `${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?despacho_id=eq.${despachoId}&tipo=eq.cargo&select=id`,
+        let cot = null;
+        if (desp.cotizacion_id) {
+          const cotRes = await fetch(
+            `${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${desp.cotizacion_id}&select=cliente_id,numero`,
             { headers }
           );
-          const cxcExist = await cxcExistRes.json();
-          if (!Array.isArray(cxcExist) || cxcExist.length === 0) {
-            const cotRes = await fetch(
-              `${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${desp.cotizacion_id}&select=cliente_id,numero`,
+          if (cotRes.ok) {
+            const cotList = await cotRes.json();
+            cot = cotList[0] || null;
+          }
+        }
+        const clienteCxCId = desp.cliente_factura_id || desp.cliente_id || (cot ? cot.cliente_id : null);
+
+        if (clienteCxCId) {
+          // 5.a. Registrar cargos
+          if (itemsCargos.length > 0) {
+            const cxcExistRes = await fetch(
+              `${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?despacho_id=eq.${despachoId}&tipo=eq.cargo&select=id`,
               { headers }
             );
-            const [cot] = await cotRes.json();
-            if (cot) {
-              const clienteCxCId = desp.cliente_factura_id || cot.cliente_id;
-              
+            const cxcExist = await cxcExistRes.json();
+            if (!Array.isArray(cxcExist) || cxcExist.length === 0) {
               for (const item of itemsCargos) {
                 const saldoRes = await fetch(
                   `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteCxCId}&select=saldo_pendiente`,
@@ -772,7 +794,7 @@ export async function handleActualizarEstadoDespacho(request, env) {
                   fecha_vencimiento = date.toISOString().split('T')[0];
                 }
 
-                const cargoPost = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
+                await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
                   method: 'POST', headers,
                   body: JSON.stringify({
                     cliente_id: clienteCxCId,
@@ -780,20 +802,86 @@ export async function handleActualizarEstadoDespacho(request, env) {
                     tipo: 'cargo',
                     monto_usd: item.monto,
                     saldo_usd: nuevoSaldo,
-                    descripcion: `Orden de despacho #${cot.numero}${item.desc}`,
+                    descripcion: `Orden de despacho #${cot ? cot.numero : despachoId}${item.desc}`,
                     registrado_por: user.operator_id,
                     fecha_vencimiento: fecha_vencimiento,
                     metodo_pago: item.metodo
                   }),
                 });
-
-                if (cargoPost.ok) {
-                  await recalcularSaldoPendienteCliente(clienteCxCId, env, headers);
-                  console.log(`[CXC] Cargo CxC (${item.metodo}) registrado al aprobar y saldo recalculado. Monto:`, item.monto);
-                }
               }
             }
           }
+
+          // 5.b. Registrar abono por Saldo a Favor
+          if (abonoSaldoFavor) {
+            const abonoExistRes = await fetch(
+              `${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?despacho_id=eq.${despachoId}&tipo=eq.abono&forma_pago_abono=eq.Saldo%20a%20favor&select=id`,
+              { headers }
+            );
+            const abonoExist = await abonoExistRes.json();
+            if (!Array.isArray(abonoExist) || abonoExist.length === 0) {
+              const saldoRes = await fetch(
+                `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteCxCId}&select=saldo_pendiente`,
+                { headers }
+              );
+              const [clienteSaldo] = await saldoRes.json();
+              const saldoActual = Number(clienteSaldo?.saldo_pendiente || 0);
+              const nuevoSaldo = Math.max(0, saldoActual - abonoSaldoFavor.monto);
+
+              await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
+                method: 'POST', headers,
+                body: JSON.stringify({
+                  cliente_id: clienteCxCId,
+                  despacho_id: despachoId,
+                  tipo: 'abono',
+                  monto_usd: abonoSaldoFavor.monto,
+                  saldo_usd: nuevoSaldo,
+                  forma_pago_abono: 'Saldo a favor',
+                  referencia: `Despacho #${cot ? cot.numero : despachoId}`,
+                  descripcion: `Pago con Saldo a Favor (${abonoSaldoFavor.origen.toUpperCase()})`,
+                  registrado_por: user.operator_id
+                }),
+              });
+            }
+          }
+
+          // 5.c. Registrar crédito por vuelto/excedente a Saldo a Favor
+          const totalAsignado = fps.reduce((acc, f) => acc + (Number(f.monto) || 0), 0);
+          const excedente = totalAsignado - Number(desp.total_usd || 0);
+          const tieneVueltoAFavor = fps.some(f => f.vuelto_a_favor === true);
+
+          if (excedente > 0.015 && tieneVueltoAFavor) {
+            const creditoExistRes = await fetch(
+              `${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?despacho_id=eq.${despachoId}&tipo=eq.credito&select=id`,
+              { headers }
+            );
+            const creditoExist = await creditoExistRes.json();
+            if (!Array.isArray(creditoExist) || creditoExist.length === 0) {
+              const saldoRes = await fetch(
+                `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteCxCId}&select=saldo_pendiente`,
+                { headers }
+              );
+              const [clienteSaldo] = await saldoRes.json();
+              const saldoActual = Number(clienteSaldo?.saldo_pendiente || 0);
+
+              await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
+                method: 'POST', headers,
+                body: JSON.stringify({
+                  cliente_id: clienteCxCId,
+                  despacho_id: despachoId,
+                  tipo: 'credito',
+                  monto_usd: Math.round(excedente * 100) / 100,
+                  saldo_usd: saldoActual,
+                  referencia: `Despacho #${cot ? cot.numero : despachoId}`,
+                  descripcion: `Excedente de pago en Despacho #${cot ? cot.numero : despachoId}`,
+                  registrado_por: user.operator_id
+                }),
+              });
+            }
+          }
+
+          // Recalcular saldo del cliente una sola vez al final
+          await recalcularSaldoPendienteCliente(clienteCxCId, env, headers);
         }
       } catch (cxcErr) {
         console.error('[CXC] Error al registrar CxC al aprobar:', cxcErr?.message);
@@ -1020,11 +1108,13 @@ export async function handleEditarItemsDespacho(request, env) {
         if (updatedDesp.estado === 'despachada') {
           const fpRaw = updatedDesp.forma_pago_cliente || updatedDesp.forma_pago || '[]';
           let itemsCargos = [];
+          let targetAbono = null;
           try {
             const fps = typeof fpRaw === 'string' ? JSON.parse(fpRaw) : fpRaw;
             if (Array.isArray(fps)) {
               const cxc = fps.find(f => f.metodo === 'Cta por cobrar');
               const cod = fps.find(f => f.metodo === 'Cobro a destino');
+              const sf = fps.find(f => f.metodo === 'Saldo a Favor');
               if (cxc && Number(cxc.monto) > 0) {
                 itemsCargos.push({
                   monto: Number(cxc.monto),
@@ -1041,6 +1131,12 @@ export async function handleEditarItemsDespacho(request, env) {
                   desc: ' (COD)'
                 });
               }
+              if (sf && Number(sf.monto) > 0) {
+                targetAbono = {
+                  monto: Number(sf.monto),
+                  origen: sf.forma_pago_origen || 'Crédito'
+                };
+              }
             }
           } catch {
             if (fpRaw === 'Cta por cobrar' && Number(updatedDesp.total_usd) > 0) {
@@ -1053,13 +1149,13 @@ export async function handleEditarItemsDespacho(request, env) {
             }
           }
 
-          // Buscar cargos existentes en CxC
+          // Buscar cargos y abonos existentes en CxC para este despacho
           const cxcExistRes = await fetch(
-            `${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?despacho_id=eq.${despachoId}&tipo=eq.cargo&select=id,monto_usd,cliente_id,metodo_pago`,
+            `${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?despacho_id=eq.${despachoId}&select=id,monto_usd,cliente_id,tipo,metodo_pago,forma_pago_abono`,
             { headers }
           );
           const cxcExist = await cxcExistRes.json();
-          const dbCargos = Array.isArray(cxcExist) ? cxcExist : [];
+          const dbMovimientos = Array.isArray(cxcExist) ? cxcExist : [];
 
           const cotRes = await fetch(
             `${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${updatedDesp.cotizacion_id}&select=cliente_id,numero`,
@@ -1069,7 +1165,9 @@ export async function handleEditarItemsDespacho(request, env) {
           const clienteCxCId = updatedDesp.cliente_factura_id || updatedDesp.cliente_id || (cot ? cot.cliente_id : null);
 
           if (clienteCxCId) {
+            // Sincronizar cargos (tipo 'cargo')
             const metodos = ['cxc', 'cod'];
+            const dbCargos = dbMovimientos.filter(m => m.tipo === 'cargo');
             for (const met of metodos) {
               const target = itemsCargos.find(it => it.metodo === met);
               const existing = dbCargos.find(c => c.metodo_pago === met);
@@ -1109,7 +1207,7 @@ export async function handleEditarItemsDespacho(request, env) {
                     despacho_id: despachoId,
                     tipo: 'cargo',
                     monto_usd: target.monto,
-                    saldo_usd: target.monto, // saldo transitorio
+                    saldo_usd: target.monto,
                     descripcion: `Orden de despacho #${cot ? cot.numero : despachoId}${target.desc} (Creado en edición profunda)`,
                     registrado_por: user.operator_id,
                     fecha_vencimiento: fecha_vencimiento,
@@ -1118,6 +1216,105 @@ export async function handleEditarItemsDespacho(request, env) {
                 });
                 console.log(`[CXC-DEEP-EDIT] Cargo CxC (${met}) creado en edición profunda por monto $${target.monto}.`);
               }
+            }
+
+            // Sincronizar Abono Saldo a Favor
+            const existingAbono = dbMovimientos.find(m => m.tipo === 'abono' && m.forma_pago_abono === 'Saldo a favor');
+            if (existingAbono) {
+              if (!targetAbono) {
+                // Si ya no existe, eliminamos el abono
+                await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?id=eq.${existingAbono.id}`, {
+                  method: 'DELETE', headers,
+                });
+                console.log(`[CXC-DEEP-EDIT] Abono Saldo a Favor eliminado en edición profunda.`);
+              } else {
+                // Si existe y cambió el monto, actualizamos
+                const diff = targetAbono.monto - Number(existingAbono.monto_usd);
+                if (diff !== 0) {
+                  await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?id=eq.${existingAbono.id}`, {
+                    method: 'PATCH',
+                    headers: { ...headers, Prefer: 'return=minimal' },
+                    body: JSON.stringify({ monto_usd: Math.round(targetAbono.monto * 10000) / 10000 }),
+                  });
+                  console.log(`[CXC-DEEP-EDIT] Ajustado abono Saldo a Favor de despacho ${despachoId} a $${targetAbono.monto}.`);
+                }
+              }
+            } else if (targetAbono) {
+              // Si no existía pero ahora sí, lo creamos
+              const saldoRes = await fetch(
+                `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteCxCId}&select=saldo_pendiente`,
+                { headers }
+              );
+              const [clienteSaldo] = await saldoRes.json();
+              const saldoActual = Number(clienteSaldo?.saldo_pendiente || 0);
+              const nuevoSaldo = Math.max(0, saldoActual - targetAbono.monto);
+
+              await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
+                method: 'POST', headers,
+                body: JSON.stringify({
+                  cliente_id: clienteCxCId,
+                  despacho_id: despachoId,
+                  tipo: 'abono',
+                  monto_usd: targetAbono.monto,
+                  saldo_usd: nuevoSaldo,
+                  forma_pago_abono: 'Saldo a favor',
+                  referencia: `Despacho #${cot ? cot.numero : despachoId}`,
+                  descripcion: `Pago con Saldo a Favor (${targetAbono.origen.toUpperCase()}) (Creado en edición profunda)`,
+                  registrado_por: user.operator_id
+                }),
+              });
+            }
+
+            // Sincronizar Crédito (tipo 'credito' - Vuelto/Excedente a Saldo a Favor)
+            const fps = typeof fpRaw === 'string' ? JSON.parse(fpRaw) : fpRaw;
+            const totalAsignado = Array.isArray(fps) ? fps.reduce((acc, f) => acc + (Number(f.monto) || 0), 0) : 0;
+            const excedente = totalAsignado - Number(updatedDesp.total_usd || 0);
+            const tieneVueltoAFavor = Array.isArray(fps) ? fps.some(f => f.vuelto_a_favor === true) : false;
+            const targetCreditoMonto = (excedente > 0.015 && tieneVueltoAFavor) ? excedente : 0;
+
+            const existingCredito = dbMovimientos.find(m => m.tipo === 'credito');
+            if (existingCredito) {
+              if (targetCreditoMonto <= 0.015) {
+                // Si ya no hay excedente o no se quiere vuelto a favor, eliminamos el crédito
+                await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?id=eq.${existingCredito.id}`, {
+                  method: 'DELETE', headers,
+                });
+                console.log(`[CXC-DEEP-EDIT] Crédito (vuelto/excedente) eliminado en edición profunda.`);
+              } else {
+                // Si cambió el monto, actualizamos
+                const diff = targetCreditoMonto - Number(existingCredito.monto_usd);
+                if (diff !== 0) {
+                  await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?id=eq.${existingCredito.id}`, {
+                    method: 'PATCH',
+                    headers: { ...headers, Prefer: 'return=minimal' },
+                    body: JSON.stringify({ monto_usd: Math.round(targetCreditoMonto * 10000) / 10000 }),
+                  });
+                  console.log(`[CXC-DEEP-EDIT] Ajustado crédito (vuelto/excedente) a $${targetCreditoMonto}.`);
+                }
+              }
+            } else if (targetCreditoMonto > 0.015) {
+              // Si no existía pero ahora sí, lo creamos
+              const saldoRes = await fetch(
+                `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteCxCId}&select=saldo_pendiente`,
+                { headers }
+              );
+              const [clienteSaldo] = await saldoRes.json();
+              const saldoActual = Number(clienteSaldo?.saldo_pendiente || 0);
+
+              await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
+                method: 'POST', headers,
+                body: JSON.stringify({
+                  cliente_id: clienteCxCId,
+                  despacho_id: despachoId,
+                  tipo: 'credito',
+                  monto_usd: Math.round(targetCreditoMonto * 100) / 100,
+                  saldo_usd: saldoActual,
+                  referencia: `Despacho #${cot ? cot.numero : despachoId}`,
+                  descripcion: `Excedente de pago en Despacho #${cot ? cot.numero : despachoId} (Creado en edición profunda)`,
+                  registrado_por: user.operator_id
+                }),
+              });
+              console.log(`[CXC-DEEP-EDIT] Crédito (vuelto/excedente) creado en edición profunda.`);
             }
 
             // Al final recalculamos una sola vez el saldo

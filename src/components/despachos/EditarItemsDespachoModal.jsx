@@ -5,12 +5,14 @@ import { useLineItems } from '../../hooks/useLineItems'
 import { useInventario } from '../../hooks/useInventario'
 import { useProductSearch } from '../../hooks/useProductSearch'
 import { useEditarItemsDespacho } from '../../hooks/useDespachos'
-import { fmtUsdSimple as fmtUsd } from '../../utils/format'
-import { round4, round2 } from '../../utils/dinero'
-import { showToast } from '../ui/Toast'
 import { useFormasPago } from '../../hooks/useFormasPago'
+import { useTasaCambio } from '../../hooks/useTasaCambio'
+import { useSaldoFavorOrigen } from '../../hooks/useCuentasCobrar'
 import { FORMAS_PAGO } from '../../constants/formasPago'
 import useAuthStore from '../../store/useAuthStore'
+import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../../utils/format'
+import { round4, round2 } from '../../utils/dinero'
+import { showToast } from '../ui/Toast'
 
 export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) {
   const { perfil } = useAuthStore()
@@ -41,6 +43,9 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
     const [esCod, setEsCod] = useState(false)
     const [tabActiva, setTabActiva] = useState('inmediato')
     const [mostrarSelectorInmediato, setMostrarSelectorInmediato] = useState(false)
+    const [vueltoComoSaldoFavor, setVueltoComoSaldoFavor] = useState(false)
+    const { tasaEfectiva: tasa = 0 } = useTasaCambio()
+    const { data: saldoFavorOrigen } = useSaldoFavorOrigen(billingCliente?.id)
     const [mostrarSelectorCod, setMostrarSelectorCod] = useState(false)
   
     // Edición de producto externo
@@ -116,7 +121,41 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
       resetFormas: resetPagosInmediatos,
       totalAsignado: totalInmediato,
       pagoCuadrado: pagoInmediatoCuadrado,
+      hayVuelto: pagosInmediatosHayVuelto,
+      diferencia: pagosInmediatosDiferencia,
     } = useFormasPago(totalConFlete)
+
+    const handleTogglePagoInmediato = (metodo) => {
+      if (metodo === 'Saldo a Favor') {
+        const active = pagosInmediatos.some(f => f.metodo === 'Saldo a Favor')
+        if (!active) {
+          togglePagoInmediato('Saldo a Favor')
+          setTimeout(() => {
+            const available = Number(billingCliente?.saldo_a_favor || 0)
+            const actualAsignado = pagosInmediatos.reduce((s, fp) => s + (Number(fp.monto) || 0), 0)
+            const restante = totalConFlete - actualAsignado
+            const montoInicial = Math.min(restante > 0 ? restante : 0, available)
+            updatePagoInmediato('Saldo a Favor', {
+              monto: Number(montoInicial.toFixed(2)) || '',
+              forma_pago_origen: saldoFavorOrigen || 'Crédito'
+            })
+          }, 50)
+          return
+        }
+      }
+      togglePagoInmediato(metodo)
+    }
+
+    const handleSetMontoPagoInmediato = (metodo, val) => {
+      if (metodo === 'Saldo a Favor') {
+        const maxVal = Number(billingCliente?.saldo_a_favor || 0)
+        let numVal = Number(val)
+        if (numVal > maxVal) {
+          val = String(maxVal)
+        }
+      }
+      setMontoPagoInmediato(metodo, val)
+    }
 
     // 2. Monto COD requerido
     const montoCodRequerido = Math.max(0, round2(totalConFlete - totalInmediato))
@@ -272,9 +311,16 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
     );
   
     const formasPagoFinales = useMemo(() => {
+      const inyectarVuelto = (fps) => {
+        if (pagosInmediatosHayVuelto && vueltoComoSaldoFavor) {
+          return fps.map((fp, i) => i === 0 ? { ...fp, vuelto_a_favor: true } : fp)
+        }
+        return fps
+      }
+
       if (esCod) {
         return [
-          ...pagosInmediatos,
+          ...inyectarVuelto(pagosInmediatos),
           {
             metodo: "Cobro a destino",
             monto: montoCodRequerido,
@@ -284,9 +330,9 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
           }
         ]
       } else {
-        return pagosInmediatos
+        return inyectarVuelto(pagosInmediatos)
       }
-    }, [esCod, pagosInmediatos, propuestaCod, totalConFlete, totalInmediato, montoCodRequerido])
+    }, [esCod, pagosInmediatos, propuestaCod, totalConFlete, totalInmediato, montoCodRequerido, pagosInmediatosHayVuelto, vueltoComoSaldoFavor])
 
     async function handleSave() {
       if (items.length === 0) {
@@ -741,7 +787,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                                 type="number"
                                 step="0.01"
                                 value={p.monto}
-                                onChange={e => setMontoPagoInmediato(p.metodo, e.target.value)}
+                                onChange={e => handleSetMontoPagoInmediato(p.metodo, e.target.value)}
                                 onFocus={e => e.target.select()}
                                 className="w-full py-1 px-2 rounded-lg border border-slate-100 text-sm font-black text-slate-800 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-all bg-slate-50 focus:bg-white"
                                 placeholder="0.00"
@@ -752,7 +798,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                           {/* Acciones compactas */}
                           <div className="flex flex-col items-end gap-1">
                             <button
-                              onClick={() => togglePagoInmediato(p.metodo)}
+                              onClick={() => handleTogglePagoInmediato(p.metodo)}
                               className="text-slate-300 hover:text-red-500 transition-colors p-1"
                               title="Eliminar este método"
                             >
@@ -760,7 +806,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                             </button>
                             {restante > 0.01 && (
                               <button
-                                onClick={() => setMontoPagoInmediato(p.metodo, Number(((Number(p.monto) || 0) + restante).toFixed(2)))}
+                                onClick={() => handleSetMontoPagoInmediato(p.metodo, Number(((Number(p.monto) || 0) + restante).toFixed(2)))}
                                 className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 hover:bg-emerald-100 transition-colors whitespace-nowrap"
                               >
                                 + RESTO
@@ -796,13 +842,28 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                       {mostrarSelectorInmediato ? (
                         <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-2.5 h-full flex flex-col justify-center">
                           <div className="flex flex-wrap gap-1">
+                            {/* Chip especial para Saldo a Favor */}
+                            {Number(billingCliente?.saldo_a_favor || 0) > 0 && !pagosInmediatos.some(f => f.metodo === 'Saldo a Favor') && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  handleTogglePagoInmediato('Saldo a Favor')
+                                  setMostrarSelectorInmediato(false)
+                                }}
+                                className="px-2 py-1 rounded-lg text-[9px] font-black bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
+                              >
+                                Saldo a Favor (${Number(billingCliente.saldo_a_favor).toFixed(2)})
+                              </button>
+                            )}
+
                             {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && (m !== 'Donación' || perfil?.rol !== 'vendedor'))
+                              .filter(m => m !== 'Saldo a Favor')
                               .filter(m => !pagosInmediatos.some(f => f.metodo === m))
                               .map(metodo => (
                                 <button
                                   key={metodo}
                                   onClick={() => {
-                                    togglePagoInmediato(metodo)
+                                    handleTogglePagoInmediato(metodo)
                                     setMostrarSelectorInmediato(false)
                                   }}
                                   className="px-2 py-1 rounded-lg text-[9px] font-bold bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
@@ -829,6 +890,42 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                     </div>
                   )}
                 </div>
+
+                {/* Banner de Vuelto / Excedente a Saldo a Favor */}
+                {pagosInmediatosHayVuelto && (
+                  <div className="mt-3 bg-indigo-50 border border-indigo-200 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm animate-in fade-in duration-200">
+                    <div className="flex items-start gap-2">
+                      <span className="p-1 rounded-lg bg-indigo-100 text-indigo-600 shrink-0 mt-0.5">
+                        <DollarSign size={14} />
+                      </span>
+                      <div>
+                        <span className="text-[11px] font-black text-indigo-900 block">
+                          El pago supera el total por ${pagosInmediatosDiferencia.toFixed(2)}
+                        </span>
+                        <span className="text-[10px] text-indigo-600 font-bold leading-normal">
+                          ¿Qué deseas hacer con la diferencia? {tasa > 0 && `(Equivale a ${fmtBs(pagosInmediatosDiferencia * tasa)})`}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                      <span className="text-[10px] font-bold text-slate-500">Vuelto Físico</span>
+                      <button
+                        type="button"
+                        onClick={() => setVueltoComoSaldoFavor(!vueltoComoSaldoFavor)}
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          vueltoComoSaldoFavor ? 'bg-indigo-600' : 'bg-slate-200'
+                        }`}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                            vueltoComoSaldoFavor ? 'translate-x-4' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                      <span className="text-[10px] font-black text-indigo-700">Saldo a Favor</span>
+                    </div>
+                  </div>
+                )}
 
                 {esCod && pagosInmediatos.length === 0 && (
                   <p className="text-xs text-slate-400 italic pl-1 pt-1">No se registraron adelantos inmediatos.</p>
