@@ -517,6 +517,7 @@ function TabVentas({ configNeg }) {
     'Préstamo': 'bg-amber-50 text-amber-700 border-amber-100',
     'Prestamo': 'bg-amber-50 text-amber-700 border-amber-100',
     'Cta por cobrar': 'bg-red-50 text-red-700 border-red-100',
+    'Saldo a Favor': 'bg-emerald-50 text-emerald-700 border-emerald-100',
     'Sin especificar': 'bg-slate-50 text-slate-600 border-slate-100',
   }
 
