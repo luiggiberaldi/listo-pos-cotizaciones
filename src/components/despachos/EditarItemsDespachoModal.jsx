@@ -13,6 +13,7 @@ import useAuthStore from '../../store/useAuthStore'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../../utils/format'
 import { round4, round2 } from '../../utils/dinero'
 import { showToast } from '../ui/Toast'
+import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 
 export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) {
   const { perfil } = useAuthStore()
@@ -26,7 +27,32 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
   const { data: inventarioData, isLoading: loadingInv } = useInventario({ pageSize: 1000 })
   const productos = inventarioData?.productos ?? inventarioData ?? []
   const editarItems = useEditarItemsDespacho()
-  const { items, setItems, agregarItem, eliminarPorId, cambiarCantidad, setCantidadDirecta, cambiarPrecio, togglePrestamo, setStockMap } = useLineItems({ checkStock: true })
+  const { data: config = {} } = useConfigNegocio()
+  const { items, setItems, agregarItem: _agregarItem, eliminarPorId, cambiarCantidad, setCantidadDirecta, cambiarPrecio: _cambiarPrecio, togglePrestamo, setStockMap } = useLineItems({ checkStock: true })
+
+  const agregarItem = (p) => {
+    const precioBase = Number(p.precio_usd ?? p.precioUnitUsd ?? 0)
+    const esPersonal = billingCliente?.tipo_cliente === 'personal'
+    const descPct = config.descuento_personal_pct ?? 10.00
+    const precioFinal = esPersonal ? round2(precioBase * (1 - descPct / 100)) : precioBase
+
+    _agregarItem({
+      ...p,
+      precio_usd: precioFinal,
+      precioOriginalUsd: precioBase
+    })
+  }
+
+  const cambiarPrecio = (productoId, precio) => {
+    const esPersonal = billingCliente?.tipo_cliente === 'personal'
+    const descPct = config.descuento_personal_pct ?? 10.00
+    const precioUnit = parseFloat(String(precio)) || 0
+    let precioOriginal = precioUnit
+    if (esPersonal) {
+      precioOriginal = round2(precioUnit / (1 - descPct / 100))
+    }
+    _cambiarPrecio(productoId, precioUnit, precioOriginal)
+  }
 
     const [busqueda, setBusqueda] = useState('')
     const [cargandoItems, setCargandoItems] = useState(false)
@@ -213,6 +239,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
             unidadSnap: it.unidad_snap,
             cantidad: Number(it.cantidad),
             precioUnitUsd: Number(it.precio_unit_usd),
+            precioOriginalUsd: Number(it.precio_original_usd || it.precio_unit_usd),
             descuentoPct: Number(it.descuento_pct || 0),
             origen: it.origen ?? 'inventario',
             esPrestamo: !!it.es_prestamo,

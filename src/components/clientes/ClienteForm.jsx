@@ -85,7 +85,7 @@ function formatearRif(prefijo, numero) {
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export default function ClienteForm({ cliente = null, onSuccess, onCancel, compact = false }) {
+export default function ClienteForm({ cliente = null, onSuccess, onCancel, compact = false, forzarTipoCliente = null }) {
   const esEdicion = !!cliente
 
   const [campos, setCampos] = useState(VACIO)
@@ -98,7 +98,7 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
   const mutation = esEdicion ? actualizarCliente : crearCliente
   const cargando = mutation.isPending
 
-  // Cargar datos del cliente al editar
+  // Cargar datos del cliente al editar o forzar tipo de cliente
   useEffect(() => {
     if (cliente) {
       // Cargar teléfono tal cual (PhoneInput se encarga de parsear)
@@ -117,8 +117,10 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
         notas:        cliente.notas        ?? '',
         tipo_cliente: cliente.tipo_cliente ?? 'natural',
       })
+    } else if (forzarTipoCliente) {
+      setCampos(prev => ({ ...prev, tipo_cliente: forzarTipoCliente }))
     }
-  }, [cliente])
+  }, [cliente, forzarTipoCliente])
 
   function cambiar(e) {
     const { name, value } = e.target
@@ -262,17 +264,19 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
       </Campo>
 
       {/* Tipo de cliente */}
-      <Campo label="Tipo de cliente *" icono={Tag} error={errores.tipo_cliente}>
-        <CustomSelect
-          options={TIPOS_CLIENTE.map(t => ({ value: t.valor, label: t.label }))}
-          value={campos.tipo_cliente}
-          onChange={val => { setCampos(prev => ({ ...prev, tipo_cliente: val })); if (val === 'natural' && rifPrefijo === 'J') setRifPrefijo('V'); if (val === 'juridico' && rifPrefijo === 'V') setRifPrefijo('J'); if (errores.tipo_cliente) setErrores(prev => ({ ...prev, tipo_cliente: '' })); if (errorGeneral) setErrorGeneral('') }}
-          placeholder="Seleccionar tipo..."
-          icon={Tag}
-          disabled={cargando}
-          searchable={false}
-        />
-      </Campo>
+      {!forzarTipoCliente && (
+        <Campo label="Tipo de cliente *" icono={Tag} error={errores.tipo_cliente}>
+          <CustomSelect
+            options={TIPOS_CLIENTE.map(t => ({ value: t.valor, label: t.label }))}
+            value={campos.tipo_cliente}
+            onChange={val => { setCampos(prev => ({ ...prev, tipo_cliente: val })); if (val === 'natural' && rifPrefijo === 'J') setRifPrefijo('V'); if (val === 'juridico' && rifPrefijo === 'V') setRifPrefijo('J'); if (errores.tipo_cliente) setErrores(prev => ({ ...prev, tipo_cliente: '' })); if (errorGeneral) setErrorGeneral('') }}
+            placeholder="Seleccionar tipo..."
+            icon={Tag}
+            disabled={cargando}
+            searchable={false}
+          />
+        </Campo>
+      )}
 
       {/* RIF / Cédula */}
       <Campo label="RIF / Cédula *" icono={Hash} error={errores.rif_cedula}>

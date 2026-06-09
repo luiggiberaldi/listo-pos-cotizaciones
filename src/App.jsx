@@ -54,6 +54,7 @@ if (typeof window !== 'undefined') {
 
 // Views — lazy loading para que solo se descarguen al navegar
 const ClientesView      = lazyRetry(() => import('./views/ClientesView'))
+const PersonalView      = lazyRetry(() => import('./views/PersonalView'))
 const CotizacionesView  = lazyRetry(() => import('./views/CotizacionesView'))
 const DespachosView     = lazyRetry(() => import('./views/DespachosView'))
 const VentaRapidaView   = lazyRetry(() => import('./views/VentaRapidaView'))
@@ -275,6 +276,7 @@ function AppRoutes() {
           <Route element={<AppLayout />}>
             <Route path="/"               element={<DashboardView />} />
             <Route path="/clientes"       element={<ClientesView />} />
+            <Route path="/personal"       element={<PersonalView />} />
             <Route path="/despachos"      element={<DespachosView />} />
             <Route path="/inventario"     element={<InventarioView />} />
             <Route path="/cotizaciones"   element={<CotizacionesView />} />

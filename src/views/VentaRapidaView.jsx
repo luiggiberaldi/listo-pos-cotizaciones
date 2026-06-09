@@ -405,9 +405,61 @@ export default function VentaRapidaView() {
   const [clienteOpen, setClienteOpen] = useState(false)
   const [productoBusqueda, setProductoBusqueda] = useState('')
   const [catActiva, setCatActiva] = useState('')
-  const { items, setItems, agregarItem: _agregarItem, eliminarPorId: quitarItem, cambiarCantidad, setCantidadDirecta, cambiarPrecio, togglePrestamo, setStockMap } = useLineItems({ checkStock: true })
+  const { items, setItems, agregarItem: _agregarItem, eliminarPorId: quitarItem, cambiarCantidad, setCantidadDirecta, cambiarPrecio: _cambiarPrecio, togglePrestamo, setStockMap } = useLineItems({ checkStock: true })
   const [editItemIdx, setEditItemIdx] = useState(null)
   const comisionEstimada = useMemo(() => calcComisionEstimada(items, config, perfil), [items, config, perfil])
+
+  const cambiarPrecio = useCallback((productoId, precio) => {
+    const esPersonal = clienteSeleccionado?.tipo_cliente === 'personal'
+    const descPct = config.descuento_personal_pct ?? 10.00
+    const precioUnit = parseFloat(String(precio)) || 0
+    let precioOriginal = precioUnit
+    if (esPersonal) {
+      precioOriginal = round2(precioUnit / (1 - descPct / 100))
+    }
+    _cambiarPrecio(productoId, precioUnit, precioOriginal)
+  }, [clienteSeleccionado, config, _cambiarPrecio])
+
+  const prevClienteIdRef = useRef(clienteId)
+
+  useEffect(() => {
+    if (!clientes.length || !config) return
+
+    const prevId = prevClienteIdRef.current
+    if (prevId === clienteId) return
+    prevClienteIdRef.current = clienteId
+
+    const prevCli = clientes.find(c => c.id === prevId)
+    const nextCli = clientes.find(c => c.id === clienteId)
+    const prevEsPersonal = prevCli?.tipo_cliente === 'personal'
+    const nextEsPersonal = nextCli?.tipo_cliente === 'personal'
+
+    if (prevEsPersonal === nextEsPersonal) return
+
+    const descPct = config.descuento_personal_pct ?? 10.00
+
+    setItems(prevItems => {
+      return prevItems.map(item => {
+        let precioOriginal = item.precioOriginalUsd ?? item.precioUnitUsd
+
+        if (nextEsPersonal) {
+          const precioConDescuento = round2(precioOriginal * (1 - descPct / 100))
+          return {
+            ...item,
+            precioOriginalUsd: precioOriginal,
+            precioUnitUsd: precioConDescuento
+          }
+        } else {
+          return {
+            ...item,
+            precioOriginalUsd: precioOriginal,
+            precioUnitUsd: precioOriginal
+          }
+        }
+      })
+    })
+    showToast(nextEsPersonal ? 'Precios ajustados con descuento de personal' : 'Precios restaurados a tarifa estándar', 'info')
+  }, [clienteId, clientes, config, setItems])
 
   // Mantener stock map actualizado para validación de cantidades
   useEffect(() => {
@@ -742,12 +794,16 @@ export default function VentaRapidaView() {
 
   function agregarProducto(p) {
     guardarProductoReciente(perfil?.id, p)
-    const precioBase = Number(p.precio_usd || p.preciousd || 0)
-    const precioConMarkup = aplicarMarkup(precioBase)
+    const precioBase = aplicarMarkup(Number(p.precio_usd || p.preciousd || 0))
+    const esPersonal = clienteSeleccionado?.tipo_cliente === 'personal'
+    const descPct = config.descuento_personal_pct ?? 10.00
+    const precioFinal = esPersonal ? round2(precioBase * (1 - descPct / 100)) : precioBase
+
     _agregarItem({
       ...p,
-      precio_usd: precioConMarkup,
-      preciousd: precioConMarkup
+      precio_usd: precioFinal,
+      preciousd: precioFinal,
+      precioOriginalUsd: precioBase
     })
   }
 

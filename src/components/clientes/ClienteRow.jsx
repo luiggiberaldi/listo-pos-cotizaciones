@@ -2,10 +2,11 @@ import { Phone, Mail, MapPin, Hash, Tag, Pencil, UserMinus, ArrowRightLeft, File
 import useAuthStore from '../../store/useAuthStore'
 import { fmtUsdSimple as fmtUsd } from '../../utils/format'
 
-const TIPO_LABELS = { natural: 'Natural', juridico: 'Jurídico' }
+const TIPO_LABELS = { natural: 'Natural', juridico: 'Jurídico', personal: 'Personal' }
 const TIPO_COLORS = {
   natural:  'bg-slate-50 text-slate-600 border-slate-200',
   juridico: 'bg-violet-50 text-violet-700 border-violet-200',
+  personal: 'bg-indigo-50 text-indigo-700 border-indigo-200',
 }
 
 export default function ClienteRow({ cliente, onEditar, onReasignar, onCotizar, onVerFicha, onBorrar, onActivar }) {

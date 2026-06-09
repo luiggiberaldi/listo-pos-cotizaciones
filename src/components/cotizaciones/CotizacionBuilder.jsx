@@ -505,17 +505,21 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
   const [costoEnvioUsd,      setCostoEnvioUsd]      = useState(cotizacionExistente?.costo_envio_usd ?? 0)
   const [corteUsd,           setCorteUsd]           = useState(cotizacionExistente?.corte_usd ?? 0)
   const [items,              setItems]              = useState(
-    (cotizacionExistente?.items ?? []).map(it => ({
-      _key:          `item-${++_itemCounter}`,
-      productoId:    it.producto_id,
-      codigoSnap:    it.codigo_snap,
-      nombreSnap:    it.nombre_snap,
-      unidadSnap:    it.unidad_snap,
-      cantidad:      Number(it.cantidad),
-      precioUnitUsd: Number(it.precio_unit_usd),
-      descuentoPct:  0, // Discount disabled — always 0
-      origen:        it.producto_id ? (it.origen || 'inventario') : 'externo',
-    }))
+    (cotizacionExistente?.items ?? []).map(it => {
+      const precioBase = Number(it.precio_unit_usd)
+      return {
+        _key:          `item-${++_itemCounter}`,
+        productoId:    it.producto_id,
+        codigoSnap:    it.codigo_snap,
+        nombreSnap:    it.nombre_snap,
+        unidadSnap:    it.unidad_snap,
+        cantidad:      Number(it.cantidad),
+        precioUnitUsd: precioBase,
+        precioOriginalUsd: precioBase,
+        descuentoPct:  0, // Discount disabled — always 0
+        origen:        it.producto_id ? (it.origen || 'inventario') : 'externo',
+      }
+    })
   )
 
   const [errorGeneral,  setErrorGeneral]  = useState('')
@@ -531,6 +535,47 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
   const [showResumen, setShowResumen] = useState(false)
   const [editItemIdx, setEditItemIdx] = useState(null)
   const [conIva, setConIva] = useState(() => localStorage.getItem('construacero_con_iva') === 'true')
+
+  const prevClienteIdRef = useRef(clienteId)
+
+  useEffect(() => {
+    if (!clientes.length || !config) return
+
+    const prevId = prevClienteIdRef.current
+    if (prevId === clienteId) return
+    prevClienteIdRef.current = clienteId
+
+    const prevCli = clientes.find(c => c.id === prevId)
+    const nextCli = clientes.find(c => c.id === clienteId)
+    const prevEsPersonal = prevCli?.tipo_cliente === 'personal'
+    const nextEsPersonal = nextCli?.tipo_cliente === 'personal'
+
+    if (prevEsPersonal === nextEsPersonal) return
+
+    const descPct = config.descuento_personal_pct ?? 10.00
+
+    setItems(prevItems => {
+      return prevItems.map(item => {
+        let precioOriginal = item.precioOriginalUsd ?? item.precioUnitUsd
+
+        if (nextEsPersonal) {
+          const precioConDescuento = round2(precioOriginal * (1 - descPct / 100))
+          return {
+            ...item,
+            precioOriginalUsd: precioOriginal,
+            precioUnitUsd: precioConDescuento
+          }
+        } else {
+          return {
+            ...item,
+            precioOriginalUsd: precioOriginal,
+            precioUnitUsd: precioOriginal
+          }
+        }
+      })
+    })
+    showToast(nextEsPersonal ? 'Precios ajustados con descuento de personal' : 'Precios restaurados a tarifa estándar', 'info')
+  }, [clienteId, clientes, config])
 
   // ── Auto-guardado: restaurar borrador al montar ────────────────────────────
   const [showDraftBanner, setShowDraftBanner] = useState(false)
@@ -687,6 +732,12 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
         }
         return prev.map((it, i) => i === idx ? { ...it, cantidad: nuevaCantidad } : it)
       }
+
+      const precioBase = isExterno ? Number(p.precio_usd) : aplicarMarkup(Number(p.precio_usd))
+      const esPersonal = clienteSeleccionado?.tipo_cliente === 'personal'
+      const descPct = config.descuento_personal_pct ?? 10.00
+      const precioFinal = esPersonal ? round2(precioBase * (1 - descPct / 100)) : precioBase
+
       return [...prev, {
         _key:          `item-${++_itemCounter}`,
         productoId:    isExterno ? null : p.id,
@@ -696,8 +747,8 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
         categoria:     p.categoria || '',
         unidadSnap:    p.unidad ?? 'und',
         cantidad:      isExterno ? (p.cantidadExterna || 1) : 1,
-        // Aplicar markup si es vendedor externo (solo para productos de inventario)
-        precioUnitUsd: isExterno ? Number(p.precio_usd) : aplicarMarkup(Number(p.precio_usd)),
+        precioUnitUsd: precioFinal,
+        precioOriginalUsd: precioBase,
         descuentoPct:  0,
       }]
     })
@@ -708,6 +759,8 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
     setItems(prev => {
       let updated = [...prev]
       let agregados = 0
+      const esPersonal = clienteSeleccionado?.tipo_cliente === 'personal'
+      const descPct = config.descuento_personal_pct ?? 10.00
       for (const { producto, cantidad } of listaItems) {
         const stock = Number(producto.stock_actual) || 0
         const qty = cantidad  // sin cap — se permite superar el stock con advertencia
@@ -716,6 +769,8 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
           const newQty = updated[idx].cantidad + qty
           updated = updated.map((it, i) => i === idx ? { ...it, cantidad: newQty } : it)
         } else {
+          const precioBase = aplicarMarkup(Number(producto.precio_usd))
+          const precioFinal = esPersonal ? round2(precioBase * (1 - descPct / 100)) : precioBase
           updated.push({
             _key:          `item-${++_itemCounter}`,
             productoId:    producto.id,
@@ -725,8 +780,8 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
             categoria:     producto.categoria || '',
             unidadSnap:    producto.unidad ?? 'und',
             cantidad:      qty,
-            // Aplicar markup del vendedor externo al hacer bulk-scan
-            precioUnitUsd: aplicarMarkup(Number(producto.precio_usd)),
+            precioUnitUsd: precioFinal,
+            precioOriginalUsd: precioBase,
             descuentoPct:  0,
           })
         }
@@ -747,7 +802,21 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
           showToast(`⚠ Stock insuficiente: tienes ${stock} unidades`, 'warning')
         }
       }
-      return { ...it, [campo]: valor }
+
+      const updated = { ...it, [campo]: valor }
+
+      if (campo === 'precioUnitUsd') {
+        const esPersonal = clienteSeleccionado?.tipo_cliente === 'personal'
+        const descPct = config.descuento_personal_pct ?? 10.00
+        const precioUnit = parseFloat(String(valor)) || 0
+        if (esPersonal) {
+          updated.precioOriginalUsd = round2(precioUnit / (1 - descPct / 100))
+        } else {
+          updated.precioOriginalUsd = precioUnit
+        }
+      }
+
+      return updated
     }))
   }
 

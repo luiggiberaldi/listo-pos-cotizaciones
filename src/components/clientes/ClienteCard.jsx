@@ -12,7 +12,7 @@ function Contacto({ icono: Icono, valor }) {
   )
 }
 
-const TIPO_LABELS = { natural: 'Natural', juridico: 'Jurídico' }
+const TIPO_LABELS = { natural: 'Natural', juridico: 'Jurídico', personal: 'Personal' }
 
 // Genera iniciales del nombre (máx 2 caracteres)
 function getIniciales(nombre = '') {

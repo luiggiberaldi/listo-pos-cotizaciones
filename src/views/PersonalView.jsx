@@ -1,10 +1,9 @@
-// src/views/ClientesView.jsx
-// Vista principal del módulo de Clientes
-// — Vendedor: ve y gestiona sus propios clientes
-// — Supervisor: ve todos los clientes + puede reasignar
+// src/views/PersonalView.jsx
+// Vista principal del módulo de Personal (Trabajadores de la empresa)
+// — Guarda a los empleados como clientes de tipo_cliente = 'personal'
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Users, Plus, Search, RefreshCw, X, LayoutGrid, List, Filter, ChevronDown, Check, AlertCircle, Trash2, UserCheck, FileText, Printer, Handshake, DollarSign } from 'lucide-react'
+import { Briefcase, Plus, Search, RefreshCw, X, LayoutGrid, List, Filter, ChevronDown, Check, AlertCircle, Trash2, UserCheck, FileText, Printer, Handshake, DollarSign } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { useClientes, useVendedores, useBorrarCliente, useActivarCliente } from '../hooks/useClientes'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
@@ -96,7 +95,7 @@ function SkeletonClientes() {
 }
 
 // ─── Vista principal ──────────────────────────────────────────────────────────
-export default function ClientesView() {
+export default function PersonalView() {
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
   const navigate = useNavigate()
   const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
@@ -108,7 +107,6 @@ export default function ClientesView() {
   // Búsqueda y filtros
   const [busqueda, setBusqueda] = useState('')
   const [textoBusqueda, setTextoBusqueda] = useState('')
-  const [filtroTipo, setFiltroTipo]         = useState('')
   const [filtroVendedor, setFiltroVendedor] = useState('')
   const [filtroConDeuda, setFiltroConDeuda] = useState(false)
   const [filtroConPrestamo, setFiltroConPrestamo] = useState(false)
@@ -117,7 +115,7 @@ export default function ClientesView() {
   const [verTodos, setVerTodos] = useState(false)
   const [vistaMode, setVistaMode] = useState(() => {
     const businessId = useAuthStore.getState().perfil?.cuenta_id
-    const key = businessId ? `clientes_vista-${businessId}` : 'clientes_vista'
+    const key = businessId ? `personal_vista-${businessId}` : 'personal_vista'
     return localStorage.getItem(key) || (window.innerWidth < 768 ? 'list' : 'grid')
   })
   const [pagina, setPagina] = useState(1)
@@ -134,7 +132,7 @@ export default function ClientesView() {
   const [clienteBorrando,  setClienteBorrando]  = useState(null)
   const [confirmBorrarOpen, setConfirmBorrarOpen] = useState(false)
 
-  // Data + mutations
+  // Data + mutations (filters in memory or we pass empty search query if we filter frontend)
   const { data: clientes = [], isLoading, isError, refetch } = useClientes(busqueda)
   const { data: vendedores = [] } = useVendedores()
   const borrarCliente = useBorrarCliente()
@@ -148,7 +146,7 @@ export default function ClientesView() {
     else setExportandoPDF(true)
     try {
       const { generarClientesPDF } = await import('../services/pdf/clientesPDF')
-      await generarClientesPDF({ items: clientesFiltrados, config, action: accion })
+      await generarClientesPDF({ items: clientesFiltrados, config, action: accion, title: 'Reporte de Personal' })
     } catch (err) {
       import('../components/ui/Toast').then(({ showToast }) =>
         showToast('Error al generar el PDF: ' + err.message, 'error')
@@ -162,11 +160,10 @@ export default function ClientesView() {
   // Filtrado local y ordenamiento (clientes con deuda o préstamos activos primero)
   const clientesFiltrados = useMemo(() => {
     const list = clientes.filter(c => {
-      // Excluir personal de la lista general de clientes
-      if (c.tipo_cliente === 'personal') return false
+      // SOLO incluir personal
+      if (c.tipo_cliente !== 'personal') return false
       // Supervisor/dev con toggle en "Mis datos": solo ver propios
       if (mostrarToggle && !verTodos && c.vendedor_id !== perfil?.id) return false
-      if (filtroTipo     && c.tipo_cliente !== filtroTipo)               return false
       if (filtroVendedor && c.vendedor_id  !== filtroVendedor)           return false
       if (filtroConDeuda && !(Number(c.saldo_pendiente || 0) > 0)) return false
       if (filtroConPrestamo && !c.tiene_prestamos_activos) return false
@@ -178,7 +175,7 @@ export default function ClientesView() {
       return true
     })
 
-    // Ordenar: Clientes con deuda o préstamos activos primero, luego orden alfabético
+    // Ordenar: Trabajadores con deuda o préstamos activos primero, luego orden alfabético
     return [...list].sort((a, b) => {
       const deudaA = Number(a.saldo_pendiente || 0)
       const deudaB = Number(b.saldo_pendiente || 0)
@@ -203,12 +200,11 @@ export default function ClientesView() {
 
       return (a.nombre || '').localeCompare(b.nombre || '')
     })
-  }, [clientes, filtroTipo, filtroVendedor, filtroConDeuda, filtroConPrestamo, filtroSaldoFavor, filtroEstado, mostrarToggle, verTodos, perfil?.id])
+  }, [clientes, filtroVendedor, filtroConDeuda, filtroConPrestamo, filtroSaldoFavor, filtroEstado, mostrarToggle, verTodos, perfil?.id])
 
-  const hayFiltros = filtroTipo || filtroVendedor || filtroConDeuda || filtroConPrestamo || filtroSaldoFavor || filtroEstado !== 'activos'
+  const hayFiltros = filtroVendedor || filtroConDeuda || filtroConPrestamo || filtroSaldoFavor || filtroEstado !== 'activos'
 
   function limpiarFiltros() {
-    setFiltroTipo('')
     setFiltroVendedor('')
     setFiltroConDeuda(false)
     setFiltroConPrestamo(false)
@@ -243,7 +239,7 @@ export default function ClientesView() {
   function cambiarVista(modo) {
     setVistaMode(modo)
     const businessId = perfil?.cuenta_id
-    const key = businessId ? `clientes_vista-${businessId}` : 'clientes_vista'
+    const key = businessId ? `personal_vista-${businessId}` : 'personal_vista'
     localStorage.setItem(key, modo)
   }
 
@@ -281,7 +277,6 @@ export default function ClientesView() {
     try {
       const result = await borrarCliente.mutateAsync(clienteBorrando.id)
       if (result.accion === 'eliminado') {
-        // showToast is not in scope here — the hook's onSuccess handles cache, toast from component
         import('../components/ui/Toast').then(({ showToast }) =>
           showToast(`"${result.nombre}" eliminado permanentemente`, 'success')
         )
@@ -319,9 +314,9 @@ export default function ClientesView() {
 
       {/* ── Encabezado ─────────────────────────────────────────────────────── */}
       <PageHeader
-        icon={Users}
-        title="Clientes"
-        subtitle={isLoading ? 'Cargando...' : `${clientesFiltrados.length} cliente${clientesFiltrados.length !== 1 ? 's' : ''}`}
+        icon={Briefcase}
+        title="Personal"
+        subtitle={isLoading ? 'Cargando...' : `${clientesFiltrados.length} trabajador${clientesFiltrados.length !== 1 ? 'es' : ''}`}
         action={
           <div className="flex items-center gap-2">
             {(perfil?.rol === 'administracion' || perfil?.rol === 'jefe' || perfil?.rol === 'desarrollador') && (
@@ -346,8 +341,8 @@ export default function ClientesView() {
             )}
             {!esAdministracion && (
               <button onClick={abrirCrear} className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98]"
-                style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
-                <Plus size={16} />Nuevo cliente
+                style={{ background: 'linear-gradient(135deg, #4f46e5, #4338ca)' }}>
+                <Plus size={16} />Nuevo trabajador
               </button>
             )}
           </div>
@@ -362,7 +357,7 @@ export default function ClientesView() {
             type="text"
             value={textoBusqueda}
             onChange={e => setTextoBusqueda(e.target.value)}
-            placeholder="Buscar por nombre, código o RIF..."
+            placeholder="Buscar trabajador por nombre, código o RIF..."
             className="w-full pl-9 pr-9 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400"
           />
           {textoBusqueda && (
@@ -428,17 +423,6 @@ export default function ClientesView() {
         {mostrarToggle && (
           <ToggleVistaPersonal value={verTodos} onChange={v => { setVerTodos(v); setFiltroVendedor(''); setPagina(1) }} />
         )}
-
-        {/* Tipo */}
-        <Dropdown
-          value={filtroTipo}
-          onChange={v => { setFiltroTipo(v); setPagina(1) }}
-          placeholder="Todos los tipos"
-          options={[
-            { value: 'natural', label: 'Natural' },
-            { value: 'juridico', label: 'Jurídico' },
-          ]}
-        />
 
         {/* Estado */}
         <Dropdown
@@ -547,7 +531,7 @@ export default function ClientesView() {
         <SkeletonClientes />
       ) : isError ? (
         <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center text-red-700">
-          <p className="font-semibold">Error al cargar los clientes</p>
+          <p className="font-semibold">Error al cargar el personal</p>
           <button
             onClick={() => refetch()}
             className="mt-3 text-sm underline text-red-600 hover:text-red-800"
@@ -555,25 +539,17 @@ export default function ClientesView() {
             Intentar de nuevo
           </button>
         </div>
-      ) : clientes.length === 0 ? (
-        <EmptyState
-          icon={Users}
-          title={busqueda ? 'Sin resultados' : 'No hay clientes aún'}
-          description={
-            busqueda
-              ? `No se encontraron clientes con "${busqueda}".`
-              : esAdministracion ? 'No hay clientes registrados.' : 'Crea tu primer cliente con el botón "Nuevo cliente".'
-          }
-          actionLabel={busqueda ? 'Limpiar búsqueda' : !esAdministracion ? 'Nuevo cliente' : undefined}
-          onAction={busqueda ? limpiarBusqueda : !esAdministracion ? abrirCrear : undefined}
-        />
       ) : clientesFiltrados.length === 0 ? (
         <EmptyState
-          icon={Filter}
-          title="Sin resultados"
-          description="No hay clientes que coincidan con los filtros aplicados."
-          actionLabel="Limpiar filtros"
-          onAction={limpiarFiltros}
+          icon={Briefcase}
+          title={busqueda ? 'Sin resultados' : 'No hay personal registrado aún'}
+          description={
+            busqueda
+              ? `No se encontraron trabajadores con "${busqueda}".`
+              : esAdministracion ? 'No hay personal registrado.' : 'Registra al primer trabajador con el botón "Nuevo trabajador".'
+          }
+          actionLabel={busqueda ? 'Limpiar búsqueda' : !esAdministracion ? 'Nuevo trabajador' : undefined}
+          onAction={busqueda ? limpiarBusqueda : !esAdministracion ? abrirCrear : undefined}
         />
       ) : (
         vistaMode === 'grid' ? (
@@ -618,16 +594,17 @@ export default function ClientesView() {
         />
       )}
 
-      {/* ── Modal: Crear / Editar cliente ──────────────────────────────────── */}
+      {/* ── Modal: Crear / Editar trabajador ───────────────────────────────── */}
       <Modal
         isOpen={modalFormOpen}
         onClose={() => setModalFormOpen(false)}
-        title={clienteEditando ? 'Editar cliente' : 'Nuevo cliente'}
+        title={clienteEditando ? 'Editar trabajador' : 'Registrar personal'}
       >
         <ClienteForm
           cliente={clienteEditando}
           onSuccess={() => setModalFormOpen(false)}
           onCancel={() => setModalFormOpen(false)}
+          forzarTipoCliente="personal"
         />
       </Modal>
 
@@ -651,12 +628,12 @@ export default function ClientesView() {
         onClose={() => { setConfirmBorrarOpen(false); setClienteBorrando(null) }}
         onConfirm={handleBorrar}
         loading={borrarCliente.isPending}
-        title="Eliminar cliente"
+        title="Eliminar trabajador"
         message={
           clienteBorrando
             ? Number(clienteBorrando.saldo_pendiente || 0) > 0
               ? `"${clienteBorrando.nombre}" tiene deuda activa y no puede eliminarse.`
-              : `¿Eliminar a "${clienteBorrando.nombre}"? Si tiene historial de cotizaciones o despachos, quedará desactivado. Si no tiene historial, se borrará permanentemente.`
+              : `¿Eliminar a "${clienteBorrando.nombre}" de la lista de personal? Si tiene historial de cotizaciones o despachos, quedará desactivado. Si no tiene historial, se borrará permanentemente.`
             : ''
         }
         confirmLabel="Eliminar"
