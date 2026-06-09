@@ -21,7 +21,7 @@ function getIniciales(nombre = '') {
   return nombre.slice(0, 2).toUpperCase()
 }
 
-export default function ClienteCard({ cliente, onEditar, onReasignar, onCotizar, onVerFicha, onBorrar, onActivar }) {
+export default function ClienteCard({ cliente, onEditar, onReasignar, onCotizar, onVerFicha, onBorrar, onActivar, esPersonalSection = false }) {
   const { perfil } = useAuthStore()
   const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
   const esAdministracion = perfil?.rol === 'administracion'
@@ -192,7 +192,7 @@ export default function ClienteCard({ cliente, onEditar, onReasignar, onCotizar,
 
       {/* ── Acciones ── */}
       <div className="mt-auto border-t border-slate-100 px-2 py-2 flex items-center flex-wrap gap-1">
-        {!esAdministracion && (
+        {!esAdministracion && onCotizar && (
           <button onClick={() => onCotizar(cliente)} title="Cotizar con este cliente"
             className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 active:bg-emerald-100 transition-colors">
             <FileText size={13} />
@@ -201,31 +201,31 @@ export default function ClienteCard({ cliente, onEditar, onReasignar, onCotizar,
         )}
         {onVerFicha && (
           <button onClick={() => onVerFicha(cliente)} title="Ver ficha del cliente"
-            className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-violet-600 hover:bg-violet-50 active:bg-violet-100 transition-colors ${esAdministracion ? 'flex-1 justify-center py-2' : ''}`}>
+            className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-violet-600 hover:bg-violet-50 active:bg-violet-100 transition-colors ${(esAdministracion && !esPersonalSection) ? 'flex-1 justify-center py-2' : ''}`}>
             <BookOpen size={13} />
-            {esAdministracion ? 'Ver cuenta' : 'Ficha'}
+            {(esAdministracion && !esPersonalSection) ? 'Ver cuenta' : 'Ficha'}
           </button>
         )}
-        {!esAdministracion && (esPropio || esSupervisor) && (
+        {onEditar && (esPersonalSection ? ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol) : (!esAdministracion && (esPropio || esSupervisor))) && (
           <button onClick={() => onEditar(cliente)} title="Editar cliente"
             className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
             <Pencil size={13} />
             Editar
           </button>
         )}
-        {(esSupervisor || esAdministracion) && (
+        {onReasignar && (esSupervisor || esAdministracion) && (
           <button onClick={() => onReasignar(cliente)} title="Reasignar cliente"
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
             <ArrowRightLeft size={14} />
           </button>
         )}
-        {!cliente.activo && onActivar && (
+        {!cliente.activo && onActivar && (esPersonalSection ? ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol) : (!esAdministracion && (esPropio || esSupervisor))) && (
           <button onClick={() => onActivar(cliente)} title="Reactivar cliente"
             className="p-1.5 rounded-lg text-emerald-500 hover:bg-emerald-50 active:bg-emerald-100 transition-colors">
             <UserCheck size={14} />
           </button>
         )}
-        {!esAdministracion && (esPropio || esSupervisor) && onBorrar && cliente.activo && (
+        {onBorrar && cliente.activo && (esPersonalSection ? ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol) : (!esAdministracion && (esPropio || esSupervisor))) && (
           <button onClick={() => onBorrar(cliente)} title="Eliminar cliente"
             className="ml-auto p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 active:bg-red-100 transition-colors">
             <Trash2 size={14} />

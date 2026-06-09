@@ -18,7 +18,6 @@ import EmptyState        from '../components/ui/EmptyState'
 import Skeleton          from '../components/ui/Skeleton'
 import Pagination        from '../components/ui/Pagination'
 import PageHeader        from '../components/ui/PageHeader'
-import ToggleVistaPersonal from '../components/ui/ToggleVistaPersonal'
 
 const ITEMS_POR_PAGINA = 12
 
@@ -102,17 +101,15 @@ export default function PersonalView() {
   const esAdministracion = perfil?.rol === 'administracion'
   const esDesarrollador = perfil?.rol === 'desarrollador'
   const esExterno = ['vendedor', 'vendedor_sin_comision'].includes(perfil?.rol) && Number(perfil?.markup_pct || 0) > 0
-  const mostrarToggle = !esExterno && (esSupervisor || esDesarrollador || ['vendedor', 'vendedor_sin_comision'].includes(perfil?.rol))
+  const puedeGestionarPersonal = ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)
 
   // Búsqueda y filtros
   const [busqueda, setBusqueda] = useState('')
   const [textoBusqueda, setTextoBusqueda] = useState('')
-  const [filtroVendedor, setFiltroVendedor] = useState('')
   const [filtroConDeuda, setFiltroConDeuda] = useState(false)
   const [filtroConPrestamo, setFiltroConPrestamo] = useState(false)
   const [filtroSaldoFavor, setFiltroSaldoFavor] = useState(false)
   const [filtroEstado, setFiltroEstado]     = useState('activos')
-  const [verTodos, setVerTodos] = useState(false)
   const [vistaMode, setVistaMode] = useState(() => {
     const businessId = useAuthStore.getState().perfil?.cuenta_id
     const key = businessId ? `personal_vista-${businessId}` : 'personal_vista'
@@ -135,6 +132,8 @@ export default function PersonalView() {
   // Data + mutations (filters in memory or we pass empty search query if we filter frontend)
   const { data: clientes = [], isLoading, isError, refetch } = useClientes(busqueda)
   const { data: vendedores = [] } = useVendedores()
+  const empresaUser = vendedores.find(v => v.nombre?.toUpperCase() === 'EMPRESA')
+  const forzarVendedorId = empresaUser?.id || null
   const borrarCliente = useBorrarCliente()
   const activarCliente = useActivarCliente()
   const { data: config = {} } = useConfigNegocio()
@@ -162,9 +161,6 @@ export default function PersonalView() {
     const list = clientes.filter(c => {
       // SOLO incluir personal
       if (c.tipo_cliente !== 'personal') return false
-      // Supervisor/dev con toggle en "Mis datos": solo ver propios
-      if (mostrarToggle && !verTodos && c.vendedor_id !== perfil?.id) return false
-      if (filtroVendedor && c.vendedor_id  !== filtroVendedor)           return false
       if (filtroConDeuda && !(Number(c.saldo_pendiente || 0) > 0)) return false
       if (filtroConPrestamo && !c.tiene_prestamos_activos) return false
       if (filtroSaldoFavor && !(Number(c.saldo_a_favor || 0) > 0)) return false
@@ -200,12 +196,11 @@ export default function PersonalView() {
 
       return (a.nombre || '').localeCompare(b.nombre || '')
     })
-  }, [clientes, filtroVendedor, filtroConDeuda, filtroConPrestamo, filtroSaldoFavor, filtroEstado, mostrarToggle, verTodos, perfil?.id])
+  }, [clientes, filtroConDeuda, filtroConPrestamo, filtroSaldoFavor, filtroEstado])
 
-  const hayFiltros = filtroVendedor || filtroConDeuda || filtroConPrestamo || filtroSaldoFavor || filtroEstado !== 'activos'
+  const hayFiltros = filtroConDeuda || filtroConPrestamo || filtroSaldoFavor || filtroEstado !== 'activos'
 
   function limpiarFiltros() {
-    setFiltroVendedor('')
     setFiltroConDeuda(false)
     setFiltroConPrestamo(false)
     setFiltroSaldoFavor(false)
@@ -339,7 +334,7 @@ export default function PersonalView() {
                 </button>
               </>
             )}
-            {!esAdministracion && (
+            {puedeGestionarPersonal && (
               <button onClick={abrirCrear} className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98]"
                 style={{ background: 'linear-gradient(135deg, #4f46e5, #4338ca)' }}>
                 <Plus size={16} />Nuevo trabajador
@@ -419,11 +414,6 @@ export default function PersonalView() {
           Filtros:
         </div>
 
-        {/* Toggle Mis datos / Todos — solo supervisor/dev */}
-        {mostrarToggle && (
-          <ToggleVistaPersonal value={verTodos} onChange={v => { setVerTodos(v); setFiltroVendedor(''); setPagina(1) }} />
-        )}
-
         {/* Estado */}
         <Dropdown
           value={filtroEstado}
@@ -434,16 +424,6 @@ export default function PersonalView() {
             { value: 'desactivados', label: 'Solo desactivados' },
           ]}
         />
-
-        {/* Vendedor — solo visible cuando "Todos" está activo o para admin */}
-        {(!mostrarToggle || verTodos) && !esExterno && (
-          <Dropdown
-            value={filtroVendedor}
-            onChange={v => { setFiltroVendedor(v); setPagina(1) }}
-            placeholder="Todos los vendedores"
-            options={vendedores.map(v => ({ value: v.id, label: v.nombre }))}
-          />
-        )}
 
         {/* Con deuda */}
         <button
@@ -546,10 +526,10 @@ export default function PersonalView() {
           description={
             busqueda
               ? `No se encontraron trabajadores con "${busqueda}".`
-              : esAdministracion ? 'No hay personal registrado.' : 'Registra al primer trabajador con el botón "Nuevo trabajador".'
+              : puedeGestionarPersonal ? 'Registra al primer trabajador con el botón "Nuevo trabajador".' : 'No hay personal registrado.'
           }
-          actionLabel={busqueda ? 'Limpiar búsqueda' : !esAdministracion ? 'Nuevo trabajador' : undefined}
-          onAction={busqueda ? limpiarBusqueda : !esAdministracion ? abrirCrear : undefined}
+          actionLabel={busqueda ? 'Limpiar búsqueda' : puedeGestionarPersonal ? 'Nuevo trabajador' : undefined}
+          onAction={busqueda ? limpiarBusqueda : puedeGestionarPersonal ? abrirCrear : undefined}
         />
       ) : (
         vistaMode === 'grid' ? (
@@ -559,11 +539,12 @@ export default function PersonalView() {
                 key={cliente.id}
                 cliente={cliente}
                 onEditar={abrirEditar}
-                onReasignar={abrirReasignar}
+                onReasignar={null}
                 onCotizar={cotizarCliente}
                 onVerFicha={abrirFicha}
                 onBorrar={abrirBorrar}
                 onActivar={handleActivar}
+                esPersonalSection={true}
               />
             ))}
           </div>
@@ -574,11 +555,12 @@ export default function PersonalView() {
                 key={cliente.id}
                 cliente={cliente}
                 onEditar={abrirEditar}
-                onReasignar={abrirReasignar}
+                onReasignar={null}
                 onCotizar={cotizarCliente}
                 onVerFicha={abrirFicha}
                 onBorrar={abrirBorrar}
                 onActivar={handleActivar}
+                esPersonalSection={true}
               />
             ))}
           </div>
@@ -605,6 +587,7 @@ export default function PersonalView() {
           onSuccess={() => setModalFormOpen(false)}
           onCancel={() => setModalFormOpen(false)}
           forzarTipoCliente="personal"
+          forzarVendedorId={forzarVendedorId}
         />
       </Modal>
 

@@ -9,12 +9,13 @@ const TIPO_COLORS = {
   personal: 'bg-indigo-50 text-indigo-700 border-indigo-200',
 }
 
-export default function ClienteRow({ cliente, onEditar, onReasignar, onCotizar, onVerFicha, onBorrar, onActivar }) {
+export default function ClienteRow({ cliente, onEditar, onReasignar, onCotizar, onVerFicha, onBorrar, onActivar, esPersonalSection = false }) {
   const { perfil } = useAuthStore()
   const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
   const esAdministracion = perfil?.rol === 'administracion'
   const esPropio = cliente.vendedor_id === perfil?.id
   const color = cliente.vendedor?.color || null
+  const mostrarComoAdmin = esAdministracion && !esPersonalSection
 
   return (
     <div className={`bg-white rounded-xl border border-slate-200 hover:shadow-md transition-all overflow-hidden flex items-stretch ${!cliente.activo ? 'opacity-60 grayscale-[0.5]' : ''}`}
@@ -125,7 +126,7 @@ export default function ClienteRow({ cliente, onEditar, onReasignar, onCotizar, 
 
       {/* Acciones */}
       <div className="flex items-center gap-1 px-2 shrink-0">
-        {esAdministracion ? (
+        {mostrarComoAdmin ? (
           <div className="flex items-center gap-1">
             {onVerFicha && (
               <button onClick={() => onVerFicha(cliente)} title="Ver cuenta"
@@ -134,37 +135,48 @@ export default function ClienteRow({ cliente, onEditar, onReasignar, onCotizar, 
                 Ver cuenta
               </button>
             )}
-            <button onClick={() => onReasignar(cliente)}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-sky-500 hover:bg-sky-50 transition-colors" title="Reasignar cliente">
-              <ArrowRightLeft size={15} />
-            </button>
-          </div>
-        ) : (
-          <>
-            <button onClick={() => onCotizar(cliente)} title="Cotizar"
-              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 active:bg-emerald-100 transition-colors">
-              <FileText size={13} />
-              Cotizar
-            </button>
-            {(esPropio || esSupervisor) && (
-              <button onClick={() => onEditar(cliente)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-light transition-colors">
-                <Pencil size={15} />
-              </button>
-            )}
-            {(esSupervisor || esAdministracion) && (
+            {onReasignar && (
               <button onClick={() => onReasignar(cliente)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-sky-500 hover:bg-sky-50 transition-colors">
+                className="p-1.5 rounded-lg text-slate-400 hover:text-sky-500 hover:bg-sky-50 transition-colors" title="Reasignar cliente">
                 <ArrowRightLeft size={15} />
               </button>
             )}
-            {!cliente.activo && onActivar && (
+          </div>
+        ) : (
+          <>
+            {!esAdministracion && onCotizar && (
+              <button onClick={() => onCotizar(cliente)} title="Cotizar"
+                className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 active:bg-emerald-100 transition-colors">
+                <FileText size={13} />
+                Cotizar
+              </button>
+            )}
+            {onVerFicha && esPersonalSection && (
+              <button onClick={() => onVerFicha(cliente)} title="Ver ficha"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-violet-600 hover:bg-violet-50 active:bg-violet-100 transition-colors">
+                <BookOpen size={13} />
+                Ficha
+              </button>
+            )}
+            {onEditar && (esPersonalSection ? ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol) : (esPropio || esSupervisor)) && (
+              <button onClick={() => onEditar(cliente)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-sky-500 hover:bg-sky-50 transition-colors" title="Editar cliente">
+                <Pencil size={15} />
+              </button>
+            )}
+            {onReasignar && (esSupervisor || esAdministracion) && (
+              <button onClick={() => onReasignar(cliente)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-sky-500 hover:bg-sky-50 transition-colors" title="Reasignar cliente">
+                <ArrowRightLeft size={15} />
+              </button>
+            )}
+            {!cliente.activo && onActivar && (esPersonalSection ? ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol) : (esPropio || esSupervisor)) && (
               <button onClick={() => onActivar(cliente)} title="Reactivar cliente"
                 className="p-1.5 rounded-lg text-emerald-500 hover:bg-emerald-50 active:bg-emerald-100 transition-colors">
                 <UserCheck size={16} />
               </button>
             )}
-            {(esPropio || esSupervisor) && onBorrar && cliente.activo && (
+            {onBorrar && cliente.activo && (esPersonalSection ? ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol) : (esPropio || esSupervisor)) && (
               <button onClick={() => onBorrar(cliente)} title="Eliminar cliente"
                 className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 active:bg-red-100 transition-colors">
                 <Trash2 size={15} />

@@ -85,7 +85,7 @@ function formatearRif(prefijo, numero) {
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export default function ClienteForm({ cliente = null, onSuccess, onCancel, compact = false, forzarTipoCliente = null }) {
+export default function ClienteForm({ cliente = null, onSuccess, onCancel, compact = false, forzarTipoCliente = null, forzarVendedorId = null }) {
   const esEdicion = !!cliente
 
   const [campos, setCampos] = useState(VACIO)
@@ -200,6 +200,10 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
       ...campos,
       rif_cedula: formatearRif(rifPrefijo, campos.rif_cedula.trim()),
       telefono: telefonoFinal,
+    }
+
+    if (forzarVendedorId) {
+      camposFinales.vendedor_id = forzarVendedorId
     }
 
     try {
