@@ -561,6 +561,22 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                             />
                           </div>
                         )}
+
+                        {/* Opción de Referencia para Transferencia y Pago Móvil */}
+                        {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil'].includes(fp.metodo) && (
+                          <div className="flex items-center gap-1.5 px-2 py-1 bg-teal-50 border border-teal-200 rounded-lg ml-2">
+                            <span className="text-[10px] font-medium text-teal-700 whitespace-nowrap">
+                              Referencia (opcional):
+                            </span>
+                            <input
+                              type="text"
+                              value={fp.referencia ?? ''}
+                              onChange={e => updatePagoInmediato(fp.metodo, { referencia: e.target.value })}
+                              placeholder="Ej: 12345"
+                              className="w-24 px-1.5 py-0.5 rounded text-[10px] font-semibold border border-teal-200 bg-white focus:outline-none focus:ring-1 focus:ring-teal-400 text-slate-700 text-center"
+                            />
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -674,6 +690,21 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                                   )}
                                 </div>
                               </div>
+                              {/* Opción de Referencia para Transferencia y Pago Móvil COD */}
+                              {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil'].includes(fp.metodo) && (
+                                <div className="flex items-center gap-1.5 px-2 py-1 bg-rose-50 border border-rose-200 rounded-lg ml-2 mt-1">
+                                  <span className="text-[10px] font-medium text-rose-700 whitespace-nowrap">
+                                    Referencia (opcional):
+                                  </span>
+                                  <input
+                                    type="text"
+                                    value={fp.referencia ?? ''}
+                                    onChange={e => updatePropuestaCod(fp.metodo, { referencia: e.target.value })}
+                                    placeholder="Ej: 12345"
+                                    className="w-24 px-1.5 py-0.5 rounded text-[10px] font-semibold border border-rose-200 bg-white focus:outline-none focus:ring-1 focus:ring-rose-400 text-slate-700 text-center"
+                                  />
+                                </div>
+                              )}
                             </div>
                           );
                         })}

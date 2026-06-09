@@ -474,6 +474,22 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
                           />
                         </div>
                       )}
+
+                      {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil'].includes(fp.metodo) && (
+                        <div className="flex items-center gap-2 pl-28">
+                          <span className="text-xs text-slate-500 font-medium whitespace-nowrap">
+                            Referencia (opcional):
+                          </span>
+                          <input
+                            type="text"
+                            value={fp.referencia ?? ''}
+                            onChange={e => updatePagoInmediato(fp.metodo, { referencia: e.target.value })}
+                            placeholder="Ej: 12345"
+                            className="flex-1 max-w-[200px] px-2 py-1.5 rounded-lg text-xs border border-slate-200 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:bg-white"
+                            disabled={cargando}
+                          />
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -619,6 +635,21 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
                                 <X size={15} />
                               </button>
                             </div>
+                            {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil'].includes(fp.metodo) && (
+                              <div className="flex items-center gap-2 pl-28 mt-1">
+                                <span className="text-xs text-slate-500 font-medium whitespace-nowrap">
+                                  Referencia (opcional):
+                                </span>
+                                <input
+                                  type="text"
+                                  value={fp.referencia ?? ''}
+                                  onChange={e => updatePropuestaCod(fp.metodo, { referencia: e.target.value })}
+                                  placeholder="Ej: 12345"
+                                  className="flex-1 max-w-[200px] px-2 py-1.5 rounded-lg text-xs border border-rose-200 bg-white focus:outline-none focus:border-rose-400 focus:ring-1 focus:ring-rose-400/20"
+                                  disabled={cargando}
+                                />
+                              </div>
+                            )}
                           </div>
                         );
                       })}

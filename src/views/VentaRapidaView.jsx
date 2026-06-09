@@ -2191,6 +2191,22 @@ function Step2Pago({
                             />
                           </div>
                         )}
+
+                        {/* Opción de Referencia para Transferencia y Pago Móvil */}
+                        {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil'].includes(fp.metodo) && (
+                          <div className="flex items-center gap-2 px-3 py-1.5 bg-teal-50/50 border border-teal-200/50 rounded-lg ml-6">
+                            <span className="text-[11px] font-semibold text-teal-700 whitespace-nowrap">
+                              Referencia (opcional):
+                            </span>
+                            <input
+                              type="text"
+                              value={fp.referencia ?? ''}
+                              onChange={e => updatePagoInmediato(fp.metodo, { referencia: e.target.value })}
+                              placeholder="Ej: 12345"
+                              className="flex-1 px-2.5 py-1 rounded border border-teal-200 bg-white focus:outline-none focus:ring-2 focus:ring-teal-300 text-slate-800 text-xs font-medium"
+                            />
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -2308,6 +2324,21 @@ function Step2Pago({
                                   <X size={14} />
                                 </button>
                               </div>
+                              {/* Opción de Referencia para Transferencia y Pago Móvil (COD) */}
+                              {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil'].includes(fp.metodo) && (
+                                <div className="flex items-center gap-2 px-3 py-1.5 bg-rose-50/50 border border-rose-200/50 rounded-lg ml-6 mt-1.5">
+                                  <span className="text-[11px] font-semibold text-rose-700 whitespace-nowrap">
+                                    Referencia (opcional):
+                                  </span>
+                                  <input
+                                    type="text"
+                                    value={fp.referencia ?? ''}
+                                    onChange={e => updatePropuestaCod(fp.metodo, { referencia: e.target.value })}
+                                    placeholder="Ej: 12345"
+                                    className="flex-1 px-2.5 py-1 rounded border border-rose-200 bg-white focus:outline-none focus:ring-2 focus:ring-rose-300 text-slate-800 text-xs font-medium"
+                                  />
+                                </div>
+                              )}
                             </div>
                           );
                         })}

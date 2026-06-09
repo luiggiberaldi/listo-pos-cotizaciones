@@ -832,6 +832,22 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                             />
                           </div>
                         )}
+
+                        {/* Referencia para Transferencia y Pago Móvil */}
+                        {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil'].includes(p.metodo) && (
+                          <div className="flex items-center gap-2 mt-1 pt-1 border-t border-slate-50">
+                            <span className="text-[9px] font-bold text-slate-400 uppercase whitespace-nowrap">
+                              Referencia (opcional):
+                            </span>
+                            <input
+                              type="text"
+                              value={p.referencia ?? ''}
+                              onChange={e => updatePagoInmediato(p.metodo, { referencia: e.target.value })}
+                              className="flex-1 py-1 px-2 rounded-lg text-[11px] font-bold border border-slate-100 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:bg-white transition-all"
+                              placeholder="Ej: 12345"
+                            />
+                          </div>
+                        )}
                       </div>
                     )
                   })}
@@ -979,6 +995,20 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                                 </button>
                               )}
                             </div>
+                            {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil'].includes(p.metodo) && (
+                              <div className="flex items-center gap-2 mt-1 pt-1 border-t border-rose-50">
+                                <span className="text-[9px] font-bold text-rose-400 uppercase">
+                                  Referencia (opcional):
+                                </span>
+                                <input
+                                  type="text"
+                                  value={p.referencia ?? ''}
+                                  onChange={e => updatePropuestaCod(p.metodo, { referencia: e.target.value })}
+                                  className="flex-1 py-1 px-2 rounded-lg text-[11px] font-bold border border-rose-100 bg-slate-50 focus:outline-none focus:border-rose-400 focus:bg-white transition-all"
+                                  placeholder="Ej: 12345"
+                                />
+                              </div>
+                            )}
                           </div>
                         </div>
                       )

@@ -567,6 +567,9 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
        const formaPagoMap = {}
        despachosMapeados.forEach(d => {
          const formas = Array.isArray(d.forma_pago) ? d.forma_pago : []
+         const tasaDespacho = Number(d.tasa)
+         const tasaValida = tasaDespacho > 0 ? tasaDespacho : null
+
          if (formas.length === 0) {
            const fallback = 'Pendiente'
            if (!formaPagoMap[fallback]) formaPagoMap[fallback] = { formaPago: fallback, count: 0, totalUsd: 0, pagos: [] }
@@ -576,6 +579,9 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
              cliente: d.cliente_nombre || 'Sin cliente',
              numero: d.despacho_numero || d.despacho_id?.slice(0, 8),
              monto: ventaNeta(d),
+             tasa: tasaValida,
+             montoBs: tasaValida ? ventaNeta(d) * tasaValida : null,
+             referencia: null,
              es_prestamo_puro: d.es_prestamo_puro,
              es_prestamo_mixto: d.es_prestamo_mixto
            })
@@ -590,6 +596,9 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
                cliente: d.cliente_nombre || 'Sin cliente',
                numero: d.despacho_numero || d.despacho_id?.slice(0, 8),
                monto: monto,
+               tasa: tasaValida,
+               montoBs: tasaValida ? monto * tasaValida : null,
+               referencia: f.referencia || null,
                es_prestamo_puro: d.es_prestamo_puro,
                es_prestamo_mixto: d.es_prestamo_mixto
              })

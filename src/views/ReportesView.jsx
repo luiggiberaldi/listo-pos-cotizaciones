@@ -150,8 +150,15 @@ function FormaPagoSection({ data = [], kpis }) {
                 <div className="pl-4 pt-1 space-y-0.5">
                   {fp.pagos.map((p, pIdx) => (
                     <div key={pIdx} className="flex justify-between text-[9px] sm:text-[10px] text-slate-500 font-medium bg-slate-50/50 hover:bg-slate-50 px-1.5 py-0.5 rounded border border-transparent hover:border-slate-100">
-                      <span className="truncate max-w-[200px] sm:max-w-[280px]">Doc #{p.numero || 'S/N'} · {p.cliente}</span>
-                      <span className="font-bold text-slate-700 shrink-0">{fmtUsd(p.monto)}</span>
+                      <span className="truncate max-w-[200px] sm:max-w-[280px]">Doc #{p.numero || 'S/N'}{p.referencia ? ` · Ref: ${p.referencia}` : ''} · {p.cliente}</span>
+                      <span className="font-bold text-slate-700 shrink-0">
+                        {fmtUsd(p.monto)}
+                        {['Transf. / Pago Móvil', 'Punto de Venta'].includes(fp.formaPago) && p.montoBs && (
+                          <span className="text-[8.5px] text-indigo-600 font-semibold ml-1.5" title={`Tasa: ${p.tasa} Bs.`}>
+                            ({fmtBs(p.montoBs)})
+                          </span>
+                        )}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -388,6 +395,9 @@ function filtrarReporteVentas(reporte, tipoFiltro) {
   const formaPagoMap = {}
   filteredDespachos.forEach(d => {
     const formas = Array.isArray(d.forma_pago) ? d.forma_pago : []
+    const tasaDespacho = Number(d.tasa)
+    const tasaValida = tasaDespacho > 0 ? tasaDespacho : null
+
     if (formas.length === 0) {
       const fallback = 'Pendiente'
       if (!formaPagoMap[fallback]) formaPagoMap[fallback] = { formaPago: fallback, count: 0, totalUsd: 0, pagos: [] }
@@ -397,6 +407,9 @@ function filtrarReporteVentas(reporte, tipoFiltro) {
         cliente: d.cliente_nombre || 'Sin cliente',
         numero: d.despacho_numero || d.despacho_id?.slice(0, 8),
         monto: Number(d.venta_neta_usd || 0),
+        tasa: tasaValida,
+        montoBs: tasaValida ? Number(d.venta_neta_usd || 0) * tasaValida : null,
+        referencia: null,
         es_prestamo_puro: d.es_prestamo_puro,
         es_prestamo_mixto: d.es_prestamo_mixto
       })
@@ -411,6 +424,9 @@ function filtrarReporteVentas(reporte, tipoFiltro) {
           cliente: d.cliente_nombre || 'Sin cliente',
           numero: d.despacho_numero || d.despacho_id?.slice(0, 8),
           monto: monto,
+          tasa: tasaValida,
+          montoBs: tasaValida ? monto * tasaValida : null,
+          referencia: f.referencia || null,
           es_prestamo_puro: d.es_prestamo_puro,
           es_prestamo_mixto: d.es_prestamo_mixto
         })
@@ -729,11 +745,20 @@ function TabVentas({ configNeg }) {
                       <td className="px-3 py-2.5">
                         {Array.isArray(d.forma_pago) && d.forma_pago.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
-                            {d.forma_pago.map((fp, idx) => (
-                              <span key={idx} className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border ${METODO_PAGOS_STYLES[fp.metodo] || METODO_PAGOS_STYLES['Sin especificar']}`}>
-                                {fp.metodo}: ${Number(fp.monto).toLocaleString('es-VE', { maximumFractionDigits: 2 })}
-                              </span>
-                            ))}
+                            {d.forma_pago.map((fp, idx) => {
+                              const tasa = Number(d.tasa)
+                              const montoBs = tasa > 0 ? Number(fp.monto) * tasa : null
+                              return (
+                                <span key={idx} className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border ${METODO_PAGOS_STYLES[fp.metodo] || METODO_PAGOS_STYLES['Sin especificar']}`}>
+                                  {fp.metodo}: ${Number(fp.monto).toLocaleString('es-VE', { maximumFractionDigits: 2 })}{fp.referencia ? ` (Ref: ${fp.referencia})` : ''}
+                                  {['Transf. / Pago Móvil', 'Punto de Venta'].includes(fp.metodo) && montoBs !== null && (
+                                    <span className="opacity-80 font-bold ml-1">
+                                      (Bs {montoBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                                    </span>
+                                  )}
+                                </span>
+                              )
+                            })}
                           </div>
                         ) : (
                           <span className="text-[10px] font-semibold text-slate-400">Pendiente</span>

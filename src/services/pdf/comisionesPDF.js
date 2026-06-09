@@ -1560,15 +1560,20 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
             ? ' (Préstamo)' 
             : (p.es_prestamo_mixto ? ' (Mixto/Prést.)' : '');
           const cliente = p.cliente ? String(p.cliente).toUpperCase().substring(0, 36) : 'CLIENTE SIN NOMBRE'
-          const labelText = `    • Doc ${numDoc}${suffixPrestamo}  ·  ${cliente}  ·  `
+          const suffixRef = p.referencia ? ` [Ref: ${p.referencia}]` : ''
+          const labelText = `    • Doc ${numDoc}${suffixRef}${suffixPrestamo}  ·  ${cliente}  ·  `
 
           doc.setFont('helvetica', 'normal')
           doc.text(labelText, MARGIN + 2, y + 2)
 
           const labelW = doc.getTextWidth(labelText)
+          const textoMonto = ['Transf. / Pago Móvil', 'Punto de Venta'].includes(fp.formaPago) && p.montoBs
+            ? `${fmtUsd(p.monto)} (${fmtBs(p.montoBs)})`
+            : fmtUsd(p.monto)
+
           doc.setFont('helvetica', 'bold')
           doc.setTextColor(...C_DARK)
-          doc.text(fmtUsd(p.monto), MARGIN + 2 + labelW, y + 2)
+          doc.text(textoMonto, MARGIN + 2 + labelW, y + 2)
           y += 7.5
         })
       }
