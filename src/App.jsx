@@ -276,7 +276,6 @@ function AppRoutes() {
           <Route element={<AppLayout />}>
             <Route path="/"               element={<DashboardView />} />
             <Route path="/clientes"       element={<ClientesView />} />
-            <Route path="/personal"       element={<PersonalView />} />
             <Route path="/despachos"      element={<DespachosView />} />
             <Route path="/inventario"     element={<InventarioView />} />
             <Route path="/cotizaciones"   element={<CotizacionesView />} />
@@ -288,8 +287,9 @@ function AppRoutes() {
               <Route path="/transportistas" element={<TransportistasView />} />
             </Route>
 
-            {/* Reportes: solo administracion y desarrollador */}
+            {/* Reportes y Personal: solo administracion, jefe y desarrollador */}
             <Route element={<RutaSoloAdmin />}>
+              <Route path="/personal"      element={<PersonalView />} />
               <Route path="/reportes"      element={<ReportesView />} />
               <Route path="/proveedores"   element={<ProveedoresView />} />
             </Route>

@@ -16,7 +16,7 @@ const BOTTOM_ITEMS = [
 
 const MORE_ITEMS = [
   { path: '/venta-rapida',        label: 'Venta rápida',       icon: Zap,       onlyRoles: ['vendedor', 'vendedor_sin_comision', 'supervisor'] },
-  { path: '/personal',            label: 'Personal',           icon: Briefcase, excludeRoles: ['logistica'] },
+  { path: '/personal',            label: 'Personal',           icon: Briefcase, onlyRoles: ['administracion', 'jefe', 'desarrollador'] },
   { path: '/orden-compra',        label: 'Orden de Compra',    icon: ShoppingCart, onlyRoles: ['supervisor', 'jefe', 'desarrollador'] },
   { path: '/inventario',          label: 'Inventario',         icon: Package,   excludeRoles: ['logistica'] },
   { path: '/transportistas',      label: 'Transportistas',     icon: Truck,     excludeRoles: ['logistica'] },
