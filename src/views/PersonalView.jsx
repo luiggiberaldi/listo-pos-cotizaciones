@@ -134,6 +134,12 @@ export default function PersonalView() {
   const { data: vendedores = [] } = useVendedores()
   const empresaUser = vendedores.find(v => v.nombre?.toUpperCase() === 'EMPRESA')
   const forzarVendedorId = empresaUser?.id || null
+  const categoriasExistentes = useMemo(() => {
+    const cats = clientes
+      .filter(c => c.tipo_cliente === 'personal' && c.categoria)
+      .map(c => c.categoria)
+    return Array.from(new Set(cats))
+  }, [clientes])
   const borrarCliente = useBorrarCliente()
   const activarCliente = useActivarCliente()
   const { data: config = {} } = useConfigNegocio()
@@ -588,6 +594,7 @@ export default function PersonalView() {
           onCancel={() => setModalFormOpen(false)}
           forzarTipoCliente="personal"
           forzarVendedorId={forzarVendedorId}
+          categoriasExistentes={categoriasExistentes}
         />
       </Modal>
 

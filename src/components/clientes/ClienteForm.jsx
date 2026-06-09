@@ -2,7 +2,7 @@
 // Formulario para crear o editar un cliente
 // Usado dentro de un Modal — recibe onSuccess para cerrar tras guardar
 import { useState, useEffect } from 'react'
-import { User, Hash, Phone, Mail, MapPin, StickyNote, Loader2, Tag, Building } from 'lucide-react'
+import { User, Hash, Phone, Mail, MapPin, StickyNote, Loader2, Tag, Building, Briefcase } from 'lucide-react'
 import { useCrearCliente, useActualizarCliente } from '../../hooks/useClientes'
 import { authFetch } from '../../services/authFetch'
 import CustomSelect from '../ui/CustomSelect'
@@ -49,6 +49,7 @@ const VACIO = {
   direccion:    '',
   notas:        '',
   tipo_cliente: 'natural',
+  categoria:    '',
 }
 
 const PREFIJOS_RIF = ['V', 'J', 'E', 'G', 'P']
@@ -85,7 +86,7 @@ function formatearRif(prefijo, numero) {
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export default function ClienteForm({ cliente = null, onSuccess, onCancel, compact = false, forzarTipoCliente = null, forzarVendedorId = null }) {
+export default function ClienteForm({ cliente = null, onSuccess, onCancel, compact = false, forzarTipoCliente = null, forzarVendedorId = null, categoriasExistentes = [] }) {
   const esEdicion = !!cliente
 
   const [campos, setCampos] = useState(VACIO)
@@ -116,6 +117,7 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
         direccion:    cliente.direccion    ?? '',
         notas:        cliente.notas        ?? '',
         tipo_cliente: cliente.tipo_cliente ?? 'natural',
+        categoria:    cliente.categoria    ?? '',
       })
     } else if (forzarTipoCliente) {
       setCampos(prev => ({ ...prev, tipo_cliente: forzarTipoCliente }))
@@ -172,6 +174,9 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
     }
     if (!campos.ciudad) {
       errs.ciudad = 'Selecciona una ciudad'
+    }
+    if (campos.tipo_cliente === 'personal' && !campos.categoria.trim()) {
+      errs.categoria = 'El papel/rol en la empresa es obligatorio'
     }
     // direccion: opcional
     return errs
@@ -333,6 +338,29 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
           />
         </div>
       </Campo>
+
+      {/* Papel / Rol de personal (Sólo si es tipo_cliente === 'personal') */}
+      {campos.tipo_cliente === 'personal' && (
+        <Campo label="Papel / Rol en la empresa *" icono={Briefcase} error={errores.categoria}>
+          <input
+            type="text"
+            list="roles-personal"
+            name="categoria"
+            value={campos.categoria}
+            onChange={cambiar}
+            placeholder="Ej: Administrador, Logística, Vendedor..."
+            className={inputClass}
+            disabled={cargando}
+          />
+          <datalist id="roles-personal">
+            {Array.from(new Set(['Administrador', 'Logística', 'Vendedor', 'Facturador', 'Despachador', 'Operario', ...categoriasExistentes]))
+              .sort()
+              .map(role => (
+                <option key={role} value={role} />
+              ))}
+          </datalist>
+        </Campo>
+      )}
 
       {/* Teléfono */}
       <Campo label="Teléfono *" icono={Phone} error={errores.telefono}>

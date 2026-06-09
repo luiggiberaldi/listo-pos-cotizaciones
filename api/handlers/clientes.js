@@ -47,7 +47,7 @@ export async function handleListarClientes(request, env) {
   // Fetch ALL active clients — filtrado en el Worker (in-memory, rápido)
   // limit=10000 evita el tope de 1000 filas de PostgREST
   // Fetch ALL clients (incluyendo inactivos) — filtrado en el Worker
-  let baseUrl = `${env.SUPABASE_URL}/rest/v1/clientes?cuenta_id=eq.${user.id}&order=nombre.asc&limit=10000&select=id,codigo_cliente,nombre,rif_cedula,telefono,email,direccion,estado,ciudad,notas,tipo_cliente,activo,vendedor_id,saldo_pendiente,saldo_a_favor,creado_en,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color,rol)`;
+  let baseUrl = `${env.SUPABASE_URL}/rest/v1/clientes?cuenta_id=eq.${user.id}&order=nombre.asc&limit=10000&select=id,codigo_cliente,nombre,rif_cedula,telefono,email,direccion,estado,ciudad,notes,tipo_cliente,activo,vendedor_id,saldo_pendiente,saldo_a_favor,creado_en,categoria,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color,rol)`;
 
   if (esExterno) {
     baseUrl += `&vendedor_id=eq.${operador.id}`;
@@ -122,7 +122,7 @@ export async function handleClientesLookup(request, env) {
 
   const esExterno = !!operador.es_externo;
 
-  let queryUrl = `${env.SUPABASE_URL}/rest/v1/clientes?id=in.(${ids.map(encodeURIComponent).join(',')})&cuenta_id=eq.${user.id}&select=id,codigo_cliente,nombre,rif_cedula,telefono,email,direccion,estado,ciudad,tipo_cliente,vendedor_id,creado_en,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color,rol)`;
+  let queryUrl = `${env.SUPABASE_URL}/rest/v1/clientes?id=in.(${ids.map(encodeURIComponent).join(',')})&cuenta_id=eq.${user.id}&select=id,codigo_cliente,nombre,rif_cedula,telefono,email,direccion,estado,ciudad,tipo_cliente,vendedor_id,creado_en,categoria,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color,rol)`;
 
   if (esExterno) {
     queryUrl += `&vendedor_id=eq.${operador.id}`;
@@ -307,7 +307,7 @@ export async function handleCrearCliente(request, env) {
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
 
-  const { nombre, rif_cedula, telefono, email, direccion, estado, ciudad, notas, tipo_cliente, vendedor_id } = body;
+  const { nombre, rif_cedula, telefono, email, direccion, estado, ciudad, notas, tipo_cliente, vendedor_id, categoria } = body;
   if (!nombre?.trim()) return jsonError('El nombre es obligatorio', 400, request);
 
   const esExterno = !!operador.es_externo;
@@ -332,6 +332,7 @@ export async function handleCrearCliente(request, env) {
     ciudad: ciudad?.trim() || null,
     notas: notas?.trim() || null,
     tipo_cliente: tipo_cliente || 'natural',
+    categoria: categoria?.trim() || null,
     vendedor_id: esExterno ? operador.id : (vendedor_id || operador.id),
     cuenta_id: user.id,
     activo: true,
@@ -360,7 +361,7 @@ export async function handleActualizarCliente(request, env) {
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
 
-  const { id, nombre, rif_cedula, telefono, email, direccion, estado, ciudad, notas, tipo_cliente } = body;
+  const { id, nombre, rif_cedula, telefono, email, direccion, estado, ciudad, notas, tipo_cliente, categoria } = body;
   if (!id || !isValidUuid(id)) return jsonError('ID inválido', 400, request);
   if (!nombre?.trim()) return jsonError('El nombre es obligatorio', 400, request);
 
@@ -389,6 +390,7 @@ export async function handleActualizarCliente(request, env) {
     ciudad: ciudad?.trim() || null,
     notas: notas?.trim() || null,
     tipo_cliente: tipo_cliente || 'natural',
+    categoria: categoria?.trim() || null,
     actualizado_en: new Date().toISOString(),
   };
 
