@@ -63,23 +63,95 @@ export function useResumenCxC() {
       const totalDeuda = clientes.reduce((s, c) => s + Number(c.saldo_pendiente || 0), 0)
       const promedioDeuda = clientes.length > 0 ? totalDeuda / clientes.length : 0
 
-      // Obtener transacciones recientes para aging
+      // Obtener transacciones (cargos y abonos) para los clientes con deuda activa
       const clienteIds = clientes.map(c => c.id)
-      let cargos = []
+      let transacciones = []
       if (clienteIds.length > 0) {
         for (let i = 0; i < clienteIds.length; i += 50) {
           const batch = clienteIds.slice(i, i + 50)
           const { data } = await supabase
             .from('cuentas_por_cobrar')
-            .select('id, cliente_id, monto_usd, saldo_usd, fecha_vencimiento, creado_en, metodo_pago, descripcion')
-            .eq('tipo', 'cargo')
+            .select('id, cliente_id, despacho_id, tipo, monto_usd, saldo_usd, fecha_vencimiento, creado_en, metodo_pago, descripcion')
+            .in('tipo', ['cargo', 'abono'])
             .in('cliente_id', batch)
-            .order('creado_en', { ascending: false })
-          cargos = cargos.concat(data ?? [])
+            .order('creado_en', { ascending: true }) // Orden cronológico para aplicar FIFO correctamente
+          transacciones = transacciones.concat(data ?? [])
         }
       }
 
-      // Aging por rangos
+      // Reconstruir los saldos pendientes reales por cargo (FIFO + despacho_id matching)
+      const cargosPendientesPorCliente = {}
+      clienteIds.forEach(cid => {
+        cargosPendientesPorCliente[cid] = []
+      })
+
+      // Agrupar transacciones por cliente
+      const txsPorCliente = {}
+      transacciones.forEach(t => {
+        if (!txsPorCliente[t.cliente_id]) {
+          txsPorCliente[t.cliente_id] = []
+        }
+        txsPorCliente[t.cliente_id].push(t)
+      })
+
+      Object.keys(txsPorCliente).forEach(cid => {
+        const txs = txsPorCliente[cid]
+        const clientCargos = []
+        const clientAbonos = []
+
+        txs.forEach(t => {
+          if (t.tipo === 'cargo') {
+            clientCargos.push({
+              ...t,
+              saldo_pendiente_cargo: Number(t.monto_usd || 0)
+            })
+          } else if (t.tipo === 'abono') {
+            clientAbonos.push({
+              ...t,
+              monto_restante: Number(t.monto_usd || 0)
+            })
+          }
+        })
+
+        // Fase 1: Aplicar abonos vinculados a un despacho directo
+        clientAbonos.forEach(abono => {
+          if (abono.despacho_id) {
+            const cargo = clientCargos.find(c => c.despacho_id === abono.despacho_id)
+            if (cargo && cargo.saldo_pendiente_cargo > 0) {
+              const aplicar = Math.min(cargo.saldo_pendiente_cargo, abono.monto_restante)
+              cargo.saldo_pendiente_cargo = Math.round((cargo.saldo_pendiente_cargo - aplicar) * 10000) / 10000
+              abono.monto_restante = Math.round((abono.monto_restante - aplicar) * 10000) / 10000
+            }
+          }
+        })
+
+        // Fase 2: Aplicar abonos restantes en orden FIFO
+        clientAbonos.forEach(abono => {
+          if (abono.monto_restante > 0) {
+            for (let i = 0; i < clientCargos.length; i++) {
+              const cargo = clientCargos[i]
+              if (cargo.saldo_pendiente_cargo > 0) {
+                const aplicar = Math.min(cargo.saldo_pendiente_cargo, abono.monto_restante)
+                cargo.saldo_pendiente_cargo = Math.round((cargo.saldo_pendiente_cargo - aplicar) * 10000) / 10000
+                abono.monto_restante = Math.round((abono.monto_restante - aplicar) * 10000) / 10000
+                if (abono.monto_restante <= 0) break
+              }
+            }
+          }
+        })
+
+        // Mapear saldo recalculado y filtrar cargos saldados
+        cargosPendientesPorCliente[cid] = clientCargos
+          .filter(c => c.saldo_pendiente_cargo > 0.005)
+          .map(c => ({
+            ...c,
+            saldo_usd: c.saldo_pendiente_cargo
+          }))
+      })
+
+      const todosCargosActivos = Object.values(cargosPendientesPorCliente).flat()
+
+      // Aging por rangos (usando el saldo real pendiente de cargos activos)
       const now = new Date()
       const aging = [
         { rango: '0 – 30 días', count: 0, totalUsd: 0 },
@@ -88,35 +160,34 @@ export function useResumenCxC() {
         { rango: '90+ días', count: 0, totalUsd: 0 },
       ]
 
-      // Dias sin pago por cliente (fecha del cargo más antiguo no cubierto)
+      // Dias sin pago por cliente (fecha del cargo más antiguo activo)
       const diasPorCliente = {}
-      cargos.forEach(c => {
+      todosCargosActivos.forEach(c => {
         const dias = Math.floor((now - new Date(c.creado_en)) / (1000 * 60 * 60 * 24))
         if (!diasPorCliente[c.cliente_id] || dias > diasPorCliente[c.cliente_id]) {
           diasPorCliente[c.cliente_id] = dias
         }
       })
 
-      cargos.forEach(c => {
+      todosCargosActivos.forEach(c => {
         const dias = Math.floor((now - new Date(c.creado_en)) / (1000 * 60 * 60 * 24))
         const bucket = dias <= 30 ? 0 : dias <= 60 ? 1 : dias <= 90 ? 2 : 3
         aging[bucket].count++
-        aging[bucket].totalUsd += Number(c.monto_usd || 0)
+        aging[bucket].totalUsd += Number(c.saldo_usd || 0)
       })
 
-      // Deuda más antigua
-      const cargoMasAntiguo = cargos.length > 0
-        ? cargos.reduce((oldest, c) => new Date(c.creado_en) < new Date(oldest.creado_en) ? c : oldest)
+      // Deuda más antigua activa
+      const cargoMasAntiguo = todosCargosActivos.length > 0
+        ? todosCargosActivos.reduce((oldest, c) => new Date(c.creado_en) < new Date(oldest.creado_en) ? c : oldest)
         : null
 
       const diasMasAntiguo = cargoMasAntiguo
         ? Math.floor((now - new Date(cargoMasAntiguo.creado_en)) / (1000 * 60 * 60 * 24))
         : 0
 
-      // Enriquecer clientes con cargos pendientes próximos a vencer
-      // Generar alertas de vencimiento (solo saldo pendiente > 0)
-      const alertasVencimiento = cargos.filter(c => {
-        if (!c.fecha_vencimiento || c.saldo_usd <= 0) return false
+      // Alertas de vencimiento (solo de cargos activos próximos a vencer o vencidos)
+      const alertasVencimiento = todosCargosActivos.filter(c => {
+        if (!c.fecha_vencimiento) return false
         const fv = new Date(c.fecha_vencimiento)
         const diffDays = Math.ceil((fv - now) / (1000 * 60 * 60 * 24))
         return diffDays <= 3 // Ya venció o vence en 3 días o menos
@@ -133,8 +204,8 @@ export function useResumenCxC() {
 
       // Días restantes para el vencimiento más próximo (de cargos activos con saldo_usd > 0)
       const diasRestantesPorCliente = {}
-      cargos.forEach(c => {
-        if (c.saldo_usd > 0 && c.fecha_vencimiento) {
+      todosCargosActivos.forEach(c => {
+        if (c.fecha_vencimiento) {
           const fv = new Date(c.fecha_vencimiento)
           const diffDays = Math.ceil((fv - now) / (1000 * 60 * 60 * 24))
           if (diasRestantesPorCliente[c.cliente_id] === undefined || diffDays < diasRestantesPorCliente[c.cliente_id]) {
@@ -147,7 +218,7 @@ export function useResumenCxC() {
         ...c,
         diasSinPago: diasPorCliente[c.id] ?? 0,
         diasRestantes: diasRestantesPorCliente[c.id] !== undefined ? diasRestantesPorCliente[c.id] : null,
-        cargosActivos: cargos.filter(car => car.cliente_id === c.id && car.saldo_usd > 0)
+        cargosActivos: cargosPendientesPorCliente[c.id] || []
       }))
 
       // Obtener abonos recientes
@@ -171,7 +242,7 @@ export function useResumenCxC() {
           promedioDeuda,
           numClientesConDeuda: clientes.length,
           diasMasAntiguo,
-          numCargos: cargos.length,
+          numCargos: todosCargosActivos.length,
         },
         clientesConDeuda: clientesEnriquecidos,
         aging,
