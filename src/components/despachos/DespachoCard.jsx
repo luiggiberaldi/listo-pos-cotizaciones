@@ -283,6 +283,38 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const subtotalProductos = totalBruto - fleteUsd - corteUsd // solo productos sin servicios
   const totalFinal = totalBruto - descuentoTotal // total con flete+corte, menos descuento
 
+  const clienteObj = despacho.cliente_factura || despacho.cliente
+  const esPersonal = clienteObj?.tipo_cliente === 'personal'
+
+  const [personalItems, setPersonalItems] = useState([])
+  useEffect(() => {
+    if (esPersonal) {
+      fetchItemsDespacho()
+        .then(data => setPersonalItems(data || []))
+        .catch(err => console.error('Error fetching personal items:', err))
+    }
+  }, [despacho.id, esPersonal])
+
+  const descPersonalPct = esPersonal ? (configNegocio?.descuento_personal_pct ?? 10.0) : 0
+  let subtotalOriginal = subtotalProductos
+  let descuentoPersonal = 0
+
+  if (esPersonal && descPersonalPct > 0 && personalItems.length > 0) {
+    let sumOriginal = 0
+    personalItems.forEach(it => {
+      if (!it.es_prestamo) {
+        const cant = Number(it.cantidad || 0)
+        const precio = Number(it.precio_unit_usd || 0)
+        const precioOrig = Math.round((precio / (1 - descPersonalPct / 100)) * 100) / 100
+        sumOriginal += precioOrig * cant
+      }
+    })
+    subtotalOriginal = sumOriginal
+    descuentoPersonal = Math.max(0, subtotalOriginal - subtotalProductos)
+  }
+
+  const totalOriginal = totalBruto + descuentoPersonal
+
   // tienePrestamos is already declared at the top of the component
   const itemsDelDespachoConFallback = tienePrestamos && !itemsDelDespacho.some(x => x.es_prestamo)
     ? itemsDelDespacho.map(it => ({ ...it, es_prestamo: true }))
@@ -922,12 +954,18 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
 
       {/* ── Total + Flete + Corte ── */}
       <div className="mx-3 mb-2 bg-slate-50 rounded-xl px-3 py-2 space-y-1">
-        {(fleteUsd > 0 || corteUsd > 0) && (
+        {(fleteUsd > 0 || corteUsd > 0 || descuentoPersonal > 0) && (
           <>
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-medium text-slate-400">Subtotal</span>
-              <span className="text-xs font-semibold text-slate-500">{fmtUsd(subtotalProductos)}</span>
+              <span className="text-xs font-semibold text-slate-500">{fmtUsd(subtotalOriginal)}</span>
             </div>
+            {descuentoPersonal > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-medium text-amber-600">Desc. Personal ({descPersonalPct}%)</span>
+                <span className="text-xs font-semibold text-amber-700">-{fmtUsd(descuentoPersonal)}</span>
+              </div>
+            )}
             {fleteUsd > 0 && (
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-medium text-slate-400">Flete</span>
@@ -957,9 +995,9 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             )}
           </div>
           <div className="text-right">
-            {descuentoTotal > 0 ? (
+            {(descuentoTotal > 0 || descuentoPersonal > 0) ? (
               <>
-                <span className="text-xs text-slate-400 line-through mr-1.5">{fmtUsd(totalBruto)}</span>
+                <span className="text-xs text-slate-400 line-through mr-1.5">{fmtUsd(totalOriginal)}</span>
                 <span className="text-lg font-bold text-amber-700">{fmtUsd(totalFinal)}</span>
                 {tasa > 0 && totalFinal > 0 && (
                   <div className="text-[11px] text-slate-400">{fmtBs(usdToBs(totalFinal, tasa))}</div>

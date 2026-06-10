@@ -451,14 +451,37 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   
   // En orden de despacho ahora SIEMPRE se muestra el exento
   const subtotal = total - montoExento
+
+  const clienteObj = despacho.cliente_factura || despacho.cliente
+  const esPersonal = clienteObj?.tipo_cliente === 'personal'
+  const descPersonalPct = esPersonal ? (config.descuento_personal_pct ?? 10) : 0
+
+  let subtotalOriginal = subtotal
+  let descuentoPersonal = 0
+
+  if (esPersonal && descPersonalPct > 0) {
+    let sumOriginal = 0
+    items.forEach(it => {
+      if (!it.es_prestamo) {
+        const cant = Number(it.cantidad || 0)
+        const precio = Number(it.precio_unit_usd || 0)
+        const precioOrig = Math.round((precio / (1 - descPersonalPct / 100)) * 100) / 100
+        sumOriginal += precioOrig * cant
+      }
+    })
+    subtotalOriginal = sumOriginal
+    descuentoPersonal = Math.max(0, subtotalOriginal - subtotal)
+  }
+
   const totalFinal = total - descuentoTotal
   const hasExentoReal = montoExento > 0
   const hasFleteReal = flete > 0
   const hasDescuento = descuentoTotal > 0
+  const hasDescuentoPersonal = descuentoPersonal > 0
 
   // Posicionar recuadro unificado fijo sobre el chofer
   // Si hay exento, el desglose ocupa 14mm (Subtotal + Exento), si no, 7mm (solo Subtotal)
-  const desgloseH = (hasExentoReal ? 14 : 7) + (hasDescuento ? 7 : 0)
+  const desgloseH = (hasExentoReal ? 14 : 7) + (hasDescuento ? 7 : 0) + (hasDescuentoPersonal ? 7 : 0)
   const ty = choferY - 24 - desgloseH
 
   // Parsear formas de pago (JSON array o string legacy)
@@ -558,8 +581,20 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   doc.setFontSize(9)
   doc.setTextColor(...C_DARK)
   doc.text('Subtotal', MARGIN + 4, desY + 5)
-  doc.text(fmtTotal(subtotal, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, desY + 5, { align: 'right' })
+  doc.text(fmtTotal(subtotalOriginal, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, desY + 5, { align: 'right' })
   desY += 7
+
+  if (hasDescuentoPersonal) {
+    doc.setDrawColor(120, 120, 120)
+    doc.setLineWidth(0.2)
+    doc.rect(MARGIN, desY, CONTENT_W, 7, 'S')
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(180, 100, 0)
+    doc.text(`Descuento Personal (${descPersonalPct}%)`, MARGIN + 4, desY + 5)
+    doc.text('-' + fmtTotal(descuentoPersonal, monedaPDF, tasa, factorBcv), MARGIN + CONTENT_W - 4, desY + 5, { align: 'right' })
+    desY += 7
+  }
 
   if (hasExentoReal) {
     doc.rect(MARGIN, desY, CONTENT_W, 7, 'S')
