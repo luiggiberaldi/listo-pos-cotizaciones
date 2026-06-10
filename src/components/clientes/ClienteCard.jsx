@@ -1,4 +1,4 @@
-import { Phone, Mail, MapPin, Hash, Tag, Pencil, UserMinus, ArrowRightLeft, FileText, AlertCircle, BookOpen, Trash2, UserCheck, Handshake, DollarSign } from 'lucide-react'
+import { Phone, Mail, MapPin, Hash, Tag, Pencil, UserMinus, ArrowRightLeft, FileText, AlertCircle, BookOpen, Trash2, UserCheck, Handshake, DollarSign, Briefcase } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtUsdSimple as fmtUsd } from '../../utils/format'
 
@@ -21,7 +21,7 @@ function getIniciales(nombre = '') {
   return nombre.slice(0, 2).toUpperCase()
 }
 
-export default function ClienteCard({ cliente, onEditar, onReasignar, onCotizar, onVerFicha, onBorrar, onActivar, esPersonalSection = false }) {
+export default function ClienteCard({ cliente, onEditar, onReasignar, onCotizar, onVerFicha, onBorrar, onActivar, esPersonalSection = false, onPromoverPersonal }) {
   const { perfil } = useAuthStore()
   const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
   const esAdministracion = perfil?.rol === 'administracion'
@@ -219,6 +219,12 @@ export default function ClienteCard({ cliente, onEditar, onReasignar, onCotizar,
           <button onClick={() => onReasignar(cliente)} title="Reasignar cliente"
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
             <ArrowRightLeft size={14} />
+          </button>
+        )}
+        {onPromoverPersonal && cliente.tipo_cliente !== 'personal' && cliente.activo && (
+          <button onClick={() => onPromoverPersonal(cliente)} title="Pasar a Personal"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 active:bg-amber-100 transition-colors">
+            <Briefcase size={14} />
           </button>
         )}
         {!cliente.activo && onActivar && (esPersonalSection ? ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol) : (!esAdministracion && (esPropio || esSupervisor))) && (

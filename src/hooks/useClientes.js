@@ -79,7 +79,7 @@ export function useCrearCliente() {
           notas:       campos.notas?.trim()     || null,
           tipo_cliente: campos.tipo_cliente || 'natural',
           categoria:    campos.categoria?.trim() || null,
-          vendedor_id: perfil.id,
+          vendedor_id:  campos.vendedor_id || perfil.id,
         })
       })
 

@@ -322,6 +322,17 @@ export async function handleCrearCliente(request, env) {
     }
   }
 
+  let finalVendedorId = esExterno ? operador.id : (vendedor_id || operador.id);
+  if (tipo_cliente === 'personal') {
+    const empRes = await fetch(`${env.SUPABASE_URL}/rest/v1/usuarios?nombre=ilike.EMPRESA&activo=eq.true&select=id`, { headers });
+    if (empRes.ok) {
+      const empUsers = await empRes.json();
+      if (empUsers.length > 0) {
+        finalVendedorId = empUsers[0].id;
+      }
+    }
+  }
+
   const payload = {
     nombre: nombre.trim(),
     rif_cedula: rif_cedula?.trim() || null,
@@ -333,7 +344,7 @@ export async function handleCrearCliente(request, env) {
     notas: notas?.trim() || null,
     tipo_cliente: tipo_cliente || 'natural',
     categoria: categoria?.trim() || null,
-    vendedor_id: esExterno ? operador.id : (vendedor_id || operador.id),
+    vendedor_id: finalVendedorId,
     cuenta_id: user.id,
     activo: true,
   };
@@ -393,6 +404,16 @@ export async function handleActualizarCliente(request, env) {
     categoria: categoria?.trim() || null,
     actualizado_en: new Date().toISOString(),
   };
+
+  if (tipo_cliente === 'personal') {
+    const empRes = await fetch(`${env.SUPABASE_URL}/rest/v1/usuarios?nombre=ilike.EMPRESA&activo=eq.true&select=id`, { headers });
+    if (empRes.ok) {
+      const empUsers = await empRes.json();
+      if (empUsers.length > 0) {
+        payload.vendedor_id = empUsers[0].id;
+      }
+    }
+  }
 
   let updateUrl = `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${id}&cuenta_id=eq.${user.id}`;
   if (esExterno) {

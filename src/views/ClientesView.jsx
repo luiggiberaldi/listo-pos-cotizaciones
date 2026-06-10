@@ -13,6 +13,7 @@ import ClienteRow        from '../components/clientes/ClienteRow'
 import ClienteForm       from '../components/clientes/ClienteForm'
 import ReasignacionModal from '../components/clientes/ReasignacionModal'
 import FichaClienteModal from '../components/clientes/FichaClienteModal'
+import PromocionPersonalModal from '../components/clientes/PromocionPersonalModal'
 import { Modal }         from '../components/ui/Modal'
 import ConfirmModal      from '../components/ui/ConfirmModal'
 import EmptyState        from '../components/ui/EmptyState'
@@ -104,6 +105,7 @@ export default function ClientesView() {
   const esDesarrollador = perfil?.rol === 'desarrollador'
   const esExterno = ['vendedor', 'vendedor_sin_comision'].includes(perfil?.rol) && Number(perfil?.markup_pct || 0) > 0
   const mostrarToggle = !esExterno && (esSupervisor || esDesarrollador || ['vendedor', 'vendedor_sin_comision'].includes(perfil?.rol))
+  const puedePromover = ['supervisor', 'administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)
 
   // Búsqueda y filtros
   const [busqueda, setBusqueda] = useState('')
@@ -133,6 +135,9 @@ export default function ClientesView() {
 
   const [clienteBorrando,  setClienteBorrando]  = useState(null)
   const [confirmBorrarOpen, setConfirmBorrarOpen] = useState(false)
+
+  const [clientePromocion, setClientePromocion] = useState(null)
+  const [modalPromocionOpen, setModalPromocionOpen] = useState(false)
 
   // Data + mutations
   const { data: clientes = [], isLoading, isError, refetch } = useClientes(busqueda)
@@ -265,6 +270,11 @@ export default function ClientesView() {
   function abrirFicha(cliente) {
     setClienteFicha(cliente)
     setFichaOpen(true)
+  }
+
+  function abrirPromocionPersonal(cliente) {
+    setClientePromocion(cliente)
+    setModalPromocionOpen(true)
   }
 
   function cotizarCliente(cliente) {
@@ -588,6 +598,7 @@ export default function ClientesView() {
                 onVerFicha={abrirFicha}
                 onBorrar={abrirBorrar}
                 onActivar={handleActivar}
+                onPromoverPersonal={puedePromover ? abrirPromocionPersonal : null}
               />
             ))}
           </div>
@@ -603,6 +614,7 @@ export default function ClientesView() {
                 onVerFicha={abrirFicha}
                 onBorrar={abrirBorrar}
                 onActivar={handleActivar}
+                onPromoverPersonal={puedePromover ? abrirPromocionPersonal : null}
               />
             ))}
           </div>
@@ -643,6 +655,13 @@ export default function ClientesView() {
         cliente={clienteFicha}
         isOpen={fichaOpen}
         onClose={() => { setFichaOpen(false); setClienteFicha(null) }}
+      />
+
+      {/* ── Modal: Promocionar a Personal ─────────────────────────────────── */}
+      <PromocionPersonalModal
+        cliente={clientePromocion}
+        isOpen={modalPromocionOpen}
+        onClose={() => { setModalPromocionOpen(false); setClientePromocion(null) }}
       />
 
       {/* ── Modal: Confirmar borrado ──────────────────────────────────────── */}

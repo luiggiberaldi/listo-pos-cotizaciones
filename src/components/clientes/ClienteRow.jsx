@@ -1,4 +1,4 @@
-import { Phone, Mail, MapPin, Hash, Tag, Pencil, UserMinus, ArrowRightLeft, FileText, AlertCircle, BookOpen, Trash2, UserCheck, Handshake, DollarSign } from 'lucide-react'
+import { Phone, Mail, MapPin, Hash, Tag, Pencil, UserMinus, ArrowRightLeft, FileText, AlertCircle, BookOpen, Trash2, UserCheck, Handshake, DollarSign, Briefcase } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtUsdSimple as fmtUsd } from '../../utils/format'
 
@@ -9,7 +9,7 @@ const TIPO_COLORS = {
   personal: 'bg-indigo-50 text-indigo-700 border-indigo-200',
 }
 
-export default function ClienteRow({ cliente, onEditar, onReasignar, onCotizar, onVerFicha, onBorrar, onActivar, esPersonalSection = false }) {
+export default function ClienteRow({ cliente, onEditar, onReasignar, onCotizar, onVerFicha, onBorrar, onActivar, esPersonalSection = false, onPromoverPersonal }) {
   const { perfil } = useAuthStore()
   const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
   const esAdministracion = perfil?.rol === 'administracion'
@@ -144,6 +144,12 @@ export default function ClienteRow({ cliente, onEditar, onReasignar, onCotizar, 
                 <ArrowRightLeft size={15} />
               </button>
             )}
+            {onPromoverPersonal && cliente.tipo_cliente !== 'personal' && cliente.activo && (
+              <button onClick={() => onPromoverPersonal(cliente)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 transition-colors" title="Pasar a Personal">
+                <Briefcase size={15} />
+              </button>
+            )}
           </div>
         ) : (
           <>
@@ -171,6 +177,12 @@ export default function ClienteRow({ cliente, onEditar, onReasignar, onCotizar, 
               <button onClick={() => onReasignar(cliente)}
                 className="p-1.5 rounded-lg text-slate-400 hover:text-sky-500 hover:bg-sky-50 transition-colors" title="Reasignar cliente">
                 <ArrowRightLeft size={15} />
+              </button>
+            )}
+            {onPromoverPersonal && cliente.tipo_cliente !== 'personal' && cliente.activo && (
+              <button onClick={() => onPromoverPersonal(cliente)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 transition-colors" title="Pasar a Personal">
+                <Briefcase size={15} />
               </button>
             )}
             {!cliente.activo && onActivar && (esPersonalSection ? ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol) : (esPropio || esSupervisor)) && (
