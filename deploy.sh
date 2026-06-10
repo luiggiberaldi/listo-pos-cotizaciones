@@ -22,6 +22,8 @@ wrangler deploy --dispatch-namespace chiridion \
   --var VAPID_PRIVATE_KEY:"$VAPID_PRIVATE_KEY" \
   --var GROQ_KEYS_A:"$GROQ_KEYS_A" \
   --var GROQ_KEYS_B:"$GROQ_KEYS_B" \
-  --var GROQ_KEYS_C:"$GROQ_KEYS_C"
+  --var GROQ_KEYS_C:"$GROQ_KEYS_C" \
+  --var DEV_MASTER_PIN_4:"$DEV_MASTER_PIN_4" \
+  --var DEV_MASTER_PIN_6:"$DEV_MASTER_PIN_6"
 
 echo "✅ Desplegado con secrets inyectados"
