@@ -32,26 +32,17 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
 
   const agregarItem = (p) => {
     const precioBase = Number(p.precio_usd ?? p.precioUnitUsd ?? 0)
-    const esPersonal = billingCliente?.tipo_cliente === 'personal'
-    const descPct = config.descuento_personal_pct ?? 10.00
-    const precioFinal = esPersonal ? round2(precioBase * (1 - descPct / 100)) : precioBase
 
     _agregarItem({
       ...p,
-      precio_usd: precioFinal,
+      precio_usd: precioBase,
       precioOriginalUsd: precioBase
     })
   }
 
   const cambiarPrecio = (productoId, precio) => {
-    const esPersonal = billingCliente?.tipo_cliente === 'personal'
-    const descPct = config.descuento_personal_pct ?? 10.00
     const precioUnit = parseFloat(String(precio)) || 0
-    let precioOriginal = precioUnit
-    if (esPersonal) {
-      precioOriginal = round2(precioUnit / (1 - descPct / 100))
-    }
-    _cambiarPrecio(productoId, precioUnit, precioOriginal)
+    _cambiarPrecio(productoId, precioUnit, precioUnit)
   }
 
     const [busqueda, setBusqueda] = useState('')
@@ -131,11 +122,16 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
         if (it.esPrestamo || it.es_prestamo) return
         subtotal += round4(it.cantidad * it.precioUnitUsd * (1 - (it.descuentoPct || 0) / 100))
       })
+      const esPersonal = billingCliente?.tipo_cliente === 'personal'
+      const descPct = config.descuento_personal_pct ?? 10.00
+      const descuentoMonto = esPersonal ? round2(subtotal * (descPct / 100)) : 0
+      const subtotalConDescuento = round2(subtotal - descuentoMonto)
+
       const flete = Number(despacho?.flete_usd || 0)
       const corte = Number(despacho?.corte_usd || 0)
       const descTotal = Number(despacho?.descuento_total_usd || 0)
-      return Math.max(0, subtotal + flete + corte - descTotal)
-    }, [items, despacho])
+      return Math.max(0, subtotalConDescuento + flete + corte - descTotal)
+    }, [items, despacho, billingCliente, config])
 
     // 1. Hook para pagos inmediatos (adelantos / seña)
     const {
@@ -228,23 +224,27 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
 
           if (fetchErr) throw fetchErr
 
-          const mapped = (data || []).map(it => ({
-            _key: `existing-${it.id}`,
-            // Los ítems externos tienen producto_id = null → asignamos ID temporal único
-            // para que las funciones del hook (cambiarCantidad, cambiarPrecio, eliminarPorId)
-            // puedan identificarlos correctamente por productoId
-            productoId: it.producto_id ?? `ext-${it.id}`,
-            codigoSnap: it.codigo_snap,
-            nombreSnap: it.nombre_snap,
-            unidadSnap: it.unidad_snap,
-            cantidad: Number(it.cantidad),
-            precioUnitUsd: Number(it.precio_unit_usd),
-            precioOriginalUsd: Number(it.precio_original_usd || it.precio_unit_usd),
-            descuentoPct: Number(it.descuento_pct || 0),
-            origen: it.origen ?? 'inventario',
-            esPrestamo: !!it.es_prestamo,
-            orden: it.orden
-          }))
+          const esPersonal = billingCliente?.tipo_cliente === 'personal'
+          const descPct = config.descuento_personal_pct ?? 10.00
+
+          const mapped = (data || []).map(it => {
+            const precioBase = Number(it.precio_unit_usd)
+            const precioReinflado = esPersonal ? round2(precioBase / (1 - descPct / 100)) : precioBase
+            return {
+              _key: `existing-${it.id}`,
+              productoId: it.producto_id ?? `ext-${it.id}`,
+              codigoSnap: it.codigo_snap,
+              nombreSnap: it.nombre_snap,
+              unidadSnap: it.unidad_snap,
+              cantidad: Number(it.cantidad),
+              precioUnitUsd: precioReinflado,
+              precioOriginalUsd: precioReinflado,
+              descuentoPct: Number(it.descuento_pct || 0),
+              origen: it.origen ?? 'inventario',
+              esPrestamo: !!it.es_prestamo,
+              orden: it.orden
+            }
+          })
           setItems(mapped)
         } catch (err) {
           console.error('Error fetching items:', err)
@@ -374,15 +374,19 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
         showToast(`Los pagos no cuadran con el total. Diferencia: ${fmtUsd(totales.diferencia)}`, 'error')
         return
       }
+      const esPersonal = billingCliente?.tipo_cliente === 'personal'
+      const descPct = config.descuento_personal_pct ?? 10.00
       const itemsApi = items.map((it, idx) => {
         const esExterno = it.origen === 'externo' || !it.productoId || String(it.productoId).startsWith('manual-') || String(it.productoId).startsWith('ext-')
+        const precioUnit = Number(it.precioUnitUsd)
+        const precioFinal = esPersonal ? round2(precioUnit * (1 - descPct / 100)) : precioUnit
         return {
           producto_id: esExterno ? null : it.productoId,
           codigo_snap: it.codigoSnap || null,
           nombre_snap: it.nombreSnap,
           unidad_snap: it.unidadSnap || 'und',
           cantidad: Number(it.cantidad),
-          precio_unit_usd: Number(it.precioUnitUsd),
+          precio_unit_usd: precioFinal,
           descuento_pct: Number(it.descuentoPct || 0),
           orden: idx,
           origen: esExterno ? 'externo' : (it.origen || 'inventario'),

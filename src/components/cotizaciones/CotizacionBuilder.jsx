@@ -548,6 +548,31 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
 
   const prevClienteIdRef = useRef(clienteId)
 
+  const initializedRef = useRef(false)
+  useEffect(() => {
+    if (esEdicion && cotizacionExistente && config && !initializedRef.current) {
+      const descPct = config.descuento_personal_pct ?? 10.00
+      const esPersonal = cotizacionExistente.cliente?.tipo_cliente === 'personal'
+      setItems((cotizacionExistente.items ?? []).map(it => {
+        const precioBase = Number(it.precio_unit_usd)
+        const precioReinflado = esPersonal ? round2(precioBase / (1 - descPct / 100)) : precioBase
+        return {
+          _key:          `item-${++_itemCounter}`,
+          productoId:    it.producto_id,
+          codigoSnap:    it.codigo_snap,
+          nombreSnap:    it.nombre_snap,
+          unidadSnap:    it.unidad_snap,
+          cantidad:      Number(it.cantidad),
+          precioUnitUsd: precioReinflado,
+          precioOriginalUsd: precioReinflado,
+          descuentoPct:  0,
+          origen:        it.producto_id ? (it.origen || 'inventario') : 'externo',
+        }
+      }))
+      initializedRef.current = true
+    }
+  }, [esEdicion, cotizacionExistente, config])
+
   useEffect(() => {
     if (!clientes.length || !config) return
 
@@ -562,29 +587,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
 
     if (prevEsPersonal === nextEsPersonal) return
 
-    const descPct = config.descuento_personal_pct ?? 10.00
-
-    setItems(prevItems => {
-      return prevItems.map(item => {
-        let precioOriginal = item.precioOriginalUsd ?? item.precioUnitUsd
-
-        if (nextEsPersonal) {
-          const precioConDescuento = round2(precioOriginal * (1 - descPct / 100))
-          return {
-            ...item,
-            precioOriginalUsd: precioOriginal,
-            precioUnitUsd: precioConDescuento
-          }
-        } else {
-          return {
-            ...item,
-            precioOriginalUsd: precioOriginal,
-            precioUnitUsd: precioOriginal
-          }
-        }
-      })
-    })
-    showToast(nextEsPersonal ? 'Precios ajustados con descuento de personal' : 'Precios restaurados a tarifa estándar', 'info')
+    showToast(nextEsPersonal ? 'Cliente personal seleccionado: descuento de personal se aplicará en totales' : 'Descuento de personal removido', 'info')
   }, [clienteId, clientes, config])
 
   // ── Auto-guardado: restaurar borrador al montar ────────────────────────────
@@ -670,7 +673,14 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
   }, [paso, clienteId, vendedorId, notasCliente, notasInternas, monedaPDF, items, costoEnvioUsd, corteUsd, esEdicion, enviada])
 
 
-  const { subtotal, descuentoUsd, totalUsd } = calcTotales(items, descuentoGlobalPct, costoEnvioUsd, corteUsd)
+  const clienteSeleccionado = clientes.find(c => c.id === clienteId)
+
+  const { subtotal, descuentoUsd: rawDescuentoUsd, totalUsd: rawTotalUsd } = calcTotales(items, descuentoGlobalPct, costoEnvioUsd, corteUsd)
+  const esPersonal = clienteSeleccionado?.tipo_cliente === 'personal'
+  const descPct = config.descuento_personal_pct ?? 10.00
+  const descuentoPersonalUsd = esPersonal ? round2(subtotal * (descPct / 100)) : 0
+  const descuentoUsd = esPersonal ? descuentoPersonalUsd : rawDescuentoUsd
+  const totalUsd = esPersonal ? round2(subtotal - descuentoPersonalUsd + round2(Number(costoEnvioUsd) || 0) + round2(Number(corteUsd) || 0)) : rawTotalUsd
   const totalBs = tasaHook.tasaEfectiva > 0 ? mulR(totalUsd, tasaHook.tasaEfectiva) : 0
 
   const comisionEstimada = useMemo(
@@ -716,9 +726,6 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
     return stockMap[productoId] ?? Infinity
   }
 
-  // Cliente seleccionado (para mostrar datos)
-  const clienteSeleccionado = clientes.find(c => c.id === clienteId)
-
   // ── Agregar producto ─────────────────────────────────────────────────────
   function agregarProducto(p) {
     const isExterno = p.origen === 'externo'
@@ -736,9 +743,6 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
       }
 
       const precioBase = isExterno ? Number(p.precio_usd) : aplicarMarkup(Number(p.precio_usd))
-      const esPersonal = clienteSeleccionado?.tipo_cliente === 'personal'
-      const descPct = config.descuento_personal_pct ?? 10.00
-      const precioFinal = esPersonal ? round2(precioBase * (1 - descPct / 100)) : precioBase
 
       return [...prev, {
         _key:          `item-${++_itemCounter}`,
@@ -749,7 +753,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
         categoria:     p.categoria || '',
         unidadSnap:    p.unidad ?? 'und',
         cantidad:      isExterno ? (p.cantidadExterna || 1) : 1,
-        precioUnitUsd: precioFinal,
+        precioUnitUsd: precioBase,
         precioOriginalUsd: precioBase,
         descuentoPct:  0,
       }]
@@ -761,8 +765,6 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
     setItems(prev => {
       let updated = [...prev]
       let agregados = 0
-      const esPersonal = clienteSeleccionado?.tipo_cliente === 'personal'
-      const descPct = config.descuento_personal_pct ?? 10.00
       for (const { producto, cantidad } of listaItems) {
         const stock = Number(producto.stock_actual) || 0
         const qty = cantidad  // sin cap — se permite superar el stock con advertencia
@@ -772,7 +774,6 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
           updated = updated.map((it, i) => i === idx ? { ...it, cantidad: newQty } : it)
         } else {
           const precioBase = aplicarMarkup(Number(producto.precio_usd))
-          const precioFinal = esPersonal ? round2(precioBase * (1 - descPct / 100)) : precioBase
           updated.push({
             _key:          `item-${++_itemCounter}`,
             productoId:    producto.id,
@@ -782,7 +783,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
             categoria:     producto.categoria || '',
             unidadSnap:    producto.unidad ?? 'und',
             cantidad:      qty,
-            precioUnitUsd: precioFinal,
+            precioUnitUsd: precioBase,
             precioOriginalUsd: precioBase,
             descuentoPct:  0,
           })
@@ -808,14 +809,8 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
       const updated = { ...it, [campo]: valor }
 
       if (campo === 'precioUnitUsd') {
-        const esPersonal = clienteSeleccionado?.tipo_cliente === 'personal'
-        const descPct = config.descuento_personal_pct ?? 10.00
         const precioUnit = parseFloat(String(valor)) || 0
-        if (esPersonal) {
-          updated.precioOriginalUsd = round2(precioUnit / (1 - descPct / 100))
-        } else {
-          updated.precioOriginalUsd = precioUnit
-        }
+        updated.precioOriginalUsd = precioUnit
       }
 
       return updated
@@ -851,10 +846,21 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
     setErrorGeneral('')
 
     try {
+      const esPersonal = clienteSeleccionado?.tipo_cliente === 'personal'
+      const descPct = config.descuento_personal_pct ?? 10.00
+      const itemsConDescuento = items.map(it => {
+        const precioUnit = it.precioUnitUsd
+        const precioFinal = esPersonal ? round2(precioUnit * (1 - descPct / 100)) : precioUnit
+        return {
+          ...it,
+          precioUnitUsd: precioFinal
+        }
+      })
+
       const payload = {
         cotizacionId,
         campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd, corteUsd, canal_venta: esVendedorExterno ? 'externo' : 'interno' },
-        items,
+        items: itemsConDescuento,
       }
       console.log('payload cotizacion (builder-guardar)', payload)
 
@@ -877,12 +883,23 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
       let currentId = cotizacionId
       let isOfflineId = String(currentId).startsWith('local_')
       
+      const esPersonal = clienteSeleccionado?.tipo_cliente === 'personal'
+      const descPct = config.descuento_personal_pct ?? 10.00
+      const itemsConDescuento = items.map(it => {
+        const precioUnit = it.precioUnitUsd
+        const precioFinal = esPersonal ? round2(precioUnit * (1 - descPct / 100)) : precioUnit
+        return {
+          ...it,
+          precioUnitUsd: precioFinal
+        }
+      })
+
       // Guardar primero si no tiene ID o actualizar si ya lo tiene
       if (!currentId) {
         const payload = {
           cotizacionId: null,
           campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd, corteUsd },
-          items,
+          items: itemsConDescuento,
         }
         console.log('payload cotizacion (builder-enviar-nuevo)', payload)
 
@@ -894,7 +911,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
         const res = await guardarBorrador.mutateAsync({
           cotizacionId: currentId,
           campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd, corteUsd },
-          items,
+          items: itemsConDescuento,
         })
         if (res?._queued) isOfflineId = true
       }
@@ -1330,7 +1347,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                     <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
                       <User size={16} className="text-amber-600 shrink-0" />
                       <p className="text-xs text-amber-800 font-bold">
-                        Cliente identificado como Personal. Se aplica descuento automático de personal ({config.descuento_personal_pct ?? 10}%) a los precios de los productos.
+                        Cliente identificado como Personal. Se aplica descuento automático de personal ({config.descuento_personal_pct ?? 10}%) en la sección de totales.
                       </p>
                     </div>
                   )}
@@ -1395,6 +1412,8 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                   onAnterior={anterior}
                   preciosMap={preciosMap}
                   stockMap={stockMap}
+                  esPersonal={esPersonal}
+                  descPct={descPct}
                 />
               </div>
             </div>
@@ -1611,13 +1630,19 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
               <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-2">
                 {clienteSeleccionado?.tipo_cliente === 'personal' && (
                   <p className="text-[10px] text-amber-600 font-semibold bg-amber-50 border border-amber-100 px-2 py-1.5 rounded-lg mb-2 text-center">
-                    * Precios de productos incluyen descuento de personal ({config.descuento_personal_pct ?? 10}%).
+                    * Descuento automático de personal ({config.descuento_personal_pct ?? 10}%) se aplicará en el total.
                   </p>
                 )}
                 <div className="flex justify-between text-sm text-slate-500">
                   <span>Subtotal</span>
                   <span className="font-medium text-slate-700">{fmtMoneda(subtotal)}</span>
                 </div>
+                {clienteSeleccionado?.tipo_cliente === 'personal' && (
+                  <div className="flex justify-between text-sm text-amber-700 font-medium">
+                    <span>Descuento Personal ({config.descuento_personal_pct ?? 10}%)</span>
+                    <span>-{fmtMoneda(descuentoPersonalUsd)}</span>
+                  </div>
+                )}
                 {costoEnvioUsd > 0 && (
                   <div className="flex justify-between text-sm text-slate-500">
                     <span>Envío</span>

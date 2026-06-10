@@ -58,6 +58,8 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   // ══════════════════════════════════════════════════════════════════════════
   const baseCliente = despacho.cliente_factura || despacho.cliente || {}
   const cliente = { ...baseCliente }
+  const esPersonal = cliente.tipo_cliente === 'personal'
+  const descPersonalPct = esPersonal ? (config.descuento_personal_pct ?? 10) : 0
   if (despacho.direccion_envio_estado || despacho.direccion_envio_ciudad || despacho.direccion_envio_direccion) {
     cliente.estado = despacho.direccion_envio_estado || ''
     cliente.ciudad = despacho.direccion_envio_ciudad || ''
@@ -460,9 +462,19 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     }
     doc.text(uniText, COLS[3].x + COLS[3].w / 2, midY, { align: 'center' })
 
-    const precioText = fmtPrecio(item.precio_unit_usd, monedaPDF, tasa, factorBcv)
-    const totalLinea = item.es_prestamo ? (Number(item.cantidad || 0) * Number(item.precio_unit_usd || 0)) : Number(item.total_linea_usd || 0)
-    const totalText = fmtPrecio(totalLinea, monedaPDF, tasa, factorBcv)
+    let precioUnitarioAMostrar = Number(item.precio_unit_usd || 0)
+    let totalLineaAMostrar = item.es_prestamo ? (Number(item.cantidad || 0) * Number(item.precio_unit_usd || 0)) : Number(item.total_linea_usd || 0)
+
+    const isCorte = (item.nombre_snap || '').toUpperCase().includes('CORTE') || (item.codigo_snap || '').startsWith('CRT')
+    const esServicio = isFlete || isCorte || item.tiene_descuento === false
+
+    if (esPersonal && descPersonalPct > 0 && !item.es_prestamo && !esServicio) {
+      precioUnitarioAMostrar = Math.round((precioUnitarioAMostrar / (1 - descPersonalPct / 100)) * 100) / 100
+      totalLineaAMostrar = precioUnitarioAMostrar * Number(item.cantidad || 0)
+    }
+
+    const precioText = fmtPrecio(precioUnitarioAMostrar, monedaPDF, tasa, factorBcv)
+    const totalText = fmtPrecio(totalLineaAMostrar, monedaPDF, tasa, factorBcv)
 
     // Auto-reducir fuente si el texto no cabe
     const fitTextCol = (text, col, baseFontSize, bold) => {
@@ -510,11 +522,37 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   // 4. BLOQUE COMBINADO: Crédito + Transporte (izq) | Desglose (der) + TOTAL
   // ══════════════════════════════════════════════════════════════════════════
   // Columna derecha: desglose (estructura fija de totales)
-  const rightItems = [
-    { label: 'SubTotal:', value: fmtTotal(total, monedaPDF, tasa, factorBcv) },
-    { label: 'Descuento:', value: fmtTotal(descuentoTotal, monedaPDF, tasa, factorBcv) },
-    { label: 'Exento:', value: fmtTotal(montoExento, monedaPDF, tasa, factorBcv) }
-  ]
+  let subtotalOriginal = total
+  let descuentoPersonal = 0
+
+  if (esPersonal && descPersonalPct > 0) {
+    let sumOriginal = 0
+    items.forEach(it => {
+      if (!it.es_prestamo) {
+        const cant = Number(it.cantidad || 0)
+        const precio = Number(it.precio_unit_usd || 0)
+        const precioOrig = Math.round((precio / (1 - descPersonalPct / 100)) * 100) / 100
+        sumOriginal += precioOrig * cant
+      }
+    })
+    subtotalOriginal = sumOriginal
+    descuentoPersonal = Math.max(0, subtotalOriginal - total)
+  }
+
+  const rightItems = []
+  if (esPersonal && descPersonalPct > 0) {
+    rightItems.push({ label: 'SubTotal:', value: fmtTotal(subtotalOriginal, monedaPDF, tasa, factorBcv) })
+    rightItems.push({ label: `Desc. Personal (${descPersonalPct}%):`, value: '-' + fmtTotal(descuentoPersonal, monedaPDF, tasa, factorBcv), color: [180, 100, 0] })
+  } else {
+    rightItems.push({ label: 'SubTotal:', value: fmtTotal(total, monedaPDF, tasa, factorBcv) })
+  }
+
+  if (descuentoTotal > 0) {
+    rightItems.push({ label: 'Descuento:', value: '-' + fmtTotal(descuentoTotal, monedaPDF, tasa, factorBcv), color: [220, 38, 38] })
+  }
+  if (montoExento > 0) {
+    rightItems.push({ label: 'Exento:', value: fmtTotal(montoExento, monedaPDF, tasa, factorBcv), color: [50, 100, 180] })
+  }
 
   if (refPago) {
     rightItems.push({ label: 'Ref:', value: refPago })

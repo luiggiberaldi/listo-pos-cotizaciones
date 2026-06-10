@@ -137,6 +137,8 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   // 2. DATOS DEL CLIENTE — cuadrícula con celdas
   // ══════════════════════════════════════════════════════════════════════════
   const cliente = cotizacion.cliente || {}
+  const esPersonal = cliente.tipo_cliente === 'personal'
+  const descPersonalPct = esPersonal ? (config.descuento_personal_pct ?? 10) : 0
 
   // Encabezado tipo "COTIZACIÓN:" - Rediseñado para el Formalismo Industrial
   const cotBarY = y - 4
@@ -351,8 +353,19 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
     })()
 
     const tasaEfectiva = tasa > 0 ? tasa : Number(cotizacion.tasa_bcv_snapshot || 0)
-    const precioText = fmtPrecio(item.precio_unit_usd, monedaPDF, tasaEfectiva, factorBcv)
-    const totalText = fmtPrecio(item.total_linea_usd, monedaPDF, tasaEfectiva, factorBcv)
+    let precioUnitarioAMostrar = Number(item.precio_unit_usd || 0)
+    let totalLineaAMostrar = Number(item.total_linea_usd || 0)
+
+    const isCorte = (item.nombre_snap || '').toUpperCase().includes('CORTE') || (item.codigo_snap || '').startsWith('CRT')
+    const esServicio = isFlete || isCorte || item.isExento === true || item.tiene_descuento === false
+
+    if (esPersonal && descPersonalPct > 0 && !esServicio) {
+      precioUnitarioAMostrar = Math.round((precioUnitarioAMostrar / (1 - descPersonalPct / 100)) * 100) / 100
+      totalLineaAMostrar = precioUnitarioAMostrar * Number(item.cantidad || 0)
+    }
+
+    const precioText = fmtPrecio(precioUnitarioAMostrar, monedaPDF, tasaEfectiva, factorBcv)
+    const totalText = fmtPrecio(totalLineaAMostrar, monedaPDF, tasaEfectiva, factorBcv)
 
     // Auto-reducir fuente si el precio no cabe en la columna
     const fitText = (text, col, baseFontSize, bold) => {
@@ -381,9 +394,9 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   const bTotX = PAGE_W - MARGIN - bTotW
   const bLeftW = bTotX - MARGIN - 5
   const bConds = ['Precios Sujetos a cambios sin previo aviso.', 'El cliente se encarga de descargar la mercancía.']
-  if (cliente.tipo_cliente === 'personal') {
+  if (esPersonal) {
     const descPct = config.descuento_personal_pct ?? 10
-    bConds.push(`Descuento de Personal del ${descPct}% aplicado a los precios.`)
+    bConds.push(`Descuento de Personal del ${descPct}% desglosado en el total.`)
   }
   const bCP = 2, bCTH = 6, bCLH = 5.0
   const bBoxH = bCTH + bConds.length * bCLH + bCP * 2 + 1 // Altura bloque Condiciones
@@ -400,15 +413,36 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   const ivaAmount = baseImponible * (ivaPct / 100)
   const totalFacturaFinal = conIVA ? (bTot + ivaAmount) : bTot
 
+  let subtotalOriginal = bSub
+  let descuentoPersonal = 0
+
+  if (esPersonal && descPersonalPct > 0) {
+    let sumOriginal = 0
+    items.forEach(it => {
+      const cant = Number(it.cantidad || 0)
+      const precio = Number(it.precio_unit_usd || 0)
+      const precioOrig = Math.round((precio / (1 - descPersonalPct / 100)) * 100) / 100
+      sumOriginal += precioOrig * cant
+    })
+    subtotalOriginal = sumOriginal
+    descuentoPersonal = Math.max(0, subtotalOriginal - bSub)
+  }
+
   const bLines = []
   if (conIVA) {
-    bLines.push({ label: 'Subtotal:', val: fmtPrecio(bSub, monedaPDF, bTasa, factorBcv) })
+    bLines.push({ label: 'Subtotal:', val: fmtPrecio(subtotalOriginal, monedaPDF, bTasa, factorBcv) })
+    if (esPersonal && descPersonalPct > 0) {
+      bLines.push({ label: `Desc. Personal (${descPersonalPct}%):`, val: '-' + fmtPrecio(descuentoPersonal, monedaPDF, bTasa, factorBcv), color: [180, 100, 0] })
+    }
     if (bDesc > 0) bLines.push({ label: 'Descuento:', val: '-' + fmtPrecio(bDesc, monedaPDF, bTasa, factorBcv), color: [220, 38, 38] })
     if (bExento > 0) bLines.push({ label: 'Exento:', val: fmtPrecio(bExento, monedaPDF, bTasa, factorBcv), color: [50, 100, 180] })
     bLines.push({ label: 'Base Gravable:', val: fmtPrecio(baseImponible, monedaPDF, bTasa, factorBcv) })
     bLines.push({ label: `IVA ${ivaPct}%:`, val: fmtPrecio(ivaAmount, monedaPDF, bTasa, factorBcv) })
   } else {
-    bLines.push({ label: 'Subtotal:', val: fmtPrecio(bSub, monedaPDF, bTasa, factorBcv) })
+    bLines.push({ label: 'Subtotal:', val: fmtPrecio(subtotalOriginal, monedaPDF, bTasa, factorBcv) })
+    if (esPersonal && descPersonalPct > 0) {
+      bLines.push({ label: `Desc. Personal (${descPersonalPct}%):`, val: '-' + fmtPrecio(descuentoPersonal, monedaPDF, bTasa, factorBcv), color: [180, 100, 0] })
+    }
     if (bDesc > 0) bLines.push({ label: 'Descuento:', val: '-' + fmtPrecio(bDesc, monedaPDF, bTasa, factorBcv), color: [220, 38, 38] })
     if (bExento > 0) bLines.push({ label: 'Exento:', val: fmtPrecio(bExento, monedaPDF, bTasa, factorBcv), color: [50, 100, 180] })
   }

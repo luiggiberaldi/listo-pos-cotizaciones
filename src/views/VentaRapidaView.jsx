@@ -411,15 +411,9 @@ export default function VentaRapidaView() {
   const comisionEstimada = useMemo(() => calcComisionEstimada(items, config, perfil), [items, config, perfil])
 
   const cambiarPrecio = useCallback((productoId, precio) => {
-    const esPersonal = clienteSeleccionado?.tipo_cliente === 'personal'
-    const descPct = config.descuento_personal_pct ?? 10.00
     const precioUnit = parseFloat(String(precio)) || 0
-    let precioOriginal = precioUnit
-    if (esPersonal) {
-      precioOriginal = round2(precioUnit / (1 - descPct / 100))
-    }
-    _cambiarPrecio(productoId, precioUnit, precioOriginal)
-  }, [clienteSeleccionado, config, _cambiarPrecio])
+    _cambiarPrecio(productoId, precioUnit, precioUnit)
+  }, [_cambiarPrecio])
 
   const prevClienteIdRef = useRef(clienteId)
 
@@ -437,30 +431,8 @@ export default function VentaRapidaView() {
 
     if (prevEsPersonal === nextEsPersonal) return
 
-    const descPct = config.descuento_personal_pct ?? 10.00
-
-    setItems(prevItems => {
-      return prevItems.map(item => {
-        let precioOriginal = item.precioOriginalUsd ?? item.precioUnitUsd
-
-        if (nextEsPersonal) {
-          const precioConDescuento = round2(precioOriginal * (1 - descPct / 100))
-          return {
-            ...item,
-            precioOriginalUsd: precioOriginal,
-            precioUnitUsd: precioConDescuento
-          }
-        } else {
-          return {
-            ...item,
-            precioOriginalUsd: precioOriginal,
-            precioUnitUsd: precioOriginal
-          }
-        }
-      })
-    })
-    showToast(nextEsPersonal ? 'Precios ajustados con descuento de personal' : 'Precios restaurados a tarifa estándar', 'info')
-  }, [clienteId, clientes, config, setItems])
+    showToast(nextEsPersonal ? 'Cliente personal seleccionado: descuento de personal se aplicará en totales' : 'Descuento de personal removido', 'info')
+  }, [clienteId, clientes, config])
 
   // Mantener stock map actualizado para validación de cantidades
   useEffect(() => {
@@ -611,7 +583,12 @@ export default function VentaRapidaView() {
   }
 
   const costoEnvioUsd = 0
-  const { subtotal, totalUsd } = calcTotales(items, 0, costoEnvioUsd)
+  const { subtotal, totalUsd: rawTotalUsd } = calcTotales(items, 0, costoEnvioUsd)
+  const esPersonal = clienteSeleccionado?.tipo_cliente === 'personal'
+  const descPct = config?.descuento_personal_pct ?? 10.00
+  const descuentoMonto = esPersonal ? round2(subtotal * (descPct / 100)) : 0
+  const totalUsd = esPersonal ? round2(subtotal - descuentoMonto) : rawTotalUsd
+
   const tasa = tasaHook.tasaEfectiva || 0
   const totalBs = tasa > 0 ? mulR(totalUsd, tasa) : 0
   const flete = Math.max(0, Number(fleteUsd) || 0)
@@ -795,14 +772,11 @@ export default function VentaRapidaView() {
   function agregarProducto(p) {
     guardarProductoReciente(perfil?.id, p)
     const precioBase = aplicarMarkup(Number(p.precio_usd || p.preciousd || 0))
-    const esPersonal = clienteSeleccionado?.tipo_cliente === 'personal'
-    const descPct = config.descuento_personal_pct ?? 10.00
-    const precioFinal = esPersonal ? round2(precioBase * (1 - descPct / 100)) : precioBase
 
     _agregarItem({
       ...p,
-      precio_usd: precioFinal,
-      preciousd: precioFinal,
+      precio_usd: precioBase,
+      preciousd: precioBase,
       precioOriginalUsd: precioBase
     })
   }
@@ -811,6 +785,10 @@ export default function VentaRapidaView() {
   async function handleSubmit() {
     if (!step1Valid || !step2Valid) return
     const fpJson = JSON.stringify(formasPagoFinales)
+    
+    const esPersonal = clienteSeleccionado?.tipo_cliente === 'personal'
+    const descPct = config.descuento_personal_pct ?? 10.00
+
     ventaRapida.mutate({
       clienteId,
       clienteNombre: clienteSeleccionado?.nombre,
@@ -822,17 +800,21 @@ export default function VentaRapidaView() {
       referenciaPago: referenciaPago || null,
       notas,
       notasCliente: null,
-      items: items.map(it => ({
-        productoId: it.productoId,
-        cantidad: it.cantidad,
-        precioUnitUsd: it.precioUnitUsd,
-        descuentoPct: 0,
-        nombreSnap: it.nombreSnap,
-        unidadSnap: it.unidadSnap,
-        codigoSnap: it.codigoSnap,
-        origen: it.origen,
-        es_prestamo: it.esPrestamo || false,
-      })),
+      items: items.map(it => {
+        const precioUnit = it.precioUnitUsd
+        const precioFinal = esPersonal ? round2(precioUnit * (1 - descPct / 100)) : precioUnit
+        return {
+          productoId: it.productoId,
+          cantidad: it.cantidad,
+          precioUnitUsd: precioFinal,
+          descuentoPct: 0,
+          nombreSnap: it.nombreSnap,
+          unidadSnap: it.unidadSnap,
+          codigoSnap: it.codigoSnap,
+          origen: it.origen,
+          es_prestamo: it.esPrestamo || false,
+        }
+      }),
       costoEnvioUsd,
       tasaBcv: tasa,
       direccionEnvioDireccion: direccionEnvioActiva ? direccionEnvioDireccion : null,
@@ -1048,6 +1030,8 @@ export default function VentaRapidaView() {
             quitarItem={quitarItem}
             preciosMap={preciosMap}
             totalItems={totalItems}
+            subtotal={subtotal}
+            descuentoMonto={descuentoMonto}
             totalUsd={totalUsd}
             totalBs={totalBs}
             tasa={tasa}
@@ -1108,9 +1092,11 @@ export default function VentaRapidaView() {
             setDireccionEnvioDireccion={setDireccionEnvioDireccion}
             saldoFavorOrigen={saldoFavorOrigen}
             vueltoComoSaldoFavor={vueltoComoSaldoFavor}
-            setVueltoComoSaldoFavor={setVueltoComoSaldoFavor}
             pagosInmediatosHayVuelto={pagosInmediatosHayVuelto}
             pagosInmediatosDiferencia={pagosInmediatosDiferencia}
+            config={config}
+            subtotal={subtotal}
+            descuentoMonto={descuentoMonto}
           />
         )}
 
@@ -1274,7 +1260,7 @@ function Step1Productos({
   categorias, catActiva, setCatActiva,
   productosFiltrados, recientes, idsAgregados, agregarProducto,
   items, cambiarCantidad, setCantidadDirecta, cambiarPrecio, quitarItem,
-  totalItems, totalUsd, totalBs, tasa,
+  totalItems, subtotal, descuentoMonto, totalUsd, totalBs, tasa,
   mobileCartOpen, setMobileCartOpen,
   step1Valid, onSiguiente,
   preciosMap = {},
@@ -1741,15 +1727,27 @@ function Step1Productos({
             <div className="shrink-0 border-t border-slate-200 p-3 space-y-2 bg-white">
               {clienteSeleccionado?.tipo_cliente === 'personal' && (
                 <p className="text-[10px] text-amber-600 font-semibold bg-amber-50 border border-amber-100 px-2 py-1 rounded-lg">
-                  * Precios unitarios incluyen descuento de personal ({config?.descuento_personal_pct ?? 10}%).
+                  * Descuento automático de personal ({config?.descuento_personal_pct ?? 10}%) se aplicará en el total.
                 </p>
               )}
-              <div className="flex justify-between items-end px-1">
-                <div>
-                  <span className="text-[12px] font-black text-slate-400 uppercase tracking-wider">Subtotal</span>
-                  {tasa > 0 && <p className="text-[11px] text-slate-400 mt-0.5">{fmtBs(totalBs)}</p>}
+              <div className="space-y-1.5 px-1">
+                <div className="flex justify-between text-xs text-slate-500">
+                  <span>Subtotal</span>
+                  <span>{fmtUsd(subtotal)}</span>
                 </div>
-                <span className="text-xl font-black text-slate-800">{fmtUsd(totalUsd)}</span>
+                {clienteSeleccionado?.tipo_cliente === 'personal' && (
+                  <div className="flex justify-between text-xs text-amber-700 font-medium">
+                    <span>Descuento Personal ({config?.descuento_personal_pct ?? 10}%)</span>
+                    <span>-{fmtUsd(descuentoMonto)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-end border-t border-slate-100 pt-1.5">
+                  <div>
+                    <span className="text-[12px] font-black text-slate-600 uppercase tracking-wider">Total</span>
+                    {tasa > 0 && <p className="text-[11px] text-slate-400 mt-0.5">{fmtBs(totalBs)}</p>}
+                  </div>
+                  <span className="text-xl font-black text-slate-800">{fmtUsd(totalUsd)}</span>
+                </div>
               </div>
               <button type="button"
                 onClick={() => { if (step1Valid) onSiguiente() }}
@@ -1981,15 +1979,27 @@ function Step1Productos({
             <div className="border-t border-slate-200 p-3 pb-6 space-y-2 bg-white">
               {clienteSeleccionado?.tipo_cliente === 'personal' && (
                 <p className="text-[10px] text-amber-600 font-semibold bg-amber-50 border border-amber-100 px-2 py-1 rounded-lg">
-                  * Precios unitarios incluyen descuento de personal ({config?.descuento_personal_pct ?? 10}%).
+                  * Descuento automático de personal ({config?.descuento_personal_pct ?? 10}%) se aplicará en el total.
                 </p>
               )}
-              <div className="flex justify-between items-end px-1">
-                <div>
-                  <span className="text-[12px] font-black text-slate-400 uppercase tracking-wider">Subtotal</span>
-                  {tasa > 0 && <p className="text-[11px] text-slate-400 mt-0.5">{fmtBs(totalBs)}</p>}
+              <div className="space-y-1.5 px-1">
+                <div className="flex justify-between text-xs text-slate-500">
+                  <span>Subtotal</span>
+                  <span>{fmtUsd(subtotal)}</span>
                 </div>
-                <span className="text-xl font-black text-slate-800">{fmtUsd(totalUsd)}</span>
+                {clienteSeleccionado?.tipo_cliente === 'personal' && (
+                  <div className="flex justify-between text-xs text-amber-700 font-medium">
+                    <span>Descuento Personal ({config?.descuento_personal_pct ?? 10}%)</span>
+                    <span>-{fmtUsd(descuentoMonto)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-end border-t border-slate-100 pt-1.5">
+                  <div>
+                    <span className="text-[12px] font-black text-slate-600 uppercase tracking-wider">Total</span>
+                    {tasa > 0 && <p className="text-[11px] text-slate-400 mt-0.5">{fmtBs(totalBs)}</p>}
+                  </div>
+                  <span className="text-xl font-black text-slate-800">{fmtUsd(totalUsd)}</span>
+                </div>
               </div>
               <button type="button"
                 onClick={() => { setSheetOpen(false); if (step1Valid) onSiguiente() }}
@@ -2025,11 +2035,14 @@ function Step2Pago({
   direccionEnvioActiva, setDireccionEnvioActiva,
   direccionEnvioEstado, setDireccionEnvioEstado,
   direccionEnvioCiudad, setDireccionEnvioCiudad,
-  direccionEnvioDireccion, setDireccionEnvioDireccion,
   saldoFavorOrigen,
   vueltoComoSaldoFavor, setVueltoComoSaldoFavor,
-  pagosInmediatosHayVuelto, pagosInmediatosDiferencia
+  pagosInmediatosHayVuelto, pagosInmediatosDiferencia,
+  config, subtotal, descuentoMonto
 }) {
+  const esPersonal = clienteSeleccionado?.tipo_cliente === 'personal'
+  const descPct = config?.descuento_personal_pct ?? 10.00
+
   const [showNuevoTransp, setShowNuevoTransp] = useState(false)
   const crearTransp = useCrearTransportista()
   const [transpError, setTranspError] = useState('')
@@ -2533,8 +2546,14 @@ function Step2Pago({
           <div className="space-y-2 text-[15px]">
             <div className="flex justify-between items-center text-slate-500">
               <span>Subtotal</span>
-            <span className="text-slate-700">${(totalParaPago - Math.max(0, Number(corteUsd) || 0)).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-          </div>
+              <span className="text-slate-700">${(esPersonal ? subtotal : (totalParaPago - Math.max(0, Number(corteUsd) || 0))).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+            {esPersonal && (
+              <div className="flex justify-between items-center text-amber-700 font-medium">
+                <span>Descuento Personal ({descPct}%)</span>
+                <span>-${descuentoMonto.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+            )}
           {Number(fleteUsd) > 0 && (
             <div className="flex justify-between items-center text-slate-500">
               <span>Flete</span>
@@ -2793,6 +2812,10 @@ function Step3Confirmar({
   totalBs, tasa, formasPago, referenciaPago, transportistaSeleccionado, notas,
   esCod, config,
 }) {
+  const esPersonal = clienteSeleccionado?.tipo_cliente === 'personal'
+  const descPct = config?.descuento_personal_pct ?? 10.00
+  const descuentoMonto = esPersonal ? round2(subtotal * (descPct / 100)) : 0
+
   return (
     <div className="flex-1 min-h-0 flex flex-col lg:flex-row lg:gap-4 p-4 pb-28 lg:pb-4 overflow-y-auto">
       {/* ── Columna izquierda: Cliente + Productos ── */}
@@ -2848,6 +2871,12 @@ function Step3Confirmar({
             <span className="text-slate-500">Subtotal</span>
             <span className="text-slate-700">{fmtUsd(subtotal)}</span>
           </div>
+          {esPersonal && (
+            <div className="flex justify-between text-sm text-amber-700 font-medium">
+              <span>Descuento Personal ({config?.descuento_personal_pct ?? 10}%)</span>
+              <span>-{fmtUsd(descuentoMonto)}</span>
+            </div>
+          )}
           {flete > 0 && (
             <div className="flex justify-between text-sm">
               <span className="text-slate-500">Flete</span>
