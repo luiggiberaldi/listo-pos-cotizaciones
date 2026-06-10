@@ -292,6 +292,19 @@ export default function CustomSelect({
                           {createMaxLength && <span className="text-xs text-emerald-500/70 shrink-0">{busqueda.trim().length}/{createMaxLength}</span>}
                         </button>
                       )}
+                      {creatable && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nuevo = prompt("Ingresa el nombre del nuevo cargo/rol:")?.trim();
+                            if (nuevo) elegir(nuevo);
+                          }}
+                          className="w-full flex items-center gap-3 px-4 py-3.5 text-left rounded-xl transition-colors active:bg-indigo-50 text-indigo-700 mt-2 border border-indigo-100/50 bg-indigo-50/30 font-bold"
+                        >
+                          <Plus size={18} className="text-indigo-500 shrink-0" />
+                          <div className="flex-1 truncate text-base">{createLabel ? `+ ${createLabel}` : "+ Crear nuevo"}</div>
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -373,6 +386,19 @@ export default function CustomSelect({
                       <Plus size={14} className="text-emerald-500 shrink-0" />
                       <span className="flex-1 truncate">{createLabel} "<span className="font-bold">{busqueda.trim()}</span>"</span>
                       {createMaxLength && <span className="text-xs text-emerald-500/70 shrink-0">{busqueda.trim().length}/{createMaxLength}</span>}
+                    </button>
+                  )}
+                  {creatable && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nuevo = prompt("Ingresa el nombre del nuevo cargo/rol:")?.trim();
+                        if (nuevo) elegir(nuevo);
+                      }}
+                      className="w-full flex items-center gap-2 px-3.5 py-2 text-left text-xs font-bold text-indigo-600 hover:bg-indigo-50 border-t border-slate-100 shrink-0"
+                    >
+                      <Plus size={13} className="text-indigo-500 shrink-0" />
+                      <span className="flex-1 truncate">{createLabel ? `+ ${createLabel}` : "+ Crear nuevo"}</span>
                     </button>
                   )}
                 </>

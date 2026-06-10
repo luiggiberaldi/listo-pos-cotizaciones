@@ -89,7 +89,15 @@ function formatearRif(prefijo, numero) {
 export default function ClienteForm({ cliente = null, onSuccess, onCancel, compact = false, forzarTipoCliente = null, forzarVendedorId = null, categoriasExistentes = [] }) {
   const esEdicion = !!cliente
   const ROLES_SUGERIDOS = ['Administrador', 'Despachador', 'Facturador', 'Logística', 'Operario', 'Vendedor']
-  const listaRoles = Array.from(new Set([...ROLES_SUGERIDOS, ...categoriasExistentes])).sort()
+  const [rolesCustom, setRolesCustom] = useState(() => {
+    try {
+      const saved = localStorage.getItem('roles_personal_custom')
+      return saved ? JSON.parse(saved) : []
+    } catch {
+      return []
+    }
+  })
+  const listaRoles = Array.from(new Set([...ROLES_SUGERIDOS, ...categoriasExistentes, ...rolesCustom])).sort()
 
   const [campos, setCampos] = useState(VACIO)
   const [rifPrefijo, setRifPrefijo] = useState('V')
@@ -349,6 +357,17 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
             value={campos.categoria}
             onChange={val => {
               setCampos(prev => ({ ...prev, categoria: val }))
+              if (val && !listaRoles.includes(val)) {
+                setRolesCustom(prev => {
+                  const next = Array.from(new Set([...prev, val]))
+                  try {
+                    localStorage.setItem('roles_personal_custom', JSON.stringify(next))
+                  } catch (e) {
+                    console.error(e)
+                  }
+                  return next
+                })
+              }
               if (errores.categoria) setErrores(prev => ({ ...prev, categoria: '' }))
               if (errorGeneral) setErrorGeneral('')
             }}

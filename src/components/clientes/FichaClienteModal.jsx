@@ -1,7 +1,7 @@
 // src/components/clientes/FichaClienteModal.jsx
 // Modal ficha del cliente: historial de crédito + formulario de abono
 import { useState, useEffect } from 'react'
-import { X, CreditCard, ArrowUpCircle, ArrowDownCircle, AlertCircle, RefreshCw, DollarSign, Hash, Phone, FileText, ChevronRight, MessageSquare, Handshake, RotateCcw, ShoppingBag, ChevronDown } from 'lucide-react'
+import { X, CreditCard, ArrowUpCircle, ArrowDownCircle, AlertCircle, RefreshCw, DollarSign, Hash, Phone, FileText, ChevronRight, MessageSquare, Handshake, RotateCcw, ShoppingBag, ChevronDown, Briefcase } from 'lucide-react'
 import { useCuentasCobrar, useRegistrarAbono, useRevertirAbono, useRegistrarSaldoFavor } from '../../hooks/useCuentasCobrar'
 import { useVentasCliente } from '../../hooks/useClientes'
 import SeguimientoTimeline from '../ui/SeguimientoTimeline'
@@ -567,12 +567,18 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-3 mt-0.5">
+                <div className="flex items-center gap-3 mt-0.5 flex-wrap">
                   {cliente.rif_cedula && (
                     <span className="flex items-center gap-1 text-xs text-white/70"><Hash size={10} />{cliente.rif_cedula}</span>
                   )}
                   {cliente.telefono && (
                     <span className="flex items-center gap-1 text-xs text-white/70"><Phone size={10} />{cliente.telefono}</span>
+                  )}
+                  {cliente.tipo_cliente === 'personal' && cliente.categoria && (
+                    <span className="inline-flex items-center gap-1 bg-white/20 text-white text-[11px] font-bold px-2 py-0.5 rounded-lg border border-white/30 shrink-0 uppercase tracking-wider">
+                      <Briefcase size={10} className="text-white/80" />
+                      {cliente.categoria}
+                    </span>
                   )}
                 </div>
               </div>

@@ -78,6 +78,7 @@ export function useCrearCliente() {
           ciudad:      campos.ciudad?.trim()    || null,
           notas:       campos.notas?.trim()     || null,
           tipo_cliente: campos.tipo_cliente || 'natural',
+          categoria:    campos.categoria?.trim() || null,
           vendedor_id: perfil.id,
         })
       })
@@ -115,6 +116,7 @@ export function useActualizarCliente() {
           ciudad:      campos.ciudad?.trim()    || null,
           notas:       campos.notas?.trim()     || null,
           tipo_cliente: campos.tipo_cliente || 'natural',
+          categoria:    campos.categoria?.trim() || null,
         })
       })
 
