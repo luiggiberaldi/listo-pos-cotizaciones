@@ -479,6 +479,16 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
   const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
   const { aplicarMarkup, esExterno: esVendedorExterno } = usePrecioVendedor()
 
+  // Queries & Hooks
+  const { data: clientes      = [], refetch: refetchClientes } = useClientes()
+  const { data: transportistas = [] } = useTransportistas()
+  const { data: vendedores     = [] } = useVendedores()
+  const { data: config = {} }  = useConfigNegocio()
+  const guardarBorrador  = useGuardarBorrador()
+  const enviarCotizacion = useEnviarCotizacion()
+  const tasaHook         = useTasaCambio()
+  const { data: inventarioParaPrecios } = useInventario({ pageSize: 1000 })
+
   // Paso actual del wizard (1-4)
   const [paso, setPaso] = useState(esEdicion ? 2 : 1)
   const [showCrearCliente, setShowCrearCliente] = useState(false)
@@ -659,14 +669,6 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
     return () => clearTimeout(timer)
   }, [paso, clienteId, vendedorId, notasCliente, notasInternas, monedaPDF, items, costoEnvioUsd, corteUsd, esEdicion, enviada])
 
-  const { data: clientes      = [], refetch: refetchClientes } = useClientes()
-  const { data: transportistas = [] } = useTransportistas()
-  const { data: vendedores     = [] } = useVendedores()
-  const { data: config = {} }  = useConfigNegocio()
-  const guardarBorrador  = useGuardarBorrador()
-  const enviarCotizacion = useEnviarCotizacion()
-  const tasaHook         = useTasaCambio()
-  const { data: inventarioParaPrecios } = useInventario({ pageSize: 1000 })
 
   const { subtotal, descuentoUsd, totalUsd } = calcTotales(items, descuentoGlobalPct, costoEnvioUsd, corteUsd)
   const totalBs = tasaHook.tasaEfectiva > 0 ? mulR(totalUsd, tasaHook.tasaEfectiva) : 0

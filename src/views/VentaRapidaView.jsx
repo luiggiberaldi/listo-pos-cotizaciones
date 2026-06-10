@@ -395,6 +395,7 @@ export default function VentaRapidaView() {
   const ventaRapida = useVentaRapida()
   // Step 1: Cliente + Productos
   const [clienteId, setClienteId] = useState('')
+  const clienteSeleccionado = clientes.find(c => c.id === clienteId)
 
   const { data: saldoFavorOrigen } = useSaldoFavorOrigen(clienteId)
 
@@ -705,7 +706,6 @@ export default function VentaRapidaView() {
   }, [step, clienteId, items, formasPagoFinales, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, esCod, ventaRapida.isPending])
 
   const idsAgregados = new Set(items.map(it => it.productoId))
-  const clienteSeleccionado = clientes.find(c => c.id === clienteId)
 
   const preciosMap = useMemo(() => {
     const m = {}

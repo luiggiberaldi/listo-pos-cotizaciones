@@ -47,7 +47,7 @@ export async function handleListarClientes(request, env) {
   // Fetch ALL active clients — filtrado en el Worker (in-memory, rápido)
   // limit=10000 evita el tope de 1000 filas de PostgREST
   // Fetch ALL clients (incluyendo inactivos) — filtrado en el Worker
-  let baseUrl = `${env.SUPABASE_URL}/rest/v1/clientes?cuenta_id=eq.${user.id}&order=nombre.asc&limit=10000&select=id,codigo_cliente,nombre,rif_cedula,telefono,email,direccion,estado,ciudad,notes,tipo_cliente,activo,vendedor_id,saldo_pendiente,saldo_a_favor,creado_en,categoria,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color,rol)`;
+  let baseUrl = `${env.SUPABASE_URL}/rest/v1/clientes?cuenta_id=eq.${user.id}&order=nombre.asc&limit=10000&select=id,codigo_cliente,nombre,rif_cedula,telefono,email,direccion,estado,ciudad,notas,tipo_cliente,activo,vendedor_id,saldo_pendiente,saldo_a_favor,creado_en,categoria,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color,rol)`;
 
   if (esExterno) {
     baseUrl += `&vendedor_id=eq.${operador.id}`;
