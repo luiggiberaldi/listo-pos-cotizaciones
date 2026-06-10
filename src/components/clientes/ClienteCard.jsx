@@ -71,7 +71,7 @@ export default function ClienteCard({ cliente, onEditar, onReasignar, onCotizar,
           <span className="relative z-10 ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full"
             style={{ background: 'rgba(255,255,255,0.25)', color: 'white', border: '1px solid rgba(255,255,255,0.4)' }}>
             {cliente.tipo_cliente === 'personal' && cliente.categoria
-              ? cliente.categoria
+              ? cliente.categoria.toUpperCase()
               : (TIPO_LABELS[cliente.tipo_cliente] || cliente.tipo_cliente)}
           </span>
         )}

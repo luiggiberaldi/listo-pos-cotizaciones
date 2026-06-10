@@ -145,7 +145,11 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   doc.rect(MARGIN + clienteLblW, f4Y, clienteValW, rowH, 'S')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(10)
-  const clienteNombre = (cliente.nombre || '—').toUpperCase()
+  let clienteNombre = (cliente.nombre || '—').toUpperCase()
+  if (cliente.tipo_cliente === 'personal') {
+    const descPct = config.descuento_personal_pct ?? 10
+    clienteNombre += ` (PERSONAL - DESC. ${descPct}%)`
+  }
   const maxClienteW = clienteValW - 4
   let cNombre = clienteNombre
   if (doc.getTextWidth(cNombre) > maxClienteW) {

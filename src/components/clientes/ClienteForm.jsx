@@ -88,16 +88,20 @@ function formatearRif(prefijo, numero) {
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function ClienteForm({ cliente = null, onSuccess, onCancel, compact = false, forzarTipoCliente = null, forzarVendedorId = null, categoriasExistentes = [] }) {
   const esEdicion = !!cliente
-  const ROLES_SUGERIDOS = ['Administrador', 'Despachador', 'Facturador', 'Logística', 'Operario', 'Vendedor']
+  const ROLES_SUGERIDOS = ['ADMINISTRADOR', 'DESPACHADOR', 'FACTURADOR', 'LOGÍSTICA', 'OPERARIO', 'VENDEDOR']
   const [rolesCustom, setRolesCustom] = useState(() => {
     try {
       const saved = localStorage.getItem('roles_personal_custom')
-      return saved ? JSON.parse(saved) : []
+      return saved ? JSON.parse(saved).map(r => String(r).toUpperCase()) : []
     } catch {
       return []
     }
   })
-  const listaRoles = Array.from(new Set([...ROLES_SUGERIDOS, ...categoriasExistentes, ...rolesCustom])).sort()
+  const listaRoles = Array.from(new Set([
+    ...ROLES_SUGERIDOS,
+    ...categoriasExistentes.map(r => String(r).toUpperCase()),
+    ...rolesCustom
+  ])).sort()
 
   const [campos, setCampos] = useState(VACIO)
   const [rifPrefijo, setRifPrefijo] = useState('V')
@@ -213,6 +217,7 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
 
     const camposFinales = {
       ...campos,
+      categoria: campos.tipo_cliente === 'personal' ? (campos.categoria || '').trim().toUpperCase() : '',
       rif_cedula: formatearRif(rifPrefijo, campos.rif_cedula.trim()),
       telefono: telefonoFinal,
     }
@@ -356,10 +361,11 @@ export default function ClienteForm({ cliente = null, onSuccess, onCancel, compa
             options={listaRoles.map(role => ({ value: role, label: role }))}
             value={campos.categoria}
             onChange={val => {
-              setCampos(prev => ({ ...prev, categoria: val }))
-              if (val && !listaRoles.includes(val)) {
+              const upperVal = val ? String(val).toUpperCase() : ''
+              setCampos(prev => ({ ...prev, categoria: upperVal }))
+              if (upperVal && !listaRoles.includes(upperVal)) {
                 setRolesCustom(prev => {
-                  const next = Array.from(new Set([...prev, val]))
+                  const next = Array.from(new Set([...prev, upperVal]))
                   try {
                     localStorage.setItem('roles_personal_custom', JSON.stringify(next))
                   } catch (e) {

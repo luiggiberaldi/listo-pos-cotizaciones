@@ -204,7 +204,11 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.rect(MARGIN + clienteLblW, f4Y, clienteValW, rowH, 'S')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(9.5)
-  const clienteNombre = (cliente.nombre || '—').toUpperCase()
+  let clienteNombre = (cliente.nombre || '—').toUpperCase()
+  if (cliente.tipo_cliente === 'personal') {
+    const descPct = config.descuento_personal_pct ?? 10
+    clienteNombre += ` (PERSONAL - DESC. ${descPct}%)`
+  }
   const maxClienteW = clienteValW - 4
   let cNombre = clienteNombre
   if (doc.getTextWidth(cNombre) > maxClienteW) {
@@ -586,10 +590,10 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   doc.setDrawColor(120, 120, 120)
   doc.setLineWidth(0.3)
   doc.rect(MARGIN, creditRowY, CONTENT_W, CREDIT_ROW_H, 'S')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8.5)
-  doc.setTextColor(...C_DARK)
-  doc.text('8 DÍAS DE CRÉDITO CONTINUO', MARGIN + 3, creditRowY + CREDIT_ROW_H / 2 + 1.0)
+  const creditText = cliente.tipo_cliente === 'personal'
+    ? `PERSONAL DE LA EMPRESA (DESC. ${config.descuento_personal_pct ?? 10}% APLICADO)`
+    : '8 DÍAS DE CRÉDITO CONTINUO'
+  doc.text(creditText, MARGIN + 3, creditRowY + CREDIT_ROW_H / 2 + 1.0)
 
   // Grid del chofer
   doc.setFillColor(240, 240, 240)

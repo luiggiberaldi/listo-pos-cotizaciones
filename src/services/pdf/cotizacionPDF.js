@@ -180,7 +180,10 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   y += ROW_H_INFO
 
   // Fila 2: Cliente | R.I.F / Cédula
-  drawCell(MARGIN, y, halfW, 'Cliente', (cliente.nombre || '').toUpperCase())
+  const nameDisplay = cliente.tipo_cliente === 'personal'
+    ? `${(cliente.nombre || '').toUpperCase()} (PERSONAL)`
+    : (cliente.nombre || '').toUpperCase()
+  drawCell(MARGIN, y, halfW, 'Cliente', nameDisplay)
   drawCell(MARGIN + halfW, y, halfW, 'R.I.F / Cédula', cliente.rif_cedula)
   y += ROW_H_INFO
 
@@ -378,6 +381,10 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   const bTotX = PAGE_W - MARGIN - bTotW
   const bLeftW = bTotX - MARGIN - 5
   const bConds = ['Precios Sujetos a cambios sin previo aviso.', 'El cliente se encarga de descargar la mercancía.']
+  if (cliente.tipo_cliente === 'personal') {
+    const descPct = config.descuento_personal_pct ?? 10
+    bConds.push(`Descuento de Personal del ${descPct}% aplicado a los precios.`)
+  }
   const bCP = 2, bCTH = 6, bCLH = 5.0
   const bBoxH = bCTH + bConds.length * bCLH + bCP * 2 + 1 // Altura bloque Condiciones
   

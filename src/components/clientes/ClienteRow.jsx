@@ -44,7 +44,7 @@ export default function ClienteRow({ cliente, onEditar, onReasignar, onCotizar, 
             <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${TIPO_COLORS[cliente.tipo_cliente] || TIPO_COLORS.natural}`}>
               <Tag size={9} />
               {cliente.tipo_cliente === 'personal' && cliente.categoria
-                ? cliente.categoria
+                ? cliente.categoria.toUpperCase()
                 : (TIPO_LABELS[cliente.tipo_cliente] || cliente.tipo_cliente)}
             </span>
           )}

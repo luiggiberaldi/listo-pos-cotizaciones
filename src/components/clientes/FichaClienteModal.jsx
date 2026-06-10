@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { X, CreditCard, ArrowUpCircle, ArrowDownCircle, AlertCircle, RefreshCw, DollarSign, Hash, Phone, FileText, ChevronRight, MessageSquare, Handshake, RotateCcw, ShoppingBag, ChevronDown, Briefcase } from 'lucide-react'
 import { useCuentasCobrar, useRegistrarAbono, useRevertirAbono, useRegistrarSaldoFavor } from '../../hooks/useCuentasCobrar'
 import { useVentasCliente } from '../../hooks/useClientes'
+import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import SeguimientoTimeline from '../ui/SeguimientoTimeline'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtUsdSimple as fmtUsd } from '../../utils/format'
@@ -422,6 +423,7 @@ function HistorialVentas({ clienteId }) {
 // ─── Modal principal ─────────────────────────────────────────────────────────
 export default function FichaClienteModal({ cliente, isOpen, onClose }) {
   const { perfil } = useAuthStore()
+  const { data: config = {} } = useConfigNegocio()
   const puedeRegistrarAbono = ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)
   const puedeRevertirAbono = ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)
   const { data: movimientos = [], isLoading, refetch } = useCuentasCobrar(isOpen ? cliente?.id : null)
@@ -555,6 +557,11 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h2 className="font-black text-white text-base leading-tight truncate">{cliente.nombre}</h2>
+                  {cliente.tipo_cliente === 'personal' && (
+                    <span className="inline-flex items-center gap-1 bg-[#FEF3C7] text-[#B45309] text-[11px] font-black px-2 py-0.5 rounded-lg border border-[#FDE68A] shrink-0 uppercase tracking-wider shadow-sm">
+                      Personal (Desc. {config.descuento_personal_pct ?? 10}%)
+                    </span>
+                  )}
                   {cliente.codigo_cliente && (
                     <span 
                       className="bg-white text-slate-900 font-mono font-black text-[11px] px-2 py-0.5 rounded-lg shadow-md border border-white/80 shrink-0 select-all cursor-pointer transition-all active:scale-95 hover:bg-slate-100" 

@@ -113,7 +113,11 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
       ),
       // Mapeo de estados: 'pagada' es el único estado que suma al pagado, resto son pendientes
       estado: rawEstado,
-      clienteNombre: c.cliente || c.despacho?.cliente_nombre || c.cotizacion?.cliente_nombre || '---',
+      clienteNombre: (() => {
+        const rawName = c.cliente || c.despacho?.cliente_nombre || c.cotizacion?.cliente_nombre || '---';
+        const isPersonal = c.cliente_tipo_cliente === 'personal' || c.despacho?.cliente_tipo_cliente === 'personal';
+        return isPersonal ? `${String(rawName).toUpperCase()} (PERSONAL)` : String(rawName).toUpperCase();
+      })(),
       creadoen: c.fecha || c.creadoen || new Date().toISOString()
     }
   }
@@ -1475,10 +1479,13 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
             ? ' (Préstamo)' 
             : (d.es_prestamo_mixto ? ' (Mixto/Prést.)' : '');
           const cliente = d.cliente_nombre ? String(d.cliente_nombre).toUpperCase() : 'CLIENTE SIN NOMBRE';
+          const displayCliente = d.cliente_tipo_cliente === 'personal'
+            ? `${cliente} (PERSONAL)`
+            : cliente;
           
           // Truncar cliente para seguridad espacial
           const maxChars = 44;
-          const truncatedCliente = cliente.length > maxChars ? `${cliente.substring(0, maxChars)}...` : cliente;
+          const truncatedCliente = displayCliente.length > maxChars ? `${displayCliente.substring(0, maxChars)}...` : displayCliente;
 
           if (d.es_prestamo_puro || d.es_prestamo_mixto) {
             doc.setFont('helvetica', 'bold');

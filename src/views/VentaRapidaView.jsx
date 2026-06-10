@@ -1014,6 +1014,7 @@ export default function VentaRapidaView() {
       <div className="flex-1 min-h-0 flex flex-col">
         {step === 0 && (
           <Step1Productos
+            config={config}
             clienteRef={clienteRef}
             clienteId={clienteId}
             clienteSeleccionado={clienteSeleccionado}
@@ -1115,6 +1116,7 @@ export default function VentaRapidaView() {
 
         {step === 2 && (
           <Step3Confirmar
+            config={config}
             clienteSeleccionado={clienteSeleccionado}
             items={items}
             subtotal={subtotal}
@@ -1263,6 +1265,7 @@ function SwipeToDelete({ children, enabled, onDelete }) {
 // Step 1: Cliente + Productos
 // ─────────────────────────────────────────────────────────────────────────────
 function Step1Productos({
+  config,
   clienteRef, clienteId, clienteSeleccionado, clienteBusqueda, setClienteBusqueda,
   clienteOpen, setClienteOpen, clientesFiltrados, elegirCliente, setClienteId,
   confirmAjeno, setConfirmAjeno, esSupervisor,
@@ -1451,6 +1454,11 @@ function Step1Productos({
             <User size={14} className="shrink-0" style={{ color: clienteSeleccionado.vendedor?.color || '#10b981' }} />
             <p className="font-medium text-sm truncate" style={{ color: clienteSeleccionado.vendedor?.color || '#1e293b' }}>{clienteSeleccionado.nombre}</p>
             {clienteSeleccionado.rif_cedula && <span className="text-xs text-slate-400">{clienteSeleccionado.rif_cedula}</span>}
+            {clienteSeleccionado?.tipo_cliente === 'personal' && (
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200 shrink-0">
+                Personal ({config?.descuento_personal_pct ?? 10}%)
+              </span>
+            )}
             <button onClick={() => setClienteId('')} className="ml-auto p-1 rounded-lg hover:bg-slate-100">
               <X size={14} className="text-slate-400" />
             </button>
@@ -1731,6 +1739,11 @@ function Step1Productos({
               })}
             </div>
             <div className="shrink-0 border-t border-slate-200 p-3 space-y-2 bg-white">
+              {clienteSeleccionado?.tipo_cliente === 'personal' && (
+                <p className="text-[10px] text-amber-600 font-semibold bg-amber-50 border border-amber-100 px-2 py-1 rounded-lg">
+                  * Precios unitarios incluyen descuento de personal ({config?.descuento_personal_pct ?? 10}%).
+                </p>
+              )}
               <div className="flex justify-between items-end px-1">
                 <div>
                   <span className="text-[12px] font-black text-slate-400 uppercase tracking-wider">Subtotal</span>
@@ -1966,6 +1979,11 @@ function Step1Productos({
             </div>
             {/* Footer */}
             <div className="border-t border-slate-200 p-3 pb-6 space-y-2 bg-white">
+              {clienteSeleccionado?.tipo_cliente === 'personal' && (
+                <p className="text-[10px] text-amber-600 font-semibold bg-amber-50 border border-amber-100 px-2 py-1 rounded-lg">
+                  * Precios unitarios incluyen descuento de personal ({config?.descuento_personal_pct ?? 10}%).
+                </p>
+              )}
               <div className="flex justify-between items-end px-1">
                 <div>
                   <span className="text-[12px] font-black text-slate-400 uppercase tracking-wider">Subtotal</span>
@@ -2773,7 +2791,7 @@ function TransportistaFormCompact({ onGuardar, onCancelar, cargando }) {
 function Step3Confirmar({
   clienteSeleccionado, items, subtotal, totalUsd, flete, corte, totalConFlete,
   totalBs, tasa, formasPago, referenciaPago, transportistaSeleccionado, notas,
-  esCod,
+  esCod, config,
 }) {
   return (
     <div className="flex-1 min-h-0 flex flex-col lg:flex-row lg:gap-4 p-4 pb-28 lg:pb-4 overflow-y-auto">
@@ -2785,6 +2803,11 @@ function Step3Confirmar({
           <div className="flex items-center gap-2">
             <User size={14} className="text-slate-400" />
             <span className="font-medium text-sm text-slate-800">{clienteSeleccionado?.nombre}</span>
+            {clienteSeleccionado?.tipo_cliente === 'personal' && (
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200 shrink-0">
+                Personal ({config?.descuento_personal_pct ?? 10}%)
+              </span>
+            )}
           </div>
           {clienteSeleccionado?.direccion && (
             <p className="text-xs text-slate-400 mt-0.5 ml-5">{clienteSeleccionado.direccion}</p>

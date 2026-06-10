@@ -494,6 +494,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
           clienteMap[cnombre] = {
             id: cnombre,
             nombre: cnombre,
+            tipo_cliente: d.cliente_tipo_cliente,
             despachos: 0,
             totalUsd: 0,
             vendedor: d.asesor_nombre || '—',

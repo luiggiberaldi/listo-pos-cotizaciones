@@ -1326,6 +1326,15 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                     </div>
                   )}
 
+                  {clienteSeleccionado?.tipo_cliente === 'personal' && (
+                    <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                      <User size={16} className="text-amber-600 shrink-0" />
+                      <p className="text-xs text-amber-800 font-bold">
+                        Cliente identificado como Personal. Se aplica descuento automático de personal ({config.descuento_personal_pct ?? 10}%) a los precios de los productos.
+                      </p>
+                    </div>
+                  )}
+
                   {/* Alerta: cliente de otro vendedor */}
                   {clienteSeleccionado && perfil?.rol !== 'supervisor' && clienteSeleccionado.vendedor_id && clienteSeleccionado.vendedor_id !== perfil?.id && (
                     <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
@@ -1548,10 +1557,16 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                   <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                     <User size={16} className="text-primary" />
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="font-bold text-sm truncate" style={{ color: clienteSeleccionado?.vendedor?.color || '#1e293b' }}>{clienteSeleccionado?.nombre}</p>
-                    {clienteSeleccionado?.tipo_cliente && (
-                      <p className="text-xs text-slate-400 capitalize">{clienteSeleccionado.tipo_cliente}</p>
+                    {clienteSeleccionado?.tipo_cliente === 'personal' ? (
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 mt-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200 shrink-0">
+                        Personal ({config.descuento_personal_pct ?? 10}%)
+                      </span>
+                    ) : (
+                      clienteSeleccionado?.tipo_cliente && (
+                        <p className="text-xs text-slate-400 capitalize">{clienteSeleccionado.tipo_cliente}</p>
+                      )
                     )}
                   </div>
                 </div>
@@ -1594,6 +1609,11 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
 
               {/* Totales */}
               <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-2">
+                {clienteSeleccionado?.tipo_cliente === 'personal' && (
+                  <p className="text-[10px] text-amber-600 font-semibold bg-amber-50 border border-amber-100 px-2 py-1.5 rounded-lg mb-2 text-center">
+                    * Precios de productos incluyen descuento de personal ({config.descuento_personal_pct ?? 10}%).
+                  </p>
+                )}
                 <div className="flex justify-between text-sm text-slate-500">
                   <span>Subtotal</span>
                   <span className="font-medium text-slate-700">{fmtMoneda(subtotal)}</span>

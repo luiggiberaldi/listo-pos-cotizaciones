@@ -732,6 +732,11 @@ function TabVentas({ configNeg }) {
                       </td>
                       <td className="px-3 py-2.5 font-bold text-slate-800 truncate max-w-[150px]">
                         {d.cliente_nombre || 'Sin cliente'}
+                        {d.cliente_tipo_cliente === 'personal' && (
+                          <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200 rounded">
+                            Personal
+                          </span>
+                        )}
                       </td>
                       <td className="px-3 py-2.5">
                         <span className="inline-flex items-center gap-1.5">
