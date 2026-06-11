@@ -2743,7 +2743,8 @@ function TabCredito() {
 function TabArticulosExternos({ configNeg }) {
   const [rango, setRango] = useState(() => {
     const actual = getDayRange(0)
-    return { from: actual.from, to: actual.to }
+    const anterior = getDayRange(-1)
+    return { from: actual.from, to: actual.to, prevFrom: anterior.from, prevTo: anterior.to }
   })
   const [exportando, setExportando] = useState(false)
   const [filtroAsesor, setFiltroAsesor] = useState('')
@@ -2821,10 +2822,10 @@ function TabArticulosExternos({ configNeg }) {
   return (
     <div className="space-y-4">
       {/* Filtros */}
-      <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 p-4 shadow-sm space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Selector de Rango */}
-          <div>
+      <div className="bg-white px-4 py-3 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex flex-col gap-3.5">
+          {/* Fila Superior: Periodo (con mucho espacio) */}
+          <div className="w-full">
             <div className="flex items-center gap-2 ml-1 mb-2">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Periodo</label>
               <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full px-2 py-0.5">
@@ -2834,56 +2835,62 @@ function TabArticulosExternos({ configNeg }) {
             <DateRangeSelector value={rango} onChange={setRango} />
           </div>
 
-          {/* Selector de Asesor */}
-          <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1 mb-2">Asesor (Vendedor)</label>
-            <select
-              value={filtroAsesor}
-              onChange={e => setFiltroAsesor(e.target.value)}
-              className="w-full text-xs font-bold px-3 py-2.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-            >
-              <option value="">Todos los asesores</option>
-              {asesores.map(a => (
-                <option key={a.nombre} value={a.nombre}>
-                  {a.nombre}
-                </option>
-              ))}
-            </select>
+          {/* Fila Inferior: Otros Filtros y Acciones */}
+          <div className="flex flex-wrap items-end gap-3 border-t border-slate-50 pt-3 w-full justify-between">
+            {/* Grupo de Filtros */}
+            <div className="flex flex-wrap items-end gap-3">
+              {/* Selector de Asesor */}
+              <div className="w-52">
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">Asesor (Vendedor)</label>
+                <select
+                  value={filtroAsesor}
+                  onChange={e => setFiltroAsesor(e.target.value)}
+                  className="w-full h-9 px-3 rounded-xl border border-slate-200 text-xs font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none bg-slate-50/50 appearance-none cursor-pointer hover:border-indigo-300 transition-all"
+                >
+                  <option value="">Todos los asesores</option>
+                  {asesores.map(a => (
+                    <option key={a.nombre} value={a.nombre}>
+                      {a.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Búsqueda */}
+              <div className="w-60">
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">Buscar</label>
+                <input
+                  type="text"
+                  placeholder="Buscar por artículo o cliente..."
+                  value={busqueda}
+                  onChange={e => setBusqueda(e.target.value)}
+                  className="w-full h-9 px-3 rounded-xl border border-slate-200 text-xs font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none bg-slate-50/50 hover:border-indigo-300 transition-all placeholder:text-slate-400"
+                />
+              </div>
+            </div>
+
+            {/* Grupo de Acciones */}
+            <div className="flex items-center gap-2.5 ml-auto shrink-0 self-end">
+              <button
+                onClick={() => exportarPDF('imprimir')}
+                disabled={exportando || !itemsFiltrados.length}
+                className="flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm h-9"
+              >
+                <Printer size={12} className="text-slate-500" />
+                {exportando ? 'Generando...' : 'Imprimir PDF'}
+              </button>
+
+              <button
+                onClick={() => exportarPDF('descargar')}
+                disabled={exportando || !itemsFiltrados.length}
+                className="flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md h-9"
+                style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
+              >
+                <Download size={12} />
+                {exportando ? 'Generando...' : 'Descargar PDF'}
+              </button>
+            </div>
           </div>
-
-          {/* Búsqueda */}
-          <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1 mb-2">Buscar</label>
-            <input
-              type="text"
-              placeholder="Buscar por artículo o cliente..."
-              value={busqueda}
-              onChange={e => setBusqueda(e.target.value)}
-              className="w-full text-xs font-bold px-3 py-2.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 placeholder:text-slate-400"
-            />
-          </div>
-        </div>
-
-        {/* Acciones */}
-        <div className="flex justify-end items-center gap-3 border-t border-slate-100 pt-4">
-          <button
-            onClick={() => exportarPDF('imprimir')}
-            disabled={exportando || !itemsFiltrados.length}
-            className="flex items-center gap-2 text-xs font-black px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm"
-          >
-            <Printer size={13} className="text-slate-500" />
-            {exportando ? 'Generando...' : 'Imprimir PDF'}
-          </button>
-
-          <button
-            onClick={() => exportarPDF('descargar')}
-            disabled={exportando || !itemsFiltrados.length}
-            className="flex items-center gap-2 text-xs font-black px-5 py-2.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-lg shadow-indigo-100/40"
-            style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
-          >
-            <Download size={13} />
-            {exportando ? 'Generando...' : 'Descargar PDF'}
-          </button>
         </div>
       </div>
 
