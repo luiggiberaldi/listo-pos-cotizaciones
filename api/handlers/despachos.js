@@ -1556,11 +1556,59 @@ export async function handleDevolucionParcialDespacho(request, env) {
 
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
-  const { despachoId, items, motivo, generarReemplazo } = body;
+  const { despachoId, items, motivo, generarReemplazo, exchangeItems } = body;
 
   if (!despachoId || !isValidUuid(despachoId)) return jsonError('despachoId inválido o ausente', 400, request);
   if (!Array.isArray(items) || items.length === 0) return jsonError('items debe ser un array no vacío', 400, request);
   if (!motivo || motivo.trim() === '') return jsonError('El motivo es requerido', 400, request);
+
+    const processedExchangeItems = [];
+    let totalIntercambioUsd = 0;
+
+    if (Array.isArray(exchangeItems) && exchangeItems.length > 0) {
+      for (const it of exchangeItems) {
+        const { producto_id, cantidad, precio_unit_usd } = it;
+        if (!producto_id || !isValidUuid(producto_id)) {
+          return jsonError(`producto_id inválido en el intercambio`, 400, request);
+        }
+        const qty = Number(cantidad);
+        if (isNaN(qty) || qty <= 0) {
+          return jsonError(`Cantidad inválida para producto de intercambio`, 400, request);
+        }
+        const price = Number(precio_unit_usd);
+        if (isNaN(price) || price < 0) {
+          return jsonError(`Precio inválido para producto de intercambio`, 400, request);
+        }
+
+        const pRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${producto_id}&select=nombre,codigo,unidad,stock_actual,activo`, { headers });
+        const [prod] = await pRes.json();
+        if (!prod) {
+          return jsonError(`Producto de intercambio no encontrado`, 404, request);
+        }
+        if (!prod.activo) {
+          return jsonError(`Producto de intercambio "${prod.nombre}" está inactivo`, 400, request);
+        }
+
+        const stockActual = Number(prod.stock_actual || 0);
+        const nuevoStock = stockActual - qty;
+
+        const lineTotal = Math.round((price * qty) * 10000) / 10000;
+        totalIntercambioUsd += lineTotal;
+
+        processedExchangeItems.push({
+          producto_id,
+          nombre_snap: prod.nombre,
+          codigo_snap: prod.codigo,
+          unidad_snap: prod.unidad || 'und',
+          cantidad: qty,
+          precio_unit_usd: price,
+          total_usd: lineTotal,
+          stock_actual: stockActual,
+          nuevo_stock: nuevoStock
+        });
+      }
+    }
+    totalIntercambioUsd = Math.round(totalIntercambioUsd * 10000) / 10000;
 
   try {
     // 1. Obtener despacho
@@ -1666,6 +1714,30 @@ export async function handleDevolucionParcialDespacho(request, env) {
       }
     }
 
+    // Devolver stock de intercambio e insertar movimientos Kardex
+    for (const item of processedExchangeItems) {
+      await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${item.producto_id}`, {
+        method: 'PATCH',
+        headers: { ...headers, Prefer: 'return=minimal' },
+        body: JSON.stringify({ stock_actual: item.nuevo_stock }),
+      });
+
+      movimientos.push({
+        lote_id: loteId,
+        tipo: 'egreso',
+        motivo: `Entrega por intercambio en devolución parcial — Despacho #${desp.numero}`,
+        motivo_tipo: 'devolucion',
+        producto_id: item.producto_id,
+        producto_nombre: item.nombre_snap,
+        cantidad: item.cantidad,
+        stock_anterior: item.stock_actual,
+        stock_nuevo: item.nuevo_stock,
+        usuario_id: user.operator_id,
+        usuario_nombre: operador.nombre,
+        usuario_color: operador.color || null,
+      });
+    }
+
     if (movimientos.length > 0) {
       const kardexRes = await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos`, {
         method: 'POST',
@@ -1768,24 +1840,97 @@ export async function handleDevolucionParcialDespacho(request, env) {
       body: JSON.stringify({ tiene_devoluciones: true })
     });
 
-    // 9. CxC abono proporcional
+    // 8.5 Guardar registros en despacho_devolucion_intercambios si existen
+    if (processedExchangeItems.length > 0) {
+      const intercambioRows = processedExchangeItems.map(item => ({
+        despacho_id: despachoId,
+        producto_id: item.producto_id,
+        nombre_snap: item.nombre_snap,
+        codigo_snap: item.codigo_snap,
+        unidad_snap: item.unidad_snap,
+        cantidad: item.cantidad,
+        precio_unit_usd: item.precio_unit_usd,
+        total_usd: item.total_usd,
+        registrado_por: user.operator_id
+      }));
+
+      const intRes = await fetch(`${env.SUPABASE_URL}/rest/v1/despacho_devolucion_intercambios`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(intercambioRows)
+      });
+
+      if (!intRes.ok) {
+        const intErr = await intRes.text();
+        console.error('[DEVOLUCION] Error al registrar intercambios en BD:', intErr);
+      }
+    }
+
+    // 9. Ajuste Financiero en CxC según Balance Neto
     let abonoRegistrado = false;
     let abonoMonto = 0;
-    const cargoRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?despacho_id=eq.${despachoId}&tipo=eq.cargo&select=monto_usd`, { headers });
-    const cargos = await cargoRes.json();
+    let creditoRegistrado = false;
+    let creditoMonto = 0;
+    let cargoRegistrado = false;
+    let cargoMonto = 0;
 
-    if (Array.isArray(cargos) && cargos.length > 0) {
-      const totalCargo = cargos.reduce((sum, c) => sum + Number(c.monto_usd), 0);
-      abonoMonto = Math.min(totalDevueltoUsd, totalCargo);
+    const netBalanceUsd = Math.round((totalIntercambioUsd - totalDevueltoUsd) * 10000) / 10000;
+    const clienteCxCId = desp.cliente_factura_id || desp.cliente_id;
+
+    if (netBalanceUsd > 0) {
+      // El cliente debe pagar la diferencia
+      cargoMonto = netBalanceUsd;
+      const cRes = await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteCxCId}&select=saldo_pendiente`, { headers });
+      const [cliente] = await cRes.json();
+      const saldoActual = Number(cliente?.saldo_pendiente || 0);
+      const nuevoSaldo = Math.round((saldoActual + cargoMonto) * 10000) / 10000;
+
+      const cargoRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
+        method: 'POST',
+        headers: { ...headers, Prefer: 'return=minimal' },
+        body: JSON.stringify({
+          cliente_id: clienteCxCId,
+          despacho_id: despachoId,
+          tipo: 'cargo',
+          monto_usd: cargoMonto,
+          saldo_usd: nuevoSaldo,
+          descripcion: `Cargo por diferencia en intercambio — Despacho #${desp.numero}`,
+          registrado_por: user.operator_id
+        })
+      });
+
+      if (cargoRes.ok) {
+        cargoRegistrado = true;
+        await recalcularSaldoPendienteCliente(clienteCxCId, env, headers);
+      } else {
+        console.error('[DEVOLUCION] Error al registrar cargo CxC:', await cargoRes.text());
+      }
+    } else if (netBalanceUsd < 0) {
+      // El cliente tiene saldo a favor
+      const refundAmount = Math.abs(netBalanceUsd);
+
+      // Calcular deuda pendiente específica de este despacho
+      const cxcDespRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?despacho_id=eq.${despachoId}&select=tipo,monto_usd`, { headers });
+      const cxcDesp = await cxcDespRes.json();
+      let despachoPendiente = 0;
+      if (Array.isArray(cxcDesp)) {
+        cxcDesp.forEach(tx => {
+          if (tx.tipo === 'cargo') despachoPendiente += Number(tx.monto_usd);
+          else if (tx.tipo === 'abono') despachoPendiente -= Number(tx.monto_usd);
+        });
+      }
+      despachoPendiente = Math.max(0, despachoPendiente);
+
+      abonoMonto = Math.min(refundAmount, despachoPendiente);
       abonoMonto = Math.round(abonoMonto * 10000) / 10000;
 
-      if (abonoMonto > 0) {
-        const clienteCxCId = desp.cliente_factura_id || desp.cliente_id;
-        const cRes = await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteCxCId}&select=saldo_pendiente`, { headers });
-        const [cliente] = await cRes.json();
-        const saldoActual = Number(cliente?.saldo_pendiente || 0);
-        const nuevoSaldo = Math.max(0, Math.round((saldoActual - abonoMonto) * 10000) / 10000);
+      const cRes = await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteCxCId}&select=saldo_pendiente,saldo_a_favor`, { headers });
+      const [cliente] = await cRes.json();
+      const saldoPendienteActual = Number(cliente?.saldo_pendiente || 0);
+      const saldoFavorActual = Number(cliente?.saldo_a_favor || 0);
 
+      if (abonoMonto > 0) {
+        const nuevoSaldoPendiente = Math.max(0, Math.round((saldoPendienteActual - abonoMonto) * 10000) / 10000);
         const abonoRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
           method: 'POST',
           headers: { ...headers, Prefer: 'return=minimal' },
@@ -1796,18 +1941,46 @@ export async function handleDevolucionParcialDespacho(request, env) {
             monto_usd: abonoMonto,
             forma_pago_abono: 'Devolución',
             referencia: `Despacho #${desp.numero}`,
-            saldo_usd: nuevoSaldo,
-            descripcion: `Abono por devolución parcial — Despacho #${desp.numero}`,
+            saldo_usd: nuevoSaldoPendiente,
+            descripcion: `Abono por devolución/intercambio — Despacho #${desp.numero}`,
             registrado_por: user.operator_id
           })
         });
-
         if (abonoRes.ok) {
           abonoRegistrado = true;
-          await recalcularSaldoPendienteCliente(clienteCxCId, env, headers);
         } else {
           console.error('[DEVOLUCION] Error al registrar abono CxC:', await abonoRes.text());
         }
+      }
+
+      const creditRemainder = refundAmount - abonoMonto;
+      creditoMonto = Math.round(creditRemainder * 10000) / 10000;
+
+      if (creditoMonto > 0) {
+        const nuevoSaldoFavor = Math.round((saldoFavorActual + creditoMonto) * 10000) / 10000;
+        const creditoRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
+          method: 'POST',
+          headers: { ...headers, Prefer: 'return=minimal' },
+          body: JSON.stringify({
+            cliente_id: clienteCxCId,
+            tipo: 'credito',
+            monto_usd: creditoMonto,
+            forma_pago_abono: 'Devolución',
+            referencia: `Despacho #${desp.numero}`,
+            saldo_usd: nuevoSaldoFavor,
+            descripcion: `Saldo a favor por excedente en intercambio — Despacho #${desp.numero}`,
+            registrado_por: user.operator_id
+          })
+        });
+        if (creditoRes.ok) {
+          creditoRegistrado = true;
+        } else {
+          console.error('[DEVOLUCION] Error al registrar crédito/saldo a favor CxC:', await creditoRes.text());
+        }
+      }
+
+      if (abonoRegistrado || creditoRegistrado) {
+        await recalcularSaldoPendienteCliente(clienteCxCId, env, headers);
       }
     }
 
@@ -1819,16 +1992,23 @@ export async function handleDevolucionParcialDespacho(request, env) {
         usuarioRol: operador.rol,
         categoria: 'DESPACHO',
         accion: 'DEVOLUCION_PARCIAL',
-        descripcion: `Devolución parcial en despacho #${desp.numero}. Motivo: ${motivo}. Total devuelto: $${totalDevueltoUsd.toFixed(2)}`,
+        descripcion: `Devolución parcial con intercambio en despacho #${desp.numero}. Motivo: ${motivo}. Devuelto: $${totalDevueltoUsd.toFixed(2)}, Intercambio: $${totalIntercambioUsd.toFixed(2)}, Balance Neto: $${netBalanceUsd.toFixed(2)}`,
         entidadTipo: 'nota_despacho',
         entidadId: despachoId,
         meta: {
           despacho_id: despachoId,
           items_devueltos: processedItems.map(i => ({ producto: i.nombre_snap, cantidad: i.cantidad_devuelta })),
+          items_intercambio: processedExchangeItems.map(i => ({ producto: i.nombre_snap, cantidad: i.cantidad })),
           total_devuelto_usd: totalDevueltoUsd,
+          total_intercambio_usd: totalIntercambioUsd,
+          balance_neto_usd: netBalanceUsd,
           cotizacion_reemplazo_id: cotizacionReemplazoId,
           abono_cxc_registrado: abonoRegistrado,
-          abono_cxc_monto: abonoMonto
+          abono_cxc_monto: abonoMonto,
+          credito_cxc_registrado: creditoRegistrado,
+          credito_cxc_monto: creditoMonto,
+          cargo_cxc_registrado: cargoRegistrado,
+          cargo_cxc_monto: cargoMonto
         },
         ip
       });
@@ -1840,8 +2020,14 @@ export async function handleDevolucionParcialDespacho(request, env) {
       ok: true,
       cotizacionReemplazoId,
       totalDevueltoUsd,
+      totalIntercambioUsd,
+      balanceNetoUsd: netBalanceUsd,
       abonoRegistrado,
-      abonoMonto
+      abonoMonto,
+      creditoRegistrado,
+      creditoMonto,
+      cargoRegistrado,
+      cargoMonto
     }, 200, request);
 
   } catch (e) {
