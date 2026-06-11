@@ -8,6 +8,7 @@ import {
   ChevronDown, Globe, UserCheck, Printer, CheckCircle
 } from 'lucide-react'
 import { useReporteVentas } from '../hooks/useReporteVentas'
+import { useReporteExternos } from '../hooks/useReporteExternos'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import { useComisiones, useComisionesResumen, useMarcarComisionPagada } from '../hooks/useComisiones'
 import ConfirmModal from '../components/ui/ConfirmModal'
@@ -32,6 +33,7 @@ const TABS = [
   { id: 'comisiones', label: 'Comisiones', short: 'Comis.', icon: Percent },
   { id: 'credito', label: 'Crédito', short: 'Créd.', icon: CreditCard },
   { id: 'ventas', label: 'Ventas', short: 'Ventas', icon: BarChart3 },
+  { id: 'externos', label: 'Artículos Externos', short: 'Extern.', icon: Globe },
 ]
 
 // ─── Skeleton ──────────────────────────────────────────────────────────────
@@ -2737,6 +2739,258 @@ function TabCredito() {
   )
 }
 
+// ─── Tab Artículos Externos ──────────────────────────────────────────────────
+function TabArticulosExternos({ configNeg }) {
+  const [rango, setRango] = useState(() => {
+    const actual = getDayRange(0)
+    return { from: actual.from, to: actual.to }
+  })
+  const [exportando, setExportando] = useState(false)
+  const [filtroAsesor, setFiltroAsesor] = useState('')
+  const [busqueda, setBusqueda] = useState('')
+
+  const { data: items = [], isLoading, isError, refetch } = useReporteExternos({
+    from: rango.from,
+    to: rango.to
+  })
+
+  const asesores = useMemo(() => {
+    const map = {}
+    items.forEach(item => {
+      if (item.asesor_nombre) {
+        map[item.asesor_nombre] = { nombre: item.asesor_nombre, color: item.asesor_color }
+      }
+    })
+    return Object.values(map).sort((a, b) => a.nombre.localeCompare(b.nombre))
+  }, [items])
+
+  const itemsFiltrados = useMemo(() => {
+    return items.filter(item => {
+      const matchAsesor = !filtroAsesor || item.asesor_nombre === filtroAsesor
+      
+      const q = busqueda.toLowerCase().trim()
+      const matchBusqueda = !q ||
+        (item.articulo_nombre || '').toLowerCase().includes(q) ||
+        (item.articulo_codigo || '').toLowerCase().includes(q) ||
+        (item.cliente_nombre || '').toLowerCase().includes(q) ||
+        (item.cliente_rif || '').toLowerCase().includes(q) ||
+        String(item.despacho_numero || '').includes(q)
+      
+      return matchAsesor && matchBusqueda
+    })
+  }, [items, filtroAsesor, busqueda])
+
+  const kpis = useMemo(() => {
+    const totalVentas = itemsFiltrados.reduce((sum, item) => sum + Number(item.total_usd || 0), 0)
+    const cantidadTotal = itemsFiltrados.reduce((sum, item) => sum + Number(item.cantidad || 0), 0)
+    const pedidosUnicos = new Set(itemsFiltrados.map(item => item.despacho_id)).size
+    const clientesUnicos = new Set(itemsFiltrados.map(item => item.cliente_rif)).size
+
+    return {
+      totalVentas,
+      cantidadTotal,
+      pedidosUnicos,
+      clientesUnicos
+    }
+  }, [itemsFiltrados])
+
+  const exportarPDF = async (accion = 'descargar') => {
+    if (!itemsFiltrados.length) return
+    setExportando(true)
+    try {
+      const { generarArticulosExternosPDF } = await import('../services/pdf/articulosExternosPDF')
+      await generarArticulosExternosPDF({
+        items: itemsFiltrados,
+        rango,
+        kpis,
+        config: configNeg,
+        action: accion === 'imprimir' ? 'print' : 'download'
+      })
+    } catch (e) {
+      console.error('Error generando PDF de artículos externos:', e)
+    } finally {
+      setExportando(false)
+    }
+  }
+
+  const rangoLabel = `${new Date(`${rango.from}T00:00:00`).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })} - ${new Date(`${rango.to}T00:00:00`).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}`
+
+  if (isLoading) return <SkeletonReporte />
+  if (isError) return <ErrorMsg onRetry={refetch} />
+
+  return (
+    <div className="space-y-4">
+      {/* Filtros */}
+      <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 p-4 shadow-sm space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Selector de Rango */}
+          <div>
+            <div className="flex items-center gap-2 ml-1 mb-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Periodo</label>
+              <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full px-2 py-0.5">
+                {rangoLabel}
+              </span>
+            </div>
+            <DateRangeSelector value={rango} onChange={setRango} />
+          </div>
+
+          {/* Selector de Asesor */}
+          <div>
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1 mb-2">Asesor (Vendedor)</label>
+            <select
+              value={filtroAsesor}
+              onChange={e => setFiltroAsesor(e.target.value)}
+              className="w-full text-xs font-bold px-3 py-2.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            >
+              <option value="">Todos los asesores</option>
+              {asesores.map(a => (
+                <option key={a.nombre} value={a.nombre}>
+                  {a.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Búsqueda */}
+          <div>
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1 mb-2">Buscar</label>
+            <input
+              type="text"
+              placeholder="Buscar por artículo o cliente..."
+              value={busqueda}
+              onChange={e => setBusqueda(e.target.value)}
+              className="w-full text-xs font-bold px-3 py-2.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 placeholder:text-slate-400"
+            />
+          </div>
+        </div>
+
+        {/* Acciones */}
+        <div className="flex justify-end items-center gap-3 border-t border-slate-100 pt-4">
+          <button
+            onClick={() => exportarPDF('imprimir')}
+            disabled={exportando || !itemsFiltrados.length}
+            className="flex items-center gap-2 text-xs font-black px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm"
+          >
+            <Printer size={13} className="text-slate-500" />
+            {exportando ? 'Generando...' : 'Imprimir PDF'}
+          </button>
+
+          <button
+            onClick={() => exportarPDF('descargar')}
+            disabled={exportando || !itemsFiltrados.length}
+            className="flex items-center gap-2 text-xs font-black px-5 py-2.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-lg shadow-indigo-100/40"
+            style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
+          >
+            <Download size={13} />
+            {exportando ? 'Generando...' : 'Descargar PDF'}
+          </button>
+        </div>
+      </div>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <KpiCard
+          icon={DollarSign}
+          label="Total Ventas Externas"
+          value={fmtUsd(kpis.totalVentas)}
+          gradient="linear-gradient(135deg, #1B365D, #0d1f3c)"
+          border="rgba(255,255,255,0.05)"
+        />
+        <KpiCard
+          icon={Briefcase}
+          label="Cant. Total Vendida"
+          value={Number(kpis.cantidadTotal).toFixed(0)}
+          sub="Unidades vendidas"
+          gradient="linear-gradient(135deg, #1e293b, #0f172a)"
+          border="rgba(255,255,255,0.05)"
+        />
+        <KpiCard
+          icon={FileText}
+          label="Pedidos Afectados"
+          value={String(kpis.pedidosUnicos)}
+          sub="Despachos únicos"
+          gradient="linear-gradient(135deg, #0369a1, #0c4a6e)"
+          border="rgba(255,255,255,0.05)"
+        />
+        <KpiCard
+          icon={Users}
+          label="Clientes Compradores"
+          value={String(kpis.clientesUnicos)}
+          sub="Clientes distintos"
+          gradient="linear-gradient(135deg, #0d5c3a, #064026)"
+          border="rgba(255,255,255,0.05)"
+        />
+      </div>
+
+      {/* Tabla */}
+      <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200">
+                <th className="px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-wider">Fecha</th>
+                <th className="px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-wider">Despacho</th>
+                <th className="px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-wider">Código</th>
+                <th className="px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-wider">Artículo</th>
+                <th className="px-4 py-3 text-right text-[10px] font-black text-slate-500 uppercase tracking-wider">Cant.</th>
+                <th className="px-4 py-3 text-right text-[10px] font-black text-slate-500 uppercase tracking-wider">P. Unit. ($)</th>
+                <th className="px-4 py-3 text-right text-[10px] font-black text-slate-500 uppercase tracking-wider">Total ($)</th>
+                <th className="px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-wider">Cliente</th>
+                <th className="px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-wider">Asesor</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-xs">
+              {itemsFiltrados.length === 0 ? (
+                <tr>
+                  <td colSpan="9" className="px-4 py-8 text-center text-slate-400 font-medium">
+                    No se encontraron artículos externos vendidos en el periodo seleccionado.
+                  </td>
+                </tr>
+              ) : (
+                itemsFiltrados.map((item, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-4 py-3 whitespace-nowrap text-slate-600 font-semibold">
+                      {new Date(item.fecha).toLocaleDateString('es-VE')}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap font-bold text-slate-900">
+                      #{item.despacho_numero}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-slate-500 font-medium">
+                      {item.articulo_codigo || '—'}
+                    </td>
+                    <td className="px-4 py-3 text-slate-700 font-semibold">
+                      {item.articulo_nombre}
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold text-slate-600">
+                      {Number(item.cantidad || 0) % 1 === 0 ? Number(item.cantidad || 0).toFixed(0) : Number(item.cantidad || 0).toFixed(2)}
+                    </td>
+                    <td className="px-4 py-3 text-right font-medium text-slate-500">
+                      {fmtUsd(item.precio_unit_usd)}
+                    </td>
+                    <td className="px-4 py-3 text-right font-bold text-slate-950">
+                      {fmtUsd(item.total_usd)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="font-semibold text-slate-800">{item.cliente_nombre}</div>
+                      <div className="text-[10px] text-slate-400 font-bold">{item.cliente_rif}</div>
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.asesor_color }} />
+                        <span className="font-bold text-slate-700">{item.asesor_nombre}</span>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MAIN VIEW
@@ -2794,6 +3048,7 @@ export default function ReportesView() {
       {activeTab === 'comisiones' && <TabComisiones configNeg={configNeg} />}
       {activeTab === 'credito' && <TabCredito />}
       {activeTab === 'ventas' && <TabVentas configNeg={configNeg} />}
+      {activeTab === 'externos' && <TabArticulosExternos configNeg={configNeg} />}
     </div>
   )
 }

@@ -23,6 +23,8 @@ async function recalcularSaldoPendienteCliente(clienteId, env, headers) {
           }
         } else if (item.tipo === 'credito') {
           saldoFavor += monto;
+        } else if (item.tipo === 'devolucion_credito') {
+          saldoFavor -= monto;
         }
       });
     }
@@ -210,8 +212,8 @@ export async function handleRevertirAbono(request, env) {
       return jsonError('La transacción no existe', 404, request);
     }
     const abono = abonos[0];
-    if (abono.tipo !== 'abono' && abono.tipo !== 'credito') {
-      return jsonError('Solo se pueden revertir transacciones de tipo abono o crédito (saldo a favor)', 400, request);
+    if (abono.tipo !== 'abono' && abono.tipo !== 'credito' && abono.tipo !== 'devolucion_credito') {
+      return jsonError('Solo se pueden revertir transacciones de tipo abono, crédito (saldo a favor) o devolución de crédito', 400, request);
     }
 
     const { cliente_id: clienteId, monto_usd: montoMov, tipo } = abono;
@@ -247,9 +249,11 @@ export async function handleRevertirAbono(request, env) {
 
     // 4. Auditoría
     try {
-      const accionAuditoria = tipo === 'credito' ? 'REVERTIR_CREDITO' : 'REVERTIR_ABONO';
+      const accionAuditoria = tipo === 'credito' ? 'REVERTIR_CREDITO' : tipo === 'devolucion_credito' ? 'REVERTIR_DEVOLUCION_CREDITO' : 'REVERTIR_ABONO';
       const descAuditoria = tipo === 'credito' 
         ? `Carga de crédito (saldo a favor) de $${montoMov} revertida para cliente ${clienteId}` 
+        : tipo === 'devolucion_credito'
+        ? `Devolución de saldo a favor de $${montoMov} revertida para cliente ${clienteId}`
         : `Abono de $${montoMov} revertido para cliente ${clienteId}`;
       await registrarAuditoria(env, headers, {
         usuarioId: operador.id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
@@ -432,4 +436,82 @@ export async function handleCruzarSaldoFavor(request, env) {
     return jsonError(e.message || 'Error al cruzar saldo a favor', 500, request);
   }
 }
+
+export async function handleRegistrarDevolucionCredito(request, env) {
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { user, operador, headers, ip } = v;
+
+  const ROLES_DEVOLUCION = ['administracion', 'jefe', 'desarrollador'];
+  if (!ROLES_DEVOLUCION.includes(operador.rol)) {
+    return jsonError('Solo administración, jefe o desarrollador pueden registrar devoluciones de saldo a favor', 403, request);
+  }
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+
+  const { clienteId, monto, formaPago, referencia, descripcion } = body;
+  if (!clienteId || !isValidUuid(clienteId)) return jsonError('clienteId inválido', 400, request);
+  if (!monto || monto <= 0) return jsonError('Monto inválido', 400, request);
+
+  try {
+    // 1. Obtener cliente y su saldo a favor actual
+    const cRes = await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteId}&select=saldo_a_favor`, { headers });
+    const [cliente] = await cRes.json();
+    if (!cliente) return jsonError('Cliente no encontrado', 404, request);
+
+    let saldoFavorActual = Number(cliente.saldo_a_favor || 0);
+
+    // Validar que el monto no exceda el saldo a favor actual (con tolerancia a float)
+    if (monto > saldoFavorActual + 0.005) {
+      return jsonError(`El monto a devolver ($${monto}) supera el saldo a favor disponible ($${saldoFavorActual.toFixed(2)})`, 400, request);
+    }
+
+    // Ajustar por precisiones de coma flotante si es para saldar por completo
+    let montoDevolver = Number(monto);
+    if (Math.abs(montoDevolver - saldoFavorActual) < 0.015) {
+      montoDevolver = saldoFavorActual;
+    }
+
+    const nuevoSaldoFavor = Math.max(0, Math.round((saldoFavorActual - montoDevolver) * 10000) / 10000);
+
+    // 2. Registrar devolución de crédito en cuentas_por_cobrar
+    const aRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
+      method: 'POST',
+      headers: { ...headers, Prefer: 'return=representation' },
+      body: JSON.stringify({
+        cliente_id: clienteId,
+        tipo: 'devolucion_credito',
+        monto_usd: montoDevolver,
+        forma_pago_abono: formaPago || null,
+        referencia: referencia || null,
+        saldo_usd: nuevoSaldoFavor,
+        descripcion: descripcion || 'Devolución de saldo a favor registrada',
+        registrado_por: operador.id
+      }),
+    });
+    if (!aRes.ok) {
+      const err = await aRes.text();
+      return jsonError(`Error al registrar devolución de saldo a favor: ${err}`, 500, request);
+    }
+    const [row] = await aRes.json();
+
+    // 3. Recalcular
+    await recalcularSaldoPendienteCliente(clienteId, env, headers);
+
+    // 4. Auditoría
+    try {
+      await registrarAuditoria(env, headers, {
+        usuarioId: operador.id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
+        categoria: 'FINANZAS', accion: 'REGISTRAR_DEVOLUCION_CREDITO', descripcion: `Devolución de saldo a favor de $${montoDevolver} registrado para cliente ${clienteId}`,
+        entidadTipo: 'cliente', entidadId: clienteId, meta: { monto: montoDevolver, forma_pago: formaPago, saldo_anterior: saldoFavorActual, saldo_nuevo: nuevoSaldoFavor }, ip,
+      });
+    } catch {}
+
+    return json({ id: row.id, nuevoSaldoFavor }, 200, request);
+  } catch (e) {
+    return jsonError(e.message || 'Error al registrar devolución de saldo a favor', 500, request);
+  }
+}
+
 

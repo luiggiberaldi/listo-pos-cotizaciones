@@ -340,6 +340,35 @@ export function useRegistrarSaldoFavor() {
   })
 }
 
+// ─── Registrar devolución de saldo a favor (Worker API) ────────────────────
+export function useRegistrarDevolucionCredito() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ clienteId, monto, formaPago, referencia, descripcion }) => {
+      const res = await authFetch('/api/cxc/devolucion-credito', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clienteId,
+          monto,
+          formaPago,
+          referencia: referencia || null,
+          descripcion: descripcion || 'Devolución de saldo a favor registrada'
+        }),
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Error al registrar devolución de saldo a favor')
+      return result
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: CXC_KEY })
+      qc.invalidateQueries({ queryKey: CLIENTES_KEY })
+      showToast('Devolución de saldo a favor registrada exitosamente', 'success')
+    },
+  })
+}
+
 // ─── Cruzar saldo a favor contra deudas (Worker API) ─────────────────────────
 export function useCruzarSaldoFavor() {
   const qc = useQueryClient()
