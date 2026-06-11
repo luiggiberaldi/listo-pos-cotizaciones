@@ -1670,13 +1670,13 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
     doc.text('DESGLOSE DE LA DIFERENCIA (RECAUDACIÓN VS VENTAS NETAS):', MARGIN + 3.5, y + 7)
 
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(10)
+    doc.setFontSize(8.5)
     doc.setTextColor(...C_DARK)
 
     let curX = MARGIN + 3.5
     
     // 1. Ventas Netas
-    const lbl1 = 'Ventas Netas (Mercancía): '
+    const lbl1 = 'Ventas Netas: '
     doc.setFont('helvetica', 'normal')
     doc.text(lbl1, curX, y + 14)
     curX += doc.getTextWidth(lbl1)
@@ -1687,13 +1687,13 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
     curX += doc.getTextWidth(val1)
     
     // Separator 1
-    const sep1 = '    |    '
+    const sep1 = '   |   '
     doc.setFont('helvetica', 'normal')
     doc.text(sep1, curX, y + 14)
     curX += doc.getTextWidth(sep1)
     
     // 2. Flete
-    const lbl2 = 'Flete/Envío Recaudado: '
+    const lbl2 = 'Flete: '
     doc.setFont('helvetica', 'normal')
     doc.text(lbl2, curX, y + 14)
     curX += doc.getTextWidth(lbl2)
@@ -1704,7 +1704,7 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
     curX += doc.getTextWidth(val2)
     
     // Separator 2
-    const sep2 = '    |    '
+    const sep2 = '   |   '
     doc.setFont('helvetica', 'normal')
     doc.text(sep2, curX, y + 14)
     curX += doc.getTextWidth(sep2)
@@ -1722,7 +1722,7 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
       curX += doc.getTextWidth(valDev)
 
       // Separator Dev
-      const sepDev = '    |    '
+      const sepDev = '   |   '
       doc.setFont('helvetica', 'normal')
       doc.text(sepDev, curX, y + 14)
       curX += doc.getTextWidth(sepDev)
@@ -1742,9 +1742,9 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
     if (tieneCxC) {
       let curX2 = MARGIN + 3.5;
       
-      const lblCxC = 'CxC, COD y Donaciones: ';
+      const lblCxC = 'CxC y Donaciones: ';
       doc.setFont('helvetica', 'normal')
-      doc.setFontSize(10)
+      doc.setFontSize(8.5)
       doc.text(lblCxC, curX2, y + 21)
       curX2 += doc.getTextWidth(lblCxC)
       
@@ -1755,12 +1755,12 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
       curX2 += doc.getTextWidth(valCxC)
       
       doc.setTextColor(...C_DARK)
-      const sepCxC = '    |    ';
+      const sepCxC = '   |   ';
       doc.setFont('helvetica', 'normal')
       doc.text(sepCxC, curX2, y + 21)
       curX2 += doc.getTextWidth(sepCxC)
       
-      const lblSinCxC = 'Ventas Netas sin CxC (Recaudación Real): ';
+      const lblSinCxC = 'Ventas Líquidas (Caja Real): ';
       doc.setFont('helvetica', 'normal')
       doc.text(lblSinCxC, curX2, y + 21)
       curX2 += doc.getTextWidth(lblSinCxC)
@@ -1793,10 +1793,10 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
     doc.setTextColor(71, 85, 105);
     
     doc.text('Cliente', MARGIN + 4, y + 4.5);
-    doc.text('Asesor', MARGIN + 52, y + 4.5);
+    doc.text('Asesor', MARGIN + 55, y + 4.5);
     doc.text('Fecha', MARGIN + 100, y + 4.5);
-    doc.text('Forma de Pago', MARGIN + 130, y + 4.5);
-    doc.text('Monto Devuelto (USD)', MARGIN + CONTENT_W - 4, y + 4.5, { align: 'right' });
+    doc.text('Forma de Pago', MARGIN + 122, y + 4.5);
+    doc.text('Devuelto ($)', MARGIN + CONTENT_W - 4, y + 4.5, { align: 'right' });
     y += 8;
 
     devolucionesReporte.forEach((dev, idx) => {
@@ -1814,11 +1814,11 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
       const displayCliente = dev.cliente_tipo_cliente === 'personal' ? `${cliente} (P)` : cliente
       
       doc.text(displayCliente, MARGIN + 4, y + 4.5)
-      doc.text(dev.vendedor_nombre || '—', MARGIN + 52, y + 4.5)
+      doc.text(dev.vendedor_nombre || '—', MARGIN + 55, y + 4.5)
       
       const fechaStr = dev.creado_en ? new Date(dev.creado_en).toLocaleDateString('es-VE', { day: '2-digit', month: 'short' }) : '—'
       doc.text(fechaStr, MARGIN + 100, y + 4.5)
-      doc.text(dev.forma_pago_abono || 'Sin especificar', MARGIN + 130, y + 4.5)
+      doc.text(dev.forma_pago_abono || 'Sin especificar', MARGIN + 122, y + 4.5)
 
       doc.setFont('helvetica', 'bold')
       doc.setTextColor(220, 38, 38) // Rose 600
