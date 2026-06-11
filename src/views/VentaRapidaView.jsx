@@ -2035,6 +2035,7 @@ function Step2Pago({
   direccionEnvioActiva, setDireccionEnvioActiva,
   direccionEnvioEstado, setDireccionEnvioEstado,
   direccionEnvioCiudad, setDireccionEnvioCiudad,
+  direccionEnvioDireccion, setDireccionEnvioDireccion,
   saldoFavorOrigen,
   vueltoComoSaldoFavor, setVueltoComoSaldoFavor,
   pagosInmediatosHayVuelto, pagosInmediatosDiferencia,

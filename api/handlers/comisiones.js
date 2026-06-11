@@ -14,12 +14,17 @@ async function obtenerVendedoresConRol(env, headers, cuentaId, roles) {
   return rows.map(r => r.id).join(',');
 }
 
+function safeParam(val) {
+  if (!val || val === 'null' || val === 'undefined' || val.trim() === '') return null;
+  return val.trim();
+}
+
 // Helper interno para unificar la lógica de filtros entre Lista y Resumen
 function aplicarFiltrosComisiones(query, urlParams, user) {
-  const vendedorId = urlParams.get('vendedorId')
-  const estado = urlParams.get('estado')
-  const desde = urlParams.get('desde')
-  const hasta = urlParams.get('hasta')
+  const vendedorId = safeParam(urlParams.get('vendedorId'))
+  const estado = safeParam(urlParams.get('estado'))
+  const desde = safeParam(urlParams.get('desde'))
+  const hasta = safeParam(urlParams.get('hasta'))
 
   const operatorRol = user.operator_rol
   const operatorId = user.operator_id
@@ -288,10 +293,10 @@ export async function handleGetComisionesResumen(request, env) {
       apikey: env.SUPABASE_SERVICE_KEY,
       Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
     };
-    const vendedorId = url.searchParams.get('vendedorId');
-    const estado = url.searchParams.get('estado');
-    const desde = url.searchParams.get('desde');
-    const hasta = url.searchParams.get('hasta');
+    const vendedorId = safeParam(url.searchParams.get('vendedorId'));
+    const estado = safeParam(url.searchParams.get('estado'));
+    const desde = safeParam(url.searchParams.get('desde'));
+    const hasta = safeParam(url.searchParams.get('hasta'));
 
     const esSupervisor = ['supervisor', 'administracion', 'desarrollador', 'jefe'].includes(operador.rol);
     const filtroVendedor = esSupervisor ? (vendedorId || null) : operador.id;
