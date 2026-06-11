@@ -1143,7 +1143,8 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
   // ══════════════════════════════════════════════════════════════════════════
   // 2. KPIs
   // ══════════════════════════════════════════════════════════════════════════
-  const kpiBoxW = CONTENT_W / 4
+  const hasDev = kpis.totalDevoluciones > 0 || kpis.totalDevoluciones !== undefined;
+  const kpiBoxW = CONTENT_W / (hasDev ? 5 : 4)
   const kpiBoxH = 22
   const kpiData = [
     { label: 'Ventas Netas (Sin Flete)', value: fmtUsd(kpis.totalVentas), sub: '(Solo mercancía)' },
@@ -1151,6 +1152,13 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
     { label: 'Ticket Promedio', value: fmtUsd(kpis.ticketPromedio) },
     { label: 'Comisiones', value: fmtUsd(kpis.totalComisiones), sub: (kpis.totalComisiones > 0) ? `2%: ${fmtUsd((kpis.comisionCabilla2 || 0) + (kpis.comisionCabilla3 || 0))} | 3%: ${fmtUsd(kpis.comisionOtros || 0)}` : null },
   ]
+  if (hasDev) {
+    kpiData.push({
+      label: 'Devolución de Saldo a Favor',
+      value: fmtUsd(kpis.totalDevoluciones || 0),
+      sub: kpis.prevTotalDevoluciones ? `Ant: ${fmtUsd(kpis.prevTotalDevoluciones)}` : null
+    })
+  }
 
   kpiData.forEach((kpi, i) => {
     const bx = MARGIN + i * kpiBoxW
@@ -1172,7 +1180,7 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
     
     // Value text (midnight blue / C_DARK)
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(12.5)
+    doc.setFontSize(hasDev ? 11.5 : 12.5)
     doc.setTextColor(...C_DARK)
     doc.text(kpi.value, bx + 3.5, y + 13.5)
     
@@ -1544,7 +1552,7 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
 
     const fpTotal = porFormaPago.reduce((s, fp) => s + fp.totalUsd, 0)
     porFormaPago.forEach((fp) => {
-      const pct = fpTotal > 0 ? ((fp.totalUsd / fpTotal) * 100).toFixed(1) : '0.0'
+      const pct = fpTotal > 0 ? ((Math.max(0, fp.totalUsd) / fpTotal) * 100).toFixed(1) : '0.0'
 
       // 1. Cabecera: nombre del metodo (se previene cabecera huerfana controlando el espacio minimo reqH)
       const reqH = Array.isArray(fp.pagos) && fp.pagos.length > 0 ? 32 : 20
@@ -1642,9 +1650,13 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
     const fpCxc = porFormaPago.find(fp => fp.formaPago === 'Cta por cobrar');
     const fpCod = porFormaPago.find(fp => fp.formaPago === 'Cobro a destino');
     const totalCxC = (fpCxc ? fpCxc.totalUsd : 0) + (fpCod ? fpCod.totalUsd : 0);
-    const ventasSinCxc = (kpis.totalVentas || 0) - totalCxC;
-    const tieneCxC = totalCxC > 0;
-    const boxH = tieneCxC ? 28 : 20;
+    const fpDonacion = porFormaPago.find(fp => fp.formaPago === 'Donación');
+    const totalDonacion = fpDonacion ? fpDonacion.totalUsd : 0;
+    const totalDeducciones = totalCxC + totalDonacion;
+    const ventasSinCxc = fpTotal - totalDeducciones;
+    const tieneCxC = totalDeducciones > 0;
+    const tieneDev = kpis.totalDevoluciones > 0;
+    const boxH = (tieneCxC || tieneDev) ? 28 : 20;
 
     y = checkPage(doc, y, boxH + 4)
     doc.setFillColor(245, 250, 255)
@@ -1696,6 +1708,25 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
     doc.setFont('helvetica', 'normal')
     doc.text(sep2, curX, y + 14)
     curX += doc.getTextWidth(sep2)
+
+    // 2.5 Devoluciones
+    if (tieneDev) {
+      const lblDev = 'Devoluciones: '
+      doc.setFont('helvetica', 'normal')
+      doc.text(lblDev, curX, y + 14)
+      curX += doc.getTextWidth(lblDev)
+      
+      const valDev = `-${fmtUsd(kpis.totalDevoluciones)}`
+      doc.setFont('helvetica', 'bold')
+      doc.text(valDev, curX, y + 14)
+      curX += doc.getTextWidth(valDev)
+
+      // Separator Dev
+      const sepDev = '    |    '
+      doc.setFont('helvetica', 'normal')
+      doc.text(sepDev, curX, y + 14)
+      curX += doc.getTextWidth(sepDev)
+    }
     
     // 3. Total Recaudado
     const lbl3 = 'Total Recaudado: '
@@ -1707,23 +1738,23 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
     doc.setFont('helvetica', 'bold')
     doc.text(val3, curX, y + 14)
 
-    // Linea 2 (solo si tiene CxC)
+    // Linea 2 (solo si tiene CxC o donaciones)
     if (tieneCxC) {
       let curX2 = MARGIN + 3.5;
       
-      const lblCxC = 'CxC y COD Pendientes: ';
+      const lblCxC = 'CxC, COD y Donaciones: ';
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(10)
       doc.text(lblCxC, curX2, y + 21)
       curX2 += doc.getTextWidth(lblCxC)
       
-      const valCxC = `-${fmtUsd(totalCxC)}`;
+      const valCxC = `-${fmtUsd(totalDeducciones)}`;
       doc.setFont('helvetica', 'bold')
-      doc.setTextColor(220, 38, 38) // Color rojo
+      doc.setTextColor(220, 38, 38)
       doc.text(valCxC, curX2, y + 21)
       curX2 += doc.getTextWidth(valCxC)
       
-      doc.setTextColor(...C_DARK) // restaurar color
+      doc.setTextColor(...C_DARK)
       const sepCxC = '    |    ';
       doc.setFont('helvetica', 'normal')
       doc.text(sepCxC, curX2, y + 21)
@@ -1740,6 +1771,62 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
     }
 
     y += boxH + 4
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 6.5. DEVOLUCIONES DE SALDO A FAVOR
+  // ══════════════════════════════════════════════════════════════════════════
+  const devolucionesReporte = reporte.devoluciones || [];
+  if (devolucionesReporte.length > 0) {
+    y = checkPage(doc, y, 22)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(10.5)
+    doc.setTextColor(...C_DARK)
+    doc.text('Devoluciones de Saldo a Favor (Reembolsos a Clientes)', MARGIN, y + 4)
+    y += 8
+
+    // Tabla header
+    doc.setFillColor(242, 244, 247);
+    doc.rect(MARGIN, y, CONTENT_W, 7, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(71, 85, 105);
+    
+    doc.text('Cliente', MARGIN + 4, y + 4.5);
+    doc.text('Asesor', MARGIN + 52, y + 4.5);
+    doc.text('Fecha', MARGIN + 100, y + 4.5);
+    doc.text('Forma de Pago', MARGIN + 130, y + 4.5);
+    doc.text('Monto Devuelto (USD)', MARGIN + CONTENT_W - 4, y + 4.5, { align: 'right' });
+    y += 8;
+
+    devolucionesReporte.forEach((dev, idx) => {
+      y = checkPage(doc, y, 8)
+      if (idx % 2 === 1) {
+        doc.setFillColor(250, 251, 253);
+        doc.rect(MARGIN, y - 0.5, CONTENT_W, 7, 'F');
+      }
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      doc.setTextColor(51, 65, 85);
+
+      const cliente = dev.cliente_nombre ? String(dev.cliente_nombre).toUpperCase().substring(0, 28) : 'CLIENTE SIN NOMBRE'
+      const displayCliente = dev.cliente_tipo_cliente === 'personal' ? `${cliente} (P)` : cliente
+      
+      doc.text(displayCliente, MARGIN + 4, y + 4.5)
+      doc.text(dev.vendedor_nombre || '—', MARGIN + 52, y + 4.5)
+      
+      const fechaStr = dev.creado_en ? new Date(dev.creado_en).toLocaleDateString('es-VE', { day: '2-digit', month: 'short' }) : '—'
+      doc.text(fechaStr, MARGIN + 100, y + 4.5)
+      doc.text(dev.forma_pago_abono || 'Sin especificar', MARGIN + 130, y + 4.5)
+
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(220, 38, 38) // Rose 600
+      doc.text(`-${fmtUsd(dev.monto_usd)}`, MARGIN + CONTENT_W - 4, y + 4.5, { align: 'right' })
+
+      y += 6.5
+    })
+    y += 4
   }
 
   // ══════════════════════════════════════════════════════════════════════════

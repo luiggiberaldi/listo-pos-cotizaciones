@@ -106,7 +106,7 @@ function FormaPagoSection({ data = [], kpis }) {
   const fpDonacion = data.find(fp => fp.formaPago === 'Donación')
   const totalDonacion = fpDonacion ? fpDonacion.totalUsd : 0
   const totalDeducciones = totalCxc + totalDonacion
-  const ventasSinCxc = (kpis?.totalVentas || 0) - totalDeducciones
+  const ventasSinCxc = total - totalDeducciones
   const COLORS = {
     'Efectivo $': '#10b981',
     'Efectivo Bs': '#22c55e',
@@ -130,7 +130,7 @@ function FormaPagoSection({ data = [], kpis }) {
       </div>
       <div className="p-3 sm:p-4 space-y-2.5 sm:space-y-3">
         {data.map(fp => {
-          const pct = total > 0 ? (fp.totalUsd / total) * 100 : 0
+          const pct = total > 0 ? (Math.max(0, fp.totalUsd) / total) * 100 : 0
           const color = COLORS[fp.formaPago] || '#64748b'
           return (
             <div key={fp.formaPago} className="space-y-1">
@@ -152,10 +152,18 @@ function FormaPagoSection({ data = [], kpis }) {
                 <div className="pl-4 pt-1 space-y-0.5">
                   {fp.pagos.map((p, pIdx) => (
                     <div key={pIdx} className="flex justify-between text-[9px] sm:text-[10px] text-slate-500 font-medium bg-slate-50/50 hover:bg-slate-50 px-1.5 py-0.5 rounded border border-transparent hover:border-slate-100">
-                      <span className="truncate max-w-[200px] sm:max-w-[280px]">Doc #{p.numero || 'S/N'}{p.referencia ? ` · Ref: ${p.referencia}` : ''} · {p.cliente}</span>
-                      <span className="font-bold text-slate-700 shrink-0">
-                        {fmtUsd(p.monto)}
-                        {['Transf. / Pago Móvil', 'Punto de Venta'].includes(fp.formaPago) && p.montoBs && (
+                      <span className="truncate max-w-[200px] sm:max-w-[280px]">
+                        {p.es_reembolso ? (
+                          <span className="text-rose-600 font-bold">
+                            [REEMBOLSO] {p.descripcion} · {p.cliente}
+                          </span>
+                        ) : (
+                          `Doc #${p.numero || 'S/N'}${p.referencia ? ` · Ref: ${p.referencia}` : ''} · ${p.cliente}`
+                        )}
+                      </span>
+                      <span className={`font-bold shrink-0 ${p.es_reembolso ? 'text-rose-600' : 'text-slate-700'}`}>
+                        {p.es_reembolso ? '-' : ''}{fmtUsd(Math.abs(p.monto))}
+                        {!p.es_reembolso && ['Transf. / Pago Móvil', 'Punto de Venta'].includes(fp.formaPago) && p.montoBs && (
                           <span className="text-[8.5px] text-indigo-600 font-semibold ml-1.5" title={`Tasa: ${p.tasa} Bs.`}>
                             ({fmtBs(p.montoBs)})
                           </span>
@@ -195,6 +203,12 @@ function FormaPagoSection({ data = [], kpis }) {
               <div className="flex justify-between items-center">
                 <span>Fletes / Envío Cobrado</span>
                 <span className="font-bold text-emerald-600">+{fmtUsd(kpis.totalFlete)}</span>
+              </div>
+            )}
+            {kpis.totalDevoluciones > 0 && (
+              <div className="flex justify-between items-center">
+                <span>Devolución de Saldo a Favor</span>
+                <span className="font-bold text-rose-600">-{fmtUsd(kpis.totalDevoluciones)}</span>
               </div>
             )}
             <div className="border-t border-slate-200 pt-1 mt-1 flex justify-between items-center font-black text-slate-800 text-[11px] sm:text-xs">
@@ -520,7 +534,7 @@ function TabVentas({ configNeg }) {
   if (isError) return <ErrorMsg onRetry={refetch} />
   if (!reporte) return null
 
-  const { kpis, porVendedor, porCliente, porProducto, porCategoria, porFormaPago, despachos } = reporte
+  const { kpis, porVendedor, porCliente, porProducto, porCategoria, porFormaPago, despachos, devoluciones = [] } = reporte
   const rangoLabel = `${new Date(`${rango.from}T00:00:00`).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })} - ${new Date(`${rango.to}T00:00:00`).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}`
 
   const METODO_PAGOS_STYLES = {
@@ -809,6 +823,66 @@ function TabVentas({ configNeg }) {
               </div>
             </div>
           </div>
+
+          {/* Tabla de Devoluciones de Saldo a Favor */}
+          {devoluciones.length > 0 && (
+            <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+              <div className="px-3 sm:px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ArrowUpCircle size={16} className="text-rose-500 shrink-0" />
+                  <h3 className="text-sm font-black text-slate-800">Devoluciones de Saldo a Favor (Reembolsos a Clientes)</h3>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs sm:text-sm">
+                  <thead>
+                    <tr className="text-[10px] sm:text-xs text-slate-400 uppercase bg-slate-50 border-b border-slate-100">
+                      <th className="px-3 py-2.5 font-semibold text-left">Cliente</th>
+                      <th className="px-3 py-2.5 font-semibold text-left">Asesor</th>
+                      <th className="px-3 py-2.5 font-semibold text-center">Fecha</th>
+                      <th className="px-3 py-2.5 font-semibold text-left">Forma de Pago</th>
+                      <th className="px-3 py-2.5 font-semibold text-left">Referencia</th>
+                      <th className="px-3 py-2.5 font-semibold text-right">Monto Devuelto</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {devoluciones.map((dev, i) => (
+                      <tr key={i} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                        <td className="px-3 py-2.5 font-bold text-slate-800 truncate max-w-[180px]">
+                          {dev.cliente_nombre || 'Sin cliente'}
+                          {dev.cliente_tipo_cliente === 'personal' && (
+                            <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200 rounded">
+                              Personal
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: dev.vendedor_color || '#64748b' }} />
+                            <span className="font-semibold text-slate-600 truncate max-w-[120px]">{dev.vendedor_nombre}</span>
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5 text-center font-medium text-slate-500">
+                          {dev.creado_en ? new Date(dev.creado_en).toLocaleDateString('es-VE', { day: '2-digit', month: 'short' }) : '—'}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border ${METODO_PAGOS_STYLES[dev.forma_pago_abono] || 'bg-slate-50 text-slate-600 border-slate-100'}`}>
+                            {dev.forma_pago_abono || 'Sin especificar'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5 font-medium text-slate-500 truncate max-w-[150px]">
+                          {dev.referencia || dev.descripcion || '—'}
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-black text-rose-600">
+                          -{fmtUsd(dev.monto_usd)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>
