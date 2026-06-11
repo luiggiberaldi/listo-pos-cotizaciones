@@ -15,7 +15,7 @@ import ConfirmModal from '../components/ui/ConfirmModal'
 import { useResumenCxC } from '../hooks/useCuentasCobrar'
 import { useProveedores } from '../hooks/useProveedores'
 import { getDayRange, getWeekRange, getMonthRange } from '../utils/dateHelpers'
-import { fmtUsd, fmtBs } from '../utils/format'
+import { fmtUsd, fmtBs, removeAccents } from '../utils/format'
 import useAuthStore from '../store/useAuthStore'
 import Skeleton from '../components/ui/Skeleton'
 import { useTasaCambio } from '../hooks/useTasaCambio'
@@ -2769,12 +2769,12 @@ function TabArticulosExternos({ configNeg }) {
     return items.filter(item => {
       const matchAsesor = !filtroAsesor || item.asesor_nombre === filtroAsesor
       
-      const q = busqueda.toLowerCase().trim()
+      const q = removeAccents(busqueda.toLowerCase().trim())
       const matchBusqueda = !q ||
-        (item.articulo_nombre || '').toLowerCase().includes(q) ||
-        (item.articulo_codigo || '').toLowerCase().includes(q) ||
-        (item.cliente_nombre || '').toLowerCase().includes(q) ||
-        (item.cliente_rif || '').toLowerCase().includes(q) ||
+        removeAccents(item.articulo_nombre || '').toLowerCase().includes(q) ||
+        removeAccents(item.articulo_codigo || '').toLowerCase().includes(q) ||
+        removeAccents(item.cliente_nombre || '').toLowerCase().includes(q) ||
+        removeAccents(item.cliente_rif || '').toLowerCase().includes(q) ||
         String(item.despacho_numero || '').includes(q)
       
       return matchAsesor && matchBusqueda
