@@ -48,8 +48,9 @@ function aplicarFiltrosComisiones(query, urlParams, user) {
   }
 
   // 4. Filtro por Fechas (Día Completo - Zona Horaria Venezuela UTC-4)
-  if (desde) query += `&creadoen=gte.${desde}T00:00:00-04:00`
-  if (hasta) query += `&creadoen=lte.${hasta}T23:59:59-04:00`
+  // Se filtra por la fecha del DESPACHO (notas_despacho.creado_en), igual que el PDF
+  if (desde) query += `&despacho.creado_en=gte.${desde}T00:00:00-04:00`
+  if (hasta) query += `&despacho.creado_en=lte.${hasta}T23:59:59-04:00`
 
   return query
 }
@@ -209,7 +210,8 @@ export async function handleGetComisiones(request, env) {
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  let baseUrl = `${env.SUPABASE_URL}/rest/v1/comisiones?select=id,despachoid,vendedorid,cotizacionid,cuentaid,totalcomision,comisioncabilla,comisionotros,pctcabilla,pctotros,montopagado,estado,pagadaen,pagadapor,creadoen,actualizadoen&order=creadoen.desc`
+  // Se incluye despacho:notas_despacho!inner(creado_en) para poder filtrar por fecha del despacho
+  let baseUrl = `${env.SUPABASE_URL}/rest/v1/comisiones?select=id,despachoid,vendedorid,cotizacionid,cuentaid,totalcomision,comisioncabilla,comisionotros,pctcabilla,pctotros,montopagado,estado,pagadaen,pagadapor,creadoen,actualizadoen,despacho:notas_despacho!inner(creado_en)&order=creadoen.desc`
   
   const userContext = { ...user, operator_rol: operador.rol, operator_id: operador.id };
   let query = aplicarFiltrosComisiones(baseUrl, url.searchParams, userContext)
@@ -328,7 +330,8 @@ export async function handleGetComisionesResumen(request, env) {
     const r = rows[0] || {};
 
     // ── CONSULTA SECUNDARIA: desglose de saldo pendiente (Regular vs CxC) ─────
-    let queryBreakdown = `${env.SUPABASE_URL}/rest/v1/comisiones?select=estado,totalcomision,montopagado&estado=in.(pendiente,cta_cobrar)`;
+    // Se incluye despacho:notas_despacho!inner(creado_en) para que el filtro de fecha use la fecha del despacho
+    let queryBreakdown = `${env.SUPABASE_URL}/rest/v1/comisiones?select=estado,totalcomision,montopagado,despacho:notas_despacho!inner(creado_en)&estado=in.(pendiente,cta_cobrar)`;
     const userContext = { ...user, operator_rol: operador.rol, operator_id: operador.id };
     queryBreakdown = aplicarFiltrosComisiones(queryBreakdown, url.searchParams, userContext);
 

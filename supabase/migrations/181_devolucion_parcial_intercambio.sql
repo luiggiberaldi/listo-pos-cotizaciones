@@ -19,6 +19,9 @@ CREATE INDEX IF NOT EXISTS idx_intercambios_despacho ON public.despacho_devoluci
 
 ALTER TABLE public.despacho_devolucion_intercambios ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Permitir todo a operadores autorizados en despacho_devolucion_i" ON public.despacho_devolucion_intercambios;
+DROP POLICY IF EXISTS "Permitir todo a operadores autorizados en despacho_devolucion_intercambios" ON public.despacho_devolucion_intercambios;
+
 CREATE POLICY "Permitir todo a operadores autorizados en despacho_devolucion_intercambios"
 ON public.despacho_devolucion_intercambios
 FOR ALL
