@@ -7,7 +7,7 @@ import { useVentasCliente } from '../../hooks/useClientes'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import SeguimientoTimeline from '../ui/SeguimientoTimeline'
 import useAuthStore from '../../store/useAuthStore'
-import { fmtUsdSimple as fmtUsd } from '../../utils/format'
+import { fmtUsdSimple as fmtUsd, removeAccents } from '../../utils/format'
 import EstadoBadge from '../cotizaciones/EstadoBadge'
 import { showToast } from '../ui/Toast'
 import { apiUrl } from '../../services/apiBase'
@@ -625,9 +625,9 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
   }
 
   const prestamosFiltrados = prestamos.filter(p => {
-    const term = busquedaPrestamos.toLowerCase()
-    const pName = (p.producto?.nombre || '').toLowerCase()
-    const pCode = (p.producto?.codigo || '').toLowerCase()
+    const term = removeAccents(busquedaPrestamos.toLowerCase())
+    const pName = removeAccents(p.producto?.nombre || '').toLowerCase()
+    const pCode = removeAccents(p.producto?.codigo || '').toLowerCase()
     return pName.includes(term) || pCode.includes(term)
   })
 

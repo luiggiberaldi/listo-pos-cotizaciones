@@ -44,16 +44,24 @@ export function fmtBcvUsd(n) {
 /** Formatea fecha corta dd/mm/yyyy. Variante 'short-month' usa mes abreviado. */
 export function fmtFecha(f, variant) {
   if (!f) return '—'
+  let dateObj
+  if (f instanceof Date) {
+    dateObj = f
+  } else {
+    const dateStr = String(f).includes('T') ? String(f) : `${f}T12:00:00`
+    dateObj = new Date(dateStr)
+    if (isNaN(dateObj.getTime())) {
+      dateObj = new Date(f)
+    }
+  }
+
   if (variant === 'short-month') {
-    return new Date(f).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })
+    return dateObj.toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })
   }
   if (variant === 'short') {
-    return new Date(f).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: '2-digit' })
+    return dateObj.toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: '2-digit' })
   }
-  // Default: normaliza fechas sin timezone para evitar off-by-one
-  return new Date(f + (String(f).includes('T') ? '' : 'T12:00:00')).toLocaleDateString('es-VE', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-  })
+  return dateObj.toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
 export function fmtFechaCorta(f) {

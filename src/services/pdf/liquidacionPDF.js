@@ -5,7 +5,7 @@ import { jsPDF } from 'jspdf'
 import { cargarLogo } from './pdfLogo'
 import {
   C_PRIMARY, C_DARK, C_WHITE, C_EMERALD, C_AMBER, C_GRAY,
-  fmtUsd,
+  fmtUsd, fmtFechaCorta,
   hexToRgb, drawWatermark, checkPage, drawPremiumHeader
 } from './pdfShared'
 
@@ -16,10 +16,6 @@ const L_M = 12    // margen
 const L_CW = L_W - L_M * 2  // ancho de contenido = 255 mm
 
 // ─── Helpers locales ──────────────────────────────────────────────────────────
-function fmtFechaCorta(ts) {
-  if (!ts) return '—'
-  return new Date(ts).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: '2-digit' })
-}
 
 function parsePago(pago) {
   if (!pago) return '—'

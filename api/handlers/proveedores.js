@@ -1,5 +1,5 @@
 // api/handlers/proveedores.js
-import { json, jsonError, isValidUuid } from '../lib/utils.js'
+import { json, jsonError, isValidUuid, removeAccents } from '../lib/utils.js'
 import { verifyAuth, validateOperator } from '../lib/auth.js'
 import { registrarAuditoria } from '../lib/audit.js'
 
@@ -61,14 +61,14 @@ export async function handleListarProveedores(request, env) {
     let data = await res.json();
 
     if (busqueda.trim()) {
-      const raw = busqueda.trim().toLowerCase();
+      const raw = removeAccents(busqueda.trim().toLowerCase());
       const norm = raw.replace(/[\.\-\(\)\s\/\\]/g, '');
 
       data = data.filter(p => {
-        const nombre = (p.nombre || '').toLowerCase();
-        const rif = (p.rif_cedula || '').toLowerCase().replace(/[\.\-\(\)\s\/\\]/g, '');
-        const tel = (p.telefono || '').toLowerCase().replace(/[\.\-\(\)\s\/\\]/g, '');
-        const email = (p.email || '').toLowerCase();
+        const nombre = removeAccents((p.nombre || '').toLowerCase());
+        const rif = removeAccents((p.rif_cedula || '').toLowerCase().replace(/[\.\-\(\)\s\/\\]/g, ''));
+        const tel = removeAccents((p.telefono || '').toLowerCase().replace(/[\.\-\(\)\s\/\\]/g, ''));
+        const email = removeAccents((p.email || '').toLowerCase());
 
         return (
           nombre.includes(raw) ||

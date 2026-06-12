@@ -28,7 +28,7 @@ import { useSaldoFavorOrigen } from '../hooks/useCuentasCobrar'
 import { useTransportistas, useCrearTransportista } from '../hooks/useTransportistas'
 import VendedorFilterPill from '../components/ui/VendedorFilterPill'
 import ToggleVistaPersonal from '../components/ui/ToggleVistaPersonal'
-import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../utils/format'
+import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs, removeAccents } from '../utils/format'
 import { showToast } from '../components/ui/Toast'
 import { round2 } from '../utils/dinero'
 import { notifyFacturacionClienteAjeno } from '../services/notificationService'
@@ -1018,14 +1018,14 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
     }
 
     if (busquedaGlobal) {
-      const q = busquedaGlobal.toLowerCase()
+      const q = removeAccents(busquedaGlobal.toLowerCase())
       const qClean = q.replace(/[\.\-\s]/g, '')
       filtered = filtered.filter(c => {
         const numStr = `cot-${String(c.numero).padStart(5, '0')}`
-        const clienteNombre = (c.cliente?.nombre || '').toLowerCase()
-        const clienteRif = (c.cliente?.rif_cedula || '').toLowerCase()
+        const clienteNombre = removeAccents(c.cliente?.nombre || '').toLowerCase()
+        const clienteRif = removeAccents(c.cliente?.rif_cedula || '').toLowerCase()
         const clienteRifClean = clienteRif.replace(/[\.\-\s]/g, '')
-        const clienteCodigo = (c.cliente?.codigo_cliente || '').toLowerCase()
+        const clienteCodigo = removeAccents(c.cliente?.codigo_cliente || '').toLowerCase()
         const totalStr = String(c.total_usd)
         
         return numStr.includes(q) || 
