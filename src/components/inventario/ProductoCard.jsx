@@ -76,7 +76,7 @@ export default function ProductoCard({ producto, onEditar, onClonar, onDesactiva
   }
 
   const esAdministracion = perfil?.rol === 'administracion'
-  const esPrivilegiado = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe') || esAdministracion
+  const esPrivilegiado = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe' || perfil?.rol === 'desarrollador') || esAdministracion
   const puedeGestionarInventario = esAdministracion || perfil?.rol === 'desarrollador' || perfil?.rol === 'jefe'
   // Costo solo visible para administracion, jefe y desarrollador
   const puedeVerCosto = ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)

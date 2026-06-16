@@ -4,7 +4,7 @@ $ErrorActionPreference = "Stop"
 if (!(Test-Path .env.secrets)) {
     Write-Host "⚠️ .env.secrets no encontrado - desplegando sin secrets" -ForegroundColor Yellow
     npm run build
-    npx wrangler deploy --dispatch-namespace chiridion
+    npx wrangler deploy
     exit 0
 }
 
@@ -21,7 +21,7 @@ Write-Host "🚀 Iniciando Build..." -ForegroundColor Cyan
 npm run build
 
 Write-Host "🚀 Iniciando Deploy..." -ForegroundColor Cyan
-npx wrangler deploy --dispatch-namespace chiridion `
+npx wrangler deploy `
   --var SUPABASE_SERVICE_KEY:"$($env:SUPABASE_SERVICE_KEY)" `
   --var VAPID_PUBLIC_KEY:"$($env:VAPID_PUBLIC_KEY)" `
   --var VAPID_PRIVATE_KEY:"$($env:VAPID_PRIVATE_KEY)" `

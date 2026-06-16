@@ -5,7 +5,7 @@ set -e
 
 if [ ! -f .env.secrets ]; then
   echo "⚠️  .env.secrets no encontrado — desplegando sin secrets"
-  bun run build && wrangler deploy --dispatch-namespace chiridion
+  npm run build && wrangler deploy
   exit 0
 fi
 
@@ -16,7 +16,7 @@ set -a && source .env.secrets && set +a
 npm run build
 
 # Deploy with secrets as --var overrides
-wrangler deploy --dispatch-namespace chiridion \
+wrangler deploy \
   --var SUPABASE_SERVICE_KEY:"$SUPABASE_SERVICE_KEY" \
   --var VAPID_PUBLIC_KEY:"$VAPID_PUBLIC_KEY" \
   --var VAPID_PRIVATE_KEY:"$VAPID_PRIVATE_KEY" \
