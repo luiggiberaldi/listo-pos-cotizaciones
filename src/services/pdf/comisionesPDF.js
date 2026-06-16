@@ -1660,7 +1660,7 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
           if (['Efectivo Bs', 'Transf. / Pago Móvil', 'Punto de Venta'].includes(fp.formaPago) && p.montoBs) {
             const usdW = doc.getTextWidth(usdVal)
             const tasaText = p.tasa && Number(p.tasa) > 0 ? ` · Tasa: ${p.tasa}` : ''
-            const bsText = ` (${fmtBs(p.montoBs)}${tasaText})`
+            const bsText = `  ·  (${fmtBs(p.montoBs)}${tasaText})`
             
             doc.setFont('helvetica', 'normal')
             doc.setFontSize(7.5) // Un poco más pequeño para dar jerarquía
