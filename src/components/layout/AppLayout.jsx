@@ -26,6 +26,7 @@ import { usePushNotifications } from '../../hooks/usePushNotifications'
 import { showToast } from '../ui/Toast'
 import { NOTIF_TYPES, setNotificationUserId, startRealtimeNotifications, stopRealtimeNotifications } from '../../services/notificationService'
 import PendingQueueBadge from '../ui/PendingQueueBadge'
+import { useTasaCambio } from '../../hooks/useTasaCambio'
 
 // ─── Formato de tiempo relativo para notificaciones ─────────────────────────
 function formatNotifTime(ts) {
@@ -150,6 +151,29 @@ export default function AppLayout() {
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
   const switchOut = useAuthStore(s => s.switchOut)
   const navigate = useNavigate()
+  const { tasaBcv, tasaUsdt, tasaEuro } = useTasaCambio()
+  const [time, setTime] = useState(new Date())
+  useEffect(() => {
+    const timer = setInterval(() => setTime(new Date()), 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  const formatFechaHora = useCallback((date) => {
+    const d = date.toLocaleDateString('es-VE', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+    })
+    const t = date.toLocaleTimeString('es-VE', {
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    })
+    const capitalized = d.charAt(0).toUpperCase() + d.slice(1)
+    return `${capitalized} · ${t.toLowerCase()}`
+  }, [])
+
   const [menuOpen, setMenuOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth >= 768 && window.innerWidth < 1400)
 
@@ -308,8 +332,44 @@ export default function AppLayout() {
           </div>
         )}
 
+        {/* Reloj y Fecha - Extremo Izquierdo en PC */}
+        <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-white/50 text-xs font-semibold ml-4 select-none">
+          <Clock size={12} className="text-white/45" />
+          <span className="text-[11px] font-bold text-white/75 tracking-wide">
+            {formatFechaHora(time)}
+          </span>
+        </div>
+
         {/* Spacer */}
         <div className="flex-1" />
+
+        {/* Tasas en Header - Solo en PC */}
+        <div className="hidden md:flex items-center gap-3 mr-2 select-none">
+          {tasaBcv?.precio > 0 && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+              <span className="text-[10px] font-black text-emerald-400 uppercase tracking-wider">BCV:</span>
+              <span className="font-extrabold text-emerald-300 text-xs">
+                Bs {tasaBcv.precio.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+          )}
+          {tasaEuro?.precio > 0 && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/20">
+              <span className="text-[10px] font-black text-blue-400 uppercase tracking-wider">EUR:</span>
+              <span className="font-extrabold text-blue-300 text-xs">
+                Bs {tasaEuro.precio.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+          )}
+          {tasaUsdt?.precio > 0 && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20">
+              <span className="text-[10px] font-black text-indigo-400 uppercase tracking-wider">USDT:</span>
+              <span className="font-extrabold text-indigo-300 text-xs">
+                Bs {tasaUsdt.precio.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+          )}
+        </div>
 
         {/* Widget BCV — supervisor puede configurar, vendedor solo ve la tasa */}
         <BcvWidget soloLectura={!esPrivilegiado} />
