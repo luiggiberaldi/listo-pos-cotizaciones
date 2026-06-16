@@ -83,6 +83,7 @@ const NAV_TODOS = [
   { path: '/inventario',     label: 'Inventario',     icono: Package,        excludeRoles: ['logistica'] },
   { path: '/transportistas', label: 'Transportistas', icono: Truck,          excludeRoles: ['logistica'] },
   { path: '/comisiones',     label: 'Comisiones',     icono: DollarSign,     excludeRoles: ['logistica', 'administracion'] },
+  { path: '/tutorial',       label: 'Tutorial',       icono: HelpCircle, onlyRoles: ['vendedor', 'vendedor_sin_comision'] },
 ]
 
 const NAV_SUPERVISOR = [
@@ -598,10 +599,13 @@ export default function AppLayout() {
         <nav className="relative z-10 flex-1 min-h-0 overflow-y-auto p-2 space-y-0.5">
           {NAV_TODOS
             .filter(item => {
-              if (perfil?.rol === 'desarrollador') return true;
-              if (item.onlyRoles?.length === 1 && item.onlyRoles[0] === 'desarrollador') return false;
-              if (perfil?.rol === 'jefe') return true;
-              return (!item.excludeRoles || !item.excludeRoles.includes(perfil?.rol)) && (!item.onlyRoles || item.onlyRoles.includes(perfil?.rol));
+              if (item.path === '/tutorial') {
+                return ['vendedor', 'vendedor_sin_comision'].includes(perfil?.rol)
+              }
+              if (perfil?.rol === 'desarrollador') return true
+              if (item.onlyRoles?.length === 1 && item.onlyRoles[0] === 'desarrollador') return false
+              if (perfil?.rol === 'jefe') return true
+              return (!item.excludeRoles || !item.excludeRoles.includes(perfil?.rol)) && (!item.onlyRoles || item.onlyRoles.includes(perfil?.rol))
             })
             .map(({ path, label, labelByRole, icono: Icono }) => (
             <NavItem key={path} path={path} label={labelByRole?.[perfil?.rol] || label} Icono={Icono} onClick={cerrarMenu} collapsed={collapsed} />

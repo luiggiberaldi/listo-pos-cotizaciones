@@ -55,12 +55,14 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const adminBtnRef = useRef(null)
   const [monedaPdf, setMonedaPdf] = useState(() => localStorage.getItem('construacero_moneda_pdf') || '$')
   const [tasaPersonalizada, setTasaPersonalizada] = useState('')
+  const [porcentajePdf, setPorcentajePdf] = useState('')
   const [showCambiarTransportista, setShowCambiarTransportista] = useState(false)
   const [showConciliarCod, setShowConciliarCod] = useState(false)
   const [showFacturaModal, setShowFacturaModal] = useState(false)
   const [showDevolucionParcial, setShowDevolucionParcial] = useState(false)
   const [facturaActionType, setFacturaActionType] = useState('download')
   const esLogistica = perfil?.rol === 'logistica' || perfil?.rol === 'jefe' || perfil?.rol === 'desarrollador'
+  const puedeAjustarPorcentaje = ['administracion', 'logistica', 'jefe', 'desarrollador'].includes(perfil?.rol)
   const { tasaBcv, tasaUsdt } = useTasaCambio()
 
   const editarDespacho = useEditarDespacho()
@@ -95,6 +97,22 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     ? Number(tasaPersonalizada)
     : tasa
 
+  const parsePorcentaje = (input) => {
+    if (!input) return 100
+    let clean = String(input).trim().replace(/%/g, '').replace(/,/g, '.')
+    let num = parseFloat(clean)
+    if (isNaN(num)) return 100
+    const hasSign = String(input).trim().startsWith('+') || String(input).trim().startsWith('-')
+    if (hasSign) {
+      return 100 + num
+    }
+    // Si no tiene signo y es un valor pequeño (entre 0 y 50, ej: 10, 15), se asume que es suma (ej: +10%)
+    if (num > 0 && num <= 50) {
+      return 100 + num
+    }
+    return num
+  }
+
   function seleccionarMoneda(moneda) {
     setMonedaPdf(moneda)
     localStorage.setItem('construacero_moneda_pdf', moneda)
@@ -127,6 +145,31 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
               onChange={e => setTasaPersonalizada(e.target.value)}
               className="w-full text-xs px-2 py-1 border border-slate-200 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
             />
+          </div>
+        )}
+        {puedeAjustarPorcentaje && (
+          <div className="px-3 py-2 bg-slate-50 border-t border-slate-100 flex flex-col gap-1 mt-1">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Ajuste Porcentual (%)</span>
+            <div className="flex items-center gap-1.5">
+              <input
+                type="text"
+                value={porcentajePdf}
+                placeholder="100% (Base)"
+                onChange={e => {
+                  const val = e.target.value
+                  if (val === '' || /^[+-]?\d*([.,]\d*)?%?$/.test(val)) {
+                    setPorcentajePdf(val)
+                  }
+                }}
+                className="w-full text-xs px-2 py-1 border border-slate-200 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+              />
+              {porcentajePdf && (
+                <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 whitespace-nowrap">
+                  {parsePorcentaje(porcentajePdf)}%
+                </span>
+              )}
+            </div>
+            <span className="text-[9px] text-slate-400">Ej: 10% (aumento del 10%), 90% (precio al 90%), -15%</span>
           </div>
         )}
       </div>
@@ -399,6 +442,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         formaPago: despacho.forma_pago || '',
         monedaPDF: monedaPdf, tasa: tasaImpresion,
         tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio,
+        porcentaje: parsePorcentaje(porcentajePdf),
       })
     } catch (err) {
       showToast('Error al generar PDF: ' + (err.message || 'Error desconocido'), 'error')
@@ -419,6 +463,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         formaPago: despacho.forma_pago || '',
         monedaPDF: monedaPdf, tasa: tasaImpresion,
         tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio,
+        porcentaje: parsePorcentaje(porcentajePdf),
       })
     } catch (err) {
       showToast('Error al generar Orden de Despacho: ' + (err.message || 'Error desconocido'), 'error')
@@ -499,7 +544,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         monedaPDF: monedaPdf, tasa: tasaImpresion,
         tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio,
         returnBlob: true,
-        nroFactura, nroControl
+        nroFactura, nroControl,
+        porcentaje: parsePorcentaje(porcentajePdf),
       })
       if (facturaActionType === 'print') {
         printOrDownloadPdf(blob, filename)
@@ -535,6 +581,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         monedaPDF: monedaPdf, tasa: tasaImpresion,
         tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio,
         returnBlob: true,
+        porcentaje: parsePorcentaje(porcentajePdf),
       })
       printOrDownloadPdf(blob, filename)
     } catch (err) {
@@ -558,6 +605,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         monedaPDF: 'bs', tasa: tasaImpresion,
         tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio,
         returnBlob: true,
+        porcentaje: parsePorcentaje(porcentajePdf),
       })
 
       const clienteObj = despacho.cliente_factura || despacho.cliente
@@ -605,6 +653,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         monedaPDF: monedaPdf, tasa: tasaImpresion,
         tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio,
         returnBlob: true,
+        porcentaje: parsePorcentaje(porcentajePdf),
       })
       printOrDownloadPdf(blob, filename)
     } catch (err) {
@@ -648,6 +697,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         monedaPDF: monedaPdf, tasa: tasaImpresion,
         tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio,
         returnBlob: true,
+        porcentaje: parsePorcentaje(porcentajePdf),
       })
 
       const clienteObj = despacho.cliente_factura || despacho.cliente

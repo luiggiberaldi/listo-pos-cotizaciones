@@ -74,6 +74,7 @@ const OrdenCompraView       = lazyRetry(() => import('./views/OrdenCompraView'))
 const SeguimientoOperativoView = lazyRetry(() => import('./views/SeguimientoOperativoView'))
 const TesterView        = lazyRetry(() => import('./views/TesterView'))
 const TesterFlowView    = lazyRetry(() => import('./views/TesterFlowView'))
+const TutorialView      = lazyRetry(() => import('./views/TutorialView'))
 
 // ─── QueryClient — importado desde lib/queryClient.js ────────────────────────
 
@@ -233,6 +234,20 @@ function RutaExcluyeAdmin() {
   return <Outlet />
 }
 
+// ─── Ruta exclusiva de vendedores ─────────────────────────────────────────────
+function RutaSoloVendedor() {
+  const hasUser = useAuthStore(useCallback(s => !!s.user, []))
+  const perfil = useAuthStore(useCallback(s => s.perfil, []))
+  const initialized = useAuthStore(useCallback(s => s.initialized, []))
+  const cargandoPerfil = useAuthStore(useCallback(s => s._cargandoPerfil, []))
+
+  if (!initialized) return <PantallaCarga />
+  if (!perfil && hasUser && cargandoPerfil) return <PantallaCarga />
+  if (!perfil) return <Navigate to="/login" replace />
+  if (perfil.rol !== 'vendedor' && perfil.rol !== 'vendedor_sin_comision') return <Navigate to="/" replace />
+  return <Outlet />
+}
+
 // ─── App raíz ─────────────────────────────────────────────────────────────────
 function AppRoutes() {
   const initialize = useAuthStore((s) => s.initialize)
@@ -282,6 +297,10 @@ function AppRoutes() {
             <Route path="/cotizaciones"   element={<CotizacionesView />} />
             <Route path="/venta-rapida"   element={<VentaRapidaView />} />
             <Route path="/comisiones"    element={<ComisionesView />} />
+            
+            <Route element={<RutaSoloVendedor />}>
+              <Route path="/tutorial"      element={<TutorialView />} />
+            </Route>
 
             {/* Transportistas: excluye admin y logistica */}
             <Route element={<RutaExcluyeAdmin />}>

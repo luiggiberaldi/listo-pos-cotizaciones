@@ -9,9 +9,10 @@ import {
   drawCheck, drawWatermark, drawAnuladaWatermark, drawAprobadoWatermark,
 } from './pdfShared'
 
-export async function generarOrdenDespachoPDF({ despacho, items = [], config = {}, formaPago = '', monedaPDF = '$', tasa = 0, tasaUsdt = 0, tasaBcv = 0, returnBlob = false }) {
+export async function generarOrdenDespachoPDF({ despacho, items = [], config = {}, formaPago = '', monedaPDF = '$', tasa = 0, tasaUsdt = 0, tasaBcv = 0, returnBlob = false, porcentaje = 100 }) {
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
 
+  const factor = Number(porcentaje || 100) / 100
   const factorBcv = (tasaUsdt > 0 && tasaBcv > 0) ? tasaUsdt / tasaBcv : 0
   let y = 0
 
@@ -402,7 +403,13 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
     let totalLineaAMostrar = Number(item.total_linea_usd || 0)
 
     const isCorte = (item.nombre_snap || '').toUpperCase().includes('CORTE') || (item.codigo_snap || '').startsWith('CRT')
+    const esFleteCorte = isFlete || isCorte
     const esServicio = isFlete || isCorte || item.tiene_descuento === false
+
+    if (!esFleteCorte) {
+      precioUnitarioAMostrar = precioUnitarioAMostrar * factor
+      totalLineaAMostrar = totalLineaAMostrar * factor
+    }
 
     if (esPersonal && descPersonalPct > 0 && !item.es_prestamo && !esServicio) {
       precioUnitarioAMostrar = Math.round((precioUnitarioAMostrar / (1 - descPersonalPct / 100)) * 100) / 100
@@ -460,10 +467,12 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   const flete = Number(despacho.flete_usd || 0)
   const corte = Number(despacho.corte_usd || 0)
   const montoExento = flete + corte
-  const descuentoTotal = Number(despacho.descuento_total_usd || 0)
+  const descuentoTotalOriginal = Number(despacho.descuento_total_usd || 0)
+  const descuentoTotal = descuentoTotalOriginal * factor
   
   // En orden de despacho ahora SIEMPRE se muestra el exento
-  const subtotal = total - montoExento
+  const subtotalOriginalVal = total - montoExento
+  const subtotal = subtotalOriginalVal * factor
 
   // Variables esPersonal y descPersonalPct definidas al inicio
 
@@ -475,7 +484,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
     items.forEach(it => {
       if (!it.es_prestamo) {
         const cant = Number(it.cantidad || 0)
-        const precio = Number(it.precio_unit_usd || 0)
+        const precio = Number(it.precio_unit_usd || 0) * factor
         const precioOrig = Math.round((precio / (1 - descPersonalPct / 100)) * 100) / 100
         sumOriginal += precioOrig * cant
       }
@@ -484,7 +493,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
     descuentoPersonal = Math.max(0, subtotalOriginal - subtotal)
   }
 
-  const totalFinal = total - descuentoTotal
+  const totalFinal = subtotal - descuentoTotal + montoExento
   const hasExentoReal = montoExento > 0
   const hasFleteReal = flete > 0
   const hasDescuento = descuentoTotal > 0
@@ -531,8 +540,16 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
     }
   }
 
-  // Con un solo método de pago siempre mostrar el total real (incluye flete/corte)
-  if (formasPagoArr.length === 1) {
+  // Scale payment methods to match the new total if there are multiple
+  if (formasPagoArr.length > 1) {
+    const originalTotalFinal = (subtotalOriginalVal - descuentoTotalOriginal) + montoExento
+    const scalingFactor = originalTotalFinal > 0 ? totalFinal / originalTotalFinal : 1
+    formasPagoArr.forEach(fp => {
+      if (fp.monto != null) {
+        fp.monto = fp.monto * scalingFactor
+      }
+    })
+  } else if (formasPagoArr.length === 1) {
     formasPagoArr[0].monto = totalFinal
   }
 

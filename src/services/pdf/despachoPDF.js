@@ -9,9 +9,10 @@ import {
   drawWatermark, drawAnuladaWatermark,
 } from './pdfShared'
 
-export async function generarDespachoPDF({ despacho, items = [], config = {}, formaPago = '', monedaPDF = '$', tasa = 0, tasaUsdt = 0, tasaBcv = 0, returnBlob = false }) {
+export async function generarDespachoPDF({ despacho, items = [], config = {}, formaPago = '', monedaPDF = '$', tasa = 0, tasaUsdt = 0, tasaBcv = 0, returnBlob = false, porcentaje = 100 }) {
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
 
+  const factor = Number(porcentaje || 100) / 100
   const factorBcv = (tasaUsdt > 0 && tasaBcv > 0) ? tasaUsdt / tasaBcv : 0
 
   const rif = config.rif_negocio || 'J-50115913-0'
@@ -466,7 +467,13 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     let totalLineaAMostrar = item.es_prestamo ? (Number(item.cantidad || 0) * Number(item.precio_unit_usd || 0)) : Number(item.total_linea_usd || 0)
 
     const isCorte = (item.nombre_snap || '').toUpperCase().includes('CORTE') || (item.codigo_snap || '').startsWith('CRT')
+    const esFleteCorte = isFlete || isCorte
     const esServicio = isFlete || isCorte || item.tiene_descuento === false
+
+    if (!esFleteCorte) {
+      precioUnitarioAMostrar = precioUnitarioAMostrar * factor
+      totalLineaAMostrar = totalLineaAMostrar * factor
+    }
 
     if (esPersonal && descPersonalPct > 0 && !item.es_prestamo && !esServicio) {
       precioUnitarioAMostrar = Math.round((precioUnitarioAMostrar / (1 - descPersonalPct / 100)) * 100) / 100
@@ -506,11 +513,13 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
 
   const sloganY = esMembrete ? PAGE_H - 21 : PAGE_H - 33
 
-  const total = items.reduce((acc, it) => acc + (it.es_prestamo ? (Number(it.cantidad || 0) * Number(it.precio_unit_usd || 0)) : Number(it.total_linea_usd || 0)), 0)
+  const totalOriginal = items.reduce((acc, it) => acc + (it.es_prestamo ? (Number(it.cantidad || 0) * Number(it.precio_unit_usd || 0)) : Number(it.total_linea_usd || 0)), 0)
+  const total = totalOriginal * factor
   const flete = Number(despacho.flete_usd || 0)
   const corte = Number(despacho.corte_usd || 0)
   const montoExento = flete + corte
-  const descuentoTotal = Number(despacho.descuento_total_usd || 0)
+  const descuentoTotalOriginal = Number(despacho.descuento_total_usd || 0)
+  const descuentoTotal = descuentoTotalOriginal * factor
   const totalFinal = total - descuentoTotal + montoExento
   const hasExento = montoExento > 0
   const hasFlete = flete > 0
@@ -530,7 +539,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     items.forEach(it => {
       if (!it.es_prestamo) {
         const cant = Number(it.cantidad || 0)
-        const precio = Number(it.precio_unit_usd || 0)
+        const precio = Number(it.precio_unit_usd || 0) * factor
         const precioOrig = Math.round((precio / (1 - descPersonalPct / 100)) * 100) / 100
         sumOriginal += precioOrig * cant
       }

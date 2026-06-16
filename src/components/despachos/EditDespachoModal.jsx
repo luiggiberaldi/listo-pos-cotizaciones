@@ -110,6 +110,16 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
         val = String(maxVal)
       }
     }
+    if (metodo === 'Cta por cobrar') {
+      const sumOthers = pagosInmediatos
+        .filter(p => p.metodo !== 'Cta por cobrar')
+        .reduce((sum, p) => sum + (Number(p.monto) || 0), 0)
+      const maxVal = Math.max(0, totalConFlete - sumOthers)
+      let numVal = Number(val)
+      if (numVal > maxVal) {
+        val = String(maxVal)
+      }
+    }
     setMontoPagoInmediato(metodo, val)
   }
 
