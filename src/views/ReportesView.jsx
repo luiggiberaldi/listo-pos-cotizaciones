@@ -22,6 +22,7 @@ import { useTasaCambio } from '../hooks/useTasaCambio'
 import EmptyState from '../components/ui/EmptyState'
 import { Modal } from '../components/ui/Modal'
 import DateRangeSelector from '../components/reportes/DateRangeSelector'
+import CustomSelect from '../components/ui/CustomSelect'
 import KpiCards from '../components/reportes/KpiCards'
 import TablaVendedores from '../components/reportes/TablaVendedores'
 import TablaProductos from '../components/reportes/TablaProductos'
@@ -1905,16 +1906,15 @@ function TabComisiones({ configNeg }) {
               {esAdmin && (
                 <div className="w-52">
                   <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">Vendedor</label>
-                  <select
+                  <CustomSelect
+                    options={[
+                      { value: '', label: 'Todos los Asesores' },
+                      ...vendedoresDisponibles.map(v => ({ value: v.id, label: v.nombre }))
+                    ]}
                     value={filtroVendedor}
-                    onChange={e => setFiltroVendedor(e.target.value)}
-                    className="w-full h-9 px-3 rounded-xl border border-slate-200 text-xs font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none bg-slate-50/50 appearance-none cursor-pointer hover:border-indigo-300 transition-all"
-                  >
-                    <option value="">Todos los Asesores</option>
-                    {vendedoresDisponibles.map(v => (
-                      <option key={v.id} value={v.id}>{v.nombre}</option>
-                    ))}
-                  </select>
+                    onChange={setFiltroVendedor}
+                    placeholder="Todos los Asesores"
+                  />
                 </div>
               )}
 
