@@ -1962,27 +1962,27 @@ function TabComisiones({ configNeg }) {
                 </div>
               )}
 
-              <div className="flex items-center gap-2.5 relative shrink-0">
+              <div className="flex items-center gap-1.5 relative shrink-0">
                 {/* BOTÓN IMPRIMIR PDF */}
                 <div className="relative">
                   {filtroVendedor ? (
                     <button
                       onClick={() => exportarPDF('todos', 'imprimir')}
                       disabled={exportando || comisiones.length === 0}
-                      className="flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm h-9"
+                      className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm h-9"
                     >
                       <Printer size={12} className="text-slate-500" />
-                      {exportando ? 'Generando...' : 'Imprimir PDF'}
+                      <span className="hidden sm:inline">{exportando ? 'Generando...' : 'Imprimir PDF'}</span>
                     </button>
                   ) : (
                     <>
                       <button
                         onClick={() => setShowPrintMenu(!showPrintMenu)}
                         disabled={exportando || comisiones.length === 0}
-                        className="flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm h-9"
+                        className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm h-9"
                       >
                         <Printer size={12} className="text-slate-500" />
-                        {exportando ? 'Generando...' : 'Imprimir PDF'}
+                        <span className="hidden sm:inline">{exportando ? 'Generando...' : 'Imprimir PDF'}</span>
                         <ChevronDown size={12} className={`transition-transform duration-200 ${showPrintMenu ? 'rotate-180' : ''}`} />
                       </button>
 
@@ -2033,22 +2033,22 @@ function TabComisiones({ configNeg }) {
                     <button
                       onClick={() => exportarPDF('todos', 'descargar')}
                       disabled={exportando || comisiones.length === 0}
-                      className="flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md h-9"
+                      className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md h-9"
                       style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
                     >
                       <Download size={12} />
-                      {exportando ? 'Generando...' : 'Descargar PDF'}
+                      <span className="hidden sm:inline">{exportando ? 'Generando...' : 'Descargar PDF'}</span>
                     </button>
                   ) : (
                     <>
                       <button
                         onClick={() => setShowExportMenu(!showExportMenu)}
                         disabled={exportando || comisiones.length === 0}
-                        className="flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md h-9"
+                        className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md h-9"
                         style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
                       >
                         <Download size={12} />
-                        {exportando ? 'Generando...' : 'Descargar PDF'}
+                        <span className="hidden sm:inline">{exportando ? 'Generando...' : 'Descargar PDF'}</span>
                         <ChevronDown size={12} className={`transition-transform duration-200 ${showExportMenu ? 'rotate-180' : ''}`} />
                       </button>
 
@@ -3130,24 +3130,24 @@ function TabArticulosExternos({ configNeg }) {
             </div>
 
             {/* Grupo de Acciones */}
-            <div className="flex items-center gap-2.5 ml-auto shrink-0 self-end">
+            <div className="flex items-center gap-1.5 ml-auto shrink-0 self-end">
               <button
                 onClick={() => exportarPDF('imprimir')}
                 disabled={exportando || !itemsFiltrados.length}
-                className="flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm h-9"
+                className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm h-9"
               >
                 <Printer size={12} className="text-slate-500" />
-                {exportando ? 'Generando...' : 'Imprimir PDF'}
+                <span className="hidden sm:inline">{exportando ? 'Generando...' : 'Imprimir PDF'}</span>
               </button>
 
               <button
                 onClick={() => exportarPDF('descargar')}
                 disabled={exportando || !itemsFiltrados.length}
-                className="flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md h-9"
+                className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md h-9"
                 style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
               >
                 <Download size={12} />
-                {exportando ? 'Generando...' : 'Descargar PDF'}
+                <span className="hidden sm:inline">{exportando ? 'Generando...' : 'Descargar PDF'}</span>
               </button>
             </div>
           </div>

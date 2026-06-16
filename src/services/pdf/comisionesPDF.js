@@ -67,6 +67,103 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
     d.text(text, badgeX + badgeW / 2, y - h / 2 + 1.4, { align: 'center' })
   }
 
+  // Obtener porcentaje de comisión para un artículo específico
+  function obtenerPctItem(p, esExterno, pctCabilla, pctOtros, catCabilla) {
+    const nombre = (p.nombre_snap || p.nombre || '').toLowerCase().trim();
+    const categoria = (p.producto?.categoria || p.categoria || '').toLowerCase().trim();
+    const catCab = (catCabilla || 'cabilla').toLowerCase().trim();
+    
+    // 1. Si es de origen externo
+    if (p.origen === 'externo') {
+      return pctOtros;
+    }
+    
+    // 2. Si es cemento y el vendedor es externo, usa la comisión de cabilla (2%)
+    if (esExterno && (categoria === 'cemento' || nombre.includes('cemento'))) {
+      return pctCabilla;
+    }
+    
+    // 3. Si la categoría o el nombre coincide con catCabilla, usa la comisión de cabilla
+    if (categoria === catCab || nombre.includes(catCab)) {
+      return pctCabilla;
+    }
+    
+    // 4. Cualquier otro producto usa la tasa de otros (3%)
+    return pctOtros;
+  }
+
+  // Desglosar comisiones por artículo individual
+  function desglosarComisionesPorArticulo(lista) {
+    const nuevaLista = []
+    const catCabilla = (config?.comision_categoria_cabilla || 'cabilla').toLowerCase().trim()
+    
+    for (const c of lista) {
+      const desp = c.despacho || {}
+      const prods = Array.isArray(desp.productos) ? desp.productos.filter(Boolean) : []
+      
+      if (prods.length === 0) {
+        // Fallback: no tiene productos, agregar tal cual
+        nuevaLista.push(c)
+        continue
+      }
+      
+      const esExterno = c.vendedor ? (!!c.vendedor.es_externo || (c.vendedor.markup_pct != null && Number(c.vendedor.markup_pct) > 0)) : false
+      const pctCabilla = Number(c.pctcabilla ?? c.pct ?? 2)
+      const pctOtros = Number(c.pctotros ?? c.pct ?? 3)
+      
+      // 1. Calcular comisión cruda para cada artículo para poder prorratear
+      let sumRawCom = 0
+      const itemsCalculados = prods.map(p => {
+        const itemPct = obtenerPctItem(p, esExterno, pctCabilla, pctOtros, catCabilla)
+        const valorItem = Number(p.total_linea_usd ?? 0)
+        const rawCom = (valorItem * itemPct) / 100
+        sumRawCom += rawCom
+        return {
+          p,
+          itemPct,
+          valorItem,
+          rawCom
+        }
+      })
+      
+      // 2. Crear un registro para cada artículo
+      itemsCalculados.forEach(({ p, itemPct, valorItem, rawCom }) => {
+        // Prorratear la comisión total del registro/evento
+        const factor = sumRawCom > 0 ? (rawCom / sumRawCom) : (1 / prods.length)
+        const itemTotalComision = Number((c.totalcomision * factor).toFixed(2))
+        const itemMontoPagado = Number(((c.montopagado || 0) * factor).toFixed(2))
+        
+        // Clasificar como cabilla u otros para mantener los subtotales/totales consistentes
+        const esCabilla = itemPct === pctCabilla
+        const itemComisionCabilla = esCabilla ? itemTotalComision : 0
+        const itemComisionOtros = esCabilla ? 0 : itemTotalComision
+        
+        // Limpiar nombre si ya incluye el código al principio
+        let nombreLimpio = p.nombre_snap || '—'
+        if (p.codigo_snap) {
+          const codEscapado = p.codigo_snap.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')
+          const regexCorchetes = new RegExp(`^\\[${codEscapado}\\]\\s*[-:]*\\s*`, 'i')
+          const regexSimple = new RegExp(`^${codEscapado}\\s*[-:]*\\s*`, 'i')
+          nombreLimpio = nombreLimpio.replace(regexCorchetes, '').replace(regexSimple, '')
+        }
+        
+        nuevaLista.push({
+          ...c,
+          codigo: p.codigo_snap || '',
+          descripcion: nombreLimpio.toUpperCase(),
+          valor: valorItem,
+          pct: itemPct,
+          totalcomision: itemTotalComision,
+          montopagado: itemMontoPagado,
+          comisioncabilla: itemComisionCabilla,
+          comisionotros: itemComisionOtros
+        })
+      })
+    }
+    
+    return nuevaLista
+  }
+
   // NORMALIZAR: unificar naming antes de procesar (soporte para Worker API y RPC)
   function normalizarComision(c) {
     // Detectar si c es un evento de comision_liberaciones (Fase 7)
@@ -105,12 +202,19 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
         comisionotros: Number(comisionotros.toFixed(2)),
         valor: Number(desp.totalusd || 0),
         pct: Number(com.pctcabilla || com.pctotros || 0),
+        pctcabilla: Number(com.pctcabilla || 0),
+        pctotros: Number(com.pctotros || 0),
         codigo: '',
         descripcion: descProductos || labelLiberacion,
         despachonumero: desp.numero || '---',
         montopagado: Number(com.montopagado || 0),
         tasa_snapshot: Number(tasaEuro ?? desp.tasa_snapshot ?? cot.tasa_bcv_snapshot ?? 0),
         estado: rawEstado,
+        // Preservar despacho con productos para el desglose por artículo
+        despacho: {
+          ...desp,
+          productos: desp.productos || []
+        },
         clienteNombre: (() => {
           const rawName = cli.nombre || desp.cliente_nombre || '---';
           const isPersonal = cli.tipo_cliente === 'personal';
@@ -150,6 +254,8 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
       totalcomision,
       comisioncabilla: Number(c.comisioncabilla ?? 0),
       comisionotros: Number(c.comisionotros ?? 0),
+      pctcabilla: Number(c.pctcabilla ?? pct),
+      pctotros: Number(c.pctotros ?? pct),
       // Valor del item (si aplica)
       valor: Number(c.total ?? c.total_linea_neto ?? 0),
       pct,
@@ -168,6 +274,8 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
         c.cotizacion?.tasa_bcv_snapshot ?? 
         0
       ),
+      // Preservar despacho con productos para el desglose por artículo
+      despacho: desp ? { ...desp, productos: desp.productos || [] } : null,
       // Mapeo de estados: 'pagada' es el único estado que suma al pagado, resto son pendientes
       estado: rawEstado,
       clienteNombre: (() => {
@@ -205,10 +313,11 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
     return descA.localeCompare(descB);
   };
 
-  const comisionesNorm = (comisiones || [])
-    .map(normalizarComision)
-    .filter(c => c.estado !== 'cta_cobrar' || c.tipo !== undefined)
-    .sort(ordenarPorVendedorYDocumento)
+  const comisionesNorm = desglosarComisionesPorArticulo(
+    (comisiones || [])
+      .map(normalizarComision)
+      .filter(c => c.estado !== 'cta_cobrar' || c.tipo !== undefined)
+  ).sort(ordenarPorVendedorYDocumento)
   console.log('[generarComisionesPDF] Comisiones normalizadas para el PDF:', comisionesNorm.map(c => ({
     id: c.id,
     doc: c.despachonumero,
@@ -291,11 +400,16 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
   // Cuadro resumen premium
   const boxH = 18
   const boxW = CONTENT_W / 3
+  const uniqueDocsCount = new Set(comisionesNorm.map(c => c.despachonumero)).size
+  const uniquePagadasCount = new Set(pagadas.map(c => c.despachonumero)).size
+  const uniquePendsCount = new Set(pends.map(c => c.despachonumero)).size
+  const uniqueCxcCount = new Set(cxc.map(c => c.despachonumero)).size
+
   const boxes = [
     { 
       label: 'Generado Histórico', 
       value: fmtUsd(totalGeneral), 
-      count: `${comisionesNorm.length} comisiones`, 
+      count: `${uniqueDocsCount} comisiones`, 
       bgColor: [248, 250, 252], // Slate 50
       borderColor: [226, 232, 240], // Slate 200
       textColor: [15, 23, 42], // Slate 900
@@ -304,7 +418,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
     { 
       label: 'Total Pagado', 
       value: fmtUsd(totalPagado), 
-      count: `${pagadas.length} pagadas`, 
+      count: `${uniquePagadasCount} pagadas`, 
       bgColor: [236, 253, 245], // Emerald 50
       borderColor: [167, 243, 208], // Emerald 200
       textColor: [4, 120, 87], // Emerald 700
@@ -313,7 +427,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
     { 
       label: 'Saldo Pendiente', 
       value: fmtUsd(totalPendiente), 
-      count: `${pends.length} pend / ${cxc.length} cxc`, 
+      count: `${uniquePendsCount} pend / ${uniqueCxcCount} cxc`, 
       bgColor: [255, 251, 235], // Amber 50
       borderColor: [253, 230, 138], // Amber 200
       textColor: [180, 83, 9], // Amber 700

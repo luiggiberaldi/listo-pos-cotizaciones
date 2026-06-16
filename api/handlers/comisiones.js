@@ -247,7 +247,7 @@ export async function handleGetComisiones(request, env) {
   const operatorId = operador.id;
 
   if (vista === 'eventos') {
-    let baseUrl = `${env.SUPABASE_URL}/rest/v1/comision_liberaciones?select=id,comision_id,despacho_id,vendedor_id,cuenta_id,monto,tipo,cxc_id,creado_en,comisiones:comisiones!inner(id,totalcomision,comisioncabilla,comisionotros,pctcabilla,pctotros,estado,montopagado,cotizacionid,despacho:notas_despacho(id,numero,total_usd,tasa_snapshot,cliente:clientes!notas_despacho_cliente_id_fkey(id,nombre,tipo_cliente),productos:notas_despacho_items(nombre_snap))),vendedor:usuarios(id,nombre,color,markup_pct,rol,es_externo)&order=creado_en.desc`
+    let baseUrl = `${env.SUPABASE_URL}/rest/v1/comision_liberaciones?select=id,comision_id,despacho_id,vendedor_id,cuenta_id,monto,tipo,cxc_id,creado_en,comisiones:comisiones!inner(id,totalcomision,comisioncabilla,comisionotros,pctcabilla,pctotros,estado,montopagado,cotizacionid,despacho:notas_despacho(id,numero,total_usd,tasa_snapshot,cliente:clientes!notas_despacho_cliente_id_fkey(id,nombre,tipo_cliente),productos:notas_despacho_items(nombre_snap,codigo_snap,cantidad,precio_unit_usd,descuento_pct,total_linea_usd,origen,producto_id,producto:productos(categoria)))),vendedor:usuarios(id,nombre,color,markup_pct,rol,es_externo)&order=creado_en.desc`
     
     let query = baseUrl + `&cuenta_id=eq.${user.id}`
 
@@ -351,7 +351,7 @@ export async function handleGetComisiones(request, env) {
   }
 
   const rows = await res.json()
-  const despachos = await fetchByIds(env, headers, 'notas_despacho', rows.map(c => c.despachoid), 'id,numero,total_usd,tasa_snapshot,cliente_id,cliente:clientes!notas_despacho_cliente_id_fkey(id,nombre),productos:notas_despacho_items(nombre_snap)')
+  const despachos = await fetchByIds(env, headers, 'notas_despacho', rows.map(c => c.despachoid), 'id,numero,total_usd,tasa_snapshot,cliente_id,cliente:clientes!notas_despacho_cliente_id_fkey(id,nombre),productos:notas_despacho_items(nombre_snap,codigo_snap,cantidad,precio_unit_usd,descuento_pct,total_linea_usd,origen,producto_id,producto:productos(categoria))')
   const cotizaciones = await fetchByIds(env, headers, 'cotizaciones', rows.map(c => c.cotizacionid), 'id,numero,tasa_bcv_snapshot,cliente_id,cliente:clientes(id,nombre)')
   const vendedores = await fetchByIds(env, headers, 'usuarios', rows.map(c => c.vendedorid), 'id,nombre,color,markup_pct,rol,es_externo')
   const data = rows.map(c => {
