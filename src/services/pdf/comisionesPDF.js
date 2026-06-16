@@ -1559,7 +1559,17 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(51, 65, 85);
           }
-          doc.text(`Doc ${numDoc}${suffixPrestamo}`, MARGIN + 4, y + 4.5);
+          const docText = `Doc ${numDoc}${suffixPrestamo}`;
+          doc.text(docText, MARGIN + 4, y + 4.5);
+          
+          if (d.tasa && Number(d.tasa) > 0) {
+            const docW = doc.getTextWidth(docText);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(140, 150, 160); // Gris más tenue
+            doc.setFontSize(7.5);
+            doc.text(` (tasa: ${d.tasa})`, MARGIN + 4 + docW, y + 4.5);
+            doc.setFontSize(9); // Restaurar
+          }
           
           doc.setFont('helvetica', 'normal');
           doc.setTextColor(51, 65, 85);
@@ -1639,13 +1649,25 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
           doc.text(labelText, MARGIN + 2, y + 2)
 
           const labelW = doc.getTextWidth(labelText)
-          const textoMonto = ['Efectivo Bs', 'Transf. / Pago Móvil', 'Punto de Venta'].includes(fp.formaPago) && p.montoBs
-            ? `${fmtUsd(p.monto)} (${fmtBs(p.montoBs)})`
-            : fmtUsd(p.monto)
+          const usdVal = fmtUsd(p.monto)
 
+          // 1. Dibujar monto en USD en negrita
           doc.setFont('helvetica', 'bold')
           doc.setTextColor(...C_DARK)
-          doc.text(textoMonto, MARGIN + 2 + labelW, y + 2)
+          doc.text(usdVal, MARGIN + 2 + labelW, y + 2)
+
+          // 2. Dibujar monto en Bs y tasa en color tenue regular al lado
+          if (['Efectivo Bs', 'Transf. / Pago Móvil', 'Punto de Venta'].includes(fp.formaPago) && p.montoBs) {
+            const usdW = doc.getTextWidth(usdVal)
+            const tasaText = p.tasa && Number(p.tasa) > 0 ? ` · Tasa: ${p.tasa}` : ''
+            const bsText = ` (${fmtBs(p.montoBs)}${tasaText})`
+            
+            doc.setFont('helvetica', 'normal')
+            doc.setFontSize(7.5) // Un poco más pequeño para dar jerarquía
+            doc.setTextColor(110, 120, 130) // Color gris tenue
+            doc.text(bsText, MARGIN + 2 + labelW + usdW, y + 2)
+            doc.setFontSize(8.5) // Restaurar
+          }
           y += 7.5
         })
       }
