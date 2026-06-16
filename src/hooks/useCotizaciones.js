@@ -17,6 +17,7 @@ import { showToast } from '../components/ui/Toast'
 import { sendPushNotification } from './usePushNotifications'
 import { STOCK_COMPROMETIDO_KEY } from './useStockComprometido'
 import { enqueue } from '../lib/mutationQueue'
+import { broadcastEntidad } from '../services/supabase/realtimeBus'
 
 export const COTIZACIONES_KEY = ['cotizaciones']
 
@@ -279,9 +280,11 @@ export function useGuardarBorrador() {
           7000,
         )
         qc.invalidateQueries({ queryKey: COTIZACIONES_KEY, exact: false })
+      broadcastEntidad('cotizaciones')
         return localId
       }
       qc.invalidateQueries({ queryKey: COTIZACIONES_KEY, exact: false })
+      broadcastEntidad('cotizaciones')
       return id
     },
   })
@@ -357,6 +360,7 @@ export function useEnviarCotizacion() {
     },
     onSuccess: async ({ numero, clienteNombre, vendedorNombre, totalUsd, esClienteAjeno, clienteVendedorNombre }) => {
       qc.invalidateQueries({ queryKey: COTIZACIONES_KEY, exact: false })
+      broadcastEntidad('cotizaciones')
       qc.invalidateQueries({ queryKey: STOCK_COMPROMETIDO_KEY })
       // Guard: si no hay numero, algo falló (evitar Ghost Toast)
       if (!numero || numero === '—') return
@@ -395,6 +399,7 @@ export function useAnularCotizacion() {
     },
     onSuccess: async ({ numero }) => {
       qc.invalidateQueries({ queryKey: COTIZACIONES_KEY, exact: false })
+      broadcastEntidad('cotizaciones')
       qc.invalidateQueries({ queryKey: STOCK_COMPROMETIDO_KEY })
       showToast(`Cotización #${numero} anulada`, 'warning')
       notifyCotizacionAnulada(numero, usuarioNombre, rol)
@@ -428,6 +433,7 @@ export function useActualizarEstado() {
     },
     onSuccess: async ({ estado, numero, clienteNombre, totalUsd, vendedorId }) => {
       qc.invalidateQueries({ queryKey: COTIZACIONES_KEY, exact: false })
+      broadcastEntidad('cotizaciones')
       qc.invalidateQueries({ queryKey: STOCK_COMPROMETIDO_KEY })
       // Guard: si no hay numero, algo falló (evitar Ghost Toast)
       if (!numero) return
@@ -471,6 +477,7 @@ export function useCrearVersion() {
     },
     onSuccess: async () => {
       qc.invalidateQueries({ queryKey: COTIZACIONES_KEY, exact: false })
+      broadcastEntidad('cotizaciones')
     },
   })
 }
@@ -493,6 +500,7 @@ export function useReabrirCotizacion() {
     },
     onSuccess: async () => {
       qc.invalidateQueries({ queryKey: COTIZACIONES_KEY, exact: false })
+      broadcastEntidad('cotizaciones')
     },
   })
 }
@@ -519,6 +527,7 @@ export function useReciclarCotizacion() {
     },
     onSuccess: async ({ id, numero, vendedorDestino }) => {
       qc.invalidateQueries({ queryKey: COTIZACIONES_KEY, exact: false })
+      broadcastEntidad('cotizaciones')
       // Guard: si no hay ID, algo falló (evitar Ghost Toast)
       if (!id) return
       const numPad = String(numero).padStart(5, '0')

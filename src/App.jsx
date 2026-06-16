@@ -9,8 +9,9 @@ import {
   Navigate,
   Outlet,
 } from 'react-router-dom'
-import { QueryClientProvider } from '@tanstack/react-query'
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
 import queryClient from './lib/queryClient'
+import { indexedDbPersister, CACHE_BUSTER } from './lib/queryPersister'
 import OfflineBanner from './components/ui/OfflineBanner'
 import useAuthStore from './store/useAuthStore'
 import { ToastProvider } from './components/ui/Toast'
@@ -329,7 +330,16 @@ function AppRoutes() {
 export default function App() {
   return (
     <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
+      <PersistQueryClientProvider
+        client={queryClient}
+        persistOptions={{
+          persister: indexedDbPersister,
+          maxAge: 1000 * 60 * 60 * 24,            // 24h — coincide con gcTime
+          buster: CACHE_BUSTER,                   // git hash → invalida en cada deploy
+          dehydrateOptions: {
+            shouldDehydrateQuery: (q) => q.state.status === 'success',
+          },
+        }}>
         <BrowserRouter unstable_useTransitions={false}>
           <ToastProvider>
             <OfflineBanner>
@@ -337,7 +347,7 @@ export default function App() {
             </OfflineBanner>
           </ToastProvider>
         </BrowserRouter>
-      </QueryClientProvider>
+      </PersistQueryClientProvider>
     </ErrorBoundary>
   )
 }

@@ -6,6 +6,7 @@ import supabase from '../services/supabase/client'
 import { apiUrl, getAuthHeaders } from '../services/apiBase'
 import useAuthStore from '../store/useAuthStore'
 import { authFetch } from '../services/authFetch'
+import { broadcastEntidad } from '../services/supabase/realtimeBus'
 import { notifyDespachoCreado, notifyStockBajo, notifyDespachoEnRuta, notifyDespachoEntregado, notifyDespachoCancelado } from '../services/notificationService'
 import { showToast } from '../components/ui/Toast'
 import { sendPushNotification } from './usePushNotifications'
@@ -243,6 +244,7 @@ export function useCrearDespacho() {
       qc.invalidateQueries({ queryKey: ['cotizaciones'], exact: false })
       qc.invalidateQueries({ queryKey: ['stock_comprometido'] })
       qc.invalidateQueries({ queryKey: ['cuentas-cobrar'] })
+      broadcastEntidad(['despachos', 'inventario', 'comisiones', 'cotizaciones', 'cuentas'])
       showToast('Nota de despacho creada', 'success')
       notifyDespachoCreado(displayNum, displayCliente, usuarioNombre, rol, perfil?.id, esCod)
       sendPushNotification({
@@ -349,6 +351,7 @@ export function useActualizarEstadoDespacho() {
         qc.invalidateQueries({ queryKey: ['dashboard_metrics'] })
         qc.invalidateQueries({ queryKey: ['clientes'], exact: false })
         qc.invalidateQueries({ queryKey: ['cuentas-cobrar'], exact: false })
+        broadcastEntidad(['despachos', 'inventario', 'comisiones', 'cotizaciones', 'clientes', 'cuentas'])
       }, 400)
     },
   })
@@ -377,6 +380,7 @@ export function useEditarDespacho() {
       qc.invalidateQueries({ queryKey: ['dashboard_metrics'] })
       qc.invalidateQueries({ queryKey: ['clientes'], exact: false })
       qc.invalidateQueries({ queryKey: ['cuentas-cobrar'], exact: false })
+      broadcastEntidad(['despachos', 'clientes', 'cuentas'])
     },
     onError: (error) => {
       showToast(error.message || 'Error al editar despacho', 'error')
@@ -407,6 +411,7 @@ export function useEditarItemsDespacho() {
       qc.invalidateQueries({ queryKey: ['dashboard_metrics'] })
       qc.invalidateQueries({ queryKey: ['clientes'], exact: false })
       qc.invalidateQueries({ queryKey: ['cuentas-cobrar'], exact: false })
+      broadcastEntidad(['despachos', 'inventario', 'clientes', 'cuentas'])
     },
     onError: (error) => {
       showToast(error.message || 'Error al editar ítems', 'error')
@@ -432,6 +437,7 @@ export function useReciclarDespacho() {
     onSuccess: async () => {
       qc.invalidateQueries({ queryKey: ['despachos'], exact: false })
       qc.invalidateQueries({ queryKey: ['cotizaciones'], exact: false })
+      broadcastEntidad(['despachos', 'cotizaciones'])
     },
   })
 }
@@ -460,6 +466,7 @@ export function useDevolucionParcialDespacho() {
       qc.invalidateQueries({ queryKey: ['cotizaciones'], exact: false })
       qc.invalidateQueries({ queryKey: ['dashboard_metrics'] })
       qc.invalidateQueries({ queryKey: ['reporte-ventas'] })
+      broadcastEntidad(['despachos', 'inventario', 'clientes', 'cuentas', 'cotizaciones'])
     },
     onError: (error) => {
       showToast(error.message || 'Error al registrar devolución', 'error')

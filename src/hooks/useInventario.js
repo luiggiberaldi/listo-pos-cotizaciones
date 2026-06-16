@@ -8,7 +8,7 @@ import useAuthStore from '../store/useAuthStore'
 import { buildSmartFilter, parseSearchTerms } from '../utils/smartSearch'
 import { showToast } from '../components/ui/Toast'
 import { MOVIMIENTOS_KEY } from './useMovimientosInventario'
-import { broadcastInventarioUpdate } from '../services/supabase/inventarioBroadcast'
+import { broadcastInventarioUpdate } from '../services/supabase/realtimeBus'
 import { authFetch } from '../services/authFetch'
 
 export const INVENTARIO_KEY = ['inventario']

@@ -6,6 +6,7 @@ import { create } from 'zustand'
 import supabase from '../services/supabase/client'
 import { apiUrl } from '../services/apiBase'
 import queryClient from '../lib/queryClient'
+import { indexedDbPersister } from '../lib/queryPersister'
 
 // ─── Mapear mensajes de error de Supabase a español ───────────────────────────
 function traducirError(mensaje) {
@@ -222,6 +223,12 @@ const useAuthStore = create((set, get) => ({
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('[AUTH] evento:', event, 'session:', !!session, 'user:', session?.user?.email)
+        // Mantener el canal Realtime autenticado con el token actual —
+        // necesario para que postgres_changes sobre tablas con RLS entregue eventos
+        if (session?.access_token) {
+          try { supabase.realtime.setAuth(session.access_token) } catch { /* noop */ }
+        }
+
         if (event === 'INITIAL_SESSION') {
           try {
             if (session?.user) {
@@ -423,6 +430,14 @@ const useAuthStore = create((set, get) => ({
       return { ok: false }
     }
 
+    // Si entra una cuenta de negocio distinta, purgar el cache persistido para
+    // no arrastrar datos de la cuenta anterior (inventario/config son por cuenta)
+    const prevUserId = get().user?.id
+    if (prevUserId && prevUserId !== data.user.id) {
+      queryClient.clear()
+      indexedDbPersister.removeClient().catch(() => {})
+    }
+
     // Setear user — el perfil SOLO se establece al seleccionar operador con PIN
     set({ user: data.user, loading: false, _cargandoPerfil: false, error: null })
 
@@ -592,8 +607,9 @@ const useAuthStore = create((set, get) => ({
       // Refrescar para limpiar app_metadata del JWT
       await supabase.auth.refreshSession()
 
-      // Limpiar cache de datos del operador anterior
+      // Limpiar cache de datos del operador anterior (memoria + persistido)
       queryClient.clear()
+      indexedDbPersister.removeClient().catch(() => {})
       const userId = get().user?.id
       guardarPerfilCache(null, userId)
       set({ perfil: null, loading: false, error: null })
@@ -627,6 +643,9 @@ const useAuthStore = create((set, get) => ({
     set({ _logoutManual: true })
     const userId = get().user?.id
     await supabase.auth.signOut()
+    // Limpiar TODO el cache (memoria + persistido) — evita fugas entre cuentas de negocio
+    queryClient.clear()
+    indexedDbPersister.removeClient().catch(() => {})
     guardarPerfilCache(null, userId)
     set({ user: null, perfil: null, error: null, _logoutManual: false })
   },

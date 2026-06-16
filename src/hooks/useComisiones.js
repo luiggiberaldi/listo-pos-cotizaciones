@@ -5,6 +5,7 @@ import supabase from '../services/supabase/client'
 import { apiUrl, getAuthHeaders } from '../services/apiBase'
 import useAuthStore from '../store/useAuthStore'
 import { showToast } from '../components/ui/Toast'
+import { broadcastEntidad } from '../services/supabase/realtimeBus'
 
 export const COMISIONES_KEY = ['comisiones']
 
@@ -193,6 +194,7 @@ export function useMarcarComisionPagada() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: COMISIONES_KEY })
+      broadcastEntidad('comisiones')
       showToast('Comisión procesada correctamente', 'success')
     },
   })

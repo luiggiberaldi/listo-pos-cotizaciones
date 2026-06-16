@@ -7,6 +7,7 @@ import supabase from '../services/supabase/client'
 import useAuthStore from '../store/useAuthStore'
 import { sanitizePostgrestSearch } from '../utils/format'
 import { authFetch } from '../services/authFetch'
+import { broadcastEntidad } from '../services/supabase/realtimeBus'
 
 // ─── Keys de caché ────────────────────────────────────────────────────────────
 export const CLIENTES_KEY = ['clientes']
@@ -90,6 +91,7 @@ export function useCrearCliente() {
     onSuccess: async () => {
       await qc.cancelQueries({ queryKey: CLIENTES_KEY })
       qc.invalidateQueries({ queryKey: CLIENTES_KEY, exact: false })
+      broadcastEntidad('clientes')
     },
   })
 }
@@ -127,6 +129,7 @@ export function useActualizarCliente() {
     onSuccess: async () => {
       await qc.cancelQueries({ queryKey: CLIENTES_KEY })
       qc.invalidateQueries({ queryKey: CLIENTES_KEY, exact: false })
+      broadcastEntidad('clientes')
     },
   })
 }
@@ -147,6 +150,7 @@ export function useDesactivarCliente() {
     onSuccess: async () => {
       await qc.cancelQueries({ queryKey: CLIENTES_KEY })
       qc.invalidateQueries({ queryKey: CLIENTES_KEY, exact: false })
+      broadcastEntidad('clientes')
     },
   })
 }
@@ -172,6 +176,7 @@ export function useBorrarCliente() {
     onSuccess: async () => {
       await qc.cancelQueries({ queryKey: CLIENTES_KEY })
       qc.invalidateQueries({ queryKey: CLIENTES_KEY, exact: false })
+      broadcastEntidad('clientes')
     },
   })
 }
@@ -194,6 +199,7 @@ export function useActivarCliente() {
     onSuccess: async () => {
       await qc.cancelQueries({ queryKey: CLIENTES_KEY })
       qc.invalidateQueries({ queryKey: CLIENTES_KEY, exact: false })
+      broadcastEntidad('clientes')
     },
   })
 }
@@ -216,6 +222,7 @@ export function useReasignarCliente() {
     onSuccess: async () => {
       await qc.cancelQueries({ queryKey: CLIENTES_KEY })
       qc.invalidateQueries({ queryKey: CLIENTES_KEY, exact: false })
+      broadcastEntidad('clientes')
     },
   })
 }

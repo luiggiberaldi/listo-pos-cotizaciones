@@ -6,6 +6,7 @@ import { useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
 import { apiUrl, getAuthHeaders } from '../services/apiBase'
+import { broadcastEntidad } from '../services/supabase/realtimeBus'
 
 const KEY = ['config_negocio']
 
@@ -67,7 +68,7 @@ export function useActualizarConfig() {
         throw new Error(data.error || text || `Error ${res.status}`)
       }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: KEY }); broadcastEntidad('config') },
   })
 }
 
