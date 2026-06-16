@@ -287,7 +287,20 @@ export async function handleEditarPagoDespacho(request, env) {
       direccionEnvioCiudad === undefined && 
       direccionEnvioEstado === undefined;
 
-    if (!editandoSoloNotas) {
+    // Logística/admin puede editar transportista y flete en despachos ya entregados
+    // pero NO puede tocar campos financieros, cliente ni dirección
+    const editandoTransportista = esAdmin &&
+      formaPago === undefined &&
+      formaPagoCliente === undefined &&
+      referenciaPago === undefined &&
+      corteUsd === undefined &&
+      clienteId === undefined &&
+      direccionEnvioDireccion === undefined &&
+      direccionEnvioCiudad === undefined &&
+      direccionEnvioEstado === undefined &&
+      (transportistaId !== undefined || fleteUsd !== undefined || notas !== undefined);
+
+    if (!editandoSoloNotas && !editandoTransportista) {
       return jsonError('No se pueden editar despachos en estado entregado', 400, request);
     }
   }

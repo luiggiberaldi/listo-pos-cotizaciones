@@ -729,7 +729,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     if (canReciclar && primaryAction?.key !== 'reciclar')
       actions.push({ label: getDespachoAction('reciclar', rol).label || 'Reutilizar', icon: RefreshCcw, onClick: () => onReciclar(despacho), textColor: 'text-teal-600' })
     
-    const canCambiarTransportista = esLogistica && ['pendiente', 'despachada'].includes(despacho.estado)
+    const canCambiarTransportista = esLogistica && ['pendiente', 'despachada', 'entregada'].includes(despacho.estado)
     if (canCambiarTransportista) {
       const tieneTransportista = !!despacho?.transportista_id
       actions.push({
