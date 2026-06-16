@@ -19,6 +19,7 @@ import BcvWidget from './BcvWidget'
 import BottomNav from './BottomNav'
 import Breadcrumbs from '../ui/Breadcrumbs'
 import QuickQuoteFAB from '../cotizaciones/QuickQuoteFAB'
+import BuzonFAB from '../ui/BuzonFAB'
 import { useRealtimeSync } from '../../hooks/useRealtimeSync'
 import { useAdminAlerts } from '../../hooks/useAdminAlerts'
 import { useRecordatoriosCotizaciones } from '../../hooks/useRecordatoriosCotizaciones'
@@ -691,6 +692,9 @@ export default function AppLayout() {
 
       {/* ── FAB Cotización Rápida — solo móvil, no para administracion ── */}
       {!esAdministracion && <QuickQuoteFAB />}
+
+      {/* ── FAB Buzón de Sugerencias — Global ── */}
+      <BuzonFAB />
 
       {/* ── Glassmorphic Urgent Notification Overlay Modal ── */}
       {urgentNotif && (
