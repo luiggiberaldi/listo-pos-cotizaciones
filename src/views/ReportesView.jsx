@@ -27,6 +27,8 @@ import TablaVendedores from '../components/reportes/TablaVendedores'
 import TablaProductos from '../components/reportes/TablaProductos'
 import TablaClientes from '../components/reportes/TablaClientes'
 import supabase from '../services/supabase/client'
+import { apiUrl, getAuthHeaders } from '../services/apiBase'
+
 
 // ─── Tabs Definition ──────────────────────────────────────────────────────
 const TABS = [
@@ -140,9 +142,16 @@ function FormaPagoSection({ data = [], kpis }) {
                   <span className="font-semibold text-slate-700 truncate">{fp.formaPago}</span>
                   <span className="text-[9px] sm:text-[10px] text-slate-400 font-bold shrink-0">{fp.count}</span>
                 </div>
-                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                  <span className="text-[10px] sm:text-xs text-slate-400">{pct.toFixed(0)}%</span>
-                  <span className="font-bold text-slate-800 text-xs sm:text-sm">{fmtUsd(fp.totalUsd)}</span>
+                <div className="flex flex-col items-end shrink-0">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <span className="text-[10px] sm:text-xs text-slate-400">{pct.toFixed(0)}%</span>
+                    <span className="font-bold text-slate-800 text-xs sm:text-sm">{fmtUsd(fp.totalUsd)}</span>
+                  </div>
+                  {['Efectivo Bs', 'Transf. / Pago Móvil', 'Punto de Venta'].includes(fp.formaPago) && (
+                    <span className="text-[9.5px] sm:text-[10px] text-indigo-600 font-semibold mt-0.5">
+                      {fmtBs(fp.pagos?.reduce((s, p) => s + (Number(p.montoBs) || 0), 0) || 0)}
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="h-2 sm:h-2.5 rounded-full bg-slate-100 overflow-hidden">
@@ -163,7 +172,7 @@ function FormaPagoSection({ data = [], kpis }) {
                       </span>
                       <span className={`font-bold shrink-0 ${p.es_reembolso ? 'text-rose-600' : 'text-slate-700'}`}>
                         {p.es_reembolso ? '-' : ''}{fmtUsd(Math.abs(p.monto))}
-                        {!p.es_reembolso && ['Transf. / Pago Móvil', 'Punto de Venta'].includes(fp.formaPago) && p.montoBs && (
+                        {!p.es_reembolso && ['Efectivo Bs', 'Transf. / Pago Móvil', 'Punto de Venta'].includes(fp.formaPago) && p.montoBs && (
                           <span className="text-[8.5px] text-indigo-600 font-semibold ml-1.5" title={`Tasa: ${p.tasa} Bs.`}>
                             ({fmtBs(p.montoBs)})
                           </span>
@@ -178,14 +187,36 @@ function FormaPagoSection({ data = [], kpis }) {
         })}
 
         {/* Fila de Total */}
-        <div className="pt-2.5 border-t border-slate-200 mt-2 flex items-center justify-between text-xs sm:text-sm font-bold text-slate-800">
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <span className="font-extrabold">TOTAL RECAUDADO</span>
-            <span className="text-[10px] sm:text-xs text-slate-500 font-bold">({data.reduce((s, fp) => s + (fp.count || 0), 0)} desp.)</span>
+        <div className="pt-2.5 border-t border-slate-200 mt-2 space-y-2">
+          <div className="flex items-center justify-between text-xs sm:text-sm font-bold text-slate-800">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <span className="font-extrabold">TOTAL RECAUDADO</span>
+              <span className="text-[10px] sm:text-xs text-slate-500 font-bold">({data.reduce((s, fp) => s + (fp.count || 0), 0)} desp.)</span>
+            </div>
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <span className="text-[10px] sm:text-xs text-slate-500">100%</span>
+              <span className="font-black text-slate-900 text-xs sm:text-sm">{fmtUsd(total)}</span>
+            </div>
           </div>
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <span className="text-[10px] sm:text-xs text-slate-500">100%</span>
-            <span className="font-black text-slate-900 text-xs sm:text-sm">{fmtUsd(total)}</span>
+
+          {/* Desglose por Monedas solicitado */}
+          <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/60 space-y-1.5">
+            <div className="flex justify-between items-center text-[10px] sm:text-xs text-slate-600 font-semibold">
+              <span>Total en Divisas (Efectivo $, Zelle, USDT)</span>
+              <span className="font-bold text-slate-800">
+                {fmtUsd(data.filter(fp => ['Efectivo $', 'Zelle', 'USDT'].includes(fp.formaPago)).reduce((s, fp) => s + fp.totalUsd, 0))}
+              </span>
+            </div>
+            <div className="flex justify-between items-center text-[10px] sm:text-xs text-indigo-600 font-semibold">
+              <span>Total en Bolívares (Efectivo Bs, Transf, P. Venta)</span>
+              <span className="font-bold text-indigo-700">
+                {fmtBs(
+                  data
+                    .filter(fp => ['Efectivo Bs', 'Transf. / Pago Móvil', 'Punto de Venta'].includes(fp.formaPago))
+                    .reduce((s, fp) => s + (fp.pagos?.reduce((sum, p) => sum + (Number(p.montoBs) || 0), 0) || 0), 0)
+                )}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -1001,45 +1032,120 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
     try {
       const { generarComisionesPDF } = await import('../services/pdf/comisionesPDF')
 
-      if (!detalle || detalle.length === 0) {
-        alert(`🔍 SIN DATOS: No hay comisiones para ${vendedor?.nombre || 'este vendedor'} en el periodo seleccionado.`)
+      let query = supabase
+        .from('comision_liberaciones')
+        .select(`
+          id,
+          comision_id,
+          despacho_id,
+          vendedor_id,
+          cuenta_id,
+          monto,
+          tipo,
+          cxc_id,
+          creado_en,
+          comisiones:comisiones!inner(
+            id,
+            totalcomision,
+            comisioncabilla,
+            comisionotros,
+            pctcabilla,
+            pctotros,
+            estado,
+            montopagado,
+            cotizacionid,
+            vendedor:usuarios(id, nombre, color, markup_pct, rol, es_externo),
+            despacho:notas_despacho(
+              id,
+              numero,
+              total_usd,
+              tasa_snapshot,
+              cliente:clientes!notas_despacho_cliente_id_fkey(id, nombre, tipo_cliente),
+              productos:notas_despacho_items(nombre_snap)
+            )
+          )
+        `)
+        .order('creado_en', { ascending: false })
+
+      if (rango?.from) {
+        query = query.gte('creado_en', `${rango.from}T00:00:00-04:00`)
+      }
+      if (rango?.to) {
+        query = query.lte('creado_en', `${rango.to}T23:59:59-04:00`)
+      }
+      if (vendedor?.id) {
+        query = query.eq('vendedor_id', vendedor.id)
+      }
+
+      const { data: rawEvents, error: errEvents } = await query
+
+      if (errEvents) {
+        console.error('Error fetching events:', errEvents)
+        alert('❌ Error al obtener las liberaciones de comisión: ' + errEvents.message)
         return
       }
 
-      // Los IDs de despacho visibles en la UI (fuente de verdad)
-      const despachoIds = new Set(detalle.map(c => c.despachoid).filter(Boolean))
+      if (!rawEvents || rawEvents.length === 0) {
+        alert(`🔍 SIN DATOS: No hay liberaciones de comisiones para ${vendedor?.nombre || 'este vendedor'} en el periodo seleccionado.`)
+        return
+      }
 
-      // Llamar al RPC para obtener detalle por artículo
-      let comisionesParaPDF = detalle // fallback por defecto
-      const { data: itemsRPC, error } = await supabase.rpc('obtener_reporte_ventas_comisiones', {
-        p_fecha_inicio: rango?.from ? `${rango.from}T00:00:00-04:00` : null,
-        p_fecha_fin: rango?.to ? `${rango.to}T23:59:59-04:00` : null,
-        p_vendedor_id: vendedor?.id
-      })
-
-      if (error) {
-        console.error('Error RPC detalle artículos:', error)
-      } else if (itemsRPC && itemsRPC.length > 0) {
-        // Filtrar SOLO los ítems que pertenecen a los despachos visibles en la UI
-        const itemsFiltrados = itemsRPC.filter(item => despachoIds.has(item.despacho_id || item.despachoid))
-        if (itemsFiltrados.length > 0) {
-          comisionesParaPDF = itemsFiltrados
+      // Fetch cotizaciones
+      const cotizacionIds = [...new Set(rawEvents.map(r => r.comisiones?.cotizacionid).filter(Boolean))]
+      let cotizacionesMap = {}
+      if (cotizacionIds.length > 0) {
+        const { data: cotList, error: cotErr } = await supabase
+          .from('cotizaciones')
+          .select('id, numero, tasa_bcv_snapshot, cliente:clientes(id, nombre)')
+          .in('id', cotizacionIds)
+        if (!cotErr && cotList) {
+          cotizacionesMap = Object.fromEntries(cotList.map(c => [c.id, c]))
         }
       }
 
-      // Enriquecer cada item con el objeto vendedor para que el PDF dibuje/clasifique correctamente
-      if (comisionesParaPDF && comisionesParaPDF.length > 0) {
-        comisionesParaPDF = comisionesParaPDF.map(item => ({
-          ...item,
-          vendedor: {
+      const comisionesParaPDF = rawEvents.map(r => {
+        const com = r.comisiones || {};
+        const desp = com.despacho || {};
+        const cot = cotizacionesMap[com.cotizacionid];
+        return {
+          id: r.id,
+          monto: Number(r.monto || 0),
+          tipo: r.tipo,
+          creado_en: r.creado_en,
+          comisiones: {
+            id: com.id,
+            totalcomision: Number(com.totalcomision || 0),
+            comisioncabilla: Number(com.comisioncabilla || 0),
+            comisionotros: Number(com.comisionotros || 0),
+            pctcabilla: Number(com.pctcabilla || 0),
+            pctotros: Number(com.pctotros || 0),
+            estado: com.estado,
+            montopagado: Number(com.montopagado || 0),
+            cotizacionid: com.cotizacionid,
+            despacho: desp ? {
+              id: desp.id,
+              numero: desp.numero,
+              totalusd: desp.total_usd,
+              tasa_snapshot: desp.tasa_snapshot,
+              cliente: desp.cliente,
+              productos: desp.productos || []
+            } : null,
+            cotizacion: cot ? {
+              id: cot.id,
+              numero: cot.numero,
+              tasa_bcv_snapshot: cot.tasa_bcv_snapshot,
+              cliente_nombre: cot.cliente?.nombre || null
+            } : null
+          },
+          vendedor: r.vendedor || com.vendedor || {
             id: vendedor?.id,
             nombre: vendedor?.nombre,
             color: vendedor?.color,
             markup_pct: vendedor?.markup_pct,
             es_externo: vendedor?.es_externo
           }
-        }))
-      }
+        };
+      });
 
       await generarComisionesPDF({
         comisiones: comisionesParaPDF,
@@ -1518,105 +1624,112 @@ function TabComisiones({ configNeg }) {
     try {
       const { generarComisionesPDF } = await import('../services/pdf/comisionesPDF')
 
-      const [rpcRes, dbUsuariosRes] = await Promise.all([
-        supabase.rpc('obtener_reporte_ventas_comisiones', {
-          p_fecha_inicio: rango.from ? `${rango.from}T00:00:00-04:00` : null,
-          p_fecha_fin: rango.to ? `${rango.to}T23:59:59-04:00` : null,
-          p_vendedor_id: filtroVendedor || null
-        }),
-        supabase.from('usuarios').select('id, nombre, color, markup_pct, rol, es_externo')
-      ])
+      const params = new URLSearchParams()
+      params.set('vista', 'eventos')
+      params.set('page', '1')
+      params.set('pageSize', '500')
+      if (rango.from) params.set('desde', rango.from)
+      if (rango.to) params.set('hasta', rango.to)
+      if (filtroVendedor) params.set('vendedorId', filtroVendedor)
 
-      let { data: detalleCompleto, error } = rpcRes
-      const dbUsuarios = dbUsuariosRes.data ?? []
+      const headers = await getAuthHeaders()
+      const res = await fetch(apiUrl(`/api/comisiones/lista?${params}`), { headers })
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(`HTTP ${res.status}: ${text}`)
+      }
+      const resJson = await res.json()
+      const rawEvents = resJson.data || []
 
-      if (error) console.error('Error RPC General:', error)
-
-      // Fallback a datos cargados en el hook useComisiones
-      if ((!detalleCompleto || detalleCompleto.length === 0) && comisiones.length > 0) {
-        detalleCompleto = comisiones;
+      if (!rawEvents || rawEvents.length === 0) {
+        alert(`🔍 SIN DATOS: No hay liberaciones de comisiones entre ${rango.from} y ${rango.to}.`)
+        return
       }
 
-      // Los IDs de despacho visibles en la UI (fuente de verdad)
-      if (comisiones.length > 0) {
-        const despachoIds = new Set(comisiones.map(c => c.despachoid).filter(Boolean))
-        if (detalleCompleto && detalleCompleto.length > 0) {
-          const itemsFiltrados = detalleCompleto.filter(item => despachoIds.has(item.despacho_id || item.despachoid))
-          if (itemsFiltrados.length > 0) {
-            detalleCompleto = itemsFiltrados
-          }
-        }
-      }
+      let filteredEvents = rawEvents
 
-      if (!detalleCompleto || detalleCompleto.length === 0) {
-        alert(`🔍 SIN DATOS: No hay comisiones registradas entre ${rango.from} y ${rango.to}.`);
-        return;
-      }
-
-      // Crear lookup map de usuarios
-      const userLookup = {}
-      if (dbUsuarios) {
-        dbUsuarios.forEach(u => {
-          if (u.nombre) {
-            userLookup[u.nombre.trim().toLowerCase()] = {
-              id: u.id,
-              nombre: u.nombre,
-              color: u.color,
-              markup_pct: u.markup_pct != null ? Number(u.markup_pct) : null,
-              es_externo: !!u.es_externo
-            }
-          }
-        })
-      }
-
-      // Enriquecer detalleCompleto con la información de vendedor (incluyendo markup_pct)
-      detalleCompleto = detalleCompleto.map(item => {
-        if (item.vendedor) return item
-        const key = item.asesor ? item.asesor.trim().toLowerCase() : ''
-        const uInfo = userLookup[key]
-        return {
-          ...item,
-          vendedor: uInfo ? {
-            id: uInfo.id,
-            nombre: uInfo.nombre,
-            color: uInfo.color,
-            markup_pct: uInfo.markup_pct,
-            es_externo: uInfo.es_externo
-          } : {
-            nombre: item.asesor || 'Sin Asesor',
-            color: item.asesor_color || '#1B365D',
-            markup_pct: null,
-            es_externo: false
-          }
-        }
-      })
-
-      // Filtrar comisiones según el tipo de vendedor seleccionado
       if (tipoFiltro === 'internos') {
-        detalleCompleto = detalleCompleto.filter(c => {
-          const v = c.vendedor
+        filteredEvents = rawEvents.filter(r => {
+          const v = r.vendedor || r.comisiones?.vendedor
           const esExterno = !!v?.es_externo || (v?.markup_pct != null && Number(v.markup_pct) > 0)
           return !esExterno
         })
       } else if (tipoFiltro === 'externos') {
-        detalleCompleto = detalleCompleto.filter(c => {
-          const v = c.vendedor
+        filteredEvents = rawEvents.filter(r => {
+          const v = r.vendedor || r.comisiones?.vendedor
           const esExterno = !!v?.es_externo || (v?.markup_pct != null && Number(v.markup_pct) > 0)
           return esExterno
         })
       }
 
-      if (detalleCompleto.length === 0) {
+      if (filteredEvents.length === 0) {
         alert(`🔍 SIN DATOS: No hay comisiones registradas para el grupo de vendedores seleccionado en este rango.`);
         return;
+      }
+
+      // Fetch cotizaciones
+      const cotizacionIds = [...new Set(filteredEvents.map(r => r.comisiones?.cotizacionid).filter(Boolean))]
+      let cotizacionesMap = {}
+      if (cotizacionIds.length > 0) {
+        const { data: cotList, error: cotErr } = await supabase
+          .from('cotizaciones')
+          .select('id, numero, tasa_bcv_snapshot, cliente:clientes(id, nombre)')
+          .in('id', cotizacionIds)
+        if (!cotErr && cotList) {
+          cotizacionesMap = Object.fromEntries(cotList.map(c => [c.id, c]))
+        }
       }
 
       const vendedorInfo = filtroVendedor
         ? vendedoresAgrupados.find(v => v.id === filtroVendedor)
         : null
 
+      const comisionesParaPDF = filteredEvents.map(r => {
+        const com = r.comisiones || {};
+        const desp = com.despacho || {};
+        const cot = cotizacionesMap[com.cotizacionid] || com.cotizacion;
+        return {
+          id: r.id,
+          monto: Number(r.monto || 0),
+          tipo: r.tipo,
+          creado_en: r.creado_en,
+          comisiones: {
+            id: com.id,
+            totalcomision: Number(com.totalcomision || 0),
+            comisioncabilla: Number(com.comisioncabilla || 0),
+            comisionotros: Number(com.comisionotros || 0),
+            pctcabilla: Number(com.pctcabilla || 0),
+            pctotros: Number(com.pctotros || 0),
+            estado: com.estado,
+            montopagado: Number(com.montopagado || 0),
+            cotizacionid: com.cotizacionid,
+            despacho: desp ? {
+              id: desp.id,
+              numero: desp.numero,
+              totalusd: desp.totalusd !== undefined ? desp.totalusd : desp.total_usd,
+              tasa_snapshot: desp.tasa_snapshot,
+              cliente: desp.cliente,
+              productos: desp.productos || []
+            } : null,
+            cotizacion: cot ? {
+              id: cot.id,
+              numero: cot.numero,
+              tasa_bcv_snapshot: cot.tasa_bcv_snapshot,
+              cliente_nombre: cot.cliente_nombre || cot.cliente?.nombre || null
+            } : null
+          },
+          vendedor: r.vendedor || com.vendedor || (vendedorInfo ? {
+            id: vendedorInfo.id,
+            nombre: vendedorInfo.nombre,
+            color: vendedorInfo.color,
+            markup_pct: vendedorInfo.markup_pct,
+            es_externo: vendedorInfo.es_externo
+          } : null)
+        };
+      });
+
       await generarComisionesPDF({
-        comisiones: detalleCompleto || [],
+        comisiones: comisionesParaPDF,
         vendedor: vendedorInfo ? { nombre: vendedorInfo.nombre, color: vendedorInfo.color, markup_pct: vendedorInfo.markup_pct, es_externo: vendedorInfo.es_externo } : null,
         tipoVendedor: tipoFiltro === 'todos' ? null : tipoFiltro,
         rango,
@@ -1639,50 +1752,123 @@ function TabComisiones({ configNeg }) {
     try {
       const { generarComisionesPDF } = await import('../services/pdf/comisionesPDF')
 
-      let { data: detalleVendedor, error } = await supabase.rpc('obtener_reporte_ventas_comisiones', {
-        p_fecha_inicio: rango.from ? `${rango.from}T00:00:00-04:00` : null,
-        p_fecha_fin: rango.to ? `${rango.to}T23:59:59-04:00` : null,
-        p_vendedor_id: vendedor.id
-      })
+      let query = supabase
+        .from('comision_liberaciones')
+        .select(`
+          id,
+          comision_id,
+          despacho_id,
+          vendedor_id,
+          cuenta_id,
+          monto,
+          tipo,
+          cxc_id,
+          creado_en,
+          comisiones:comisiones!inner(
+            id,
+            totalcomision,
+            comisioncabilla,
+            comisionotros,
+            pctcabilla,
+            pctotros,
+            estado,
+            montopagado,
+            cotizacionid,
+            vendedor:usuarios(id, nombre, color, markup_pct, rol, es_externo),
+            despacho:notas_despacho(
+              id,
+              numero,
+              total_usd,
+              tasa_snapshot,
+              cliente:clientes!notas_despacho_cliente_id_fkey(id, nombre, tipo_cliente),
+              productos:notas_despacho_items(nombre_snap)
+            )
+          )
+        `)
+        .order('creado_en', { ascending: false })
 
-      if (error) console.error('Error RPC Individual:', error)
-
-      // Fallback filtrando de la lista general si la RPC falla
-      if ((!detalleVendedor || detalleVendedor.length === 0) && comisiones.length > 0) {
-        detalleVendedor = comisiones.filter(c => (c.vendedor?.id || c.vendedor_id) === vendedor.id);
+      if (rango.from) {
+        query = query.gte('creado_en', `${rango.from}T00:00:00-04:00`)
+      }
+      if (rango.to) {
+        query = query.lte('creado_en', `${rango.to}T23:59:59-04:00`)
+      }
+      if (vendedor.id) {
+        query = query.eq('vendedor_id', vendedor.id)
       }
 
-      // Los IDs de despacho del vendedor visibles en la UI (fuente de verdad)
-      const comisionesVendedorUI = comisiones.filter(c => (c.vendedor?.id || c.vendedor_id) === vendedor.id)
-      if (comisionesVendedorUI.length > 0) {
-        const despachoIds = new Set(comisionesVendedorUI.map(c => c.despachoid).filter(Boolean))
-        if (detalleVendedor && detalleVendedor.length > 0) {
-          const itemsFiltrados = detalleVendedor.filter(item => despachoIds.has(item.despacho_id || item.despachoid))
-          if (itemsFiltrados.length > 0) {
-            detalleVendedor = itemsFiltrados
+      const { data: rawEvents, error: errEvents } = await query
+
+      if (errEvents) {
+        console.error('Error fetching events:', errEvents)
+        alert('❌ Error al obtener las liberaciones de comisión: ' + errEvents.message)
+        return
+      }
+
+      if (!rawEvents || rawEvents.length === 0) {
+        alert(`🔍 SIN DATOS: No hay registros para ${vendedor.nombre} en este rango.`)
+        return
+      }
+
+      // Fetch cotizaciones
+      const cotizacionIds = [...new Set(rawEvents.map(r => r.comisiones?.cotizacionid).filter(Boolean))]
+      let cotizacionesMap = {}
+      if (cotizacionIds.length > 0) {
+        const { data: cotList, error: cotErr } = await supabase
+          .from('cotizaciones')
+          .select('id, numero, tasa_bcv_snapshot, cliente:clientes(id, nombre)')
+          .in('id', cotizacionIds)
+        if (!cotErr && cotList) {
+          cotizacionesMap = Object.fromEntries(cotList.map(c => [c.id, c]))
+        }
+      }
+
+      const comisionesParaPDF = rawEvents.map(r => {
+        const com = r.comisiones || {};
+        const desp = com.despacho || {};
+        const cot = cotizacionesMap[com.cotizacionid];
+        return {
+          id: r.id,
+          monto: Number(r.monto || 0),
+          tipo: r.tipo,
+          creado_en: r.creado_en,
+          comisiones: {
+            id: com.id,
+            totalcomision: Number(com.totalcomision || 0),
+            comisioncabilla: Number(com.comisioncabilla || 0),
+            comisionotros: Number(com.comisionotros || 0),
+            pctcabilla: Number(com.pctcabilla || 0),
+            pctotros: Number(com.pctotros || 0),
+            estado: com.estado,
+            montopagado: Number(com.montopagado || 0),
+            cotizacionid: com.cotizacionid,
+            despacho: desp ? {
+              id: desp.id,
+              numero: desp.numero,
+              totalusd: desp.total_usd,
+              tasa_snapshot: desp.tasa_snapshot,
+              cliente: desp.cliente,
+              productos: desp.productos || []
+            } : null,
+            cotizacion: cot ? {
+              id: cot.id,
+              numero: cot.numero,
+              tasa_bcv_snapshot: cot.tasa_bcv_snapshot,
+              cliente_nombre: cot.cliente?.nombre || null
+            } : null
+          },
+          vendedor: r.vendedor || com.vendedor || {
+            id: vendedor.id,
+            nombre: vendedor.nombre,
+            color: vendedor.color,
+            markup_pct: vendedor.markup_pct,
+            es_externo: vendedor.es_externo
           }
-        }
-      }
-
-      if (!detalleVendedor || detalleVendedor.length === 0) {
-        alert(`🔍 SIN DATOS: No hay registros para ${vendedor.nombre} en este rango.`);
-        return;
-      }
-
-      // Enriquecer cada item con el objeto vendedor para que el PDF dibuje/clasifique correctamente
-      detalleVendedor = detalleVendedor.map(item => ({
-        ...item,
-        vendedor: {
-          id: vendedor.id,
-          nombre: vendedor.nombre,
-          color: vendedor.color,
-          markup_pct: vendedor.markup_pct,
-          es_externo: vendedor.es_externo
-        }
-      }))
+        };
+      });
 
       await generarComisionesPDF({
-        comisiones: detalleVendedor || [],
+        comisiones: comisionesParaPDF,
         vendedor: { nombre: vendedor.nombre, color: vendedor.color, markup_pct: vendedor.markup_pct, es_externo: vendedor.es_externo },
         rango,
         config: configNeg ?? {},
@@ -1691,7 +1877,7 @@ function TabComisiones({ configNeg }) {
         ajustesManuales
       })
     } catch (e) {
-      console.error('Error generando PDF individual:', e)
+      console.error('Error generating PDF individual:', e)
       alert('❌ Error al generar PDF de ' + vendedor.nombre + ': ' + e.message)
     } finally {
       setExportando(false)
