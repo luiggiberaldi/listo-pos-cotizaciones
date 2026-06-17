@@ -35,12 +35,12 @@ export function useCuentasCobrar(clienteId) {
 }
 
 // ─── Resumen global CxC (para reporte) ────────────────────────────────────
-export function useResumenCxC() {
+export function useResumenCxC(rango) {
   const { perfil } = useAuthStore()
   const esPrivilegiado = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe') || perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador'
 
   return useQuery({
-    queryKey: [...CXC_KEY, 'resumen', esPrivilegiado, perfil?.id],
+    queryKey: [...CXC_KEY, 'resumen', esPrivilegiado, perfil?.id, rango?.from, rango?.to],
     queryFn: async () => {
       // Obtener clientes con saldo pendiente > 0
       let query = supabase
@@ -71,7 +71,7 @@ export function useResumenCxC() {
           const batch = clienteIds.slice(i, i + 50)
           const { data } = await supabase
             .from('cuentas_por_cobrar')
-            .select('id, cliente_id, despacho_id, tipo, monto_usd, saldo_usd, fecha_vencimiento, creado_en, metodo_pago, descripcion')
+            .select('id, cliente_id, despacho_id, tipo, monto_usd, saldo_usd, fecha_vencimiento, creado_en, metodo_pago, forma_pago_abono, descripcion, referencia')
             .in('tipo', ['cargo', 'abono'])
             .in('cliente_id', batch)
             .order('creado_en', { ascending: true }) // Orden cronológico para aplicar FIFO correctamente
@@ -81,8 +81,10 @@ export function useResumenCxC() {
 
       // Reconstruir los saldos pendientes reales por cargo (FIFO + despacho_id matching)
       const cargosPendientesPorCliente = {}
+      const abonosPorCliente = {}
       clienteIds.forEach(cid => {
         cargosPendientesPorCliente[cid] = []
+        abonosPorCliente[cid] = []
       })
 
       // Agrupar transacciones por cliente
@@ -147,6 +149,15 @@ export function useResumenCxC() {
             ...c,
             saldo_usd: c.saldo_pendiente_cargo
           }))
+
+        // Guardar abonos del cliente que caen en el rango seleccionado
+        abonosPorCliente[cid] = clientAbonos.filter(a => {
+          if (!a.creado_en) return false
+          const fechaAbono = a.creado_en.split('T')[0]
+          if (rango?.from && fechaAbono < rango.from) return false
+          if (rango?.to && fechaAbono > rango.to) return false
+          return true
+        })
       })
 
       const todosCargosActivos = Object.values(cargosPendientesPorCliente).flat()
@@ -218,11 +229,12 @@ export function useResumenCxC() {
         ...c,
         diasSinPago: diasPorCliente[c.id] ?? 0,
         diasRestantes: diasRestantesPorCliente[c.id] !== undefined ? diasRestantesPorCliente[c.id] : null,
-        cargosActivos: cargosPendientesPorCliente[c.id] || []
+        cargosActivos: cargosPendientesPorCliente[c.id] || [],
+        abonosEnRango: abonosPorCliente[c.id] || []
       }))
 
       // Obtener abonos recientes
-      const { data: abonosRaw, error: abonosError } = await supabase
+      let abonosQuery = supabase
         .from('cuentas_por_cobrar')
         .select(`
           id, cliente_id, despacho_id, tipo, monto_usd, saldo_usd,
@@ -232,9 +244,18 @@ export function useResumenCxC() {
         `)
         .eq('tipo', 'abono')
         .order('creado_en', { ascending: false })
-        .limit(50)
 
-      if (abonosError) throw abonosError
+      if (rango?.from) {
+        abonosQuery = abonosQuery.gte('creado_en', `${rango.from}T00:00:00-04:00`)
+      }
+      if (rango?.to) {
+        abonosQuery = abonosQuery.lte('creado_en', `${rango.to}T23:59:59-04:00`)
+      }
+      if (!rango?.from && !rango?.to) {
+        abonosQuery = abonosQuery.limit(50)
+      }
+
+      const { data: abonosRaw, error: abonosError } = await abonosQuery
 
       return {
         kpis: {

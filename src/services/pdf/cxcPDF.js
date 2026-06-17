@@ -46,13 +46,22 @@ function obtenerRiesgo(dias) {
   return { label: 'Crítico', color: [124, 58, 237] } // purple-600
 }
 
-export async function generarReporteCxCPDF({ data, config = {}, action = 'download', tipo = 'detallado' }) {
+export async function generarReporteCxCPDF({ data, config = {}, action = 'download', tipo = 'detallado', rango }) {
   const { kpis = {}, clientesConDeuda = [], aging = [], abonos = [] } = data
 
-  // Filtrar abonos: Mostrar únicamente los realizados en el día de hoy
-  const inicioHoy = new Date()
-  inicioHoy.setHours(0, 0, 0, 0)
-  const abonosDelDia = abonos.filter(a => a.creado_en && new Date(a.creado_en) >= inicioHoy)
+  // Filtrar abonos según rango de fechas si se proporciona, sino mostrar hoy
+  let abonosFiltrados = abonos
+  const isTodayOnly = !rango || (rango.from === rango.to && rango.from === new Date().toISOString().slice(0, 10))
+  const abonosTitle = isTodayOnly
+    ? 'Cobranza del Día (Abonos Recibidos Hoy)'
+    : `Cobranza del Periodo (${fmtFecha(rango.from)} al ${fmtFecha(rango.to)})`
+
+  if (isTodayOnly && !rango) {
+    const inicioHoy = new Date()
+    inicioHoy.setHours(0, 0, 0, 0)
+    abonosFiltrados = abonos.filter(a => a.creado_en && new Date(a.creado_en) >= inicioHoy)
+  }
+  const abonosDelDia = abonosFiltrados
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
   const logoData = LOGO_LISTA_PRECIOS
   let y = 0
@@ -390,6 +399,59 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
         y += 6
       })
 
+      // ═══ ABONOS Y COBROS DEL PERIODO PARA EL CLIENTE ═══
+      const abonosEnRango = c.abonosEnRango || []
+      if (abonosEnRango.length > 0) {
+        y = checkPage(doc, y, 15, onNewPage, 22)
+        
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(7)
+        doc.setTextColor(16, 185, 129) // Emerald
+        doc.text('ABONOS Y COBROS REGISTRADOS EN EL PERIODO:', MARGIN + 4, y + 4)
+        y += 6
+
+        const abonoCols = [
+          { label: 'Fecha Pago',            x: MARGIN + 4,   align: 'left' },
+          { label: 'Método / Forma de Pago', x: MARGIN + 40,  align: 'left' },
+          { label: 'Referencia / Descripción', x: MARGIN + 90,  align: 'left' },
+          { label: 'Monto Recibido',        x: MARGIN + 185, align: 'right' },
+        ]
+        y = drawTableHeader(doc, abonoCols, y)
+
+        abonosEnRango.forEach((ab, aIdx) => {
+          y = checkPage(doc, y, 7.5, onNewPage, 22)
+
+          if (aIdx % 2 === 0) {
+            doc.setFillColor(244, 252, 248) // soft green zebra striping
+            doc.rect(MARGIN, y - 0.8, CONTENT_W, 6, 'F')
+          }
+
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(6.5)
+          doc.setTextColor(...C_DARK)
+
+          const fPago = ab.creado_en 
+            ? new Date(ab.creado_en).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+            : '—'
+          doc.text(fPago, MARGIN + 4, y + 3.2)
+          
+          doc.text(ab.metodo_pago || ab.forma_pago_abono || '—', MARGIN + 40, y + 3.2)
+
+          const refDesc = [
+            ab.referencia ? `Ref: ${ab.referencia}` : '',
+            ab.descripcion || ''
+          ].filter(Boolean).join(' - ')
+          doc.text(refDesc.substring(0, 52), MARGIN + 90, y + 3.2)
+
+          doc.setFont('helvetica', 'bold')
+          doc.setTextColor(16, 185, 129)
+          doc.text(`+${fmtUsd(ab.monto_usd)}`, MARGIN + 185, y + 3.2, { align: 'right' })
+          
+          doc.setTextColor(...C_DARK)
+          y += 6
+        })
+      }
+
       // Sub-total del cliente
       y = checkPage(doc, y, 7.5, onNewPage, 22)
       doc.setLineWidth(0.2)
@@ -400,6 +462,15 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
       doc.setFontSize(6.5)
       doc.setTextColor(...C_GRAY)
       doc.text(`TOTAL ${c.nombre?.toUpperCase()}`, MARGIN + 4, y + 3.5)
+      
+      // Mostrar la suma total de abonos del cliente si tiene alguno
+      const totalAbonosClient = abonosEnRango.reduce((sum, ab) => sum + Number(ab.monto_usd || 0), 0)
+      if (totalAbonosClient > 0) {
+        doc.setFontSize(6.5)
+        doc.setTextColor(16, 185, 129)
+        doc.text(`Total Abonos: +${fmtUsd(totalAbonosClient)}`, MARGIN + 120, y + 3.5, { align: 'right' })
+      }
+
       doc.setFontSize(7)
       doc.setTextColor(...C_RED)
       doc.text(fmtUsd(c.saldo_pendiente), MARGIN + 185, y + 3.5, { align: 'right' })
@@ -411,7 +482,7 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
   // ═══ HISTORIAL DE COBRANZA (ABONOS DE HOY) ═══════════════════════════════════
   if (abonosDelDia && abonosDelDia.length > 0) {
     y = checkPage(doc, y, 20, onNewPage, doc.internal.getNumberOfPages() === 1 ? 35 : 22)
-    y = drawSectionTitle(doc, 'Cobranza del Día (Abonos Recibidos Hoy)', y)
+    y = drawSectionTitle(doc, abonosTitle, y)
 
     const abonosCols = [
       { label: 'Fecha / Hora',            x: MARGIN + 4,   align: 'left' },

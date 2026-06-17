@@ -2515,7 +2515,11 @@ function AgingBars({ aging }) {
 }
 
 function TabCredito() {
-  const { data: cxcData, isLoading: cxcLoading, isError: cxcError, refetch: refetchCxc } = useResumenCxC()
+  const [rango, setRango] = useState(() => {
+    const month = getMonthRange()
+    return { from: month.from, to: month.to }
+  })
+  const { data: cxcData, isLoading: cxcLoading, isError: cxcError, refetch: refetchCxc } = useResumenCxC(rango)
   const { data: proveedores = [], isLoading: provLoading, isError: provError, refetch: refetchProv } = useProveedores()
 
   const [seccionCredito, setSeccionCredito] = useState('cxc') // 'cxc' | 'cxp'
@@ -2543,7 +2547,8 @@ function TabCredito() {
         data: cxcData,
         config: configNeg,
         action: accion === 'imprimir' ? 'print' : 'download',
-        tipo: tipoReporte
+        tipo: tipoReporte,
+        rango: rango
       })
     } catch (e) {
       console.error('Error generando reporte de CxC:', e)
@@ -2616,8 +2621,25 @@ function TabCredito() {
     </button>
   )
 
+  const rangoLabel = `${new Date(`${rango.from}T00:00:00`).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })} - ${new Date(`${rango.to}T00:00:00`).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}`
+
   return (
     <div className="space-y-4">
+      {/* Selector de Rango de Fecha para Cobranza/Abonos */}
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex flex-col gap-6">
+          <div className="w-full">
+            <div className="flex items-center gap-2 ml-1 mb-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Periodo de Cobranza (Abonos)</label>
+              <span className="hidden sm:inline-flex text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full px-2 py-0.5">
+                {rangoLabel}
+              </span>
+            </div>
+            <DateRangeSelector value={rango} onChange={setRango} />
+          </div>
+        </div>
+      </div>
+
       {/* Alertas de Vencimiento para Admin */}
       {esAdmin && alertasVencimiento?.length > 0 && (
         <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
@@ -2860,7 +2882,9 @@ function TabCredito() {
               <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <DollarSign size={14} className="text-emerald-500" />
-                  <h3 className="text-xs sm:text-sm font-black text-slate-800">Historial de Cobranza (Abonos Recientes)</h3>
+                  <h3 className="text-xs sm:text-sm font-black text-slate-800">
+                    Historial de Cobranza ({rango.from === rango.to ? "Abonos del Día" : "Abonos del Periodo"})
+                  </h3>
                   <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 text-[10px] font-bold">{abonos.length}</span>
                 </div>
               </div>
