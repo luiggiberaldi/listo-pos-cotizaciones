@@ -4,7 +4,7 @@
 // — Supervisor: vista completa + crear/editar/desactivar
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Package, Plus, Search, RefreshCw, X, Filter, LayoutGrid, List, AlertTriangle, ArrowLeftRight, FileText, ClipboardPaste, TrendingUp, FileSpreadsheet } from 'lucide-react'
+import { Package, Plus, Search, RefreshCw, X, Filter, LayoutGrid, List, AlertTriangle, ArrowLeftRight, FileText, ClipboardPaste, TrendingUp, FileSpreadsheet, EyeOff } from 'lucide-react'
 import { smartSearchProductos } from '../utils/smartSearch'
 import useAuthStore from '../store/useAuthStore'
 import { useTasaCambio } from '../hooks/useTasaCambio'
@@ -75,6 +75,7 @@ export default function InventarioView() {
   const [textoBusqueda, setTextoBusqueda] = useState('')
   const [categoria,     setCategoria]     = useState('')
   const [stockBajo,     setStockBajo]     = useState(() => searchParams.get('filtro') === 'stock_bajo')
+  const [soloDesactivados, setSoloDesactivados] = useState(false)
   const [vistaMode,     setVistaMode]     = useState(() => {
     const businessId = useAuthStore.getState().perfil?.cuenta_id
     const key = businessId ? `inventario_vista-${businessId}` : 'inventario_vista'
@@ -110,11 +111,11 @@ export default function InventarioView() {
   const [showImportador,   setShowImportador]   = useState(false)
 
   // Data — todos los productos (sin filtro de búsqueda, filtro client-side con smartSearch)
-  const { data: inventarioData, isLoading, isError, refetch } = useInventario({ categoria, pageSize: 1000 })
+  const { data: inventarioData, isLoading, isError, refetch } = useInventario({ categoria, pageSize: 1000, mostrarInactivos: esPrivilegiado })
   const productosRaw = inventarioData?.productos ?? inventarioData ?? []
-  const { data: todosData } = useInventario({ pageSize: 1000 })
+  const { data: todosData } = useInventario({ pageSize: 1000, mostrarInactivos: esPrivilegiado })
   const todosProductos = todosData?.productos ?? todosData ?? []
-  const { data: categorias = [] } = useCategorias()
+  const { data: categorias = [] } = useCategorias({ mostrarInactivos: esPrivilegiado })
   const desactivar = useDesactivarProducto()
   const borrar = useBorrarProducto()
   const { data: stockComprometido = {} } = useStockComprometido()
@@ -122,9 +123,13 @@ export default function InventarioView() {
 
   // Smart search client-side con ranking por relevancia
   const productos = useMemo(() => {
-    if (!busqueda.trim()) return productosRaw
-    return smartSearchProductos(productosRaw, busqueda)
-  }, [productosRaw, busqueda])
+    let list = productosRaw
+    if (soloDesactivados) {
+      list = list.filter(p => p.activo === false)
+    }
+    if (!busqueda.trim()) return list
+    return smartSearchProductos(list, busqueda)
+  }, [productosRaw, busqueda, soloDesactivados])
 
   // Filtrar por stock bajo (client-side) — stock bajo primero, stock 0 al final
   const productosFiltrados = useMemo(() => {
@@ -166,6 +171,7 @@ export default function InventarioView() {
     setBusqueda('')
     setCategoria('')
     setStockBajo(false)
+    setSoloDesactivados(false)
     setSearchParams({})
     setPagina(1)
   }
@@ -217,7 +223,7 @@ export default function InventarioView() {
   async function confirmarDesactivar() {
     if (!productoADesact) return
     try {
-      await desactivar.mutateAsync(productoADesact.id)
+      await desactivar.mutateAsync({ id: productoADesact.id, activo: !productoADesact.activo })
     } finally {
       setProductoADesact(null)
     }
@@ -234,7 +240,7 @@ export default function InventarioView() {
     }
   }
 
-  const hayFiltros = busqueda || categoria || stockBajo
+  const hayFiltros = busqueda || categoria || stockBajo || soloDesactivados
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -343,6 +349,22 @@ export default function InventarioView() {
             <AlertTriangle size={14} />
             <span className="hidden sm:inline">Stock bajo</span>
           </button>
+
+          {/* Filtro desactivados (solo administración/privilegiados) */}
+          {esPrivilegiado && (
+            <button
+              type="button"
+              onClick={() => { setSoloDesactivados(!soloDesactivados); setPagina(1); }}
+              className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-colors border shrink-0 ${
+                soloDesactivados
+                  ? 'bg-slate-800 border-slate-700 text-white hover:bg-slate-700 shadow-sm shadow-slate-200'
+                  : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+              }`}
+            >
+              <EyeOff size={14} />
+              <span>Solo desactivados</span>
+            </button>
+          )}
 
           <div className="flex items-center gap-2 shrink-0 ml-auto">
             {/* Botón Procesar Lista (Oculto temporalmente) */}
@@ -503,10 +525,14 @@ export default function InventarioView() {
         isOpen={confirmDesactOpen}
         onClose={() => { setConfirmDesactOpen(false); setProductoADesact(null) }}
         onConfirm={confirmarDesactivar}
-        title="¿Desactivar producto?"
-        message={`"${productoADesact?.nombre}" dejará de aparecer en el catálogo.`}
-        confirmText="Sí, desactivar"
-        variant="danger"
+        title={productoADesact?.activo === false ? "¿Activar producto?" : "¿Desactivar producto?"}
+        message={
+          productoADesact?.activo === false
+            ? `"${productoADesact?.nombre}" volverá a estar disponible en el catálogo de ventas.`
+            : `"${productoADesact?.nombre}" dejará de aparecer en el catálogo.`
+        }
+        confirmText={productoADesact?.activo === false ? "Sí, activar" : "Sí, desactivar"}
+        variant={productoADesact?.activo === false ? "info" : "danger"}
       />
 
       {/* ── Confirm: Borrar ──────────────────────────────────────────────────── */}

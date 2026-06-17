@@ -102,15 +102,17 @@ export default function ProductoCard({ producto, onEditar, onClonar, onDesactiva
 
   return (
     <div className={`rounded-2xl border hover:shadow-lg transition-all duration-200 flex flex-col relative ${
-      agotado
-        ? 'bg-red-50/50 border-red-200 hover:border-red-300 hover:shadow-red-100'
-        : stockBajo
-          ? 'bg-amber-50/30 border-amber-200 hover:border-amber-300 hover:shadow-amber-100'
-          : 'bg-white border-slate-200 hover:border-sky-200 hover:shadow-sky-50'
+      producto.activo === false
+        ? 'bg-slate-50/80 border-slate-300 opacity-80 shadow-none hover:shadow-none'
+        : agotado
+          ? 'bg-red-50/50 border-red-200 hover:border-red-300 hover:shadow-red-100'
+          : stockBajo
+            ? 'bg-amber-50/30 border-amber-200 hover:border-amber-300 hover:shadow-amber-100'
+            : 'bg-white border-slate-200 hover:border-sky-200 hover:shadow-sky-50'
     }`}>
 
       {/* Imagen */}
-      <div className={`relative w-full h-16 sm:h-20 flex items-center justify-center overflow-hidden shrink-0 rounded-t-2xl ${agotado ? 'opacity-50 grayscale' : ''}`}
+      <div className={`relative w-full h-16 sm:h-20 flex items-center justify-center overflow-hidden shrink-0 rounded-t-2xl ${(agotado || producto.activo === false) ? 'opacity-50 grayscale' : ''}`}
         style={{ background: producto.imagen_url ? '#f8fafc' : bg }}>
         {producto.imagen_url ? (
           <img src={producto.imagen_url} alt={producto.nombre}
@@ -118,18 +120,21 @@ export default function ProductoCard({ producto, onEditar, onClonar, onDesactiva
         ) : (
           <Package size={24} style={{ color: fg, opacity: 0.7 }} />
         )}
-        {agotado && (
+        {producto.activo === false ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-slate-900/60 z-10">
+            <span className="text-[10px] font-black text-white bg-slate-700 px-2.5 py-0.5 rounded-full uppercase tracking-wider">Desactivado</span>
+          </div>
+        ) : agotado ? (
           <div className="absolute inset-0 flex items-center justify-center bg-red-900/40">
             <span className="text-[10px] font-black text-white bg-red-600 px-2 py-0.5 rounded-full uppercase tracking-wider">Agotado</span>
           </div>
-        )}
-        {stockBajo && (
+        ) : stockBajo ? (
           <div className="absolute top-1 right-1">
             <span className="flex items-center gap-0.5 text-[9px] font-bold text-amber-800 bg-amber-300 px-1.5 py-0.5 rounded-full shadow-sm">
               <AlertTriangle size={8} />Bajo
             </span>
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* Contenido */}
@@ -160,7 +165,7 @@ export default function ProductoCard({ producto, onEditar, onClonar, onDesactiva
               </span>
             )}
           </div>
-          <h3 className="font-bold text-slate-800 text-[11px] sm:text-xs leading-snug uppercase">{producto.nombre}</h3>
+          <h3 className={`font-bold text-slate-800 text-[11px] sm:text-xs leading-snug uppercase ${producto.activo === false ? 'line-through text-slate-400' : ''}`}>{producto.nombre}</h3>
           {producto.categoria && (
             <span className="inline-flex items-center gap-0.5 mt-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full max-w-full"
               style={{ background: bg, color: fg }}>

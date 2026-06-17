@@ -52,17 +52,17 @@ export default function ProductoRow({ producto, onEditar, onClonar, onDesactivar
   const catColor = colorCategoria(producto.categoria || '')
 
   return (
-    <div className="bg-white rounded-xl border hover:shadow-md transition-all overflow-hidden flex items-stretch"
-      style={{ borderColor: catColor + '30' }}>
+    <div className={`rounded-xl border hover:shadow-md transition-all overflow-hidden flex items-stretch ${producto.activo === false ? 'opacity-65 bg-slate-50/90 border-slate-300' : 'bg-white'}`}
+      style={producto.activo === false ? {} : { borderColor: catColor + '30' }}>
 
       {/* Barra lateral de color de categoría */}
       <div className="w-1 shrink-0" style={{ background: catColor }} />
 
       {/* Thumbnail */}
-      <div className="w-10 h-10 my-auto ml-3 rounded-lg flex items-center justify-center overflow-hidden shrink-0"
+      <div className="w-10 h-10 my-auto ml-3 rounded-lg flex items-center justify-center overflow-hidden shrink-0 relative"
         style={{ background: catColor + '15' }}>
         {producto.imagen_url ? (
-          <img src={producto.imagen_url} alt="" className="w-full h-full object-contain p-0.5" loading="lazy" />
+          <img src={producto.imagen_url} alt="" className={`w-full h-full object-contain p-0.5 ${producto.activo === false ? 'grayscale opacity-50' : ''}`} loading="lazy" />
         ) : (
           <Package size={16} style={{ color: catColor, opacity: 0.7 }} />
         )}
@@ -71,7 +71,12 @@ export default function ProductoRow({ producto, onEditar, onClonar, onDesactivar
       {/* Info principal */}
       <div className="min-w-0 flex-1 px-3 py-3">
         <div className="flex items-center gap-2 flex-wrap">
-          <h3 className="font-bold text-slate-800 text-sm truncate uppercase">{producto.nombre}</h3>
+          <h3 className={`font-bold text-slate-800 text-sm truncate uppercase ${producto.activo === false ? 'line-through text-slate-400' : ''}`}>{producto.nombre}</h3>
+          {producto.activo === false && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-black text-white bg-slate-500 px-2 py-0.5 rounded-full uppercase tracking-wider">
+              Desactivado
+            </span>
+          )}
           {producto.codigo && (
             <button
               onClick={handleCopiarCodigo}
@@ -183,9 +188,9 @@ export default function ProductoRow({ producto, onEditar, onClonar, onDesactivar
                   className="p-1.5 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors">
                   <Copy size={15} />
                 </button>
-                <button onClick={() => onDesactivar(producto)} title="Desactivar producto"
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 transition-colors">
-                  <EyeOff size={15} />
+                <button onClick={() => onDesactivar(producto)} title={producto.activo ? "Desactivar producto" : "Activar producto"}
+                  className={`p-1.5 rounded-lg transition-colors ${producto.activo ? 'text-slate-400 hover:text-amber-500 hover:bg-amber-50' : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50'}`}>
+                  {producto.activo ? <EyeOff size={15} /> : <Eye size={15} />}
                 </button>
                 <button onClick={() => onBorrar(producto)} title="Borrar producto"
                   className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">

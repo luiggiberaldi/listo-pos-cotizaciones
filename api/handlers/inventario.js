@@ -437,6 +437,8 @@ export async function handleBuscarProductosHibrido(request, env) {
   const page = Math.max(0, parseInt(body.page || '0'))
   const limit = Math.min(100, Math.max(1, parseInt(body.limit || '100')))
   const isGroup = body.categoria_grupo === true
+  const incluirInactivos = body.incluir_inactivos === true
+  const puedeVerInactivos = isSup && incluirInactivos
 
   let embedding = null
 
@@ -467,15 +469,44 @@ export async function handleBuscarProductosHibrido(request, env) {
     p_cuenta_id: user.id
   }
 
-  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/buscar_productos_hibrido`, {
+  let res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/buscar_productos_hibrido`, {
     method: 'POST',
     headers: h,
-    body: JSON.stringify(rpcBody)
+    body: JSON.stringify({
+      ...rpcBody,
+      p_incluir_inactivos: puedeVerInactivos
+    })
   })
 
   if (!res.ok) {
+    const errorText = await res.text()
+    let parsedError = {}
+    try { parsedError = JSON.parse(errorText) } catch {}
+
+    // Fallback: Si falla por PGRST202 (firma de función no coincide), reintentamos sin p_incluir_inactivos ni p_cuenta_id
+    if (parsedError.code === 'PGRST202') {
+      console.log('[HYBRID_SEARCH] RPC signature mismatch, retrying with legacy parameters...')
+      res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/buscar_productos_hibrido`, {
+        method: 'POST',
+        headers: h,
+        body: JSON.stringify({
+          p_busqueda: busqueda,
+          p_embedding: embedding,
+          p_categoria: categoria,
+          p_categoria_grupo: isGroup,
+          p_limit: limit,
+          p_offset: page * limit
+        })
+      })
+    } else {
+      console.error('[HYBRID_SEARCH] RPC Error:', errorText)
+      return jsonError('Error en búsqueda híbrida', 500, request)
+    }
+  }
+
+  if (!res.ok) {
     const text = await res.text()
-    console.error('[HYBRID_SEARCH] RPC Error:', text)
+    console.error('[HYBRID_SEARCH] RPC Fallback Error:', text)
     return jsonError('Error en búsqueda híbrida', 500, request)
   }
 

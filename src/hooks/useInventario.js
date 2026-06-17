@@ -36,12 +36,12 @@ function getCategoryGroup(cat) {
 }
 
 // ─── Lista de productos ───────────────────────────────────────────────────────
-export function useInventario({ busqueda = '', categoria = '', page = 0, pageSize = 100 } = {}) {
+export function useInventario({ busqueda = '', categoria = '', page = 0, pageSize = 100, mostrarInactivos = false } = {}) {
   const { perfil } = useAuthStore()
   const esPrivilegiado = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe') || perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador'
 
   return useQuery({
-    queryKey: [...INVENTARIO_KEY, busqueda, categoria, esPrivilegiado, page, pageSize],
+    queryKey: [...INVENTARIO_KEY, busqueda, categoria, esPrivilegiado, page, pageSize, mostrarInactivos],
     queryFn: async () => {
       const isGroup = categoria ? CATEGORY_GROUPS.includes(categoria.toUpperCase().trim()) : false
 
@@ -55,7 +55,8 @@ export function useInventario({ busqueda = '', categoria = '', page = 0, pageSiz
               categoria: categoria || '',
               categoria_grupo: isGroup,
               page,
-              limit: pageSize
+              limit: pageSize,
+              incluir_inactivos: mostrarInactivos
             })
           })
           if (!res.ok) throw new Error('Error en búsqueda híbrida')
@@ -72,7 +73,10 @@ export function useInventario({ busqueda = '', categoria = '', page = 0, pageSiz
         let query = supabase
           .from('productos')
           .select('id, codigo, nombre, descripcion, categoria, unidad, precio_usd, precio_2, precio_3, precio1_porcentaje, precio2_porcentaje, precio3_porcentaje, costo_usd, stock_actual, stock_minimo, activo, imagen_url, creado_en, actualizado_en', { count: 'exact' })
-          .eq('activo', true)
+
+        if (!mostrarInactivos) {
+          query = query.eq('activo', true)
+        }
 
         if (busqueda.trim()) {
           const filters = buildSmartFilter(busqueda)
@@ -145,20 +149,25 @@ function processCategoriasHierarchy(rawCats) {
 }
 
 // ─── Categorías únicas (para el filtro) ──────────────────────────────────────
-export function useCategorias() {
+export function useCategorias({ mostrarInactivos = false } = {}) {
   const { perfil } = useAuthStore()
   const esPrivilegiado = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe') || perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador'
 
   return useQuery({
-    queryKey: [...INVENTARIO_KEY, 'categorias'],
+    queryKey: [...INVENTARIO_KEY, 'categorias', mostrarInactivos],
     queryFn: async () => {
       if (esPrivilegiado) {
-        const { data, error } = await supabase
+        let query = supabase
           .from('productos')
           .select('categoria')
-          .eq('activo', true)
           .not('categoria', 'is', null)
           .order('categoria', { ascending: true })
+
+        if (!mostrarInactivos) {
+          query = query.eq('activo', true)
+        }
+
+        const { data, error } = await query
         if (error) throw error
         const rawCats = (data ?? []).map(r => r.categoria).filter(Boolean)
         return processCategoriasHierarchy(rawCats)
@@ -312,19 +321,23 @@ export function useDesactivarProducto() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async (id) => {
+    mutationFn: async ({ id, activo }) => {
       const { error } = await supabase
         .from('productos')
-        .update({ activo: false })
+        .update({ activo })
         .eq('id', id)
       if (error) throw error
     },
-    onSuccess: (_, id) => {
+    onSuccess: (_, { id, activo }) => {
       qc.cancelQueries({ queryKey: INVENTARIO_KEY })
       qc.setQueriesData({ queryKey: INVENTARIO_KEY }, (old) => {
         if (!old?.productos) return old
-        return { ...old, productos: old.productos.filter(p => p.id !== id), totalCount: Math.max((old.totalCount ?? old.productos.length) - 1, 0) }
+        return {
+          ...old,
+          productos: old.productos.map(p => p.id === id ? { ...p, activo } : p)
+        }
       })
+      showToast(activo ? 'Producto activado' : 'Producto desactivado', 'success')
       setTimeout(() => qc.invalidateQueries({ queryKey: INVENTARIO_KEY }), 300)
     },
   })
