@@ -435,7 +435,7 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
             : '—'
           doc.text(fPago, MARGIN + 4, y + 3.2)
           
-          doc.text(ab.metodo_pago || ab.forma_pago_abono || '—', MARGIN + 40, y + 3.2)
+          doc.text(ab.forma_pago_abono || ab.metodo_pago || '—', MARGIN + 40, y + 3.2)
 
           const refDesc = [
             ab.referencia ? `Ref: ${ab.referencia}` : '',
@@ -521,7 +521,7 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
       doc.setFont('helvetica', 'normal')
 
       // Método
-      const metodo = a.metodo_pago || a.forma_pago_abono || '—'
+      const metodo = a.forma_pago_abono || a.metodo_pago || '—'
       doc.text(metodo, MARGIN + 95, y + 3.2, { align: 'center' })
 
       // Referencia / Descripción

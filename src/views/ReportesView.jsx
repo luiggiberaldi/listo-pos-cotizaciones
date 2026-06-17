@@ -2918,7 +2918,7 @@ function TabCredito() {
                             {a.cliente?.nombre || 'Desconocido'}
                           </td>
                           <td className="px-3 py-2.5 text-center font-semibold text-slate-600">
-                            {a.metodo_pago || a.forma_pago_abono || '—'}
+                            {a.forma_pago_abono || a.metodo_pago || '—'}
                           </td>
                           <td className="px-3 py-2.5 text-slate-500 italic max-w-xs truncate" title={a.descripcion}>
                             {a.referencia ? `Ref: ${a.referencia} · ` : ''}{a.descripcion || 'Sin descripción'}
