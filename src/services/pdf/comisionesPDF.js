@@ -1888,7 +1888,7 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
     const totalCxC = (fpCxc ? fpCxc.totalUsd : 0) + (fpCod ? fpCod.totalUsd : 0);
     const fpDonacion = porFormaPago.find(fp => fp.formaPago === 'Donación');
     const totalDonacion = fpDonacion ? fpDonacion.totalUsd : 0;
-    const totalDeducciones = totalCxC + totalDonacion;
+    const totalDeducciones = totalCxC;
     const ventasSinCxc = fpTotal - totalDeducciones;
     const tieneCxC = totalDeducciones > 0;
     const tieneDev = kpis.totalDevoluciones > 0;
@@ -1978,7 +1978,7 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
     if (tieneCxC) {
       let curX2 = MARGIN + 3.5;
       
-      const lblCxC = 'CxC y Donaciones: ';
+      const lblCxC = 'CxC y COD: ';
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(8.5)
       doc.text(lblCxC, curX2, y + 21)

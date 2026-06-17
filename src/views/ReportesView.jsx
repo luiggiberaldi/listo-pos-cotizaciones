@@ -108,7 +108,7 @@ function FormaPagoSection({ data = [], kpis }) {
   const totalCxc = (fpCxc ? fpCxc.totalUsd : 0) + (fpCod ? fpCod.totalUsd : 0)
   const fpDonacion = data.find(fp => fp.formaPago === 'Donación')
   const totalDonacion = fpDonacion ? fpDonacion.totalUsd : 0
-  const totalDeducciones = totalCxc + totalDonacion
+  const totalDeducciones = totalCxc
   const ventasSinCxc = total - totalDeducciones
   const COLORS = {
     'Efectivo $': '#10b981',
@@ -248,20 +248,12 @@ function FormaPagoSection({ data = [], kpis }) {
               <span>{fmtUsd(total)}</span>
             </div>
 
-            {(totalCxc > 0 || totalDonacion > 0) && (
+            {totalCxc > 0 && (
               <div className="pt-1.5 border-t border-slate-200/60 mt-1.5 space-y-1.5">
-                {totalCxc > 0 && (
-                  <div className="flex justify-between items-center text-slate-500">
-                    <span>CxC y COD Pendientes</span>
-                    <span className="font-bold text-red-500">-{fmtUsd(totalCxc)}</span>
-                  </div>
-                )}
-                {totalDonacion > 0 && (
-                  <div className="flex justify-between items-center text-slate-500">
-                    <span>Donaciones</span>
-                    <span className="font-bold text-purple-500">-{fmtUsd(totalDonacion)}</span>
-                  </div>
-                )}
+                <div className="flex justify-between items-center text-slate-500">
+                  <span>CxC y COD Pendientes</span>
+                  <span className="font-bold text-red-500">-{fmtUsd(totalCxc)}</span>
+                </div>
                 <div className="flex justify-between items-center font-extrabold text-slate-800 bg-slate-200/40 p-1.5 rounded-lg text-[10.5px] sm:text-[11.5px]">
                   <span>Ventas Líquidas (Recaudación Real)</span>
                   <span className="font-black text-slate-900">{fmtUsd(ventasSinCxc)}</span>
