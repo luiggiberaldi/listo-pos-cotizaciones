@@ -14,6 +14,33 @@ import {
 const C_CXC_PRIMARY = C_PRIMARY
 const C_CXC_ACCENT = [241, 245, 249] // slate soft bg
 
+// Helper para formatear forma_pago_abono (que puede venir como JSON array o string)
+function formatMetodoPago(val, fallback = '—') {
+  if (!val) return fallback
+  try {
+    if (Array.isArray(val)) {
+      const parts = val.map(p => p.metodo || p.metodo_pago || p.formaPago).filter(Boolean)
+      return parts.length > 0 ? parts.join(', ') : fallback
+    }
+    if (typeof val === 'string') {
+      const trimmed = val.trim()
+      if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+        const parsed = JSON.parse(trimmed)
+        if (Array.isArray(parsed)) {
+          const parts = parsed.map(p => p.metodo || p.metodo_pago || p.formaPago).filter(Boolean)
+          return parts.length > 0 ? parts.join(', ') : fallback
+        } else if (parsed && typeof parsed === 'object') {
+          return parsed.metodo || parsed.metodo_pago || parsed.formaPago || fallback
+        }
+      }
+      return val || fallback
+    }
+  } catch (e) {
+    // Ignore and fallback
+  }
+  return String(val) || fallback
+}
+
 // Helper para dibujar títulos de sección estilizados
 function drawSectionTitle(doc, text, y) {
   doc.setFillColor(...C_CXC_PRIMARY)
@@ -435,7 +462,7 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
             : '—'
           doc.text(fPago, MARGIN + 4, y + 3.2)
           
-          doc.text(ab.forma_pago_abono || ab.metodo_pago || '—', MARGIN + 40, y + 3.2)
+          doc.text(formatMetodoPago(ab.forma_pago_abono || ab.metodo_pago), MARGIN + 40, y + 3.2)
 
           const refDesc = [
             ab.referencia ? `Ref: ${ab.referencia}` : '',
@@ -521,7 +548,7 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
       doc.setFont('helvetica', 'normal')
 
       // Método
-      const metodo = a.forma_pago_abono || a.metodo_pago || '—'
+      const metodo = formatMetodoPago(a.forma_pago_abono || a.metodo_pago)
       doc.text(metodo, MARGIN + 95, y + 3.2, { align: 'center' })
 
       // Referencia / Descripción

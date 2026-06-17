@@ -30,6 +30,33 @@ import TablaClientes from '../components/reportes/TablaClientes'
 import supabase from '../services/supabase/client'
 import { apiUrl, getAuthHeaders } from '../services/apiBase'
 
+// Helper para formatear forma_pago_abono (que puede venir como JSON array o string)
+function formatMetodoPago(val, fallback = '—') {
+  if (!val) return fallback
+  try {
+    if (Array.isArray(val)) {
+      const parts = val.map(p => p.metodo || p.metodo_pago || p.formaPago).filter(Boolean)
+      return parts.length > 0 ? parts.join(', ') : fallback
+    }
+    if (typeof val === 'string') {
+      const trimmed = val.trim()
+      if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+        const parsed = JSON.parse(trimmed)
+        if (Array.isArray(parsed)) {
+          const parts = parsed.map(p => p.metodo || p.metodo_pago || p.formaPago).filter(Boolean)
+          return parts.length > 0 ? parts.join(', ') : fallback
+        } else if (parsed && typeof parsed === 'object') {
+          return parsed.metodo || parsed.metodo_pago || parsed.formaPago || fallback
+        }
+      }
+      return val || fallback
+    }
+  } catch (e) {
+    // Ignore and fallback
+  }
+  return String(val) || fallback
+}
+
 
 // ─── Tabs Definition ──────────────────────────────────────────────────────
 const TABS = [
@@ -2918,7 +2945,7 @@ function TabCredito() {
                             {a.cliente?.nombre || 'Desconocido'}
                           </td>
                           <td className="px-3 py-2.5 text-center font-semibold text-slate-600">
-                            {a.forma_pago_abono || a.metodo_pago || '—'}
+                            {formatMetodoPago(a.forma_pago_abono || a.metodo_pago)}
                           </td>
                           <td className="px-3 py-2.5 text-slate-500 italic max-w-xs truncate" title={a.descripcion}>
                             {a.referencia ? `Ref: ${a.referencia} · ` : ''}{a.descripcion || 'Sin descripción'}
