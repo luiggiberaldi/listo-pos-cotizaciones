@@ -166,6 +166,99 @@ export async function handleMarcarComisionPagada(request, env) {
   }
 }
 
+export async function handleLiberarComisionCxc(request, env) {
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { operador, headers, ip } = v;
+
+  const ROLES_LIBERAR = ['administracion', 'jefe', 'desarrollador'];
+  if (!ROLES_LIBERAR.includes(operador.rol)) {
+    return jsonError('Solo administración, jefe o desarrollador pueden liberar comisiones CxC', 403, request);
+  }
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body invalido', 400, request); }
+  const comisionid = body.comisionid || body.comisionId;
+  if (!comisionid || !isValidUuid(comisionid)) return jsonError('comisionid invalido', 400, request);
+
+  try {
+    // 1. Obtener la comisión actual
+    const actualRes = await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?id=eq.${comisionid}&select=despachoid,vendedorid,cuentaid,totalcomision,comision_liberada,comision_retenida,montopagado,estado`, { headers });
+    if (!actualRes.ok) {
+      const err = await actualRes.text();
+      return jsonError(`Error al leer comision: ${err}`, actualRes.status, request);
+    }
+    const [actual] = await actualRes.json();
+    if (!actual) return jsonError('Comision no encontrada', 404, request);
+
+    const totalComision = Number(actual.totalcomision || 0);
+    const comisionRetenida = Number(actual.comision_retenida || 0);
+    const montopagado = Number(actual.montopagado || 0);
+
+    if (comisionRetenida <= 0.01) {
+      return jsonError('Esta comisión no tiene monto CxC retenido para liberar', 400, request);
+    }
+
+    // 2. Fecha de aprobación real del despacho (para fechar el evento en su período)
+    let fechaAprob = new Date().toISOString();
+    if (actual.despachoid) {
+      const despRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${actual.despachoid}&select=despachada_en,entregada_en,creado_en`, { headers });
+      if (despRes.ok) {
+        const [desp] = await despRes.json();
+        if (desp) fechaAprob = desp.despachada_en || desp.entregada_en || desp.creado_en || fechaAprob;
+      }
+    }
+
+    // 3. Liberar: todo lo retenido pasa a liberado
+    const nuevoEstado = montopagado >= totalComision - 0.01 ? 'pagada' : 'pendiente';
+    const patchRes = await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?id=eq.${comisionid}&estado=eq.cta_cobrar&select=id,estado`, {
+      method: 'PATCH',
+      headers: { ...headers, Prefer: 'return=representation' },
+      body: JSON.stringify({
+        comision_liberada: totalComision,
+        comision_retenida: 0,
+        estado: nuevoEstado,
+        pagadaen: nuevoEstado === 'pagada' ? new Date().toISOString() : null,
+        pagadapor: nuevoEstado === 'pagada' ? operador.id : null,
+        actualizadoen: new Date().toISOString()
+      })
+    });
+
+    if (!patchRes.ok) {
+      const err = await patchRes.text();
+      return jsonError(`Error al liberar comision CxC: ${err}`, patchRes.status, request);
+    }
+    const [comision] = await patchRes.json();
+    if (!comision) return jsonError('Comision no encontrada o ya liberada', 404, request);
+
+    // 4. Registrar el evento de liberación manual, fechado a la aprobación
+    await fetch(`${env.SUPABASE_URL}/rest/v1/comision_liberaciones`, {
+      method: 'POST',
+      headers: { ...headers, Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        comision_id: comisionid,
+        despacho_id: actual.despachoid,
+        vendedor_id: actual.vendedorid,
+        cuenta_id: actual.cuentaid,
+        monto: comisionRetenida,
+        tipo: 'manual',
+        creado_en: fechaAprob
+      })
+    });
+
+    await registrarAuditoria(env, headers, {
+      usuarioId: operador.id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
+      categoria: 'COTIZACION', accion: 'LIBERAR_COMISION_CXC',
+      entidadTipo: 'comision', entidadId: comisionid,
+      meta: { monto_liberado: comisionRetenida, estado_nuevo: nuevoEstado }, ip,
+    });
+
+    return json({ ok: true, comisionid, monto_liberado: comisionRetenida, estado: nuevoEstado }, 200, request);
+  } catch (e) {
+    return jsonError(`Error critico al liberar comision CxC: ${e.message}`, 500, request);
+  }
+}
+
 export async function handleActualizarEstadoComision(request, env) {
   const v = await validateOperator(request, env);
   if (v.error) return v.error;

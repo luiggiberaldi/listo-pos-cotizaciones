@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { DollarSign, CheckCircle, Clock, Filter, TrendingUp, FileText, Download, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, User, Briefcase } from 'lucide-react'
-import { useComisiones, useComisionesResumen, useMarcarComisionPagada } from '../hooks/useComisiones'
+import { useComisiones, useComisionesResumen, useMarcarComisionPagada, useLiberarComisionCxc } from '../hooks/useComisiones'
 import { useVendedores } from '../hooks/useClientes'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import useAuthStore from '../store/useAuthStore'
@@ -40,7 +40,7 @@ function ResumenCard({ icon: Icon, label, value, sub, gradient, border }) {
 }
 
 // ─── Tarjeta agrupada por vendedor ──────────────────────────────────────────
-function VendedorCard({ vendedor, comisiones, esSupervisor, onMarcarPagada, onPagarTodo, marcando, onExportarPDF, config }) {
+function VendedorCard({ vendedor, comisiones, esSupervisor, onMarcarPagada, onPagarTodo, onLiberarCxc, marcando, liberando, onExportarPDF, config }) {
   const [abierto, setAbierto] = useState(false)
   const [seleccionados, setSeleccionados] = useState([])
 
@@ -48,7 +48,11 @@ function VendedorCard({ vendedor, comisiones, esSupervisor, onMarcarPagada, onPa
   const totalGeneral = useMemo(() => comisiones.reduce((s, c) => s + Number(c.totalcomision || 0), 0), [comisiones])
   const pendientes = useMemo(() => comisiones.filter(c => ['pendiente', 'cta_cobrar'].includes(c.estado) && Math.max(0, Number(c.comision_liberada || 0) - Number(c.montopagado || 0)) > 0.01), [comisiones])
   const montoPendiente = useMemo(() => pendientes.reduce((s, c) => s + Math.max(0, Number(c.comision_liberada || 0) - Number(c.montopagado || 0)), 0), [pendientes])
-  
+  // Total retenido (CxC) que admin puede liberar a mano
+  const montoRetenido = useMemo(() => comisiones.reduce((s, c) => s + Number(c.comision_retenida || 0), 0), [comisiones])
+  // La columna de acciones aparece si hay algo por pagar o algo retenido por liberar
+  const accionesVisibles = esSupervisor && (montoPendiente > 0 || montoRetenido > 0.01)
+
   // Limpiar seleccionados que ya no existen o ya no están pendientes
   useEffect(() => {
     setSeleccionados(prev => prev.filter(id => pendientes.some(p => p.id === id)))
@@ -228,7 +232,7 @@ function VendedorCard({ vendedor, comisiones, esSupervisor, onMarcarPagada, onPa
                   <th className="px-2 py-2 font-semibold text-right">Comisión (Tot / Lib / Ret)</th>
                   <th className="px-2 py-2 font-semibold text-right">Pagado / Pendiente</th>
                   <th className="px-2 py-2 font-semibold text-center">Estado</th>
-                  {esSupervisor && montoPendiente > 0 && <th className="px-1 py-2"></th>}
+                  {accionesVisibles && <th className="px-1 py-2"></th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100/60">
@@ -296,19 +300,32 @@ function VendedorCard({ vendedor, comisiones, esSupervisor, onMarcarPagada, onPa
                       <td className="px-2 py-2.5 text-center">
                         <span className={`text-[10px] ${badge.cls}`}>{badge.label}</span>
                       </td>
-                      {esSupervisor && montoPendiente > 0 && (
+                      {accionesVisibles && (
                         <td className="px-1 py-2.5 text-right">
-                          {puedePagar && saldoPagar > 0.01 ? (
-                            <button
-                              onClick={() => onMarcarPagada(c)}
-                              disabled={marcando}
-                              className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 font-bold px-2 py-1 rounded-lg transition-colors disabled:opacity-50 border border-emerald-200/50 shadow-sm text-[10px]"
-                            >
-                              <CheckCircle size={10} /> Pagar
-                            </button>
-                          ) : (
-                            <span className="inline-block w-10"></span>
-                          )}
+                          <div className="flex items-center justify-end gap-1">
+                            {Number(c.comision_retenida || 0) > 0.01 && (
+                              <button
+                                onClick={() => onLiberarCxc(c)}
+                                disabled={liberando}
+                                title={`Liberar comisión CxC retenida (${fmtUsd(c.comision_retenida)})`}
+                                className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800 font-bold px-2 py-1 rounded-lg transition-colors disabled:opacity-50 border border-amber-200/60 shadow-sm text-[10px]"
+                              >
+                                <DollarSign size={10} /> Liberar CxC
+                              </button>
+                            )}
+                            {puedePagar && saldoPagar > 0.01 && (
+                              <button
+                                onClick={() => onMarcarPagada(c)}
+                                disabled={marcando}
+                                className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 font-bold px-2 py-1 rounded-lg transition-colors disabled:opacity-50 border border-emerald-200/50 shadow-sm text-[10px]"
+                              >
+                                <CheckCircle size={10} /> Pagar
+                              </button>
+                            )}
+                            {!(Number(c.comision_retenida || 0) > 0.01) && !(puedePagar && saldoPagar > 0.01) && (
+                              <span className="inline-block w-10"></span>
+                            )}
+                          </div>
                         </td>
                       )}
                     </tr>
@@ -498,6 +515,7 @@ export default function ComisionesView() {
   const pageSize = 48 // Agrupamos de a 48 para que la cuadrícula sea simétrica (3 col x 16 filas)
 
   const [comisionAPagar, setComisionAPagar] = useState(null)
+  const [comisionALiberar, setComisionALiberar] = useState(null)
   const [pagoMasivoData, setPagoMasivoData] = useState(null)
   const [pagandoMasivo, setPagandoMasivo] = useState(false)
 
@@ -535,6 +553,7 @@ export default function ComisionesView() {
   const { data: vendedores = [] } = useVendedores()
   const { data: configNeg = {} } = useConfigNegocio()
   const marcar = useMarcarComisionPagada()
+  const liberar = useLiberarComisionCxc()
   const [exportando, setExportando] = useState(false)
   const [menuAbierto, setMenuAbierto] = useState(false)
 
@@ -898,10 +917,12 @@ export default function ComisionesView() {
                           vendedor={{ id: g.id, ...g.vendedor }} 
                           comisiones={g.items} 
                           esSupervisor={puedePagarComisiones} 
-                          onMarcarPagada={setComisionAPagar} 
+                          onMarcarPagada={setComisionAPagar}
                           onPagarTodo={setPagoMasivoData}
-                          marcando={marcar.isPending || pagandoMasivo} 
-                          onExportarPDF={exportarPDF} 
+                          onLiberarCxc={setComisionALiberar}
+                          marcando={marcar.isPending || pagandoMasivo}
+                          liberando={liberar.isPending}
+                          onExportarPDF={exportarPDF}
                           config={configNeg}
                         />
                       ))}
@@ -923,10 +944,12 @@ export default function ComisionesView() {
                           vendedor={{ id: g.id, ...g.vendedor }} 
                           comisiones={g.items} 
                           esSupervisor={puedePagarComisiones} 
-                          onMarcarPagada={setComisionAPagar} 
+                          onMarcarPagada={setComisionAPagar}
                           onPagarTodo={setPagoMasivoData}
-                          marcando={marcar.isPending || pagandoMasivo} 
-                          onExportarPDF={exportarPDF} 
+                          onLiberarCxc={setComisionALiberar}
+                          marcando={marcar.isPending || pagandoMasivo}
+                          liberando={liberar.isPending}
+                          onExportarPDF={exportarPDF}
                           config={configNeg}
                         />
                       ))}
@@ -965,6 +988,16 @@ export default function ComisionesView() {
         message={comisionAPagar ? `Se registrará el pago de ${fmtUsd(Math.max(0, Number(comisionAPagar.comision_liberada || 0) - Number(comisionAPagar.montopagado || 0)))}. Esta acción es atómica y final.` : ''}
         confirmText="Confirmar Pago"
         variant="success"
+      />
+
+      <ConfirmModal
+        isOpen={!!comisionALiberar}
+        onConfirm={() => { liberar.mutate({ comisionid: comisionALiberar.id }); setComisionALiberar(null) }}
+        onClose={() => setComisionALiberar(null)}
+        title="Liberar Comisión CxC"
+        message={comisionALiberar ? `Se liberará la comisión retenida de Cta por Cobrar (${fmtUsd(comisionALiberar.comision_retenida || 0)}) y quedará disponible para pago. Úsalo cuando administración haya gestionado el cobro a crédito.` : ''}
+        confirmText="Liberar"
+        variant="warning"
       />
 
       <ConfirmModal

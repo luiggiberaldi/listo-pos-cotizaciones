@@ -177,11 +177,21 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
           nombreLimpio = nombreLimpio.replace(regexCorchetes, '').replace(regexSimple, '')
         }
         
+        const fraccion = c.fraccionRelease ?? 1
+        let suffix = ''
+        if (c.tipo === 'contado' && fraccion < 0.99) {
+          suffix = ' (CONTADO - SIN CXC)'
+        } else if (c.tipo === 'abono') {
+          suffix = ' (ABONO)'
+        } else if (c.tipo === 'manual') {
+          suffix = ' (LIB. MANUAL)'
+        }
+
         nuevaLista.push({
           ...c,
           codigo: p.codigo_snap || '',
-          descripcion: nombreLimpio.toUpperCase(),
-          valor: valorItem,
+          descripcion: (nombreLimpio + suffix).toUpperCase(),
+          valor: Number((valorItem * fraccion).toFixed(2)),
           pct: itemPct,
           totalcomision: itemTotalComision,
           montopagado: itemMontoPagado,
@@ -197,7 +207,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
   // NORMALIZAR: unificar naming antes de procesar (soporte para Worker API y RPC)
   function normalizarComision(c) {
     // Detectar si c es un evento de comision_liberaciones (Fase 7)
-    const esEvento = c && (c.tipo === 'contado' || c.tipo === 'abono') && c.comisiones;
+    const esEvento = c && (c.tipo === 'contado' || c.tipo === 'abono' || c.tipo === 'manual') && c.comisiones;
     
     if (esEvento) {
       const com = c.comisiones;
@@ -222,7 +232,15 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
       const descProductos = prods.length
         ? [...new Set(prods.map(p => String(p.nombre_snap || p).toUpperCase()))].join(' · ')
         : '';
-      const labelLiberacion = c.tipo === 'contado' ? 'LIBERACIÓN INICIAL (CONTADO)' : 'LIBERACIÓN POR COBRO (ABONO)';
+
+      let labelLiberacion = 'LIBERACIÓN DE COMISIÓN';
+      if (c.tipo === 'contado') labelLiberacion = 'LIBERACIÓN INICIAL (CONTADO)';
+      else if (c.tipo === 'abono') labelLiberacion = 'LIBERACIÓN POR COBRO (ABONO)';
+      else if (c.tipo === 'manual') labelLiberacion = 'LIBERACIÓN MANUAL';
+
+      const fraccionRelease = Number(com.totalcomision || 0) > 0 
+        ? totalcomision / Number(com.totalcomision) 
+        : 1;
 
       return {
         ...c,
@@ -230,7 +248,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
         totalcomision,
         comisioncabilla: Number(comisioncabilla.toFixed(2)),
         comisionotros: Number(comisionotros.toFixed(2)),
-        valor: Number(desp.totalusd || 0),
+        valor: Number((Number(desp.totalusd || desp.total_usd || 0) * fraccionRelease).toFixed(2)),
         pct: Number(com.pctcabilla || com.pctotros || 0),
         pctcabilla: Number(com.pctcabilla || 0),
         pctotros: Number(com.pctotros || 0),
@@ -240,6 +258,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
         montopagado: Number(com.montopagado || 0),
         tasa_snapshot: Number(tasaEuro ?? desp.tasa_snapshot ?? cot.tasa_bcv_snapshot ?? 0),
         estado: rawEstado,
+        fraccionRelease,
         // Preservar despacho con productos para el desglose por artículo
         despacho: {
           ...desp,
@@ -308,6 +327,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
       despacho: desp ? { ...desp, productos: desp.productos || [] } : null,
       // Mapeo de estados: 'pagada' es el único estado que suma al pagado, resto son pendientes
       estado: rawEstado,
+      fraccionRelease: 1,
       clienteNombre: (() => {
         const rawName = c.cliente || c.despacho?.cliente_nombre || c.cotizacion?.cliente_nombre || '---';
         const isPersonal = c.cliente_tipo_cliente === 'personal' || c.despacho?.cliente_tipo_cliente === 'personal';
@@ -1291,7 +1311,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
 }
 
 // ─── Generar Reporte de Ventas PDF ───────────────────────────────────────────
-export async function generarReporteVentasPDF({ reporte, rango, config = {}, action = 'download' }) {
+export async function generarReporteVentasPDF({ reporte, rango, config = {}, action = 'download', cxcData = null }) {
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
   let y = 0
 
@@ -2093,6 +2113,140 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
       y += 6.5
     })
     y += 4
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 6.7. CUENTAS POR COBRAR Y ABONOS (Al final del reporte de ventas)
+  // ══════════════════════════════════════════════════════════════════════════
+  if (cxcData) {
+    const clientesConDeuda = cxcData.clientesConDeuda || []
+    if (clientesConDeuda.length > 0) {
+      y = checkPage(doc, y, 22)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(10.5)
+      doc.setTextColor(...C_DARK)
+      doc.text('Cuentas por Cobrar (Saldos Pendientes)', MARGIN, y + 4)
+      y += 8
+
+      // Tabla cabecera
+      doc.setFillColor(242, 244, 247)
+      doc.rect(MARGIN, y, CONTENT_W, 7, 'F')
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8.5)
+      doc.setTextColor(71, 85, 105)
+      doc.text('Cliente', MARGIN + 4, y + 4.5)
+      doc.text('Vendedor', MARGIN + 94, y + 4.5)
+      doc.text('Saldo Pendiente ($)', MARGIN + CONTENT_W - 4, y + 4.5, { align: 'right' })
+      y += 8
+
+      let totalDeudaCxc = 0
+      clientesConDeuda.forEach((c, idx) => {
+        const saldo = Number(c.saldo_pendiente || 0)
+        if (saldo <= 0) return
+        totalDeudaCxc += saldo
+
+        y = checkPage(doc, y, 8)
+        if (idx % 2 === 1) {
+          doc.setFillColor(250, 251, 253)
+          doc.rect(MARGIN, y - 0.5, CONTENT_W, 7, 'F')
+        }
+
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(8.5)
+        doc.setTextColor(51, 65, 85)
+
+        const nombre = String(c.nombre || 'SIN NOMBRE').toUpperCase().substring(0, 48)
+        doc.text(nombre, MARGIN + 4, y + 4.5)
+        doc.text(c.vendedor?.nombre || '—', MARGIN + 94, y + 4.5)
+
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(...C_DARK)
+        doc.text(fmtUsd(saldo), MARGIN + CONTENT_W - 4, y + 4.5, { align: 'right' })
+        y += 6.5
+      })
+
+      // Fila de total
+      y = checkPage(doc, y, 10)
+      doc.setDrawColor(210, 215, 225)
+      doc.setLineWidth(0.4)
+      doc.line(MARGIN, y - 1, MARGIN + CONTENT_W, y - 1)
+      
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9.5)
+      doc.setTextColor(...C_DARK)
+      doc.text('TOTAL CUENTAS POR COBRAR:', MARGIN + 4, y + 4.5)
+      doc.text(fmtUsd(totalDeudaCxc), MARGIN + CONTENT_W - 4, y + 4.5, { align: 'right' })
+      y += 10
+      y += 4
+    }
+
+    const abonos = cxcData.abonos || []
+    if (abonos.length > 0) {
+      y = checkPage(doc, y, 22)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(10.5)
+      doc.setTextColor(...C_DARK)
+      doc.text('Abonos Realizados en el Periodo', MARGIN, y + 4)
+      y += 8
+
+      // Tabla cabecera
+      doc.setFillColor(242, 244, 247)
+      doc.rect(MARGIN, y, CONTENT_W, 7, 'F')
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8.5)
+      doc.setTextColor(71, 85, 105)
+      doc.text('Fecha', MARGIN + 4, y + 4.5)
+      doc.text('Cliente', MARGIN + 26, y + 4.5)
+      doc.text('Método / Referencia', MARGIN + 101, y + 4.5)
+      doc.text('Monto ($)', MARGIN + CONTENT_W - 4, y + 4.5, { align: 'right' })
+      y += 8
+
+      let totalAbonosCxc = 0
+      abonos.forEach((a, idx) => {
+        const monto = Number(a.monto_usd || 0)
+        totalAbonosCxc += monto
+
+        y = checkPage(doc, y, 8)
+        if (idx % 2 === 1) {
+          doc.setFillColor(250, 251, 253)
+          doc.rect(MARGIN, y - 0.5, CONTENT_W, 7, 'F')
+        }
+
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(8.5)
+        doc.setTextColor(51, 65, 85)
+
+        const fechaStr = a.creado_en ? new Date(a.creado_en).toLocaleDateString('es-VE', { day: '2-digit', month: 'short' }) : '—'
+        doc.text(fechaStr, MARGIN + 4, y + 4.5)
+
+        const cliente = String(a.cliente?.nombre || 'SIN NOMBRE').toUpperCase().substring(0, 38)
+        doc.text(cliente, MARGIN + 26, y + 4.5)
+
+        const metodo = formatMetodoPago(a.forma_pago_abono || a.metodo_pago)
+        const ref = a.referencia ? ` [Ref: ${a.referencia}]` : ''
+        doc.text(`${metodo}${ref}`, MARGIN + 101, y + 4.5)
+
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(16, 185, 129) // Emerald 500
+        doc.text(fmtUsd(monto), MARGIN + CONTENT_W - 4, y + 4.5, { align: 'right' })
+        y += 6.5
+      })
+
+      // Fila de total
+      y = checkPage(doc, y, 10)
+      doc.setDrawColor(210, 215, 225)
+      doc.setLineWidth(0.4)
+      doc.line(MARGIN, y - 1, MARGIN + CONTENT_W, y - 1)
+      
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9.5)
+      doc.setTextColor(...C_DARK)
+      doc.text('TOTAL ABONOS RECIBIDOS:', MARGIN + 4, y + 4.5)
+      doc.setTextColor(...C_EMERALD)
+      doc.text(fmtUsd(totalAbonosCxc), MARGIN + CONTENT_W - 4, y + 4.5, { align: 'right' })
+      y += 10
+      y += 4
+    }
   }
 
   // ══════════════════════════════════════════════════════════════════════════

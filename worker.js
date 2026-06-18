@@ -18,7 +18,7 @@ import { handleListarClientes, handleCheckRif, handleClientesLookup, handleReasi
 import { handlePush } from './api/handlers/push.js'
 import { handleLogFromClient, handleGetLogs, handleGetLogStats, handleDownloadLogs, handleAnalyzeLogs, handlePurgeLogs } from './api/handlers/logs.js'
 import { handleGetAudit, handleGetAuditStats, handleAnalyzeAudit } from './api/handlers/audit.js'
-import { handleMarcarComisionPagada, handleActualizarEstadoComision, handleGetComisionesConfig, handleGetComisiones, handleGetComisionesResumen } from './api/handlers/comisiones.js'
+import { handleMarcarComisionPagada, handleLiberarComisionCxc, handleActualizarEstadoComision, handleGetComisionesConfig, handleGetComisiones, handleGetComisionesResumen } from './api/handlers/comisiones.js'
 import { handleRegistrarAbono, handleRevertirAbono, handleRegistrarSaldoFavor, handleCruzarSaldoFavor, handleRegistrarDevolucionCredito } from './api/handlers/cxc.js'
 import { handleSwitchOperator, handleClearOperator, handleGetOperators, handleSuperAdmin } from './api/handlers/auth-operators.js'
 import { handleBuscarProductosHibrido, handleSyncEmbeddings, handleParseMaterialText, handleScanMaterialList, handleAplicarMovimientoLote, handleBatchIngest, handleTransformacionInventario, handleBatchPriceUpdate, handleClearInventory, handlePdfTemp } from './api/handlers/inventario.js'
@@ -304,6 +304,11 @@ export default {
     // ── API: marcar comisión pagada (bypass RLS) ────────────────────────────
     if (url.pathname === '/api/comisiones/pagar' && request.method === 'POST') {
       return handleMarcarComisionPagada(request, env);
+    }
+
+    // ── API: liberar manualmente la porción CxC retenida de una comisión ────
+    if (url.pathname === '/api/comisiones/liberar-cxc' && request.method === 'POST') {
+      return handleLiberarComisionCxc(request, env);
     }
 
     if (url.pathname === '/api/comisiones/estado' && request.method === 'POST') {

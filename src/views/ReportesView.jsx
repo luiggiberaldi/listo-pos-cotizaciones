@@ -545,6 +545,8 @@ function TabVentas({ configNeg }) {
     prevTo: rango.prevTo,
   })
 
+  const { data: cxcData } = useResumenCxC(rango)
+
   async function exportarPDF(tipoFiltro = 'todos', accion = 'descargar') {
     if (!reporte) return
     setExportando(true)
@@ -572,7 +574,8 @@ function TabVentas({ configNeg }) {
         reporte: reportePDF, 
         rango, 
         config: configNeg, 
-        action: accion === 'imprimir' ? 'print' : 'download'
+        action: accion === 'imprimir' ? 'print' : 'download',
+        cxcData
       })
     } catch (e) {
       console.error('Error generando reporte de ventas:', e)

@@ -201,6 +201,38 @@ export function useMarcarComisionPagada() {
 }
 
 /**
+ * Mutación para liberar manualmente la porción CxC retenida de una comisión
+ */
+export function useLiberarComisionCxc() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ comisionid }) => {
+      const headers = await getAuthHeaders()
+      const res = await fetch(apiUrl('/api/comisiones/liberar-cxc'), {
+        method: 'POST',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ comisionid }),
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || result.message || 'Error al liberar comisión CxC')
+      return result
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: COMISIONES_KEY })
+      broadcastEntidad('comisiones')
+      showToast('Comisión CxC liberada correctamente', 'success')
+    },
+    onError: (e) => {
+      showToast(e.message || 'Error al liberar comisión CxC', 'error')
+    },
+  })
+}
+
+/**
  * Reporte Detallado de Ventas y Comisiones (RPC)
  */
 export function useReporteVentasComisiones({ desde, hasta, vendedorId } = {}) {
