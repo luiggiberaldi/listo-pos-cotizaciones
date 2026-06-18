@@ -1935,7 +1935,13 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
     // Bloque de Desglose de Flete / Diferencia
     const fpCxc = porFormaPago.find(fp => fp.formaPago === 'Cta por cobrar');
     const fpCod = porFormaPago.find(fp => fp.formaPago === 'Cobro a destino');
-    const totalCxC = (fpCxc ? fpCxc.totalUsd : 0) + (fpCod ? fpCod.totalUsd : 0);
+    // Usar el saldo pendiente real (totalDeuda) de cxcData si está disponible,
+    // en lugar de la suma de otorgado de porFormaPago, para que el desglose
+    // solo reste lo que realmente sigue sin cobrar.
+    const totalCxCOtorgado = (fpCxc ? fpCxc.totalUsd : 0) + (fpCod ? fpCod.totalUsd : 0);
+    const totalCxC = (cxcData?.kpis?.totalDeuda !== undefined)
+      ? cxcData.kpis.totalDeuda
+      : totalCxCOtorgado;
     const fpDonacion = porFormaPago.find(fp => fp.formaPago === 'Donación');
     const totalDonacion = fpDonacion ? fpDonacion.totalUsd : 0;
     const totalDeducciones = totalCxC;
@@ -2135,15 +2141,22 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
       doc.setFontSize(8.5)
       doc.setTextColor(71, 85, 105)
       doc.text('Cliente', MARGIN + 4, y + 4.5)
-      doc.text('Vendedor', MARGIN + 94, y + 4.5)
-      doc.text('Saldo Pendiente ($)', MARGIN + CONTENT_W - 4, y + 4.5, { align: 'right' })
+      doc.text('Vendedor', MARGIN + 80, y + 4.5)
+      doc.text('Otorgado ($)', MARGIN + CONTENT_W - 72, y + 4.5, { align: 'right' })
+      doc.text('Cobrado ($)', MARGIN + CONTENT_W - 36, y + 4.5, { align: 'right' })
+      doc.text('Pendiente ($)', MARGIN + CONTENT_W - 4, y + 4.5, { align: 'right' })
       y += 8
 
       let totalDeudaCxc = 0
+      let totalOtorgadoCxc = 0
+      let totalCobradoCxc = 0
       clientesConDeuda.forEach((c, idx) => {
         const saldo = Number(c.saldo_pendiente || 0)
-        if (saldo <= 0) return
+        const otorgado = Number(c.monto_otorgado || 0)
+        const cobrado = Number(c.monto_cobrado || 0)
         totalDeudaCxc += saldo
+        totalOtorgadoCxc += otorgado
+        totalCobradoCxc += cobrado
 
         y = checkPage(doc, y, 8)
         if (idx % 2 === 1) {
@@ -2155,12 +2168,21 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
         doc.setFontSize(8.5)
         doc.setTextColor(51, 65, 85)
 
-        const nombre = String(c.nombre || 'SIN NOMBRE').toUpperCase().substring(0, 48)
+        const nombre = String(c.nombre || 'SIN NOMBRE').toUpperCase().substring(0, 38)
         doc.text(nombre, MARGIN + 4, y + 4.5)
-        doc.text(c.vendedor?.nombre || '—', MARGIN + 94, y + 4.5)
+        doc.text(c.vendedor?.nombre || '—', MARGIN + 80, y + 4.5)
 
+        // Otorgado (gris)
+        doc.setTextColor(71, 85, 105)
+        doc.text(fmtUsd(otorgado), MARGIN + CONTENT_W - 72, y + 4.5, { align: 'right' })
+
+        // Cobrado (verde)
+        doc.setTextColor(22, 163, 74)
+        doc.text(fmtUsd(cobrado), MARGIN + CONTENT_W - 36, y + 4.5, { align: 'right' })
+
+        // Pendiente (rojo si > 0, verde si 0)
         doc.setFont('helvetica', 'bold')
-        doc.setTextColor(...C_DARK)
+        doc.setTextColor(saldo > 0.005 ? 220 : 22, saldo > 0.005 ? 38 : 163, saldo > 0.005 ? 38 : 74)
         doc.text(fmtUsd(saldo), MARGIN + CONTENT_W - 4, y + 4.5, { align: 'right' })
         y += 6.5
       })
@@ -2175,6 +2197,11 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
       doc.setFontSize(9.5)
       doc.setTextColor(...C_DARK)
       doc.text('TOTAL CUENTAS POR COBRAR:', MARGIN + 4, y + 4.5)
+      doc.setTextColor(71, 85, 105)
+      doc.text(fmtUsd(totalOtorgadoCxc), MARGIN + CONTENT_W - 72, y + 4.5, { align: 'right' })
+      doc.setTextColor(22, 163, 74)
+      doc.text(fmtUsd(totalCobradoCxc), MARGIN + CONTENT_W - 36, y + 4.5, { align: 'right' })
+      doc.setTextColor(220, 38, 38)
       doc.text(fmtUsd(totalDeudaCxc), MARGIN + CONTENT_W - 4, y + 4.5, { align: 'right' })
       y += 10
       y += 4

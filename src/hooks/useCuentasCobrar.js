@@ -60,8 +60,8 @@ export function useResumenCxC(rango) {
       if (error) throw error
 
       const clientes = clientesConDeuda ?? []
-      const totalDeuda = clientes.reduce((s, c) => s + Number(c.saldo_pendiente || 0), 0)
-      const promedioDeuda = clientes.length > 0 ? totalDeuda / clientes.length : 0
+      let totalDeuda = clientes.reduce((s, c) => s + Number(c.saldo_pendiente || 0), 0)
+      let promedioDeuda = clientes.length > 0 ? totalDeuda / clientes.length : 0
 
       // Obtener transacciones (cargos y abonos) para los clientes con deuda activa
       const clienteIds = clientes.map(c => c.id)
@@ -74,7 +74,7 @@ export function useResumenCxC(rango) {
             .select('id, cliente_id, despacho_id, tipo, monto_usd, saldo_usd, fecha_vencimiento, creado_en, metodo_pago, forma_pago_abono, descripcion, referencia')
             .in('tipo', ['cargo', 'abono'])
             .in('cliente_id', batch)
-            .order('creado_en', { ascending: true }) // Orden cronológico para aplicar FIFO correctamente
+            .order('creado_en', { ascending: true })
           transacciones = transacciones.concat(data ?? [])
         }
       }
@@ -90,12 +90,11 @@ export function useResumenCxC(rango) {
       // Agrupar transacciones por cliente
       const txsPorCliente = {}
       transacciones.forEach(t => {
-        if (!txsPorCliente[t.cliente_id]) {
-          txsPorCliente[t.cliente_id] = []
-        }
+        if (!txsPorCliente[t.cliente_id]) txsPorCliente[t.cliente_id] = []
         txsPorCliente[t.cliente_id].push(t)
       })
 
+      // FIFO para clientes originales (saldo global > 0)
       Object.keys(txsPorCliente).forEach(cid => {
         const txs = txsPorCliente[cid]
         const clientCargos = []
@@ -103,15 +102,9 @@ export function useResumenCxC(rango) {
 
         txs.forEach(t => {
           if (t.tipo === 'cargo') {
-            clientCargos.push({
-              ...t,
-              saldo_pendiente_cargo: Number(t.monto_usd || 0)
-            })
+            clientCargos.push({ ...t, saldo_pendiente_cargo: Number(t.monto_usd || 0) })
           } else if (t.tipo === 'abono') {
-            clientAbonos.push({
-              ...t,
-              monto_restante: Number(t.monto_usd || 0)
-            })
+            clientAbonos.push({ ...t, monto_restante: Number(t.monto_usd || 0) })
           }
         })
 
@@ -142,15 +135,21 @@ export function useResumenCxC(rango) {
           }
         })
 
-        // Mapear saldo recalculado y filtrar cargos saldados
+        // Filtrar cargos: sin rango → solo pendientes; con rango → todos los del periodo
         cargosPendientesPorCliente[cid] = clientCargos
-          .filter(c => c.saldo_pendiente_cargo > 0.005)
-          .map(c => ({
-            ...c,
-            saldo_usd: c.saldo_pendiente_cargo
-          }))
+          .filter(c => {
+            if (!rango?.from && !rango?.to) {
+              return c.saldo_pendiente_cargo > 0.005
+            }
+            if (!c.creado_en) return false
+            const fechaCargo = c.creado_en.split('T')[0]
+            if (rango?.from && fechaCargo < rango.from) return false
+            if (rango?.to && fechaCargo > rango.to) return false
+            return true
+          })
+          .map(c => ({ ...c, saldo_usd: c.saldo_pendiente_cargo }))
 
-        // Guardar abonos del cliente que caen en el rango seleccionado
+        // Abonos del cliente en el rango seleccionado
         abonosPorCliente[cid] = clientAbonos.filter(a => {
           if (!a.creado_en) return false
           const fechaAbono = a.creado_en.split('T')[0]
@@ -160,9 +159,130 @@ export function useResumenCxC(rango) {
         })
       })
 
+      // ── Si hay rango de fecha, también incluir clientes que pagaron 100%
+      // (saldo global = 0, pero tuvieron cargos en el periodo)
+      let clientesExtraIds = []
+      if (rango?.from || rango?.to) {
+        const { data: cargosEnRango } = await supabase
+          .from('cuentas_por_cobrar')
+          .select('cliente_id')
+          .eq('tipo', 'cargo')
+          .gte('creado_en', `${rango.from || '2000-01-01'}T00:00:00-04:00`)
+          .lte('creado_en', `${rango.to || '2100-01-01'}T23:59:59-04:00`)
+
+        const idsEnRango = [...new Set((cargosEnRango || []).map(r => r.cliente_id))]
+        clientesExtraIds = idsEnRango.filter(id => !clienteIds.includes(id))
+      }
+
+      let clientesExtra = []
+      if (clientesExtraIds.length > 0) {
+        for (let i = 0; i < clientesExtraIds.length; i += 50) {
+          const batch = clientesExtraIds.slice(i, i + 50)
+          let qExtra = supabase
+            .from('clientes')
+            .select(`
+              id, nombre, rif_cedula, telefono,
+              saldo_pendiente,
+              vendedor:usuarios!clientes_vendedor_id_fkey(id, nombre, color)
+            `)
+            .in('id', batch)
+          if (!esPrivilegiado) qExtra = qExtra.eq('vendedor_id', perfil.id)
+          const { data: extraData } = await qExtra
+          if (extraData) clientesExtra = clientesExtra.concat(extraData)
+        }
+      }
+
+      // Inicializar mapas para clientes extra y aplicar FIFO
+      clientesExtraIds.forEach(cid => {
+        cargosPendientesPorCliente[cid] = []
+        abonosPorCliente[cid] = []
+      })
+
+      if (clientesExtraIds.length > 0) {
+        for (let i = 0; i < clientesExtraIds.length; i += 50) {
+          const batch = clientesExtraIds.slice(i, i + 50)
+          const { data: txExtra } = await supabase
+            .from('cuentas_por_cobrar')
+            .select('id, cliente_id, despacho_id, tipo, monto_usd, saldo_usd, fecha_vencimiento, creado_en, metodo_pago, forma_pago_abono, descripcion, referencia')
+            .in('tipo', ['cargo', 'abono'])
+            .in('cliente_id', batch)
+            .order('creado_en', { ascending: true })
+
+          if (txExtra) {
+            // Agrupar por cliente
+            const extraPorCliente = {}
+            txExtra.forEach(t => {
+              if (!extraPorCliente[t.cliente_id]) extraPorCliente[t.cliente_id] = []
+              extraPorCliente[t.cliente_id].push(t)
+            })
+
+            Object.keys(extraPorCliente).forEach(cid => {
+              const txs = extraPorCliente[cid]
+              const clientCargos = []
+              const clientAbonos = []
+
+              txs.forEach(t => {
+                if (t.tipo === 'cargo') {
+                  clientCargos.push({ ...t, saldo_pendiente_cargo: Number(t.monto_usd || 0) })
+                } else if (t.tipo === 'abono') {
+                  clientAbonos.push({ ...t, monto_restante: Number(t.monto_usd || 0) })
+                }
+              })
+
+              // FIFO fase 1: despacho directo
+              clientAbonos.forEach(abono => {
+                if (abono.despacho_id) {
+                  const cargo = clientCargos.find(c => c.despacho_id === abono.despacho_id)
+                  if (cargo && cargo.saldo_pendiente_cargo > 0) {
+                    const aplicar = Math.min(cargo.saldo_pendiente_cargo, abono.monto_restante)
+                    cargo.saldo_pendiente_cargo = Math.round((cargo.saldo_pendiente_cargo - aplicar) * 10000) / 10000
+                    abono.monto_restante = Math.round((abono.monto_restante - aplicar) * 10000) / 10000
+                  }
+                }
+              })
+
+              // FIFO fase 2: resto cronológico
+              clientAbonos.forEach(abono => {
+                if (abono.monto_restante > 0) {
+                  for (let j = 0; j < clientCargos.length; j++) {
+                    const cargo = clientCargos[j]
+                    if (cargo.saldo_pendiente_cargo > 0) {
+                      const aplicar = Math.min(cargo.saldo_pendiente_cargo, abono.monto_restante)
+                      cargo.saldo_pendiente_cargo = Math.round((cargo.saldo_pendiente_cargo - aplicar) * 10000) / 10000
+                      abono.monto_restante = Math.round((abono.monto_restante - aplicar) * 10000) / 10000
+                      if (abono.monto_restante <= 0) break
+                    }
+                  }
+                }
+              })
+
+              // Solo cargos del periodo (pagados y no pagados)
+              cargosPendientesPorCliente[cid] = clientCargos
+                .filter(c => {
+                  if (!c.creado_en) return false
+                  const fechaCargo = c.creado_en.split('T')[0]
+                  if (rango?.from && fechaCargo < rango.from) return false
+                  if (rango?.to && fechaCargo > rango.to) return false
+                  return true
+                })
+                .map(c => ({ ...c, saldo_usd: c.saldo_pendiente_cargo }))
+
+              abonosPorCliente[cid] = clientAbonos.filter(a => {
+                if (!a.creado_en) return false
+                const fechaAbono = a.creado_en.split('T')[0]
+                if (rango?.from && fechaAbono < rango.from) return false
+                if (rango?.to && fechaAbono > rango.to) return false
+                return true
+              })
+            })
+          }
+        }
+      }
+
+      const todosClientes = [...clientes, ...clientesExtra]
       const todosCargosActivos = Object.values(cargosPendientesPorCliente).flat()
 
-      // Aging por rangos (usando el saldo real pendiente de cargos activos)
+      // Aging por rangos
       const now = new Date()
       const aging = [
         { rango: '0 – 30 días', count: 0, totalUsd: 0 },
@@ -171,7 +291,6 @@ export function useResumenCxC(rango) {
         { rango: '90+ días', count: 0, totalUsd: 0 },
       ]
 
-      // Dias sin pago por cliente (fecha del cargo más antiguo activo)
       const diasPorCliente = {}
       todosCargosActivos.forEach(c => {
         const dias = Math.floor((now - new Date(c.creado_en)) / (1000 * 60 * 60 * 24))
@@ -187,51 +306,70 @@ export function useResumenCxC(rango) {
         aging[bucket].totalUsd += Number(c.saldo_usd || 0)
       })
 
-      // Deuda más antigua activa
       const cargoMasAntiguo = todosCargosActivos.length > 0
         ? todosCargosActivos.reduce((oldest, c) => new Date(c.creado_en) < new Date(oldest.creado_en) ? c : oldest)
         : null
-
       const diasMasAntiguo = cargoMasAntiguo
         ? Math.floor((now - new Date(cargoMasAntiguo.creado_en)) / (1000 * 60 * 60 * 24))
         : 0
 
-      // Alertas de vencimiento (solo de cargos activos próximos a vencer o vencidos)
       const alertasVencimiento = todosCargosActivos.filter(c => {
         if (!c.fecha_vencimiento) return false
-        const fv = new Date(c.fecha_vencimiento)
-        const diffDays = Math.ceil((fv - now) / (1000 * 60 * 60 * 24))
-        return diffDays <= 3 // Ya venció o vence en 3 días o menos
+        const diffDays = Math.ceil((new Date(c.fecha_vencimiento) - now) / (1000 * 60 * 60 * 24))
+        return diffDays <= 3
       }).map(c => {
-        const fv = new Date(c.fecha_vencimiento)
-        const diffDays = Math.ceil((fv - now) / (1000 * 60 * 60 * 24))
-        const cClient = clientes.find(cli => cli.id === c.cliente_id)
-        return {
-          ...c,
-          cliente_nombre: cClient ? cClient.nombre : 'Desconocido',
-          diasRestantes: diffDays
-        }
+        const diffDays = Math.ceil((new Date(c.fecha_vencimiento) - now) / (1000 * 60 * 60 * 24))
+        const cClient = todosClientes.find(cli => cli.id === c.cliente_id)
+        return { ...c, cliente_nombre: cClient ? cClient.nombre : 'Desconocido', diasRestantes: diffDays }
       })
 
-      // Días restantes para el vencimiento más próximo (de cargos activos con saldo_usd > 0)
       const diasRestantesPorCliente = {}
       todosCargosActivos.forEach(c => {
         if (c.fecha_vencimiento) {
-          const fv = new Date(c.fecha_vencimiento)
-          const diffDays = Math.ceil((fv - now) / (1000 * 60 * 60 * 24))
+          const diffDays = Math.ceil((new Date(c.fecha_vencimiento) - now) / (1000 * 60 * 60 * 24))
           if (diasRestantesPorCliente[c.cliente_id] === undefined || diffDays < diasRestantesPorCliente[c.cliente_id]) {
             diasRestantesPorCliente[c.cliente_id] = diffDays
           }
         }
       })
 
-      const clientesEnriquecidos = clientes.map(c => ({
-        ...c,
-        diasSinPago: diasPorCliente[c.id] ?? 0,
-        diasRestantes: diasRestantesPorCliente[c.id] !== undefined ? diasRestantesPorCliente[c.id] : null,
-        cargosActivos: cargosPendientesPorCliente[c.id] || [],
-        abonosEnRango: abonosPorCliente[c.id] || []
-      }))
+      const clientesEnriquecidos = todosClientes.map(c => {
+        const cActivos = cargosPendientesPorCliente[c.id] || []
+        const saldoReporte = (rango?.from || rango?.to)
+          ? cActivos.reduce((sum, car) => sum + car.saldo_usd, 0)
+          : Number(c.saldo_pendiente || 0)
+        const montoOtorgadoReporte = (rango?.from || rango?.to)
+          ? cActivos.reduce((sum, car) => sum + Number(car.monto_usd || 0), 0)
+          : Number(c.saldo_pendiente || 0)
+        const montoCobradoReporte = Math.max(0, montoOtorgadoReporte - saldoReporte)
+
+        return {
+          ...c,
+          saldo_pendiente: Math.round(saldoReporte * 100) / 100,
+          monto_otorgado: Math.round(montoOtorgadoReporte * 100) / 100,
+          monto_cobrado: Math.round(montoCobradoReporte * 100) / 100,
+          diasSinPago: diasPorCliente[c.id] ?? 0,
+          diasRestantes: diasRestantesPorCliente[c.id] !== undefined ? diasRestantesPorCliente[c.id] : null,
+          cargosActivos: cActivos,
+          abonosEnRango: abonosPorCliente[c.id] || []
+        }
+      })
+
+      const clientesConDeudaFiltrados = (rango?.from || rango?.to)
+        ? clientesEnriquecidos
+            .filter(c => c.monto_otorgado > 0.005 || c.saldo_pendiente > 0.005)
+            .sort((a, b) => Number(b.monto_otorgado || 0) - Number(a.monto_otorgado || 0))
+        : clientesEnriquecidos
+
+      totalDeuda = clientesConDeudaFiltrados.reduce((s, c) => s + c.saldo_pendiente, 0)
+      const totalOtorgado = (rango?.from || rango?.to)
+        ? clientesConDeudaFiltrados.reduce((s, c) => s + c.monto_otorgado, 0)
+        : totalDeuda
+      const totalCobrado = (rango?.from || rango?.to)
+        ? clientesConDeudaFiltrados.reduce((s, c) => s + c.monto_cobrado, 0)
+        : 0
+
+      promedioDeuda = clientesConDeudaFiltrados.length > 0 ? totalDeuda / clientesConDeudaFiltrados.length : 0
 
       // Obtener abonos recientes
       let abonosQuery = supabase
@@ -260,12 +398,14 @@ export function useResumenCxC(rango) {
       return {
         kpis: {
           totalDeuda,
+          totalOtorgado,
+          totalCobrado,
           promedioDeuda,
-          numClientesConDeuda: clientes.length,
+          numClientesConDeuda: clientesConDeudaFiltrados.length,
           diasMasAntiguo,
-          numCargos: todosCargosActivos.length,
+          numCargos: clientesConDeudaFiltrados.reduce((s, c) => s + (c.cargosActivos?.length || 0), 0),
         },
-        clientesConDeuda: clientesEnriquecidos,
+        clientesConDeuda: clientesConDeudaFiltrados,
         aging,
         alertasVencimiento,
         abonos: abonosRaw || []

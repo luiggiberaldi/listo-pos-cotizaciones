@@ -126,13 +126,16 @@ function KpiCard({ icon: Icon, label, value, sub, gradient, border, light = fals
 }
 
 // ─── Forma de Pago Section ────────────────────────────────────────────────
-function FormaPagoSection({ data = [], kpis }) {
+function FormaPagoSection({ data = [], kpis, cxcData }) {
   if (data.length === 0) return null
   const total = data.reduce((s, fp) => s + fp.totalUsd, 0)
 
   const fpCxc = data.find(fp => fp.formaPago === 'Cta por cobrar')
   const fpCod = data.find(fp => fp.formaPago === 'Cobro a destino')
-  const totalCxc = (fpCxc ? fpCxc.totalUsd : 0) + (fpCod ? fpCod.totalUsd : 0)
+  const totalCxc = cxcData?.kpis?.totalDeuda !== undefined
+    ? cxcData.kpis.totalDeuda
+    : ((fpCxc ? fpCxc.totalUsd : 0) + (fpCod ? fpCod.totalUsd : 0))
+
   const fpDonacion = data.find(fp => fp.formaPago === 'Donación')
   const totalDonacion = fpDonacion ? fpDonacion.totalUsd : 0
   const totalDeducciones = totalCxc
@@ -2815,6 +2818,8 @@ function TabCredito() {
                     <th className="px-3 py-2.5 text-center">
                       <SortBtn col="diasRestantes" label="Días Restantes" />
                     </th>
+                    <th className="px-3 py-2.5 text-right font-semibold">Otorgado USD</th>
+                    <th className="px-3 py-2.5 text-right font-semibold text-emerald-700">Cobrado USD</th>
                     <th className="px-3 py-2.5 text-right">
                       <SortBtn col="saldo" label="Saldo USD" />
                     </th>
@@ -2884,9 +2889,23 @@ function TabCredito() {
                             </span>
                           )}
                         </td>
+                        {/* Otorgado */}
+                        <td className="px-3 py-3 text-right">
+                          <span className="font-bold text-slate-600">
+                            {fmtUsd(c.monto_otorgado || 0)}
+                          </span>
+                        </td>
+                        {/* Cobrado */}
+                        <td className="px-3 py-3 text-right">
+                          {(rango?.from || rango?.to) ? (
+                            <span className="font-bold text-emerald-600">
+                              {fmtUsd(c.monto_cobrado || 0)}
+                            </span>
+                          ) : <span className="text-slate-300">—</span>}
+                        </td>
                         {/* Saldo */}
                         <td className="px-3 py-3 text-right">
-                          <span className="font-black text-red-600 text-sm">
+                          <span className={`font-black text-sm ${saldo > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
                             {fmtUsd(saldo)}
                           </span>
                         </td>
@@ -2898,11 +2917,23 @@ function TabCredito() {
             </div>
 
             {/* Footer resumen */}
-            <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+            <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
               <span className="text-[10px] text-slate-400">{clientesConDeuda.length} cliente{clientesConDeuda.length !== 1 ? 's' : ''} con deuda activa</span>
-              <span className="text-xs font-black text-red-600">
-                Total por cobrar: {fmtUsd(totalCxC)}
-              </span>
+              <div className="flex flex-wrap gap-4">
+                {(rango?.from || rango?.to) && (
+                  <span className="text-xs font-bold text-slate-500">
+                    Otorgado: {fmtUsd(kpis.totalOtorgado || totalCxC)}
+                  </span>
+                )}
+                {(rango?.from || rango?.to) && (
+                  <span className="text-xs font-bold text-emerald-600">
+                    Cobrado: {fmtUsd(kpis.totalCobrado || 0)}
+                  </span>
+                )}
+                <span className="text-xs font-black text-red-600">
+                  Saldo Pendiente: {fmtUsd(totalCxC)}
+                </span>
+              </div>
             </div>
           </div>
 
