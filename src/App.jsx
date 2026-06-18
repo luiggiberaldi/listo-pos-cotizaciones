@@ -332,6 +332,10 @@ function AppRoutes() {
               <Route path="/logs"          element={<LogsView />} />
               <Route path="/tester"        element={<TesterView />} />
               <Route path="/tester-flow"   element={<TesterFlowView />} />
+            </Route>
+
+            {/* Rutas para supervisor, admin, jefe y desarrollador */}
+            <Route element={<RutaSupervisorOAdmin />}>
               <Route path="/auditoria"     element={<AuditoriaView />} />
             </Route>
           </Route>

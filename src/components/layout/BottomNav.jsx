@@ -25,7 +25,7 @@ const MORE_ITEMS = [
   { path: '/reportes',            label: 'Reportes',           icon: BarChart3, onlyRoles: ['administracion', 'desarrollador'] },
   { path: '/configuracion',       label: 'Configuración',      icon: Settings,  onlyRoles: ['supervisor', 'administracion', 'desarrollador'] },
   { path: '/tester',              label: 'Tester',             icon: FlaskConical, onlyRoles: ['desarrollador'] },
-  { path: '/auditoria',           label: 'Auditoría',          icon: Shield,    onlyRoles: ['desarrollador'] },
+  { path: '/auditoria',           label: 'Auditoría',          icon: Shield,    onlyRoles: ['desarrollador', 'jefe', 'administracion', 'supervisor'] },
 ]
 
 export default function BottomNav({ esSupervisor, esAdministracion = false, rol: rolProp }) {
@@ -43,7 +43,6 @@ export default function BottomNav({ esSupervisor, esAdministracion = false, rol:
     if (item.onlyRoles && !item.onlyRoles.includes(rol)) return false
     if (item.supervisorOnly && !esSupervisor) return false
     if (item.requiresPrivileged && !esPrivilegiado) return false
-    if (!esSupervisor && ['/auditoria', '/logs'].includes(item.path)) return false
     return true
   })
 

@@ -95,7 +95,7 @@ const NAV_SUPERVISOR = [
   { path: '/configuracion', label: 'Configuración', icono: Settings, excludeRoles: ['vendedor', 'vendedor_sin_comision', 'logistica'] },
   { path: '/logs',          label: 'System Logs',   icono: ScrollText, onlyRoles: ['desarrollador'] },
   { path: '/tester',        label: 'Tester',        icono: FlaskConical, onlyRoles: ['desarrollador'] },
-  { path: '/auditoria',     label: 'Auditoría',     icono: Shield,       onlyRoles: ['desarrollador'] },
+  { path: '/auditoria',     label: 'Auditoría',     icono: Shield,       onlyRoles: ['desarrollador', 'jefe', 'administracion', 'supervisor'] },
 ]
 
 // ─── Badge de rol ──────────────────────────────────────────────────────────────

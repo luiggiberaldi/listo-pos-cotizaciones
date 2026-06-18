@@ -523,6 +523,7 @@ export default function AuditoriaView() {
 
   const perfil = useAuthStore(s => s.perfil)
   const esRolAutorizado = ['jefe', 'administracion', 'supervisor', 'desarrollador'].includes(perfil?.rol)
+  const esDesarrollador = perfil?.rol === 'desarrollador'
 
   // Estados del Buscador de Reportes Especiales
   const [reportTab, setReportTab] = useState('despacho') // 'despacho' | 'cliente'
@@ -1479,164 +1480,172 @@ export default function AuditoriaView() {
         title="Auditoría"
         subtitle={isLoading ? 'Cargando...' : `${total.toLocaleString()} registros de actividad`}
         action={
-          <div className="flex items-center gap-2">
-            <button onClick={handleCopiarLogs} disabled={isLoading || registrosFiltrados.length === 0}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none select-none"
-              title="Copiar logs al portapapeles">
-              {copiado ? <Check size={13} className="text-emerald-600 animate-scale-up" /> : <Copy size={13} className="text-slate-500" />}
-              <span>{copiado ? '¡Copiado!' : 'Copiar logs'}</span>
-            </button>
-            <button onClick={() => refetch()}
-              className="p-2 rounded-xl transition-colors text-slate-400 hover:text-slate-700 hover:bg-slate-100"
-              title="Actualizar">
-              <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
-            </button>
-          </div>
+          esDesarrollador ? (
+            <div className="flex items-center gap-2">
+              <button onClick={handleCopiarLogs} disabled={isLoading || registrosFiltrados.length === 0}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none select-none"
+                title="Copiar logs al portapapeles">
+                {copiado ? <Check size={13} className="text-emerald-600 animate-scale-up" /> : <Copy size={13} className="text-slate-500" />}
+                <span>{copiado ? '¡Copiado!' : 'Copiar logs'}</span>
+              </button>
+              <button onClick={() => refetch()}
+                className="p-2 rounded-xl transition-colors text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                title="Actualizar">
+                <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+              </button>
+            </div>
+          ) : null
         }
       />
 
-      {/* Resumen rápido */}
-      <div className="grid grid-cols-3 gap-3">
-        <ResumenCard
-          icon={Activity}
-          label="Total registros"
-          value={total.toLocaleString()}
-          gradient="linear-gradient(135deg, #1B365D 0%, #0d1f3c 100%)"
-          border="rgba(255,255,255,0.07)"
-        />
-        <ResumenCard
-          icon={CalendarDays}
-          label="Hoy"
-          value={countHoy}
-          gradient="linear-gradient(135deg, #0891b2 0%, #0e7490 100%)"
-          border="rgba(255,255,255,0.10)"
-        />
-        <ResumenCard
-          icon={TrendingUp}
-          label="Esta página"
-          value={registrosFiltrados.length}
-          gradient="linear-gradient(135deg, #059669 0%, #047857 100%)"
-          border="rgba(255,255,255,0.10)"
-        />
-      </div>
+      {/* KPIs: solo desarrollador */}
+      {esDesarrollador && (
+        <div className="grid grid-cols-3 gap-3">
+          <ResumenCard
+            icon={Activity}
+            label="Total registros"
+            value={total.toLocaleString()}
+            gradient="linear-gradient(135deg, #1B365D 0%, #0d1f3c 100%)"
+            border="rgba(255,255,255,0.07)"
+          />
+          <ResumenCard
+            icon={CalendarDays}
+            label="Hoy"
+            value={countHoy}
+            gradient="linear-gradient(135deg, #0891b2 0%, #0e7490 100%)"
+            border="rgba(255,255,255,0.10)"
+          />
+          <ResumenCard
+            icon={TrendingUp}
+            label="Esta página"
+            value={registrosFiltrados.length}
+            gradient="linear-gradient(135deg, #059669 0%, #047857 100%)"
+            border="rgba(255,255,255,0.10)"
+          />
+        </div>
+      )}
 
       {/* Buscador de Reportes Especiales */}
       {esRolAutorizado && renderBuscadorReportes()}
 
-      {/* Búsqueda + Filtros */}
-      <div className="space-y-3">
-        {/* Barra de búsqueda */}
-        <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Buscar por usuario, acción o descripción..."
-            value={busqueda}
-            onChange={e => setBusqueda(e.target.value)}
-            className="w-full pl-9 pr-9 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-colors placeholder:text-slate-400"
-          />
-          {busqueda && (
-            <button onClick={() => setBusqueda('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-              <X size={14} />
-            </button>
-          )}
-        </div>
-
-        {/* Filtros rápidos de fecha + selectores */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Chips de fecha */}
-          <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5">
-            {FILTROS_FECHA.map(f => (
-              <button key={f.id}
-                onClick={() => cambiarFiltro(() => setFiltroFecha(f.id))}
-                className={`text-xs font-medium px-3 py-1.5 rounded-md transition-all ${
-                  filtroFecha === f.id
-                    ? 'bg-white text-slate-800 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}>
-                {f.label}
+      {/* Búsqueda + Filtros: solo desarrollador */}
+      {esDesarrollador && (
+        <div className="space-y-3">
+          {/* Barra de búsqueda */}
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Buscar por usuario, acción o descripción..."
+              value={busqueda}
+              onChange={e => setBusqueda(e.target.value)}
+              className="w-full pl-9 pr-9 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-colors placeholder:text-slate-400"
+            />
+            {busqueda && (
+              <button onClick={() => setBusqueda('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                <X size={14} />
               </button>
-            ))}
+            )}
           </div>
 
-          <div className="w-px h-6 bg-slate-200 hidden sm:block" />
-
-          {/* Select de categoría */}
-          <div className="min-w-[160px]">
-            <CustomSelect
-              options={CATEGORIAS_FILTRO.map(({ valor, label }) => ({ value: valor, label }))}
-              value={categoria}
-              onChange={val => cambiarFiltro(() => setCategoria(val))}
-              placeholder="Categoría"
-              searchable={false}
-            />
-          </div>
-
-          {/* Select de usuario */}
-          <div className="min-w-[160px]">
-            <CustomSelect
-              options={[
-                { value: '', label: 'Todos los usuarios' },
-                ...usuarios.map(u => ({ value: u.id, label: u.nombre })),
-              ]}
-              value={usuarioId}
-              onChange={val => cambiarFiltro(() => setUsuarioId(val))}
-              placeholder="Usuario"
-            />
-          </div>
-
-          {hayFiltros && (
-            <button onClick={() => { setCategoria(''); setUsuarioId(''); setBusqueda(''); setFiltroFecha(''); setPagina(0) }}
-              className="text-xs text-slate-500 hover:text-red-600 flex items-center gap-1 transition-colors">
-              <X size={12} /> Limpiar
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Timeline agrupado por fecha */}
-      {isLoading ? (
-        <SkeletonAuditoria />
-      ) : isError ? (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center text-red-700">
-          <p className="font-semibold text-sm">Error al cargar registros</p>
-          <button onClick={() => refetch()} className="mt-2 text-xs underline">Intentar de nuevo</button>
-        </div>
-      ) : registrosFiltrados.length === 0 ? (
-        <div className="bg-white rounded-xl border border-slate-200 p-10 text-center text-slate-400">
-          <ClipboardList size={28} className="mx-auto mb-2 opacity-30" />
-          <p className="font-medium text-sm">Sin actividad</p>
-          <p className="text-xs mt-1">No hay registros que coincidan con los filtros.</p>
-        </div>
-      ) : (
-        <div className="space-y-5">
-          {grupos.map(grupo => (
-            <div key={grupo.label}>
-              {/* Separador de fecha */}
-              <div className="flex items-center gap-3 mb-2.5">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">
-                  {grupo.label}
-                </span>
-                <div className="flex-1 h-px bg-slate-200" />
-                <span className="text-[10px] text-slate-400 font-medium">
-                  {grupo.registros.length} registro{grupo.registros.length !== 1 ? 's' : ''}
-                </span>
-              </div>
-
-              {/* Cards del grupo */}
-              <div className="space-y-2">
-                {grupo.registros.map(r => (
-                  <ActividadCard key={r.id} registro={r} tasa={tasaEfectiva} />
-                ))}
-              </div>
+          {/* Filtros rápidos de fecha + selectores */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Chips de fecha */}
+            <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5">
+              {FILTROS_FECHA.map(f => (
+                <button key={f.id}
+                  onClick={() => cambiarFiltro(() => setFiltroFecha(f.id))}
+                  className={`text-xs font-medium px-3 py-1.5 rounded-md transition-all ${
+                    filtroFecha === f.id
+                      ? 'bg-white text-slate-800 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}>
+                  {f.label}
+                </button>
+              ))}
             </div>
-          ))}
+
+            <div className="w-px h-6 bg-slate-200 hidden sm:block" />
+
+            {/* Select de categoría */}
+            <div className="min-w-[160px]">
+              <CustomSelect
+                options={CATEGORIAS_FILTRO.map(({ valor, label }) => ({ value: valor, label }))}
+                value={categoria}
+                onChange={val => cambiarFiltro(() => setCategoria(val))}
+                placeholder="Categoría"
+                searchable={false}
+              />
+            </div>
+
+            {/* Select de usuario */}
+            <div className="min-w-[160px]">
+              <CustomSelect
+                options={[
+                  { value: '', label: 'Todos los usuarios' },
+                  ...usuarios.map(u => ({ value: u.id, label: u.nombre })),
+                ]}
+                value={usuarioId}
+                onChange={val => cambiarFiltro(() => setUsuarioId(val))}
+                placeholder="Usuario"
+              />
+            </div>
+
+            {hayFiltros && (
+              <button onClick={() => { setCategoria(''); setUsuarioId(''); setBusqueda(''); setFiltroFecha(''); setPagina(0) }}
+                className="text-xs text-slate-500 hover:text-red-600 flex items-center gap-1 transition-colors">
+                <X size={12} /> Limpiar
+              </button>
+            )}
+          </div>
         </div>
       )}
 
-      {/* Paginación */}
-      {!isLoading && totalPags > 1 && (
+      {/* Timeline agrupado por fecha: solo desarrollador */}
+      {esDesarrollador && (
+        isLoading ? (
+          <SkeletonAuditoria />
+        ) : isError ? (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center text-red-700">
+            <p className="font-semibold text-sm">Error al cargar registros</p>
+            <button onClick={() => refetch()} className="mt-2 text-xs underline">Intentar de nuevo</button>
+          </div>
+        ) : registrosFiltrados.length === 0 ? (
+          <div className="bg-white rounded-xl border border-slate-200 p-10 text-center text-slate-400">
+            <ClipboardList size={28} className="mx-auto mb-2 opacity-30" />
+            <p className="font-medium text-sm">Sin actividad</p>
+            <p className="text-xs mt-1">No hay registros que coincidan con los filtros.</p>
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {grupos.map(grupo => (
+              <div key={grupo.label}>
+                {/* Separador de fecha */}
+                <div className="flex items-center gap-3 mb-2.5">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">
+                    {grupo.label}
+                  </span>
+                  <div className="flex-1 h-px bg-slate-200" />
+                  <span className="text-[10px] text-slate-400 font-medium">
+                    {grupo.registros.length} registro{grupo.registros.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+
+                {/* Cards del grupo */}
+                <div className="space-y-2">
+                  {grupo.registros.map(r => (
+                    <ActividadCard key={r.id} registro={r} tasa={tasaEfectiva} />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      )}
+
+      {/* Paginación: solo desarrollador */}
+      {esDesarrollador && !isLoading && totalPags > 1 && (
         <div className="flex items-center justify-between bg-white rounded-xl border border-slate-200 px-4 py-2.5">
           <span className="text-xs text-slate-500">
             Pág. <strong>{pagina + 1}</strong> / <strong>{totalPags}</strong>
