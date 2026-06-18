@@ -10,6 +10,36 @@ import {
   hexToRgb, drawWatermark, checkPage, drawSimplifiedHeader, drawPremiumHeader, drawPremiumFooter
 } from './pdfShared'
 
+// Helper para formatear forma_pago_abono (que puede venir como JSON array o string)
+function formatMetodoPago(val, fallback = '—') {
+  if (!val) return fallback
+  try {
+    if (Array.isArray(val)) {
+      const parts = val.map(p => p.metodo || p.metodo_pago || p.formaPago).filter(Boolean)
+      return parts.length > 0 ? parts.join(', ') : fallback
+    }
+    if (typeof val === 'object') {
+      return val.metodo || val.metodo_pago || val.formaPago || fallback
+    }
+    if (typeof val === 'string') {
+      const trimmed = val.trim()
+      if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+        const parsed = JSON.parse(trimmed)
+        if (Array.isArray(parsed)) {
+          const parts = parsed.map(p => p.metodo || p.metodo_pago || p.formaPago).filter(Boolean)
+          return parts.length > 0 ? parts.join(', ') : fallback
+        } else if (parsed && typeof parsed === 'object') {
+          return parsed.metodo || parsed.metodo_pago || parsed.formaPago || fallback
+        }
+      }
+      return val || fallback
+    }
+  } catch (e) {
+    // Ignore and fallback
+  }
+  return String(val) || fallback
+}
+
 // ─── Generar Reporte de Comisiones ───────────────────────────────────────────
 // ─── Generar Reporte de Comisiones ───────────────────────────────────────────
 export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVendedor = null, resumen = null, rango = null, config = {}, action = 'download', formato = 'detallado', tasaEuro = null, ajustesManuales = {} }) {
@@ -2054,7 +2084,7 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
       
       const fechaStr = dev.creado_en ? new Date(dev.creado_en).toLocaleDateString('es-VE', { day: '2-digit', month: 'short' }) : '—'
       doc.text(fechaStr, MARGIN + 100, y + 4.5)
-      doc.text(dev.forma_pago_abono || 'Sin especificar', MARGIN + 122, y + 4.5)
+      doc.text(formatMetodoPago(dev.forma_pago_abono), MARGIN + 122, y + 4.5)
 
       doc.setFont('helvetica', 'bold')
       doc.setTextColor(220, 38, 38) // Rose 600

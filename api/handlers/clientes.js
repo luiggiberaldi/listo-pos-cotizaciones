@@ -188,14 +188,32 @@ export async function handleReasignarCliente(request, env) {
       const despachos = await dRes.json();
       const despIds = despachos.map(d => d.id);
       if (despIds.length > 0) {
-        await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=in.(${despIds.join(',')})&estado=in.(pendiente,cta_cobrar)`, {
-          method: 'PATCH',
-          headers: { ...headers, Prefer: 'return=minimal' },
-          body: JSON.stringify({
-            vendedorid: nuevoVendedorId,
-            actualizadoen: new Date().toISOString()
-          })
-        });
+        const comsRes = await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=in.(${despIds.join(',')})&estado=in.(pendiente,cta_cobrar)&select=id`, { headers });
+        if (comsRes.ok) {
+          const coms = await comsRes.json();
+          const comIds = coms.map(c => c.id);
+          
+          if (comIds.length > 0) {
+            // Actualizar vendedor en comisiones
+            await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?id=in.(${comIds.join(',')})`, {
+              method: 'PATCH',
+              headers: { ...headers, Prefer: 'return=minimal' },
+              body: JSON.stringify({
+                vendedorid: nuevoVendedorId,
+                actualizadoen: new Date().toISOString()
+              })
+            });
+
+            // Actualizar vendedor en liberaciones correspondientes
+            await fetch(`${env.SUPABASE_URL}/rest/v1/comision_liberaciones?comision_id=in.(${comIds.join(',')})`, {
+              method: 'PATCH',
+              headers: { ...headers, Prefer: 'return=minimal' },
+              body: JSON.stringify({
+                vendedor_id: nuevoVendedorId
+              })
+            });
+          }
+        }
       }
     }
 
@@ -528,14 +546,32 @@ export async function handleReasignarClientesBulk(request, env) {
         const despachos = await dRes.json();
         const despIds = despachos.map(d => d.id);
         if (despIds.length > 0) {
-          await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=in.(${despIds.join(',')})&estado=in.(pendiente,cta_cobrar)`, {
-            method: 'PATCH',
-            headers: { ...headers, Prefer: 'return=minimal' },
-            body: JSON.stringify({
-              vendedorid: vendedorDestinoId,
-              actualizadoen: ahora
-            })
-          });
+          const comsRes = await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=in.(${despIds.join(',')})&estado=in.(pendiente,cta_cobrar)&select=id`, { headers });
+          if (comsRes.ok) {
+            const coms = await comsRes.json();
+            const comIds = coms.map(c => c.id);
+
+            if (comIds.length > 0) {
+              // Actualizar vendedor en comisiones
+              await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?id=in.(${comIds.join(',')})`, {
+                method: 'PATCH',
+                headers: { ...headers, Prefer: 'return=minimal' },
+                body: JSON.stringify({
+                  vendedorid: vendedorDestinoId,
+                  actualizadoen: ahora
+                })
+              });
+
+              // Actualizar vendedor en liberaciones correspondientes
+              await fetch(`${env.SUPABASE_URL}/rest/v1/comision_liberaciones?comision_id=in.(${comIds.join(',')})`, {
+                method: 'PATCH',
+                headers: { ...headers, Prefer: 'return=minimal' },
+                body: JSON.stringify({
+                  vendedor_id: vendedorDestinoId
+                })
+              });
+            }
+          }
         }
       }
     }

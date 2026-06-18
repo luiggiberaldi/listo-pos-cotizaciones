@@ -8,7 +8,7 @@ import {
   Send, Ban, CheckCircle, XCircle, PenLine, PlusCircle, Trash2,
   Eye, GitBranch, Clock, ChevronDown, ChevronUp, DollarSign,
   User, Calendar, Hash, Info, Loader2, Search, TrendingUp,
-  Activity, CalendarDays, X, Copy, Check
+  Activity, CalendarDays, X, Copy, Check, Printer, Download
 } from 'lucide-react'
 import { useAuditoria }  from '../hooks/useAuditoria'
 import { useUsuarios }   from '../hooks/useUsuarios'
@@ -19,6 +19,8 @@ import CustomSelect from '../components/ui/CustomSelect'
 import Skeleton from '../components/ui/Skeleton'
 import PageHeader from '../components/ui/PageHeader'
 import { showToast } from '../components/ui/Toast'
+import useAuthStore from '../store/useAuthStore'
+import { authFetch } from '../services/authFetch'
 
 // ─── Configuración de categorías ────────────────────────────────────────────
 const CATEGORIA_CONFIG = {
@@ -519,9 +521,864 @@ export default function AuditoriaView() {
   const [filtroFecha,  setFiltroFecha]  = useState('')
   const [copiado,      setCopiado]      = useState(false)
 
+  const perfil = useAuthStore(s => s.perfil)
+  const esRolAutorizado = ['jefe', 'administracion', 'supervisor', 'desarrollador'].includes(perfil?.rol)
+
+  // Estados del Buscador de Reportes Especiales
+  const [reportTab, setReportTab] = useState('despacho') // 'despacho' | 'cliente'
+  const [reportQuery, setReportQuery] = useState('')
+  const [clientSearchQuery, setClientSearchQuery] = useState('')
+  const [clientSearchResults, setClientSearchResults] = useState([])
+  const [loadingReport, setLoadingReport] = useState(false)
+  const [showReportModal, setShowReportModal] = useState(false)
+  const [reportModalData, setReportModalData] = useState(null)
+
   const { data, isLoading, isError, refetch } = useAuditoria({ pagina, porPagina: POR_PAGINA, usuarioId, categoria })
   const { data: usuarios = [] } = useUsuarios()
   const { tasaEfectiva } = useTasaCambio()
+
+  const handleSearchDespacho = async (numero) => {
+    const cleanNum = String(numero).replace(/^(des|dsp)[\.\-\s]*/i, '').replace(/^0+/g, '').trim()
+    if (!cleanNum || isNaN(cleanNum)) {
+      showToast('Ingresa un número correlativo de despacho válido', 'warning')
+      return
+    }
+    setLoadingReport(true)
+    try {
+      const { data: despacho, error: dErr } = await supabase
+        .from('notas_despacho')
+        .select(`
+          *,
+          cliente:clientes!notas_despacho_cliente_id_fkey(*),
+          vendedor:usuarios!notas_despacho_vendedor_id_fkey(*),
+          cotizacion:cotizaciones(id, numero, creado_en)
+        `)
+        .eq('numero', parseInt(cleanNum, 10))
+        .maybeSingle()
+
+      if (dErr) throw dErr
+      if (!despacho) {
+        showToast(`Despacho DES-${cleanNum.padStart(5, '0')} no encontrado`, 'error')
+        setLoadingReport(false)
+        return
+      }
+
+      const { data: items, error: iErr } = await supabase
+        .from('notas_despacho_items')
+        .select('*')
+        .eq('despacho_id', despacho.id)
+
+      if (iErr) throw iErr
+
+      let comisiones = []
+      try {
+        const comRes = await authFetch(`/api/comisiones/lista?despachoId=${despacho.id}&pageSize=50`)
+        if (comRes.ok) {
+          const comJson = await comRes.json()
+          comisiones = comJson.data || []
+        } else {
+          const errText = await comRes.text().catch(() => '')
+          console.warn('[AuditoriaView] API comisiones respondió con error:', comRes.status, errText)
+        }
+      } catch (cErr) {
+        console.warn('[AuditoriaView] Excepción al consultar comisiones de la API:', cErr)
+      }
+
+      // Fallback: si la API no devolvió comisiones, intentar consulta directa a Supabase
+      if (comisiones.length === 0) {
+        try {
+          const { data: comDirect, error: comDirErr } = await supabase
+            .from('comisiones')
+            .select(`
+              id, despachoid, vendedorid, cotizacionid, cuentaid,
+              totalcomision, comisioncabilla, comisionotros,
+              pctcabilla, pctotros, montopagado,
+              comision_liberada, comision_retenida,
+              estado, pagadaen, pagadapor, creadoen,
+              vendedor:usuarios!comisiones_vendedorid_fkey(id, nombre, rol, color)
+            `)
+            .eq('despachoid', despacho.id)
+          if (!comDirErr && comDirect && comDirect.length > 0) {
+            comisiones = comDirect
+          } else if (comDirErr) {
+            console.warn('[AuditoriaView] Fallback Supabase comisiones error:', comDirErr.message)
+          }
+        } catch (fbErr) {
+          console.warn('[AuditoriaView] Excepción en fallback de comisiones:', fbErr)
+        }
+      }
+
+      const { data: auditLogs, error: aErr } = await supabase
+        .from('auditoria')
+        .select('*')
+        .eq('entidad_id', despacho.id)
+        .order('ts', { ascending: true })
+
+      if (aErr) throw aErr
+
+      setReportModalData({
+        type: 'despacho',
+        title: `Reporte de Despacho: DES-${String(despacho.numero).padStart(5, '0')}`,
+        data: {
+          despacho,
+          items: items || [],
+          comisiones: comisiones || [],
+          auditLogs: auditLogs || [],
+        }
+      })
+      setShowReportModal(true)
+    } catch (err) {
+      console.error(err)
+      showToast('Error al consultar despacho: ' + err.message, 'error')
+    } finally {
+      setLoadingReport(false)
+    }
+  }
+
+  const handleSearchCliente = async (cliente) => {
+    if (!cliente?.id) return
+    setLoadingReport(true)
+    try {
+      const { data: reasignaciones, error: rErr } = await supabase
+        .from('reasignaciones_clientes')
+        .select(`
+          *,
+          origen:usuarios!reasignaciones_clientes_vendedor_origen_fkey(nombre),
+          destino:usuarios!reasignaciones_clientes_vendedor_destino_fkey(nombre),
+          supervisor:usuarios!reasignaciones_clientes_supervisor_id_fkey(nombre)
+        `)
+        .eq('cliente_id', cliente.id)
+        .order('creado_en', { ascending: true })
+
+      if (rErr) throw rErr
+
+      const tStart = new Date(new Date(cliente.creado_en).getTime() - 90000).toISOString()
+      const tEnd = new Date(new Date(cliente.creado_en).getTime() + 90000).toISOString()
+
+      const { data: logsCercanos } = await supabase
+        .from('auditoria')
+        .select('*')
+        .gte('ts', tStart)
+        .lte('ts', tEnd)
+        .order('ts', { ascending: true })
+
+      setReportModalData({
+        type: 'cliente',
+        title: `Reporte del Cliente: ${cliente.nombre}`,
+        data: {
+          cliente,
+          reasignaciones: reasignaciones || [],
+          logsCercanos: logsCercanos || []
+        }
+      })
+      setShowReportModal(true)
+      setClientSearchQuery('')
+      setClientSearchResults([])
+    } catch (err) {
+      console.error(err)
+      showToast('Error al consultar cliente: ' + err.message, 'error')
+    } finally {
+      setLoadingReport(false)
+    }
+  }
+
+  const handleClientInputChange = async (val) => {
+    setClientSearchQuery(val)
+    if (val.trim().length < 2) {
+      setClientSearchResults([])
+      return
+    }
+    try {
+      const { data, error } = await supabase
+        .from('clientes')
+        .select(`
+          *,
+          vendedor:usuarios!clientes_vendedor_id_fkey(nombre)
+        `)
+        .or(`nombre.ilike.%${val.trim()}%,codigo_cliente.ilike.%${val.trim()}%,rif_cedula.ilike.%${val.trim()}%`)
+        .eq('activo', true)
+        .limit(10)
+      
+      if (!error && data) {
+        setClientSearchResults(data)
+      }
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  const renderBuscadorReportes = () => {
+    return (
+      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm space-y-3">
+        <div className="flex items-center gap-2">
+          <Activity size={16} className="text-blue-600" />
+          <h2 className="text-sm font-bold text-slate-800">Buscador de Historial y Auditoría Cruzada</h2>
+        </div>
+        <p className="text-xs text-slate-500">
+          Consulta al instante el historial completo, comisiones, modificaciones y asignaciones de un despacho o un cliente.
+        </p>
+
+        {/* Pestañas */}
+        <div className="flex border-b border-slate-100">
+          <button
+            onClick={() => { setReportTab('despacho'); setReportQuery(''); setClientSearchQuery(''); setClientSearchResults([]) }}
+            className={`text-xs font-bold pb-2 px-4 border-b-2 transition-all ${
+              reportTab === 'despacho'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            Por Despacho (Nº Correlativo)
+          </button>
+          <button
+            onClick={() => { setReportTab('cliente'); setReportQuery(''); setClientSearchQuery(''); setClientSearchResults([]) }}
+            className={`text-xs font-bold pb-2 px-4 border-b-2 transition-all ${
+              reportTab === 'cliente'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            Por Cliente (Nombre / RIF)
+          </button>
+        </div>
+
+        {/* Área del buscador */}
+        {reportTab === 'despacho' ? (
+          <form
+            onSubmit={(e) => { e.preventDefault(); handleSearchDespacho(reportQuery) }}
+            className="flex gap-2"
+          >
+            <div className="relative flex-1">
+              <Hash size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Ingresa el correlativo de despacho (ej. 1132)..."
+                value={reportQuery}
+                onChange={e => setReportQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-all placeholder:text-slate-400"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loadingReport || !reportQuery.trim()}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+            >
+              {loadingReport ? 'Buscando...' : 'Generar Reporte'}
+            </button>
+          </form>
+        ) : (
+          <div className="relative space-y-1">
+            <div className="relative">
+              <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Busca el nombre, código o RIF del cliente..."
+                value={clientSearchQuery}
+                onChange={e => handleClientInputChange(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-all placeholder:text-slate-400"
+              />
+              {loadingReport && (
+                <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-slate-400" />
+              )}
+            </div>
+
+            {/* Resultados predictivos */}
+            {clientSearchResults.length > 0 && (
+              <div className="absolute z-30 w-full bg-white border border-slate-200 rounded-xl shadow-lg mt-1 max-h-60 overflow-y-auto divide-y divide-slate-100">
+                {clientSearchResults.map(cli => (
+                  <button
+                    key={cli.id}
+                    onClick={() => handleSearchCliente(cli)}
+                    className="w-full px-4 py-2.5 text-left text-xs hover:bg-blue-50 transition-colors flex items-center justify-between"
+                  >
+                    <div>
+                      <p className="font-bold text-slate-800">{cli.nombre}</p>
+                      <p className="text-[10px] text-slate-400">{cli.rif_cedula || 'Sin RIF'} | Código: #{cli.codigo_cliente}</p>
+                    </div>
+                    <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-medium">
+                      Vendedor: {cli.vendedor?.nombre || '—'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  const renderReportModal = () => {
+    if (!showReportModal || !reportModalData) return null
+    const { type, title, data } = reportModalData
+
+    const printReport = () => {
+      const printContent = document.getElementById('report-print-area').innerHTML
+      const printWindow = window.open('', '', 'height=800,width=900')
+      printWindow.document.write('<html><head><title>' + title + '</title>')
+      printWindow.document.write('<style>')
+      printWindow.document.write(`
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 30px; color: #1e293b; line-height: 1.5; }
+        .header { border-bottom: 2px solid #3b82f6; padding-bottom: 15px; margin-bottom: 25px; }
+        .header h1 { margin: 0; font-size: 24px; color: #1e3a8a; }
+        .header p { margin: 5px 0 0 0; font-size: 13px; color: #64748b; }
+        h2 { font-size: 16px; color: #1e3a8a; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; margin-top: 25px; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .field { margin-bottom: 8px; font-size: 13px; }
+        .label { color: #64748b; font-weight: 500; display: inline-block; width: 140px; }
+        .value { color: #0f172a; font-weight: 600; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 20px; }
+        th, td { padding: 10px; text-align: left; font-size: 12px; border-bottom: 1px solid #e2e8f0; }
+        th { background-color: #f8fafc; font-weight: bold; color: #475569; border-top: 1px solid #e2e8f0; }
+        .badge { padding: 4px 8px; border-radius: 9999px; font-size: 10px; font-weight: bold; display: inline-block; text-transform: uppercase; }
+        .badge-success { background-color: #d1fae5; color: #065f46; }
+        .badge-warning { background-color: #fef3c7; color: #92400e; }
+        .badge-danger { background-color: #fee2e2; color: #991b1b; }
+        .badge-info { background-color: #e0f2fe; color: #0369a1; }
+        .badge-slate { background-color: #f1f5f9; color: #334155; }
+        .timeline { list-style: none; padding: 0; margin: 0; }
+        .timeline-item { position: relative; padding-left: 20px; margin-bottom: 12px; font-size: 12px; }
+        .timeline-item::before { content: ""; position: absolute; left: 0; top: 5px; width: 8px; height: 8px; border-radius: 50%; background-color: #3b82f6; }
+        .timestamp { color: #64748b; font-family: monospace; font-size: 11px; margin-right: 8px; }
+        .footer { margin-top: 40px; border-top: 1px solid #e2e8f0; padding-top: 15px; font-size: 11px; color: #94a3b8; text-align: center; }
+      `)
+      printWindow.document.write('</style></head><body>')
+      printWindow.document.write(printContent)
+      printWindow.document.write('</body></html>')
+      printWindow.document.close()
+      printWindow.focus()
+      setTimeout(() => {
+        printWindow.print()
+        printWindow.close()
+      }, 300)
+    }
+
+    const renderContent = () => {
+      if (type === 'despacho') {
+        const { despacho, items, comisiones, auditLogs } = data
+        let formaPagoText = '—'
+        try {
+          if (despacho.forma_pago) {
+            const parsed = typeof despacho.forma_pago === 'string' ? JSON.parse(despacho.forma_pago) : despacho.forma_pago
+            if (Array.isArray(parsed)) {
+              formaPagoText = parsed.map(p => `${p.metodo || 'Método'}: ${fmtUsd(p.monto)}`).join(', ')
+            } else if (parsed && typeof parsed === 'object') {
+              formaPagoText = `${parsed.metodo || 'Método'}: ${fmtUsd(parsed.monto)}`
+            }
+          }
+        } catch {}
+
+        const creacionLog = auditLogs.find(l => l.accion === 'CREAR_DESPACHO')
+        const creadoPorStr = creacionLog 
+          ? `${creacionLog.usuario_nombre} (${creacionLog.usuario_rol || 'vendedor'}) el ${new Date(creacionLog.ts).toLocaleString('es-VE')}`
+          : `Sistema (Vendedor: ${despacho.vendedor?.nombre || '—'})`
+
+        const modLogs = auditLogs.filter(l => l.accion !== 'CREAR_DESPACHO')
+
+        return (
+          <div className="space-y-6">
+            <div className="flex justify-between border-b border-slate-100 pb-4 flex-wrap gap-4">
+              <div>
+                <h3 className="text-lg font-black text-slate-800">Nota de Despacho: DES-${String(despacho.numero).padStart(5, '0')}</h3>
+                <p className="text-xs text-slate-400 mt-1">Estatus: <span className="font-bold text-slate-600 capitalize">{despacho.estado}</span> | Fecha: {new Date(despacho.creado_en).toLocaleString('es-VE')}</p>
+              </div>
+              <div className="text-right">
+                <span className="text-xs text-slate-400 block">Monto Total Despacho</span>
+                <span className="text-xl font-black text-slate-800">{fmtUsd(despacho.total_usd)}</span>
+              </div>
+            </div>
+
+            <div>
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Información General</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-xs bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                <div>
+                  <p className="py-1"><span className="text-slate-400 font-medium inline-block w-28">Cliente:</span><span className="font-bold text-slate-700">{despacho.cliente?.nombre || '—'}</span></p>
+                  <p className="py-1"><span className="text-slate-400 font-medium inline-block w-28">RIF / Cédula:</span><span className="font-bold text-slate-700">{despacho.cliente?.rif_cedula || '—'}</span></p>
+                  <p className="py-1"><span className="text-slate-400 font-medium inline-block w-28">Vendedor:</span><span className="font-bold text-slate-700">{despacho.vendedor?.nombre || '—'}</span></p>
+                </div>
+                <div>
+                  <p className="py-1"><span className="text-slate-400 font-medium inline-block w-28">Creado por:</span><span className="font-bold text-slate-700">{creadoPorStr}</span></p>
+                  <p className="py-1"><span className="text-slate-400 font-medium inline-block w-28">Aprobado por:</span><span className="font-bold text-slate-700">{despacho.aprobado_por_nombre || '—'}</span></p>
+                  <p className="py-1"><span className="text-slate-400 font-medium inline-block w-28">Forma de Pago:</span><span className="font-bold text-slate-700">{formaPagoText}</span></p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Artículos Despachados</h4>
+              <div className="overflow-x-auto border border-slate-100 rounded-xl">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-100">
+                      <th className="px-3 py-2 text-left font-bold text-slate-500">Código</th>
+                      <th className="px-3 py-2 text-left font-bold text-slate-500">Descripción</th>
+                      <th className="px-3 py-2 text-center font-bold text-slate-500">Cantidad</th>
+                      <th className="px-3 py-2 text-right font-bold text-slate-500">Precio Unit.</th>
+                      <th className="px-3 py-2 text-right font-bold text-slate-500">Total USD</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {items.map(it => (
+                      <tr key={it.id} className="hover:bg-slate-50/50">
+                        <td className="px-3 py-2.5 font-mono text-slate-600">{it.codigo_snap}</td>
+                        <td className="px-3 py-2.5 font-bold text-slate-700">{it.nombre_snap}</td>
+                        <td className="px-3 py-2.5 text-center font-bold text-slate-700">{it.cantidad}</td>
+                        <td className="px-3 py-2.5 text-right text-slate-600">{fmtUsd(it.precio_unit_usd)}</td>
+                        <td className="px-3 py-2.5 text-right font-bold text-slate-800">{fmtUsd(it.total_linea_usd)}</td>
+                      </tr>
+                    ))}
+                    <tr className="bg-slate-50 font-bold border-t border-slate-200">
+                      <td colSpan="3" className="px-3 py-2"></td>
+                      <td className="px-3 py-2 text-right text-slate-500">Flete:</td>
+                      <td className="px-3 py-2 text-right text-slate-800">{fmtUsd(despacho.flete_usd || 0)}</td>
+                    </tr>
+                    <tr className="bg-slate-50 font-black">
+                      <td colSpan="3" className="px-3 py-2.5"></td>
+                      <td className="px-3 py-2.5 text-right text-slate-800">Total Cobrado:</td>
+                      <td className="px-3 py-2.5 text-right text-blue-700 text-sm">{fmtUsd(despacho.total_usd)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div>
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Comisiones Generadas</h4>
+              {comisiones.length === 0 ? (
+                <div className="bg-amber-50 border border-amber-100 rounded-xl p-3.5 text-xs text-amber-800 flex items-start gap-2">
+                  <DollarSign size={14} className="text-amber-500 shrink-0 mt-0.5" />
+                  <p>No se encontraron registros de comisión para este despacho. Es posible que el despacho no haya sido aprobado aún o que la comisión esté pendiente de generación.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {comisiones.map(c => {
+                    const vendorName = c.vendedor?.nombre || c.vendedorid || '—'
+                    const totalCom = Number(c.totalcomision || 0)
+                    const cabilla = Number(c.comisioncabilla || 0)
+                    const otros = Number(c.comisionotros || 0)
+                    const liberada = Number(c.comision_liberada || 0)
+                    const retenida = Number(c.comision_retenida || 0)
+                    const pagado = Number(c.montopagado || 0)
+                    const pctCabilla = Number(c.pctcabilla || 0)
+                    const pctOtros = Number(c.pctotros || 0)
+                    const estadoLabel = c.estado === 'pagada' ? 'Pagada' : c.estado === 'cta_cobrar' ? 'En Cuenta x Cobrar' : 'Pendiente'
+                    const estadoColor = c.estado === 'pagada' ? 'bg-emerald-100 text-emerald-800' : c.estado === 'cta_cobrar' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
+                    return (
+                      <div key={c.id} className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
+                        {/* Header */}
+                        <div className="flex justify-between items-center px-4 py-3 border-b border-slate-100">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: c.vendedor?.color ? c.vendedor.color + '22' : '#3b82f622', color: c.vendedor?.color || '#3b82f6' }}>
+                              <DollarSign size={13} />
+                            </div>
+                            <div>
+                              <p className="font-bold text-slate-800 text-xs">Comisión de {vendorName}</p>
+                              <p className="text-[10px] text-slate-400">Generada: {c.creadoen ? new Date(c.creadoen).toLocaleDateString('es-VE') : '—'}</p>
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-end gap-1">
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${estadoColor}`}>{estadoLabel}</span>
+                            {liberada > 0 && <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-indigo-100 text-indigo-800">Liberada</span>}
+                            {retenida > 0 && <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-100 text-rose-800">Retenida</span>}
+                          </div>
+                        </div>
+                        {/* Body: amounts grid */}
+                        <div className="px-4 py-3 grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
+                          <div>
+                            <p className="text-slate-400 font-medium">Total Comisión</p>
+                            <p className="font-black text-slate-800 text-sm">{fmtUsd(totalCom)}</p>
+                          </div>
+                          <div>
+                            <p className="text-slate-400 font-medium">Monto Pagado</p>
+                            <p className={`font-black text-sm ${pagado >= totalCom && totalCom > 0 ? 'text-emerald-600' : 'text-slate-700'}`}>{fmtUsd(pagado)}</p>
+                          </div>
+                          {liberada > 0 && (
+                            <div>
+                              <p className="text-slate-400 font-medium">Com. Liberada</p>
+                              <p className="font-bold text-indigo-600">{fmtUsd(liberada)}</p>
+                            </div>
+                          )}
+                          {retenida > 0 && (
+                            <div>
+                              <p className="text-slate-400 font-medium">Com. Retenida</p>
+                              <p className="font-bold text-rose-600">{fmtUsd(retenida)}</p>
+                            </div>
+                          )}
+                          {cabilla > 0 && (
+                            <div>
+                              <p className="text-slate-400 font-medium">Cabilla ({pctCabilla}%)</p>
+                              <p className="font-bold text-slate-700">{fmtUsd(cabilla)}</p>
+                            </div>
+                          )}
+                          {otros > 0 && (
+                            <div>
+                              <p className="text-slate-400 font-medium">Otros ({pctOtros}%)</p>
+                              <p className="font-bold text-slate-700">{fmtUsd(otros)}</p>
+                            </div>
+                          )}
+                          {c.pagadaen && (
+                            <div className="col-span-2">
+                              <p className="text-slate-400 font-medium">Fecha de Pago</p>
+                              <p className="font-bold text-emerald-700">{new Date(c.pagadaen).toLocaleString('es-VE')}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2.5">Historial de Modificaciones y Trazabilidad</h4>
+              {modLogs.length === 0 ? (
+                <p className="text-xs text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-100">No se registran cambios o modificaciones posteriores en la auditoría.</p>
+              ) : (
+                <div className="space-y-2 border-l-2 border-blue-100 pl-4 ml-2.5">
+                  {modLogs.map(log => {
+                    const lDate = new Date(log.ts).toLocaleString('es-VE')
+                    const lAction = ACCION_LABEL[log.accion] || log.accion.replace(/_/g, ' ')
+                    return (
+                      <div key={log.id} className="relative text-xs">
+                        <div className="absolute -left-[23px] top-1.5 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-white" />
+                        <span className="text-[10px] font-mono text-slate-400">{lDate}</span>
+                        <p className="font-bold text-slate-700 mt-0.5">{log.usuario_nombre} ({log.usuario_rol})</p>
+                        <p className="text-slate-600 text-[11px] font-medium">{lAction}</p>
+                        {log.descripcion && <p className="text-slate-500 text-[10px] mt-0.5 italic">{log.descripcion}</p>}
+                        {log.meta && Object.keys(log.meta).length > 0 && (
+                          <div className="mt-1 bg-slate-50 p-1.5 rounded text-[10px]">
+                            <MetaDisplay meta={log.meta} />
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      } else {
+        const { cliente, reasignaciones, logsCercanos } = data
+
+        const sellerLogin = logsCercanos.find(l => l.usuario_id === cliente.vendedor_id && l.accion === 'LOGIN_EXITOSO')
+        const firstQuote = logsCercanos.find(l => l.accion === 'ENVIAR_COTIZACION' || l.accion === 'CREAR_COTIZACION')
+        
+        let creatorEstimate = 'Desconocido (Registro Directo)'
+        let creatorDetail = 'Registrado directamente en base de datos o sin log de acción'
+        if (firstQuote) {
+          creatorEstimate = `${firstQuote.usuario_nombre} (${firstQuote.usuario_rol || 'vendedor'})`
+          creatorDetail = `Creó el cliente e inició cotización #${firstQuote.meta?.numero || 'S/N'}`
+        } else if (sellerLogin) {
+          creatorEstimate = `${sellerLogin.usuario_nombre} (${sellerLogin.usuario_rol || 'vendedor'})`
+          creatorDetail = `Inició sesión momentos antes y se le asignó automáticamente`
+        } else if (logsCercanos.length > 0) {
+          const activeUser = logsCercanos[0]
+          creatorEstimate = `${activeUser.usuario_nombre} (${activeUser.usuario_rol || 'usuario'})`
+          creatorDetail = `Usuario más activo en el sistema a la hora de creación`
+        }
+
+        return (
+          <div className="space-y-6">
+            <div className="flex justify-between border-b border-slate-100 pb-4 flex-wrap gap-4">
+              <div>
+                <h3 className="text-lg font-black text-slate-800">Ficha del Cliente: {cliente.nombre}</h3>
+                <p className="text-xs text-slate-400 mt-1">Código: <span className="font-mono font-bold text-slate-600">#{cliente.codigo_cliente}</span> | RIF: {cliente.rif_cedula || 'Sin RIF'}</p>
+              </div>
+              <div className="text-right">
+                <span className="text-xs text-slate-400 block">Deuda Pendiente Actual</span>
+                <span className={`text-xl font-black ${cliente.saldo_pendiente > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                  {fmtUsd(cliente.saldo_pendiente || 0)}
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Información del Cliente</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-xs bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                <div>
+                  <p className="py-1"><span className="text-slate-400 font-medium inline-block w-28">Teléfono:</span><span className="font-bold text-slate-700">{cliente.telefono || '—'}</span></p>
+                  <p className="py-1"><span className="text-slate-400 font-medium inline-block w-28">Dirección:</span><span className="font-bold text-slate-700">{cliente.direccion || '—'}</span></p>
+                  <p className="py-1"><span className="text-slate-400 font-medium inline-block w-28">Localidad:</span><span className="font-bold text-slate-700">{cliente.ciudad ? `${cliente.ciudad}, ${cliente.estado}` : '—'}</span></p>
+                </div>
+                <div>
+                  <p className="py-1"><span className="text-slate-400 font-medium inline-block w-28">Fecha Registro:</span><span className="font-bold text-slate-700">{new Date(cliente.creado_en).toLocaleString('es-VE')}</span></p>
+                  <p className="py-1"><span className="text-slate-400 font-medium inline-block w-28">Vendedor Actual:</span><span className="font-bold text-slate-700">{cliente.vendedor?.nombre || '—'}</span></p>
+                  <p className="py-1"><span className="text-slate-400 font-medium inline-block w-28">Tipo Cliente:</span><span className="font-bold text-slate-700 capitalize">{cliente.tipo_cliente || 'natural'}</span></p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Trazabilidad y Creación de Cuenta</h4>
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-xs space-y-2">
+                <p><span className="text-slate-400 font-medium inline-block w-40">Usuario Creador Estimado:</span><span className="font-bold text-slate-800">{creatorEstimate}</span></p>
+                <p><span className="text-slate-400 font-medium inline-block w-40">Detalle de Actividad:</span><span className="font-bold text-slate-600">{creatorDetail}</span></p>
+                <p className="text-[10px] text-slate-400 italic font-medium">Nota: Estimación realizada cruzando la fecha de creación del cliente con los inicios de sesión y cotizaciones en la base de datos.</p>
+              </div>
+            </div>
+
+            <div>
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Historial de Reasignaciones de Cartera</h4>
+              {reasignaciones.length === 0 ? (
+                <div className="bg-emerald-50 text-emerald-800 border border-emerald-100 p-4 rounded-xl text-xs flex items-center gap-2">
+                  <CheckCircle size={14} className="text-emerald-600 shrink-0" />
+                  <p className="font-medium"><strong>Sin reasignaciones previas:</strong> Este cliente nunca ha sido transferido. Se mantiene asignado a su vendedor original ({cliente.vendedor?.nombre || 'Edgar Ramírez'}) desde el momento de su creación.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto border border-slate-100 rounded-xl">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-100">
+                        <th className="px-3 py-2 text-left font-bold text-slate-500">Fecha</th>
+                        <th className="px-3 py-2 text-left font-bold text-slate-500">Vendedor Origen</th>
+                        <th className="px-3 py-2 text-left font-bold text-slate-500">Vendedor Destino</th>
+                        <th className="px-3 py-2 text-left font-bold text-slate-500">Autorizado Por</th>
+                        <th className="px-3 py-2 text-left font-bold text-slate-500">Motivo</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {reasignaciones.map(r => (
+                        <tr key={r.id} className="hover:bg-slate-50/50">
+                          <td className="px-3 py-2.5 text-slate-500 font-mono">{new Date(r.creado_en || r.ts).toLocaleDateString('es-VE')}</td>
+                          <td className="px-3 py-2.5 text-slate-600 font-medium">{r.origen?.nombre || '—'}</td>
+                          <td className="px-3 py-2.5 text-slate-800 font-bold">{r.destino?.nombre || '—'}</td>
+                          <td className="px-3 py-2.5 text-slate-600 font-medium">{r.supervisor?.nombre || '—'}</td>
+                          <td className="px-3 py-2.5 text-slate-500 italic">{r.motivo || 'Reasignación de cartera'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      }
+    }
+
+    const renderPrintArea = () => {
+      if (type === 'despacho') {
+        const { despacho, items, comisiones, auditLogs } = data
+        let formaPagoText = '—'
+        try {
+          if (despacho.forma_pago) {
+            const parsed = typeof despacho.forma_pago === 'string' ? JSON.parse(despacho.forma_pago) : despacho.forma_pago
+            if (Array.isArray(parsed)) {
+              formaPagoText = parsed.map(p => `${p.metodo || 'Método'}: ${fmtUsd(p.monto)}`).join(', ')
+            } else if (parsed && typeof parsed === 'object') {
+              formaPagoText = `${parsed.metodo || 'Método'}: ${fmtUsd(parsed.monto)}`
+            }
+          }
+        } catch {}
+
+        return (
+          <div id="report-print-area" className="hidden">
+            <div className="header">
+              <h1>Reporte Cruzado de Nota de Despacho</h1>
+              <p>Generado automáticamente desde el módulo de Auditoría</p>
+            </div>
+            
+            <h2>Ficha General</h2>
+            <div className="grid">
+              <div>
+                <div className="field"><span className="label">Despacho Nº:</span><span className="value">DES-${String(despacho.numero).padStart(5, '0')}</span></div>
+                <div className="field"><span className="label">Estatus:</span><span className="value">{despacho.estado.toUpperCase()}</span></div>
+                <div className="field"><span className="label">Fecha Emisión:</span><span className="value">{new Date(despacho.creado_en).toLocaleString('es-VE')}</span></div>
+                <div className="field"><span className="label">Aprobado Por:</span><span className="value">{despacho.aprobado_por_nombre || '—'}</span></div>
+              </div>
+              <div>
+                <div className="field"><span className="label">Cliente:</span><span className="value">{despacho.cliente?.nombre || '—'}</span></div>
+                <div className="field"><span className="label">RIF / Cédula:</span><span className="value">{despacho.cliente?.rif_cedula || '—'}</span></div>
+                <div className="field"><span className="label">Vendedor:</span><span className="value">{despacho.vendedor?.nombre || '—'}</span></div>
+                <div className="field"><span className="label">Forma Pago:</span><span className="value">{formaPagoText}</span></div>
+              </div>
+            </div>
+
+            <h2>Artículos Despachados</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Código</th>
+                  <th>Descripción</th>
+                  <th style={{textAlign: 'center'}}>Cantidad</th>
+                  <th style={{textAlign: 'right'}}>Precio Unit.</th>
+                  <th style={{textAlign: 'right'}}>Total USD</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map(it => (
+                  <tr key={it.id}>
+                    <td>{it.codigo_snap}</td>
+                    <td className="font-bold">{it.nombre_snap}</td>
+                    <td style={{textAlign: 'center'}} className="font-bold">{it.cantidad}</td>
+                    <td style={{textAlign: 'right'}}>{fmtUsd(it.precio_unit_usd)}</td>
+                    <td style={{textAlign: 'right'}} className="font-bold">{fmtUsd(it.total_linea_usd)}</td>
+                  </tr>
+                ))}
+                <tr>
+                  <td colSpan="3" style={{border: 'none'}}></td>
+                  <td style={{textAlign: 'right', fontWeight: 'bold'}}>Flete:</td>
+                  <td style={{textAlign: 'right', fontWeight: 'bold'}}>{fmtUsd(despacho.flete_usd || 0)}</td>
+                </tr>
+                <tr>
+                  <td colSpan="3" style={{border: 'none'}}></td>
+                  <td style={{textAlign: 'right', fontWeight: 'bold', fontSize: '13px'}}>Total Cobrado:</td>
+                  <td style={{textAlign: 'right', fontWeight: 'bold', color: '#1e3a8a', fontSize: '13px'}}>{fmtUsd(despacho.total_usd)}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h2>Comisiones Asociadas</h2>
+            {comisiones.length === 0 ? (
+              <p style={{fontSize: '12px', color: '#666'}}>No se generaron comisiones de venta para este despacho.</p>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID Comisión</th>
+                    <th>Vendedor</th>
+                    <th style={{textAlign: 'right'}}>Total Comisión</th>
+                    <th style={{textAlign: 'right'}}>Monto Pagado</th>
+                    <th>Estatus Pago</th>
+                    <th>Estatus Liberación</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {comisiones.map(c => (
+                    <tr key={c.id}>
+                      <td style={{fontFamily: 'monospace'}}>{c.id.substring(0,8)}...</td>
+                      <td>{despacho.vendedor?.nombre || '—'}</td>
+                      <td style={{textAlign: 'right'}} className="font-bold">{fmtUsd(c.totalcomision)}</td>
+                      <td style={{textAlign: 'right'}}>{fmtUsd(c.montopagado || 0)}</td>
+                      <td><span className="badge badge-slate">{c.estado}</span></td>
+                      <td><span className="badge badge-info">{c.comision_liberada > 0 ? 'Liberada' : 'Retenida'}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
+            <h2>Historial de Auditoría (Trazabilidad)</h2>
+            <ul className="timeline">
+              {auditLogs.map(log => (
+                <li key={log.id} className="timeline-item">
+                  <span className="timestamp">{new Date(log.ts).toLocaleString('es-VE')}</span>
+                  <strong>{log.usuario_nombre} ({log.usuario_rol})</strong>: {ACCION_LABEL[log.accion] || log.accion.replace(/_/g, ' ')}
+                  {log.descripcion && <span style={{display: 'block', fontStyle: 'italic', fontSize: '11px', color: '#666'}}>{log.descripcion}</span>}
+                </li>
+              ))}
+            </ul>
+
+            <div className="footer">
+              ListoPOS System — Reporte de Auditoría Cruzada de Despachos.
+            </div>
+          </div>
+        )
+      } else {
+        const { cliente, reasignaciones } = data
+        return (
+          <div id="report-print-area" className="hidden">
+            <div className="header">
+              <h1>Ficha de Auditoría de Cliente</h1>
+              <p>Historial completo de asignación de vendedores y control de registro</p>
+            </div>
+
+            <h2>Datos Básicos del Cliente</h2>
+            <div className="grid">
+              <div>
+                <div className="field"><span className="label">Cliente:</span><span className="value">{cliente.nombre}</span></div>
+                <div className="field"><span className="label">Código Interno:</span><span className="value">#{cliente.codigo_cliente}</span></div>
+                <div className="field"><span className="label">RIF / Cédula:</span><span className="value">{cliente.rif_cedula || 'Sin RIF'}</span></div>
+                <div className="field"><span className="label">Teléfono:</span><span className="value">{cliente.telefono || '—'}</span></div>
+              </div>
+              <div>
+                <div className="field"><span className="label">Fecha Registro:</span><span className="value">{new Date(cliente.creado_en).toLocaleString('es-VE')}</span></div>
+                <div className="field"><span className="label">Vendedor Actual:</span><span className="value">{cliente.vendedor?.nombre || '—'}</span></div>
+                <div className="field"><span className="label">Deuda Pendiente:</span><span className="value">{fmtUsd(cliente.saldo_pendiente || 0)}</span></div>
+                <div className="field"><span className="label">Estatus Cuenta:</span><span className="value">{cliente.activo ? 'ACTIVA' : 'INACTIVA'}</span></div>
+              </div>
+            </div>
+
+            <h2>Historial de Reasignaciones de Cartera</h2>
+            {reasignaciones.length === 0 ? (
+              <p style={{fontSize: '13px', padding: '10px', backgroundColor: '#f0fdf4', color: '#14532d', border: '1px solid #bbf7d0', borderRadius: '6px'}}>
+                <strong>Sin reasignaciones previas:</strong> Este cliente nunca ha sido transferido. Se mantiene asignado a su vendedor original ({cliente.vendedor?.nombre || 'Edgar Ramírez'}) desde el momento de su creación.
+              </p>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Vendedor Origen</th>
+                    <th>Vendedor Destino</th>
+                    <th>Supervisor Autorizante</th>
+                    <th>Motivo de Reasignación</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reasignaciones.map(r => (
+                    <tr key={r.id}>
+                      <td>{new Date(r.creado_en || r.ts).toLocaleDateString('es-VE')}</td>
+                      <td>{r.origen?.nombre || '—'}</td>
+                      <td className="font-bold">{r.destino?.nombre || '—'}</td>
+                      <td>{r.supervisor?.nombre || '—'}</td>
+                      <td style={{fontStyle: 'italic'}}>{r.motivo || 'Reasignación de cartera'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
+            <div className="footer">
+              ListoPOS System — Reporte de Auditoría de Cartera de Clientes.
+            </div>
+          </div>
+        )
+      }
+    }
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fade-in">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-scale-up">
+          <div className="flex items-center justify-between px-6 py-4 bg-slate-50 border-b border-slate-100 shrink-0">
+            <span className="text-sm font-black text-slate-800 font-mono tracking-wide">{title}</span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={printReport}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all active:scale-95"
+              >
+                <Printer size={13} />
+                <span>Imprimir / PDF</span>
+              </button>
+              <button
+                onClick={() => { setShowReportModal(false); setReportModalData(null) }}
+                className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-200 hover:text-slate-700 transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-6 md:p-8">
+            {renderContent()}
+          </div>
+
+          <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 flex justify-end shrink-0">
+            <button
+              onClick={() => { setShowReportModal(false); setReportModalData(null) }}
+              className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl transition-all"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+
+        {renderPrintArea()}
+      </div>
+    )
+  }
 
   const registros = data?.registros ?? []
   const total     = data?.total ?? 0
@@ -663,6 +1520,9 @@ export default function AuditoriaView() {
         />
       </div>
 
+      {/* Buscador de Reportes Especiales */}
+      {esRolAutorizado && renderBuscadorReportes()}
+
       {/* Búsqueda + Filtros */}
       <div className="space-y-3">
         {/* Barra de búsqueda */}
@@ -793,6 +1653,7 @@ export default function AuditoriaView() {
           </div>
         </div>
       )}
+      {esRolAutorizado && renderReportModal()}
     </div>
   )
 }

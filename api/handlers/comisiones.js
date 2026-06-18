@@ -25,6 +25,7 @@ function aplicarFiltrosComisiones(query, urlParams, user) {
   const estado = safeParam(urlParams.get('estado'))
   const desde = safeParam(urlParams.get('desde'))
   const hasta = safeParam(urlParams.get('hasta'))
+  const despachoId = safeParam(urlParams.get('despachoId') || urlParams.get('despachoid'))
 
   const operatorRol = user.operator_rol
   const operatorId = user.operator_id
@@ -51,6 +52,11 @@ function aplicarFiltrosComisiones(query, urlParams, user) {
   // Se filtra por la fecha del DESPACHO (notas_despacho.creado_en), igual que el PDF
   if (desde) query += `&despacho.creado_en=gte.${desde}T00:00:00-04:00`
   if (hasta) query += `&despacho.creado_en=lte.${hasta}T23:59:59-04:00`
+
+  // 5. Filtro por Despacho ID
+  if (despachoId) {
+    query += `&despachoid=eq.${despachoId}`
+  }
 
   return query
 }

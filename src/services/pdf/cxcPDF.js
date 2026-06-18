@@ -22,6 +22,9 @@ function formatMetodoPago(val, fallback = '—') {
       const parts = val.map(p => p.metodo || p.metodo_pago || p.formaPago).filter(Boolean)
       return parts.length > 0 ? parts.join(', ') : fallback
     }
+    if (typeof val === 'object') {
+      return val.metodo || val.metodo_pago || val.formaPago || fallback
+    }
     if (typeof val === 'string') {
       const trimmed = val.trim()
       if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
