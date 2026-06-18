@@ -8,7 +8,7 @@ import {
   UserCog, ClipboardList,
   LayoutDashboard, Settings, ArrowRightLeft,
   Menu, X, DollarSign, RefreshCw, PackageCheck, Bell, BellOff,
-  AlertTriangle, Send, CheckCircle, Ban,
+  AlertTriangle, Send, CheckCircle, Ban, MessageSquare,
   PanelLeftClose, PanelLeftOpen, BarChart3, BarChart2,
   Clock, AlertCircle, ScrollText, FlaskConical, UserX, Shield, ShoppingCart,
   Globe, Compass, Smartphone, HelpCircle, Lock, Briefcase,
@@ -93,8 +93,7 @@ const NAV_SUPERVISOR = [
   { path: '/reportes',      label: 'Reportes',      icono: BarChart3,   excludeRoles: ['supervisor'] },
   { path: '/proveedores',   label: 'Proveedores',   icono: Briefcase,   onlyRoles: ['administracion', 'jefe', 'desarrollador'] },
   { path: '/configuracion', label: 'Configuración', icono: Settings, excludeRoles: ['vendedor', 'vendedor_sin_comision', 'logistica'] },
-  { path: '/logs',          label: 'System Logs',   icono: ScrollText, onlyRoles: ['desarrollador'] },
-  { path: '/tester',        label: 'Tester',        icono: FlaskConical, onlyRoles: ['desarrollador'] },
+  { path: '/logs',          label: 'Buzón',         icono: MessageSquare, onlyRoles: ['desarrollador'] },
   { path: '/auditoria',     label: 'Auditoría',     icono: Shield,       onlyRoles: ['desarrollador', 'jefe', 'administracion', 'supervisor'] },
 ]
 

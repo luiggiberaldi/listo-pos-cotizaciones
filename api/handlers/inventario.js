@@ -56,12 +56,12 @@ export async function handleClearInventory(request, env) {
   }
 
   // Borrar kardex (movimientos) antes de productos
-  await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos?id=neq.00000000-0000-0000-0000-000000000000`, {
+  await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos?cuenta_id=eq.${operador.cuenta_id}`, {
     method: 'DELETE',
     headers: h,
   });
 
-  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=neq.00000000-0000-0000-0000-000000000000`, {
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?cuenta_id=eq.${operador.cuenta_id}`, {
     method: 'DELETE',
     headers: h,
   });
@@ -102,7 +102,7 @@ export async function handleAplicarMovimientoLote(request, env) {
       if (cantidad <= 0) return jsonError('La cantidad debe ser mayor a 0', 400, request);
 
       // Obtener producto
-      const pRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${item.producto_id}&activo=eq.true&select=id,nombre,stock_actual`, { headers });
+      const pRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${item.producto_id}&activo=eq.true&cuenta_id=eq.${operador.cuenta_id}&select=id,nombre,stock_actual`, { headers });
       const [prod] = await pRes.json();
       if (!prod) return jsonError('Producto no encontrado o inactivo', 400, request);
 
@@ -117,7 +117,7 @@ export async function handleAplicarMovimientoLote(request, env) {
       }
 
       // Actualizar stock
-      await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${item.producto_id}`, {
+      await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${item.producto_id}&cuenta_id=eq.${operador.cuenta_id}`, {
         method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
         body: JSON.stringify({ stock_actual: nuevoStock, actualizado_en: new Date().toISOString() }),
       });
@@ -134,6 +134,7 @@ export async function handleAplicarMovimientoLote(request, env) {
         stock_nuevo: nuevoStock,
         usuario_id: user.operator_id,
         usuario_nombre: operador.nombre,
+        cuenta_id: operador.cuenta_id,
       });
     }
 

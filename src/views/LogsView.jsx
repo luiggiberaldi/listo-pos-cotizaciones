@@ -415,9 +415,9 @@ function PurgeModal({ onConfirm, onClose }) {
 export default function LogsView() {
   const { perfil } = useAuthStore()
   const esDesarrollador = perfil?.rol === 'desarrollador'
-  const TABS = esDesarrollador ? [...TABS_BASE, ...TABS_DEV] : TABS_BASE
+  const TABS = [{ id: 'buzon', label: 'Buzón', icon: MessageSquare }]
 
-  const [tab, setTab] = useState('logs')
+  const [tab, setTab] = useState('buzon')
   const [page, setPage] = useState(1)
   const [nivel, setNivel] = useState('')
   const [origen, setOrigen] = useState('')
@@ -548,13 +548,13 @@ export default function LogsView() {
   return (
     <div className="p-3 sm:p-4 md:p-5 lg:p-6 pb-24 lg:pb-6 space-y-4">
       <PageHeader
-        icon={AlertCircle}
-        title="System Logs"
-        subtitle="Monitoreo de errores y análisis AI del sistema"
+        icon={MessageSquare}
+        title="Buzón de Sugerencias"
+        subtitle="Sugerencias, quejas y reportes de los operadores"
       />
 
       {/* Stats */}
-      {stats && (
+      {tab === 'logs' && stats && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <StatCard label="Total logs" value={stats.total} icon={Database} color="#64748b" />
           <StatCard label="Errores hoy" value={stats.erroresHoy} icon={AlertCircle} color="#ef4444" />
@@ -563,27 +563,29 @@ export default function LogsView() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-4 bg-slate-100 rounded-xl p-1">
-        {TABS.map(t => {
-          const Icon = t.icon
-          const active = tab === t.id
-          return (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-bold transition-all relative ${active ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              <Icon size={14} />
-              {t.label}
-              {t.id === 'buzon' && unreadCount > 0 && (
-                <span className="absolute -top-1 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] font-black text-white shadow-sm border border-white/20 animate-pulse">
-                  {unreadCount}
-                </span>
-              )}
-            </button>
-          )
-        })}
-      </div>
+      {TABS.length > 1 && (
+        <div className="flex gap-1 mb-4 bg-slate-100 rounded-xl p-1">
+          {TABS.map(t => {
+            const Icon = t.icon
+            const active = tab === t.id
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-bold transition-all relative ${active ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                <Icon size={14} />
+                {t.label}
+                {t.id === 'buzon' && unreadCount > 0 && (
+                  <span className="absolute -top-1 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] font-black text-white shadow-sm border border-white/20 animate-pulse">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {/* Tab: Logs */}
       {tab === 'logs' && (

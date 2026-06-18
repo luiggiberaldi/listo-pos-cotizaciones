@@ -136,7 +136,7 @@ export async function handleAdmin(request, env, url) {
 
     if (Object.keys(updateData).length > 0) {
       const dbRes = await fetch(
-        `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${userId}`,
+        `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${userId}&cuenta_id=eq.${user.id}`,
         {
           method: 'PATCH',
           headers: {
@@ -175,7 +175,7 @@ export async function handleAdmin(request, env, url) {
 
     // Eliminar de public.usuarios
     const dbRes = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${userId}`,
+      `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${userId}&cuenta_id=eq.${user.id}`,
       {
         method: 'DELETE',
         headers: {
@@ -222,7 +222,7 @@ export async function handleBackup(request, env) {
   const errors = [];
 
   async function fetchTable(tabla, query = '') {
-    const res = await fetch(`${env.SUPABASE_URL}/rest/v1/${tabla}?limit=100000${query}`, { headers: h });
+    const res = await fetch(`${env.SUPABASE_URL}/rest/v1/${tabla}?limit=100000&cuenta_id=eq.${user.id}${query}`, { headers: h });
     if (!res.ok) {
       errors.push(`Error al leer ${tabla}: ${res.status}`);
       return [];
@@ -358,7 +358,7 @@ export async function handleRestore(request, env) {
     // Upsert en lotes de 500
     let restaurados = 0;
     for (let i = 0; i < filas.length; i += 500) {
-      const lote = filas.slice(i, i + 500);
+      const lote = filas.slice(i, i + 500).map(fila => ({ ...fila, cuenta_id: user.id }));
       const res = await fetch(`${env.SUPABASE_URL}/rest/v1/${tabla}`, {
         method: 'POST',
         headers: h,

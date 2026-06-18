@@ -28,22 +28,8 @@ export async function handleDevTools(request, env, url) {
       checks.supabase = { ok: false, error: e.message, ms: Date.now() - t0 };
     }
 
-    // 2. Groq API (grupo A, modelo check)
-    const t1 = Date.now();
-    try {
-      const raw = env.GROQ_KEYS_A;
-      const keys = raw ? raw.split(',').map(k => k.trim()).filter(Boolean) : [];
-      if (!keys.length) {
-        checks.groq = { ok: false, error: 'No hay keys configuradas', ms: 0 };
-      } else {
-        const r = await fetch('https://api.groq.com/openai/v1/models', {
-          headers: { Authorization: `Bearer ${keys[0]}` },
-        });
-        checks.groq = { ok: r.ok, status: r.status, keys_count: keys.length * 3, ms: Date.now() - t1 };
-      }
-    } catch (e) {
-      checks.groq = { ok: false, error: e.message, ms: Date.now() - t1 };
-    }
+    // 2. Groq API (Deshabilitado por requerimiento de costos/espacio)
+    checks.groq = { ok: true, status: 'disabled', message: 'Integración con Groq deshabilitada', ms: 0 };
 
     // 3. System logs table
     const t2 = Date.now();
