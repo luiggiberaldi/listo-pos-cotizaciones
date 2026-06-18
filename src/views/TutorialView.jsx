@@ -5,7 +5,7 @@ import {
   ArrowLeft, ArrowRight, CheckCircle2, RotateCcw, Play, BookOpen,
   Sparkles, Star, Award, ChevronRight, Shield, Search, Plus, Check,
   Minus, Download, Share2, Clipboard, WifiOff, RefreshCw, Copy, Info, CheckCircle, PlusCircle,
-  MessageSquare
+  MessageSquare, Send
 } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 
@@ -20,89 +20,89 @@ const TUTORIAL_MODULES = [
     steps: [
       {
         title: '¡Bienvenido a Listo!',
-        desc: 'Listo POS es el sistema centralizado de cotizaciones y despachos de Construacero Carabobo. Aquí podrás gestionar clientes, productos, emitir presupuestos en tiempo récord y consultar tus comisiones del mes.',
+        desc: 'Listo es el sistema centralizado de cotizaciones y despachos de Construacero Carabobo. Aquí podrás gestionar clientes, productos, emitir presupuestos en tiempo récord y consultar tus comisiones del mes.',
         tip: 'Este es el centro de operaciones donde ocurre toda la magia de ventas.',
         mockupType: 'welcome'
       },
       {
         title: 'Tu Perfil y Tasas de Cambio',
-        desc: 'En la parte superior verás las tasas del día (BCV, USDT) sincronizadas automáticamente. El sistema también registra la tasa Euro oficial para reportes de liquidación.',
+        desc: 'En la parte superior verás las tasas del día (BCV, USDT) sincronizadas automáticamente (esta barra superior solo es visible en PC, no en dispositivos móviles). El sistema también registra la tasa Euro oficial para reportes de comisiones.',
         tip: 'Las tasas se actualizan en tiempo real basándose en los datos oficiales.',
         mockupType: 'profile'
       },
       {
         title: 'Tu Panel de Control',
-        desc: 'El Dashboard te muestra tus métricas clave de forma inmediata: total cotizado, comisiones acumuladas y estado de tus despachos pendientes de entrega.',
+        desc: 'El panel principal te muestra tus números y resultados clave de forma inmediata: total cotizado, comisiones acumuladas y el estado de tus despachos pendientes de entrega.',
         tip: 'Haz clic en cualquier métrica para ver los detalles de ese módulo directamente.',
         mockupType: 'dashboard'
       }
     ]
   },
   {
-    id: 'venta-rapida',
-    title: 'Venta Rápida',
-    desc: 'Crea un presupuesto y orden de entrega rápido en 3 pasos con el botón flotante.',
-    icon: Zap,
-    color: 'from-amber-500 to-orange-600 border-amber-500/20',
-    bgColor: 'bg-amber-500/10',
-    steps: [
-      {
-        title: 'El Botón Flotante (FAB)',
-        desc: 'En dispositivos móviles, presiona el botón circular con el ícono de más (+) en la esquina inferior derecha. Al abrirse el menú Speed Dial, selecciona "Venta Rápida" (ícono de Rayo).',
-        tip: 'Haz clic en el botón flotante (+) en la simulación a la derecha para ver las opciones, luego selecciona Venta Rápida.',
-        mockupType: 'fab'
-      },
-      {
-        title: 'Paso 1: Cliente y Productos',
-        desc: 'Busca y selecciona al cliente (se te advertirá si pertenece a otro vendedor). Luego busca productos por nombre/categoría y tócalos para agregarlos directamente al carrito de compras in-line, donde puedes modificar la cantidad.',
-        tip: 'Toca en "Inversiones Carabobo, C.A.", agrega "Cabilla 1/2" e incrementa la cantidad a 10 para continuar.',
-        mockupType: 'vr_cliente_productos'
-      },
-      {
-        title: 'Paso 2: Pago y Entrega',
-        desc: 'Define los métodos de pago (pueden ser mixtos o divididos). Selecciona si se incluye Flete, el transportista, la dirección de entrega, o si se maneja como Cobro a Destino (COD).',
-        tip: 'Toca en la opción "Flete / Transporte" y selecciona "Efectivo" en el simulador para avanzar.',
-        mockupType: 'vr_pago_entrega'
-      },
-      {
-        title: 'Paso 3: Emisión y Documentos',
-        desc: 'Revisa los totales generales en divisas y bolívares. Presiona "Generar Despacho" para registrar la venta. Tendrás acceso inmediato para descargar, imprimir o compartir por WhatsApp la Nota de Entrega y la Orden de Despacho en PDF.',
-        tip: 'Toca en "Generar Despacho" para concluir el flujo y ver las opciones de PDF.',
-        mockupType: 'vr_finish'
-      }
-    ]
-  },
-  {
     id: 'cotizaciones',
     title: 'Cotizaciones',
-    desc: 'Usa el constructor detallado para clientes recurrentes, descuentos de personal y presupuestos en PDF.',
+    desc: 'Usa el constructor detallado para clientes recurrentes y presupuestos en PDF.',
     icon: FileText,
     color: 'from-indigo-500 to-violet-600 border-indigo-500/20',
     bgColor: 'bg-indigo-500/10',
     steps: [
       {
         title: 'Paso 1: Datos del Cliente',
-        desc: 'Ingresa al constructor completo de cotizaciones y selecciona o crea al cliente. Si es un cliente de tipo "Personal", el sistema te advertirá que se le aplicará un descuento automático en el total (configurado en el negocio, ej: 10%).',
+        desc: 'Entra al creador detallado de cotizaciones y selecciona o crea al cliente. Puedes cotizar a clientes de otros vendedores, pero la comisión por la venta siempre le corresponderá al dueño original del cliente.',
         tip: 'Toca sobre el buscador y selecciona a "Inversiones Carabobo, C.A." para ver los datos del cliente.',
         mockupType: 'cot_completa_cliente'
       },
       {
         title: 'Paso 2: Selección de Productos',
-        desc: 'Busca productos por catálogo o usa el lector/escáner de listas bulk. Agrega los materiales a la cesta de compras a la derecha, donde puedes elegir entre los niveles de precio (P1, P2 o P3) y verificar el stock actual.',
-        tip: 'Toca en la cesta para ajustar cantidades y definir precios promocionales autorizados.',
+        desc: 'Busca productos por catálogo. Si necesitas vender un material especial que no esté en el inventario, o si vas a cobrar por un servicio de corte de material, puedes usar la opción de "Producto Externo" para registrarlos manualmente indicando nombre, cantidad y costo. Añade los productos a la bolsa de compras a la derecha, donde puedes elegir entre diferentes tipos de precio (Precio 1, Precio 2 o Precio 3) y verificar la cantidad disponible en el inventario.',
+        tip: '¡Tip de Corte! Los cobros por cortes se agregan como un producto externo escribiendo la palabra "corte" en su nombre (estos no generan comisión).',
         mockupType: 'cot_completa_productos'
       },
       {
         title: 'Paso 3: Resumen y Opciones',
-        desc: 'Configura las opciones finales: selecciona la moneda a mostrar en el PDF (USDT, BCV o Bs), activa o desactiva la inclusión de IVA (16%), agrega cargos de flete y escribe observaciones públicas o internas.',
-        tip: 'Revisa el total general y el cálculo automático de tu Comisión Estimada antes de proceder.',
+        desc: 'Aquí puedes configurar las opciones finales de tu cotización. Es muy importante que uses el selector "Moneda del PDF" para elegir en qué moneda quieres que se muestren los precios y totales en el documento PDF descargable (puedes elegir dólares USDT, tasa oficial BCV o bolívares en efectivo). También puedes incluir o quitar el IVA (16%), agregar el costo de transporte (flete) y escribir observaciones.',
+        tip: '¡Tip Clave! Cambiar la moneda solo afecta la presentación del PDF para tu cliente; el sistema seguirá registrando la venta internamente en dólares.',
         mockupType: 'cot_completa_resumen'
       },
       {
         title: 'Paso 4: Confirmación y Compartir',
-        desc: 'Una vez enviada, el sistema genera el código correlativo de cotización (ej. COT-01234). Podrás imprimir, descargar el PDF o compartir el enlace por WhatsApp. También tienes el botón "Despachar" para iniciar el envío de inmediato.',
+        desc: 'Una vez guardada, el sistema creará un número único para la cotización (por ejemplo, COT-01234). Podrás imprimirla, descargarla en PDF o compartir el enlace directo por WhatsApp. También puedes presionar "Despachar" para iniciar el envío de inmediato.',
         tip: 'Toca en "Compartir por WhatsApp" en la simulación para concluir el constructor.',
         mockupType: 'cot_completa_print'
+      }
+    ]
+  },
+  {
+    id: 'venta-rapida',
+    title: 'Venta Rápida',
+    desc: 'Crea un presupuesto y orden de entrega rápido en 3 pasos con el botón de más (+).',
+    icon: Zap,
+    color: 'from-amber-500 to-orange-600 border-amber-500/20',
+    bgColor: 'bg-amber-500/10',
+    steps: [
+      {
+        title: 'El Botón de Más (+)',
+        desc: 'La Venta Rápida es un flujo optimizado que crea automáticamente una cotización y la pasa a despacho de forma directa. En teléfonos móviles, presiona el botón redondo con el ícono de más (+) en la esquina inferior derecha. Al abrirse el menú de opciones rápidas, selecciona "Venta Rápida" (con el ícono de rayo).',
+        tip: 'Haz clic en el botón de más (+) a la derecha para ver las opciones, luego selecciona Venta Rápida.',
+        mockupType: 'fab'
+      },
+      {
+        title: 'Paso 1: Cliente y Productos',
+        desc: 'Busca y selecciona al cliente (el sistema te avisará si pertenece a otro vendedor; puedes cotizarle pero la comisión le corresponderá al dueño del cliente). Luego busca productos por su nombre o categoría y tócalos para agregarlos directamente a tu lista de compra, donde puedes cambiar la cantidad.',
+        tip: 'Toca en "Inversiones Carabobo, C.A.", agrega "Cabilla 1/2" e incrementa la cantidad a 10 para continuar.',
+        mockupType: 'vr_cliente_productos'
+      },
+      {
+        title: 'Paso 2: Pago y Entrega',
+        desc: 'Elige cómo va a pagar el cliente (puede pagar usando varios métodos a la vez). Selecciona si incluye transporte (flete), quién llevará la mercancía, la dirección de entrega, o si se cobrará cuando el cliente reciba la mercancía (COD).',
+        tip: 'Toca en la opción "Flete / Transporte" y selecciona "Efectivo" en el simulador para avanzar.',
+        mockupType: 'vr_pago_entrega'
+      },
+      {
+        title: 'Paso 3: Emisión y Documentos',
+        desc: 'Revisa los totales generales en dólares y bolívares. Presiona "Generar Despacho" para registrar la venta. Tendrás acceso inmediato para descargar, imprimir o compartir por WhatsApp la Nota de Entrega y la Orden de Despacho en PDF.',
+        tip: 'Toca en "Generar Despacho" para concluir el flujo y ver las opciones de PDF.',
+        mockupType: 'vr_finish'
       }
     ]
   },
@@ -115,9 +115,9 @@ const TUTORIAL_MODULES = [
     bgColor: 'bg-emerald-500/10',
     steps: [
       {
-        title: 'Estados Contextuales por Rol',
-        desc: 'Los despachos tienen estados dinámicos. Por ejemplo, un despacho nuevo sale como "Esperando aprobación" (para vendedores), "Por aprobar" (para supervisores) o "Pendiente" (para logística). Al aprobarse pasa a "Aprobada/En entrega".',
-        tip: 'Filtra y revisa los badges de estado para saber en qué parte del ciclo de entrega se encuentra la orden.',
+        title: 'Estados del Despacho',
+        desc: 'Los despachos cambian de estado según quién los revise. Por ejemplo, una nueva entrega aparece como "Esperando aprobación" para ti, "Por aprobar" para Administración y "Pendiente" para el equipo de Logística. Una vez aprobada por el equipo de Administración, la verás como "Aprobada" en tu panel (mientras que Administración la verá como "En entrega" y Logística como "Por entregar").',
+        tip: 'Filtra y revisa las etiquetas de estado para saber en qué parte del camino está la entrega.',
         mockupType: 'despacho_estados'
       },
       {
@@ -127,8 +127,8 @@ const TUTORIAL_MODULES = [
         mockupType: 'despacho_acciones'
       },
       {
-        title: 'Trazabilidad: Transporte y COD',
-        desc: 'Los choferes, camiones y placas de vehículos son asignados por el rol de Logística al despachar. La Administración concilia y registra si los pagos de flete o Cobro a Destino (COD) son recibidos conforme.',
+        title: 'Seguimiento: Transporte y Pagos',
+        desc: 'Los datos del chofer, camión y placa del vehículo pueden ser asignados por ti (vendedor) al crear o editar el despacho, o por el equipo de Logística al momento del envío. El equipo de Administración se encarga de revisar y registrar que los pagos de transporte o de la mercancía sean recibidos correctamente.',
         tip: 'Toca en "Auto-completar Datos de Logística" en el simulador para ver la información de trazabilidad registrada.',
         mockupType: 'despacho_trazabilidad'
       }
@@ -144,13 +144,13 @@ const TUTORIAL_MODULES = [
     steps: [
       {
         title: 'Directorio de Clientes',
-        desc: 'Accede a la base de datos completa. Puedes buscar por RIF, cédula o razón social y ver el total comprado por cada cliente.',
+        desc: 'Accede a la lista completa de clientes. Puedes buscar por RIF, cédula o nombre y ver el total comprado por cada cliente.',
         tip: 'Usa el buscador para ubicar clientes rápidamente.',
         mockupType: 'cliente_list'
       },
       {
         title: 'Registro de un Nuevo Cliente',
-        desc: 'Ingresa los datos fiscales obligatorios. Asegúrate de colocar el correo y teléfono celular correctos para el envío de cotizaciones.',
+        desc: 'Ingresa los datos obligatorios del cliente (como RIF/Cédula). Asegúrate de colocar el teléfono celular correcto para poder enviarle sus cotizaciones. Recuerda que el vendedor que registra al cliente es a quien le pertenecerán sus cotizaciones y la comisión de sus compras.',
         tip: 'Toca el botón "+ Crear Nuevo Cliente" en el simulador.',
         mockupType: 'cliente_form'
       },
@@ -159,6 +159,28 @@ const TUTORIAL_MODULES = [
         desc: 'Desde la ficha del cliente, puedes consultar su historial completo de cotizaciones y despachos, facilitando el seguimiento post-venta.',
         tip: 'Toca en la pestaña "Historial" en la simulación para completar el módulo.',
         mockupType: 'cliente_historial'
+      }
+    ]
+  },
+  {
+    id: 'inventario',
+    title: 'Inventario',
+    desc: 'Consulta precios y stock disponible de productos, y comparte la ficha técnica por WhatsApp.',
+    icon: Search,
+    color: 'from-teal-500 to-emerald-600 border-teal-500/20',
+    bgColor: 'bg-teal-500/10',
+    steps: [
+      {
+        title: 'Consulta de Precios y Stock',
+        desc: 'Accede al módulo de Inventario para consultar rápidamente los precios de cualquier material (precio de lista, al mayor o en bolívares según la tasa del día) y verificar el stock disponible (tanto la cantidad en almacén como el stock comprometido en despachos pendientes).',
+        tip: 'Usa la barra de búsqueda superior para filtrar productos por nombre o código.',
+        mockupType: 'inv_consulta'
+      },
+      {
+        title: 'Compartir Ficha por WhatsApp',
+        desc: 'Al tocar cualquier artículo en la lista de inventario, se abrirá su Ficha de Detalle. Desde allí puedes seleccionar la moneda y presionar "Compartir" para enviar una imagen de la ficha técnica y la información del artículo formateada por WhatsApp de forma directa.',
+        tip: 'Toca en "Compartir Ficha" en el simulador para ver cómo se genera el mensaje para el cliente.',
+        mockupType: 'inv_compartir'
       }
     ]
   },
@@ -172,13 +194,13 @@ const TUTORIAL_MODULES = [
     steps: [
       {
         title: 'Mi Panel de Comisiones',
-        desc: 'Monitorea tus ganancias por cada venta cobrada. El sistema calcula automáticamente el porcentaje correspondiente a tu rol.',
+        desc: 'Monitorea tus ganancias por cada venta cobrada. El sistema calcula automáticamente la comisión según el tipo de artículo (por ejemplo, 2% para cabillas y 3% para otros artículos).',
         tip: 'Recuerda que las comisiones se calculan sobre el precio de venta cobrado y despachado.',
         mockupType: 'comision_panel'
       },
       {
         title: 'Estados de Pago',
-        desc: 'Conoce el estado de tus comisiones: "Por Liquidar" (material por despachar), "Disponible" (listo para cobro) o "Pagado".',
+        desc: 'Conoce el estado de tus ganancias: "Por Liquidar" (cuando la mercancía aún no se ha entregado), "Disponible" (listo para cobrar) o "Pagado" (dinero entregado).',
         tip: 'Revisa regularmente este estatus para planificar tus retiros.',
         mockupType: 'comision_estados'
       },
@@ -187,40 +209,6 @@ const TUTORIAL_MODULES = [
         desc: 'Filtra tus comisiones por mes o rango de fechas para llevar un control detallado de tu desempeño comercial.',
         tip: 'Toca sobre el selector de fecha y marca "Este Mes" en la simulación.',
         mockupType: 'comision_filtros'
-      }
-    ]
-  },
-  {
-    id: 'tips',
-    title: 'Tips & Trucos',
-    desc: 'Sincronización en tiempo real, modo offline y buzón de sugerencias.',
-    icon: Lightbulb,
-    color: 'from-teal-500 to-emerald-600 border-teal-500/20',
-    bgColor: 'bg-teal-500/10',
-    steps: [
-      {
-        title: 'Sincronización en Tiempo Real',
-        desc: '¡Olvídate de F5! Si un supervisor actualiza una tasa de cambio o cambia un precio en el inventario, los valores en tu pantalla se actualizan automáticamente en segundos sin interrumpir tu trabajo.',
-        tip: 'Observa cómo cambian las tasas y stock en el simulador al detectar actualizaciones en la red.',
-        mockupType: 'tips_realtime'
-      },
-      {
-        title: 'Buzón de Sugerencias',
-        desc: '¿Tienes ideas de mejora o fallas técnicas? Envía comentarios usando el botón flotante de chat (ícono de mensaje). En la pestaña "Mis Mensajes" podrás ver el historial y las respuestas del equipo técnico.',
-        tip: 'Toca en el FAB flotante del buzón (ícono de mensaje) en el simulador.',
-        mockupType: 'tips_buzon'
-      },
-      {
-        title: 'Modo Offline (Sin Conexión)',
-        desc: '¡No te detengas! Si te quedas sin señal, Listo almacena tus cotizaciones localmente. Cuando recuperes la conexión, se sincronizarán solas.',
-        tip: 'Verás un banner rojo de advertencia offline y un banner verde cuando se sincronice la cola pendiente.',
-        mockupType: 'tips_offline'
-      },
-      {
-        title: 'Duplicar Cotizaciones',
-        desc: 'Si un cliente pide el mismo presupuesto que la semana pasada, no lo escribas de nuevo. Abre la cotización y haz clic en "Duplicar".',
-        tip: 'Haz clic en "Duplicar" en la cotización de prueba para finalizar el tutorial completo.',
-        mockupType: 'tips_duplicar'
       }
     ]
   }
@@ -265,11 +253,9 @@ export default function TutorialView() {
     clTab: 'info',
     // commission variables
     cmFiltered: false,
-    // tips variables
-    tpBuzonOpen: false,
-    tpBuzonTab: 'nuevo',
-    tpOfflineSync: false,
-    tpRealtimeActive: false
+    // inventory variables
+    invSelected: false,
+    invShared: false
   })
 
   // Load progress from localStorage
@@ -279,7 +265,8 @@ export default function TutorialView() {
       const saved = localStorage.getItem(key)
       if (saved) {
         try {
-          setProgress(JSON.parse(saved))
+          const parsed = JSON.parse(saved)
+          setTimeout(() => setProgress(parsed), 0)
         } catch (e) {
           console.error(e)
         }
@@ -294,7 +281,7 @@ export default function TutorialView() {
       const key = `listo-tutorial-progress-${perfil.cuenta_id}`
       localStorage.setItem(key, JSON.stringify(newProgress))
     }
-  }, [perfil?.cuenta_id])
+  }, [perfil])
 
   // Reset progress
   const handleResetProgress = () => {
@@ -304,6 +291,24 @@ export default function TutorialView() {
       setStepIndex(0)
     }
   }
+
+  const handleNext = useCallback(() => {
+    if (!activeModule) return
+    if (stepIndex < activeModule.steps.length - 1) {
+      setStepIndex(v => v + 1)
+    } else {
+      // Mark module as completed
+      const newProgress = { ...progress, [activeModule.id]: true }
+      saveProgress(newProgress)
+      setActiveModule(null)
+    }
+  }, [activeModule, stepIndex, progress, saveProgress])
+
+  const handlePrev = useCallback(() => {
+    if (stepIndex > 0) {
+      setStepIndex(v => v - 1)
+    }
+  }, [stepIndex])
 
   // Handle keyboard navigation
   useEffect(() => {
@@ -317,7 +322,7 @@ export default function TutorialView() {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [activeModule, stepIndex])
+  }, [activeModule, handleNext, handlePrev])
 
   const handleSelectModule = (mod) => {
     setActiveModule(mod)
@@ -348,29 +353,9 @@ export default function TutorialView() {
       clCreated: false,
       clTab: 'info',
       cmFiltered: false,
-      tpBuzonOpen: false,
-      tpBuzonTab: 'nuevo',
-      tpOfflineSync: false,
-      tpRealtimeActive: false
+      invSelected: false,
+      invShared: false
     })
-  }
-
-  const handleNext = () => {
-    if (!activeModule) return
-    if (stepIndex < activeModule.steps.length - 1) {
-      setStepIndex(v => v + 1)
-    } else {
-      // Mark module as completed
-      const newProgress = { ...progress, [activeModule.id]: true }
-      saveProgress(newProgress)
-      setActiveModule(null)
-    }
-  }
-
-  const handlePrev = () => {
-    if (stepIndex > 0) {
-      setStepIndex(v => v - 1)
-    }
   }
 
   // Calculations
@@ -451,15 +436,12 @@ export default function TutorialView() {
       setMockupState(s => ({ ...s, cmFiltered: true }))
     }
 
-    // Tips
-    if (action === 'tp-realtime-trigger') {
-      setMockupState(s => ({ ...s, tpRealtimeActive: true }))
-    } else if (action === 'tp-buzon') {
-      setMockupState(s => ({ ...s, tpBuzonOpen: true }))
-    } else if (action === 'tp-buzon-tab-history') {
-      setMockupState(s => ({ ...s, tpBuzonTab: 'historial' }))
-    } else if (action === 'tp-offline') {
-      setMockupState(s => ({ ...s, tpOfflineSync: true }))
+    // Inventory
+    if (action === 'inv-select-product') {
+      setMockupState(s => ({ ...s, invSelected: true }))
+      setTimeout(() => setStepIndex(1), 300)
+    } else if (action === 'inv-share') {
+      setMockupState(s => ({ ...s, invShared: true }))
     }
   }
 
@@ -705,16 +687,11 @@ export default function TutorialView() {
               {/* Opciones de Despacho */}
               <div className="space-y-1">
                 <label className="text-[8px] text-white/45 font-bold uppercase">Forma de Despacho</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="border border-white/5 bg-white/5 rounded-xl p-2 text-center opacity-40">
-                    <span className="text-[9px] text-white font-semibold block">Retira por Planta</span>
-                  </div>
-                  <div 
-                    onClick={() => handleMockupInteraction('vr-select-despacho')}
-                    className={`border rounded-xl p-2 text-center cursor-pointer transition-all ${mockupState.qqDespachoSelected ? 'border-emerald-500 bg-emerald-500/10' : 'border-white/10 bg-white/5 hover:bg-white/10 animate-pulse'}`}
-                  >
-                    <span className={`text-[9px] font-bold block ${mockupState.qqDespachoSelected ? 'text-emerald-400' : 'text-white/80'}`}>Flete / Transporte</span>
-                  </div>
+                <div 
+                  onClick={() => handleMockupInteraction('vr-select-despacho')}
+                  className={`border rounded-xl p-2.5 text-center cursor-pointer transition-all ${mockupState.qqDespachoSelected ? 'border-emerald-500 bg-emerald-500/10' : 'border-white/10 bg-white/5 hover:bg-white/10 animate-pulse'}`}
+                >
+                  <span className={`text-[9px] font-bold block ${mockupState.qqDespachoSelected ? 'text-emerald-400' : 'text-white/80'}`}>Flete / Transporte</span>
                 </div>
               </div>
 
@@ -878,7 +855,7 @@ export default function TutorialView() {
                   {/* Warning: cliente de otro vendedor */}
                   <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-2.5 flex items-start gap-2">
                     <Info size={12} className="text-amber-400 shrink-0 mt-0.5" />
-                    <p className="text-[8px] text-amber-300 leading-normal font-medium">Este cliente está asignado a Edgar Ramírez. Puedes cotizarle pero se notificará al supervisor al enviar.</p>
+                    <p className="text-[8px] text-amber-300 leading-normal font-medium">Este cliente está asignado a Edgar Ramírez. Puedes cotizarle, pero la comisión le corresponderá al dueño del cliente (se notificará al supervisor al enviar).</p>
                   </div>
                 </div>
               )}
@@ -1061,7 +1038,7 @@ export default function TutorialView() {
                 </div>
                 <div className="text-right">
                   <span className="text-[8px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded font-black block">Esperando aprobación</span>
-                  <span className="text-[7px] text-white/30 mt-0.5 block">Supervisor ve: "Por aprobar"</span>
+                  <span className="text-[7px] text-white/30 mt-0.5 block">Admin ve: "Por aprobar"</span>
                 </div>
               </div>
 
@@ -1360,176 +1337,117 @@ export default function TutorialView() {
           </div>
         )
 
-      // Tips
-      case 'tips_realtime':
+      // Inventory
+      case 'inv_consulta':
         return (
           <div className="flex flex-col h-full bg-slate-950/40 rounded-2xl p-3 overflow-hidden border border-white/5 text-left justify-between">
-            <span className="text-[9px] text-white/40 font-black uppercase tracking-wider">Tasa y Precios en Tiempo Real</span>
-            
-            <div className="space-y-2.5 my-2 flex-1">
-              <div className="bg-slate-900 border border-white/5 rounded-lg p-2.5 space-y-2">
-                <div className="flex justify-between items-center text-[10px]">
-                  <span className="text-white/60">Tasa Dólar BCV:</span>
-                  <span className={`font-black ${mockupState.tpRealtimeActive ? 'text-emerald-400 animate-pulse text-xs' : 'text-white'}`}>
-                    {mockupState.tpRealtimeActive ? 'Bs. 45.85' : 'Bs. 45.32'}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-[10px]">
-                  <span className="text-white/60">Stock Cabilla 1/2:</span>
-                  <span className={`font-black ${mockupState.tpRealtimeActive ? 'text-rose-400 animate-pulse text-xs' : 'text-white'}`}>
-                    {mockupState.tpRealtimeActive ? '390 piezas' : '420 piezas'}
-                  </span>
-                </div>
+            <div className="space-y-2 flex-1">
+              <span className="text-[9px] text-white/40 font-black uppercase tracking-wider block">Buscador de Inventario</span>
+              
+              {/* Buscador */}
+              <div className="relative">
+                <Search size={12} className="absolute left-2.5 top-2 text-white/35" />
+                <input 
+                  type="text" 
+                  placeholder="Buscar por nombre o código..." 
+                  className="w-full bg-slate-900/60 border border-white/10 rounded-lg py-1 pl-7 pr-3 text-[9px] text-white placeholder-white/20 focus:outline-none"
+                  readOnly
+                />
               </div>
 
-              {mockupState.tpRealtimeActive && (
-                <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-2 flex items-center gap-1.5 animate-in slide-in-from-top duration-300">
-                  <RefreshCw size={10} className="text-emerald-400 animate-spin" />
-                  <span className="text-[8px] text-emerald-300 font-bold leading-tight">¡Tasas y stock actualizados en tiempo real!</span>
+              {/* Lista de productos */}
+              <div className="space-y-2 max-h-[120px] overflow-y-auto pt-1">
+                <div 
+                  onClick={() => handleMockupInteraction('inv-select-product')}
+                  className="bg-white/5 border border-white/10 rounded-xl p-2.5 flex justify-between items-center cursor-pointer hover:bg-white/10 animate-pulse"
+                >
+                  <div>
+                    <span className="text-[10px] font-black text-white">Cabilla 1/2 Pulgada</span>
+                    <p className="text-[7px] text-white/40 mt-0.5">Código: CAB-12 · Categoría: Cabillas</p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] text-amber-400 font-extrabold block">$9.50</span>
+                    <span className="text-[7px] text-emerald-400 block font-medium">Stock: 420 pzas</span>
+                  </div>
                 </div>
-              )}
-            </div>
 
-            {!mockupState.tpRealtimeActive && (
-              <button 
-                onClick={() => handleMockupInteraction('tp-realtime-trigger')}
-                className="w-full bg-gradient-to-r from-teal-500 to-emerald-600 py-1.5 text-[9px] font-black text-white rounded-lg shadow-lg cursor-pointer animate-pulse"
-              >
-                Simular Cambio de Tasa de Cambio
-              </button>
-            )}
+                <div className="bg-white/5 border border-white/5 rounded-xl p-2.5 flex justify-between items-center opacity-60">
+                  <div>
+                    <span className="text-[10px] font-bold text-white">Cemento Gris</span>
+                    <p className="text-[7px] text-white/30 mt-0.5">Código: CEM-GR · Categoría: Cemento</p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] text-white/70 font-bold block">$8.50</span>
+                    <span className="text-[7px] text-white/40 block">Stock: 80 sacos</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white/5 p-2 rounded-xl text-[8px] text-white/45 text-center mt-2">
+              Haz clic sobre la <strong>Cabilla 1/2</strong> para abrir su Ficha Técnica.
+            </div>
           </div>
         )
 
-      case 'tips_buzon':
+      case 'inv_compartir':
         return (
-          <div className="flex flex-col h-full bg-slate-950/40 rounded-2xl p-3 overflow-hidden border border-white/5 relative justify-between text-left">
-            {mockupState.tpBuzonOpen ? (
-              <div className="bg-slate-900 border border-white/10 rounded-xl p-2 flex-1 flex flex-col justify-between animate-in zoom-in-95 duration-200">
+          <div className="flex flex-col h-full bg-slate-950/40 rounded-2xl p-3 overflow-hidden border border-white/5 text-left justify-between">
+            <div className="bg-white border border-slate-200 rounded-2xl p-3.5 flex flex-col text-slate-800 shadow-xl w-full max-w-[240px] mx-auto relative animate-in zoom-in-95 duration-200">
+              {/* Header de Ficha */}
+              <div className="flex justify-between items-start border-b border-slate-100 pb-2 mb-2.5">
                 <div>
-                  {/* Tabs */}
-                  <div className="grid grid-cols-2 gap-1 bg-white/5 p-0.5 rounded-lg border border-white/5 mb-2">
-                    <button 
-                      onClick={() => setMockupState(s => ({ ...s, tpBuzonTab: 'nuevo' }))}
-                      className={`py-0.5 text-[7px] font-bold rounded ${mockupState.tpBuzonTab === 'nuevo' ? 'bg-white/10 text-white' : 'text-white/40'}`}
-                    >
-                      Enviar
-                    </button>
-                    <button 
-                      onClick={() => handleMockupInteraction('tp-buzon-tab-history')}
-                      className={`py-0.5 text-[7px] font-black rounded cursor-pointer ${mockupState.tpBuzonTab === 'historial' ? 'bg-amber-500 text-white' : 'text-white/40 animate-pulse'}`}
-                    >
-                      Mis Mensajes
-                    </button>
-                  </div>
-
-                  {mockupState.tpBuzonTab === 'nuevo' ? (
-                    <div className="space-y-1.5">
-                      <span className="text-[8px] text-amber-400 font-bold block">Nuevo Mensaje</span>
-                      <textarea 
-                        className="w-full bg-slate-950 border border-white/5 rounded p-1 text-[8px] text-white placeholder-white/20 h-10 resize-none focus:outline-none"
-                        value="Sería excelente agregar un botón para calcular fletes por zona."
-                        onChange={() => {}}
-                        readOnly
-                        disabled
-                      />
-                    </div>
-                  ) : (
-                    <div className="space-y-1.5 animate-in fade-in duration-300 overflow-y-auto max-h-[110px]">
-                      <div className="bg-slate-950 p-1 rounded border border-white/5 text-[7px]">
-                        <p className="text-white/80 font-semibold">Mensaje: Sería excelente agregar un botón...</p>
-                        <div className="mt-1 p-1 bg-blue-500/10 border-l border-blue-400 text-blue-300 rounded-r text-[6px] leading-snug">
-                          <span className="font-bold block text-[5px] uppercase">Nota Dev:</span>
-                          ¡Hola! Ya agregamos la estimación de fletes por transportistas en la sección de despacho.
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  <span className="text-[7px] bg-sky-50 text-sky-600 px-1 py-0.5 rounded font-black tracking-wider uppercase">Ficha de Producto</span>
+                  <h6 className="text-[10px] font-black text-slate-900 mt-1">Cabilla 1/2 Pulgada</h6>
+                  <p className="text-[7px] text-slate-400 mt-0.5">Código: CAB-12</p>
                 </div>
+              </div>
 
-                {mockupState.tpBuzonTab === 'nuevo' && (
-                  <button className="w-full bg-amber-500 py-1 text-[8px] font-black text-white rounded shadow-sm" type="button">
-                    Enviar Sugerencia
+              {/* Detalles */}
+              <div className="space-y-2 text-[8px] flex-1">
+                <div className="flex justify-between border-b border-slate-50 pb-1">
+                  <span className="text-slate-400">Precio de Lista:</span>
+                  <span className="font-extrabold text-slate-900">$9.50</span>
+                </div>
+                <div className="flex justify-between border-b border-slate-50 pb-1">
+                  <span className="text-slate-400">Precio al Mayor:</span>
+                  <span className="font-extrabold text-slate-950">$9.02</span>
+                </div>
+                <div className="flex justify-between border-b border-slate-50 pb-1">
+                  <span className="text-slate-400">Stock Físico:</span>
+                  <span className="font-bold text-emerald-600">420 piezas</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Comprometido:</span>
+                  <span className="font-bold text-amber-500">10 piezas</span>
+                </div>
+              </div>
+
+              {/* Botón de Compartir simulado */}
+              <div className="mt-3.5 pt-2 border-t border-slate-100 flex justify-center">
+                {mockupState.invShared ? (
+                  <div className="bg-emerald-50 text-emerald-700 text-[8px] font-bold py-1 px-3 rounded-lg flex items-center gap-1 animate-bounce">
+                    <CheckCircle size={10} /> Compartido por WhatsApp
+                  </div>
+                ) : (
+                  <button 
+                    onClick={() => handleMockupInteraction('inv-share')}
+                    className="bg-emerald-500 hover:bg-emerald-600 text-white text-[9px] font-black py-1.5 px-4 rounded-xl flex items-center gap-1 shadow-md shadow-emerald-500/10 cursor-pointer animate-pulse"
+                  >
+                    <Share2 size={10} /> Compartir Ficha
                   </button>
                 )}
               </div>
-            ) : (
-              <>
-                <div className="bg-white/5 rounded-xl p-2 text-center text-[9px] text-white/50">
-                  Haz clic en el ícono de sugerencias abajo a la derecha para simular abrir el buzón del sistema.
-                </div>
-                
-                <div className="flex justify-end mt-4">
-                  <button 
-                    onClick={() => handleMockupInteraction('tp-buzon')}
-                    className="w-10 h-10 rounded-full bg-gradient-to-r from-slate-900 to-indigo-950 border border-white/25 flex items-center justify-center shadow-lg cursor-pointer animate-bounce relative"
-                    type="button"
-                  >
-                    <MessageSquare size={18} className="text-white animate-pulse" />
-                    <span className="absolute inset-0 rounded-full bg-amber-500/40 animate-ping pointer-events-none" />
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        )
-
-      case 'tips_offline':
-        return (
-          <div className="flex flex-col h-full bg-slate-950/40 rounded-2xl p-3 overflow-hidden border border-white/5 text-left justify-between">
-            <span className="text-[9px] text-white/40 font-black uppercase">Simulación Offline</span>
-            
-            <div className="space-y-2.5 my-2 flex-1">
-              <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-2.5 flex items-center gap-2">
-                <WifiOff size={14} className="text-rose-400 shrink-0" />
-                <div>
-                  <span className="text-[9px] text-rose-300 font-bold block">Sin conexión a Internet</span>
-                  <p className="text-[7px] text-white/40 mt-0.5 leading-snug">Modo offline activo. Puedes seguir cotizando.</p>
-                </div>
-              </div>
-
-              {mockupState.tpOfflineSync && (
-                <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-2.5 flex items-center gap-2 animate-in slide-in-from-top duration-300">
-                  <RefreshCw size={12} className="text-emerald-400 shrink-0 animate-spin" />
-                  <div>
-                    <span className="text-[9px] text-emerald-300 font-bold block">Sincronizando datos...</span>
-                    <p className="text-[7px] text-white/40 mt-0.5 leading-snug">Se subieron 2 cotizaciones pendientes exitosamente.</p>
-                  </div>
-                </div>
-              )}
             </div>
 
-            {!mockupState.tpOfflineSync && (
-              <button 
-                onClick={() => handleMockupInteraction('tp-offline')}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 py-1.5 text-[9px] font-black text-white rounded-lg shadow-lg cursor-pointer animate-pulse"
-              >
-                Simular Recuperación de Señal
-              </button>
-            )}
-          </div>
-        )
-
-      case 'tips_duplicar':
-        return (
-          <div className="flex flex-col h-full bg-slate-950/40 rounded-2xl p-3 overflow-hidden border border-white/5 justify-center">
-            <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-left">
-              <div className="flex justify-between items-center mb-2">
-                <div>
-                  <span className="text-[10px] font-black text-white">Cotización #COT-8640</span>
-                  <p className="text-[8px] text-white/40 block mt-0.5">Cliente: Constructor Carabobo</p>
-                </div>
-                <span className="text-xs font-black text-white">$1,250.00</span>
-              </div>
-              
+            {mockupState.invShared && (
               <button 
                 onClick={handleNext}
-                className="w-full bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 py-2 rounded-xl text-[10px] text-white font-black flex items-center justify-center gap-1.5 shadow-lg cursor-pointer animate-pulse"
+                className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[9px] font-black py-2 rounded-lg shadow-lg flex items-center justify-center gap-1 cursor-pointer mt-2"
               >
-                <Copy size={12} />
-                Duplicar Cotización
+                Completar Módulo <ArrowRight size={10} />
               </button>
-            </div>
+            )}
           </div>
         )
 

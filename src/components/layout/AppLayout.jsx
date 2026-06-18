@@ -697,8 +697,8 @@ export default function AppLayout() {
       {/* ── FAB Cotización Rápida — solo móvil, no para administracion ── */}
       {!esAdministracion && <QuickQuoteFAB />}
 
-      {/* ── FAB Buzón de Sugerencias — Global ── */}
-      <BuzonFAB />
+      {/* ── FAB Buzón de Sugerencias — solo en el inicio (/) ── */}
+      {location.pathname === '/' && <BuzonFAB />}
 
       {/* ── Glassmorphic Urgent Notification Overlay Modal ── */}
       {urgentNotif && (
