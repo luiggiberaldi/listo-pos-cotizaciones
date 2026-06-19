@@ -1,6 +1,32 @@
+import { useState } from 'react'
 import { Phone, Mail, MapPin, Hash, Tag, Pencil, UserMinus, ArrowRightLeft, FileText, AlertCircle, BookOpen, Trash2, UserCheck, Handshake, DollarSign, Briefcase } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtUsdSimple as fmtUsd } from '../../utils/format'
+
+function CodigoCliente({ codigo }) {
+  const [copiado, setCopiado] = useState(false)
+
+  const handleCopy = (e) => {
+    e.stopPropagation()
+    navigator.clipboard.writeText(codigo)
+    setCopiado(true)
+    setTimeout(() => setCopiado(false), 1500)
+  }
+
+  return (
+    <span
+      onClick={handleCopy}
+      className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-lg shadow-sm shrink-0 cursor-pointer transition-all duration-200 active:scale-90 select-none ${
+        copiado 
+          ? 'bg-emerald-600 text-white animate-pulse' 
+          : 'bg-slate-950 text-white hover:bg-slate-800 hover:shadow-md'
+      }`}
+      title={copiado ? "¡Código copiado!" : "Haga clic para copiar código"}
+    >
+      {copiado ? 'Copiado!' : `#${codigo}`}
+    </span>
+  )
+}
 
 const TIPO_LABELS = { natural: 'Natural', juridico: 'Jurídico', personal: 'Personal' }
 const TIPO_COLORS = {
@@ -31,9 +57,7 @@ export default function ClienteRow({ cliente, onEditar, onReasignar, onCotizar, 
         <div className="flex items-center gap-2 flex-wrap">
           <h3 className="font-bold text-slate-800 text-sm truncate">{cliente.nombre}</h3>
           {cliente.codigo_cliente && (
-            <span className="text-[10px] font-mono font-black bg-slate-950 text-white px-2 py-0.5 rounded-lg shadow-sm shrink-0" title="Código de cliente">
-              #{cliente.codigo_cliente}
-            </span>
+            <CodigoCliente codigo={cliente.codigo_cliente} />
           )}
           {cliente.rif_cedula && (
             <span className="flex items-center gap-1 text-xs text-slate-400">

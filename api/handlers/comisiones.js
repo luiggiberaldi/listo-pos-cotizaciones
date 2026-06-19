@@ -557,7 +557,7 @@ export async function handleGetComisionesResumen(request, env) {
 
     // ── CONSULTA SECUNDARIA: desglose de saldo pendiente (Regular vs CxC) ─────
     // Se incluye despacho:notas_despacho!inner(creado_en) para que el filtro de fecha use la fecha del despacho
-    let queryBreakdown = `${env.SUPABASE_URL}/rest/v1/comisiones?select=estado,totalcomision,montopagado,despacho:notas_despacho!inner(creado_en)&estado=in.(pendiente,cta_cobrar)`;
+    let queryBreakdown = `${env.SUPABASE_URL}/rest/v1/comisiones?select=estado,totalcomision,comision_liberada,montopagado,despacho:notas_despacho!inner(creado_en)&estado=in.(pendiente,cta_cobrar)`;
     const userContext = { ...user, operator_rol: operador.rol, operator_id: operador.id };
     queryBreakdown = aplicarFiltrosComisiones(queryBreakdown, url.searchParams, userContext);
 
@@ -569,7 +569,8 @@ export async function handleGetComisionesResumen(request, env) {
       if (breakdownRes.ok) {
         const items = await breakdownRes.json();
         for (const item of items) {
-          const saldo = Math.max(0, Number(item.totalcomision || 0) - Number(item.montopagado || 0));
+          const m = item.estado === 'cta_cobrar' ? Number(item.comision_liberada || 0) : Number(item.totalcomision || 0);
+          const saldo = Math.max(0, m - Number(item.montopagado || 0));
           if (item.estado === 'cta_cobrar') {
             pendienteCxc += saldo;
           } else {

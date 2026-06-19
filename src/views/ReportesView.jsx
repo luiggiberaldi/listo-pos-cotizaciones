@@ -979,18 +979,27 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
   }, [detalle])
 
   const comisionesSoloPendientes = useMemo(() => {
-    return detalle.filter(c => c.estado === 'pendiente')
+    return detalle.filter(c => {
+      if (c.estado === 'pendiente') return true
+      if (c.estado === 'cta_cobrar') {
+        const saldoLib = Number(c.comision_liberada || 0) - Number(c.montopagado || 0)
+        return saldoLib > 0.01
+      }
+      return false
+    })
   }, [detalle])
 
   const montoPendiente = useMemo(() => {
     return comisionesPendientes.reduce((acc, c) => {
-      return acc + Math.max(0, Number(c.totalcomision || 0) - Number(c.montopagado || 0))
+      const m = c.estado === 'cta_cobrar' ? Number(c.comision_liberada || 0) : Number(c.totalcomision || 0)
+      return acc + Math.max(0, m - Number(c.montopagado || 0))
     }, 0)
   }, [comisionesPendientes])
 
   const montoSoloPendiente = useMemo(() => {
     return comisionesSoloPendientes.reduce((acc, c) => {
-      return acc + Math.max(0, Number(c.totalcomision || 0) - Number(c.montopagado || 0))
+      const m = c.estado === 'cta_cobrar' ? Number(c.comision_liberada || 0) : Number(c.totalcomision || 0)
+      return acc + Math.max(0, m - Number(c.montopagado || 0))
     }, 0)
   }, [comisionesSoloPendientes])
 
@@ -1001,7 +1010,8 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
 
   const montoSeleccionado = useMemo(() => {
     return selectedPendientes.reduce((acc, c) => {
-      return acc + Math.max(0, Number(c.totalcomision || 0) - Number(c.montopagado || 0))
+      const m = c.estado === 'cta_cobrar' ? Number(c.comision_liberada || 0) : Number(c.totalcomision || 0)
+      return acc + Math.max(0, m - Number(c.montopagado || 0))
     }, 0)
   }, [selectedPendientes])
 
@@ -1029,7 +1039,7 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
 
   // Calcular totales del detalle
   const totales = detalle.reduce((acc, item) => {
-    const total = Number(item.totalcomision || 0)
+    const total = item.estado === 'cta_cobrar' ? Number(item.comision_liberada || 0) : Number(item.totalcomision || 0)
     acc.totalUsd += total
     acc.comBs += total * tasaComision(item)
     return acc
@@ -1286,42 +1296,18 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
                         pendientes: comisionesSoloPendientes,
                         montoPendiente: montoSoloPendiente,
                         vendedor,
-                        title: "Pagar Solo Comisiones (Sin CxC)",
-                        desc: "solo comisiones pendientes, excluyendo cuentas por cobrar"
-                      });
-                    }}
-                    disabled={marcar.isPending || pagandoMasivo}
-                    className="flex items-center gap-2.5 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white transition-all duration-200 shadow-md shadow-indigo-600/10 border border-indigo-500/20 active:scale-95 disabled:opacity-50 group"
-                    title="Pagar solo las comisiones sin incluir cuentas por cobrar"
-                  >
-                    <CreditCard size={15} className="group-hover:scale-110 transition-transform text-indigo-200 shrink-0" />
-                    <div className="flex flex-col items-start leading-tight">
-                      <span className="font-black text-xs tracking-wide">{fmtUsd(montoSoloPendiente)}</span>
-                      <span className="text-[10px] font-medium text-indigo-200 whitespace-nowrap">Solo comis. <span className="opacity-75">(sin CxC)</span></span>
-                    </div>
-                  </button>
-                )}
-
-                {puedePagarComisiones && comisionesPendientes.length > 0 && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setPagoMasivoData({
-                        pendientes: comisionesPendientes,
-                        montoPendiente,
-                        vendedor,
-                        title: "Pagar Todo (Comisiones + CxC)",
-                        desc: "todas las comisiones pendientes, incluyendo cuentas por cobrar"
+                        title: "Pagar Todo (Comisiones)",
+                        desc: "todas las comisiones pendientes, excluyendo cuentas por cobrar no liberadas"
                       });
                     }}
                     disabled={marcar.isPending || pagandoMasivo}
                     className="flex items-center gap-2.5 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white transition-all duration-200 shadow-md shadow-emerald-600/10 border border-emerald-500/20 active:scale-95 disabled:opacity-50 group"
-                    title="Pagar todas las comisiones pendientes de este vendedor"
+                    title="Pagar todas las comisiones pendientes (excluyendo CxC no liberadas) de este vendedor"
                   >
                     <CheckCircle size={15} className="group-hover:scale-110 transition-transform text-emerald-200 shrink-0" />
                     <div className="flex flex-col items-start leading-tight">
-                      <span className="font-black text-xs tracking-wide">{fmtUsd(montoPendiente)}</span>
-                      <span className="text-[10px] font-medium text-emerald-200 whitespace-nowrap">Comis. + CxC <span className="opacity-75">(todo)</span></span>
+                      <span className="font-black text-xs tracking-wide">{fmtUsd(montoSoloPendiente)}</span>
+                      <span className="text-[10px] font-medium text-emerald-200 whitespace-nowrap">Pagar Todo</span>
                     </div>
                   </button>
                 )}
@@ -1368,7 +1354,7 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
                 </thead>
                 <tbody>
                   {detalle.map((d, i) => {
-                    const total = Number(d.totalcomision || 0)
+                    const total = d.estado === 'cta_cobrar' ? Number(d.comision_liberada || 0) : Number(d.totalcomision || 0)
                     const tasa = tasaComision(d)
                     const comBs = total * tasa
                     const valCabilla = Number(d.comisioncabilla || 0)
@@ -1464,13 +1450,17 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
         isOpen={!!comisionAPagar}
         onConfirm={() => {
           if (!comisionAPagar) return
-          const saldo = Math.max(0, Number(comisionAPagar.totalcomision || 0) - Number(comisionAPagar.montopagado || 0))
+          const m = comisionAPagar.estado === 'cta_cobrar' ? Number(comisionAPagar.comision_liberada || 0) : Number(comisionAPagar.totalcomision || 0)
+          const saldo = Math.max(0, m - Number(comisionAPagar.montopagado || 0))
           marcar.mutate({ comisionid: comisionAPagar.id, montopagado: saldo })
           setComisionAPagar(null)
         }}
         onClose={() => setComisionAPagar(null)}
         title="Registrar Pago de Comisión"
-        message={comisionAPagar ? `Se registrará el pago de ${fmtUsd(Math.max(0, Number(comisionAPagar.totalcomision || 0) - Number(comisionAPagar.montopagado || 0)))}. Esta acción es atómica y final.` : ''}
+        message={comisionAPagar ? (() => {
+          const m = comisionAPagar.estado === 'cta_cobrar' ? Number(comisionAPagar.comision_liberada || 0) : Number(comisionAPagar.totalcomision || 0)
+          return `Se registrará el pago de ${fmtUsd(Math.max(0, m - Number(comisionAPagar.montopagado || 0)))}. Esta acción es atómica y final.`
+        })() : ''}
         confirmText="Confirmar Pago"
         variant="success"
       />
@@ -1482,7 +1472,8 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
           setPagandoMasivo(true)
           const { pendientes: items } = pagoMasivoData
           for (const c of items) {
-            const saldo = Math.max(0, Number(c.totalcomision || 0) - Number(c.montopagado || 0))
+            const m = c.estado === 'cta_cobrar' ? Number(c.comision_liberada || 0) : Number(c.totalcomision || 0)
+            const saldo = Math.max(0, m - Number(c.montopagado || 0))
             if (saldo > 0) {
               try {
                 await marcar.mutateAsync({ comisionid: c.id, montopagado: saldo })
@@ -1557,8 +1548,15 @@ function TabComisiones({ configNeg }) {
   const handlePagarTodoVendedor = useCallback((v, conCxc = true) => {
     const pendientes = comisiones.filter(c => {
       const vId = c.vendedor?.id || '00000000-0000-0000-0000-000000000000'
-      const matchEstado = conCxc ? c.estado !== 'pagada' : c.estado === 'pendiente'
-      return vId === v.id && matchEstado
+      if (vId !== v.id) return false
+      
+      const m = (c.estado === 'cta_cobrar' && !conCxc)
+        ? Number(c.comision_liberada || 0)
+        : Number(c.totalcomision || 0)
+      const saldo = Math.max(0, m - Number(c.montopagado || 0))
+      
+      const matchEstado = conCxc ? c.estado !== 'pagada' : ['pendiente', 'cta_cobrar'].includes(c.estado)
+      return matchEstado && saldo > 0.01
     })
     if (pendientes.length === 0) return
     setPagoMasivoData({
@@ -1619,10 +1617,8 @@ function TabComisiones({ configNeg }) {
       map[vId].totalBs += mBs
       map[vId].cantidad++
       if (['pendiente', 'cta_cobrar'].includes(c.estado)) {
-        map[vId].pendUsd += m
-        if (c.estado === 'pendiente') {
-          map[vId].pendSoloComisUsd += m
-        }
+        map[vId].pendSoloComisUsd += m
+        map[vId].pendUsd += Number(c.totalcomision || 0)
       } else {
         map[vId].pagUsd += m
       }
@@ -2265,7 +2261,7 @@ function TabComisiones({ configNeg }) {
                             </div>
                             <div className="bg-amber-50/50 rounded-xl p-2.5 text-center border border-amber-100/50">
                               <p className="text-[10px] text-amber-600/70 font-bold uppercase mb-0.5">Pendiente</p>
-                              <p className="font-bold text-amber-600">{fmtUsd(v.pendUsd)}</p>
+                              <p className="font-bold text-amber-600">{fmtUsd(v.pendSoloComisUsd)}</p>
                             </div>
                           </div>
 
@@ -2274,43 +2270,18 @@ function TabComisiones({ configNeg }) {
                             <span className="text-xs font-bold text-indigo-600">{fmtBs(v.totalBs)}</span>
                           </div>
 
-                          {puedePagarComisiones && v.pendUsd > 0 && (
+                          {puedePagarComisiones && v.pendSoloComisUsd > 0.01 && (
                             <div className="flex flex-col gap-2 mt-3">
-                              {v.pendSoloComisUsd > 0 && v.pendSoloComisUsd < v.pendUsd ? (
-                                <>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handlePagarTodoVendedor(v, false);
-                                    }}
-                                    className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all duration-300 shadow-sm active:scale-[0.98] border border-indigo-500/20"
-                                  >
-                                    <CreditCard size={13} className="text-indigo-200" />
-                                    <span>Solo Comis. ({fmtUsd(v.pendSoloComisUsd)})</span>
-                                  </button>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handlePagarTodoVendedor(v, true);
-                                    }}
-                                    className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all duration-300 shadow-md hover:shadow-emerald-600/20 active:scale-[0.98] border border-emerald-500/20"
-                                  >
-                                    <CheckCircle size={14} className="text-white" />
-                                    <span>Comis. + CxC ({fmtUsd(v.pendUsd)})</span>
-                                  </button>
-                                </>
-                              ) : (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handlePagarTodoVendedor(v, true);
-                                  }}
-                                  className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all duration-300 shadow-md hover:shadow-emerald-600/20 active:scale-[0.98] border border-emerald-500/20"
-                                >
-                                  <CheckCircle size={14} className="text-white" />
-                                  <span>Pagar Todo ({fmtUsd(v.pendUsd)})</span>
-                                </button>
-                              )}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handlePagarTodoVendedor(v, false);
+                                }}
+                                className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all duration-300 shadow-md hover:shadow-emerald-600/20 active:scale-[0.98] border border-emerald-500/20"
+                              >
+                                <CheckCircle size={14} className="text-white" />
+                                <span>Pagar Todo ({fmtUsd(v.pendSoloComisUsd)})</span>
+                              </button>
                             </div>
                           )}
                         </div>
@@ -2362,7 +2333,7 @@ function TabComisiones({ configNeg }) {
                             </div>
                             <div className="bg-amber-50/50 rounded-xl p-2.5 text-center border border-amber-100/50">
                               <p className="text-[10px] text-amber-600/70 font-bold uppercase mb-0.5">Pendiente</p>
-                              <p className="font-bold text-amber-600">{fmtUsd(v.pendUsd)}</p>
+                              <p className="font-bold text-amber-600">{fmtUsd(v.pendSoloComisUsd)}</p>
                             </div>
                           </div>
 
@@ -2371,43 +2342,18 @@ function TabComisiones({ configNeg }) {
                             <span className="text-xs font-bold text-indigo-600">{fmtBs(v.totalBs)}</span>
                           </div>
 
-                          {puedePagarComisiones && v.pendUsd > 0 && (
+                          {puedePagarComisiones && v.pendSoloComisUsd > 0.01 && (
                             <div className="flex flex-col gap-2 mt-3">
-                              {v.pendSoloComisUsd > 0 && v.pendSoloComisUsd < v.pendUsd ? (
-                                <>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handlePagarTodoVendedor(v, false);
-                                    }}
-                                    className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all duration-300 shadow-sm active:scale-[0.98] border border-indigo-500/20"
-                                  >
-                                    <CreditCard size={13} className="text-indigo-200" />
-                                    <span>Solo Comis. ({fmtUsd(v.pendSoloComisUsd)})</span>
-                                  </button>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handlePagarTodoVendedor(v, true);
-                                    }}
-                                    className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all duration-300 shadow-md hover:shadow-emerald-600/20 active:scale-[0.98] border border-emerald-500/20"
-                                  >
-                                    <CheckCircle size={14} className="text-white" />
-                                    <span>Comis. + CxC ({fmtUsd(v.pendUsd)})</span>
-                                  </button>
-                                </>
-                              ) : (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handlePagarTodoVendedor(v, true);
-                                  }}
-                                  className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all duration-300 shadow-md hover:shadow-emerald-600/20 active:scale-[0.98] border border-emerald-500/20"
-                                >
-                                  <CheckCircle size={14} className="text-white" />
-                                  <span>Pagar Todo ({fmtUsd(v.pendUsd)})</span>
-                                </button>
-                              )}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handlePagarTodoVendedor(v, false);
+                                }}
+                                className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all duration-300 shadow-md hover:shadow-emerald-600/20 active:scale-[0.98] border border-emerald-500/20"
+                              >
+                                <CheckCircle size={14} className="text-white" />
+                                <span>Pagar Todo ({fmtUsd(v.pendSoloComisUsd)})</span>
+                              </button>
                             </div>
                           )}
                         </div>
@@ -2440,7 +2386,8 @@ function TabComisiones({ configNeg }) {
               setPagandoMasivo(true)
               const { pendientes: items } = pagoMasivoData
               for (const c of items) {
-                const saldo = Math.max(0, Number(c.totalcomision || 0) - Number(c.montopagado || 0))
+                const m = c.estado === 'cta_cobrar' ? Number(c.comision_liberada || 0) : Number(c.totalcomision || 0)
+                const saldo = Math.max(0, m - Number(c.montopagado || 0))
                 if (saldo > 0) {
                   try {
                     await marcar.mutateAsync({ comisionid: c.id, montopagado: saldo })

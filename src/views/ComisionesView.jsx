@@ -140,32 +140,7 @@ function VendedorCard({ vendedor, comisiones, esSupervisor, onMarcarPagada, onPa
           <p className="text-xs text-slate-400 font-medium">{comisiones.length} operaciones</p>
           {esSupervisor && pendientes.length > 0 && montoPendiente > 0 && (
             <div className="flex gap-1.5 flex-wrap mt-1">
-              {montoPendienteCxc > 0 && montoPendienteRegular > 0 && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const regularPendientes = pendientes.filter(c => c.estado !== 'cta_cobrar');
-                    onPagarTodo({
-                      vendedor,
-                      pendientes: regularPendientes,
-                      montoPendiente: montoPendienteRegular,
-                      esRegular: true
-                    });
-                  }}
-                  disabled={marcando}
-                  className="inline-flex items-center gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700 font-bold px-3 py-1.5 rounded-lg text-[11px] transition-all disabled:opacity-50 shadow-sm active:scale-95 animate-in fade-in duration-200"
-                >
-                  <CheckCircle size={12} /> Pagar Regular ({fmtUsd(montoPendienteRegular)})
-                </button>
-              )}
-              <button
-                onClick={(e) => { e.stopPropagation(); onPagarTodo({ vendedor, pendientes, montoPendiente }); }}
-                disabled={marcando}
-                className="inline-flex items-center gap-1.5 bg-slate-700 text-white hover:bg-slate-850 font-bold px-3 py-1.5 rounded-lg text-[11px] transition-all disabled:opacity-50 shadow-sm active:scale-95"
-              >
-                <CheckCircle size={12} /> Pagar Todo ({fmtUsd(montoPendiente)})
-              </button>
-              {seleccionados.length > 0 && (
+              {seleccionados.length > 0 ? (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -181,6 +156,14 @@ function VendedorCard({ vendedor, comisiones, esSupervisor, onMarcarPagada, onPa
                   className="inline-flex items-center gap-1.5 bg-emerald-500 text-white hover:bg-emerald-600 font-bold px-3 py-1.5 rounded-lg text-[11px] transition-all disabled:opacity-50 shadow-sm active:scale-95 animate-in fade-in zoom-in duration-150"
                 >
                   <CheckCircle size={12} /> Pagar Seleccionados ({fmtUsd(montoSeleccionado)})
+                </button>
+              ) : (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onPagarTodo({ vendedor, pendientes, montoPendiente }); }}
+                  disabled={marcando}
+                  className="inline-flex items-center gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700 font-bold px-3 py-1.5 rounded-lg text-[11px] transition-all disabled:opacity-50 shadow-sm active:scale-95"
+                >
+                  <CheckCircle size={12} /> Pagar Todo ({fmtUsd(montoPendiente)})
                 </button>
               )}
             </div>
