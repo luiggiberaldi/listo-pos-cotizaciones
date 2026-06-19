@@ -1608,7 +1608,10 @@ function TabComisiones({ configNeg }) {
           cantidad: 0
         }
       }
-      const m = Number(c.totalcomision || 0)
+      // Para CxC usar solo la porción liberada, para el resto usar totalcomision
+      const m = c.estado === 'cta_cobrar'
+        ? Number(c.comision_liberada || 0)
+        : Number(c.totalcomision || 0)
       const tasa = tasaEuro?.precio || Number(c.despacho?.tasa_snapshot || c.cotizacion?.tasa_bcv_snapshot || 0)
       const mBs = m * tasa
 

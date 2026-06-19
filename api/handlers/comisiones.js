@@ -44,7 +44,11 @@ function aplicarFiltrosComisiones(query, urlParams, user) {
     }
   }
   // 3. Filtro por Estado
-  if (estado) {
+  // Cuando se filtra por 'pendiente', incluir también 'cta_cobrar' porque tienen
+  // montos liberados pendientes de pago que deben aparecer en la vista
+  if (estado === 'pendiente') {
+    query += `&estado=in.(pendiente,cta_cobrar)`
+  } else if (estado) {
     query += `&estado=eq.${estado}`
   }
 

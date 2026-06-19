@@ -577,8 +577,11 @@ export default function ComisionesView() {
       const vendedor = g.vendedor || { nombre: 'Sin Asignar', color: '#64748b' }
       const esExterno = !!vendedor?.es_externo || (vendedor?.markup_pct != null && Number(vendedor.markup_pct) > 0)
       
-      const validItems = g.items.filter(c => c.estado !== 'cta_cobrar')
-      const generadoUsd = validItems.reduce((acc, c) => acc + Number(c.totalcomision || 0), 0)
+      // Usar comision_liberada para CxC (solo la porción ya liberada), totalcomision para el resto
+      const generadoUsd = g.items.reduce((acc, c) => {
+        if (c.estado === 'cta_cobrar') return acc + Number(c.comision_liberada || 0)
+        return acc + Number(c.totalcomision || 0)
+      }, 0)
       
       return {
         id: g.id,
