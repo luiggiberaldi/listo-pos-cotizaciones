@@ -2233,10 +2233,23 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
         const monto = Number(a.monto_usd || 0)
         totalAbonosCxc += monto
 
-        y = checkPage(doc, y, 8)
+        const metodo = formatMetodoPago(a.forma_pago_abono || a.metodo_pago)
+        const ref = a.referencia ? ` [Ref: ${a.referencia}]` : ''
+        const metodoText = `${metodo}${ref}`
+
+        // Definir ancho seguro para esta columna (desde MARGIN + 101 hasta MARGIN + CONTENT_W - 25 = 177, ancho = 62)
+        const maxMetodoWidth = 62
+        const lines = doc.splitTextToSize(metodoText, maxMetodoWidth)
+
+        // Calcular altura dinámica basada en la cantidad de líneas
+        const lineHeight = 3.5
+        const rowHeight = 6.5 + (lines.length - 1) * lineHeight
+        const rectHeight = 7 + (lines.length - 1) * lineHeight
+
+        y = checkPage(doc, y, rowHeight + 1.5)
         if (idx % 2 === 1) {
           doc.setFillColor(250, 251, 253)
-          doc.rect(MARGIN, y - 0.5, CONTENT_W, 7, 'F')
+          doc.rect(MARGIN, y - 0.5, CONTENT_W, rectHeight, 'F')
         }
 
         doc.setFont('helvetica', 'normal')
@@ -2249,14 +2262,15 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
         const cliente = String(a.cliente?.nombre || 'SIN NOMBRE').toUpperCase().substring(0, 38)
         doc.text(cliente, MARGIN + 26, y + 4.5)
 
-        const metodo = formatMetodoPago(a.forma_pago_abono || a.metodo_pago)
-        const ref = a.referencia ? ` [Ref: ${a.referencia}]` : ''
-        doc.text(`${metodo}${ref}`, MARGIN + 101, y + 4.5)
+        // Dibujar líneas del Método / Referencia
+        lines.forEach((line, i) => {
+          doc.text(line, MARGIN + 101, y + 4.5 + (i * lineHeight))
+        })
 
         doc.setFont('helvetica', 'bold')
         doc.setTextColor(16, 185, 129) // Emerald 500
         doc.text(fmtUsd(monto), MARGIN + CONTENT_W - 4, y + 4.5, { align: 'right' })
-        y += 6.5
+        y += rowHeight
       })
 
       // Fila de total

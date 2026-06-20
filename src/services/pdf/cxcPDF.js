@@ -449,11 +449,22 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
         y = drawTableHeader(doc, abonoCols, y)
 
         abonosEnRango.forEach((ab, aIdx) => {
-          y = checkPage(doc, y, 7.5, onNewPage, 22)
+          const refDesc = [
+            ab.referencia ? `Ref: ${ab.referencia}` : '',
+            ab.descripcion || ''
+          ].filter(Boolean).join(' - ')
+
+          const maxRefWidth = 75
+          const lines = doc.splitTextToSize(refDesc, maxRefWidth)
+          const lineHeight = 3.0
+          const rowHeight = 6.0 + (lines.length - 1) * lineHeight
+          const rectHeight = 6.0 + (lines.length - 1) * lineHeight
+
+          y = checkPage(doc, y, rowHeight + 1.5, onNewPage, 22)
 
           if (aIdx % 2 === 0) {
             doc.setFillColor(244, 252, 248) // soft green zebra striping
-            doc.rect(MARGIN, y - 0.8, CONTENT_W, 6, 'F')
+            doc.rect(MARGIN, y - 0.8, CONTENT_W, rectHeight, 'F')
           }
 
           doc.setFont('helvetica', 'normal')
@@ -467,18 +478,17 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
           
           doc.text(formatMetodoPago(ab.forma_pago_abono || ab.metodo_pago), MARGIN + 40, y + 3.2)
 
-          const refDesc = [
-            ab.referencia ? `Ref: ${ab.referencia}` : '',
-            ab.descripcion || ''
-          ].filter(Boolean).join(' - ')
-          doc.text(refDesc.substring(0, 52), MARGIN + 90, y + 3.2)
+          // Dibujar líneas de la Referencia / Descripción
+          lines.forEach((line, i) => {
+            doc.text(line, MARGIN + 90, y + 3.2 + (i * lineHeight))
+          })
 
           doc.setFont('helvetica', 'bold')
           doc.setTextColor(16, 185, 129)
           doc.text(`+${fmtUsd(ab.monto_usd)}`, MARGIN + 185, y + 3.2, { align: 'right' })
           
           doc.setTextColor(...C_DARK)
-          y += 6
+          y += rowHeight
         })
       }
 
@@ -524,11 +534,22 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
     y = drawTableHeader(doc, abonosCols, y)
 
     abonosDelDia.forEach((a, idx) => {
-      y = checkPage(doc, y, 8, onNewPage, doc.internal.getNumberOfPages() === 1 ? 35 : 22)
+      const refDesc = [
+        a.referencia ? `Ref: ${a.referencia}` : '',
+        a.descripcion || ''
+      ].filter(Boolean).join(' - ')
+
+      const maxRefWidth = 48
+      const lines = doc.splitTextToSize(refDesc, maxRefWidth)
+      const lineHeight = 3.0
+      const rowHeight = 6.0 + (lines.length - 1) * lineHeight
+      const rectHeight = 6.0 + (lines.length - 1) * lineHeight
+
+      y = checkPage(doc, y, rowHeight + 2, onNewPage, doc.internal.getNumberOfPages() === 1 ? 35 : 22)
 
       if (idx % 2 === 0) {
         doc.setFillColor(250, 251, 255)
-        doc.rect(MARGIN, y - 0.8, CONTENT_W, 6, 'F')
+        doc.rect(MARGIN, y - 0.8, CONTENT_W, rectHeight, 'F')
       }
 
       doc.setFont('helvetica', 'normal')
@@ -555,11 +576,9 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
       doc.text(metodo, MARGIN + 95, y + 3.2, { align: 'center' })
 
       // Referencia / Descripción
-      const refDesc = [
-        a.referencia ? `Ref: ${a.referencia}` : '',
-        a.descripcion || ''
-      ].filter(Boolean).join(' - ')
-      doc.text(refDesc.substring(0, 32), MARGIN + 125, y + 3.2)
+      lines.forEach((line, i) => {
+        doc.text(line, MARGIN + 125, y + 3.2 + (i * lineHeight))
+      })
 
       // Monto
       doc.setFont('helvetica', 'bold')
@@ -567,7 +586,7 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
       doc.text(`+${fmtUsd(a.monto_usd)}`, MARGIN + 185, y + 3.2, { align: 'right' })
       doc.setTextColor(...C_DARK) // Reset color
 
-      y += 6
+      y += rowHeight
     })
   }
 
