@@ -2,7 +2,14 @@
 // Configuración del negocio para header del PDF y ajustes globales
 // — select explícito SIN gate_password_hash
 // — gate se valida server-side vía RPCs SECURITY DEFINER
-import { useEffect } from 'react'
+//
+// NOTA: este hook NO abre canal realtime propio. Antes creaba un canal
+// postgres_changes con nombre aleatorio POR INSTANCIA (y se monta en cada
+// fila de producto vía useTasaCambio) → cientos de canales simultáneos y
+// errores "ChannelRateLimitReached" en Supabase. Los cambios de config ya
+// llegan por dos vías compartidas: el broadcast de useActualizarConfig
+// (broadcastEntidad('config')) y el postgres_changes centralizado de
+// useRealtimeSync sobre configuracion_negocio.
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
 import { apiUrl, getAuthHeaders } from '../services/apiBase'
@@ -11,28 +18,6 @@ import { broadcastEntidad } from '../services/supabase/realtimeBus'
 const KEY = ['config_negocio']
 
 export function useConfigNegocio() {
-  const qc = useQueryClient()
-
-  useEffect(() => {
-    const channelName = `config_negocio_changes_${Date.now()}_${Math.random()}`
-    const sub = supabase.channel(channelName)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'configuracion_negocio' },
-        (payload) => {
-          if (payload.new) {
-            qc.setQueryData(KEY, (old) => {
-              if (!old) return payload.new
-              return { ...old, ...payload.new }
-            })
-          }
-        }
-      )
-      .subscribe()
-
-    return () => { supabase.removeChannel(sub) }
-  }, [qc])
-
   return useQuery({
     queryKey: KEY,
     queryFn: async () => {

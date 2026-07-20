@@ -107,6 +107,9 @@ export function useReporteInventario() {
       ])
 
       if (prodRes.error) throw prodRes.error
+      // Los movimientos alimentan "días sin movimiento" — un fallo silencioso
+      // marcaría productos activos como sin actividad
+      if (movRes.error) throw movRes.error
 
       // Normalizar stock comprometido a mapa
       const stockComprometido = {}

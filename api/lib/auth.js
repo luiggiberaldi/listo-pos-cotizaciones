@@ -4,6 +4,37 @@ import { jsonError, isValidUuid } from './utils.js'
 // UUID especial para Super Admin virtual (easter egg del logo)
 export const SUPER_ADMIN_UUID = '00000000-0000-0000-0000-000000000000'
 
+// ─── Caché en memoria del isolate para verificación de auth ────────────────────
+// Cada petición API pagaba 2-3 round-trips a Supabase solo para validar el token
+// y el operador. Con TTL corto (60s) las ráfagas de peticiones reutilizan la
+// verificación. El isolate de Cloudflare se recicla solo, así que el caché es
+// naturalmente efímero. Límite de entradas para acotar memoria.
+const AUTH_CACHE_TTL_MS = 60_000;
+const AUTH_CACHE_MAX = 500;
+const _userCache = new Map();     // token → { user (raw), exp }
+const _operatorCache = new Map(); // operatorId → { operador, exp }
+
+function cacheGet(map, key) {
+  const hit = map.get(key);
+  if (!hit) return null;
+  if (Date.now() > hit.exp) { map.delete(key); return null; }
+  return hit.value;
+}
+
+function cacheSet(map, key, value) {
+  if (map.size >= AUTH_CACHE_MAX) {
+    // Evicción simple: borrar la entrada más antigua (primera insertada)
+    const first = map.keys().next().value;
+    if (first !== undefined) map.delete(first);
+  }
+  map.set(key, { value, exp: Date.now() + AUTH_CACHE_TTL_MS });
+}
+
+// Invalidar caché de un operador (llamar tras cambios de rol/activo/PIN)
+export function invalidateOperatorCache(operatorId) {
+  if (operatorId) _operatorCache.delete(operatorId);
+}
+
 // Obtiene headers Supabase con service key
 export function supaServiceHeaders(env) {
   return {
@@ -21,15 +52,22 @@ export async function verifyAuth(request, env) {
   if (!authHeader?.startsWith('Bearer ')) return null;
   const token = authHeader.slice(7);
 
-  // Verificar el token llamando a Supabase auth
-  const res = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      apikey: env.SUPABASE_ANON_KEY,
-    },
-  });
-  if (!res.ok) return null;
-  const user = await res.json();
+  // Verificar el token: caché 60s por token para evitar el round-trip repetido
+  let rawUser = cacheGet(_userCache, token);
+  if (!rawUser) {
+    const res = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        apikey: env.SUPABASE_ANON_KEY,
+      },
+    });
+    if (!res.ok) return null;
+    rawUser = await res.json();
+    cacheSet(_userCache, token, rawUser);
+  }
+
+  // Clonar antes de mutar — el objeto cacheado se comparte entre peticiones
+  const user = { ...rawUser };
   // Attach operator context from app_metadata (set by switch-operator)
   user.operator_id = user.app_metadata?.operator_id || null;
   user.operator_rol = user.app_metadata?.operator_rol || null;
@@ -62,6 +100,9 @@ export async function verifyAuth(request, env) {
 export async function getOperatorRole(operatorId, env) {
   if (!operatorId) return null;
   if (operatorId === SUPER_ADMIN_UUID) return 'desarrollador';
+  // Reusar la fila cacheada por validateOperator si existe
+  const cached = cacheGet(_operatorCache, operatorId);
+  if (cached) return cached.rol ?? null;
   const res = await fetch(
     `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${operatorId}&activo=eq.true&select=rol`,
     {
@@ -104,23 +145,31 @@ export async function validateOperator(request, env, { requireSupervisor = false
   }
 
   const h = supaServiceHeaders(env);
-  const rolFilter = requireSupervisor ? '&rol=in.(supervisor,jefe,logistica,administracion,desarrollador)' : '';
+  const ROLES_PRIVILEGIADOS = ['supervisor', 'jefe', 'logistica', 'administracion', 'desarrollador'];
   try {
-    const res = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${user.operator_id}&activo=eq.true${rolFilter}&select=id,nombre,rol,color,cuenta_id,markup_pct,es_externo`,
-      { headers: h }
-    );
-    if (!res.ok) {
-      const errText = await res.text();
-      return { error: jsonError(`Error de conexion con Supabase (HTTP ${res.status}): ${errText}`, res.status || 500, request) };
-    }
-    const rows = await res.json();
-    const operador = rows[0];
+    // Caché 60s por operador — evita re-consultar usuarios en cada petición.
+    // El filtro de rol se aplica en código para poder compartir la entrada
+    // cacheada entre endpoints con y sin requireSupervisor.
+    let operador = cacheGet(_operatorCache, user.operator_id);
     if (!operador) {
-      const msg = requireSupervisor
-        ? 'Solo supervisores, logistica o administracion pueden realizar esta acción'
-        : 'Operador no encontrado o inactivo';
-      return { error: jsonError(msg, 403, request) };
+      const res = await fetch(
+        `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${user.operator_id}&activo=eq.true&select=id,nombre,rol,color,cuenta_id,markup_pct,es_externo`,
+        { headers: h }
+      );
+      if (!res.ok) {
+        const errText = await res.text();
+        return { error: jsonError(`Error de conexion con Supabase (HTTP ${res.status}): ${errText}`, res.status || 500, request) };
+      }
+      const rows = await res.json();
+      operador = rows[0] ?? null;
+      if (operador) cacheSet(_operatorCache, user.operator_id, operador);
+    }
+
+    if (!operador) {
+      return { error: jsonError('Operador no encontrado o inactivo', 403, request) };
+    }
+    if (requireSupervisor && !ROLES_PRIVILEGIADOS.includes(operador.rol)) {
+      return { error: jsonError('Solo supervisores, logistica o administracion pueden realizar esta acción', 403, request) };
     }
 
     return { user, operador, headers: h, ip };

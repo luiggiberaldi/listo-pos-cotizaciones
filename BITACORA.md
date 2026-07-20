@@ -1824,6 +1824,150 @@ Modificar la generación y exportación del reporte de comisiones en PDF para qu
 ### Verificación
 - Compilación de producción en proceso.
 
+## SESIÓN 20/07/2026 — Fase 1 de Fixes de Rendimiento de Carga (auditoría)
+
+### Objetivo
+Aplicar la Fase 1 del plan de fixeo derivado de la auditoría de problemas de carga (despachos, inventario, cotizaciones): detener las tormentas de refetch y agregar índices faltantes en la base de datos.
+
+### Cambios realizados
+
+#### 1. Invalidación filtrada al reconectar (`src/store/useAuthStore.js`)
+- El handler `online` ya no ejecuta `queryClient.invalidateQueries()` sin filtro (recargaba TODO el caché en cada micro-corte de red).
+- Ahora invalida solo queries **activas** (`refetchType: 'active'`) y con **debounce de 3s** para coalescer ráfagas de reconexión en redes inestables.
+- El timer del debounce se limpia en el cleanup de `initialize()`.
+
+#### 2. Retorno de pestaña inteligente (`src/hooks/useRealtimeSync.js`)
+- `visibilitychange` ya no recarga inventario + despachos completos en CADA retorno a la pestaña.
+- Solo invalida si la app estuvo **más de 3 minutos** en segundo plano (el canal realtime cubre ausencias cortas).
+
+#### 3. Debounce en broadcast entre dispositivos (`src/hooks/useRealtimeSync.js`)
+- La invalidación por broadcast (`cuenta-{id}`) ahora usa `debouncedInvalidate` con 400ms — coalesce ráfagas de ediciones en lote que antes disparaban N recargas de listas de 1000 filas en todos los dispositivos.
+
+#### 4. `staleTime` de inventario (`src/hooks/useInventario.js`)
+- De 30s → **3 minutos**. La query más pesada de la app ya no se refetchea constantemente; el realtime invalida ante cambios reales.
+
+#### 5. `gcTime` de despachos (`src/hooks/useDespachos.js`)
+- Eliminado el override de 15 min; hereda las 24h globales para que los despachos no se caigan del caché offline de IndexedDB (persister `maxAge: 24h`).
+
+#### 6. Migración de índices (`supabase/migrations/202_indices_carga.sql`)
+- Índices nuevos (aditivos, `IF NOT EXISTS`): `notas_despacho(cliente_id)`, `notas_despacho(cliente_factura_id)`, `notas_despacho(creado_en DESC)`, `notas_despacho(entregada_en DESC)`, `notas_despacho(transportista_id)`, `cotizaciones(creado_en DESC)`.
+- **PENDIENTE: aplicar la migración en Supabase** (no se ejecutó contra la base de datos).
+
+### Verificación
+- `npm run build` exitoso sin errores.
+- ESLint sobre los 4 archivos tocados: solo warnings/errores preexistentes en líneas no modificadas.
+- Sin commit ni push a git, respetando la política de resguardo del usuario.
+
+### Pendiente (fases siguientes del plan)
+- Fase 2: paralelizar cascadas de despachos/cotizaciones/reportes, `.catch` en lookups de enriquecimiento, caché de auth en el Worker.
+- Fase 3: dejar de tragar errores en reportes financieros/dashboard/modales.
+- Fase 4: paginación real del catálogo (>1000 productos), búsqueda servidor de cotizaciones antiguas, tasa de cambio centralizada (un solo canal realtime), N+1 en DespachoCard.
+
+---
+
+## SESIÓN 20/07/2026 — Fase 2 de Fixes de Rendimiento de Carga
+
+### Objetivo
+Aplicar la Fase 2 del plan de fixeo: paralelizar las cascadas de peticiones secuenciales que hacían las cargas 3-5× más lentas, y hacer resilientes los lookups de enriquecimiento.
+
+### Cambios realizados
+
+#### 1. Cascada de despachos paralelizada (`src/hooks/useDespachos.js`)
+- El enriquecimiento post-query pasó de 3 viajes en serie (despachos → clientes → usuarios) a **1 tanda paralela** (`Promise.all` de clientes + vendedores de despachos) + 1 query condicional solo si los clientes referencian vendedores no cargados aún.
+- El lookup `/api/clientes/lookup` ahora degrada a `[]` con `.catch()`: si el Worker falla, la lista se muestra con "cliente: —" en vez de fallar completa.
+
+#### 2. Cascada de cotizaciones paralelizada (`src/hooks/useCotizaciones.js`)
+- Mismo patrón que despachos: clientes + vendedores en paralelo, query extra solo para vendedores faltantes, `.catch(() => [])` en el lookup de clientes.
+
+#### 3. Guarda de null en `useCotizacion` (`src/hooks/useCotizaciones.js`)
+- Tras `.maybeSingle()`, si la cotización no existe (eliminada u oculta por RLS) se retorna `null` limpio en vez de lanzar `TypeError: Cannot read properties of null`.
+- `.catch(() => [])` también en el lookup de cliente del detalle.
+
+#### 4. Lotes de reportes paralelizados
+- `src/hooks/useReporteVendedores.js`: los 3 loops `for + await` de lotes de 50 (cotizacion_items, notas_despacho_items + despacho_descuentos, productos) ahora corren con `Promise.all` — 10 lotes pasan de 10-20 viajes en serie a 1 tanda paralela.
+- `src/hooks/useReporteVentas.js`: mismos 3 loops paralelizados.
+- `src/hooks/useReporteLiquidacion.js`: loop de cotizacion_items paralelizado.
+- La semántica de manejo de errores se mantuvo idéntica por archivo (donde se lanzaba `throw`, se sigue lanzando; donde se ignoraba, se ignora — eso se corrige en Fase 3).
+
+#### 5. Caché de verificación de auth en el Worker (`api/lib/auth.js`)
+- Caché en memoria del isolate con TTL 60s y máx. 500 entradas: `token → user` (evita el round-trip a `/auth/v1/user` en cada petición) y `operatorId → operador` (evita re-consultar `usuarios`).
+- `validateOperator` ahora aplica el filtro de rol en código (no en la query) para compartir la entrada cacheada entre endpoints con/sin `requireSupervisor`.
+- `getOperatorRole` reutiliza la fila cacheada.
+- Nueva función exportada `invalidateOperatorCache(operatorId)` — llamada desde `api/handlers/admin.js` al editar o eliminar usuarios (cambios de rol/PIN/activo invalidan el caché de inmediato).
+- Trade-off aceptado: un operador desactivado podría operar hasta 60s más en otro isolate (el TTL acota la ventana).
+
+#### 6. Timeout de Supabase 15s → 30s (`src/services/supabase/client.js`)
+- Con las cascadas paralelizadas, 30s solo se alcanza en fallos reales; evita abortar reportes legítimamente pesados en redes lentas (la causa de vistas "cargando para siempre").
+
+### Verificación
+- `npm run build` exitoso (2272 módulos transformados, sin errores).
+- `node --check` sobre `api/lib/auth.js` y `api/handlers/admin.js`: sintaxis OK.
+- `npx wrangler deploy --dry-run` exitoso.
+- ESLint: solo warnings/errores preexistentes en líneas no modificadas.
+- Sin commit ni push a git, respetando la política de resguardo del usuario.
+
+### Pendiente (fases siguientes del plan)
+- Fase 3: dejar de tragar errores en reportes financieros/dashboard/modales (mostrar error visible en vez de ceros/vacío).
+- Fase 4: paginación real del catálogo (>1000 productos), búsqueda servidor de cotizaciones antiguas, tasa de cambio centralizada, N+1 en DespachoCard.
+- Recordatorio: aplicar migración `202_indices_carga.sql` en Supabase (Fase 1).
+
+---
+
+## SESIÓN 20/07/2026 — Fase 3 de Fixes + URGENTE: ChannelRateLimitReached
+
+### Objetivo
+1. Fase 3 del plan de fixeo: dejar de tragar errores (mostrar error visible en vez de ceros/vacío).
+2. URGENTE: los logs de Supabase mostraron ráfagas de `ChannelRateLimitReached: Too many channels` e `IncreaseSubscriptionConnectionPool: Too many database timeouts` — causados por canales realtime creados POR INSTANCIA de hook (uno por fila de producto renderizada). Se adelantó el fix 4.5 del plan.
+
+### Cambios URGENTES (realtime)
+
+#### 1. Canal `tasa-sync` singleton (`src/hooks/useTasaCambio.js`)
+- Antes: cada instancia del hook (~20 componentes, incluyendo CADA fila de producto) abría su propio canal `tasa-sync` → una página de inventario con 100 filas = 100 canales.
+- Ahora: **un solo canal por pestaña** con conteo de referencias (`acquireTasaChannel`/`releaseTasaChannel`) y un set de suscriptores en memoria que reparte los eventos `tasa_change` a todas las instancias.
+
+#### 2. Eliminado canal por instancia de `useConfigNegocio` (`src/hooks/useConfigNegocio.js`)
+- Antes: cada llamada al hook creaba un canal `postgres_changes` con nombre ALEATORIO (`config_negocio_changes_${Date.now()}_${Math.random()}`) sobre `configuracion_negocio`. Como `useTasaCambio` llama a este hook, se multiplicaba también por fila.
+- Ahora: el hook no abre canal propio. Los cambios de config llegan por las vías compartidas ya existentes: `broadcastEntidad('config')` en `useActualizarConfig` y el `postgres_changes` centralizado de `useRealtimeSync` (tabla `configuracion_negocio` en TABLAS_INMEDIATAS).
+- Resultado esperado: de cientos de canales por cliente a ≤5 (db-changes, cuenta-broadcast, notificaciones, tasa-sync). Los errores de rate limit y los timeouts del pool de suscripciones deben desaparecer.
+
+### Cambios Fase 3 (errores visibles)
+
+#### 3. Reportes financieros (`useReporteVendedores.js`, `useReporteVentas.js`)
+- Las queries de cotizaciones del período ahora verifican `.error` y lanzan (antes: `data ?? []` → KPIs en cero silenciosos).
+- Todos los lotes paralelos (cotizacion_items, notas_despacho_items, despacho_descuentos, productos) lanzan en error en vez de ignorarlo.
+- La query de usuarios de useReporteVendedores verifica error.
+- Las vistas ya manejan `isError` con botón de reintento (ReporteVendedoresView:478, ReportesView:591).
+
+#### 4. Reporte de inventario (`useReporteInventario.js`)
+- `movRes.error` ahora lanza — antes un fallo dejaba "días sin movimiento" silenciosamente incorrecto.
+
+#### 5. Dashboard (`useDashboardMetrics.js` + `DashboardView.jsx`)
+- Todas las sub-queries de métricas verifican `.error` y lanzan (vendedor, admin/jefe, logística, supervisor).
+- `DashboardView` muestra **banner ámbar con botón "Reintentar"** cuando `useMetricas` o `useDashboardMetrics` fallan — antes mostraba ceros sin aviso.
+
+#### 6. Modales
+- `ReciclarCotizacionModal.jsx`: toast de error si fallan los items (antes parecía una cotización sin productos).
+- `DetalleModal.jsx` (ui): toast de error en el catch + columnas explícitas en vez de `select('*')` (con `origen` solo en cotizacion_items y `es_prestamo` solo en notas_despacho_items, según esquema real).
+- `DescuentoModal.jsx`: toast de error si fallan los items.
+
+#### 7. Generador de códigos (`codigosHelper.js` + `ProductoForm.jsx`)
+- `calcularSiguienteCodigo` retorna `null` en fallo (antes `''` silencioso) y `ProductoForm` muestra toast pidiendo ingreso manual — generar un correlativo sin ver los códigos existentes producía duplicados.
+
+#### 8. `useDesactivarProducto` (`useInventario.js`)
+- Agregado `onError` con toast (era la única mutación sin él).
+
+### Verificación
+- `npm run build` exitoso (build completo, sin errores).
+- ESLint: solo errores/warnings preexistentes.
+- Sin commit ni push a git, respetando la política de resguardo del usuario.
+
+### Pendiente
+- Aplicar migración `202_indices_carga.sql` en Supabase (Fase 1).
+- Desplegar Worker (`wrangler deploy`) para el caché de auth (Fase 2).
+- Fase 4 restante: paginación real del catálogo (>1000 productos), búsqueda servidor de cotizaciones antiguas, N+1 en DespachoCard, consolidar doble query de InventarioView.
+
+---
+
 *Mantener este archivo actualizado al inicio y fin de cada sesión de trabajo.*
 
 

@@ -187,11 +187,19 @@ const useAuthStore = create((set, get) => ({
     // Esto permite el fallback en switchOperator cuando la red falla.
 
     // Listeners de conectividad
+    // Debounce: en redes inestables el evento 'online' se dispara en ráfagas;
+    // solo invalidar una vez que la conexión se estabilice (3s sin cortes)
+    let onlineDebounceId = null
     const handleOnline = () => {
       console.log('[AUTH] conexión restaurada — refrescando datos')
       set({ offline: false, error: null })
-      // Invalidar todas las queries para que se refresquen con datos frescos
-      queryClient.invalidateQueries()
+      if (onlineDebounceId) clearTimeout(onlineDebounceId)
+      onlineDebounceId = setTimeout(() => {
+        onlineDebounceId = null
+        // Solo refetch de queries ACTIVAS (visibles en pantalla).
+        // Las inactivas quedan stale y se refrescan solas al montar su vista.
+        queryClient.invalidateQueries({ refetchType: 'active' })
+      }, 3000)
     }
     const handleOffline = () => {
       console.log('[AUTH] conexión perdida')
@@ -309,6 +317,7 @@ const useAuthStore = create((set, get) => ({
     return () => {
       clearTimeout(timeoutId)
       clearTimeout(safetyTimeoutId)
+      if (onlineDebounceId) clearTimeout(onlineDebounceId)
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
       subscription.unsubscribe()

@@ -172,19 +172,25 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
       let despachoDescuentos = []
 
       if (allDispatchIds.length > 0) {
-        for (let i = 0; i < allDispatchIds.length; i += 50) {
-          const batch = allDispatchIds.slice(i, i + 50)
-          const { data: itemsData } = await supabase
+        // Lotes de 50 en paralelo — items y descuentos a la vez
+        // (antes: 2 awaits secuenciales por lote)
+        const batches = []
+        for (let i = 0; i < allDispatchIds.length; i += 50) batches.push(allDispatchIds.slice(i, i + 50))
+        const results = await Promise.all(batches.map(batch => Promise.all([
+          supabase
             .from('notas_despacho_items')
             .select('despacho_id, producto_id, nombre_snap, codigo_snap, cantidad, precio_unit_usd, total_linea_usd, origen, es_prestamo')
-            .in('despacho_id', batch)
-          if (itemsData) ndItems = ndItems.concat(itemsData)
-
-          const { data: descData } = await supabase
+            .in('despacho_id', batch),
+          supabase
             .from('despacho_descuentos')
             .select('despacho_id, cotizacion_item_id, monto_usd')
-            .in('despacho_id', batch)
-          if (descData) despachoDescuentos = despachoDescuentos.concat(descData)
+            .in('despacho_id', batch),
+        ])))
+        for (const [itemsRes, descRes] of results) {
+          if (itemsRes.error) throw itemsRes.error
+          if (descRes.error) throw descRes.error
+          ndItems = ndItems.concat(itemsRes.data ?? [])
+          despachoDescuentos = despachoDescuentos.concat(descRes.data ?? [])
         }
       }
 
@@ -192,13 +198,16 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
       const cotIds = [...new Set(despachos.map(d => d.cotizacion_id).filter(Boolean))]
       let items = []
       if (cotIds.length > 0) {
-        // Supabase .in() tiene límite, dividir en batches de 50
-        for (let i = 0; i < cotIds.length; i += 50) {
-          const batch = cotIds.slice(i, i + 50)
-          const { data, error } = await supabase
+        // Supabase .in() tiene límite, dividir en batches de 50 — en paralelo
+        const batches = []
+        for (let i = 0; i < cotIds.length; i += 50) batches.push(cotIds.slice(i, i + 50))
+        const results = await Promise.all(batches.map(batch =>
+          supabase
             .from('cotizacion_items')
             .select('id, producto_id, nombre_snap, codigo_snap, cantidad, precio_unit_usd, total_linea_usd, cotizacion_id, origen')
             .in('cotizacion_id', batch)
+        ))
+        for (const { data, error } of results) {
           if (error) throw error
           items = items.concat(data ?? [])
         }
@@ -248,17 +257,20 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
       ]
       const productCategories = {}
       if (allProductIds.length > 0) {
-        for (let i = 0; i < allProductIds.length; i += 50) {
-          const batch = allProductIds.slice(i, i + 50)
-          const { data } = await supabase
+        // Lotes de 50 en paralelo (antes: await secuencial por lote)
+        const batches = []
+        for (let i = 0; i < allProductIds.length; i += 50) batches.push(allProductIds.slice(i, i + 50))
+        const results = await Promise.all(batches.map(batch =>
+          supabase
             .from('productos')
             .select('id, categoria')
             .in('id', batch)
-          if (data) {
-            data.forEach(p => {
-              productCategories[p.id] = p.categoria || ''
-            })
-          }
+        ))
+        for (const { data, error } of results) {
+          if (error) throw error
+          ;(data ?? []).forEach(p => {
+            productCategories[p.id] = p.categoria || ''
+          })
         }
       }
 

@@ -148,8 +148,8 @@ export default function DashboardView() {
   const esVendedor = perfil?.rol === 'vendedor' || perfil?.rol === 'vendedor_sin_comision'
   const esPrivilegiado = esSupervisor || esAdministracion || esDesarrollador || esJefe
 
-  const { data: m, isLoading } = useMetricas()
-  const { data: dm, isLoading: dmLoading } = useDashboardMetrics()
+  const { data: m, isLoading, isError: mError, refetch: mRefetch } = useMetricas()
+  const { data: dm, isLoading: dmLoading, isError: dmError, refetch: dmRefetch } = useDashboardMetrics()
   const { data: comResumen } = useComisionesResumen()
   const { data: cxcResumen } = useResumenCxC()
   const { tasaEfectiva } = useTasaCambio()
@@ -174,6 +174,19 @@ export default function DashboardView() {
 
   return (
     <div className="p-3 sm:p-4 md:p-5 lg:p-6 space-y-3 sm:space-y-4 md:space-y-5">
+
+      {/* Banner de error de métricas — antes un fallo mostraba ceros en silencio */}
+      {(mError || dmError) && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <span>No se pudieron cargar algunas métricas del dashboard. Los valores mostrados pueden estar incompletos.</span>
+          <button
+            type="button"
+            onClick={() => { if (mError) mRefetch(); if (dmError) dmRefetch() }}
+            className="shrink-0 rounded-lg bg-amber-200/70 px-3 py-1.5 font-semibold hover:bg-amber-200 active:scale-95 transition-all">
+            Reintentar
+          </button>
+        </div>
+      )}
 
       {/* Tip de onboarding — solo vendedor/supervisor */}
       {(esVendedor || esSupervisor || esDesarrollador) && !esJefe && (

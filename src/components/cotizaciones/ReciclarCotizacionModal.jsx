@@ -6,6 +6,7 @@ import { RefreshCw, Loader2, FileText, User, DollarSign, ChevronRight, Package, 
 import { fmtUsdSimple as fmtUsd } from '../../utils/format'
 import EstadoBadge from './EstadoBadge'
 import supabase from '../../services/supabase/client'
+import { showToast } from '../ui/Toast'
 
 export default function ReciclarCotizacionModal({
   isOpen,
@@ -33,7 +34,13 @@ export default function ReciclarCotizacionModal({
       .eq('cotizacion_id', cotizacion.id)
       .order('orden')
       .then(({ data, error }) => {
-        if (!error && data) setItems(data)
+        if (error) {
+          // Sin aviso, un fallo aquí se veía como "cotización sin productos"
+          showToast('No se pudieron cargar los artículos de la cotización', 'error')
+          setItems([])
+        } else {
+          setItems(data ?? [])
+        }
         setLoadingItems(false)
       })
   }, [isOpen, cotizacion?.id])

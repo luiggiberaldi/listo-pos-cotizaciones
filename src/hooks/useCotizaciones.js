@@ -61,29 +61,40 @@ export function useCotizaciones({ estado = '', clienteId = '', veTodos = false }
 
       const session = (await supabase.auth.getSession()).data.session
 
-      // 1. Cargar clientes primero
-      const clientesData = clienteIds.length
-        ? await fetch(apiUrl('/api/clientes/lookup'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-            body: JSON.stringify({ ids: clienteIds }),
-          }).then(r => r.ok ? r.json() : [])
-        : []
+      const VENDEDOR_COLS = 'id, nombre, color, telefono, rol, markup_pct, es_externo'
 
-      // 2. Extraer todos los IDs de vendedores (de las cotizaciones Y de los clientes)
-      const allVendedorIds = [...new Set([
-        ...rows.map(r => r.vendedor_id),
-        ...clientesData.map(c => c.vendedor_id || c.vendedor?.id)
-      ].filter(Boolean))]
+      // 1. Cargar clientes y vendedores de las cotizaciones EN PARALELO
+      //    (antes era en serie: 3 viajes → ahora 1 tanda + 1 condicional)
+      //    El lookup de clientes degrada a [] si falla: la lista se muestra
+      //    con "cliente: —" en vez de fallar completa.
+      const [clientesData, vendedoresCotRes] = await Promise.all([
+        clienteIds.length
+          ? fetch(apiUrl('/api/clientes/lookup'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+              body: JSON.stringify({ ids: clienteIds }),
+            }).then(r => r.ok ? r.json() : []).catch(() => [])
+          : Promise.resolve([]),
+        vendedorIds.length
+          ? supabase.from('usuarios').select(VENDEDOR_COLS).in('id', vendedorIds)
+          : Promise.resolve({ data: [] }),
+      ])
 
-      // 3. Cargar todos los vendedores necesarios (incluyendo teléfonos)
-      const vendedoresRes = allVendedorIds.length
-        ? await supabase.from('usuarios').select('id, nombre, color, telefono, rol, markup_pct, es_externo').in('id', allVendedorIds)
-        : { data: [] }
+      const vendedoresMap = Object.fromEntries(
+        (vendedoresCotRes.error ? [] : vendedoresCotRes.data ?? []).map(v => [v.id, v])
+      )
 
-      const vendedoresMap = Object.fromEntries((vendedoresRes.error ? [] : vendedoresRes.data ?? []).map(v => [v.id, v]))
+      // 2. Vendedores adicionales referenciados por los clientes (solo los que falten)
+      const vendedorIdsFaltantes = [...new Set(
+        clientesData.map(c => c.vendedor_id || c.vendedor?.id).filter(Boolean)
+      )].filter(id => !vendedoresMap[id])
 
-      // 4. Hidratar el vendedor dentro de cada cliente
+      if (vendedorIdsFaltantes.length) {
+        const extraRes = await supabase.from('usuarios').select(VENDEDOR_COLS).in('id', vendedorIdsFaltantes)
+        for (const v of (extraRes.error ? [] : extraRes.data ?? [])) vendedoresMap[v.id] = v
+      }
+
+      // 3. Hidratar el vendedor dentro de cada cliente
       const clientesMap = Object.fromEntries((clientesData ?? []).map(c => {
         const vId = c.vendedor_id || c.vendedor?.id
         if (vId) {
@@ -133,6 +144,9 @@ export function useCotizacion(id) {
       if (itemsRes.error) throw itemsRes.error
 
       let cot = cotRes.data
+      // Cotización eliminada u oculta por RLS — retornar null limpio
+      // (la vista muestra "no encontrada" en vez de un TypeError)
+      if (!cot) return null
 
       // Fetch cliente y vendedor por separado (evita problemas de RLS con joins)
       const session = (await supabase.auth.getSession()).data.session
@@ -142,7 +156,7 @@ export function useCotizacion(id) {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
               body: JSON.stringify({ ids: [cot.cliente_id] }),
-            }).then(r => r.ok ? r.json() : [])
+            }).then(r => r.ok ? r.json() : []).catch(() => [])
           : [],
         cot.vendedor_id
           ? supabase.from('usuarios').select('id, nombre, color, telefono, rol, markup_pct, es_externo').eq('id', cot.vendedor_id).maybeSingle()

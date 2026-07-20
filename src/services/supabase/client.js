@@ -21,7 +21,9 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   global: {
     fetch: (url, options = {}) => {
       const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), 15000) // 15s timeout
+      // 30s: en redes lentas los reportes pesados superaban los 15s y la vista
+      // quedaba "cargando" o vacía por el abort
+      const timeout = setTimeout(() => controller.abort(), 30000)
       return fetch(url, { ...options, signal: controller.signal })
         .finally(() => clearTimeout(timeout))
     },

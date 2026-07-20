@@ -59,12 +59,16 @@ export function useReporteLiquidacion({ fechaInicio, fechaFin, vendedorId } = {}
       const cotIds = [...new Set(despachos.map(d => d.cotizacion_id).filter(Boolean))]
       let items = []
       if (cotIds.length > 0) {
-        for (let i = 0; i < cotIds.length; i += 50) {
-          const batch = cotIds.slice(i, i + 50)
-          const { data, error } = await supabase
+        // Lotes de 50 en paralelo (antes: await secuencial por lote)
+        const batches = []
+        for (let i = 0; i < cotIds.length; i += 50) batches.push(cotIds.slice(i, i + 50))
+        const results = await Promise.all(batches.map(batch =>
+          supabase
             .from('cotizacion_items')
             .select('producto_id, nombre_snap, codigo_snap, cantidad, precio_unit_usd, total_linea_usd, cotizacion_id, comision_pct')
             .in('cotizacion_id', batch)
+        ))
+        for (const { data, error } of results) {
           if (error) throw error
           items = items.concat(data ?? [])
         }

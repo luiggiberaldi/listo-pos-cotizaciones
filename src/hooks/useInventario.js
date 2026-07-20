@@ -114,7 +114,7 @@ export function useInventario({ busqueda = '', categoria = '', page = 0, pageSiz
       return { productos, totalCount }
     },
     enabled: !!perfil,
-    staleTime: 1000 * 30,         // 30s — permite refetch al volver de fondo
+    staleTime: 1000 * 60 * 3,     // 3min — el realtime invalida ante cambios reales
     gcTime:    1000 * 60 * 10,
   })
 }
@@ -339,6 +339,9 @@ export function useDesactivarProducto() {
       })
       showToast(activo ? 'Producto activado' : 'Producto desactivado', 'success')
       setTimeout(() => qc.invalidateQueries({ queryKey: INVENTARIO_KEY }), 300)
+    },
+    onError: (error, { activo }) => {
+      showToast(error.message || `Error al ${activo ? 'activar' : 'desactivar'} producto`, 'error')
     },
   })
 }

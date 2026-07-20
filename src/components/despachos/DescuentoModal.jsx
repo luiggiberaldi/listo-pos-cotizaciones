@@ -5,6 +5,7 @@ import { X, Tag, Loader2, Trash2, AlertCircle, ChevronRight, Truck, ChevronLeft,
 import supabase from '../../services/supabase/client'
 import { fmtUsdSimple as fmtUsd } from '../../utils/format'
 import { useDespachoDescuentos, useGuardarDescuentos } from '../../hooks/useDespachoDescuentos'
+import { showToast } from '../ui/Toast'
 
 function calcMonto(tipo, valor, totalLinea, cantidad) {
   if (tipo === 'nuevo_precio') {
@@ -315,7 +316,14 @@ export default function DescuentoModal({ isOpen, onClose, despacho }) {
       .select('id,codigo_snap,nombre_snap,unidad_snap,cantidad,precio_unit_usd,total_linea_usd,orden')
       .eq('cotizacion_id', despacho.cotizacion_id)
       .order('orden')
-      .then(({ data }) => { setItems(data ?? []); setCargandoItems(false) })
+      .then(({ data, error }) => {
+        if (error) {
+          // Sin aviso, un fallo aquí se veía como un despacho sin artículos
+          showToast('No se pudieron cargar los artículos del despacho', 'error')
+        }
+        setItems(data ?? [])
+        setCargandoItems(false)
+      })
   }, [isOpen, despacho?.cotizacion_id])
 
   useEffect(() => {

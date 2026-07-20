@@ -9,6 +9,7 @@ import useAuthStore from '../../store/useAuthStore'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import { getComisionPctForItem } from '../../utils/comisionUtils'
+import { showToast } from './Toast'
 
 function calcDescMonto(desc, totalLinea, cantidad) {
   if (!desc) return 0
@@ -179,11 +180,15 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
       setCargando(true)
       const tableName = tipo === 'cotizacion' ? 'cotizacion_items' : 'notas_despacho_items'
       const filterCol = tipo === 'cotizacion' ? 'cotizacion_id' : 'despacho_id'
-      
+      // Columnas explícitas (antes select('*') traía todo)
+      const itemCols = tipo === 'cotizacion'
+        ? 'id, cotizacion_id, producto_id, codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, descuento_pct, total_linea_usd, orden, origen'
+        : 'id, despacho_id, producto_id, codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, descuento_pct, total_linea_usd, orden, es_prestamo'
+
       try {
         const { data, error } = await supabase
           .from(tableName)
-          .select('*, producto:productos(id, stock_actual, categoria)')
+          .select(`${itemCols}, producto:productos(id, stock_actual, categoria)`)
           .eq(filterCol, registro.id)
           .order('orden')
 
@@ -224,6 +229,8 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
         setItems(allItems.filter(it => !esCorte(it)))
       } catch (err) {
         console.error('Error fetching items:', err)
+        // Sin aviso, un fallo aquí se veía como un despacho sin productos
+        showToast('No se pudieron cargar los artículos. Reintenta.', 'error')
       } finally {
         setCargando(false)
       }

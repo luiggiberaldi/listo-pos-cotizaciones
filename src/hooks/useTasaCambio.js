@@ -23,6 +23,36 @@ let _lastFetchTs = 0      // Timestamp del último fetch completado
 let _subscribers = new Set() // Callbacks para notificar a todas las instancias
 const MIN_DEDUP_INTERVAL = 5000 // No refetchar si se hizo hace menos de 5s
 
+// ─── Singleton: canal realtime 'tasa-sync' compartido ───────────────────────
+// Este hook se monta en ~20 componentes (incluyendo cada fila de producto).
+// Antes cada instancia abría su propio canal → cientos de canales simultáneos
+// y errores "ChannelRateLimitReached" en Supabase. Ahora hay UN canal por
+// pestaña, compartido con conteo de referencias.
+let _tasaChannel = null
+let _tasaChannelUsers = 0
+const _tasaChangeSubscribers = new Set()
+
+function acquireTasaChannel() {
+  _tasaChannelUsers++
+  if (!_tasaChannel) {
+    _tasaChannel = supabase
+      .channel('tasa-sync')
+      .on('broadcast', { event: 'tasa_change' }, ({ payload }) => {
+        _tasaChangeSubscribers.forEach(cb => cb(payload))
+      })
+      .subscribe()
+  }
+  return _tasaChannel
+}
+
+function releaseTasaChannel() {
+  _tasaChannelUsers = Math.max(0, _tasaChannelUsers - 1)
+  if (_tasaChannelUsers === 0 && _tasaChannel) {
+    supabase.removeChannel(_tasaChannel)
+    _tasaChannel = null
+  }
+}
+
 // Modos válidos: 'bcv' | 'usdt' | 'manual'
 const MODOS_VALIDOS = ['bcv', 'usdt', 'manual']
 
@@ -452,31 +482,31 @@ export function useTasaCambio() {
   }, [guardarTasaEnBD])
 
   // Escuchar broadcast de otros dispositivos (sync instantáneo)
+  // Canal singleton compartido — ver acquireTasaChannel() arriba
   useEffect(() => {
-    const channel = supabase
-      .channel('tasa-sync')
-      .on('broadcast', { event: 'tasa_change' }, ({ payload }) => {
-        if (!payload) return
-        // Ignorar si el broadcast viene de esta misma pestaña
-        if (payload.deviceId === deviceIdRef.current) return
-        if (payload.modoTasa && MODOS_VALIDOS.includes(payload.modoTasa)) {
-          setModoTasa(payload.modoTasa)
-          // Persistir en localStorage para que sobreviva recargas
-          if (STORAGEKEYMODE) localStorage.setItem(STORAGEKEYMODE, payload.modoTasa)
-        }
-        if (payload.tasaManual !== null && payload.tasaManual !== undefined) {
-          setTasaManual(String(payload.tasaManual))
-          // Persistir en localStorage
-          if (STORAGEKEYMANUAL) localStorage.setItem(STORAGEKEYMANUAL, String(payload.tasaManual))
-        }
-      })
-      .subscribe()
+    const onTasaChange = (payload) => {
+      if (!payload) return
+      // Ignorar si el broadcast viene de esta misma pestaña
+      if (payload.deviceId === deviceIdRef.current) return
+      if (payload.modoTasa && MODOS_VALIDOS.includes(payload.modoTasa)) {
+        setModoTasa(payload.modoTasa)
+        // Persistir en localStorage para que sobreviva recargas
+        if (STORAGEKEYMODE) localStorage.setItem(STORAGEKEYMODE, payload.modoTasa)
+      }
+      if (payload.tasaManual !== null && payload.tasaManual !== undefined) {
+        setTasaManual(String(payload.tasaManual))
+        // Persistir en localStorage
+        if (STORAGEKEYMANUAL) localStorage.setItem(STORAGEKEYMANUAL, String(payload.tasaManual))
+      }
+    }
 
-    channelRef.current = channel
+    _tasaChangeSubscribers.add(onTasaChange)
+    channelRef.current = acquireTasaChannel()
 
     return () => {
+      _tasaChangeSubscribers.delete(onTasaChange)
       channelRef.current = null
-      supabase.removeChannel(channel)
+      releaseTasaChannel()
     }
   }, [])
 

@@ -18,11 +18,12 @@ export function useDashboardMetrics() {
 
       if (rol === 'vendedor' || rol === 'vendedor_sin_comision') {
         // Despachos pendientes de aprobación (propios)
-        const { count } = await supabase
+        const { count, error } = await supabase
           .from('notas_despacho')
           .select('id', { count: 'exact', head: true })
           .eq('estado', 'pendiente')
           .eq('vendedor_id', perfil.id)
+        if (error) throw error
         result.despachosPendientes = count ?? 0
       }
 
@@ -87,6 +88,14 @@ export function useDashboardMetrics() {
             return { data: json?.data ?? [] }
           })(),
         ])
+
+        // Métricas financieras: un error debe verse, no renderizar ceros
+        // (comisionesSemana viene del Worker con fallback [] intencional)
+        if (pendientes.error) throw pendientes.error
+        if (ventasHoy.error) throw ventasHoy.error
+        if (ventasSemana.error) throw ventasSemana.error
+        if (stockBajo.error) throw stockBajo.error
+        if (cotizacionesImportantes.error) throw cotizacionesImportantes.error
 
         result.despachosPendientes = pendientes.count ?? 0
         result.ventasDia = (ventasHoy.data ?? []).reduce((s, d) => s + Number(d.total_usd || 0), 0)
@@ -171,6 +180,10 @@ export function useDashboardMetrics() {
             .limit(5),
         ])
 
+        if (despachados.error) throw despachados.error
+        if (entregasHoy.error) throw entregasHoy.error
+        if (proximas.error) throw proximas.error
+
         result.despachosDespachados = despachados.count ?? 0
         result.entregasHoy = entregasHoy.count ?? 0
 
@@ -195,10 +208,11 @@ export function useDashboardMetrics() {
 
       if (rol === 'supervisor' && rol !== 'jefe' && rol !== 'desarrollador') {
         // Despachos pendientes (todos)
-        const { count } = await supabase
+        const { count, error } = await supabase
           .from('notas_despacho')
           .select('id', { count: 'exact', head: true })
           .eq('estado', 'pendiente')
+        if (error) throw error
         result.despachosPendientes = count ?? 0
       }
 

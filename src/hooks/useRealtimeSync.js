@@ -127,11 +127,12 @@ export function useRealtimeSync() {
         .channel(`cuenta-${cuentaId}`, { config: { broadcast: { self: false } } })
         .on('broadcast', { event: REALTIME_EV }, (msg) => {
           const entidades = msg?.payload?.entidades || []
-          // Invalidación inmediata, sin debounce → refresco casi instantáneo
+          // Debounce corto (400ms): coalesce ráfagas de ediciones en lote
+          // sin sacrificar la sensación de sync instantáneo
           for (const entidad of entidades) {
             const keys = ENTIDAD_KEYS[entidad]
             if (!keys) continue
-            for (const k of keys) qc.invalidateQueries({ queryKey: k, refetchType: 'active' })
+            debouncedInvalidate(`bus-${entidad}`, keys, 'active', 400)
           }
         })
         .subscribe((status) => {
@@ -150,8 +151,16 @@ export function useRealtimeSync() {
     createBusChannel()
 
     // Refetch al volver de fondo (cubre caso de móvil en background)
+    // Solo si estuvo >3 min oculta — el canal realtime ya cubre ausencias cortas,
+    // y sin este umbral cada cambio de pestaña recargaba inventario+despachos completos
+    let hiddenAt = 0
     function handleVisibilityChange() {
+      if (document.visibilityState === 'hidden') {
+        hiddenAt = Date.now()
+        return
+      }
       if (document.visibilityState === 'visible') {
+        if (hiddenAt && Date.now() - hiddenAt < 3 * 60 * 1000) return
         qc.invalidateQueries({ queryKey: INVENTARIO_KEY, refetchType: 'active' })
         qc.invalidateQueries({ queryKey: DESPACHOS_KEY, refetchType: 'active' })
       }

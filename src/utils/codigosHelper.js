@@ -386,6 +386,8 @@ export function sugerirEstructuraDesdeNombre(nombre) {
 }
 
 // Consulta a Supabase los códigos que empiezan con el prefijo y calcula el siguiente correlativo libre
+// Retorna null si la consulta falla — el caller DEBE avisar al usuario:
+// generar un correlativo sin ver los códigos existentes produciría duplicados
 export async function calcularSiguienteCodigo(supabase, linea, material, forma) {
   if (!linea || !material || !forma) return '';
   const prefix = `${linea}${material}${forma}`;
@@ -416,6 +418,6 @@ export async function calcularSiguienteCodigo(supabase, linea, material, forma) 
     return `${prefix}${nextCorr}`;
   } catch (err) {
     console.error('Error calculando siguiente código:', err);
-    return '';
+    return null;
   }
 }

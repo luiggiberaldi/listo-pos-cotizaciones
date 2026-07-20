@@ -8,6 +8,7 @@ import supabase from '../../services/supabase/client'
 import CustomSelect from '../ui/CustomSelect'
 import useAuthStore from '../../store/useAuthStore'
 import { LINEAS, MATERIALES, FORMAS, RESTRICCIONES, obtenerCategoriaDesdeEstructura, calcularSiguienteCodigo, sugerirEstructuraDesdeNombre } from '../../utils/codigosHelper'
+import { showToast } from '../ui/Toast'
 
 function Campo({ label, icono: Icono, error, children }) {
   return (
@@ -277,6 +278,11 @@ export default function ProductoForm({ producto = null, isClone = false, onSucce
     async function updateCode() {
       setGenerando(true)
       const code = await calcularSiguienteCodigo(supabase, genLinea, genMaterial, genForma)
+      if (active && code === null) {
+        // La consulta falló — sin ver los códigos existentes, autogenerar
+        // produciría un correlativo duplicado. Avisar y dejar entrada manual.
+        showToast('No se pudo calcular el código automático. Verifica tu conexión o ingrésalo manualmente.', 'error')
+      }
       if (active && code) {
         if (esEdicion && producto?.codigo && producto.codigo.startsWith(prefijoDeseado)) {
           setCampos(p => ({ ...p, codigo: producto.codigo }))

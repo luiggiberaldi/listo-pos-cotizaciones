@@ -1,6 +1,6 @@
 // api/handlers/admin.js
 import { json, jsonError, corsHeaders, isValidUuid, isRateLimited } from '../lib/utils.js'
-import { verifyAuth, verifySupervisor, verifyPrivileged, supaServiceHeaders, SUPER_ADMIN_UUID, validateOperator } from '../lib/auth.js'
+import { verifyAuth, verifySupervisor, verifyPrivileged, supaServiceHeaders, SUPER_ADMIN_UUID, validateOperator, invalidateOperatorCache } from '../lib/auth.js'
 import { hashPinPBKDF2, verifyPinPBKDF2, generateSalt } from '../lib/crypto.js'
 import { registrarAuditoria, logToSystem } from '../lib/audit.js'
 
@@ -153,6 +153,8 @@ export async function handleAdmin(request, env, url) {
         console.error('[WORKER] Error actualizando usuario:', dbErr);
         return jsonError(`Error al actualizar usuario: ${dbErr}`, 500, request);
       }
+      // Invalidar caché de auth — el rol/activo pudo cambiar
+      invalidateOperatorCache(userId);
     }
 
     // Auditoría
@@ -187,6 +189,8 @@ export async function handleAdmin(request, env, url) {
     );
 
     if (!dbRes.ok) return jsonError('Error al eliminar usuario', 500, request);
+    // Invalidar caché de auth — el operador ya no existe
+    invalidateOperatorCache(userId);
 
     // Auditoría
     try {
