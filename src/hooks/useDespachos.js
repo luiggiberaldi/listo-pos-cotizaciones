@@ -161,7 +161,11 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false, busqu
         clienteIds.length
           ? fetch(apiUrl('/api/clientes/lookup'), {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${session?.access_token}`,
+                'X-Operator-Id': perfil?.id || '',
+              },
               body: JSON.stringify({ ids: clienteIds }),
             }).then(r => r.ok ? r.json() : []).catch(() => [])
           : Promise.resolve([]),

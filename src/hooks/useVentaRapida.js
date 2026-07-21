@@ -74,7 +74,11 @@ export function useVentaRapida() {
           const session = (await supabase.auth.getSession()).data.session
           const cRes = await fetch(apiUrl('/api/clientes/lookup'), {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${session?.access_token}`,
+              'X-Operator-Id': perfil?.id || '',
+            },
             body: JSON.stringify({ ids: [clienteId] }),
           })
           if (cRes.ok) {

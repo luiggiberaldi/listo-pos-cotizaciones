@@ -97,7 +97,11 @@ export function useRecordatoriosCotizaciones() {
                 const { apiUrl } = await import('../services/apiBase')
                 const res = await fetch(apiUrl('/api/clientes/lookup'), {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${session.access_token}`,
+                    'X-Operator-Id': useAuthStore.getState().perfil?.id || '',
+                  },
                   body: JSON.stringify({ ids: clienteIds }),
                 })
                 if (res.ok) {

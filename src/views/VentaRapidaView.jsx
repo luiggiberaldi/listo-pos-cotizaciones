@@ -104,7 +104,11 @@ function ModalVentaExitosa({ data, onClose, config }) {
       supabase.from('notas_despacho_items').select('codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, total_linea_usd, orden').eq('despacho_id', despachoId).order('orden'),
       fetch(apiUrl('/api/clientes/lookup'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`,
+          'X-Operator-Id': useAuthStore.getState().perfil?.id || '',
+        },
         body: JSON.stringify({ ids: [data.clienteId].filter(Boolean) }),
       }).then(r => r.ok ? r.json() : []),
       supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', data.vendedorId).single(),

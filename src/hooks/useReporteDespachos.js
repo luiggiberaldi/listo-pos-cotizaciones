@@ -47,7 +47,11 @@ export function useReporteDespachos({ from, to }) {
         try {
           const res = await fetch(apiUrl('/api/clientes/lookup'), {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${session?.access_token}`,
+              'X-Operator-Id': perfil?.id || '',
+            },
             body: JSON.stringify({ ids: clienteIds }),
           })
           if (res.ok) {

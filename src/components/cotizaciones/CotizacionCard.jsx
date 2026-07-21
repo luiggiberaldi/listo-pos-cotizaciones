@@ -22,7 +22,11 @@ async function fetchClienteViaAPI(clienteId) {
     const session = (await supabase.auth.getSession()).data.session
     const res = await fetch(apiUrl('/api/clientes/lookup'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session?.access_token}`,
+        'X-Operator-Id': useAuthStore.getState().perfil?.id || '',
+      },
       body: JSON.stringify({ ids: [clienteId] }),
     })
     if (!res.ok) return null
