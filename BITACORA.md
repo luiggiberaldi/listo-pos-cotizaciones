@@ -1968,6 +1968,74 @@ Aplicar la Fase 2 del plan de fixeo: paralelizar las cascadas de peticiones secu
 
 ---
 
+## SESIÓN 20/07/2026 — Fase 4 de Fixes: Escalabilidad de Datos
+
+### Objetivo
+Fase 4 (final) del plan de fixeo: eliminar los muros de datos silenciosos (1000 productos, 200 cotizaciones, 1000 movimientos de kardex) y el patrón N+1 de las tarjetas de despacho.
+
+### Cambios realizados
+
+#### 1. Paginación real del catálogo (`src/hooks/useInventario.js`)
+- Cuando un call-site pide el catálogo completo (`pageSize >= 1000`, 9 lugares en la app), el `queryFn` ahora **pagina en chunks de 1000 en paralelo** hasta el total real, con tope de seguridad de 5000. Aplica tanto a la ruta privilegiada (tabla directa) como a la RPC de vendedor.
+- El resultado expone `truncado: true` si se alcanzó el tope.
+- Exportado `CATEGORY_GROUPS` para reutilizar la lógica de grupos en las vistas.
+- Con esto, los productos #1001+ ahora aparecen en búsqueda, cotizador, despachos y modales sin cambiar ningún call-site.
+
+#### 2. Query única en InventarioView (`src/views/InventarioView.jsx`)
+- Eliminada la segunda instancia de `useInventario`: ahora hay UNA query del catálogo completo y el filtro de categoría (incluyendo grupos por prefijo) se aplica en memoria — antes, con una categoría activa, se descargaban ~2000 filas duplicadas en cada refetch.
+- Banner ámbar cuando el catálogo supera el tope de 5000 ("mostrando X de Y productos").
+
+#### 3. Kardex paginado (`src/hooks/useMovimientosInventario.js` + `KardexModal.jsx`)
+- `useKardex` ahora acepta `{ limite }` (default 200), usa **columnas explícitas** (antes `select('*')` sin límite → corte silencioso en 1000) y retorna `{ movimientos, total, hayMas }`.
+- `KardexModal` muestra botón "Cargar más movimientos (X de Y)" que incrementa el límite en 200.
+
+#### 4. Búsqueda de cotizaciones en el histórico (`src/hooks/useCotizaciones.js` + `CotizacionesView.jsx`)
+- Nuevo hook `useBuscarCotizaciones(busqueda)`: busca en TODA la tabla por número (`COT-00123`, `123`) y por cliente (nombre/RIF/código vía Worker), respetando RLS de vendedor, y enriquece con clientes/vendedores.
+- La vista lo activa **solo cuando el filtro local no encuentra nada** (con debounce de 400ms): spinner "Buscando en el histórico completo…", subtítulo "(del histórico)" y empty state diferenciado "Sin resultados en todo el histórico".
+- Antes: buscar una cotización fuera de las 200 recientes daba "sin resultados" sin explicación.
+
+#### 5. N+1 eliminado en tarjetas de despacho (`src/hooks/useDespachos.js` + `DespachosView.jsx` + `DespachoCard.jsx`)
+- Nuevo hook `useStockCheckDespachos(despachos)`: 2 tandas de queries en lote (items de todos los despachos visibles + stock de todos los productos referenciados) en vez de 2 queries POR tarjeta (12 tarjetas = 24 queries → 2).
+- `DespachosView` lo llama con la página visible y pasa `stockCheckData`/`stockCheckPending` a cada tarjeta.
+- `DespachoCard` usa los datos del lote; conserva fallback a queries propias si se usa fuera de la vista. `staleTime` 2min con caché por combinación de IDs.
+
+#### 6. Topes de seguridad en reportes
+- `useReportePipeline.js`: `.limit(5000)` en cotizaciones del rango.
+- `useReporteVendedores.js`: `.limit(5000)` en las 2 queries de cotizaciones del período.
+- `useReporteInventario.js`: `.limit(5000)` en productos activos y movimientos de 90 días.
+- Sin el límite explícito, Supabase cortaba en 1000 sin avisar (datos incorrectos en silencio).
+
+### Verificación
+- `npm run build` exitoso (build completo).
+- ESLint: 0 errores nuevos (corregido un escape innecesario en regex propia; el resto de errores reportados son preexistentes).
+- Sin commit ni push a git, respetando la política de resguardo del usuario.
+
+### Estado del plan de fixeo
+- ✅ Fase 1 (tormentas de refetch + índices) — commit `9bf8f6f`
+- ✅ Fase 2 (cascadas paralelizadas + caché auth Worker) — commit `9bf8f6f`
+- ✅ Fase 3 (errores visibles) — commit `9bf8f6f`
+- ✅ Fix urgente canales realtime (ChannelRateLimitReached) — commit `9bf8f6f`
+- ✅ Fase 4 (escalabilidad) — esta sesión, pendiente de commit
+- ⚠️ Recordatorios de despliegue: aplicar `202_indices_carga.sql` en Supabase + `wrangler deploy` del Worker
+
+---
+
+## SESIÓN 21/07/2026 — Diagnóstico: error de enum log_origen en cron
+
+### Síntoma
+Logs de Postgres en Supabase con error 22P02 `invalid input value for enum log_origen: "worker-cron"` cada día a las 03:00 UTC.
+
+### Diagnóstico
+- El cron del Worker (`wrangler.toml: crons = ["0 3 * * *"]`) ejecuta `runCleanupCotizaciones` y `runPurgeTrackingImages`, que llaman `logToSystem` con `origen: 'worker-cron'` (5 lugares en `api/handlers/cotizaciones.js` y `seguimiento.js`).
+- El enum `log_origen` (migración 056) solo acepta `'frontend' | 'worker' | 'supabase'`.
+- El código ACTUAL del repo ya no inserta en `system_logs` (commit f16adbf lo redujo a console.log), pero el **Worker desplegado en producción es una versión anterior** que sí inserta → el insert del log falla en cada corrida del cron. Los trabajos de limpieza en sí no se ven afectados; solo falla el registro del log.
+
+### Solución
+- Creada migración `203_log_origen_worker_cron.sql`: `ALTER TYPE log_origen ADD VALUE IF NOT EXISTS 'worker-cron'` (cinturón de seguridad, correr fuera de transacción).
+- La solución definitiva es desplegar el Worker actualizado (`wrangler deploy`), que ya estaba pendiente por el caché de auth de la Fase 2.
+
+---
+
 *Mantener este archivo actualizado al inicio y fin de cada sesión de trabajo.*
 
 
