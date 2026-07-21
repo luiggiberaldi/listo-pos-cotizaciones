@@ -280,7 +280,9 @@ export function useResumenCxC(rango) {
       }
 
       const todosClientes = [...clientes, ...clientesExtra]
-      const todosCargosActivos = Object.values(cargosPendientesPorCliente).flat()
+      const todosCargosActivos = Object.values(cargosPendientesPorCliente)
+        .flat()
+        .filter(c => Number(c.saldo_usd || 0) > 0.005)
 
       // Aging por rangos
       const now = new Date()
