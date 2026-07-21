@@ -207,6 +207,66 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false, busqu
   })
 }
 
+// ─── Chequeo de stock/ítems por lote para las tarjetas ──────────────────────
+// Antes cada DespachoCard pendiente/despachada hacía 2 queries propias al
+// montar (N+1: 50 tarjetas = 100 queries). Ahora la vista hace 2 tandas
+// para TODOS los despachos visibles y reparte los datos por props.
+export function useStockCheckDespachos(despachos = [], { enabled = true } = {}) {
+  const ids = despachos
+    .filter(d => ['pendiente', 'despachada'].includes(d.estado))
+    .map(d => d.id)
+  const idsKey = [...ids].sort().join(',')
+
+  return useQuery({
+    queryKey: [...DESPACHOS_KEY, 'stock-check', idsKey],
+    queryFn: async () => {
+      if (!ids.length) return { itemsPorDespacho: {}, prodsMap: {} }
+
+      // 1. Items de todos los despachos visibles (lotes de 100 en paralelo)
+      const batches = []
+      for (let i = 0; i < ids.length; i += 100) batches.push(ids.slice(i, i + 100))
+      const results = await Promise.all(batches.map(batch =>
+        supabase
+          .from('notas_despacho_items')
+          .select('despacho_id, id, producto_id, codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, total_linea_usd, orden, es_prestamo, productos(categoria)')
+          .in('despacho_id', batch)
+          .order('orden')
+      ))
+      const items = []
+      for (const r of results) {
+        if (r.error) throw r.error
+        items.push(...(r.data ?? []))
+      }
+      const itemsPorDespacho = {}
+      for (const it of items) {
+        const mapped = { ...it, categoria: it.productos?.categoria || '' }
+        if (!itemsPorDespacho[it.despacho_id]) itemsPorDespacho[it.despacho_id] = []
+        itemsPorDespacho[it.despacho_id].push(mapped)
+      }
+
+      // 2. Stock actual de todos los productos referenciados
+      const pids = [...new Set(items.map(it => it.producto_id).filter(Boolean))]
+      const prodsMap = {}
+      if (pids.length) {
+        const pBatches = []
+        for (let i = 0; i < pids.length; i += 200) pBatches.push(pids.slice(i, i + 200))
+        const pResults = await Promise.all(pBatches.map(batch =>
+          supabase.from('productos').select('id, stock_actual, categoria').in('id', batch)
+        ))
+        for (const r of pResults) {
+          if (r.error) throw r.error
+          for (const p of (r.data ?? [])) prodsMap[p.id] = p
+        }
+      }
+
+      return { itemsPorDespacho, prodsMap }
+    },
+    enabled: enabled && ids.length > 0,
+    staleTime: 1000 * 60 * 2,
+    gcTime: 1000 * 60 * 10,
+  })
+}
+
 // ─── Crear nota de despacho (via Worker API) ───────────────────────────────
 export function useCrearDespacho() {
   const qc = useQueryClient()

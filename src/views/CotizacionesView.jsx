@@ -7,7 +7,7 @@ import { FileText, Plus, RefreshCw, AlertTriangle, PackageCheck, Loader2, X, Ale
 import useAuthStore from '../store/useAuthStore'
 import supabase from '../services/supabase/client'
 import { useTasaCambio } from '../hooks/useTasaCambio'
-import { useCotizaciones, useAnularCotizacion, useActualizarEstado, useReabrirCotizacion, useReciclarCotizacion } from '../hooks/useCotizaciones'
+import { useCotizaciones, useBuscarCotizaciones, useAnularCotizacion, useActualizarEstado, useReabrirCotizacion, useReciclarCotizacion } from '../hooks/useCotizaciones'
 import { useCrearDespacho, useActualizarEstadoDespacho } from '../hooks/useDespachos'
 import { useCotizacion } from '../hooks/useCotizaciones'
 import { useClientes } from '../hooks/useClientes'
@@ -1058,12 +1058,30 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
     return filtered
   }, [cotizaciones, vendedorFiltro, esAdmin, estadoFiltro, busquedaGlobal])
 
+  // ── Búsqueda en el histórico (servidor) ──────────────────────────────────
+  // La lista solo trae las 200 más recientes. Si el filtro local no encuentra
+  // nada, buscamos en TODA la tabla por número o cliente (con debounce).
+  const [busquedaHistorico, setBusquedaHistorico] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => setBusquedaHistorico(busquedaGlobal), 400)
+    return () => clearTimeout(t)
+  }, [busquedaGlobal])
+
+  const localVacio = !!busquedaGlobal.trim() && cotizacionesFiltradas.length === 0
+  const { data: resultadosHistorico = [], isFetching: buscandoHistorico } = useBuscarCotizaciones(
+    busquedaHistorico,
+    { enabled: localVacio && !isLoading && busquedaHistorico === busquedaGlobal }
+  )
+
+  // Si lo local no encontró nada, mostrar lo que trajo el servidor
+  const listaMostrada = localVacio ? resultadosHistorico : cotizacionesFiltradas
+
   const ITEMS_POR_PAGINA = 12
-  const totalPaginas = Math.max(1, Math.ceil(cotizacionesFiltradas.length / ITEMS_POR_PAGINA))
+  const totalPaginas = Math.max(1, Math.ceil(listaMostrada.length / ITEMS_POR_PAGINA))
   const cotizacionesPaginadas = useMemo(() => {
     const inicio = (pagina - 1) * ITEMS_POR_PAGINA
-    return cotizacionesFiltradas.slice(inicio, inicio + ITEMS_POR_PAGINA)
-  }, [cotizacionesFiltradas, pagina])
+    return listaMostrada.slice(inicio, inicio + ITEMS_POR_PAGINA)
+  }, [listaMostrada, pagina])
 
   // Reset página al cambiar filtro
   useEffect(() => { setPagina(1) }, [estadoFiltro, vendedorFiltro, verTodos])
@@ -1162,7 +1180,7 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
       <PageHeader
         icon={esAdmin ? PackageCheck : FileText}
         title={esAdmin ? 'Despachos' : 'Cotizaciones'}
-        subtitle={isLoading ? 'Cargando...' : `${cotizacionesFiltradas.length} ${esAdmin ? 'despacho' : 'cotización'}${cotizacionesFiltradas.length !== 1 ? (esAdmin ? 's' : 'es') : ''}`}
+        subtitle={isLoading ? 'Cargando...' : `${listaMostrada.length} ${esAdmin ? 'despacho' : 'cotización'}${listaMostrada.length !== 1 ? (esAdmin ? 's' : 'es') : ''}${localVacio && resultadosHistorico.length > 0 ? ' (del histórico)' : ''}`}
         action={
           !esAdmin && (
           <div className="flex items-center gap-2">
@@ -1264,18 +1282,23 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
       {/* Contenido */}
       {isLoading ? (
         <SkeletonCotizaciones />
-      ) : isError && cotizacionesFiltradas.length === 0 ? (
+      ) : isError && listaMostrada.length === 0 ? (
         <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center text-red-700">
           <p className="font-semibold">Error al cargar cotizaciones</p>
           <button onClick={() => refetch()} className="mt-3 text-sm underline">Intentar de nuevo</button>
         </div>
-      ) : cotizacionesFiltradas.length === 0 ? (
+      ) : buscandoHistorico && listaMostrada.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-14 gap-3 text-slate-400">
+          <div className="w-6 h-6 border-[3px] border-sky-300 border-t-sky-500 rounded-full animate-spin" />
+          <p className="text-sm">Buscando en el histórico completo…</p>
+        </div>
+      ) : listaMostrada.length === 0 ? (
         <EmptyState
           icon={FileText}
-          title={estadoFiltro || vendedorFiltro ? 'Sin cotizaciones con estos filtros' : '¡Aún no tienes cotizaciones!'}
-          description={estadoFiltro || vendedorFiltro ? 'Intenta con otro filtro.' : 'Crea tu primera cotización para empezar a vender.'}
-          actionLabel={estadoFiltro || vendedorFiltro ? 'Limpiar filtros' : 'Nueva cotización'}
-          onAction={estadoFiltro || vendedorFiltro ? () => { setEstadoFiltro(''); setVendedorFiltro('') } : onNueva}
+          title={busquedaGlobal ? 'Sin resultados en todo el histórico' : estadoFiltro || vendedorFiltro ? 'Sin cotizaciones con estos filtros' : '¡Aún no tienes cotizaciones!'}
+          description={busquedaGlobal ? 'Se buscó por número y cliente en todas las cotizaciones.' : estadoFiltro || vendedorFiltro ? 'Intenta con otro filtro.' : 'Crea tu primera cotización para empezar a vender.'}
+          actionLabel={busquedaGlobal ? 'Limpiar búsqueda' : estadoFiltro || vendedorFiltro ? 'Limpiar filtros' : 'Nueva cotización'}
+          onAction={busquedaGlobal ? () => setBusquedaGlobal('') : estadoFiltro || vendedorFiltro ? () => { setEstadoFiltro(''); setVendedorFiltro('') } : onNueva}
         />
       ) : (
         <>

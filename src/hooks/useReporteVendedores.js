@@ -59,12 +59,14 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
           .from('cotizaciones')
           .select('id, vendedor_id, estado, total_usd, creado_en')
           .gte('creado_en', `${from}T00:00:00${tzStr}`)
-          .lte('creado_en', `${to}T23:59:59${tzStr}`),
+          .lte('creado_en', `${to}T23:59:59${tzStr}`)
+          .limit(5000), // tope de seguridad — sin él Supabase corta en 1000 sin avisar
         supabase
           .from('cotizaciones')
           .select('id, vendedor_id, estado')
           .gte('creado_en', `${prevFrom}T00:00:00${tzStr}`)
-          .lte('creado_en', `${prevTo}T23:59:59${tzStr}`),
+          .lte('creado_en', `${prevTo}T23:59:59${tzStr}`)
+          .limit(5000),
       ])
       // Reporte financiero: un error debe verse, nunca renderizar con ceros
       if (cotActualRes.error) throw cotActualRes.error

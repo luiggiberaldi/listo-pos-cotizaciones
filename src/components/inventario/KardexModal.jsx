@@ -155,7 +155,11 @@ function KardexRow({ m, idx, isExpanded, onToggle }) {
 }
 
 export default function KardexModal({ isOpen, onClose, producto }) {
-  const { data: movimientos = [], isLoading } = useKardex(producto?.id)
+  const [limite, setLimite] = useState(200)
+  const { data: kardexData, isLoading } = useKardex(producto?.id, { limite })
+  const movimientos = kardexData?.movimientos ?? []
+  const hayMas = !!kardexData?.hayMas
+  const totalMovimientos = kardexData?.total ?? 0
   const [fechaDesde, setFechaDesde] = useState('')
   const [fechaHasta, setFechaHasta] = useState('')
   const [expandedRows, setExpandedRows] = useState(new Set())
@@ -299,6 +303,14 @@ export default function KardexModal({ isOpen, onClose, producto }) {
                   onToggle={toggleRow}
                 />
               ))}
+              {hayMas && (
+                <button
+                  type="button"
+                  onClick={() => setLimite(l => l + 200)}
+                  className="w-full py-2.5 text-xs font-semibold text-sky-600 hover:bg-sky-50 transition-colors">
+                  Cargar más movimientos ({movimientos.length.toLocaleString('es-VE')} de {totalMovimientos.toLocaleString('es-VE')})
+                </button>
+              )}
             </div>
 
             {/* Resumen footer */}

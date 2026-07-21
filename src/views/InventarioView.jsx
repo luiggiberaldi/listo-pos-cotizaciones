@@ -9,7 +9,7 @@ import { smartSearchProductos } from '../utils/smartSearch'
 import useAuthStore from '../store/useAuthStore'
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import CustomSelect from '../components/ui/CustomSelect'
-import { useInventario, useCategorias, useDesactivarProducto, useBorrarProducto } from '../hooks/useInventario'
+import { useInventario, useCategorias, useDesactivarProducto, useBorrarProducto, CATEGORY_GROUPS as CATEGORY_GROUPS_VIEW } from '../hooks/useInventario'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import { useStockComprometido } from '../hooks/useStockComprometido'
 import ProductoCard  from '../components/inventario/ProductoCard'
@@ -110,11 +110,21 @@ export default function InventarioView() {
   const [modalCloneMode,   setModalCloneMode]   = useState(false)
   const [showImportador,   setShowImportador]   = useState(false)
 
-  // Data — todos los productos (sin filtro de búsqueda, filtro client-side con smartSearch)
-  const { data: inventarioData, isLoading, isError, refetch } = useInventario({ categoria, pageSize: 1000, mostrarInactivos: esPrivilegiado })
-  const productosRaw = inventarioData?.productos ?? inventarioData ?? []
-  const { data: todosData } = useInventario({ pageSize: 1000, mostrarInactivos: esPrivilegiado })
+  // Data — UNA sola query del catálogo completo; el filtro de categoría se
+  // aplica en memoria (antes había 2 instancias de useInventario y con una
+  // categoría activa ambas descargaban ~1000 filas cada una en cada refetch)
+  const { data: todosData, isLoading, isError, refetch } = useInventario({ pageSize: 1000, mostrarInactivos: esPrivilegiado })
   const todosProductos = todosData?.productos ?? todosData ?? []
+  const catalogoTruncado = !!todosData?.truncado
+  const esGrupoCategoria = categoria ? CATEGORY_GROUPS_VIEW.includes(categoria.toUpperCase().trim()) : false
+  const productosRaw = useMemo(() => {
+    if (!categoria) return todosProductos
+    if (esGrupoCategoria) {
+      const prefijo = categoria.toUpperCase().trim()
+      return todosProductos.filter(p => (p.categoria || '').toUpperCase().trim().startsWith(prefijo))
+    }
+    return todosProductos.filter(p => p.categoria === categoria)
+  }, [todosProductos, categoria, esGrupoCategoria])
   const { data: categorias = [] } = useCategorias({ mostrarInactivos: esPrivilegiado })
   const desactivar = useDesactivarProducto()
   const borrar = useBorrarProducto()
@@ -426,6 +436,13 @@ export default function InventarioView() {
             }`}>
             Movimientos
           </button>
+        </div>
+      )}
+
+      {/* ── Aviso de catálogo truncado (tope de seguridad de 5000) ─────────── */}
+      {catalogoTruncado && !isLoading && (
+        <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-2.5 text-sm text-amber-800">
+          El catálogo supera el límite de carga: se muestran {todosProductos.length.toLocaleString('es-VE')} de {(todosData?.totalCount ?? 0).toLocaleString('es-VE')} productos. Usa la búsqueda o filtros para encontrar el resto.
         </div>
       )}
 

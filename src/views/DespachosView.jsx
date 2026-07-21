@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import { Package, PackageCheck, RefreshCw, Filter, LayoutGrid, List, FileDown, ChevronDown, Search, X } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { useTasaCambio } from '../hooks/useTasaCambio'
-import { useDespachos, useActualizarEstadoDespacho, useReciclarDespacho } from '../hooks/useDespachos'
+import { useDespachos, useActualizarEstadoDespacho, useReciclarDespacho, useStockCheckDespachos } from '../hooks/useDespachos'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import { useVendedores } from '../hooks/useClientes'
 import { getDespachoAction } from '../utils/despachoActions'
@@ -304,6 +304,9 @@ export default function DespachosView() {
     return despachosFiltrados.slice(inicio, inicio + ITEMS_POR_PAGINA)
   }, [despachosFiltrados, pagina])
 
+  // Chequeo de stock/ítems en lote para las tarjetas visibles (antes: 2 queries POR tarjeta)
+  const { data: stockCheck } = useStockCheckDespachos(despachosPaginados, { enabled: esPrivilegiado })
+
   // Reset página al cambiar filtro
   useEffect(() => { setPagina(1) }, [estadoFiltro, vendedorFiltro, verTodos])
 
@@ -469,6 +472,8 @@ export default function DespachosView() {
               <DespachoCard
                 key={d.id}
                 despacho={d}
+                stockCheckData={esPrivilegiado ? stockCheck : undefined}
+                stockCheckPending={esPrivilegiado && !stockCheck}
                 onCambiarEstado={(id, estado, motivoDev, motivoAnu) => cambiarEstado.mutateAsync({ despachoId: id, nuevoEstado: estado, numeroCotizacion: d.cotizacion?.numero || d.numero, clienteNombre: d.cliente?.nombre, vendedorId: d.vendedor_id, motivoDevolucion: motivoDev, motivoAnulacion: motivoAnu, ...(estado === 'entregada' ? { tasaBcv: tasaEfectiva } : {}) })}
                 onAnular={setDespachoAAnular}
                 onReciclar={setDespachoAReciclar}

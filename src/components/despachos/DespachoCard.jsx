@@ -25,7 +25,7 @@ import SeguimientoFijadoModal from '../ui/SeguimientoFijadoModal'
 import { compartirPorWhatsApp, generarMensaje } from '../../utils/whatsapp'
 import { calcComisionEstimada } from '../../utils/comisionUtils'
 
-export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular, onReciclar, tasa = 0, config = {}, estadoCambiando = false }) {
+export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular, onReciclar, tasa = 0, config = {}, estadoCambiando = false, stockCheckData = undefined, stockCheckPending = false }) {
   const { data: configNegocio } = useConfigNegocio()
   const pctCabilla = Number(configNegocio?.comision_pct_cabilla ?? 0)
   const pctOtros   = Number(configNegocio?.comision_pct_otros   ?? 0)
@@ -210,13 +210,24 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     if (['pendiente', 'despachada'].includes(despacho.estado) && esPrivilegiado) {
       async function checkStock() {
         try {
-          const items = await fetchItemsDespacho()
+          // Datos por lote desde la vista (evita 2 queries por tarjeta);
+          // fallback a query propia si la tarjeta se usa fuera de DespachosView
+          if (stockCheckPending) return // el lote está en curso — este effect corre de nuevo al llegar
+          let items, prods
+          if (stockCheckData) {
+            items = stockCheckData.itemsPorDespacho[despacho.id] ?? []
+            prods = items.map(it => stockCheckData.prodsMap[it.producto_id]).filter(Boolean)
+          } else {
+            items = await fetchItemsDespacho()
+            const ids = items.map(it => it.producto_id).filter(Boolean)
+            const prodsRes = ids.length
+              ? await supabase.from('productos').select('id, stock_actual, categoria').in('id', ids)
+              : { data: [] }
+            prods = prodsRes.data ?? []
+          }
           setItemsDelDespacho(items || [])
-          const ids = items.map(it => it.producto_id).filter(Boolean)
-          if (ids.length === 0) return
-          
-          const { data: prods } = await supabase.from('productos').select('id, stock_actual, categoria').in('id', ids)
-          
+          if (items.length === 0) return
+
           // Mapear categorías y calcular faltantes
           const itemsConCat = items.map(it => {
             const esExterno = it.origen === 'externo' || !it.producto_id || String(it.producto_id).startsWith('manual-') || String(it.codigo_snap).startsWith('EXT')
@@ -261,7 +272,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       setComisionEst(null)
       setCorteUsdDesdeItems(0)
     }
-  }, [despacho.id, despacho.estado, pctCabilla, pctOtros, catCabilla])
+  }, [despacho.id, despacho.estado, pctCabilla, pctOtros, catCabilla, stockCheckData, stockCheckPending])
 
   useEffect(() => {
     if (accionPendiente && (accionPendiente.estado === 'despachada' || accionPendiente.estado === 'entregada')) {

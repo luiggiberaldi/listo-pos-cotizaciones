@@ -95,7 +95,8 @@ export function useReporteInventario() {
           .select('id, codigo, nombre, categoria, unidad, precio_usd, costo_usd, stock_actual, stock_minimo, activo')
           .eq('activo', true)
           .order('categoria')
-          .order('nombre'),
+          .order('nombre')
+          .limit(5000), // tope de seguridad — sin él Supabase corta en 1000 sin avisar
 
         supabase.rpc('obtener_stock_comprometido').catch(() => ({ data: null })),
 
@@ -103,7 +104,8 @@ export function useReporteInventario() {
           .from('inventario_movimientos')
           .select('producto_id, creado_en')
           .gte('creado_en', hace90.toISOString())
-          .order('creado_en', { ascending: false }),
+          .order('creado_en', { ascending: false })
+          .limit(5000),
       ])
 
       if (prodRes.error) throw prodRes.error

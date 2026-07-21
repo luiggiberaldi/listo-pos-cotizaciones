@@ -14,7 +14,7 @@ import { authFetch } from '../services/authFetch'
 export const INVENTARIO_KEY = ['inventario']
 
 // Prefijos que se consolidan en una sola categoría padre
-const CATEGORY_GROUPS = [
+export const CATEGORY_GROUPS = [
   'CONEXIONES',
   'ELECTRICIDAD',
   'LAMINAS',
@@ -68,50 +68,94 @@ export function useInventario({ busqueda = '', categoria = '', page = 0, pageSiz
         }
       }
 
+      // Modo "catálogo completo": los call-sites que pasan pageSize >= 1000
+      // esperan TODOS los productos (búsqueda/cotización client-side).
+      // Supabase corta cada respuesta en 1000 filas, así que paginamos hasta
+      // el total real, con tope de seguridad. `truncado` avisa si se alcanzó.
+      const esCatalogoCompleto = pageSize >= 1000 && page === 0
+      const CHUNK = 1000
+      const MAX_CATALOGO = 5000
+
       if (esPrivilegiado) {
         // Supervisor: tabla directa (con costo_usd)
-        let query = supabase
-          .from('productos')
-          .select('id, codigo, nombre, descripcion, categoria, unidad, precio_usd, precio_2, precio_3, precio1_porcentaje, precio2_porcentaje, precio3_porcentaje, costo_usd, stock_actual, stock_minimo, activo, imagen_url, creado_en, actualizado_en', { count: 'exact' })
+        const buildQuery = (desde, hasta) => {
+          let query = supabase
+            .from('productos')
+            .select('id, codigo, nombre, descripcion, categoria, unidad, precio_usd, precio_2, precio_3, precio1_porcentaje, precio2_porcentaje, precio3_porcentaje, costo_usd, stock_actual, stock_minimo, activo, imagen_url, creado_en, actualizado_en', { count: 'exact' })
 
-        if (!mostrarInactivos) {
-          query = query.eq('activo', true)
+          if (!mostrarInactivos) {
+            query = query.eq('activo', true)
+          }
+
+          if (busqueda.trim()) {
+            const filters = buildSmartFilter(busqueda)
+            if (filters) {
+              for (const orClause of filters) {
+                query = query.or(orClause)
+              }
+            }
+          }
+
+          if (categoria) {
+            if (isGroup) query = query.ilike('categoria', `${categoria}%`)
+            else query = query.eq('categoria', categoria)
+          }
+
+          return query.order('nombre', { ascending: true }).range(desde, hasta)
         }
 
-        if (busqueda.trim()) {
-          const filters = buildSmartFilter(busqueda)
-          if (filters) {
-            for (const orClause of filters) {
-              query = query.or(orClause)
-            }
+        const { data, error, count } = await buildQuery(page * pageSize, (page + 1) * pageSize - 1)
+        if (error) throw error
+        let productos = data ?? []
+        const totalCount = count ?? productos.length
+
+        // Traer las páginas restantes si el catálogo supera el primer chunk
+        if (esCatalogoCompleto && totalCount > productos.length) {
+          const objetivo = Math.min(totalCount, MAX_CATALOGO)
+          const extraRanges = []
+          for (let desde = productos.length; desde < objetivo; desde += CHUNK) {
+            extraRanges.push([desde, Math.min(desde + CHUNK, objetivo) - 1])
+          }
+          const extras = await Promise.all(extraRanges.map(([d, h]) => buildQuery(d, h)))
+          for (const r of extras) {
+            if (r.error) throw r.error
+            productos = productos.concat(r.data ?? [])
           }
         }
 
-        if (categoria) {
-          if (isGroup) query = query.ilike('categoria', `${categoria}%`)
-          else query = query.eq('categoria', categoria)
-        }
-
-        query = query.order('nombre', { ascending: true }).range(page * pageSize, (page + 1) * pageSize - 1)
-
-        const { data, error, count } = await query
-        if (error) throw error
-        return { productos: data ?? [], totalCount: count ?? (data?.length || 0) }
+        return { productos, totalCount, truncado: totalCount > productos.length }
       }
 
       // Vendedor: RPC segura
-      const { data, error } = await supabase.rpc('obtener_productos_vendedor', {
-        p_busqueda: busqueda.trim(),
-        p_categoria: categoria || '',
-        p_categoria_grupo: isGroup,
-        p_limit: pageSize,
-        p_offset: page * pageSize,
-      })
-      if (error) throw error
-      const rows = data ?? []
+      const fetchPagina = async (limit, offset) => {
+        const { data, error } = await supabase.rpc('obtener_productos_vendedor', {
+          p_busqueda: busqueda.trim(),
+          p_categoria: categoria || '',
+          p_categoria_grupo: isGroup,
+          p_limit: limit,
+          p_offset: offset,
+        })
+        if (error) throw error
+        return data ?? []
+      }
+
+      const rows = await fetchPagina(Math.min(pageSize, CHUNK), page * pageSize)
       const totalCount = rows.length > 0 ? Number(rows[0].total_count) : 0
-      const productos = rows.map(({ total_count, ...rest }) => rest)
-      return { productos, totalCount }
+      let productos = rows.map(({ total_count, ...rest }) => rest)
+
+      if (esCatalogoCompleto && totalCount > productos.length) {
+        const objetivo = Math.min(totalCount, MAX_CATALOGO)
+        const extraOffsets = []
+        for (let offset = productos.length; offset < objetivo; offset += CHUNK) {
+          extraOffsets.push(offset)
+        }
+        const extras = await Promise.all(extraOffsets.map(offset => fetchPagina(CHUNK, offset)))
+        for (const extraRows of extras) {
+          productos = productos.concat(extraRows.map(({ total_count, ...rest }) => rest))
+        }
+      }
+
+      return { productos, totalCount, truncado: totalCount > productos.length }
     },
     enabled: !!perfil,
     staleTime: 1000 * 60 * 3,     // 3min — el realtime invalida ante cambios reales

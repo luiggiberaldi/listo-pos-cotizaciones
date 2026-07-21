@@ -30,6 +30,7 @@ export function useReportePipeline({ from, to }) {
         .gte('creado_en', `${from}T00:00:00${tzStr}`)
         .lte('creado_en', `${to}T23:59:59${tzStr}`)
         .order('creado_en', { ascending: false })
+        .limit(5000) // tope de seguridad — sin él Supabase corta en 1000 sin avisar
 
       if (!esPrivilegiado) q = q.eq('vendedor_id', perfil.id)
 

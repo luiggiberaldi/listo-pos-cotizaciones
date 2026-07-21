@@ -115,6 +115,91 @@ export function useCotizaciones({ estado = '', clienteId = '', veTodos = false }
   })
 }
 
+// ─── Búsqueda en servidor (histórico completo) ───────────────────────────────
+// La lista principal solo trae las 200 más recientes; buscar una cotización
+// vieja daba "sin resultados" sin explicación. Este hook busca en TODA la
+// tabla por número o por cliente cuando el filtro local no encuentra nada.
+export function useBuscarCotizaciones(busqueda, { enabled = true } = {}) {
+  const perfil = useAuthStore(useCallback(s => s.perfil, []))
+  const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
+  const esDesarrollador = perfil?.rol === 'desarrollador'
+  const esAdmin = perfil?.rol === 'administracion'
+  const esPrivilegiado = esAdmin || esSupervisor || esDesarrollador
+
+  const q = (busqueda || '').trim()
+
+  return useQuery({
+    queryKey: [...COTIZACIONES_KEY, 'buscar-historico', q, esPrivilegiado, perfil?.id],
+    queryFn: async () => {
+      const selectCols = 'id, numero, version, cliente_id, vendedor_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, corte_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, notas_cliente, creado_en, actualizado_en, enviada_en, items_count:cotizacion_items(count), despacho:notas_despacho!notas_despacho_cotizacion_id_fkey(id, estado), seguimiento:seguimiento_operativo(id, prioridad, fijada)'
+      const session = (await supabase.auth.getSession()).data.session
+      const promises = []
+
+      // 1. Por número (COT-00123, 123, etc.)
+      const numberClean = q.replace(/^cot[.\-\s]*/i, '').replace(/^0+/, '')
+      if (numberClean && !isNaN(numberClean)) {
+        let byNum = supabase.from('cotizaciones').select(selectCols).eq('numero', parseInt(numberClean, 10)).limit(20)
+        if (!esPrivilegiado) byNum = byNum.eq('vendedor_id', perfil.id)
+        promises.push(byNum.then(r => r.data ?? []))
+      }
+
+      // 2. Por cliente (nombre/RIF/código via Worker)
+      if (session?.access_token && q.length >= 2) {
+        promises.push(
+          fetch(apiUrl(`/api/clientes?busqueda=${encodeURIComponent(q)}`), {
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          })
+            .then(r => r.ok ? r.json() : [])
+            .then(async clients => {
+              const ids = (clients || []).map(c => c.id).filter(Boolean)
+              if (!ids.length) return []
+              let byCliente = supabase.from('cotizaciones').select(selectCols)
+                .in('cliente_id', ids)
+                .order('actualizado_en', { ascending: false })
+                .limit(60)
+              if (!esPrivilegiado) byCliente = byCliente.eq('vendedor_id', perfil.id)
+              const r = await byCliente
+              return r.data ?? []
+            })
+            .catch(() => [])
+        )
+      }
+
+      const results = (await Promise.all(promises)).flat()
+      // Dedupe por id
+      const rows = [...new Map(results.map(r => [r.id, r])).values()]
+      if (!rows.length) return []
+
+      // Enriquecer con clientes + vendedores (misma vía que la lista)
+      const clienteIds = [...new Set(rows.map(r => r.cliente_id).filter(Boolean))]
+      const vendedorIds = [...new Set(rows.map(r => r.vendedor_id).filter(Boolean))]
+      const [clientesData, vendedoresRes] = await Promise.all([
+        clienteIds.length
+          ? fetch(apiUrl('/api/clientes/lookup'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+              body: JSON.stringify({ ids: clienteIds }),
+            }).then(r => r.ok ? r.json() : []).catch(() => [])
+          : Promise.resolve([]),
+        vendedorIds.length
+          ? supabase.from('usuarios').select('id, nombre, color, telefono, rol, markup_pct, es_externo').in('id', vendedorIds)
+          : Promise.resolve({ data: [] }),
+      ])
+      const vendedoresMap = Object.fromEntries((vendedoresRes.error ? [] : vendedoresRes.data ?? []).map(v => [v.id, v]))
+      const clientesMap = Object.fromEntries((clientesData ?? []).map(c => [c.id, c]))
+
+      return rows.map(r => ({
+        ...r,
+        cliente: clientesMap[r.cliente_id] ?? null,
+        vendedor: vendedoresMap[r.vendedor_id] ?? null,
+      }))
+    },
+    enabled: enabled && !!perfil && q.length >= 2,
+    staleTime: 1000 * 60,
+    gcTime: 1000 * 60 * 5,
+  })
+}
+
 // ─── Cotización individual con items ─────────────────────────────────────────
 export function useCotizacion(id) {
   const perfil = useAuthStore(useCallback(s => s.perfil, []))

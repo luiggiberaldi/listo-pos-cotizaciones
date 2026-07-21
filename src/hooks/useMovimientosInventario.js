@@ -45,20 +45,24 @@ export function useMovimientosInventario({
 }
 
 // ─── Kardex: movimientos de un producto específico ──────────────────────────
-export function useKardex(productoId) {
+// Paginado: sin límite Supabase cortaba en 1000 filas silenciosamente.
+// `limite` crece desde la vista con "cargar más"; `hayMas` indica si quedan.
+export function useKardex(productoId, { limite = 200 } = {}) {
   const { perfil } = useAuthStore()
   return useQuery({
-    queryKey: [...KARDEX_KEY, productoId],
+    queryKey: [...KARDEX_KEY, productoId, limite],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error, count } = await supabase
         .from('inventario_movimientos')
-        .select('*')
+        .select('id, numero, lote_id, producto_id, producto_nombre, tipo, cantidad, stock_anterior, stock_nuevo, motivo, motivo_tipo, usuario_nombre, usuario_color, creado_en', { count: 'exact' })
         .eq('producto_id', productoId)
         .order('creado_en', { ascending: false })
         .order('numero', { ascending: false })
+        .limit(limite)
 
       if (error) throw error
-      return data ?? []
+      const movimientos = data ?? []
+      return { movimientos, total: count ?? movimientos.length, hayMas: (count ?? 0) > movimientos.length }
     },
     enabled: !!productoId && ['supervisor', 'administracion', 'desarrollador', 'jefe'].includes(perfil?.rol),
     staleTime: 1000 * 60 * 2,
