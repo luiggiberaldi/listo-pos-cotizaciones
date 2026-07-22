@@ -181,7 +181,7 @@ export default function DespachosView() {
     if (estadoFiltro === 'hoy') {
       const today = new Date()
       lista = lista.filter(d => {
-        if (!d.creado_en) return false
+        if (!d.creado_en || d.estado === 'anulada') return false
         const dateObj = new Date(d.creado_en)
         return (
           dateObj.getDate() === today.getDate() &&
@@ -191,6 +191,8 @@ export default function DespachosView() {
       })
     } else if (estadoFiltro) {
       lista = lista.filter(d => d.estado === estadoFiltro)
+    } else {
+      lista = lista.filter(d => d.estado !== 'anulada')
     }
 
     if (busquedaGlobal) {
@@ -239,7 +241,7 @@ export default function DespachosView() {
     if (estadoFiltro === 'hoy') {
       const today = new Date()
       lista = lista.filter(d => {
-        if (!d.creado_en) return false
+        if (!d.creado_en || d.estado === 'anulada') return false
         const dateObj = new Date(d.creado_en)
         return (
           dateObj.getDate() === today.getDate() &&
@@ -249,6 +251,9 @@ export default function DespachosView() {
       })
     } else if (estadoFiltro) {
       lista = lista.filter(d => d.estado === estadoFiltro)
+    } else {
+      // Si el estadoFiltro es '' (Todos), excluir anulados por defecto
+      lista = lista.filter(d => d.estado !== 'anulada')
     }
 
     // Ordenar:
