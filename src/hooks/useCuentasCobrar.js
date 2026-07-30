@@ -394,6 +394,7 @@ export function useResumenCxC(rango) {
       if (!rango?.from && !rango?.to) {
         abonosQuery = abonosQuery.limit(50)
       }
+      const { data: abonosRaw } = await abonosQuery
 
       // Consultar saldo_a_favor global de clientes activos
       let querySaldoFavor = supabase
