@@ -395,7 +395,16 @@ export function useResumenCxC(rango) {
         abonosQuery = abonosQuery.limit(50)
       }
 
-      const { data: abonosRaw, error: abonosError } = await abonosQuery
+      // Consultar saldo_a_favor global de clientes activos
+      let querySaldoFavor = supabase
+        .from('clientes')
+        .select('saldo_a_favor')
+        .gt('saldo_a_favor', 0)
+        .eq('activo', true)
+      if (!esPrivilegiado) querySaldoFavor = querySaldoFavor.eq('vendedor_id', perfil.id)
+      const { data: clientesSaldoFavor } = await querySaldoFavor
+      const totalSaldoFavorClientes = (clientesSaldoFavor || []).reduce((sum, c) => sum + Number(c.saldo_a_favor || 0), 0)
+      const numClientesConSaldoFavor = (clientesSaldoFavor || []).length
 
       return {
         kpis: {
@@ -403,6 +412,8 @@ export function useResumenCxC(rango) {
           totalOtorgado,
           totalCobrado,
           promedioDeuda,
+          totalSaldoFavorClientes,
+          numClientesConSaldoFavor,
           numClientesConDeuda: clientesConDeudaFiltrados.length,
           diasMasAntiguo,
           numCargos: clientesConDeudaFiltrados.reduce((s, c) => s + (c.cargosActivos?.length || 0), 0),

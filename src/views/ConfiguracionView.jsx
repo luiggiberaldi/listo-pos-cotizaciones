@@ -959,8 +959,8 @@ export default function ConfiguracionView() {
             )}
           </div>
 
-          {/* ── Reinicio Operacional (supervisores+) ─────────────────────── */}
-          {esSupervisor && (
+          {/* ── Reinicio Operacional (desarrollador) ─────────────────────── */}
+          {esDesarrollador && (
           <div className="bg-white rounded-2xl border border-orange-200 p-5 space-y-4">
             <div className="flex items-center gap-3 mb-1">
               <div className="w-0.5 self-stretch rounded-full shrink-0 bg-orange-400" style={{ minHeight: '20px' }} />

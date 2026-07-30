@@ -138,8 +138,9 @@ function FormaPagoSection({ data = [], kpis, cxcData }) {
 
   const fpDonacion = data.find(fp => fp.formaPago === 'Donación')
   const totalDonacion = fpDonacion ? fpDonacion.totalUsd : 0
-  const totalDeducciones = totalCxc
-  const ventasSinCxc = total - totalDeducciones
+  const totalSaldoFavor = data.filter(fp => fp.formaPago === 'Saldo a favor').reduce((s, fp) => s + fp.totalUsd, 0)
+  const totalDeducciones = totalCxc + totalSaldoFavor
+  const recaudacionDineroFresco = Math.max(0, total - totalDeducciones)
   const COLORS = {
     'Efectivo $': '#10b981',
     'Efectivo Bs': '#22c55e',
@@ -152,6 +153,7 @@ function FormaPagoSection({ data = [], kpis, cxcData }) {
     'Préstamo': '#eab308',
     'Prestamo': '#eab308',
     'Cta por cobrar': '#ef4444',
+    'Saldo a favor': '#059669',
     'Sin especificar': '#94a3b8'
   }
 
@@ -248,6 +250,14 @@ function FormaPagoSection({ data = [], kpis, cxcData }) {
                 )}
               </span>
             </div>
+            {totalSaldoFavor > 0 && (
+              <div className="flex justify-between items-center text-[10px] sm:text-xs text-emerald-600 font-semibold border-t border-slate-200/40 pt-1">
+                <span>Consumo de Saldo a Favor (Pasivo preexistente)</span>
+                <span className="font-bold text-emerald-700">
+                  {fmtUsd(totalSaldoFavor)}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -278,15 +288,23 @@ function FormaPagoSection({ data = [], kpis, cxcData }) {
               <span>{fmtUsd(total)}</span>
             </div>
 
-            {totalCxc > 0 && (
+            {(totalCxc > 0 || totalSaldoFavor > 0) && (
               <div className="pt-1.5 border-t border-slate-200/60 mt-1.5 space-y-1.5">
-                <div className="flex justify-between items-center text-slate-500">
-                  <span>CxC y COD Pendientes</span>
-                  <span className="font-bold text-red-500">-{fmtUsd(totalCxc)}</span>
-                </div>
+                {totalCxc > 0 && (
+                  <div className="flex justify-between items-center text-slate-500">
+                    <span>CxC y COD Pendientes</span>
+                    <span className="font-bold text-red-500">-{fmtUsd(totalCxc)}</span>
+                  </div>
+                )}
+                {totalSaldoFavor > 0 && (
+                  <div className="flex justify-between items-center text-slate-500">
+                    <span>Ventas con Saldo a Favor (Pasivo consumido)</span>
+                    <span className="font-bold text-emerald-600">-{fmtUsd(totalSaldoFavor)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between items-center font-extrabold text-slate-800 bg-slate-200/40 p-1.5 rounded-lg text-[10.5px] sm:text-[11.5px]">
-                  <span>Ventas Líquidas (Recaudación Real)</span>
-                  <span className="font-black text-slate-900">{fmtUsd(ventasSinCxc)}</span>
+                  <span>Caja Real (Dinero Fresco Líquido Ingresado)</span>
+                  <span className="font-black text-slate-900">{fmtUsd(recaudacionDineroFresco)}</span>
                 </div>
               </div>
             )}
@@ -2680,13 +2698,19 @@ function TabCredito() {
         </div>
       )}
 
-      {/* KPIs — 4 tarjetas */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* KPIs — 5 tarjetas */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         <KpiCard
           icon={DollarSign} label="Total por cobrar (CxC)"
           value={fmtUsd(totalCxC)}
           sub={`${kpis.numClientesConDeuda} clientes con deuda`}
           gradient="linear-gradient(135deg, #991b1b, #b91c1c)" border="rgba(255,255,255,0.10)"
+        />
+        <KpiCard
+          icon={CheckCircle} label="Saldo a favor clientes"
+          value={fmtUsd(kpis.totalSaldoFavorClientes || 0)}
+          sub={`${kpis.numClientesConSaldoFavor || 0} clientes con saldo a favor`}
+          gradient="linear-gradient(135deg, #059669, #047857)" border="rgba(255,255,255,0.10)"
         />
         <KpiCard
           icon={Briefcase} label="Total por pagar (CxP)"
