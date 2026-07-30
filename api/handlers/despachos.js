@@ -1,46 +1,7 @@
-// api/handlers/despachos.js
 import { json, jsonError, corsHeaders, isValidUuid } from '../lib/utils.js'
 import { verifyAuth, validateOperator, getOperatorRole, verifySupervisor, verifyPrivileged } from '../lib/auth.js'
 import { registrarAuditoria } from '../lib/audit.js'
-
-async function recalcularSaldoPendienteCliente(clienteId, env, headers) {
-  try {
-    const cxcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?cliente_id=eq.${clienteId}&select=tipo,monto_usd,forma_pago_abono`, { headers });
-    if (!cxcRes.ok) return;
-    const cxcList = await cxcRes.json();
-    
-    let saldoReal = 0;
-    let saldoFavor = 0;
-    if (Array.isArray(cxcList)) {
-      cxcList.forEach(item => {
-        const monto = Number(item.monto_usd) || 0;
-        if (item.tipo === 'cargo') {
-          saldoReal += monto;
-        } else if (item.tipo === 'abono') {
-          saldoReal -= monto;
-          if (item.forma_pago_abono === 'Saldo a favor') {
-            saldoFavor -= monto;
-          }
-        } else if (item.tipo === 'credito') {
-          saldoFavor += monto;
-        }
-      });
-    }
-    
-    saldoReal = Math.max(0, Math.round(saldoReal * 10000) / 10000);
-    saldoFavor = Math.max(0, Math.round(saldoFavor * 10000) / 10000);
-    
-    await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteId}`, {
-      method: 'PATCH',
-      headers: { ...headers, Prefer: 'return=minimal' },
-      body: JSON.stringify({ saldo_pendiente: saldoReal, saldo_a_favor: saldoFavor }),
-    });
-    
-    console.log(`[RECALCULO-SALDO] Cliente ${clienteId} saldo sincronizado a pendiente=$${saldoReal}, a_favor=$${saldoFavor}`);
-  } catch (err) {
-    console.error(`[RECALCULO-SALDO] Error al recalcular saldo para cliente ${clienteId}:`, err?.message);
-  }
-}
+import { recalcularSaldoPendienteCliente } from '../lib/cxcUtils.js'
 
 async function obtenerVendedorComisionId(despacho, headers, env) {
   if (despacho.cliente_id) {

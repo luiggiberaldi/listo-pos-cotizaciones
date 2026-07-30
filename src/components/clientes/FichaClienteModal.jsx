@@ -1,8 +1,8 @@
 // src/components/clientes/FichaClienteModal.jsx
 // Modal ficha del cliente: historial de crédito + formulario de abono
 import { useState, useEffect } from 'react'
-import { X, CreditCard, ArrowUpCircle, ArrowDownCircle, AlertCircle, RefreshCw, DollarSign, Hash, Phone, FileText, ChevronRight, MessageSquare, Handshake, RotateCcw, ShoppingBag, ChevronDown, Briefcase } from 'lucide-react'
-import { useCuentasCobrar, useRegistrarAbono, useRevertirAbono, useRegistrarSaldoFavor, useRegistrarDevolucionCredito } from '../../hooks/useCuentasCobrar'
+import { X, CreditCard, ArrowUpCircle, ArrowDownCircle, AlertCircle, RefreshCw, DollarSign, Hash, Phone, FileText, ChevronRight, MessageSquare, Handshake, RotateCcw, ShoppingBag, ChevronDown, Briefcase, Repeat } from 'lucide-react'
+import { useCuentasCobrar, useRegistrarAbono, useRevertirAbono, useRegistrarSaldoFavor, useRegistrarDevolucionCredito, useCruzarSaldoFavor } from '../../hooks/useCuentasCobrar'
 import { useVentasCliente } from '../../hooks/useClientes'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import SeguimientoTimeline from '../ui/SeguimientoTimeline'
@@ -416,6 +416,104 @@ function FormDevolucionCredito({ clienteId, saldoFavor, onSuccess }) {
   )
 }
 
+function FormCruzarSaldoFavor({ clienteId, saldo, saldoFavor, onSuccess }) {
+  const maxCruzar = Math.max(0, Math.round(Math.min(saldo, saldoFavor) * 100) / 100)
+  const [monto, setMonto] = useState(maxCruzar > 0 ? maxCruzar.toFixed(2) : '')
+  const cruzar = useCruzarSaldoFavor()
+
+  const numMonto = parseFloat(monto) || 0
+  const sinMonto = numMonto <= 0
+  const excede = numMonto > maxCruzar + 0.001
+
+  const resultanteDeuda = Math.max(0, Math.round((saldo - numMonto) * 100) / 100)
+  const resultanteFavor = Math.max(0, Math.round((saldoFavor - numMonto) * 100) / 100)
+
+  function ponerTotal() {
+    setMonto(maxCruzar.toFixed(2))
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (sinMonto || excede || cruzar.isPending) return
+
+    await cruzar.mutateAsync({ clienteId, monto: numMonto })
+    onSuccess?.(numMonto)
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 space-y-3">
+      <h4 className="text-sm font-black text-indigo-900 flex items-center gap-2">
+        <Repeat size={15} className="text-indigo-600" />
+        Cruzar saldo a favor contra deuda
+      </h4>
+
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <div className="bg-white/90 p-2 rounded-lg border border-indigo-100">
+          <span className="text-slate-500 block text-[10px]">Deuda actual</span>
+          <strong className="text-rose-600 font-bold">{fmtUsd(saldo)}</strong>
+        </div>
+        <div className="bg-white/90 p-2 rounded-lg border border-indigo-100">
+          <span className="text-slate-500 block text-[10px]">Saldo a favor actual</span>
+          <strong className="text-emerald-600 font-bold">{fmtUsd(saldoFavor)}</strong>
+        </div>
+      </div>
+
+      <div className="bg-white border border-indigo-100 rounded-xl p-3 space-y-2">
+        <div>
+          <label className="block text-[10px] font-semibold text-slate-500 mb-1">Monto a cruzar (USD)</label>
+          <div className="flex gap-1">
+            <input
+              type="number"
+              step="0.01"
+              min="0.01"
+              max={maxCruzar}
+              value={monto}
+              onChange={e => setMonto(e.target.value)}
+              placeholder="0.00"
+              className="flex-1 px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-300"
+            />
+            {maxCruzar > 0 && (
+              <button
+                type="button"
+                onClick={ponerTotal}
+                className="px-3 py-2 rounded-lg bg-indigo-100 text-indigo-700 text-xs font-bold hover:bg-indigo-200 transition-colors whitespace-nowrap"
+              >
+                Máximo ({fmtUsd(maxCruzar)})
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="p-2.5 bg-indigo-50/50 rounded-lg text-[11px] space-y-1 border border-indigo-100/60">
+          <div className="flex justify-between text-slate-600">
+            <span>Deuda resultante estimada:</span>
+            <strong className="text-slate-800">{fmtUsd(resultanteDeuda)}</strong>
+          </div>
+          <div className="flex justify-between text-slate-600">
+            <span>Saldo a favor resultante estimado:</span>
+            <strong className="text-slate-800">{fmtUsd(resultanteFavor)}</strong>
+          </div>
+        </div>
+      </div>
+
+      {excede && (
+        <p className="text-xs text-red-600 font-semibold flex items-center gap-1">
+          <AlertCircle size={12} />
+          El monto supera el límite máximo cruzable ({fmtUsd(maxCruzar)}).
+        </p>
+      )}
+
+      <button
+        type="submit"
+        disabled={cruzar.isPending || sinMonto || excede}
+        className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-indigo-200 flex justify-center items-center gap-2"
+      >
+        {cruzar.isPending ? 'Procesando cruce...' : `Confirmar cruce de ${fmtUsd(numMonto)}`}
+      </button>
+    </form>
+  )
+}
+
 
 // ─── Historial de Ventas Aprobadas con Acordeón ──────────────────────────────
 function HistorialVentas({ clienteId }) {
@@ -548,6 +646,7 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
   const { data: config = {} } = useConfigNegocio()
   const puedeRegistrarAbono = ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)
   const puedeRevertirAbono = ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)
+  const puedeCruzarSaldo = ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)
   const { data: movimientos = [], isLoading, refetch } = useCuentasCobrar(isOpen ? cliente?.id : null)
 
   const [activeTab, setActiveTab] = useState('cuenta')
@@ -845,6 +944,19 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
                       Devolver Crédito
                     </button>
                   )}
+                  {puedeCruzarSaldo && saldo > 0 && saldoFavor > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setCxcAction('cruzar_favor')}
+                      className={`flex-1 py-1.5 text-[11px] font-bold rounded-lg transition-all ${
+                        cxcAction === 'cruzar_favor'
+                          ? 'bg-indigo-600 text-white shadow-sm font-black'
+                          : 'text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 font-black'
+                      }`}
+                    >
+                      Cruzar Saldo
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -875,6 +987,19 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
                   saldoFavor={saldoFavor}
                   onSuccess={(montoDevuelto) => {
                     setSaldoFavorLocal(prev => Math.max(0, (prev ?? saldoFavor) - montoDevuelto))
+                    refetch()
+                  }}
+                />
+              )}
+
+              {puedeCruzarSaldo && cxcAction === 'cruzar_favor' && saldo > 0 && saldoFavor > 0 && (
+                <FormCruzarSaldoFavor
+                  clienteId={cliente.id}
+                  saldo={saldo}
+                  saldoFavor={saldoFavor}
+                  onSuccess={(montoCruzado) => {
+                    setSaldoLocal(prev => Math.max(0, Math.round(((prev ?? saldo) - montoCruzado) * 100) / 100))
+                    setSaldoFavorLocal(prev => Math.max(0, Math.round(((prev ?? saldoFavor) - montoCruzado) * 100) / 100))
                     refetch()
                   }}
                 />
