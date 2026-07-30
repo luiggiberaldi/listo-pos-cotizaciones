@@ -75,6 +75,7 @@ export default function InventarioView() {
   const [textoBusqueda, setTextoBusqueda] = useState('')
   const [categoria,     setCategoria]     = useState('')
   const [stockBajo,     setStockBajo]     = useState(() => searchParams.get('filtro') === 'stock_bajo')
+  const [stockNegativo, setStockNegativo] = useState(false)
   const [soloDesactivados, setSoloDesactivados] = useState(false)
   const [vistaMode,     setVistaMode]     = useState(() => {
     const businessId = useAuthStore.getState().perfil?.cuenta_id
@@ -89,6 +90,8 @@ export default function InventarioView() {
       setStockBajo(true)
     }
   }, [searchParams])
+
+
 
   // Modales
   const [modalFormOpen,    setModalFormOpen]    = useState(false)
@@ -141,23 +144,27 @@ export default function InventarioView() {
     return smartSearchProductos(list, busqueda)
   }, [productosRaw, busqueda, soloDesactivados])
 
-  // Filtrar por stock bajo (client-side) — stock bajo primero, stock 0 al final
+  // Filtrar por stock bajo / negativo
   const productosFiltrados = useMemo(() => {
-    if (!stockBajo) return productos
-    const filtrados = productos.filter(p => {
-      const stock = Number(p.stock_actual) || 0
-      const min = Number(p.stock_minimo) || 0
-      return stock <= 0 || (min > 0 && stock <= min)
-    })
-    return filtrados.sort((a, b) => {
+    let list = productos
+    if (stockNegativo) {
+      list = list.filter(p => (Number(p.stock_actual) || 0) < 0)
+    } else if (stockBajo) {
+      list = list.filter(p => {
+        const stock = Number(p.stock_actual) || 0
+        const min = Number(p.stock_minimo) || 0
+        return stock <= 0 || (min > 0 && stock <= min)
+      })
+    }
+    return list.sort((a, b) => {
       const aStock = Number(a.stock_actual) || 0
       const bStock = Number(b.stock_actual) || 0
       const aZero = aStock <= 0 ? 1 : 0
       const bZero = bStock <= 0 ? 1 : 0
-      if (aZero !== bZero) return aZero - bZero // stock > 0 primero
-      return aStock - bStock                   // menor stock primero
+      if (aZero !== bZero) return aZero - bZero
+      return aStock - bStock
     })
-  }, [productos, stockBajo])
+  }, [productos, stockBajo, stockNegativo])
 
   // Paginación
   const totalPaginas = Math.max(1, Math.ceil(productosFiltrados.length / ITEMS_POR_PAGINA))
@@ -242,6 +249,7 @@ export default function InventarioView() {
   function toggleStockBajo() {
     const next = !stockBajo
     setStockBajo(next)
+    if (next) setStockNegativo(false)
     setPagina(1)
     if (next) {
       setSearchParams({ filtro: 'stock_bajo' })
@@ -250,7 +258,7 @@ export default function InventarioView() {
     }
   }
 
-  const hayFiltros = busqueda || categoria || stockBajo || soloDesactivados
+  const hayFiltros = busqueda || categoria || stockBajo || stockNegativo || soloDesactivados
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -358,6 +366,25 @@ export default function InventarioView() {
           >
             <AlertTriangle size={14} />
             <span className="hidden sm:inline">Stock bajo</span>
+          </button>
+
+          {/* Filtro stock negativo (Venta Anticipada) */}
+          <button
+            type="button"
+            onClick={() => {
+              const next = !stockNegativo
+              setStockNegativo(next)
+              if (next) setStockBajo(false)
+              setPagina(1)
+            }}
+            className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-colors border shrink-0 ${
+              stockNegativo
+                ? 'bg-red-50 border-red-300 text-red-700 hover:bg-red-100 ring-2 ring-red-200 shadow-sm'
+                : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-red-600'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-red-500 shrink-0 animate-pulse" />
+            <span className="hidden sm:inline">Stock Negativo</span>
           </button>
 
           {/* Filtro desactivados (solo administración/privilegiados) */}

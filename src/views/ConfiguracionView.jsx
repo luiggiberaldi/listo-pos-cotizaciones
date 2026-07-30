@@ -537,6 +537,35 @@ function ComisionesTab({ campos, cambiar, isLoading, cargando }) {
             </button>
           </div>
         </div>
+
+        {/* ── Venta Anticipada (Stock Negativo) ─────────────────────────── */}
+        <div className="bg-white/80 backdrop-blur-md rounded-2xl border border-amber-200/80 p-5 space-y-3 shadow-sm hover:border-amber-300 transition-all duration-300">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600" />
+                <h3 className="text-sm font-bold text-amber-900">Venta Anticipada (Stock Negativo)</h3>
+              </div>
+              <p className="text-xs text-amber-700 mt-1 max-w-xl">
+                Permite entregar productos cuando la mercancía ya está física en el almacén pero aún no se ha cargado el ingreso al sistema. Los egresos se registran como <span className="font-mono bg-amber-100 px-1 py-0.5 rounded font-semibold text-amber-900">venta_anticipada</span> en el Kardex.
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => cambiar('permitir_stock_negativo', !campos.permitir_stock_negativo)}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 ${
+                campos.permitir_stock_negativo ? 'bg-amber-500' : 'bg-slate-300'
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  campos.permitir_stock_negativo ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -595,6 +624,7 @@ export default function ConfiguracionView() {
     iva_pct:                 16,
     nota_entrega_mostrar_iva: true,
     nota_entrega_plantilla:  'estandar',
+    permitir_stock_negativo: false,
     gate_email:              '',
     comision_pct_cabilla:         2,
     comision_pct_otros:           3,
@@ -622,6 +652,7 @@ export default function ConfiguracionView() {
         iva_pct:                 config.iva_pct                 ?? 16,
         nota_entrega_mostrar_iva: config.nota_entrega_mostrar_iva ?? true,
         nota_entrega_plantilla:  config.nota_entrega_plantilla  ?? 'estandar',
+        permitir_stock_negativo: config.permitir_stock_negativo ?? false,
         gate_email:              config.gate_email              ?? '',
         comision_pct_cabilla:       config.comision_pct_cabilla       ?? 2,
         comision_pct_otros:         config.comision_pct_otros         ?? 3,

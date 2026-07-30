@@ -24,6 +24,7 @@ import { useSaldoFavorOrigen } from '../hooks/useCuentasCobrar'
 import CustomSelect from '../components/ui/CustomSelect'
 import useAuthStore from '../store/useAuthStore'
 import supabase from '../services/supabase/client'
+import { fetchDespachoConsolidado } from '../services/despachoItemsService'
 import { ESTADOS, getCiudades } from '../data/venezuelaGeo'
 import { MapPin, Building } from 'lucide-react'
 import { apiUrl } from '../services/apiBase'
@@ -127,7 +128,23 @@ function ModalVentaExitosa({ data, onClose, config }) {
       transportista: transportistaRes.data || null,
     }
     const generarFn = pdfType === 'orden' ? pdfModule.generarOrdenDespachoPDF : pdfModule.generarDespachoPDF
-    return { generarFn, despachoObj, items: itemsRes.data ?? [] }
+
+    // Si el despacho tiene devoluciones, usar ítems consolidados
+    let finalItems = itemsRes.data ?? []
+    try {
+      const despCheck = await supabase.from('notas_despacho').select('tiene_devoluciones, total_usd').eq('id', despachoId).maybeSingle()
+      if (despCheck.data?.tiene_devoluciones) {
+        const { itemsConsolidados } = await fetchDespachoConsolidado(despachoId, { tiene_devoluciones: true })
+        finalItems = itemsConsolidados
+        if (despCheck.data.total_usd != null) {
+          despachoObj.total_usd = Number(despCheck.data.total_usd)
+        }
+      }
+    } catch (e) {
+      console.error('[VentaRapida] Error al consolidar ítems con devoluciones:', e)
+    }
+
+    return { generarFn, despachoObj, items: finalItems }
   }
 
   async function handleDescargar(tipo) {

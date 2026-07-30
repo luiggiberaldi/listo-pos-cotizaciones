@@ -540,20 +540,39 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
     }
   }
 
-  // Scale payment methods to match the new total if there are multiple
-  if (formasPagoArr.length > 1) {
-    const originalTotalFinal = (subtotalOriginalVal - descuentoTotalOriginal) + montoExento
-    const scalingFactor = originalTotalFinal > 0 ? totalFinal / originalTotalFinal : 1
-    formasPagoArr.forEach(fp => {
-      if (fp.monto != null) {
-        fp.monto = fp.monto * scalingFactor
-      }
-    })
-  } else if (formasPagoArr.length === 1) {
+  // Sumar pagos originales para calcular diferencia exacta si hubo devolución/intercambio
+  let sumOriginalPagos = 0
+  let hasExplicitMontos = false
+  formasPagoArr.forEach(fp => {
+    if (fp.monto != null && Number(fp.monto) > 0) {
+      sumOriginalPagos += Number(fp.monto)
+      hasExplicitMontos = true
+    }
+  })
+
+  // Si no hay montos explícitos y hay una sola forma de pago, asignar totalFinal
+  if (!hasExplicitMontos && formasPagoArr.length === 1) {
     formasPagoArr[0].monto = totalFinal
+    sumOriginalPagos = totalFinal
   }
 
-  // Notas Adicionales — Eliminado para que no se muestre en Orden de Despacho
+  const diferenciaAjuste = Math.round((totalFinal - sumOriginalPagos) * 100) / 100
+
+  if (despacho.tiene_devoluciones && Math.abs(diferenciaAjuste) >= 0.01) {
+    if (diferenciaAjuste < 0) {
+      formasPagoArr.push({
+        metodo: 'SALDO A FAVOR (DEVOLUCIÓN)',
+        monto: Math.abs(diferenciaAjuste),
+        esAjusteDevolucion: true
+      })
+    } else {
+      formasPagoArr.push({
+        metodo: 'CTA POR COBRAR (DIFERENCIA)',
+        monto: diferenciaAjuste,
+        esAjusteDevolucion: true
+      })
+    }
+  }
 
   // Fila FORMA DE PAGO — solo los elegidos con checkbox y palomita
   const fpY = ty
@@ -562,39 +581,40 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   doc.rect(MARGIN, fpY, CONTENT_W, 9, 'S')
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9)
+  doc.setFontSize(8.5)
   doc.setTextColor(...C_DARK)
-  doc.text('FORMA DE PAGO:', MARGIN + 3, fpY + 6)
+  doc.text('FORMA DE PAGO:', MARGIN + 2, fpY + 6)
 
-  const checkSize = 3.5
-  let cx = MARGIN + 38
+  const checkSize = 3.2
+  let cx = MARGIN + 34
   formasPagoArr.forEach(fp => {
     const nombre = (fp.metodo || '').toUpperCase()
     if (!nombre) return
-    const boxY = fpY + 2.5
+    const boxY = fpY + 2.8
     // Checkbox
     doc.setDrawColor(80, 80, 80)
     doc.setLineWidth(0.3)
     doc.rect(cx, boxY, checkSize, checkSize, 'S')
 
-    // Dibuja la palomita (check) si está aprobado
-    if (despacho.aprobado_por_nombre) {
+    // Dibuja la palomita (check) si está aprobado o si es un ajuste por devolución
+    if (despacho.aprobado_por_nombre || fp.esAjusteDevolucion) {
       doc.setLineWidth(0.6)
-      doc.setDrawColor(30, 80, 160) // Color azul institucional (mismo que marca de agua de aprobación)
-      doc.line(cx + 0.6, boxY + 1.8, cx + 1.6, boxY + 2.8)
-      doc.line(cx + 1.6, boxY + 2.8, cx + 3.1, boxY + 0.5)
+      doc.setDrawColor(fp.esAjusteDevolucion ? 200 : 30, fp.esAjusteDevolucion ? 100 : 80, fp.esAjusteDevolucion ? 0 : 160)
+      doc.line(cx + 0.5, boxY + 1.6, cx + 1.4, boxY + 2.6)
+      doc.line(cx + 1.4, boxY + 2.6, cx + 2.9, boxY + 0.4)
       doc.setLineWidth(0.3)
     }
 
     const montoVal = fp.monto != null && fp.monto !== '' ? Number(fp.monto) : null
-    const monto = montoVal != null ? ` ${fmtTotal(montoVal, monedaPDF, tasa, factorBcv)}` : ''
+    const prefixSign = fp.esAjusteDevolucion && diferenciaAjuste < 0 ? '-' : (fp.esAjusteDevolucion && diferenciaAjuste > 0 ? '+' : '')
+    const monto = montoVal != null ? ` ${prefixSign}${fmtTotal(montoVal, monedaPDF, tasa, factorBcv)}` : ''
     const txt = nombre + monto
     // Label
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
+    doc.setFontSize(7.5)
     doc.setTextColor(...C_DARK)
-    doc.text(txt, cx + checkSize + 1.2, fpY + 6)
-    cx += checkSize + 1.2 + doc.getTextWidth(txt) + 4
+    doc.text(txt, cx + checkSize + 1.0, fpY + 6)
+    cx += checkSize + 1.0 + doc.getTextWidth(txt) + 3
   })
 
   // Desglose Subtotal + Exento (si aplica) + Descuento

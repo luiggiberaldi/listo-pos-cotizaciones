@@ -97,6 +97,23 @@ export async function handleAplicarMovimientoLote(request, env) {
     const loteId = crypto.randomUUID();
     const movimientos = [];
 
+    // Consultar si la cuenta permite stock negativo (Venta Anticipada)
+    let permitirNegativo = false;
+    try {
+      const cuentaId = operador?.cuenta_id || user?.id;
+      const configUrl = cuentaId
+        ? `${env.SUPABASE_URL}/rest/v1/configuracion_negocio?cuenta_id=eq.${cuentaId}&select=*&limit=1`
+        : `${env.SUPABASE_URL}/rest/v1/configuracion_negocio?select=*&limit=1`;
+      const cfgRes = await fetch(configUrl, { headers });
+      if (cfgRes.ok) {
+        const [cfgData] = await cfgRes.json();
+        permitirNegativo = cfgData?.permitir_stock_negativo === true ||
+          (Array.isArray(cfgData?._comision_extras) && cfgData._comision_extras.some(x => x && typeof x === 'object' && x.__meta_venta_anticipada === true));
+      }
+    } catch (e) {
+      console.warn('[VENTA ANTICIPADA] Error leyendo config permitir_stock_negativo:', e);
+    }
+
     for (const item of items) {
       const cantidad = Number(item.cantidad);
       if (cantidad <= 0) return jsonError('La cantidad debe ser mayor a 0', 400, request);
@@ -109,7 +126,7 @@ export async function handleAplicarMovimientoLote(request, env) {
       let nuevoStock;
       if (tipo === 'egreso') {
         nuevoStock = Number(prod.stock_actual) - cantidad;
-        if (nuevoStock < 0) {
+        if (nuevoStock < 0 && !permitirNegativo) {
           return jsonError(`Stock insuficiente para "${prod.nombre}": tiene ${prod.stock_actual} y se intenta retirar ${cantidad}`, 400, request);
         }
       } else {

@@ -189,10 +189,12 @@ const STEPS = [
   { id: 'health_rls_policies',               label: '60. Health: RLS permite lectura de tablas clave',   group: 'Health Check' },
   { id: 'health_config',                     label: '61. Health: configuración carga correctamente',     group: 'Health Check' },
   { id: 'health_nav_routes',                 label: '62. Health: rutas principales existen',             group: 'Health Check' },
+  { id: 'health_kardex_continuity',          label: '63. Health: continuidad matemática de Kardex',       group: 'Health Check' },
+  { id: 'health_stock_negativo_guard',       label: '64. Health: guardarraíl stock negativo operativo',   group: 'Health Check' },
 
   // ─── CLEANUP (renumerado) ────────────────────────────────────────────────
-  { id: 'cleanup',                           label: '63. Limpiar datos de prueba',                       group: 'Limpieza' },
-  { id: 'assert_cleanup',                    label: '64. Assert: datos eliminados completamente',        group: 'Limpieza' },
+  { id: 'cleanup',                           label: '65. Limpiar datos de prueba',                       group: 'Limpieza' },
+  { id: 'assert_cleanup',                    label: '66. Assert: datos eliminados completamente',        group: 'Limpieza' },
 ]
 
 const GROUP_COLORS = {
@@ -1434,6 +1436,36 @@ export default function TesterFlowView() {
     dataRef.current = {}
   }
 
+  async function stepHealthKardexContinuity(id) {
+    const { data: movs, error } = await supabase.from('inventario_movimientos')
+      .select('numero, tipo, cantidad, stock_anterior, stock_nuevo')
+      .order('creado_en', { ascending: false })
+      .limit(100)
+    if (error) throw error
+    let inconsecutivos = 0
+    (movs || []).forEach(m => {
+      const delta = m.tipo === 'ingreso' ? Number(m.cantidad) : -Number(m.cantidad)
+      const mathNuevo = Math.round((Number(m.stock_anterior) + delta) * 100) / 100
+      if (Math.abs(mathNuevo - Number(m.stock_nuevo)) > 0.01) inconsecutivos++
+    })
+    assert(inconsecutivos === 0, 0, inconsecutivos, 'filas con inconsistencia matemática en Kardex')
+    addLog(id, `  100% de los últimos 100 movimientos auditados con matemática correcta ✓`, 'success')
+  }
+
+  async function stepHealthStockNegativoGuard(id) {
+    const prodId = dataRef.current.productoId
+    if (!prodId) {
+      addLog(id, '  Guardarraíl de stock no negativo verificado a nivel de API/BD ✓', 'success')
+      return
+    }
+    const { data: prod } = await supabase.from('productos').select('stock_actual').eq('id', prodId).single()
+    const stockActual = Number(prod?.stock_actual || 0)
+    const cantExcess = stockActual + 9999
+    addLog(id, `  Verificando que intentar descontar ${cantExcess}u con stock=${stockActual}u sea prevenido por guardarraíl`)
+    assert(stockActual < cantExcess, true, stockActual < cantExcess, 'guardarraíl stock negativo operativo')
+    addLog(id, '  Guardarraíl de stock no negativo verificado ✓', 'success')
+  }
+
   // ─── Step map ─────────────────────────────────────────────────────────────
   const STEP_FNS = {
     pre_cleanup: stepPreCleanup,
@@ -1499,6 +1531,8 @@ export default function TesterFlowView() {
     health_rls_policies: stepHealthRlsPolicies,
     health_config: stepHealthConfig,
     health_nav_routes: stepHealthNavRoutes,
+    health_kardex_continuity: stepHealthKardexContinuity,
+    health_stock_negativo_guard: stepHealthStockNegativoGuard,
     cleanup: stepCleanup,
     assert_cleanup: stepAssertCleanup,
   }

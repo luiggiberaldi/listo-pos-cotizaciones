@@ -531,4 +531,4 @@ export default {
     );
   },
 };
-// Hot-reload trigger: picking up es_prestamo fix in cotizaciones.js
+// Hot-reload trigger: fixed syntax in despachos.js

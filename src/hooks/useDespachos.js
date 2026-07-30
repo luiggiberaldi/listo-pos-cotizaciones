@@ -523,11 +523,11 @@ export function useDevolucionParcialDespacho() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ despachoId, items, motivo, generarReemplazo }) => {
+    mutationFn: async ({ despachoId, items, motivo, generarReemplazo, exchangeItems }) => {
       const res = await authFetch('/api/despachos/devolucion-parcial', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ despachoId, items, motivo, generarReemplazo }),
+        body: JSON.stringify({ despachoId, items, motivo, generarReemplazo, exchangeItems }),
       })
       const result = await res.json()
       if (!res.ok) throw new Error(result.error || 'Error al registrar devolución parcial')

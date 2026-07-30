@@ -95,6 +95,22 @@ export const ACCIONES = {
       confirmText: 'Sí, devolver',
       variant: 'warning',
     },
+    administracion: {
+      label: 'Reabrir / Devolver despacho',
+      confirmTitle: '¿Reabrir este despacho?',
+      confirmMessage: 'El despacho regresará a "Pendiente" y se revertirán stock, comisión y CxC.',
+      confirmDetails: 'Requiere motivo. Si la comisión ya fue pagada o hay abonos reales en CxC, la operación será bloqueada.',
+      confirmText: 'Sí, reabrir despacho',
+      variant: 'warning',
+    },
+    supervisor: {
+      label: 'Reabrir / Devolver despacho',
+      confirmTitle: '¿Reabrir este despacho?',
+      confirmMessage: 'El despacho regresará a "Pendiente" y se revertirán stock, comisión y CxC.',
+      confirmDetails: 'Requiere motivo de devolución obligatorio.',
+      confirmText: 'Sí, reabrir despacho',
+      variant: 'warning',
+    },
   },
   pdf: {
     default: { label: 'Descargar PDF' },

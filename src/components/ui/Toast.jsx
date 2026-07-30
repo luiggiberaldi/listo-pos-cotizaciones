@@ -33,7 +33,9 @@ const COLORS = {
 const toastRef = { current: null }
 
 export function showToast(message, type = 'info', duration = 3500) {
-  toastRef.current?.(message, type, duration)
+  setTimeout(() => {
+    toastRef.current?.(message, type, duration)
+  }, 0)
 }
 
 // Métodos estáticos para facilitar el uso y evitar errores de 'not a function'

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { X, Package, Loader2, Calendar, User, FileText, CreditCard, Hash, Truck, DollarSign, Pencil, AlertTriangle, Clock, MessageSquare, Handshake } from 'lucide-react'
 import EditarItemsDespachoModal from '../despachos/EditarItemsDespachoModal'
 import supabase from '../../services/supabase/client'
+import { fetchDespachoConsolidado } from '../../services/despachoItemsService'
 import SeguimientoTimeline from './SeguimientoTimeline'
 import { apiUrl } from '../../services/apiBase'
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs } from '../../utils/format'
@@ -194,6 +195,19 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
 
         if (error) throw error
         let allItems = data || []
+
+        // Si es un despacho con devoluciones, usar ítems consolidados
+        if (tipo === 'despacho' && registro.tiene_devoluciones) {
+          try {
+            const { itemsConsolidados } = await fetchDespachoConsolidado(registro.id, registro)
+            allItems = itemsConsolidados.map(it => ({
+              ...it,
+              producto: it.producto || { id: it.producto_id, stock_actual: 0, categoria: it.categoria || '' }
+            }))
+          } catch (err) {
+            console.error('Error al cargar ítems consolidados, usando originales:', err)
+          }
+        }
 
         // Si el usuario tiene RLS restrictivo (vendedor), obtener el stock real mediante la RPC segura
         const productIds = allItems.map(it => it.producto_id).filter(Boolean)

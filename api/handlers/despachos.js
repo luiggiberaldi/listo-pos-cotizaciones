@@ -507,28 +507,165 @@ export async function handleActualizarEstadoDespacho(request, env) {
       }
     }
 
+    // Bloquear reversión o anulación si el Saldo a Favor generado por una devolución en este despacho ya fue consumido en otras compras
+    if (['pendiente', 'anulada'].includes(nuevoEstado) && desp.tiene_devoluciones) {
+      try {
+        const cxcCredRes = await fetch(
+          `${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?despacho_id=eq.${despachoId}&tipo=eq.credito&select=monto_usd`,
+          { headers }
+        );
+        if (cxcCredRes.ok) {
+          const credRows = await cxcCredRes.json();
+          const creditoGenerado = Math.round((credRows || []).reduce((s, r) => s + Number(r.monto_usd || 0), 0) * 100) / 100;
+          if (creditoGenerado > 0) {
+            const clienteCxCId = desp.cliente_factura_id || desp.cliente_id;
+            const clRes = await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteCxCId}&select=saldo_a_favor`, { headers });
+            if (clRes.ok) {
+              const [clData] = await clRes.json();
+              const saldoFavorActual = Math.round(Number(clData?.saldo_a_favor || 0) * 100) / 100;
+              if (saldoFavorActual < (creditoGenerado - 0.01)) {
+                return jsonError(
+                  `No se puede ${nuevoEstado === 'anulada' ? 'anular' : 'revertir'} este despacho porque el cliente ya consumió parte o la totalidad del Saldo a Favor ($${creditoGenerado.toFixed(2)}) generado por la devolución previa.`,
+                  400,
+                  request
+                );
+              }
+            }
+          }
+        }
+      } catch (errCredCheck) {
+        console.error('[DESPACHOS] Error verificando saldo a favor consumido:', errCredCheck);
+      }
+    }
+
+    // Guardarrail: Bloquear si la comisión del vendedor ya fue pagada (solo desarrollador puede forzar)
+    if (['pendiente', 'anulada'].includes(nuevoEstado) && ['despachada', 'entregada'].includes(desp.estado)) {
+      if (rolOp !== 'desarrollador') {
+        try {
+          const comRes = await fetch(
+            `${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}&estado=eq.pagada&select=id&limit=1`,
+            { headers }
+          );
+          if (comRes.ok) {
+            const [comPagada] = await comRes.json();
+            if (comPagada) {
+              return jsonError(
+                'No se puede reabrir/revertir este despacho porque la comisión del vendedor ya fue pagada. Anule el pago de comisión primero.',
+                400, request
+              );
+            }
+          }
+        } catch (comChkErr) {
+          console.warn('[GUARDARRAIL] Error verificando comisión pagada:', comChkErr?.message);
+        }
+      }
+    }
+
+    // Guardarrail: Bloquear si existen abonos reales en CxC (no Saldo a Favor) para este despacho
+    if (['pendiente', 'anulada'].includes(nuevoEstado) && ['despachada', 'entregada'].includes(desp.estado)) {
+      if (rolOp !== 'desarrollador') {
+        try {
+          const abonosRes = await fetch(
+            `${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?despacho_id=eq.${despachoId}&tipo=eq.abono&forma_pago_abono=neq.Saldo%20a%20favor&select=id,monto_usd&limit=1`,
+            { headers }
+          );
+          if (abonosRes.ok) {
+            const [abono] = await abonosRes.json();
+            if (abono) {
+              return jsonError(
+                `No se puede reabrir/revertir este despacho porque ya tiene abonos o pagos registrados en CxC ($${Number(abono.monto_usd || 0).toFixed(2)}). Anule los cobros primero.`,
+                400, request
+              );
+            }
+          }
+        } catch (abonoChkErr) {
+          console.warn('[GUARDARRAIL] Error verificando abonos en CxC:', abonoChkErr?.message);
+        }
+      }
+    }
+
     // 2f. Revertir entrega (entregada→despachada): administración, supervisor, desarrollador
     if (desp.estado === 'entregada' && nuevoEstado === 'despachada') {
       if (!['administracion', 'supervisor', 'jefe', 'desarrollador'].includes(rolOp)) {
         return jsonError('Solo un supervisor o administración puede revertir un despacho entregado', 403, request);
       }
     }
+
     // Solo restaurar stock si ya había sido entregada (stock ya descontado) y se anula o revierte
     if (desp.estado === 'entregada' && ['pendiente', 'despachada', 'anulada'].includes(nuevoEstado)) {
+      // 1. Obtener ítems originales
       const ciRes = await fetch(
         `${env.SUPABASE_URL}/rest/v1/notas_despacho_items?despacho_id=eq.${despachoId}&producto_id=not.is.null&origen=eq.inventario&select=producto_id,cantidad,nombre_snap`,
         { headers }
       );
-      const items = await ciRes.json();
+      const itemsOrig = (await ciRes.json()) || [];
+
+      // 2. Si tiene devoluciones, consultar devoluciones e intercambios
+      let mapDevoluciones = {};
+      let mapIntercambios = {};
+      if (desp.tiene_devoluciones) {
+        const [devRes, intRes] = await Promise.all([
+          fetch(`${env.SUPABASE_URL}/rest/v1/despacho_devoluciones?despacho_id=eq.${despachoId}&select=producto_id,cantidad_devuelta`, { headers }),
+          fetch(`${env.SUPABASE_URL}/rest/v1/despacho_devolucion_intercambios?despacho_id=eq.${despachoId}&select=producto_id,cantidad,nombre_snap`, { headers })
+        ]);
+        if (devRes.ok) {
+          const devList = await devRes.json();
+          (devList || []).forEach(d => {
+            if (d.producto_id) {
+              mapDevoluciones[d.producto_id] = (mapDevoluciones[d.producto_id] || 0) + Number(d.cantidad_devuelta || 0);
+            }
+          });
+        }
+        if (intRes.ok) {
+          const intList = await intRes.json();
+          (intList || []).forEach(i => {
+            if (i.producto_id) {
+              mapIntercambios[i.producto_id] = {
+                cantidad: (mapIntercambios[i.producto_id]?.cantidad || 0) + Number(i.cantidad || 0),
+                nombre: i.nombre_snap
+              };
+            }
+          });
+        }
+      }
+
+      // 3. Consolidar mapa de productos y calcular cantidad neta a restaurar
+      const prodsToRestore = {}; // { prodId: { cant: number, nombre: string } }
+      itemsOrig.forEach(it => {
+        const devueltosPrevio = mapDevoluciones[it.producto_id] || 0;
+        const cantNetaOriginal = Number(it.cantidad || 0) - devueltosPrevio;
+        prodsToRestore[it.producto_id] = {
+          cant: cantNetaOriginal,
+          nombre: it.nombre_snap
+        };
+      });
+
+      // Sumar ítems de intercambio (que fueron egresados y deben devolverse a stock)
+      Object.keys(mapIntercambios).forEach(pId => {
+        const intObj = mapIntercambios[pId];
+        if (prodsToRestore[pId]) {
+          prodsToRestore[pId].cant += intObj.cantidad;
+        } else {
+          prodsToRestore[pId] = {
+            cant: intObj.cantidad,
+            nombre: intObj.nombre
+          };
+        }
+      });
+
       const loteId = crypto.randomUUID();
       const movimientos = [];
-      for (const item of items) {
-        const pRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${item.producto_id}&select=stock_actual,nombre`, { headers });
+
+      for (const pId of Object.keys(prodsToRestore)) {
+        const itemInfo = prodsToRestore[pId];
+        if (itemInfo.cant <= 0) continue;
+
+        const pRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${pId}&select=stock_actual,nombre`, { headers });
         const [prod] = await pRes.json();
         if (prod) {
           const stockAnterior = Number(prod.stock_actual);
-          const nuevoStock = stockAnterior + Number(item.cantidad);
-          await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${item.producto_id}`, {
+          const nuevoStock = stockAnterior + itemInfo.cant;
+          await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${pId}`, {
             method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
             body: JSON.stringify({ stock_actual: nuevoStock }),
           });
@@ -536,12 +673,12 @@ export async function handleActualizarEstadoDespacho(request, env) {
             lote_id: loteId,
             tipo: 'ingreso',
             motivo: nuevoEstado === 'anulada'
-              ? `Anulación de despacho #${desp.numero}`
+              ? `Anulación de despacho #${desp.numero} (Ajuste neto inventario)`
               : `Reversión de despacho #${desp.numero} a ${nuevoEstado === 'pendiente' ? 'pendiente' : 'aprobado'}`,
             motivo_tipo: 'venta',
-            producto_id: item.producto_id,
-            producto_nombre: item.nombre_snap || prod.nombre,
-            cantidad: Number(item.cantidad),
+            producto_id: pId,
+            producto_nombre: itemInfo.nombre || prod.nombre,
+            cantidad: itemInfo.cant,
             stock_anterior: stockAnterior,
             stock_nuevo: nuevoStock,
             usuario_id: user.operator_id,
@@ -550,11 +687,15 @@ export async function handleActualizarEstadoDespacho(request, env) {
           });
         }
       }
+
       if (movimientos.length > 0) {
-        await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos`, {
+        const revKardexRes = await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos`, {
           method: 'POST', headers,
           body: JSON.stringify(movimientos),
         });
+        if (!revKardexRes.ok) {
+          console.error('[REVERSAR] Fallo al registrar Kardex:', await revKardexRes.text());
+        }
       }
     }
 
@@ -567,6 +708,23 @@ export async function handleActualizarEstadoDespacho(request, env) {
       const itemsEnt = await ciResEnt.json();
 
       if (itemsEnt.length > 0) {
+        // Consultar si la cuenta permite stock negativo (Venta Anticipada)
+        let permitirNegativo = false;
+        try {
+          const cuentaId = operador?.cuenta_id || user?.id || desp?.cuenta_id;
+          const configUrl = cuentaId
+            ? `${env.SUPABASE_URL}/rest/v1/configuracion_negocio?cuenta_id=eq.${cuentaId}&select=*&limit=1`
+            : `${env.SUPABASE_URL}/rest/v1/configuracion_negocio?select=*&limit=1`;
+          const cfgRes = await fetch(configUrl, { headers });
+          if (cfgRes.ok) {
+            const [cfgData] = await cfgRes.json();
+            permitirNegativo = cfgData?.permitir_stock_negativo === true ||
+              (Array.isArray(cfgData?._comision_extras) && cfgData._comision_extras.some(x => x && typeof x === 'object' && x.__meta_venta_anticipada === true));
+          }
+        } catch (e) {
+          console.warn('[VENTA ANTICIPADA] Error leyendo config permitir_stock_negativo:', e);
+        }
+
         const prodIdsEnt = itemsEnt.map(i => i.producto_id);
         const prodResEnt = await fetch(
           `${env.SUPABASE_URL}/rest/v1/productos?id=in.(${prodIdsEnt.join(',')})&activo=eq.true&select=id,stock_actual,stock_minimo,nombre,unidad`,
@@ -575,10 +733,15 @@ export async function handleActualizarEstadoDespacho(request, env) {
         const productosEnt = await prodResEnt.json();
         const stockMapEnt = Object.fromEntries(productosEnt.map(p => [p.id, p]));
 
-        // Verificar existencia de productos
+        // Verificar existencia de productos y stock suficiente (salvo Venta Anticipada)
         for (const item of itemsEnt) {
           const prod = stockMapEnt[item.producto_id];
           if (!prod) return jsonError(`Producto "${item.nombre_snap}" no encontrado o inactivo`, 400, request);
+          const stockAnterior = Number(prod.stock_actual);
+          const cantReq = Number(item.cantidad);
+          if (stockAnterior < cantReq && !permitirNegativo) {
+            return jsonError(`Stock insuficiente para "${prod.nombre}": disponible ${stockAnterior}, requerido ${cantReq}`, 400, request);
+          }
         }
 
         // Descontar stock y registrar kardex
@@ -588,14 +751,18 @@ export async function handleActualizarEstadoDespacho(request, env) {
           const prod = stockMapEnt[item.producto_id];
           const stockAnterior = Number(prod.stock_actual);
           const nuevoStock = stockAnterior - Number(item.cantidad);
-          const patchRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${item.producto_id}`, {
+          await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${item.producto_id}`, {
             method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
             body: JSON.stringify({ stock_actual: nuevoStock }),
           });
+
+          const esVentaAnticipada = nuevoStock < 0;
           movimientosEnt.push({
             lote_id: loteIdEnt,
             tipo: 'egreso',
-            motivo: `Entrega confirmada — Despacho #${desp.numero}`,
+            motivo: esVentaAnticipada
+              ? `Entrega confirmada [VENTA ANTICIPADA] — Despacho #${desp.numero}`
+              : `Entrega confirmada — Despacho #${desp.numero}`,
             motivo_tipo: 'venta',
             producto_id: item.producto_id,
             producto_nombre: item.nombre_snap || prod.nombre,
@@ -1633,61 +1800,111 @@ export async function handleDevolucionParcialDespacho(request, env) {
       return jsonError('El despacho debe estar en estado entregada para registrar una devolución parcial', 400, request);
     }
 
-    // 2. Obtener ítems originales
-    const diRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho_items?despacho_id=eq.${despachoId}&select=*`, { headers });
-    const originalItems = await diRes.json();
+    // 2. Obtener ítems originales e intercambios previos
+    const [diRes, intPrevRes] = await Promise.all([
+      fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho_items?despacho_id=eq.${despachoId}&select=*`, { headers }),
+      fetch(`${env.SUPABASE_URL}/rest/v1/despacho_devolucion_intercambios?despacho_id=eq.${despachoId}&select=*`, { headers })
+    ]);
+    const originalItems = (await diRes.json()) || [];
+    const exchangeItemsPrev = (await intPrevRes.json()) || [];
+
     const origItemMap = Object.fromEntries(originalItems.map(i => [i.id, i]));
+    const exchangeItemMap = Object.fromEntries(exchangeItemsPrev.map(i => [i.id, i]));
 
     // 3. Obtener devoluciones previas
-    const prevDevRes = await fetch(`${env.SUPABASE_URL}/rest/v1/despacho_devoluciones?despacho_id=eq.${despachoId}&select=despacho_item_id,cantidad_devuelta`, { headers });
-    const prevDevoluciones = await prevDevRes.json();
+    const prevDevRes = await fetch(`${env.SUPABASE_URL}/rest/v1/despacho_devoluciones?despacho_id=eq.${despachoId}&select=despacho_item_id,producto_id,cantidad_devuelta`, { headers });
+    const prevDevoluciones = (await prevDevRes.json()) || [];
 
     const returnedQtyMap = {};
+    const returnedExchangeQtyMap = {};
     if (Array.isArray(prevDevoluciones)) {
       prevDevoluciones.forEach(d => {
-        returnedQtyMap[d.despacho_item_id] = (returnedQtyMap[d.despacho_item_id] || 0) + Number(d.cantidad_devuelta);
+        if (d.despacho_item_id) {
+          returnedQtyMap[d.despacho_item_id] = (returnedQtyMap[d.despacho_item_id] || 0) + Number(d.cantidad_devuelta);
+        } else if (d.producto_id) {
+          returnedExchangeQtyMap[d.producto_id] = (returnedExchangeQtyMap[d.producto_id] || 0) + Number(d.cantidad_devuelta);
+        }
       });
     }
 
-    // 4. Validar ítems y cantidades
+    // 4. Validar ítems y cantidades (originales o de intercambio)
     const processedItems = [];
     let totalDevueltoUsd = 0;
 
     for (const it of items) {
-      const { despacho_item_id, cantidad_devuelta } = it;
-      if (!despacho_item_id || !origItemMap[despacho_item_id]) {
-        return jsonError(`Ítem con ID ${despacho_item_id} no pertenece a este despacho`, 400, request);
-      }
-
-      const origItem = origItemMap[despacho_item_id];
+      const { despacho_item_id, producto_id, cantidad_devuelta, es_intercambio, intercambio_id } = it;
       const qty = Number(cantidad_devuelta);
-      if (isNaN(qty) || qty <= 0) {
-        return jsonError(`Cantidad a devolver inválida para el producto: ${origItem.nombre_snap}`, 400, request);
+
+      const isExchange = Boolean(es_intercambio) || es_intercambio === 'true' || !despacho_item_id || despacho_item_id === 'null' || despacho_item_id === 'undefined';
+
+      if (isExchange) {
+        const intKey = (intercambio_id && intercambio_id !== 'null' && intercambio_id !== 'undefined') ? intercambio_id : (exchangeItemsPrev.find(x => x.producto_id === producto_id)?.id);
+        const intItem = (intKey ? exchangeItemMap[intKey] : null) || exchangeItemsPrev.find(x => x.producto_id === producto_id);
+        if (!intItem) {
+          return jsonError(`Producto de intercambio previo no encontrado`, 400, request);
+        }
+
+        if (isNaN(qty) || qty <= 0) {
+          return jsonError(`Cantidad a devolver inválida para el producto: ${intItem.nombre_snap}`, 400, request);
+        }
+
+        const alreadyReturned = returnedExchangeQtyMap[intItem.producto_id] || 0;
+        const maxReturnable = Number(intItem.cantidad) - alreadyReturned;
+
+        if (qty > maxReturnable) {
+          return jsonError(`La cantidad a devolver (${qty}) supera el saldo disponible (${maxReturnable}) para el producto de intercambio: ${intItem.nombre_snap}`, 400, request);
+        }
+
+        const unitPrice = Number(intItem.precio_unit_usd);
+        const lineTotalRefund = Math.round((unitPrice * qty) * 10000) / 10000;
+
+        totalDevueltoUsd += lineTotalRefund;
+
+        processedItems.push({
+          despacho_item_id: null,
+          producto_id: intItem.producto_id,
+          nombre_snap: intItem.nombre_snap,
+          codigo_snap: intItem.codigo_snap,
+          unidad_snap: intItem.unidad_snap,
+          cantidad_devuelta: qty,
+          precio_unit_usd: unitPrice,
+          total_devuelto_usd: lineTotalRefund,
+          origen: 'intercambio'
+        });
+      } else {
+        if (!despacho_item_id || !origItemMap[despacho_item_id]) {
+          return jsonError(`Ítem con ID ${despacho_item_id} no pertenece a este despacho`, 400, request);
+        }
+
+        const origItem = origItemMap[despacho_item_id];
+        if (isNaN(qty) || qty <= 0) {
+          return jsonError(`Cantidad a devolver inválida para el producto: ${origItem.nombre_snap}`, 400, request);
+        }
+
+        const alreadyReturned = returnedQtyMap[despacho_item_id] || 0;
+        const maxReturnable = Number(origItem.cantidad) - alreadyReturned;
+
+        if (qty > maxReturnable) {
+          return jsonError(`La cantidad a devolver (${qty}) supera el saldo disponible (${maxReturnable}) para el producto: ${origItem.nombre_snap}`, 400, request);
+        }
+
+        const unitPriceAfterDiscount = Number(origItem.precio_unit_usd) * (1 - Number(origItem.descuento_pct || 0) / 100);
+        const lineTotalRefund = Math.round((unitPriceAfterDiscount * qty) * 10000) / 10000;
+
+        totalDevueltoUsd += lineTotalRefund;
+
+        processedItems.push({
+          despacho_item_id,
+          producto_id: origItem.producto_id,
+          nombre_snap: origItem.nombre_snap,
+          codigo_snap: origItem.codigo_snap,
+          unidad_snap: origItem.unidad_snap,
+          cantidad_devuelta: qty,
+          precio_unit_usd: origItem.precio_unit_usd,
+          total_devuelto_usd: lineTotalRefund,
+          origen: origItem.origen || 'inventario'
+        });
       }
-
-      const alreadyReturned = returnedQtyMap[despacho_item_id] || 0;
-      const maxReturnable = Number(origItem.cantidad) - alreadyReturned;
-
-      if (qty > maxReturnable) {
-        return jsonError(`La cantidad a devolver (${qty}) supera el saldo disponible (${maxReturnable}) para el producto: ${origItem.nombre_snap}`, 400, request);
-      }
-
-      const unitPriceAfterDiscount = Number(origItem.precio_unit_usd) * (1 - Number(origItem.descuento_pct || 0) / 100);
-      const lineTotalRefund = Math.round((unitPriceAfterDiscount * qty) * 10000) / 10000;
-
-      totalDevueltoUsd += lineTotalRefund;
-
-      processedItems.push({
-        despacho_item_id,
-        producto_id: origItem.producto_id,
-        nombre_snap: origItem.nombre_snap,
-        codigo_snap: origItem.codigo_snap,
-        unidad_snap: origItem.unidad_snap,
-        cantidad_devuelta: qty,
-        precio_unit_usd: origItem.precio_unit_usd,
-        total_devuelto_usd: lineTotalRefund,
-        origen: origItem.origen
-      });
     }
 
     totalDevueltoUsd = Math.round(totalDevueltoUsd * 10000) / 10000;
@@ -1696,7 +1913,7 @@ export async function handleDevolucionParcialDespacho(request, env) {
     const loteId = crypto.randomUUID();
     const movimientos = [];
     for (const item of processedItems) {
-      if (item.producto_id && item.origen === 'inventario') {
+      if (item.producto_id && (item.origen === 'inventario' || item.origen === 'intercambio')) {
         const pRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${item.producto_id}&select=stock_actual,nombre`, { headers });
         const [prod] = await pRes.json();
         if (prod) {
@@ -1758,7 +1975,9 @@ export async function handleDevolucionParcialDespacho(request, env) {
         body: JSON.stringify(movimientos),
       });
       if (!kardexRes.ok) {
-        console.error('[DEVOLUCION] Error al insertar Kardex:', await kardexRes.text());
+        const kardexErr = await kardexRes.text();
+        console.error('[DEVOLUCION] Error al insertar Kardex:', kardexErr);
+        return jsonError(`Error crítico al registrar Kardex de devolución: ${kardexErr}`, 500, request);
       }
     }
 
@@ -1846,11 +2065,13 @@ export async function handleDevolucionParcialDespacho(request, env) {
       return jsonError(`Error al registrar devoluciones en BD: ${devInsErr}`, 500, request);
     }
 
-    // 8. Actualizar flag en notas_despacho
+    // 8. Actualizar flag y total_usd neto en notas_despacho
+    const totalOriginalCabecera = Number(desp.total_usd || 0);
+    const nuevoTotalUsd = Math.round((totalOriginalCabecera - totalDevueltoUsd + totalIntercambioUsd) * 10000) / 10000;
     await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}`, {
       method: 'PATCH',
       headers: { ...headers, Prefer: 'return=minimal' },
-      body: JSON.stringify({ tiene_devoluciones: true })
+      body: JSON.stringify({ tiene_devoluciones: true, total_usd: nuevoTotalUsd })
     });
 
     // 8.5 Guardar registros en despacho_devolucion_intercambios si existen
@@ -1976,6 +2197,7 @@ export async function handleDevolucionParcialDespacho(request, env) {
           headers: { ...headers, Prefer: 'return=minimal' },
           body: JSON.stringify({
             cliente_id: clienteCxCId,
+            despacho_id: despachoId,
             tipo: 'credito',
             monto_usd: creditoMonto,
             forma_pago_abono: 'Devolución',
@@ -1995,6 +2217,34 @@ export async function handleDevolucionParcialDespacho(request, env) {
       if (abonoRegistrado || creditoRegistrado) {
         await recalcularSaldoPendienteCliente(clienteCxCId, env, headers);
       }
+    }
+
+    // 9.5 Ajustar comisión del vendedor proporcionalmente al nuevo total neto
+    try {
+      const comRes = await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}&select=id,totalcomision,comisioncabilla,comisionotros`, { headers });
+      if (comRes.ok) {
+        const [comRow] = await comRes.json();
+        if (comRow && totalOriginalCabecera > 0) {
+          const factor = nuevoTotalUsd / totalOriginalCabecera;
+          const nTotalCom = Math.round(Number(comRow.totalcomision || 0) * factor * 100) / 100;
+          const nComCab = Math.round(Number(comRow.comisioncabilla || 0) * factor * 100) / 100;
+          const nComOtr = Math.round(Number(comRow.comisionotros || 0) * factor * 100) / 100;
+
+          await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?id=eq.${comRow.id}`, {
+            method: 'PATCH',
+            headers: { ...headers, Prefer: 'return=minimal' },
+            body: JSON.stringify({
+              totalcomision: nTotalCom,
+              comisioncabilla: nComCab,
+              comisionotros: nComOtr,
+              actualizadoen: new Date().toISOString()
+            })
+          });
+          console.log(`[DEVOLUCION] Comisión de despacho ${despachoId} ajustada a $${nTotalCom} (factor: ${factor.toFixed(4)})`);
+        }
+      }
+    } catch (comErr) {
+      console.error('[DEVOLUCION] Error al ajustar comisión del despacho:', comErr.message);
     }
 
     // 10. Auditoría

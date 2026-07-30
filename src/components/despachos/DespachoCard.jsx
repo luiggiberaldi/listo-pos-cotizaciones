@@ -8,6 +8,7 @@ import { useEditarDespacho } from '../../hooks/useDespachos'
 import { getDespachoAction, PRIMARY_ACTION_COLORS } from '../../utils/despachoActions'
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtFechaHora, fmtBs, usdToBs } from '../../utils/format'
 import supabase from '../../services/supabase/client'
+import { fetchDespachoConsolidado } from '../../services/despachoItemsService'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import DetalleModal from '../ui/DetalleModal'
@@ -323,7 +324,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const canEntregar = (perfil?.rol === 'logistica' || perfil?.rol === 'jefe' || esDesarrollador) && despacho.estado === 'despachada'
   const esVendedorPropio = perfil?.id === despacho.vendedor_id
   const canAnular = despacho.estado === 'pendiente' && (esDesarrollador || esAdministracion || esSupervisor || esVendedorPropio)
-  const canDevolver = (despacho.estado === 'despachada' || despacho.estado === 'entregada') && ['logistica', 'jefe', 'desarrollador'].includes(perfil?.rol)
+  const canDevolver = (despacho.estado === 'despachada' || despacho.estado === 'entregada') && ['logistica', 'jefe', 'desarrollador', 'administracion', 'supervisor'].includes(perfil?.rol)
   const canDevolucionParcial = despacho.estado === 'entregada' && ['administracion', 'logistica', 'desarrollador', 'jefe'].includes(perfil?.rol)
   const canReciclar = ((esSupervisor || esDesarrollador) && despacho.estado === 'anulada' && onReciclar)
     || (['vendedor', 'vendedor_sin_comision'].includes(rol) && despacho.estado === 'anulada' && esVendedorPropio && onReciclar)
@@ -441,12 +442,18 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     }))
   }
 
+  // Helper: fetch ítems consolidados para PDFs (descuenta devoluciones, añade intercambios)
+  async function fetchItemsParaPdf() {
+    const { itemsConsolidados } = await fetchDespachoConsolidado(despacho.id, despacho)
+    return itemsConsolidados
+  }
+
   async function descargarPDF() {
     setPdfLoading(true)
     try {
       const [{ generarDespachoPDF }, itemsFinal] = await Promise.all([
         import('../../services/pdf/despachoPDF'),
-        fetchItemsDespacho(),
+        fetchItemsParaPdf(),
       ])
       await generarDespachoPDF({
         despacho, items: itemsFinal, config,
@@ -467,7 +474,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     try {
       const [{ generarOrdenDespachoPDF }, itemsFinal] = await Promise.all([
         import('../../services/pdf/ordenDespachoPDF'),
-        fetchItemsDespacho(),
+        fetchItemsParaPdf(),
       ])
       await generarOrdenDespachoPDF({
         despacho, items: itemsFinal, config,
@@ -488,7 +495,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     try {
       const [{ generarGuiaDespachoPDF }, itemsFinal] = await Promise.all([
         import('../../services/pdf/guiaDespachoPDF'),
-        fetchItemsDespacho(),
+        fetchItemsParaPdf(),
       ])
       await generarGuiaDespachoPDF({
         despacho, items: itemsFinal, config
@@ -547,7 +554,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     try {
       const [{ generarFacturaPDF }, itemsFinal] = await Promise.all([
         import('../../services/pdf/facturaPDF'),
-        fetchItemsDespacho(),
+        fetchItemsParaPdf(),
       ])
       const { blob, filename } = await generarFacturaPDF({
         despacho, items: itemsFinal, config,
@@ -584,7 +591,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     try {
       const [{ generarDespachoPDF }, itemsFinal] = await Promise.all([
         import('../../services/pdf/despachoPDF'),
-        fetchItemsDespacho(),
+        fetchItemsParaPdf(),
       ])
       const { blob, filename } = await generarDespachoPDF({
         despacho, items: itemsFinal, config,
@@ -608,7 +615,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     try {
       const [{ generarDespachoPDF }, itemsFinal] = await Promise.all([
         import('../../services/pdf/despachoPDF'),
-        fetchItemsDespacho(),
+        fetchItemsParaPdf(),
       ])
       const { blob, filename } = await generarDespachoPDF({
         despacho, items: itemsFinal, config,
@@ -656,7 +663,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     try {
       const [{ generarOrdenDespachoPDF }, itemsFinal] = await Promise.all([
         import('../../services/pdf/ordenDespachoPDF'),
-        fetchItemsDespacho(),
+        fetchItemsParaPdf(),
       ])
       const { blob, filename } = await generarOrdenDespachoPDF({
         despacho, items: itemsFinal, config,
@@ -680,7 +687,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     try {
       const [{ generarGuiaDespachoPDF }, itemsFinal] = await Promise.all([
         import('../../services/pdf/guiaDespachoPDF'),
-        fetchItemsDespacho(),
+        fetchItemsParaPdf(),
       ])
       const { blob, filename } = await generarGuiaDespachoPDF({
         despacho, items: itemsFinal, config,
@@ -700,7 +707,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     try {
       const [{ generarOrdenDespachoPDF }, itemsFinal] = await Promise.all([
         import('../../services/pdf/ordenDespachoPDF'),
-        fetchItemsDespacho(),
+        fetchItemsParaPdf(),
       ])
       const { blob, filename } = await generarOrdenDespachoPDF({
         despacho, items: itemsFinal, config,
@@ -1513,6 +1520,46 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
                         <p className="text-slate-600"><strong>Irreversible:</strong> No se podrán hacer cambios después de {accionPendiente?.estado === 'despachada' ? 'aprobar' : 'entregar'}.</p>
                       </div>
                     </div>
+
+                    {accionPendiente?.estado === 'entregada' && (() => {
+                      const itemsConStockInsuficiente = itemsDespacho.filter(it => {
+                        if (!it.producto_id) return false
+                        const stockInfo = stockCheckData?.[it.producto_id]
+                        if (!stockInfo) return false
+                        const stockAct = Number(stockInfo.stock_actual) || 0
+                        return stockAct < Number(it.cantidad)
+                      })
+
+                      if (itemsConStockInsuficiente.length === 0) return null
+
+                      return (
+                        <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-xs text-amber-900 space-y-1.5 my-3 shadow-sm">
+                          <div className="flex items-center gap-1.5 font-bold text-amber-800">
+                            <AlertTriangle size={14} className="text-amber-600 shrink-0" />
+                            <span>⚠️ Venta Anticipada (Stock Negativo)</span>
+                          </div>
+                          <p className="text-[11px] text-amber-700">
+                            Los siguientes productos no tienen stock suficiente y quedarán con saldo negativo:
+                          </p>
+                          <ul className="space-y-1 mt-1 font-mono text-[11px]">
+                            {itemsConStockInsuficiente.map((it, idx) => {
+                              const stockAct = Number(stockCheckData?.[it.producto_id]?.stock_actual || 0)
+                              const cantReq = Number(it.cantidad)
+                              const saldoResultante = stockAct - cantReq
+                              return (
+                                <li key={idx} className="flex justify-between bg-amber-100/70 px-2 py-1 rounded border border-amber-200">
+                                  <span className="truncate max-w-[180px] font-sans font-medium">{it.nombre_snap}</span>
+                                  <span>disp: {stockAct} | req: {cantReq} &rarr; <strong className="text-red-600 font-bold">{saldoResultante}</strong></span>
+                                </li>
+                              )
+                            })}
+                          </ul>
+                          <p className="text-[10px] text-amber-600 italic">
+                            Se registrará en Kardex con motivo Venta Anticipada.
+                          </p>
+                        </div>
+                      )
+                    })()}
                     
                     <h4 className="font-bold text-slate-700 border-b border-slate-200 pb-1.5 mb-2 mt-4">
                       {accionPendiente?.estado === 'despachada' ? 'Productos a Despachar' : 'Productos a Descontar'}
@@ -1560,6 +1607,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       {/* Modal especial para Devolver o Anular desde "despachada" */}
       <DevolverAnularModal
         isOpen={!!accionPendiente && (accionPendiente.isDevolver || accionPendiente.isAnular)}
+        tieneDevoluciones={despacho.tiene_devoluciones}
         onClose={() => setAccionPendiente(null)}
         onConfirm={async (estadoDestino, motivo) => {
           if (!accionPendiente) return

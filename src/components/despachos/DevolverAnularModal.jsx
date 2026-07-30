@@ -3,7 +3,7 @@ import { Modal } from '../ui/Modal'
 import { AlertCircle } from 'lucide-react'
 import CustomSelect from '../ui/CustomSelect'
 
-export default function DevolverAnularModal({ isOpen, onClose, onConfirm, accion, despachoNum, isLoading }) {
+export default function DevolverAnularModal({ isOpen, onClose, onConfirm, accion, despachoNum, isLoading, tieneDevoluciones }) {
   const [motivoSelect, setMotivoSelect] = useState('')
   const [motivoText, setMotivoText] = useState('')
   const [entendido, setEntendido] = useState(false)
@@ -49,6 +49,11 @@ export default function DevolverAnularModal({ isOpen, onClose, onConfirm, accion
           <div>
             <p className="font-semibold">{accion?.actionConfig?.confirmMessage}</p>
             {accion?.actionConfig?.confirmDetails && <p className="mt-1 opacity-90">{accion.actionConfig.confirmDetails}</p>}
+            {tieneDevoluciones && (
+              <p className="mt-1.5 text-xs font-semibold text-amber-900 bg-amber-100/80 p-1.5 rounded-lg border border-amber-300/50">
+                📦 Este despacho tiene devoluciones e intercambios previos. Se reingresará el stock neto entregado y se revertirán los saldos en CxC de forma segura.
+              </p>
+            )}
           </div>
         </div>
 

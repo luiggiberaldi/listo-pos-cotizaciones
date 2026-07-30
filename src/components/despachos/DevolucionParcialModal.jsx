@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Modal } from '../ui/Modal'
-import { AlertCircle, RotateCcw, FileText, CheckCircle, Package, Trash2, Plus } from 'lucide-react'
+import { AlertCircle, RotateCcw, CheckCircle, Package, Trash2, Plus } from 'lucide-react'
 import CustomSelect from '../ui/CustomSelect'
 import supabase from '../../services/supabase/client'
 import { useDevolucionParcialDespacho } from '../../hooks/useDespachos'
@@ -47,9 +47,10 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
     setLoading(true)
     try {
       const clienteId = despacho.cliente_factura_id || despacho.cliente_id;
-      const [itemsRes, devRes, clRes] = await Promise.all([
+      const [itemsRes, exchangePrevRes, devRes, clRes] = await Promise.all([
         supabase.from('notas_despacho_items').select('*').eq('despacho_id', despacho.id).order('orden', { ascending: true }),
-        supabase.from('despacho_devoluciones').select('despacho_item_id, cantidad_devuelta').eq('despacho_id', despacho.id),
+        supabase.from('despacho_devolucion_intercambios').select('*').eq('despacho_id', despacho.id),
+        supabase.from('despacho_devoluciones').select('despacho_item_id, producto_id, cantidad_devuelta').eq('despacho_id', despacho.id),
         supabase.from('clientes').select('nombre, saldo_pendiente, saldo_a_favor').eq('id', clienteId).maybeSingle()
       ])
 
@@ -61,11 +62,17 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
       }
 
       const itemsData = itemsRes.data || []
+      const exchangePrevData = exchangePrevRes?.data || []
       const devData = devRes.data || []
 
       const returnedQtyMap = {}
+      const returnedExchangeQtyMap = {}
       devData.forEach(d => {
-        returnedQtyMap[d.despacho_item_id] = (returnedQtyMap[d.despacho_item_id] || 0) + Number(d.cantidad_devuelta)
+        if (d.despacho_item_id) {
+          returnedQtyMap[d.despacho_item_id] = (returnedQtyMap[d.despacho_item_id] || 0) + Number(d.cantidad_devuelta)
+        } else if (d.producto_id) {
+          returnedExchangeQtyMap[d.producto_id] = (returnedExchangeQtyMap[d.producto_id] || 0) + Number(d.cantidad_devuelta)
+        }
       })
 
       const mappedItems = itemsData.map(item => {
@@ -76,11 +83,33 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
           alreadyReturned,
           maxReturnable: Math.max(0, maxReturnable),
           cantidad_devolver: '',
-          selected: false
+          selected: false,
+          es_intercambio: false
         }
       })
 
-      setItemsList(mappedItems)
+      const mappedExchangeItems = exchangePrevData.map(item => {
+        const alreadyReturned = returnedExchangeQtyMap[item.producto_id] || 0
+        const maxReturnable = Number(item.cantidad) - alreadyReturned
+        return {
+          id: item.id,
+          despacho_id: item.despacho_id,
+          producto_id: item.producto_id,
+          nombre_snap: item.nombre_snap,
+          codigo_snap: item.codigo_snap,
+          unidad_snap: item.unidad_snap,
+          cantidad: item.cantidad,
+          precio_unit_usd: item.precio_unit_usd,
+          descuento_pct: 0,
+          alreadyReturned,
+          maxReturnable: Math.max(0, maxReturnable),
+          cantidad_devolver: '',
+          selected: false,
+          es_intercambio: true
+        }
+      })
+
+      setItemsList([...mappedItems, ...mappedExchangeItems])
     } catch (err) {
       console.error('[DEVOLUCION_MODAL] Error al cargar detalles:', err)
       showToast('Error al cargar productos del despacho', 'error')
@@ -220,9 +249,11 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
     if (!isFormValid) return
 
     const itemsPayload = selectedItems.map(item => ({
-      despacho_item_id: item.id,
+      despacho_item_id: item.es_intercambio ? null : item.id,
       producto_id: item.producto_id,
-      cantidad_devuelta: Number(item.cantidad_devolver)
+      cantidad_devuelta: Number(item.cantidad_devolver),
+      es_intercambio: !!item.es_intercambio,
+      intercambio_id: item.es_intercambio ? item.id : null
     }))
 
     const motivoFinal = motivoSelect === 'Otro' ? motivoText.trim() : motivoSelect
@@ -310,89 +341,153 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
                   <div className="w-5 h-5 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
                   <span className="text-xs text-slate-500 ml-2">Cargando productos...</span>
                 </div>
-              ) : itemsList.length === 0 ? (
-                <p className="text-xs text-slate-500 py-3 text-center">No hay productos disponibles para devolver.</p>
-              ) : (
-                <div className="border border-slate-100 rounded-xl divide-y divide-slate-100 overflow-hidden bg-slate-50">
-                  {itemsList.map(item => {
-                    const priceAfterDiscount = Number(item.precio_unit_usd) * (1 - Number(item.descuento_pct || 0) / 100)
-                    const isNoReturnable = item.maxReturnable <= 0
-
-                    return (
-                      <div
-                        key={item.id}
-                        className={`py-2 px-3 flex items-center gap-3 transition-colors ${item.selected ? 'bg-amber-50/30' : 'bg-white'} ${isNoReturnable ? 'opacity-65 bg-slate-50' : ''}`}
-                      >
-                        <input
-                          type="checkbox"
-                          disabled={isNoReturnable}
-                          checked={item.selected}
-                          onChange={() => handleCheckboxChange(item.id)}
-                          className="w-4 h-4 rounded text-amber-600 border-slate-300 focus:ring-amber-500 cursor-pointer disabled:cursor-not-allowed shrink-0"
-                        />
-
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-slate-800 truncate leading-snug">{item.nombre_snap}</p>
-                          <div className="flex flex-wrap gap-x-2.5 text-[10px] text-slate-400 mt-0.5">
-                            <span>Cód: {item.codigo_snap || 'N/A'}</span>
-                            <span>Precio: ${priceAfterDiscount.toFixed(2)}</span>
-                            <span>Entregado: {Number(item.cantidad)} {item.unidad_snap}</span>
-                            {item.alreadyReturned > 0 && (
-                              <span className="text-amber-700 font-medium">Devuelto: {item.alreadyReturned}</span>
-                            )}
+              ) : itemsList.length === 0 || itemsList.every(i => i.maxReturnable <= 0) ? (
+                <div className="space-y-3">
+                  <div className="p-3 rounded-xl border border-amber-200 bg-amber-50/90 text-amber-900 text-xs flex items-start gap-2">
+                    <AlertCircle size={16} className="shrink-0 text-amber-600 mt-0.5" />
+                    <div>
+                      <p className="font-bold">Todos los productos de este despacho han sido devueltos en su totalidad.</p>
+                      <p className="mt-0.5 text-[11px] opacity-80">No hay unidades disponibles para registrar una nueva devolución.</p>
+                    </div>
+                  </div>
+                  {itemsList.length > 0 && (
+                    <div className="border border-slate-100 rounded-xl divide-y divide-slate-100 overflow-hidden bg-slate-50 opacity-75">
+                      {itemsList.map(item => (
+                        <div key={item.id} className="py-2.5 px-3 flex items-center justify-between gap-3 bg-white">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-xs font-semibold text-slate-800 truncate">{item.nombre_snap}</p>
+                              {item.es_intercambio && (
+                                <span className="px-1.5 py-0.2 text-[9px] font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded">INTERCAMBIO</span>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap gap-x-2.5 text-[10px] text-slate-400 mt-0.5">
+                              <span>Cód: {item.codigo_snap || 'N/A'}</span>
+                              <span>Entregado: {Number(item.cantidad)} {item.unidad_snap}</span>
+                            </div>
                           </div>
-                        </div>
-
-                        <div className="flex flex-col items-end gap-1 shrink-0">
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              disabled={!item.selected || Number(item.cantidad_devolver) <= 0 || isNoReturnable}
-                              onClick={() => {
-                                const current = Number(item.cantidad_devolver) || 0
-                                const step = item.unidad_snap === 'und' ? 1 : 0.1
-                                handleCantidadChange(item.id, String(Math.max(0, Math.round((current - step) * 100) / 100)))
-                              }}
-                              className="w-6 h-6 flex items-center justify-center border border-slate-200 rounded-lg bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-800 disabled:opacity-40 disabled:cursor-not-allowed select-none text-sm font-bold shadow-sm transition-colors"
-                            >
-                              -
-                            </button>
-
-                            <input
-                              type="number"
-                              disabled={!item.selected || isNoReturnable}
-                              min="0.01"
-                              max={item.maxReturnable}
-                              step="any"
-                              value={item.cantidad_devolver}
-                              onChange={e => handleCantidadChange(item.id, e.target.value)}
-                              onFocus={() => saveAndClear(item.id, item.cantidad_devolver)}
-                              onClick={() => saveAndClear(item.id, item.cantidad_devolver)}
-                              onBlur={() => handleBlur(item.id, item.cantidad_devolver)}
-                              placeholder="0"
-                              className="w-14 text-center py-0.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 disabled:bg-slate-50 disabled:text-slate-400 font-extrabold"
-                            />
-
-                            <button
-                              type="button"
-                              disabled={!item.selected || Number(item.cantidad_devolver) >= item.maxReturnable || isNoReturnable}
-                              onClick={() => {
-                                const current = Number(item.cantidad_devolver) || 0
-                                const step = item.unidad_snap === 'und' ? 1 : 0.1
-                                handleCantidadChange(item.id, String(Math.min(item.maxReturnable, Math.round((current + step) * 100) / 100)))
-                              }}
-                              className="w-6 h-6 flex items-center justify-center border border-slate-200 rounded-lg bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-800 disabled:opacity-40 disabled:cursor-not-allowed select-none text-sm font-bold shadow-sm transition-colors"
-                            >
-                              +
-                            </button>
-                          </div>
-                          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider pr-1">
-                            máx: {item.maxReturnable} {item.unidad_snap}
+                          <span className="px-2 py-0.5 text-[10px] font-black text-amber-800 bg-amber-100 border border-amber-200 rounded-md shrink-0 select-none">
+                            DEVUELTO 100%
                           </span>
                         </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {/* Ítems activos para devolución */}
+                  <div className="border border-slate-100 rounded-xl divide-y divide-slate-100 overflow-hidden bg-slate-50 shadow-xs">
+                    {itemsList.filter(i => i.maxReturnable > 0).map(item => {
+                      const priceAfterDiscount = Number(item.precio_unit_usd) * (1 - Number(item.descuento_pct || 0) / 100)
+                      return (
+                        <div
+                          key={item.id}
+                          className={`py-2 px-3 flex items-center gap-3 transition-colors ${item.selected ? 'bg-amber-50/30' : 'bg-white'}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={item.selected}
+                            onChange={() => handleCheckboxChange(item.id)}
+                            className="w-4 h-4 rounded text-amber-600 border-slate-300 focus:ring-amber-500 cursor-pointer shrink-0"
+                          />
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-xs font-semibold text-slate-800 truncate leading-snug">{item.nombre_snap}</p>
+                              {item.es_intercambio && (
+                                <span className="px-1.5 py-0.2 text-[9px] font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded shrink-0">INTERCAMBIO PREVIO</span>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap gap-x-2.5 text-[10px] text-slate-400 mt-0.5">
+                              <span>Cód: {item.codigo_snap || 'N/A'}</span>
+                              <span>Precio: ${priceAfterDiscount.toFixed(2)}</span>
+                              <span>Entregado: {Number(item.cantidad)} {item.unidad_snap}</span>
+                              {item.alreadyReturned > 0 && (
+                                <span className="text-amber-700 font-medium">Devuelto previo: {item.alreadyReturned}</span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col items-end gap-1 shrink-0">
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                disabled={!item.selected || Number(item.cantidad_devolver) <= 0}
+                                onClick={() => {
+                                  const current = Number(item.cantidad_devolver) || 0
+                                  const step = item.unidad_snap === 'und' ? 1 : 0.1
+                                  handleCantidadChange(item.id, String(Math.max(0, Math.round((current - step) * 100) / 100)))
+                                }}
+                                className="w-6 h-6 flex items-center justify-center border border-slate-200 rounded-lg bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-800 disabled:opacity-40 disabled:cursor-not-allowed select-none text-sm font-bold shadow-sm transition-colors"
+                              >
+                                -
+                              </button>
+
+                              <input
+                                type="number"
+                                disabled={!item.selected}
+                                min="0.01"
+                                max={item.maxReturnable}
+                                step="any"
+                                value={item.cantidad_devolver}
+                                onChange={e => handleCantidadChange(item.id, e.target.value)}
+                                onFocus={() => saveAndClear(item.id, item.cantidad_devolver)}
+                                onClick={() => saveAndClear(item.id, item.cantidad_devolver)}
+                                onBlur={() => handleBlur(item.id, item.cantidad_devolver)}
+                                placeholder="0"
+                                className="w-14 text-center py-0.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 disabled:bg-slate-50 disabled:text-slate-400 font-extrabold"
+                              />
+
+                              <button
+                                type="button"
+                                disabled={!item.selected || Number(item.cantidad_devolver) >= item.maxReturnable}
+                                onClick={() => {
+                                  const current = Number(item.cantidad_devolver) || 0
+                                  const step = item.unidad_snap === 'und' ? 1 : 0.1
+                                  handleCantidadChange(item.id, String(Math.min(item.maxReturnable, Math.round((current + step) * 100) / 100)))
+                                }}
+                                className="w-6 h-6 flex items-center justify-center border border-slate-200 rounded-lg bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-800 disabled:opacity-40 disabled:cursor-not-allowed select-none text-sm font-bold shadow-sm transition-colors"
+                              >
+                                +
+                              </button>
+                            </div>
+                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider pr-1">
+                              Máx: {item.maxReturnable} {item.unidad_snap}
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Sección secundaria de ítems devueltos al 100% */}
+                  {itemsList.some(i => i.maxReturnable <= 0) && (
+                    <div className="pt-2 border-t border-slate-100">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Historial de productos devueltos al 100%</p>
+                      <div className="border border-slate-100 rounded-xl divide-y divide-slate-100 overflow-hidden bg-slate-50/60 opacity-80">
+                        {itemsList.filter(i => i.maxReturnable <= 0).map(item => (
+                          <div key={item.id} className="py-2 px-3 flex items-center justify-between gap-3 bg-white">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <p className="text-xs font-semibold text-slate-700 truncate">{item.nombre_snap}</p>
+                                {item.es_intercambio && (
+                                  <span className="px-1.5 py-0.2 text-[9px] font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded">INTERCAMBIO</span>
+                                )}
+                              </div>
+                              <div className="flex flex-wrap gap-x-2.5 text-[10px] text-slate-400 mt-0.5">
+                                <span>Cód: {item.codigo_snap || 'N/A'}</span>
+                                <span>Entregado: {Number(item.cantidad)} {item.unidad_snap}</span>
+                              </div>
+                            </div>
+                            <span className="px-2 py-0.5 text-[10px] font-extrabold text-amber-800 bg-amber-100/90 border border-amber-200/80 rounded-md shrink-0 select-none">
+                              DEVUELTO 100%
+                            </span>
+                          </div>
+                        ))}
                       </div>
-                    )
-                  })}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -532,21 +627,6 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
 
             {/* Checkboxes de Confirmación */}
             <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/60 space-y-2.5">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={generarReemplazo}
-                  onChange={e => setGenerarReemplazo(e.target.checked)}
-                  className="w-4 h-4 text-amber-600 border-slate-300 rounded focus:ring-amber-500 cursor-pointer shrink-0"
-                />
-                <div className="text-xs select-none">
-                  <span className="font-semibold text-slate-700 flex items-center gap-1">
-                    <FileText size={12} className="text-slate-500" />
-                    Generar cotización de reemplazo tradicional
-                  </span>
-                </div>
-              </label>
-
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"

@@ -35,7 +35,7 @@ export function useLineItems({ withDescuento = false, checkStock = false } = {})
       if (idx !== -1) {
         // Ya existe → incrementar cantidad
         if (checkStock && prev[idx].cantidad >= stock) {
-          showToast(`Stock excedido: ${stock} disp.`, 'warning')
+          setTimeout(() => showToast(`Stock excedido: ${stock} disp.`, 'warning'), 0)
         }
         return prev.map((it, i) => i === idx ? { ...it, cantidad: it.cantidad + 1 } : it)
       }
@@ -78,7 +78,7 @@ export function useLineItems({ withDescuento = false, checkStock = false } = {})
         const esExterno = it.origen === 'externo' || !it.productoId || String(it.productoId).startsWith('manual-') || String(it.codigoSnap).startsWith('EXT')
         const stock = esExterno ? Infinity : getStock(productoId)
         if (nueva > stock && delta > 0 && stock < Infinity) {
-          showToast(`Stock insuficiente: ${stock} disp.`, 'warning')
+          setTimeout(() => showToast(`Stock insuficiente: ${stock} disp.`, 'warning'), 0)
         }
       }
       return { ...it, cantidad: nueva }
@@ -93,7 +93,7 @@ export function useLineItems({ withDescuento = false, checkStock = false } = {})
         const esExterno = it.origen === 'externo' || !it.productoId || String(it.productoId).startsWith('manual-') || String(it.codigoSnap).startsWith('EXT')
         const stock = esExterno ? Infinity : getStock(productoId)
         if (n > stock && stock < Infinity) {
-          showToast(`Cantidad supera el stock (${stock})`, 'warning')
+          setTimeout(() => showToast(`Cantidad supera el stock (${stock})`, 'warning'), 0)
         }
       }
       return prev.map(x => x.productoId === productoId ? { ...x, cantidad: n } : x)

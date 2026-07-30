@@ -440,6 +440,17 @@ export async function handleSaveConfig(request, env) {
     delete datosGuardar.nota_entrega_plantilla;
   }
 
+  // Manejar fallback para permitir_stock_negativo si la columna aún no existe físicamente en BD
+  const hasPermitirCol = existingColumns.length > 0 && existingColumns.includes('permitir_stock_negativo');
+  if (!hasPermitirCol && campos.permitir_stock_negativo !== undefined) {
+    let extras = Array.isArray(datosGuardar._comision_extras) ? [...datosGuardar._comision_extras] : [];
+    extras = extras.filter(x => !x || typeof x !== 'object' || !x.__meta_venta_anticipada);
+    if (campos.permitir_stock_negativo === true) {
+      extras.push({ __meta_venta_anticipada: true });
+    }
+    datosGuardar._comision_extras = extras;
+  }
+
   const res = await fetch(`${env.SUPABASE_URL}/rest/v1/configuracion_negocio?on_conflict=cuenta_id`, {
     method: 'POST',
     headers: {
@@ -489,6 +500,12 @@ export async function handleGetConfig(request, env) {
   // Por seguridad, quitamos el hash de la contraseña del gate antes de enviarla
   delete config.gate_password_hash;
   
+  // Normalizar permitir_stock_negativo si proviene de fallback en _comision_extras
+  if (config.permitir_stock_negativo === undefined) {
+    const hasMeta = Array.isArray(config._comision_extras) && config._comision_extras.some(x => x && typeof x === 'object' && x.__meta_venta_anticipada === true);
+    config.permitir_stock_negativo = hasMeta;
+  }
+
   return json(config, 200, request);
 }
 
