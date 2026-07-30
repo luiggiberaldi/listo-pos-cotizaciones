@@ -256,7 +256,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
         descripcion: descProductos || labelLiberacion,
         despachonumero: desp.numero || '---',
         montopagado: Number(com.montopagado || 0),
-        tasa_snapshot: Number(tasaEuro ?? desp.tasa_snapshot ?? cot.tasa_bcv_snapshot ?? 0),
+        tasa_snapshot: Number(desp?.tasa_snapshot ?? cot?.tasa_bcv_snapshot ?? com?.tasa ?? tasaEuro ?? 0),
         estado: rawEstado,
         fraccionRelease,
         // Preservar despacho con productos para el desglose por artículo
@@ -316,11 +316,11 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
       montopagado: Number(c.despacho_comision_liberada ?? c.montopagado ?? 0),
       // Tasa
       tasa_snapshot: Number(
-        tasaEuro ??
-        c.tasa ??
-        c.tasa_snapshot ?? 
         c.despacho?.tasa_snapshot ?? 
         c.cotizacion?.tasa_bcv_snapshot ?? 
+        c.tasa ?? 
+        c.tasa_snapshot ?? 
+        tasaEuro ?? 
         0
       ),
       // Preservar despacho con productos para el desglose por artículo

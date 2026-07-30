@@ -1035,7 +1035,13 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
     }
   }
 
-  const tasaComision = (item) => tasaEuro?.precio || Number(item.despacho?.tasa_snapshot || item.cotizacion?.tasa_bcv_snapshot || 0)
+  const tasaComision = (item) => Number(
+    item.despacho?.tasa_snapshot || 
+    item.cotizacion?.tasa_bcv_snapshot || 
+    item.tasa || 
+    tasaEuro?.precio || 
+    0
+  )
 
   // Calcular totales del detalle
   const totales = detalle.reduce((acc, item) => {
@@ -1053,11 +1059,11 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
     const aj = ajustesManuales[vendedor.id] || { cxc: '', descuentoCarro: '' };
     const cxcVal = Number(aj.cxc) || 0;
     const descVal = Number(aj.descuentoCarro) || 0;
-    const rate = tasaEuro?.precio || 0;
+    const ratePonderada = totales.totalUsd > 0 ? (totales.comBs / totales.totalUsd) : (tasaEuro?.precio || 0);
 
     if (formatoReporte === 'resumido') {
       const adjustedUsd = totales.totalUsd + cxcVal - descVal;
-      const adjustedBs = adjustedUsd * rate;
+      const adjustedBs = adjustedUsd * ratePonderada;
       return { totalUsd: adjustedUsd, comBs: adjustedBs };
     }
     return totales;
@@ -1610,7 +1616,13 @@ function TabComisiones({ configNeg }) {
       const m = c.estado === 'cta_cobrar'
         ? Number(c.comision_liberada || 0)
         : Number(c.totalcomision || 0)
-      const tasa = tasaEuro?.precio || Number(c.despacho?.tasa_snapshot || c.cotizacion?.tasa_bcv_snapshot || 0)
+      const tasa = Number(
+        c.despacho?.tasa_snapshot || 
+        c.cotizacion?.tasa_bcv_snapshot || 
+        c.tasa || 
+        tasaEuro?.precio || 
+        0
+      )
       const mBs = m * tasa
 
       map[vId].totalUsd += m
