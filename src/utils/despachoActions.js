@@ -41,6 +41,14 @@ export const ACCIONES = {
       confirmText: 'Sí, confirmar entrega',
       variant: 'success',
     },
+    administracion: {
+      label: 'Confirmar entrega',
+      confirmTitle: '¿Confirmar entrega realizada?',
+      confirmMessage: 'Se marcará el despacho como entregado al cliente.',
+      confirmDetails: '',
+      confirmText: 'Sí, confirmar entrega',
+      variant: 'success',
+    },
   },
   anular: {
     supervisor: {

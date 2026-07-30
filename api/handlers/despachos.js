@@ -416,10 +416,10 @@ export async function handleActualizarEstadoDespacho(request, env) {
       }
     }
 
-    // 2c. Confirmar entrega: solo logística, jefe y desarrollador
+    // 2c. Confirmar entrega: logística, jefe, administración y desarrollador
     if (nuevoEstado === 'entregada') {
-      if (!['logistica', 'jefe', 'desarrollador'].includes(rolOp)) {
-        return jsonError('Solo logística, jefe o desarrollador pueden confirmar entregas', 403, request);
+      if (!['logistica', 'jefe', 'desarrollador', 'administracion'].includes(rolOp)) {
+        return jsonError('No tiene permisos para confirmar entregas', 403, request);
       }
     }
 

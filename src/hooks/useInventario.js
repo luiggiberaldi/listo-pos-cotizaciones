@@ -158,8 +158,9 @@ export function useInventario({ busqueda = '', categoria = '', page = 0, pageSiz
       return { productos, totalCount, truncado: totalCount > productos.length }
     },
     enabled: !!perfil,
-    staleTime: 1000 * 60 * 3,     // 3min — el realtime invalida ante cambios reales
-    gcTime:    1000 * 60 * 10,
+    staleTime: 1000 * 10,         // 10s — refresco instantáneo de stock real
+    gcTime:    1000 * 60 * 5,
+    refetchOnWindowFocus: true,
   })
 }
 
