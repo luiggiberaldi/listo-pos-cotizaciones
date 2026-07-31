@@ -30,13 +30,17 @@ export function useLineItems({ withDescuento = false, checkStock = false } = {})
   const agregarItem = useCallback((producto) => {
     const stock = Number(producto.stock_actual) || 0
 
+    if (checkStock) {
+      const itemExistente = items.find(it => it.productoId === producto.id)
+      if (itemExistente && itemExistente.cantidad >= stock) {
+        showToast(`Stock excedido: ${stock} disp.`, 'warning')
+      }
+    }
+
     setItems(prev => {
       const idx = prev.findIndex(it => it.productoId === producto.id)
       if (idx !== -1) {
         // Ya existe → incrementar cantidad
-        if (checkStock && prev[idx].cantidad >= stock) {
-          setTimeout(() => showToast(`Stock excedido: ${stock} disp.`, 'warning'), 0)
-        }
         return prev.map((it, i) => i === idx ? { ...it, cantidad: it.cantidad + 1 } : it)
       }
       const precioBase = Number(producto.precio_usd ?? producto.preciousd ?? 0)
@@ -56,7 +60,7 @@ export function useLineItems({ withDescuento = false, checkStock = false } = {})
       if (withDescuento) item.descuentoPct = 0
       return [...prev, item]
     })
-  }, [checkStock, withDescuento])
+  }, [checkStock, withDescuento, items])
 
   const editarItem = useCallback((idx, campo, valor) => {
     setItems(prev => prev.map((it, i) => i === idx ? { ...it, [campo]: valor } : it))
@@ -71,34 +75,39 @@ export function useLineItems({ withDescuento = false, checkStock = false } = {})
   }, [])
 
   const cambiarCantidad = useCallback((productoId, delta) => {
+    if (checkStock && delta > 0) {
+      const it = items.find(x => x.productoId === productoId)
+      if (it) {
+        const esExterno = it.origen === 'externo' || !it.productoId || String(it.productoId).startsWith('manual-') || String(it.codigoSnap).startsWith('EXT')
+        const stock = esExterno ? Infinity : getStock(productoId)
+        const nueva = Math.max(1, it.cantidad + delta)
+        if (nueva > stock && stock < Infinity) {
+          showToast(`Stock insuficiente: ${stock} disp.`, 'warning')
+        }
+      }
+    }
+
     setItems(prev => prev.map(it => {
       if (it.productoId !== productoId) return it
       const nueva = Math.max(1, it.cantidad + delta)
-      if (checkStock) {
-        const esExterno = it.origen === 'externo' || !it.productoId || String(it.productoId).startsWith('manual-') || String(it.codigoSnap).startsWith('EXT')
-        const stock = esExterno ? Infinity : getStock(productoId)
-        if (nueva > stock && delta > 0 && stock < Infinity) {
-          setTimeout(() => showToast(`Stock insuficiente: ${stock} disp.`, 'warning'), 0)
-        }
-      }
       return { ...it, cantidad: nueva }
     }))
-  }, [checkStock])
+  }, [checkStock, items])
 
   const setCantidadDirecta = useCallback((productoId, cantidad) => {
     let n = Math.max(1, Math.floor(Number(cantidad) || 1))
-    setItems(prev => {
-      const it = prev.find(x => x.productoId === productoId)
-      if (checkStock && it) {
+    if (checkStock) {
+      const it = items.find(x => x.productoId === productoId)
+      if (it) {
         const esExterno = it.origen === 'externo' || !it.productoId || String(it.productoId).startsWith('manual-') || String(it.codigoSnap).startsWith('EXT')
         const stock = esExterno ? Infinity : getStock(productoId)
         if (n > stock && stock < Infinity) {
-          setTimeout(() => showToast(`Cantidad supera el stock (${stock})`, 'warning'), 0)
+          showToast(`Cantidad supera el stock (${stock})`, 'warning')
         }
       }
-      return prev.map(x => x.productoId === productoId ? { ...x, cantidad: n } : x)
-    })
-  }, [checkStock])
+    }
+    setItems(prev => prev.map(x => x.productoId === productoId ? { ...x, cantidad: n } : x))
+  }, [checkStock, items])
 
   const cambiarPrecio = useCallback((productoId, precio, precioOriginal) => {
     setItems(prev => prev.map(it => {

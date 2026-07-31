@@ -30,6 +30,8 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
   const { data: config = {} } = useConfigNegocio()
   const { items, setItems, agregarItem: _agregarItem, eliminarPorId, cambiarCantidad, setCantidadDirecta, cambiarPrecio: _cambiarPrecio, togglePrestamo, setStockMap } = useLineItems({ checkStock: true })
 
+  const [seccionMovil, setSeccionMovil] = useState('catalogo')
+
   const agregarItem = (p) => {
     const precioBase = Number(p.precio_usd ?? p.precioUnitUsd ?? 0)
 
@@ -38,6 +40,9 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
       precio_usd: precioBase,
       precioOriginalUsd: precioBase
     })
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setSeccionMovil('carrito')
+    }
   }
 
   const cambiarPrecio = (productoId, precio) => {
@@ -415,10 +420,14 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
       }
     }
   
+  // Memoizar conjunto de IDs en cesta para evitar re-renderizar el catálogo al cambiar cantidades (+ / -)
+  const itemIdsInCartKey = useMemo(() => items.map(it => it.productoId).join(','), [items])
+  const inCartSet = useMemo(() => new Set(items.map(it => it.productoId)), [itemIdsInCartKey])
+
   // 4.5. Memoizar el catálogo izquierdo para evitar re-renderizados pesados en cada pulsación o cambio de pagos
   const catalogoIzquierdo = useMemo(() => {
     return (
-      <div className="w-full md:w-5/12 border-r border-slate-100 flex flex-col bg-slate-50/50">
+      <div className={`w-full md:w-5/12 border-b md:border-b-0 md:border-r border-slate-100 flex flex-col bg-slate-50/50 flex-1 md:flex-initial min-h-0 overflow-hidden ${seccionMovil === 'catalogo' ? 'flex' : 'hidden md:flex'}`}>
         <div className="p-4 bg-white border-b border-slate-100 space-y-3">
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
@@ -508,7 +517,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
             </div>
           )}
         </div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+        <div className="flex-1 overflow-y-auto p-4 space-y-2 min-h-0 touch-pan-y">
           {loadingInv ? (
             <div className="flex flex-col items-center justify-center py-10 gap-3">
               <Loader2 size={24} className="animate-spin text-indigo-500" />
@@ -518,7 +527,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
             <p className="text-center py-10 text-xs text-slate-400 italic">No se encontraron productos</p>
           ) : (
             productosFiltrados.map(p => {
-              const enCarrito = items.some(it => it.productoId === p.id)
+              const enCarrito = inCartSet.has(p.id)
               const stock = Number(p.stock_actual) || 0
               return (
                 <div
@@ -560,7 +569,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
         </div>
       </div>
     )
-  }, [productosFiltrados, loadingInv, busqueda, showManual, manualNombre, manualUnidad, manualPrecio, manualCantidad, items, esDesarrollador])
+  }, [productosFiltrados, loadingInv, busqueda, showManual, manualNombre, manualUnidad, manualPrecio, manualCantidad, inCartSet, esDesarrollador, seccionMovil])
 
   if (!isOpen) return null
 
@@ -573,7 +582,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
       <div className="bg-white w-full max-w-5xl h-full sm:h-[92vh] sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden">
 
         {/* ── Header ── */}
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center">
               <Package size={22} className="text-indigo-600" />
@@ -588,6 +597,32 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
           </button>
         </div>
 
+        {/* ── Pestañas de navegación exclusiva para móvil (< 768px) ── */}
+        <div className="flex md:hidden border-b border-slate-200 bg-slate-100 p-1.5 shrink-0">
+          <button
+            type="button"
+            onClick={() => setSeccionMovil('catalogo')}
+            className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+              seccionMovil === 'catalogo'
+                ? 'bg-white text-indigo-600 shadow-sm font-black'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <Search size={14} /> Catálogo
+          </button>
+          <button
+            type="button"
+            onClick={() => setSeccionMovil('carrito')}
+            className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+              seccionMovil === 'carrito'
+                ? 'bg-white text-indigo-600 shadow-sm font-black'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <Package size={14} /> Carrito ({items.length})
+          </button>
+        </div>
+
         {/* ── Columnas: Catálogo + Carrito ── */}
         <div className="flex flex-col md:flex-row min-h-0 flex-1 overflow-hidden">
 
@@ -595,14 +630,14 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
           {catalogoIzquierdo}
 
           {/* Columna Derecha: Carrito */}
-          <div className="w-full md:w-7/12 flex flex-col bg-white">
+          <div className={`w-full md:w-7/12 flex flex-col bg-white flex-1 min-h-0 overflow-hidden ${seccionMovil === 'carrito' ? 'flex' : 'hidden md:flex'}`}>
             <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Carrito del Despacho</span>
               <span className="px-2 py-1 bg-indigo-100 text-indigo-700 text-[10px] font-bold rounded-lg uppercase">
                 {items.length} Items
               </span>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0 touch-pan-y">
               {cargandoItems ? (
                 <div className="flex flex-col items-center justify-center py-20 gap-3">
                   <Loader2 size={32} className="animate-spin text-slate-300" />
@@ -619,7 +654,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                 </div>
               ) : (
                 items.map((it) => (
-                  <div key={it._key} className={`px-3 py-2.5 rounded-xl border transition-all shadow-sm flex flex-col gap-2 ${it.esPrestamo || it.es_prestamo ? 'bg-emerald-50/50 border-emerald-200/60 my-1' : 'border-slate-100 bg-white'}`}>
+                  <div key={it._key} className={`px-3 py-2.5 rounded-xl border transition-colors shadow-sm flex flex-col gap-2 ${it.esPrestamo || it.es_prestamo ? 'bg-emerald-50/50 border-emerald-200/60 my-1' : 'border-slate-100 bg-white'}`}>
                     {/* Nombre + eliminar */}
                     <div className="flex justify-between gap-2">
                       <div className="min-w-0">
@@ -660,43 +695,43 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                           </div>
                         )}
                       </div>
-                      <div className="flex gap-1.5 shrink-0 self-start">
+                      <div className="flex gap-1 shrink-0 self-start">
                         {esDesarrollador && (
                           <button
                             onClick={() => agregarComoExterno(it)}
-                            className="text-slate-400 hover:text-indigo-600 p-0.5 transition-colors shrink-0"
+                            className="text-slate-400 hover:text-indigo-600 p-1.5 hover:bg-slate-100 rounded-lg transition-colors shrink-0 w-8 h-8 flex items-center justify-center"
                             title="Duplicar como externo"
                           >
-                            <Copy size={13} />
+                            <Copy size={14} />
                           </button>
                         )}
                         {(it.origen === 'externo' || !it.productoId || String(it.productoId).startsWith('manual-')) && (
-                          <button onClick={() => setEditItemIdx(items.findIndex(x => x.productoId === it.productoId))} className="text-amber-400 hover:text-amber-500 p-0.5 transition-colors shrink-0" title="Editar detalles">
+                          <button onClick={() => setEditItemIdx(items.findIndex(x => x.productoId === it.productoId))} className="text-amber-500 hover:text-amber-600 p-1.5 hover:bg-amber-50 rounded-lg transition-colors shrink-0 w-8 h-8 flex items-center justify-center" title="Editar detalles">
                             <Edit2 size={14} />
                           </button>
                         )}
-                        <button onClick={() => eliminarPorId(it.productoId)} className="text-slate-300 hover:text-red-500 p-0.5 transition-colors shrink-0">
+                        <button onClick={() => eliminarPorId(it.productoId)} className="text-slate-400 hover:text-red-500 p-1.5 hover:bg-red-50 rounded-lg transition-colors shrink-0 w-8 h-8 flex items-center justify-center">
                           <Trash2 size={14} />
                         </button>
                       </div>
                     </div>
 
                     {/* Controles en una sola fila compacta */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
                       {/* Cantidad */}
                       <div className="flex items-center gap-0.5 bg-slate-100 rounded-lg p-0.5">
-                        <button onClick={() => cambiarCantidad(it.productoId, -1)} className="w-6 h-6 flex items-center justify-center bg-white rounded-md shadow-sm text-slate-600 active:scale-90 transition-transform">
-                          <Minus size={11} />
+                        <button onClick={() => cambiarCantidad(it.productoId, -1)} className="w-8 h-8 sm:w-7 sm:h-7 flex items-center justify-center bg-white rounded-md shadow-sm text-slate-600 active:scale-90 transition-transform touch-manipulation">
+                          <Minus size={13} />
                         </button>
                         <input
                           type="number"
                           value={it.cantidad}
                           onChange={e => setCantidadDirecta(it.productoId, e.target.value)}
                           onBlur={e => { if (!e.target.value || Number(e.target.value) <= 0) setCantidadDirecta(it.productoId, 1) }}
-                          className="w-9 text-center bg-transparent text-xs font-black text-slate-800 focus:outline-none"
+                          className="w-10 text-center bg-transparent text-xs font-black text-slate-800 focus:outline-none"
                         />
-                        <button onClick={() => cambiarCantidad(it.productoId, 1)} className="w-6 h-6 flex items-center justify-center bg-white rounded-md shadow-sm text-slate-600 active:scale-90 transition-transform">
-                          <Plus size={11} />
+                        <button onClick={() => cambiarCantidad(it.productoId, 1)} className="w-8 h-8 sm:w-7 sm:h-7 flex items-center justify-center bg-white rounded-md shadow-sm text-slate-600 active:scale-90 transition-transform touch-manipulation">
+                          <Plus size={13} />
                         </button>
                       </div>
                       {/* Precio */}
@@ -804,7 +839,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
           </div>
 
           {/* Área de la grilla de pagos (intercambiable) */}
-          <div className="px-6 py-4">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 max-h-[35vh] sm:max-h-none overflow-y-auto">
             {(!esCod || tabActiva === 'inmediato') ? (
               // VISTA: PAGO INMEDIATO (ADELANTO)
               <div className="space-y-2">
@@ -1105,10 +1140,10 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
         </div>
 
         {/* ── Footer Totales + Botones ── */}
-        <div className="px-6 py-4 bg-white border-t border-slate-200 shrink-0">
-          <div className="flex items-center justify-between gap-6">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 bg-white border-t border-slate-200 shrink-0">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
             {/* Desglose de totales */}
-            <div className="flex items-center gap-6 text-xs text-slate-500 flex-wrap">
+            <div className="flex items-center justify-between sm:justify-start gap-4 sm:gap-6 text-xs text-slate-500 flex-wrap">
               <span>Subtotal: <strong className="text-slate-700">{fmtUsd(totales.subtotal)}</strong></span>
               {Number(despacho?.flete_usd) > 0 && (
                 <span className="text-emerald-600">Flete: <strong>+{fmtUsd(despacho.flete_usd)}</strong></span>
@@ -1119,17 +1154,17 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
               {Number(despacho?.descuento_total_usd) > 0 && (
                 <span className="text-amber-600">Desc: <strong>-{fmtUsd(despacho.descuento_total_usd)}</strong></span>
               )}
-              <span className="text-base font-black text-slate-900">
+              <span className="text-base font-black text-slate-900 ml-auto sm:ml-0">
                 Total: {fmtUsd(totales.total)}
               </span>
             </div>
 
             {/* Botones */}
-            <div className="flex gap-3 shrink-0">
+            <div className="flex gap-2 sm:gap-3 shrink-0 w-full sm:w-auto">
               <button
                 onClick={onClose}
                 disabled={editarItems.isPending}
-                className="px-5 py-3 rounded-2xl border border-slate-300 text-slate-600 font-bold text-sm hover:bg-slate-50 active:scale-[0.98] transition-all disabled:opacity-50"
+                className="flex-1 sm:flex-none px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl border border-slate-300 text-slate-600 font-bold text-sm hover:bg-slate-50 active:scale-[0.98] transition-all disabled:opacity-50 text-center"
               >
                 Cancelar
               </button>
@@ -1143,7 +1178,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                     ? (!propuestaCodCuadrado ? 'La propuesta COD no está cuadrada' : undefined)
                     : (!pagoInmediatoCuadrado ? 'Los montos no cuadran con el total' : undefined)
                 }
-                className="px-6 py-3 rounded-2xl bg-indigo-600 text-white font-black text-sm shadow-lg shadow-indigo-200 hover:bg-indigo-700 active:scale-[0.98] transition-all flex items-center gap-2 disabled:opacity-50"
+                className="flex-1 sm:flex-none px-5 sm:px-6 py-2.5 sm:py-3 rounded-2xl bg-indigo-600 text-white font-black text-sm shadow-lg shadow-indigo-200 hover:bg-indigo-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {editarItems.isPending ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                 Guardar Cambios
