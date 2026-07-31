@@ -4,7 +4,7 @@
 // — Supervisor: vista completa + crear/editar/desactivar
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Package, Plus, Search, RefreshCw, X, Filter, LayoutGrid, List, AlertTriangle, ArrowLeftRight, FileText, ClipboardPaste, TrendingUp, FileSpreadsheet, EyeOff } from 'lucide-react'
+import { Package, Plus, Search, RefreshCw, X, Filter, AlertTriangle, ArrowLeftRight, FileText, ClipboardPaste, TrendingUp, FileSpreadsheet, EyeOff } from 'lucide-react'
 import { smartSearchProductos } from '../utils/smartSearch'
 import useAuthStore from '../store/useAuthStore'
 import { useTasaCambio } from '../hooks/useTasaCambio'
@@ -13,7 +13,6 @@ import { useInventario, useCategorias, useDesactivarProducto, useBorrarProducto,
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import { useStockComprometido } from '../hooks/useStockComprometido'
 import ProductoCard  from '../components/inventario/ProductoCard'
-import ProductoRow   from '../components/inventario/ProductoRow'
 import ProductoForm  from '../components/inventario/ProductoForm'
 import MovimientoLoteModal from '../components/inventario/MovimientoLoteModal'
 import MovimientosHistorial from '../components/inventario/MovimientosHistorial'
@@ -77,11 +76,6 @@ export default function InventarioView() {
   const [stockBajo,     setStockBajo]     = useState(() => searchParams.get('filtro') === 'stock_bajo')
   const [stockNegativo, setStockNegativo] = useState(false)
   const [soloDesactivados, setSoloDesactivados] = useState(false)
-  const [vistaMode,     setVistaMode]     = useState(() => {
-    const businessId = useAuthStore.getState().perfil?.cuenta_id
-    const key = businessId ? `inventario_vista-${businessId}` : 'inventario_vista'
-    return localStorage.getItem(key) || (window.innerWidth < 768 ? 'list' : 'grid')
-  })
   const [pagina,        setPagina]        = useState(1)
 
   // Sincronizar URL param con estado
@@ -90,8 +84,6 @@ export default function InventarioView() {
       setStockBajo(true)
     }
   }, [searchParams])
-
-
 
   // Modales
   const [modalFormOpen,    setModalFormOpen]    = useState(false)
@@ -113,9 +105,7 @@ export default function InventarioView() {
   const [modalCloneMode,   setModalCloneMode]   = useState(false)
   const [showImportador,   setShowImportador]   = useState(false)
 
-  // Data — UNA sola query del catálogo completo; el filtro de categoría se
-  // aplica en memoria (antes había 2 instancias de useInventario y con una
-  // categoría activa ambas descargaban ~1000 filas cada una en cada refetch)
+  // Data
   const { data: todosData, isLoading, isError, refetch } = useInventario({ pageSize: 1000, mostrarInactivos: esPrivilegiado })
   const todosProductos = todosData?.productos ?? todosData ?? []
   const catalogoTruncado = !!todosData?.truncado
@@ -134,7 +124,7 @@ export default function InventarioView() {
   const { data: stockComprometido = {} } = useStockComprometido()
   const categoriasBatch = useMemo(() => [...new Set(todosProductos.map(p => p.categoria).filter(Boolean))].sort(), [todosProductos])
 
-  // Smart search client-side con ranking por relevancia
+  // Smart search client-side
   const productos = useMemo(() => {
     let list = productosRaw
     if (soloDesactivados) {
@@ -173,7 +163,7 @@ export default function InventarioView() {
     return productosFiltrados.slice(inicio, inicio + ITEMS_POR_PAGINA)
   }, [productosFiltrados, pagina])
 
-  // Debounce: actualizar búsqueda real 300ms después de dejar de teclear
+  // Debounce
   useEffect(() => {
     const timer = setTimeout(() => {
       setBusqueda(textoBusqueda)
@@ -191,13 +181,6 @@ export default function InventarioView() {
     setSoloDesactivados(false)
     setSearchParams({})
     setPagina(1)
-  }
-
-  function cambiarVista(modo) {
-    setVistaMode(modo)
-    const businessId = perfil?.cuenta_id
-    const key = businessId ? `inventario_vista-${businessId}` : 'inventario_vista'
-    localStorage.setItem(key, modo)
   }
 
   function abrirCrear() {
@@ -218,23 +201,14 @@ export default function InventarioView() {
     setModalFormOpen(true)
   }
 
-  function abrirBorrar(producto) {
-    setProductoABorrar(producto)
-    setConfirmBorrarOpen(true)
-  }
-
-  async function confirmarBorrar() {
-    if (!productoABorrar) return
-    try {
-      await borrar.mutateAsync(productoABorrar.id)
-    } finally {
-      setProductoABorrar(null)
-    }
-  }
-
   function abrirDesactivar(producto) {
     setProductoADesact(producto)
     setConfirmDesactOpen(true)
+  }
+
+  function abrirBorrar(producto) {
+    setProductoABorrar(producto)
+    setConfirmBorrarOpen(true)
   }
 
   async function confirmarDesactivar() {
@@ -242,7 +216,18 @@ export default function InventarioView() {
     try {
       await desactivar.mutateAsync({ id: productoADesact.id, activo: !productoADesact.activo })
     } finally {
+      setConfirmDesactOpen(false)
       setProductoADesact(null)
+    }
+  }
+
+  async function confirmarBorrar() {
+    if (!productoABorrar) return
+    try {
+      await borrar.mutateAsync(productoABorrar.id)
+    } finally {
+      setConfirmBorrarOpen(false)
+      setProductoABorrar(null)
     }
   }
 
@@ -260,6 +245,17 @@ export default function InventarioView() {
 
   const hayFiltros = busqueda || categoria || stockBajo || stockNegativo || soloDesactivados
 
+  // Guardarraíl: migrar posibles valores 'list' guardados en localStorage a 'grid'
+  {
+    const businessId = useAuthStore.getState().perfil?.cuenta_id
+    const keys = businessId
+      ? [`inventario_vista-${businessId}`, 'inventario_vista']
+      : ['inventario_vista']
+    keys.forEach(k => {
+      if (localStorage.getItem(k) === 'list') localStorage.setItem(k, 'grid')
+    })
+  }
+
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="p-3 sm:p-4 md:p-5 lg:p-6 pb-24 lg:pb-6 space-y-3 sm:space-y-4 md:space-y-5">
@@ -271,16 +267,6 @@ export default function InventarioView() {
         subtitle={<>{isLoading ? 'Cargando...' : `${productosFiltrados.length} producto${productosFiltrados.length !== 1 ? 's' : ''}${stockBajo ? ' con stock bajo' : ''}`}{!esPrivilegiado && <span className="ml-1 opacity-60">(catálogo de precios)</span>}</>}
         action={puedeGestionarInventario && (
           <div className="flex flex-wrap items-center gap-2">
-            {/*
-            <button
-              onClick={() => setShowIngresoLote(true)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-emerald-500 text-emerald-700 font-bold text-sm hover:bg-emerald-50 transition-all shadow-sm shrink-0"
-            >
-              <ClipboardPaste size={16} />
-              <span className="hidden sm:inline">Ingreso Masivo</span>
-              <span className="sm:hidden">Masivo</span>
-            </button>
-            */}
             <button onClick={() => setModalLoteOpen(true)} className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98] bg-slate-700 hover:bg-slate-600 shrink-0">
               <ArrowLeftRight size={16} />
               <span className="hidden sm:inline">Ingreso / Egreso</span>
@@ -333,39 +319,54 @@ export default function InventarioView() {
           </div>
         </form>
 
-        {/* Fila 2: Categoría + controles */}
+        {/* Fila 2: Categoría + Botones de Acción Global */}
         <div className="flex items-center gap-2">
           {/* Filtro categoría */}
           {categorias.length > 0 && (
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <div className="flex-1 min-w-0">
-                <CustomSelect
-                  options={[
-                    { value: '', label: 'Todas las categorías' },
-                    ...categorias,
-                  ]}
-                  value={categoria}
-                  onChange={val => { setCategoria(val); setPagina(1) }}
-                  placeholder="Todas las categorías"
-                  icon={Filter}
-                  clearable
-                />
-              </div>
+            <div className="flex-1 min-w-0">
+              <CustomSelect
+                options={[
+                  { value: '', label: 'Todas las categorías' },
+                  ...categorias,
+                ]}
+                value={categoria}
+                onChange={val => { setCategoria(val); setPagina(1) }}
+                placeholder="Todas las categorías"
+                icon={Filter}
+                clearable
+              />
             </div>
           )}
 
+          <div className="flex items-center gap-2 shrink-0 ml-auto">
+            {/* Botón Lista de Precios */}
+            <button type="button" onClick={() => setShowListaPrecios(true)} title="Lista de precios PDF"
+              className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-colors border bg-white border-slate-200 text-slate-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 shrink-0">
+              <FileText size={14} />
+              <span className="hidden sm:inline">Lista de precios</span>
+            </button>
+
+            <button type="button" onClick={() => refetch()} title="Actualizar"
+              className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors shrink-0">
+              <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
+            </button>
+          </div>
+        </div>
+
+        {/* Fila 3: Chips de filtro deslizable en móvil */}
+        <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide py-1 -mx-1 px-1">
           {/* Filtro stock bajo */}
           <button
             type="button"
             onClick={toggleStockBajo}
-            className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-colors border shrink-0 ${
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-colors border shrink-0 ${
               stockBajo
                 ? 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100'
                 : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-amber-600'
             }`}
           >
             <AlertTriangle size={14} />
-            <span className="hidden sm:inline">Stock bajo</span>
+            <span>Stock bajo</span>
           </button>
 
           {/* Filtro stock negativo (Venta Anticipada) */}
@@ -377,14 +378,14 @@ export default function InventarioView() {
               if (next) setStockBajo(false)
               setPagina(1)
             }}
-            className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-colors border shrink-0 ${
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-colors border shrink-0 ${
               stockNegativo
                 ? 'bg-red-50 border-red-300 text-red-700 hover:bg-red-100 ring-2 ring-red-200 shadow-sm'
                 : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-red-600'
             }`}
           >
             <span className="w-2 h-2 rounded-full bg-red-500 shrink-0 animate-pulse" />
-            <span className="hidden sm:inline">Stock Negativo</span>
+            <span>Stock Negativo</span>
           </button>
 
           {/* Filtro desactivados (solo administración/privilegiados) */}
@@ -392,7 +393,7 @@ export default function InventarioView() {
             <button
               type="button"
               onClick={() => { setSoloDesactivados(!soloDesactivados); setPagina(1); }}
-              className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-colors border shrink-0 ${
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-colors border shrink-0 ${
                 soloDesactivados
                   ? 'bg-slate-800 border-slate-700 text-white hover:bg-slate-700 shadow-sm shadow-slate-200'
                   : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-800'
@@ -402,49 +403,6 @@ export default function InventarioView() {
               <span>Solo desactivados</span>
             </button>
           )}
-
-          <div className="flex items-center gap-2 shrink-0 ml-auto">
-            {/* Botón Procesar Lista (Oculto temporalmente) */}
-            {/* 
-            <button type="button" onClick={() => setShowBusquedaLista(true)} title="Procesar lista de cliente"
-              className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-colors border bg-white border-slate-200 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-300 shrink-0">
-              <ClipboardPaste size={14} />
-              <span className="hidden sm:inline">Procesar Lista</span>
-            </button>
-            */}
-
-            {/* Botón Lista de Precios */}
-            <button type="button" onClick={() => setShowListaPrecios(true)} title="Lista de precios PDF"
-              className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-colors border bg-white border-slate-200 text-slate-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 shrink-0">
-              <FileText size={14} />
-              <span className="hidden sm:inline">Lista de precios</span>
-            </button>
-
-            <button type="button" onClick={() => refetch()} title="Actualizar"
-              className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
-              <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
-            </button>
-
-            {/* Toggle cuadrícula / lista */}
-            <div className="flex bg-slate-100 rounded-xl p-1">
-              <button
-                type="button"
-                onClick={() => cambiarVista('grid')}
-                title="Vista cuadrícula"
-                className={`p-2.5 rounded-lg transition-colors ${vistaMode === 'grid' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-              >
-                <LayoutGrid size={16} />
-              </button>
-              <button
-                type="button"
-                onClick={() => cambiarVista('list')}
-                title="Vista lista"
-                className={`p-2.5 rounded-lg transition-colors ${vistaMode === 'list' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-              >
-                <List size={16} />
-              </button>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -500,42 +458,23 @@ export default function InventarioView() {
           onAction={hayFiltros ? limpiarFiltros : puedeGestionarInventario ? abrirCrear : undefined}
         />
       ) : (
-        vistaMode === 'grid' ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-            {productosPaginados.map((p, index) => (
-              <ProductoCard
-                key={p.id}
-                index={index}
-                producto={p}
-                onEditar={abrirEditar}
-                onClonar={abrirClonar}
-                onDesactivar={abrirDesactivar}
-                onBorrar={abrirBorrar}
-                onKardex={setKardexProducto}
-                onDetalle={setDetalleProducto}
-                tasa={tasaEfectiva}
-                comprometido={stockComprometido[p.id] || 0}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {productosPaginados.map(p => (
-              <ProductoRow
-                key={p.id}
-                producto={p}
-                onEditar={abrirEditar}
-                onClonar={abrirClonar}
-                onDesactivar={abrirDesactivar}
-                onBorrar={abrirBorrar}
-                onKardex={setKardexProducto}
-                onDetalle={setDetalleProducto}
-                tasa={tasaEfectiva}
-                comprometido={stockComprometido[p.id] || 0}
-              />
-            ))}
-          </div>
-        )
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+          {productosPaginados.map((p, index) => (
+            <ProductoCard
+              key={p.id}
+              index={index}
+              producto={p}
+              onEditar={abrirEditar}
+              onClonar={abrirClonar}
+              onDesactivar={abrirDesactivar}
+              onBorrar={abrirBorrar}
+              onKardex={setKardexProducto}
+              onDetalle={setDetalleProducto}
+              tasa={tasaEfectiva}
+              comprometido={stockComprometido[p.id] || 0}
+            />
+          ))}
+        </div>
       )}
 
       {/* ── Paginación (solo tab productos) ──────────────────────────────────── */}

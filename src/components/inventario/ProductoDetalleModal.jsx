@@ -233,14 +233,16 @@ export default function ProductoDetalleModal({ isOpen, onClose, producto, tasa =
               )}
             </div>
 
-            {/* Disponibilidad */}
-            <div className="flex items-center justify-center pt-0.5">
-              <span className={`inline-flex items-center gap-1.5 px-3 py-1 sm:px-4 sm:py-2 rounded-full text-xs sm:text-sm font-bold ${
+            {/* Disponibilidad y Stock */}
+            <div className="flex flex-col items-center justify-center gap-1 pt-0.5">
+              <span className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-bold border ${
                 disponible
-                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                  : 'bg-red-50 text-red-700 border border-red-200'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : 'bg-red-50 text-red-700 border-red-200'
               }`}>
-                {disponible ? '✅ Disponible' : '❌ Agotado'}
+                <span>{disponible ? '✅ Disponible' : '❌ Agotado'}</span>
+                <span className="opacity-30">•</span>
+                <span>{Number(stockActual).toLocaleString('es-VE')}{producto.unidad ? ` ${producto.unidad}` : ''}</span>
               </span>
             </div>
 
