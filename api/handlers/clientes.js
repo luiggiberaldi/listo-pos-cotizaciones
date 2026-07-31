@@ -123,7 +123,7 @@ export async function handleClientesLookup(request, env) {
 
   const esExterno = !!operador.es_externo;
 
-  let queryUrl = `${env.SUPABASE_URL}/rest/v1/clientes?id=in.(${ids.map(encodeURIComponent).join(',')})&cuenta_id=eq.${user.id}&select=id,codigo_cliente,nombre,rif_cedula,telefono,email,direccion,estado,ciudad,tipo_cliente,vendedor_id,creado_en,categoria,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color,rol)`;
+  let queryUrl = `${env.SUPABASE_URL}/rest/v1/clientes?id=in.(${ids.map(encodeURIComponent).join(',')})&cuenta_id=eq.${user.id}&select=id,codigo_cliente,nombre,rif_cedula,telefono,email,direccion,estado,ciudad,tipo_cliente,vendedor_id,saldo_a_favor,saldo_pendiente,creado_en,categoria,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color,rol)`;
 
   if (esExterno) {
     queryUrl += `&vendedor_id=eq.${operador.id}`;

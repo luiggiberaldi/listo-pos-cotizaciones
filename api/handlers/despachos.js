@@ -68,12 +68,15 @@ export async function handleCrearDespacho(request, env) {
     // Fetch cliente details and check if vendedor has no commission
     let clienteNombre = 'cliente';
     let esVendedorSinComision = false;
-    if (cot.cliente_id) {
-      const cliRes = await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${cot.cliente_id}&select=nombre,vendedor_id,vendedor:usuarios!clientes_vendedor_id_fkey(rol)`, { headers });
+    let clienteSaldoFavor = 0;
+    const targetCliId = (clienteFacturaId && isValidUuid(clienteFacturaId)) ? clienteFacturaId : cot.cliente_id;
+    if (targetCliId) {
+      const cliRes = await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${targetCliId}&select=nombre,saldo_a_favor,vendedor_id,vendedor:usuarios!clientes_vendedor_id_fkey(rol)`, { headers });
       if (cliRes.ok) {
         const cliData = await cliRes.json();
         if (cliData && cliData.length > 0) {
           clienteNombre = cliData[0].nombre;
+          clienteSaldoFavor = Number(cliData[0].saldo_a_favor || 0);
           esVendedorSinComision = cliData[0].vendedor?.rol === 'vendedor_sin_comision';
         }
       }
@@ -89,6 +92,10 @@ export async function handleCrearDespacho(request, env) {
             if (isNaN(dias) || dias <= 0) {
               return jsonError('Los días de vencimiento son obligatorios para cuentas por cobrar', 400, request);
             }
+          }
+          const sf = fps.find(f => f.metodo === 'Saldo a Favor');
+          if (sf && Number(sf.monto) > clienteSaldoFavor + 0.01) {
+            return jsonError(`El monto en Saldo a Favor ($${sf.monto}) excede el disponible actual del cliente ($${clienteSaldoFavor.toFixed(2)})`, 400, request);
           }
         }
       } catch (e) {}

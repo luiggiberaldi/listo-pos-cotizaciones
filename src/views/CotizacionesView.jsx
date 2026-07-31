@@ -141,9 +141,9 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
 
   const billingCliente = useMemo(() => {
-    return clienteFacturaId
-      ? clientes.find(c => c.id === clienteFacturaId)
-      : cotizacion?.cliente
+    const targetId = clienteFacturaId || cotizacion?.cliente_id
+    const found = targetId ? clientes.find(c => c.id === targetId) : null
+    return found || cotizacion?.cliente
   }, [clienteFacturaId, clientes, cotizacion])
 
   const esVendedorSinComision = useMemo(() => {

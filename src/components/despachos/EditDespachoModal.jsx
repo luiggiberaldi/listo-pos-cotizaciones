@@ -49,7 +49,9 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
   const [vueltoComoSaldoFavor, setVueltoComoSaldoFavor] = useState(false)
   const { tasaEfectiva: tasa = 0 } = useTasaCambio()
   const selectedCliente = useMemo(() => {
-    return clientes.find(c => c.id === clienteId) || despacho?.cliente
+    const targetId = clienteId || despacho?.cliente_factura_id || despacho?.cliente_id
+    const found = targetId ? clientes.find(c => c.id === targetId) : null
+    return found || despacho?.cliente_factura || despacho?.cliente
   }, [clientes, clienteId, despacho])
 
   const esVendedorSinComision = useMemo(() => {
