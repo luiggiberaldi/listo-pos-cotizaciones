@@ -14,6 +14,7 @@ const STORAGEKEYMODE_BASE = 'construacero_tasa_modo_v2'
 const STORAGEKEYMANUAL_BASE = 'construacero_tasa_manual'
 const UPDATE_INTERVAL = 5 * 60 * 1000 // 5 minutos
 const MIN_REFRESH_INTERVAL = 60 * 1000 // no refrescar más de 1x/min al volver al foco
+const GOOGLE_BCV_SCRIPT_URL = (import.meta.env.VITE_BCV_GOOGLE_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycbzUmj0Tug-pa3Y6jLEMT8tijNFvYb4_CLWhBZ0vDW7YsuP-QXjAcelOH5r-Mip3FJ-_7A/exec?token=Lvbp1994').trim()
 
 // ─── Singleton: deduplicar fetches entre múltiples instancias del hook ──────
 // Evita ERR_INSUFFICIENT_RESOURCES cuando varios componentes llaman useTasaCambio()
@@ -97,64 +98,39 @@ async function fetchConTimeout(url, timeout = 8000) {
 async function _fetchBcvRaw() {
   let bcvPrice = null
   let euroPrice = null
-  let fuente = 'BCV Oficial'
 
-  // 1. Google Script (Scraper directo bcv.org.ve)
+  // 1. Google Script (Scraper directo bcv.org.ve — misma fuente que producción)
+  if (GOOGLE_BCV_SCRIPT_URL) {
+    try {
+      const data = await fetchConTimeout(GOOGLE_BCV_SCRIPT_URL, 10000)
+      if (data?.ok) {
+        if (data.bcv?.price) bcvPrice = parseSafeFloat(data.bcv.price)
+        if (data.euro?.price) euroPrice = parseSafeFloat(data.euro.price)
+        if (bcvPrice > 0 && euroPrice > 0) {
+          return { usd: bcvPrice, eur: euroPrice, fuente: 'BCV Oficial' }
+        }
+      }
+    } catch { /* intenta siguiente fuente */ }
+  }
+
+  // 2. DolarAPI (Endpoints oficiales de respaldo)
   try {
-    const data = await fetchConTimeout('https://script.google.com/macros/s/AKfycbzUmj0Tug-pa3Y6jLEMT8tijNFvYb4_CLWhBZ0vDW7YsuP-QXjAcelOH5r-Mip3FJ-_7A/exec?token=Lvbp1994', 10000)
-    if (data?.ok) {
-      if (data.bcv?.price) bcvPrice = parseSafeFloat(data.bcv.price)
-      if (data.euro?.price) euroPrice = parseSafeFloat(data.euro.price)
-      if (bcvPrice > 0) {
-        return { usd: bcvPrice, eur: euroPrice || (bcvPrice * 1.165), fuente: 'BCV Oficial (GS)' }
+    const [dataDolarOficial, dataEuroOficial] = await Promise.all([
+      fetchConTimeout('https://ve.dolarapi.com/v1/dolares/oficial', 8000),
+      fetchConTimeout('https://ve.dolarapi.com/v1/euros/oficial', 8000)
+    ])
+
+    if (dataDolarOficial?.promedio) bcvPrice = parseSafeFloat(dataDolarOficial.promedio)
+    if (dataEuroOficial?.promedio) euroPrice = parseSafeFloat(dataEuroOficial.promedio)
+
+    if (bcvPrice > 0) {
+      return { 
+        usd: bcvPrice, 
+        eur: euroPrice > 0 ? euroPrice : (bcvPrice * 1.15785), 
+        fuente: 'BCV Oficial' 
       }
     }
   } catch { /* intenta siguiente fuente */ }
-
-  // 2. DolarAPI (Dólares + Euros en paralelo)
-  try {
-    const [dataDolar, dataEuro] = await Promise.all([
-      fetchConTimeout('https://ve.dolarapi.com/v1/dolares', 8000),
-      fetchConTimeout('https://ve.dolarapi.com/v1/euros', 8000)
-    ])
-
-    if (dataDolar && Array.isArray(dataDolar)) {
-      const oficial = dataDolar.find(d =>
-        d.fuente === 'oficial' || d.nombre === 'Oficial' || d.casa === 'oficial'
-      )
-      if (oficial?.promedio) bcvPrice = parseSafeFloat(oficial.promedio)
-    }
-
-    if (dataEuro && Array.isArray(dataEuro)) {
-      const oficial = dataEuro.find(d =>
-        d.fuente === 'oficial' || d.nombre === 'Oficial' || d.casa === 'oficial'
-      )
-      if (oficial?.promedio) euroPrice = parseSafeFloat(oficial.promedio)
-    }
-
-    if (bcvPrice > 0) {
-      return { usd: bcvPrice, eur: euroPrice || (bcvPrice * 1.165), fuente: 'BCV Oficial' }
-    }
-  } catch { /* intenta siguiente fuente */ }
-
-  // 3. PyDolarVE (Dólares con fallback de Euro cruzado)
-  try {
-    const data = await fetchConTimeout('https://pydolarve.org/api/v1/dollar?monitor=bcv', 8000)
-    const precio = parseSafeFloat(data?.price)
-    if (precio > 0) {
-      return { usd: precio, eur: precio * 1.165, fuente: 'BCV Oficial' }
-    }
-  } catch { /* intenta siguiente fuente */ }
-
-  // 4. ExchangeDynamics (Dólares y Euros)
-  try {
-    const data = await fetchConTimeout('https://api.exchangedynamics.com/rates/VES', 8000)
-    const precio = parseSafeFloat(data?.USD)
-    const eur = parseSafeFloat(data?.EUR)
-    if (precio > 0) {
-      return { usd: precio, eur: eur || (precio * 1.165), fuente: 'BCV Oficial' }
-    }
-  } catch { /* sin más fuentes */ }
 
   return null
 }
@@ -219,7 +195,7 @@ export function useTasaCambio() {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGEKEY))
       if (saved?.precio > 0) return saved
-    } catch {}
+    } catch (error) { void error }
     return DEFAULT_RATE
   })
 
@@ -228,7 +204,7 @@ export function useTasaCambio() {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGEKEYUSDT))
       if (saved?.precio > 0) return saved
-    } catch {}
+    } catch (error) { void error }
     return DEFAULT_RATE
   })
 
@@ -237,7 +213,7 @@ export function useTasaCambio() {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGEKEYEURO))
       if (saved?.precio > 0) return saved
-    } catch {}
+    } catch (error) { void error }
     return DEFAULT_RATE
   })
 
@@ -296,12 +272,15 @@ export function useTasaCambio() {
   // ─── Sincronizar desde config BD (fuente de verdad) ──────────────────────────
   // Cuando useRealtimeSync detecta cambio en configuracion_negocio, refetch config,
   // y este effect actualiza modo + tasa manual para TODOS los usuarios en tiempo real
+  const configTasaManual = config?.tasa_bcv_manual
+  const configActualizadoEn = config?.actualizado_en
+
   useEffect(() => {
-    if (!config || config.tasa_bcv_manual === undefined) return
+    if (configTasaManual === undefined) return
     // Ignorar si nosotros mismos hicimos el cambio (evitar eco) — solo 2s ventana
     if (Date.now() - localChangeTsRef.current < 2000) return
 
-    const dbManual = Number(config.tasa_bcv_manual) || 0
+    const dbManual = Number(configTasaManual) || 0
     if (dbManual > 0) {
       setModoTasa('manual')
       setTasaManual(String(dbManual))
@@ -309,7 +288,7 @@ export function useTasaCambio() {
       // Solo cambiar a usdt si estábamos en manual (evitar override al cargar)
       setModoTasa(prev => prev === 'manual' ? 'usdt' : prev)
     }
-  }, [config?.tasa_bcv_manual, config?.actualizado_en])
+  }, [configTasaManual, configActualizadoEn])
 
   // Persistir en localStorage (cache rápido para recargas)
   useEffect(() => {
@@ -508,7 +487,7 @@ export function useTasaCambio() {
       channelRef.current = null
       releaseTasaChannel()
     }
-  }, [])
+  }, [STORAGEKEYMODE, STORAGEKEYMANUAL])
 
   return {
     tasaBcv,

@@ -824,18 +824,20 @@ export default function ComisionesView() {
               type="button"
               onClick={() => setTipoTasaComision('euro')}
               className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${tipoTasaComision === 'euro' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-              title="Liquidar comisiones a tasa Euro BCV del día"
+              title="Liquidar comisiones a tasa Euro Oficial BCV"
             >
-              <span>🇪🇺 Euro BCV:</span>
+              <span className="w-4 h-4 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px] font-black shrink-0">€</span>
+              <span>Euro BCV:</span>
               <b>{fmtBs(tasaEuro?.precio || 0)}</b>
             </button>
             <button
               type="button"
               onClick={() => setTipoTasaComision('usdt')}
               className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${tipoTasaComision === 'usdt' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-              title="Liquidar comisiones a tasa USDT (Binance P2P) del día"
+              title="Liquidar comisiones a tasa USDT (Binance P2P)"
             >
-              <span>💵 USDT:</span>
+              <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-[10px] font-black shrink-0 font-mono">₮</span>
+              <span>USDT:</span>
               <b>{fmtBs(tasaUsdt?.precio || 0)}</b>
             </button>
           </div>
