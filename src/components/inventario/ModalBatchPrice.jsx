@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import { Modal } from './ui/Modal'
-import CustomSelect from './ui/CustomSelect'
-import { showToast } from './ui/Toast'
-import { authFetch } from '../services/authFetch'
+import { Modal } from '../ui/Modal'
+import CustomSelect from '../ui/CustomSelect'
+import { showToast } from '../ui/Toast'
+import { authFetch } from '../../services/authFetch'
 import { Calculator, Eye, CheckCircle2, XCircle, AlertCircle } from 'lucide-react'
 
 export default function ModalBatchPrice({ isOpen, onClose, cuentaId, categorias = [], onSuccess }) {

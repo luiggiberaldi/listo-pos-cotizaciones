@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { X, Truck, Plus, Loader2 } from 'lucide-react'
 import { useTransportistas, useCrearTransportista } from '../../hooks/useTransportistas'
+import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import { useEditarDespacho } from '../../hooks/useDespachos'
 import CustomSelect from '../ui/CustomSelect'
 import TransportistaFormCompact from '../transportistas/TransportistaFormCompact'
@@ -10,6 +11,7 @@ import { showToast } from '../ui/Toast'
 
 export default function CambiarTransportistaModal({ isOpen, onClose, despacho }) {
   const { data: transportistas = [] } = useTransportistas()
+  const { data: config = {} } = useConfigNegocio()
   const editarDespacho = useEditarDespacho()
   const crearTransp = useCrearTransportista()
 
@@ -30,6 +32,20 @@ export default function CambiarTransportistaModal({ isOpen, onClose, despacho })
   }, [despacho, isOpen])
 
   const cargando = editarDespacho.isPending
+
+  // ── Preview del neto a pagar al chofer local (config global) ──
+  const transportistaSel = transportistas.find(t => t.id === transportistaId)
+  const esLocal = !!transportistaSel?.es_local
+  const fleteNum = Number(fleteUsd) || 0
+  const tipoCalculo = config.transp_tipo_calculo === 'fija' ? 'fija' : 'porcentaje'
+  const pctComision = Number(config.transp_pct_comision) || 0
+  const tarifaFija  = Number(config.transp_tarifa_fija_usd) || 0
+  let netoPreview = 0
+  if (esLocal && fleteNum > 0) {
+    netoPreview = tipoCalculo === 'fija'
+      ? Math.min(tarifaFija, fleteNum)
+      : Math.round(fleteNum * pctComision / 100 * 100) / 100
+  }
 
   async function handleGuardar(e) {
     if (e) e.preventDefault()
@@ -81,9 +97,9 @@ export default function CambiarTransportistaModal({ isOpen, onClose, despacho })
                   showSubInTrigger={false}
                   options={transportistas.map(t => ({
                     value: t.id,
-                    label: `${t.nombre}${t.rif ? ` (${t.rif})` : ''}`,
+                    label: `${t.nombre}${t.es_local ? ' · LOCAL' : ''}${t.rif ? ` (${t.rif})` : ''}`,
                     selectedLabel: t.nombre,
-                    sub: [t.vehiculo, t.placa_chuto ? `Placas: ${t.placa_chuto}${t.placa_batea ? `/${t.placa_batea}` : ''}` : '', t.color].filter(Boolean).join(' · ') || undefined
+                    sub: [t.vehiculo, t.placa_chuto ? `Placas: ${t.placa_chuto}${t.placa_batea ? `/${t.placa_batea}` : ''}` : '', t.color, t.es_local ? 'Local' : null].filter(Boolean).join(' · ') || undefined
                   }))}
                   placeholder="Seleccionar transportista..."
                   disabled={cargando}
@@ -102,6 +118,26 @@ export default function CambiarTransportistaModal({ isOpen, onClose, despacho })
                 <Plus size={16} className="text-emerald-600" />
               </button>
             </div>
+
+            {/* ── Preview del neto a pagar al chofer local ── */}
+            {esLocal && (
+              <div className="mt-2 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-800">
+                <span className="font-bold">Transportista local</span> ·{' '}
+                {tipoCalculo === 'porcentaje'
+                  ? `${pctComision}% del flete`
+                  : `Tarifa fija $${tarifaFija.toFixed(2)}`}
+                {fleteNum > 0 && (
+                  <span className="block mt-0.5 text-amber-900 font-semibold">
+                    → Neto a pagar al chofer: <span className="font-black">${netoPreview.toFixed(2)}</span>
+                  </span>
+                )}
+              </div>
+            )}
+            {!esLocal && transportistaSel && (
+              <div className="mt-1 text-[11px] text-slate-500">
+                Transportista propio del negocio (no se le paga neto del flete).
+              </div>
+            )}
 
             {showNuevoTransp && (
               <div className="bg-white rounded-2xl border-2 border-emerald-200 shadow-lg p-3 sm:p-4 space-y-3 mt-3">

@@ -1,11 +1,12 @@
 // src/views/TransportistasView.jsx
 // Gestión de transportistas — solo supervisores pueden crear/editar/desactivar
-import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Truck, Plus, Pencil, Ban, RefreshCw, ChevronLeft, ChevronRight, MapPin, Scale, FileText, Printer } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import {
   useTransportistas,
+  useTransportistasCounts,
   useCrearTransportista,
   useActualizarTransportista,
   useDesactivarTransportista,
@@ -14,6 +15,7 @@ import ConfirmModal from '../components/ui/ConfirmModal'
 import Skeleton     from '../components/ui/Skeleton'
 import EmptyState   from '../components/ui/EmptyState'
 import PageHeader  from '../components/ui/PageHeader'
+import { colorTransportista } from '../utils/transportistaColors'
 
 import { PREFIJOS_RIF, parsearRif as parsearRifTransp, formatearRif as formatearRifTransp } from '../utils/rif'
 
@@ -32,6 +34,9 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
     placa_batea:     inicial.placa_batea     ?? '',
     zona_cobertura:  inicial.zona_cobertura  ?? '',
     capacidad:       inicial.capacidad       ?? '',
+    es_local:        inicial.es_local        ?? false,
+    tipo_relacion:   inicial.tipo_relacion   ?? 'proveedor',
+    emite_comprobante: inicial.emite_comprobante ?? false,
   })
   const [error, setError] = useState('')
 
@@ -45,7 +50,10 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
     e.preventDefault()
     if (!campos.nombre.trim()) { setError('El nombre es obligatorio'); return }
     // RIF ahora es opcional
-    onGuardar({ ...campos, rif: formatearRifTransp(rifPrefijo, campos.rif) })
+    onGuardar({
+      ...campos,
+      rif: formatearRifTransp(rifPrefijo, campos.rif),
+    })
   }
 
   const inputCls = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-primary placeholder:text-slate-400'
@@ -59,7 +67,7 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
             placeholder="Nombre del transportista" className={inputCls} disabled={cargando} />
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Cédula / RIF *</label>
+          <label className="text-sm font-medium text-slate-700">Cédula / RIF</label>
           <div className="flex gap-1 mb-1.5">
             {PREFIJOS_RIF.map(p => (
               <button key={p} type="button" disabled={cargando}
@@ -124,6 +132,39 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
           <input value={campos.capacidad} onChange={e => cambiar('capacidad', e.target.value)}
             placeholder="Ej: 30 Toneladas, 350 Sacos" className={inputCls} disabled={cargando} />
         </div>
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-slate-700">Relación</label>
+          <select value={campos.tipo_relacion} onChange={e => cambiar('tipo_relacion', e.target.value)}
+            className={inputCls} disabled={cargando}>
+            <option value="empleado">Empleado</option>
+            <option value="contratista">Contratista</option>
+            <option value="proveedor">Proveedor</option>
+            <option value="propio">Propio de la empresa</option>
+          </select>
+        </div>
+        <label className="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+          <input type="checkbox" checked={!!campos.emite_comprobante}
+            onChange={e => cambiar('emite_comprobante', e.target.checked)} disabled={cargando}
+            className="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary" />
+          Emite comprobante por el servicio
+        </label>
+      </div>
+
+      {/* ── Transportista local (cobra % o tarifa del flete) ── */}
+      <div className="space-y-3 border-t border-slate-100 pt-4">
+        <label className="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer w-fit">
+          <input
+            type="checkbox"
+            checked={!!campos.es_local}
+            onChange={e => cambiar('es_local', e.target.checked)}
+            disabled={cargando}
+            className="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary"
+          />
+          Es transportista local (cobra del flete)
+        </label>
+        <p className="text-[11px] text-slate-400">
+          El tipo de cálculo (% o tarifa fija) y el valor se configuran globalmente en Configuración → Transportistas.
+        </p>
       </div>
 
       {error && <p className="text-xs text-red-500">{error}</p>}
@@ -192,22 +233,17 @@ function TransportistaModal({ transportista = null, onClose }) {
   )
 }
 
-// ─── Color determinista por nombre ────────────────────────────────────────────
-function colorTransportista() {
-  return '#1B365D' // Azul Oscuro Corporativo
-}
-
 // ─── Tarjeta ──────────────────────────────────────────────────────────────────
 function TransportistaCard({ transportista, esSupervisor, puedeEditar, onEditar, onDesactivar }) {
-  const color = colorTransportista(transportista.nombre)
+  const colors = colorTransportista(transportista.nombre)
 
   return (
     <div className="bg-white rounded-2xl border overflow-hidden flex flex-col hover:shadow-lg transition-all duration-200"
-      style={{ borderColor: color + '30', boxShadow: `0 1px 3px ${color}10` }}>
+      style={{ borderColor: colors.border, boxShadow: `0 1px 3px ${colors.shadow}` }}>
 
       {/* ── Strip superior con color ── */}
       <div className="relative h-20 shrink-0 flex flex-col items-center justify-center gap-1"
-        style={{ background: `linear-gradient(135deg, ${color}ee 0%, ${color}99 100%)` }}>
+        style={{ background: `linear-gradient(135deg, ${colors.gradientStart} 0%, ${colors.gradientEnd} 100%)` }}>
         {/* Dot pattern */}
         <div className="absolute inset-0 opacity-10 pointer-events-none"
           style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '12px 12px' }} />
@@ -223,6 +259,16 @@ function TransportistaCard({ transportista, esSupervisor, puedeEditar, onEditar,
         <p className="font-black text-slate-800 text-sm leading-tight truncate">{transportista.nombre}</p>
         {transportista.rif && (
           <p className="text-[11px] text-slate-400 font-mono mt-0.5">{transportista.rif}</p>
+        )}
+        {transportista.es_local && (
+          <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold uppercase tracking-wide">
+            Local
+          </span>
+        )}
+        {transportista.tipo_relacion && (
+          <span className="inline-flex items-center gap-1 mt-1 ml-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-semibold capitalize">
+            {transportista.tipo_relacion}
+          </span>
         )}
       </div>
 
@@ -316,17 +362,22 @@ const purificar  = (s) => (s || '').replace(/[^a-z0-9]/gi, '').toLowerCase()
 export default function TransportistasView() {
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
   const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
-  const puedeCrear = esSupervisor || ['vendedor', 'vendedor_sin_comision'].includes(perfil?.rol)
+  const puedeCrear = esSupervisor || ['vendedor', 'vendedor_sin_comision', 'administracion', 'desarrollador'].includes(perfil?.rol)
 
   const [modalAbierto,          setModalAbierto]          = useState(false)
   const [editando,              setEditando]              = useState(null)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
+  const [filtroTipo, setFiltroTipo] = useState('todos')
   const PAGE_SIZE = 12
   const [desactivandoTransp,    setDesactivandoTransp]    = useState(null)
 
-  const { data: transportistas = [], isLoading, isError, refetch } =
-    useTransportistas({ soloActivos: true })
+  const { data: transportistasPage = { items: [], total: 0 }, isLoading, isError, refetch } =
+    useTransportistas({ soloActivos: true, paginado: true, page, pageSize: PAGE_SIZE, search, tipo: filtroTipo })
+  const transportistas = useMemo(() => transportistasPage.items ?? [], [transportistasPage.items])
+  const totalCount = transportistasPage.total ?? 0
+  const { data: transportistasCounts = { todos: 0, locales: 0, generales: 0 } } =
+    useTransportistasCounts({ soloActivos: true })
   const desactivar = useDesactivarTransportista()
   const { data: config = {} } = useConfigNegocio()
   const [exportandoPDF, setExportandoPDF] = useState(false)
@@ -363,11 +414,14 @@ export default function TransportistasView() {
 
 
   const transportistasFiltrados = useMemo(() => {
-    if (!search.trim()) return transportistas
+    let arr = transportistas
+    if (filtroTipo === 'locales')    arr = arr.filter(t => !!t.es_local)
+    else if (filtroTipo === 'generales') arr = arr.filter(t => !t.es_local)
+    if (!search.trim()) return arr
     const q = normalizar(search)
     const qP = purificar(search)
     
-    return transportistas.filter(t => {
+    return arr.filter(t => {
       const n = normalizar(t.nombre)
       const r = purificar(t.rif)
       const pC = purificar(t.placa_chuto)
@@ -380,16 +434,13 @@ export default function TransportistasView() {
       // Coincidencia en nombre, rif, placas, vehículo, cobertura o capacidad
       return n.includes(q) || r.includes(qP) || pC.includes(qP) || pB.includes(qP) || cB.includes(q) || v.includes(q) || cob.includes(q) || cap.includes(q)
     })
-  }, [transportistas, search])
+  }, [transportistas, search, filtroTipo])
 
-  const totalPages = Math.max(1, Math.ceil(transportistasFiltrados.length / PAGE_SIZE))
-  const transportistasPaginados = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE
-    return transportistasFiltrados.slice(start, start + PAGE_SIZE)
-  }, [transportistasFiltrados, page])
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+  const transportistasPaginados = transportistasFiltrados
 
-  // Reset page on search change
-  useEffect(() => { setPage(1) }, [search])
+  // Reset page on search/filtro change
+  useEffect(() => { setPage(1) }, [search, filtroTipo])
 
   return (
     <div className="p-3 sm:p-4 md:p-5 lg:p-6 space-y-3 sm:space-y-4 md:space-y-5">
@@ -398,7 +449,7 @@ export default function TransportistasView() {
       <PageHeader
         icon={Truck}
         title="Transportistas"
-        subtitle={isLoading ? 'Cargando...' : `${transportistasFiltrados.length} visible${transportistasFiltrados.length !== 1 ? 's' : ''} de ${transportistas.length}`}
+        subtitle={isLoading ? 'Cargando...' : `${totalCount} visible${totalCount !== 1 ? 's' : ''}`}
         action={
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             {/* Buscador optimizado */}
@@ -447,7 +498,7 @@ export default function TransportistasView() {
                   </button>
                 </>
               )}
-              {puedeCrear && perfil?.rol !== 'administracion' && (
+              {puedeCrear && (
                 <button onClick={abrirNuevo} className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98] whitespace-nowrap"
                   style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
                   <Plus size={16} />Nuevo
@@ -458,6 +509,34 @@ export default function TransportistasView() {
         }
       />
 
+      {/* Filtro por tipo: Todos / Locales / Generales */}
+      {!isLoading && !isError && totalCount > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {[
+            { id: 'todos',      label: 'Todos',      count: transportistasCounts.todos },
+            { id: 'locales',    label: 'Locales',    count: transportistasCounts.locales },
+            { id: 'generales',  label: 'Generales',  count: transportistasCounts.generales },
+          ].map(f => (
+            <button
+              key={f.id}
+              onClick={() => setFiltroTipo(f.id)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                filtroTipo === f.id
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              {f.label}
+              <span className={`text-[10px] rounded-full px-1.5 py-0.5 ${
+                filtroTipo === f.id ? 'bg-white/20' : 'bg-slate-100 text-slate-500'
+              }`}>
+                {f.count}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Contenido */}
       {isLoading ? (
         <SkeletonTransportistas />
@@ -466,13 +545,25 @@ export default function TransportistasView() {
           <p className="font-semibold">Error al cargar transportistas</p>
           <button onClick={() => refetch()} className="mt-3 text-sm underline">Intentar de nuevo</button>
         </div>
-      ) : transportistas.length === 0 ? (
+      ) : transportistasFiltrados.length === 0 ? (
         <EmptyState
           icon={Truck}
-          title="No hay transportistas registrados"
-          description={puedeCrear ? 'Agrega el primer transportista.' : 'Aún no se han registrado transportistas.'}
-          actionLabel={puedeCrear ? 'Nuevo transportista' : undefined}
-          onAction={puedeCrear ? abrirNuevo : undefined}
+          title={
+            totalCount === 0
+              ? 'No hay transportistas registrados'
+              : filtroTipo === 'locales'
+                ? 'No hay transportistas locales'
+                : filtroTipo === 'generales'
+                  ? 'No hay transportistas generales'
+                  : 'Sin resultados'
+          }
+          description={
+            totalCount === 0
+              ? (puedeCrear ? 'Agrega el primer transportista.' : 'Aún no se han registrado transportistas.')
+              : 'Prueba con otro filtro o término de búsqueda.'
+          }
+          actionLabel={totalCount === 0 && puedeCrear ? 'Nuevo transportista' : undefined}
+          onAction={totalCount === 0 && puedeCrear ? abrirNuevo : undefined}
         />
       ) : (
         <>

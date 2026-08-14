@@ -15,6 +15,7 @@ export default function TransportistaFormCompact({ onGuardar, onCancelar, cargan
   const [colorBatea, setColorBatea] = useState('')
   const [zonaCobertura, setZonaCobertura] = useState('')
   const [capacidad, setCapacidad] = useState('')
+  const [esLocal, setEsLocal] = useState(false)
   const [error, setError] = useState('')
 
   function submit(e) {
@@ -30,6 +31,7 @@ export default function TransportistaFormCompact({ onGuardar, onCancelar, cargan
       color_batea: colorBatea,
       zona_cobertura: zonaCobertura,
       capacidad,
+      es_local: esLocal,
     })
   }
 
@@ -109,6 +111,26 @@ export default function TransportistaFormCompact({ onGuardar, onCancelar, cargan
             placeholder="Ej: 30 Toneladas" className={inputCls} disabled={cargando} />
         </div>
       </div>
+
+      {/* ── Transportista local ── */}
+      <div className="space-y-2 pt-2 border-t border-slate-100">
+        <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={esLocal}
+            onChange={e => setEsLocal(e.target.checked)}
+            disabled={cargando}
+            className="w-4 h-4 rounded border-slate-300 text-sky-500 focus:ring-sky-200"
+          />
+          Es transportista local (cobra del flete)
+        </label>
+        {esLocal && (
+          <p className="text-[11px] text-slate-500 italic px-1">
+            El tipo de cálculo y el valor se configuran globalmente en <span className="font-semibold">Configuración → Administración</span>.
+          </p>
+        )}
+      </div>
+
       {error && <p className="text-xs text-red-500">{error}</p>}
       <div className="flex justify-end gap-2 pt-1">
         <button type="button" onClick={onCancelar} disabled={cargando}
