@@ -5,7 +5,7 @@ import {
   BarChart3, CreditCard, RefreshCw, Download,
   FileText, DollarSign, AlertTriangle,
   Clock, Users, Percent, ArrowUpCircle, Loader2, Briefcase,
-  ChevronDown, Globe, UserCheck, Printer, CheckCircle
+  ChevronDown, Globe, UserCheck, Printer, CheckCircle, Truck
 } from 'lucide-react'
 import { useReporteVentas } from '../hooks/useReporteVentas'
 import { useReporteExternos } from '../hooks/useReporteExternos'
@@ -27,6 +27,8 @@ import KpiCards from '../components/reportes/KpiCards'
 import TablaVendedores from '../components/reportes/TablaVendedores'
 import TablaProductos from '../components/reportes/TablaProductos'
 import TablaClientes from '../components/reportes/TablaClientes'
+import TabTransportistas from '../components/reportes/TabTransportistas'
+import SeccionTransportistasVentas from '../components/reportes/SeccionTransportistasVentas'
 import supabase from '../services/supabase/client'
 import { apiUrl, getAuthHeaders } from '../services/apiBase'
 
@@ -63,6 +65,8 @@ const TABS = [
   { id: 'comisiones', label: 'Comisiones', short: 'Comis.', icon: Percent },
   { id: 'credito', label: 'Crédito', short: 'Créd.', icon: CreditCard },
   { id: 'ventas', label: 'Ventas', short: 'Ventas', icon: BarChart3 },
+  { id: 'transportistas', label: 'Transportistas', short: 'Transp.', icon: Truck,
+    roles: ['administracion', 'desarrollador', 'logistica', 'jefe'] },
   { id: 'externos', label: 'Artículos Externos', short: 'Extern.', icon: Globe },
 ]
 
@@ -960,11 +964,15 @@ function TabVentas({ configNeg }) {
           )}
         </>
       )}
+
+      {/* ── Transportistas locales: flete + comisiones en el período ──────── */}
+      <SeccionTransportistasVentas
+        desde={rango.from || null}
+        hasta={rango.to   || null}
+      />
     </div>
   )
 }
-
-// ─── Modal Detalle Vendedor ──────────────────────────────────────────────────
 function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, ajustesManuales = {} }) {
   const { data: comisionesRes, isLoading } = useComisiones({
     desde: rango?.from,
@@ -976,7 +984,11 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
 
   const marcar = useMarcarComisionPagada()
   const { perfil } = useAuthStore()
-  const { tasaEuro } = useTasaCambio()
+  const { tasaEuro, tasaUsdt } = useTasaCambio()
+  const [tipoTasaComision, setTipoTasaComision] = useState('euro') // 'euro' | 'usdt'
+  const tasaSeleccionada = tipoTasaComision === 'usdt' ? (tasaUsdt?.precio || 0) : (tasaEuro?.precio || 0)
+  const tipoTasaLabel = tipoTasaComision === 'usdt' ? 'USDT' : 'Euro BCV'
+
   const esAdmin = perfil?.rol === 'administracion'
   const esJefe = perfil?.rol === 'jefe'
   const esDev = perfil?.rol === 'desarrollador'
@@ -1053,19 +1065,13 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
     }
   }
 
-  const tasaComision = (item) => Number(
-    item.despacho?.tasa_snapshot || 
-    item.cotizacion?.tasa_bcv_snapshot || 
-    item.tasa || 
-    tasaEuro?.precio || 
-    0
-  )
+  const tasaComision = () => tasaSeleccionada || 0
 
   // Calcular totales del detalle
   const totales = detalle.reduce((acc, item) => {
     const total = item.estado === 'cta_cobrar' ? Number(item.comision_liberada || 0) : Number(item.totalcomision || 0)
     acc.totalUsd += total
-    acc.comBs += total * tasaComision(item)
+    acc.comBs += total * tasaSeleccionada
     return acc
   }, { totalUsd: 0, comBs: 0 })
 
@@ -1077,15 +1083,15 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
     const aj = ajustesManuales[vendedor.id] || { cxc: '', descuentoCarro: '' };
     const cxcVal = Number(aj.cxc) || 0;
     const descVal = Number(aj.descuentoCarro) || 0;
-    const ratePonderada = totales.totalUsd > 0 ? (totales.comBs / totales.totalUsd) : (tasaEuro?.precio || 0);
+    const rateVal = tasaSeleccionada || 0;
 
     if (formatoReporte === 'resumido') {
       const adjustedUsd = totales.totalUsd + cxcVal - descVal;
-      const adjustedBs = adjustedUsd * ratePonderada;
+      const adjustedBs = adjustedUsd * rateVal;
       return { totalUsd: adjustedUsd, comBs: adjustedBs };
     }
     return totales;
-  }, [totales, vendedor, ajustesManuales, formatoReporte, tasaEuro])
+  }, [totales, vendedor, ajustesManuales, formatoReporte, tasaSeleccionada])
 
   async function exportarPDF(action = 'download') {
     setExportando(true)
@@ -1214,7 +1220,9 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
         config: configNeg ?? {},
         action,
         formato: formatoReporte,
-        tasaEuro: tasaEuro?.precio || 0,
+        tasaEuro: tasaSeleccionada,
+        tasaAplicada: tasaSeleccionada,
+        tipoTasa: tipoTasaLabel,
         ajustesManuales
       })
     } catch (e) {
@@ -1246,7 +1254,7 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
           {/* Fila 1: KPIs - siempre en ancho completo */}
           <div className="grid grid-cols-2 gap-4">
             <KpiCard icon={DollarSign} label="Total Comisión USD" value={fmtUsd(totalConAjustes.totalUsd)} gradient="linear-gradient(135deg, #1e293b, #0f172a)" border="rgba(255,255,255,0.05)" />
-            <KpiCard icon={Percent} label="Total Comisión Bs" value={fmtBs(totalConAjustes.comBs)} gradient="linear-gradient(135deg, #065f46, #064e3b)" border="rgba(255,255,255,0.05)" />
+            <KpiCard icon={Percent} label={`Total Comisión Bs (${tipoTasaLabel})`} value={fmtBs(totalConAjustes.comBs)} gradient="linear-gradient(135deg, #065f46, #064e3b)" border="rgba(255,255,255,0.05)" />
           </div>
 
           {/* Fila 2: Acciones */}
@@ -1270,6 +1278,28 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
               {exportando ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} className="group-hover:scale-110 transition-transform" />}
               <span>Imprimir</span>
             </button>
+
+            {/* Selector de Tasa Euro / USDT */}
+            <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs font-bold shrink-0 h-9">
+              <button
+                type="button"
+                onClick={() => setTipoTasaComision('euro')}
+                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${tipoTasaComision === 'euro' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                title="Calcular comisiones con tasa Euro BCV"
+              >
+                <span>🇪🇺 Euro:</span>
+                <b>{fmtBs(tasaEuro?.precio || 0)}</b>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTipoTasaComision('usdt')}
+                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${tipoTasaComision === 'usdt' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                title="Calcular comisiones con tasa USDT"
+              >
+                <span>💵 USDT:</span>
+                <b>{fmtBs(tasaUsdt?.precio || 0)}</b>
+              </button>
+            </div>
 
             <div className="flex p-0.5 bg-slate-100 rounded-xl h-9 min-w-[180px] border border-slate-200 ml-auto">
               <button
@@ -1544,7 +1574,10 @@ function TabComisiones({ configNeg }) {
   const [filtroEstado, setFiltroEstado] = useState('pendiente') // Inicializado con 'pendiente'
   const [filtroVendedor, setFiltroVendedor] = useState('')
   const [formatoReporte, setFormatoReporte] = useState('detallado') // 'detallado', 'resumido'
-  const { tasaEuro } = useTasaCambio()
+  const { tasaEuro, tasaUsdt } = useTasaCambio()
+  const [tipoTasaComision, setTipoTasaComision] = useState('euro') // 'euro' | 'usdt'
+  const tasaSeleccionada = tipoTasaComision === 'usdt' ? (tasaUsdt?.precio || 0) : (tasaEuro?.precio || 0)
+  const tipoTasaLabel = tipoTasaComision === 'usdt' ? 'USDT' : 'Euro BCV'
   const [exportando, setExportando] = useState(false)
   const [showPrintMenu, setShowPrintMenu] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
@@ -1634,13 +1667,7 @@ function TabComisiones({ configNeg }) {
       const m = c.estado === 'cta_cobrar'
         ? Number(c.comision_liberada || 0)
         : Number(c.totalcomision || 0)
-      const tasa = Number(
-        c.despacho?.tasa_snapshot || 
-        c.cotizacion?.tasa_bcv_snapshot || 
-        c.tasa || 
-        tasaEuro?.precio || 
-        0
-      )
+      const tasa = Number(tasaSeleccionada || 0)
       const mBs = m * tasa
 
       map[vId].totalUsd += m
@@ -1791,7 +1818,9 @@ function TabComisiones({ configNeg }) {
         config: configNeg ?? {},
         action: accion === 'imprimir' ? 'print' : 'download',
         formato: formatoReporte,
-        tasaEuro: tasaEuro?.precio || 0,
+        tasaEuro: tasaSeleccionada,
+        tasaAplicada: tasaSeleccionada,
+        tipoTasa: tipoTasaLabel,
         ajustesManuales
       })
     } catch (e) {
@@ -1928,7 +1957,9 @@ function TabComisiones({ configNeg }) {
         rango,
         config: configNeg ?? {},
         formato: formatoReporte,
-        tasaEuro: tasaEuro?.precio || 0,
+        tasaEuro: tasaSeleccionada,
+        tasaAplicada: tasaSeleccionada,
+        tipoTasa: tipoTasaLabel,
         ajustesManuales
       })
     } catch (e) {
@@ -2007,14 +2038,28 @@ function TabComisiones({ configNeg }) {
               </div>
             </div>
 
-            {/* Grupo de Acciones y Tasa Euro */}
+            {/* Grupo de Acciones y Selector de Tasa Euro / USDT */}
             <div className="flex flex-wrap items-center gap-2.5 ml-auto shrink-0 self-end">
-              {tasaEuro?.precio > 0 && (
-                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 border border-indigo-100 rounded-xl text-indigo-800 text-[11px] font-bold shrink-0 h-9">
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
-                  <span>Tasa Euro BCV: <b>{fmtBs(tasaEuro.precio)}</b></span>
-                </div>
-              )}
+              <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs font-bold shrink-0 h-9">
+                <button
+                  type="button"
+                  onClick={() => setTipoTasaComision('euro')}
+                  className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${tipoTasaComision === 'euro' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  title="Calcular comisiones con tasa Euro BCV"
+                >
+                  <span>🇪🇺 Euro:</span>
+                  <b>{fmtBs(tasaEuro?.precio || 0)}</b>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTipoTasaComision('usdt')}
+                  className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${tipoTasaComision === 'usdt' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  title="Calcular comisiones con tasa USDT"
+                >
+                  <span>💵 USDT:</span>
+                  <b>{fmtBs(tasaUsdt?.precio || 0)}</b>
+                </button>
+              </div>
 
               <div className="flex items-center gap-1.5 relative shrink-0">
                 {/* BOTÓN IMPRIMIR PDF */}
@@ -2169,7 +2214,7 @@ function TabComisiones({ configNeg }) {
               const cxcVal = Number(aj.cxc) || 0
               const descVal = Number(aj.descuentoCarro) || 0
               const totalPagar = comisionGen + cxcVal - descVal
-              const tasa = tasaEuro?.precio || 0
+              const tasa = Number(tasaSeleccionada || 0)
               return (
                 <div key={v.id} className="flex flex-wrap items-center gap-3 px-4 py-2.5">
                   {/* Nombre vendedor */}
@@ -2217,7 +2262,7 @@ function TabComisiones({ configNeg }) {
                   </div>
                   {tasa > 0 && (
                     <div className="flex flex-col items-start">
-                      <label className="text-[9px] font-black text-emerald-600 uppercase tracking-wide mb-0.5">Total en Bs</label>
+                      <label className="text-[9px] font-black text-emerald-600 uppercase tracking-wide mb-0.5">Total en Bs ({tipoTasaLabel})</label>
                       <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1">Bs {(totalPagar * tasa).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                   )}
@@ -3328,6 +3373,7 @@ function TabArticulosExternos({ configNeg }) {
 export default function ReportesView() {
   const [activeTab, setActiveTab] = useState('comisiones')
   const { data: configNeg = {} } = useConfigNegocio()
+  const perfil = useAuthStore(s => s.perfil)
 
   return (
     <div className="p-3 sm:p-4 md:p-5 lg:p-6 space-y-3 sm:space-y-4 md:space-y-5">
@@ -3356,7 +3402,7 @@ export default function ReportesView() {
 
       {/* ── Tabs scrollable ────────────────────────────────────────────── */}
       <div className="flex gap-1 overflow-x-auto pb-0.5 -mx-1 px-1 scrollbar-hide">
-        {TABS.map(tab => {
+        {TABS.filter(t => !t.roles || t.roles.includes(perfil?.rol)).map(tab => {
           const Icon = tab.icon
           const isActive = activeTab === tab.id
           return (
@@ -3375,10 +3421,11 @@ export default function ReportesView() {
       </div>
 
       {/* Tab Content */}
-      {activeTab === 'comisiones' && <TabComisiones configNeg={configNeg} />}
-      {activeTab === 'credito' && <TabCredito />}
-      {activeTab === 'ventas' && <TabVentas configNeg={configNeg} />}
-      {activeTab === 'externos' && <TabArticulosExternos configNeg={configNeg} />}
+       {activeTab === 'comisiones' && <TabComisiones configNeg={configNeg} />}
+       {activeTab === 'credito' && <TabCredito />}
+       {activeTab === 'ventas' && <TabVentas configNeg={configNeg} />}
+       {activeTab === 'transportistas' && <TabTransportistas />}
+       {activeTab === 'externos' && <TabArticulosExternos configNeg={configNeg} />}
     </div>
   )
 }

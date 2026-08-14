@@ -349,8 +349,8 @@ function SkeletonComisiones() {
 }
 
 // ─── Tabla interactiva para reporte resumido ─────────────────────────────────
-function TablaLiquidacionInteractiva({ sellers, ajustes, onChange, tasaEuro }) {
-  const rate = Number(tasaEuro?.precio || 0)
+function TablaLiquidacionInteractiva({ sellers, ajustes, onChange, tasaSeleccionada, tipoTasaLabel = 'Euro BCV' }) {
+  const rate = Number(tasaSeleccionada || 0)
   
   // Calcular Totales
   const totalPeriodo = sellers.reduce((acc, s) => acc + s.generadoUsd, 0)
@@ -378,7 +378,7 @@ function TablaLiquidacionInteractiva({ sellers, ajustes, onChange, tasaEuro }) {
               <th className="px-4 py-3 text-center font-black bg-amber-50/40 text-amber-700 w-44">Comisión CxC ($)</th>
               <th className="px-4 py-3 text-center font-black bg-slate-50/80 w-44">Descuento Carro ($)</th>
               <th className="px-4 py-3 text-right font-black">Total a Pagar ($)</th>
-              <th className="px-4 py-3 text-right font-black">Total en Bs</th>
+              <th className="px-4 py-3 text-right font-black">Total en Bs ({tipoTasaLabel}: {fmtBs(rate)})</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -494,7 +494,10 @@ export default function ComisionesView() {
   const [fechaHasta,     setFechaHasta]     = useState('')
   const [page,           setPage]           = useState(1)
   const [formatoReporte, setFormatoReporte] = useState('detallado') // 'detallado', 'resumido'
-  const { tasaEuro } = useTasaCambio()
+  const { tasaEuro, tasaUsdt } = useTasaCambio()
+  const [tipoTasaComision, setTipoTasaComision] = useState('euro') // 'euro' | 'usdt'
+  const tasaSeleccionada = tipoTasaComision === 'usdt' ? (tasaUsdt?.precio || 0) : (tasaEuro?.precio || 0)
+  const tipoTasaLabel = tipoTasaComision === 'usdt' ? 'USDT' : 'Euro BCV'
   const pageSize = 48 // Agrupamos de a 48 para que la cuadrícula sea simétrica (3 col x 16 filas)
 
   const [comisionAPagar, setComisionAPagar] = useState(null)
@@ -698,7 +701,9 @@ export default function ComisionesView() {
         rango, 
         config: configNeg ?? {},
         formato: formatoReporte,
-        tasaEuro: tasaEuro?.precio || 0,
+        tasaEuro: tasaSeleccionada,
+        tasaAplicada: tasaSeleccionada,
+        tipoTasa: tipoTasaLabel,
         ajustesManuales
       })
     } catch (e) { console.error('Error PDF:', e) }
@@ -814,12 +819,26 @@ export default function ComisionesView() {
             </select>
           )}
 
-          {tasaEuro?.precio > 0 && (
-            <div className="flex items-center gap-1.5 px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-xl text-indigo-800 text-xs font-bold shrink-0 h-9">
-              <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
-              <span>Tasa Euro BCV: <b>{fmtBs(tasaEuro.precio)}</b></span>
-            </div>
-          )}
+          <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs font-bold shrink-0 h-9">
+            <button
+              type="button"
+              onClick={() => setTipoTasaComision('euro')}
+              className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${tipoTasaComision === 'euro' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              title="Liquidar comisiones a tasa Euro BCV del día"
+            >
+              <span>🇪🇺 Euro BCV:</span>
+              <b>{fmtBs(tasaEuro?.precio || 0)}</b>
+            </button>
+            <button
+              type="button"
+              onClick={() => setTipoTasaComision('usdt')}
+              className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${tipoTasaComision === 'usdt' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              title="Liquidar comisiones a tasa USDT (Binance P2P) del día"
+            >
+              <span>💵 USDT:</span>
+              <b>{fmtBs(tasaUsdt?.precio || 0)}</b>
+            </button>
+          </div>
 
           {comisiones.length > 0 && (
             <div className="relative ml-auto shrink-0">
@@ -882,7 +901,8 @@ export default function ComisionesView() {
               sellers={sellersSummary}
               ajustes={ajustesManuales}
               onChange={handleAjusteChange}
-              tasaEuro={tasaEuro}
+              tasaSeleccionada={tasaSeleccionada}
+              tipoTasaLabel={tipoTasaLabel}
             />
           ) : (() => {
             const comisionesInternos = comisionesPorVendedor.filter(g => !(!!g.vendedor?.es_externo || (g.vendedor?.markup_pct != null && Number(g.vendedor.markup_pct) > 0)))

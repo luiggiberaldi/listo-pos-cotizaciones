@@ -42,9 +42,10 @@ function formatMetodoPago(val, fallback = '—') {
 
 // ─── Generar Reporte de Comisiones ───────────────────────────────────────────
 // ─── Generar Reporte de Comisiones ───────────────────────────────────────────
-export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVendedor = null, resumen = null, rango = null, config = {}, action = 'download', formato = 'detallado', tasaEuro = null, ajustesManuales = {} }) {
+export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVendedor = null, resumen = null, rango = null, config = {}, action = 'download', formato = 'detallado', tasaEuro = null, tasaAplicada = null, tipoTasa = 'Euro BCV', ajustesManuales = {} }) {
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
   let y = 0
+  const rateVal = Number(tasaAplicada || tasaEuro || 0)
 
   const logoData = LOGO_LISTA_PRECIOS
 
@@ -256,7 +257,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
         descripcion: descProductos || labelLiberacion,
         despachonumero: desp.numero || '---',
         montopagado: Number(com.montopagado || 0),
-        tasa_snapshot: Number(desp?.tasa_snapshot ?? cot?.tasa_bcv_snapshot ?? com?.tasa ?? tasaEuro ?? 0),
+        tasa_snapshot: rateVal > 0 ? rateVal : Number(desp?.tasa_snapshot ?? cot?.tasa_bcv_snapshot ?? com?.tasa ?? 0),
         estado: rawEstado,
         fraccionRelease,
         // Preservar despacho con productos para el desglose por artículo
@@ -314,13 +315,12 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
       // Número de despacho
       despachonumero: c.despacho_numero || c.despachonumero || c.despacho?.numero || '---',
       montopagado: Number(c.despacho_comision_liberada ?? c.montopagado ?? 0),
-      // Tasa
-      tasa_snapshot: Number(
+      // Tasa (Priorizar la tasa actual de liquidación rateVal si existe)
+      tasa_snapshot: rateVal > 0 ? rateVal : Number(
         c.despacho?.tasa_snapshot ?? 
         c.cotizacion?.tasa_bcv_snapshot ?? 
         c.tasa ?? 
         c.tasa_snapshot ?? 
-        tasaEuro ?? 
         0
       ),
       // Preservar despacho con productos para el desglose por artículo
@@ -528,11 +528,11 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
 
   y += boxH + 4
 
-  if (tasaEuro && Number(tasaEuro) > 0) {
+  if (rateVal > 0) {
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(8.5)
     doc.setTextColor(79, 70, 229) // Indigo 600
-    doc.text(`Tasa de Referencia Euro BCV: ${fmtBs(tasaEuro)}`, MARGIN + 1, y + 1.5)
+    doc.text(`Tasa de Referencia ${tipoTasa}: ${fmtBs(rateVal)}`, MARGIN + 1, y + 1.5)
     y += 7.0
   }
 
@@ -656,7 +656,6 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
   function dibujarTablaResumida(sellers) {
     y = checkPage(doc, y, 18, handlePageAdd);
     
-    const rateVal = Number(tasaEuro || 0);
     const tasaLabel = rateVal > 0 ? fmtBsShort(rateVal) : 'N/D';
 
     const colDateLabel = rango && (rango.from || rango.to)
@@ -669,7 +668,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
       { label: 'COMISIÓN CUENTAS\nPOR COBRAR ($)', x: MARGIN + 70, w: 38, align: 'center', highlight: true },
       { label: 'DESCUENTO\nCARRO ($)', x: MARGIN + 108, w: 26, align: 'center' },
       { label: 'TOTAL A\nPAGAR ($)', x: MARGIN + 134, w: 26, align: 'right' },
-      { label: `TOTAL EN Bs\n(TASA: ${tasaLabel})`, x: MARGIN + 160, w: 28, align: 'right' }
+      { label: `TOTAL EN Bs\n(${tipoTasa.toUpperCase()}: ${tasaLabel})`, x: MARGIN + 160, w: 28, align: 'right' }
     ];
 
     // Pintar fondo amarillo en cabecera de Comisión CxC primero
