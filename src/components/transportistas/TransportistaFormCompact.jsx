@@ -122,11 +122,11 @@ export default function TransportistaFormCompact({ onGuardar, onCancelar, cargan
             disabled={cargando}
             className="w-4 h-4 rounded border-slate-300 text-sky-500 focus:ring-sky-200"
           />
-          Es transportista local (cobra del flete)
+          Es chofer local (comisión solo fuera de Carabobo)
         </label>
         {esLocal && (
           <p className="text-[11px] text-slate-500 italic px-1">
-            El tipo de cálculo y el valor se configuran globalmente en <span className="font-semibold">Configuración → Administración</span>.
+            En Carabobo se procesa por nómina externa; fuera de Carabobo se calcula la comisión configurada en el sistema.
           </p>
         )}
       </div>

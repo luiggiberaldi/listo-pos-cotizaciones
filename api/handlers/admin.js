@@ -1097,8 +1097,21 @@ export async function handleCrearTransportista(request, env) {
   }
 
   const body = await request.json();
-  const { nombre, rif, telefono, zona_cobertura, tarifa_base, notas, color, vehiculo, placa_chuto, placa_batea, capacidad, color_batea } = body;
+  const {
+    nombre, rif, telefono, zona_cobertura, tarifa_base, notas,
+    color, vehiculo, placa_chuto, placa_batea, capacidad, color_batea,
+    es_local, tipo_relacion, empleado_id, fecha_inicio_relacion,
+    fecha_fin_relacion, emite_comprobante,
+  } = body;
   if (!nombre) return jsonError('Nombre es requerido', 400, request);
+
+  const relacionesValidas = ['empleado', 'contratista', 'proveedor', 'propio'];
+  if (tipo_relacion !== undefined && !relacionesValidas.includes(tipo_relacion)) {
+    return jsonError('tipo_relacion inválido', 400, request);
+  }
+  if (empleado_id !== undefined && empleado_id !== null && !isValidUuid(empleado_id)) {
+    return jsonError('empleado_id inválido', 400, request);
+  }
 
   const res = await fetch(`${env.SUPABASE_URL}/rest/v1/transportistas`, {
     method: 'POST',
@@ -1111,6 +1124,12 @@ export async function handleCrearTransportista(request, env) {
     body: JSON.stringify({
       nombre, rif, telefono, zona_cobertura, tarifa_base, notas,
       color, vehiculo, placa_chuto, placa_batea, capacidad, color_batea,
+      es_local: !!es_local,
+      tipo_relacion: tipo_relacion || 'proveedor',
+      empleado_id: empleado_id || null,
+      fecha_inicio_relacion: fecha_inicio_relacion || null,
+      fecha_fin_relacion: fecha_fin_relacion || null,
+      emite_comprobante: !!emite_comprobante,
       cuenta_id: operador.cuenta_id,
       creado_por: operador.id,
       activo: true
@@ -1135,9 +1154,28 @@ export async function handleActualizarTransportista(request, env) {
     return jsonError('Acceso denegado: solo personal autorizado', 403, request);
   }
 
-  const body = await request.json();
-  const { id, ...updateData } = body;
-  if (!id) return jsonError('ID es requerido', 400, request);
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+  const { id } = body;
+  if (!id || !isValidUuid(id)) return jsonError('ID inválido', 400, request);
+  if (!operador.cuenta_id) return jsonError('Cuenta del operador no disponible', 403, request);
+
+  const camposPermitidos = [
+    'nombre', 'rif', 'telefono', 'zona_cobertura', 'tarifa_base', 'notas', 'color',
+    'vehiculo', 'placa_chuto', 'placa_batea', 'capacidad', 'color_batea', 'es_local',
+    'tipo_relacion', 'empleado_id', 'fecha_inicio_relacion', 'fecha_fin_relacion', 'emite_comprobante',
+  ];
+  const updateData = Object.fromEntries(
+    camposPermitidos.filter(campo => Object.prototype.hasOwnProperty.call(body, campo))
+      .map(campo => [campo, body[campo]])
+  );
+  if (updateData.tipo_relacion !== undefined && !['empleado', 'contratista', 'proveedor', 'propio'].includes(updateData.tipo_relacion)) {
+    return jsonError('tipo_relacion inválido', 400, request);
+  }
+  if (updateData.empleado_id !== undefined && updateData.empleado_id !== null && !isValidUuid(updateData.empleado_id)) {
+    return jsonError('empleado_id inválido', 400, request);
+  }
+  if (Object.keys(updateData).length === 0) return jsonError('No hay campos permitidos para actualizar', 400, request);
 
   const res = await fetch(`${env.SUPABASE_URL}/rest/v1/transportistas?id=eq.${id}&cuenta_id=eq.${operador.cuenta_id}`, {
     method: 'PATCH',

@@ -1103,12 +1103,14 @@ export function smartMatchScore(text, searchTerms) {
   if (querySizes.length > 0) {
     const productSizes = extractInchSizes(normalized)
     if (productSizes.length > 0) {
-      const isConflict = querySizes.some(qs => {
-        return productSizes.some(ps => {
-          return sizesConflict(qs, ps)
-        })
-      })
-      if (isConflict) {
+      // Un producto puede contener números que no son su medida (por ejemplo,
+      // el correlativo del código). Solo debe descartarse cuando no exista
+      // ninguna medida compatible, no cuando exista una medida adicional que
+      // sea diferente.
+      const hasMatchingSize = querySizes.some(qs =>
+        productSizes.some(ps => !sizesConflict(qs, ps))
+      )
+      if (!hasMatchingSize) {
         return { match: false, score: 0, coverage: 0, matchedTerms: 0, totalTerms: searchTerms.length }
       }
     }
@@ -1189,12 +1191,16 @@ export function smartMatchScore(text, searchTerms) {
 
   if (matchedTerms === 0) return { match: false, score: 0 }
 
-  // Score final: % de términos que matchearon * score acumulado
+  // Las consultas compuestas deben coincidir en todos sus términos.
+  // Permitir 50% hacía que "cabilla media" aceptara cualquier producto con 1/2,
+  // aunque no tuviera ninguna coincidencia con cabilla.
   const coverage = matchedTerms / searchTerms.length
+  const requiredCoverage = searchTerms.length > 1 ? 1 : 0.5
   return {
-    match: coverage >= 0.5, // Al menos 50% de los términos deben matchear (permite marcas/nombres no en DB)
+    match: coverage >= requiredCoverage,
     score: totalScore * coverage,
     coverage,
+    requiredCoverage,
     matchedTerms,
     totalTerms: searchTerms.length,
   }
@@ -1234,6 +1240,13 @@ export function smartSearchProductos(productos, query) {
 
   return productos
     .map(p => {
+      // El código es una referencia exacta y debe ganar siempre al fuzzy
+      // matching. También evita que los dígitos del correlativo interfieran
+      // con el análisis de medidas/fracciones del nombre.
+      if (matchByCode(p, query)) {
+        return { ...p, _score: 100000, _match: true, _coverage: 1 }
+      }
+
       const texto = `${p.nombre || ''} ${p.codigo || ''} ${p.categoria || ''} ${p.descripcion || ''}`
       const result = smartMatchScore(texto, searchTerms)
       return { ...p, _score: result.score, _match: result.match, _coverage: result.coverage }

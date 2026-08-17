@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { generarComisionesPDF } from '../../services/pdf/comisionesPDF'
 
 describe('Cálculo de Tasa en Reporte de Comisiones vs Ventas', () => {
   const despachoHistorico = {
@@ -67,5 +68,13 @@ describe('Cálculo de Tasa en Reporte de Comisiones vs Ventas', () => {
 
     expect(totalPagarUsd).toBe(230.00)
     expect(totalPagarBs).toBe(210450.00)
+  })
+
+  it('rechaza generar un PDF si la tasa de liquidación no está disponible', async () => {
+    await expect(generarComisionesPDF({
+      comisiones: [],
+      tasaAplicada: 0,
+      tipoTasa: 'USDT'
+    })).rejects.toThrow('No hay una tasa de liquidación válida')
   })
 })

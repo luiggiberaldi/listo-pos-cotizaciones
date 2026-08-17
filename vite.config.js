@@ -6,17 +6,19 @@ import { execSync } from 'child_process'
 // Usar git commit hash como buster — el cache solo se invalida en deploys reales,
 // no en cada reinicio del dev server (evita borrar datos offline innecesariamente)
 let gitHash = 'dev'
-try { gitHash = execSync('git rev-parse --short HEAD').toString().trim() } catch {}
+try { gitHash = execSync('git rev-parse --short HEAD').toString().trim() } catch (error) { void error }
 
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(gitHash),
   },
   server: {
+    port: 5173,
+    strictPort: true,
     proxy: {
       '/api': {
-        // Para usar el worker local: target: 'http://localhost:8787'
-        target: 'http://localhost:8787',
+        // Worker local del proyecto principal; staging usa el puerto 8789.
+        target: 'http://127.0.0.1:8787',
         changeOrigin: true,
         secure: false,
       }

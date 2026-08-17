@@ -238,15 +238,9 @@ export default function BusquedaListaModal({ open, onClose, productos = [], tasa
           }
         }
 
-        // Paso 3: Si no hay match, buscar con palabras clave principales (sin stopwords)
-        if (!mejorMatch) {
-          const palabras = texto.split(/\s+/).filter(p => p.length >= 3)
-          for (let len = palabras.length; len >= 1 && !mejorMatch; len--) {
-            const subquery = palabras.slice(0, len).join(' ')
-            const matches = smartSearchProductos(productos, subquery)
-            if (matches.length > 0) mejorMatch = matches[0]
-          }
-        }
+        // No seleccionar por una palabra parcial: podría convertir una línea
+        // como "cabilla media" en un producto cualquiera con solo 1/2.
+        // Las coincidencias incompletas quedan para revisión manual.
 
         items.push({
           textoOriginal: texto,

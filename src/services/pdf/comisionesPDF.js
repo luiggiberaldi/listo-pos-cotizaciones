@@ -42,15 +42,28 @@ function formatMetodoPago(val, fallback = '—') {
 
 // ─── Generar Reporte de Comisiones ───────────────────────────────────────────
 // ─── Generar Reporte de Comisiones ───────────────────────────────────────────
-export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVendedor = null, resumen = null, rango = null, config = {}, action = 'download', formato = 'detallado', tasaEuro = null, tasaAplicada = null, tipoTasa = 'Euro BCV', ajustesManuales = {} }) {
+export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVendedor = null, resumen = null, rango = null, config = {}, action = 'download', formato = 'detallado', tasaEuro = null, tasaAplicada = null, tipoTasa = 'Euro BCV', tasaFuente = null, tasaActualizadaEn = null, ajustesManuales = {}, modoCorteSemanal = false }) {
+  const rateInput = tasaAplicada ?? tasaEuro
+  const rateVal = Number(rateInput)
+  if (!Number.isFinite(rateVal) || rateVal <= 0) {
+    throw new Error('No hay una tasa de liquidación válida disponible para generar el PDF')
+  }
+
+  const tipoTasaLabel = String(tipoTasa || 'Euro BCV').trim() || 'Euro BCV'
+  const rateColumnLabel = tipoTasaLabel.toUpperCase() === 'USDT'
+    ? 'Tasa USDT'
+    : `Tasa ${tipoTasaLabel}`
+  const rateUpdatedLabel = tasaActualizadaEn
+    ? new Date(tasaActualizadaEn).toLocaleString('es-VE', { dateStyle: 'short', timeStyle: 'short' })
+    : 'N/D'
+
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
   let y = 0
-  const rateVal = Number(tasaAplicada || tasaEuro || 0)
 
   const logoData = LOGO_LISTA_PRECIOS
 
   const handlePageAdd = (d) => {
-    let rightTitle = 'Reporte de Comisiones'
+    let rightTitle = modoCorteSemanal ? 'Corte semanal de comisiones' : 'Reporte de Comisiones'
     if (tipoVendedor === 'internos') rightTitle = 'Comisiones (Vendedores Internos)'
     else if (tipoVendedor === 'externos') rightTitle = 'Comisiones (Vendedores Externos)'
     else if (vendedor) rightTitle = `Comisiones - ${vendedor.nombre}`
@@ -172,7 +185,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
         // Limpiar nombre si ya incluye el código al principio
         let nombreLimpio = p.nombre_snap || '—'
         if (p.codigo_snap) {
-          const codEscapado = p.codigo_snap.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')
+          const codEscapado = p.codigo_snap.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
           const regexCorchetes = new RegExp(`^\\[${codEscapado}\\]\\s*[-:]*\\s*`, 'i')
           const regexSimple = new RegExp(`^${codEscapado}\\s*[-:]*\\s*`, 'i')
           nombreLimpio = nombreLimpio.replace(regexCorchetes, '').replace(regexSimple, '')
@@ -257,7 +270,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
         descripcion: descProductos || labelLiberacion,
         despachonumero: desp.numero || '---',
         montopagado: Number(com.montopagado || 0),
-        tasa_snapshot: rateVal > 0 ? rateVal : Number(desp?.tasa_snapshot ?? cot?.tasa_bcv_snapshot ?? com?.tasa ?? 0),
+        tasa_snapshot: rateVal,
         estado: rawEstado,
         fraccionRelease,
         // Preservar despacho con productos para el desglose por artículo
@@ -316,13 +329,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
       despachonumero: c.despacho_numero || c.despachonumero || c.despacho?.numero || '---',
       montopagado: Number(c.despacho_comision_liberada ?? c.montopagado ?? 0),
       // Tasa (Priorizar la tasa actual de liquidación rateVal si existe)
-      tasa_snapshot: rateVal > 0 ? rateVal : Number(
-        c.despacho?.tasa_snapshot ?? 
-        c.cotizacion?.tasa_bcv_snapshot ?? 
-        c.tasa ?? 
-        c.tasa_snapshot ?? 
-        0
-      ),
+      tasa_snapshot: rateVal,
       // Preservar despacho con productos para el desglose por artículo
       despacho: desp ? { ...desp, productos: desp.productos || [] } : null,
       // Mapeo de estados: 'pagada' es el único estado que suma al pagado, resto son pendientes
@@ -377,6 +384,286 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
   })));
   // Si hay descripciones significativas, es el reporte detallado
   const esDetallado = comisionesNorm.some(c => c.descripcion && c.descripcion !== '---')
+
+  // Modo de corte externo: el PDF se usa para revisar y pagar fuera del sistema.
+  // No muestra estados internos ni montos registrados por el botón de pago.
+  if (modoCorteSemanal) {
+    const corteItems = comisionesNorm.filter(c => Number(c.totalcomision || 0) > 0)
+    const corteFrom = rango?.from || 'Inicio'
+    const corteTo = rango?.to || 'Fin'
+    const totalCorteUsd = corteItems.reduce((sum, c) => sum + Number(c.totalcomision || 0), 0)
+    const totalCorteBs = totalCorteUsd * rateVal
+    const corteVendedorLabel = vendedor?.nombre || null
+
+    let corteY = drawPremiumHeader({
+      doc,
+      logoData,
+      config,
+      title: 'Corte semanal de comisiones',
+      subtitle: `Período: ${corteFrom} al ${corteTo}`,
+      customBgColor: [255, 255, 255],
+      customAccentColor: [0, 0, 0],
+      customTextColor: [0, 0, 0],
+      customSubtitleColor: [0, 0, 0],
+      customBorderColor: [0, 0, 0],
+      centerBusinessName: true
+    })
+    drawWatermark(doc)
+
+    if (corteVendedorLabel) {
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(13)
+      doc.setTextColor(...C_DARK)
+      doc.text(corteVendedorLabel, MARGIN, corteY + 3)
+      corteY += 9
+    }
+
+    doc.setFont('helvetica', 'italic')
+    doc.setFontSize(7.5)
+    doc.setTextColor(...C_GRAY)
+    doc.text('Documento de corte para revisión y liquidación externa. No representa un registro de pago dentro del sistema.', MARGIN, corteY + 2)
+    corteY += 8
+
+    const corteBoxH = 19
+    const corteBoxW = CONTENT_W / 3
+    const corteBoxes = [
+      { label: 'Comisión del período', value: fmtUsd(totalCorteUsd), color: C_PRIMARY, bg: [239, 246, 255] },
+      { label: 'Operaciones', value: String(corteItems.length), color: C_DARK, bg: [248, 250, 252] },
+      { label: 'Total en Bs', value: fmtBs(totalCorteBs), color: C_EMERALD, bg: [236, 253, 245] },
+    ]
+
+    corteBoxes.forEach((box, index) => {
+      const bx = MARGIN + index * corteBoxW
+      doc.setFillColor(...box.bg)
+      doc.roundedRect(bx + 1, corteY, corteBoxW - 2, corteBoxH, 2.5, 2.5, 'F')
+      doc.setDrawColor(226, 232, 240)
+      doc.setLineWidth(0.4)
+      doc.roundedRect(bx + 1, corteY, corteBoxW - 2, corteBoxH, 2.5, 2.5, 'S')
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8)
+      doc.setTextColor(...box.color)
+      doc.text(box.label.toUpperCase(), bx + 4.5, corteY + 6)
+      doc.setFontSize(index === 1 ? 14 : 12.5)
+      doc.text(box.value, bx + 4.5, corteY + 14)
+    })
+    corteY += corteBoxH + 5
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8)
+    doc.setTextColor(79, 70, 229)
+    doc.text(`Tasa de referencia ${tipoTasaLabel}: ${fmtBs(rateVal)}`, MARGIN, corteY + 2)
+    corteY += 8
+
+    const corteCols = [
+      { label: 'Fecha', x: MARGIN, w: 16 },
+      { label: 'Cliente / Doc', x: MARGIN + 16, w: 42 },
+      { label: 'Descripción', x: MARGIN + 58, w: 42 },
+      { label: 'Valor ($)', x: MARGIN + 100, w: 17, align: 'right' },
+      { label: '%', x: MARGIN + 117, w: 8, align: 'right' },
+      { label: 'Comisión ($)', x: MARGIN + 125, w: 20, align: 'right' },
+      { label: rateColumnLabel, x: MARGIN + 145, w: 19, align: 'right' },
+      { label: 'Comisión (Bs)', x: MARGIN + 164, w: CONTENT_W - 164, align: 'right' },
+    ]
+
+    const drawCorteHeader = (yPos) => {
+      doc.setDrawColor(210, 215, 225)
+      doc.setLineWidth(0.3)
+      doc.line(MARGIN, yPos, MARGIN + CONTENT_W, yPos)
+      doc.line(MARGIN, yPos + 8, MARGIN + CONTENT_W, yPos + 8)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(7)
+      doc.setTextColor(80, 90, 110)
+      corteCols.forEach(col => {
+        const align = col.align || 'left'
+        const x = align === 'right' ? col.x + col.w - 2 : col.x + 1
+        const lines = doc.splitTextToSize(col.label, col.w - 2)
+        lines.forEach((line, lineIndex) => doc.text(line, x, yPos + 3.2 + lineIndex * 3, { align }))
+      })
+      return yPos + 9.5
+    }
+
+    const separarPorVendedor = !corteVendedorLabel
+    let corteVendedorKey = null
+    let corteVendedorNombre = null
+    let corteVendedorColor = '#1B365D'
+    let corteVendedorTotalUsd = 0
+    let corteVendedorTotalBs = 0
+    let corteVendedorOperaciones = 0
+    let corteVendedorFila = 0
+
+    const dibujarEncabezadoVendedorCorte = (item) => {
+      corteY = checkPage(doc, corteY, 20, handlePageAdd)
+      corteVendedorColor = item.vendedor?.color || '#1B365D'
+      const vendedorRgb = hexToRgb(corteVendedorColor)
+      doc.setFillColor(...vendedorRgb)
+      doc.circle(MARGIN + 3, corteY + 3, 1.5, 'F')
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(11)
+      doc.setTextColor(...C_DARK)
+      doc.text(corteVendedorNombre.toUpperCase(), MARGIN + 7, corteY + 4)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(7.2)
+      doc.setTextColor(...C_GRAY)
+      doc.text('Detalle completo del vendedor', MARGIN + 7, corteY + 8)
+      corteY += 11
+      corteY = drawCorteHeader(corteY)
+    }
+
+    const dibujarSubtotalVendedorCorte = () => {
+      if (!corteVendedorNombre) return
+      corteY = checkPage(doc, corteY, 12, handlePageAdd)
+      doc.setDrawColor(210, 215, 225)
+      doc.setLineWidth(0.4)
+      doc.line(MARGIN, corteY, MARGIN + CONTENT_W, corteY)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8.5)
+      doc.setTextColor(...C_PRIMARY)
+      doc.text(`Subtotal ${corteVendedorNombre}:`, MARGIN + 2, corteY + 5)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(7)
+      doc.setTextColor(...C_GRAY)
+      doc.text(`${corteVendedorOperaciones} operaciones`, MARGIN + 2, corteY + 8.5)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8.5)
+      doc.setTextColor(...C_DARK)
+      doc.text(fmtUsd(corteVendedorTotalUsd), corteCols[5].x + corteCols[5].w - 2, corteY + 5, { align: 'right' })
+      doc.setTextColor(...C_EMERALD)
+      doc.text(fmtBs(corteVendedorTotalBs), corteCols[7].x + corteCols[7].w - 2, corteY + 5, { align: 'right' })
+      corteY += 11
+    }
+
+    if (!separarPorVendedor || corteItems.length === 0) {
+      corteY = drawCorteHeader(corteY)
+    }
+
+    if (corteItems.length === 0) {
+      doc.setFont('helvetica', 'italic')
+      doc.setFontSize(9)
+      doc.setTextColor(...C_GRAY)
+      doc.text('No hay operaciones en el período seleccionado.', MARGIN + 2, corteY + 6)
+      corteY += 14
+    } else {
+      corteItems.forEach((c, index) => {
+        if (separarPorVendedor) {
+          const nextSellerName = (c.vendedor?.nombre || 'Sin asesor').trim() || 'Sin asesor'
+          const nextSellerKey = nextSellerName.toLowerCase()
+          if (corteVendedorKey !== nextSellerKey) {
+            dibujarSubtotalVendedorCorte()
+            corteVendedorKey = nextSellerKey
+            corteVendedorNombre = nextSellerName
+            corteVendedorTotalUsd = 0
+            corteVendedorTotalBs = 0
+            corteVendedorOperaciones = 0
+            corteVendedorFila = 0
+            dibujarEncabezadoVendedorCorte(c)
+          }
+        }
+
+        const clienteBase = c.clienteNombre || '—'
+        const cliente = corteVendedorLabel || separarPorVendedor
+          ? clienteBase
+          : `${c.vendedor?.nombre || '—'} · ${clienteBase}`
+        const descripcion = `${c.codigo ? `[${c.codigo}] ` : ''}${c.descripcion || '—'}`
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(7.2)
+        const clienteLines = doc.splitTextToSize(String(cliente).toUpperCase(), corteCols[1].w - 2)
+        const descripcionLines = doc.splitTextToSize(String(descripcion).toUpperCase(), corteCols[2].w - 2)
+        const lineCount = Math.max(clienteLines.length, descripcionLines.length, 1)
+        const rowH = Math.max(8, 3.2 + lineCount * 3.2)
+        const nextY = checkPage(doc, corteY, rowH + 2, handlePageAdd)
+        if (nextY !== corteY) {
+          corteY = drawCorteHeader(nextY)
+        } else {
+          corteY = nextY
+        }
+
+        const rowIndex = separarPorVendedor ? corteVendedorFila : index
+        if (rowIndex % 2 === 0) {
+          doc.setFillColor(252, 252, 253)
+          doc.rect(MARGIN, corteY - 1, CONTENT_W, rowH, 'F')
+        }
+
+        const tasa = rateVal
+        const comisionUsd = Number(c.totalcomision || 0)
+        const comisionBs = comisionUsd * tasa
+        const middleY = corteY + rowH / 2 + 1
+
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(7.2)
+        doc.setTextColor(...C_DARK)
+        doc.text(fmtFechaCorta(c.creadoen), corteCols[0].x + 1, middleY)
+        doc.text(clienteLines, corteCols[1].x + 1, corteY + 3.8)
+        doc.text(descripcionLines, corteCols[2].x + 1, corteY + 3.8)
+        doc.text(fmtUsd(c.valor), corteCols[3].x + corteCols[3].w - 2, middleY, { align: 'right' })
+        doc.text(`${Number(c.pct || 0)}%`, corteCols[4].x + corteCols[4].w - 2, middleY, { align: 'right' })
+        doc.setFont('helvetica', 'bold')
+        doc.text(fmtUsd(comisionUsd), corteCols[5].x + corteCols[5].w - 2, middleY, { align: 'right' })
+        doc.setFont('helvetica', 'normal')
+        doc.text(fmtBs(tasa), corteCols[6].x + corteCols[6].w - 2, middleY, { align: 'right' })
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(...C_EMERALD)
+        doc.text(fmtBs(comisionBs), corteCols[7].x + corteCols[7].w - 2, middleY, { align: 'right' })
+        corteY += rowH
+        if (separarPorVendedor) {
+          corteVendedorTotalUsd += comisionUsd
+          corteVendedorTotalBs += comisionBs
+          corteVendedorOperaciones += 1
+          corteVendedorFila += 1
+        }
+      })
+
+      if (separarPorVendedor) {
+        dibujarSubtotalVendedorCorte()
+      }
+
+      corteY = checkPage(doc, corteY, 12, handlePageAdd)
+      doc.setDrawColor(210, 215, 225)
+      doc.setLineWidth(0.4)
+      doc.line(MARGIN, corteY, MARGIN + CONTENT_W, corteY)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9.5)
+      doc.setTextColor(...C_PRIMARY)
+      doc.text('TOTAL DEL PERÍODO:', MARGIN + 2, corteY + 6)
+      doc.setTextColor(...C_DARK)
+      doc.text(fmtUsd(totalCorteUsd), corteCols[5].x + corteCols[5].w - 2, corteY + 6, { align: 'right' })
+      doc.setTextColor(...C_EMERALD)
+      doc.text(fmtBs(totalCorteBs), corteCols[7].x + corteCols[7].w - 2, corteY + 6, { align: 'right' })
+      corteY += 12
+    }
+
+    drawPremiumFooter(doc, config, [255, 255, 255], [0, 0, 0], [0, 0, 0], 'Corte semanal · liquidación externa')
+
+    const corteTitulo = vendedor
+      ? `Corte_Comisiones_${vendedor.nombre.replace(/\s+/g, '_')}_${corteFrom}_${corteTo}`
+      : `Corte_Comisiones_${corteFrom}_${corteTo}`
+
+    if (action === 'print') {
+      doc.autoPrint()
+      const corteBlobUrl = doc.output('bloburl')
+      if (corteBlobUrl) {
+        const iframe = document.createElement('iframe')
+        iframe.style.position = 'fixed'
+        iframe.style.right = '0'
+        iframe.style.bottom = '0'
+        iframe.style.width = '0'
+        iframe.style.height = '0'
+        iframe.style.border = '0'
+        iframe.src = corteBlobUrl
+        document.body.appendChild(iframe)
+        iframe.onload = () => {
+          iframe.contentWindow.focus()
+          iframe.contentWindow.print()
+          setTimeout(() => {
+            document.body.removeChild(iframe)
+            URL.revokeObjectURL(corteBlobUrl)
+          }, 10000)
+        }
+      }
+    } else {
+      doc.save(`${corteTitulo}.pdf`)
+    }
+    return
+  }
 
   let subTitleText = 'Reporte de Comisiones'
   if (tipoVendedor === 'internos') subTitleText = 'Reporte de Comisiones — Internos'
@@ -532,8 +819,12 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(8.5)
     doc.setTextColor(79, 70, 229) // Indigo 600
-    doc.text(`Tasa de Referencia ${tipoTasa}: ${fmtBs(rateVal)}`, MARGIN + 1, y + 1.5)
-    y += 7.0
+    doc.text(`Tasa de Referencia ${tipoTasaLabel}: ${fmtBs(rateVal)}`, MARGIN + 1, y + 1.5)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7.2)
+    doc.setTextColor(...C_GRAY)
+    doc.text(`Fuente: ${tasaFuente || 'N/D'} · Actualizada: ${rateUpdatedLabel}`, MARGIN + 1, y + 5.0)
+    y += 9.0
   }
 
   // DRAW VISUAL BREAKDOWN BAR (Barra de progreso)
@@ -601,7 +892,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
       { label: 'Valor ($)', x: MARGIN + 92, w: 14, align: 'right' },
       { label: '%', x: MARGIN + 106, w: 6, align: 'right' },
       { label: 'Com ($)', x: MARGIN + 112, w: 14, align: 'right' },
-      { label: 'Tasa EUR', x: MARGIN + 126, w: 15, align: 'right' },
+      { label: rateColumnLabel, x: MARGIN + 126, w: 15, align: 'right' },
       { label: 'Com (Bs)', x: MARGIN + 141, w: 25, align: 'right' },
       { label: 'Estado', x: MARGIN + 166, w: 22, align: 'center' },
     ]
@@ -619,7 +910,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
       { label: 'Otros ($)', x: MARGIN + 75, w: 15, align: 'right' },
       { label: 'Total Com ($)', x: MARGIN + 90, w: 18, align: 'right' },
       { label: 'Abonado ($)', x: MARGIN + 108, w: 17, align: 'right' },
-      { label: 'Tasa EUR', x: MARGIN + 125, w: 16, align: 'right' },
+      { label: rateColumnLabel, x: MARGIN + 125, w: 16, align: 'right' },
       { label: 'Com. (Bs)', x: MARGIN + 141, w: 27, align: 'right' },
       { label: 'Estado', x: MARGIN + 168, w: 20, align: 'center' },
     ]
@@ -668,7 +959,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
       { label: 'COMISIÓN CUENTAS\nPOR COBRAR ($)', x: MARGIN + 70, w: 38, align: 'center', highlight: true },
       { label: 'DESCUENTO\nCARRO ($)', x: MARGIN + 108, w: 26, align: 'center' },
       { label: 'TOTAL A\nPAGAR ($)', x: MARGIN + 134, w: 26, align: 'right' },
-      { label: `TOTAL EN Bs\n(${tipoTasa.toUpperCase()}: ${tasaLabel})`, x: MARGIN + 160, w: 28, align: 'right' }
+      { label: `TOTAL EN Bs\n(${tipoTasaLabel.toUpperCase()}: ${tasaLabel})`, x: MARGIN + 160, w: 28, align: 'right' }
     ];
 
     // Pintar fondo amarillo en cabecera de Comisión CxC primero

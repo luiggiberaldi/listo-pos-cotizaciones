@@ -3,6 +3,59 @@ import { verifyAuth, validateOperator, getOperatorRole, verifySupervisor, verify
 import { registrarAuditoria } from '../lib/audit.js'
 import { recalcularSaldoPendienteCliente } from '../lib/cxcUtils.js'
 
+function errorReglaFlete(errorText, request, mensajeFallback) {
+  const text = String(errorText || '')
+  if (text.includes('DESTINO_ESTADO_REQUERIDO')) {
+    return jsonError('Debe indicar el estado de destino para calcular la comisión del chofer local.', 400, request)
+  }
+  if (text.includes('FLETE_YA_PAGADO')) {
+    return jsonError('El flete ya fue liquidado. Revierta el pago antes de modificar chofer, flete o destino.', 400, request)
+  }
+  if (text.includes('FLETE_NO_COMISIONABLE')) {
+    return jsonError('El flete de Carabobo pertenece a la nómina externa y no puede liquidarse aquí.', 400, request)
+  }
+  if (text.includes('CONFIG_TRANSPORTISTA_NO_DISPONIBLE')) {
+    return jsonError('Configure la comisión de choferes locales antes de registrar un flete fuera de Carabobo.', 400, request)
+  }
+  return jsonError(mensajeFallback, 500, request)
+}
+
+async function validarDestinoFleteLocal({ env, headers, cuentaId, transportistaId, clienteId, estadoDestino, flete, request }) {
+  if (!transportistaId || Number(flete) <= 0) return null
+  if (!isValidUuid(transportistaId)) return jsonError('transportistaId inválido', 400, request)
+  if (!isValidUuid(cuentaId)) return jsonError('Cuenta del operador no disponible', 403, request)
+
+  const cuentaFilter = `&cuenta_id=eq.${cuentaId}`
+  const transpRes = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/transportistas?id=eq.${transportistaId}${cuentaFilter}&select=es_local&limit=1`,
+    { headers }
+  )
+  if (!transpRes.ok) {
+    const detail = await transpRes.text().catch(() => '')
+    return errorReglaFlete(detail, request, 'No se pudo validar el transportista para el flete.')
+  }
+  const [transportista] = await transpRes.json()
+  if (!transportista) return jsonError('Transportista no encontrado en la cuenta del operador', 400, request)
+  if (!transportista.es_local) return null
+
+  let estado = String(estadoDestino || '').trim()
+  if (!estado && clienteId) {
+    const clienteRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteId}${cuentaFilter}&select=estado&limit=1`,
+      { headers }
+    )
+    if (clienteRes.ok) {
+      const [cliente] = await clienteRes.json()
+      estado = String(cliente?.estado || '').trim()
+    }
+  }
+
+  if (!estado) {
+    return jsonError('Debe indicar el estado de destino para calcular la comisión del chofer local.', 400, request)
+  }
+  return null
+}
+
 async function obtenerVendedorComisionId(despacho, headers, env) {
   if (despacho.cliente_id) {
     const cliRes = await fetch(
@@ -28,8 +81,17 @@ export async function handleCrearDespacho(request, env) {
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
   const { cotizacionId, notas, formaPago, transportistaId, fleteUsd, corteUsd, clienteFacturaId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado } = body;
-  const flete = Math.max(0, Number(fleteUsd) || 0);
-  const corte = Math.max(0, Number(corteUsd) || 0);
+  if (transportistaId !== undefined && transportistaId !== null && transportistaId !== '' && !isValidUuid(transportistaId)) {
+    return jsonError('transportistaId inválido', 400, request);
+  }
+  if (fleteUsd !== undefined && (!Number.isFinite(Number(fleteUsd)) || Number(fleteUsd) < 0)) {
+    return jsonError('fleteUsd inválido', 400, request);
+  }
+  if (corteUsd !== undefined && (!Number.isFinite(Number(corteUsd)) || Number(corteUsd) < 0)) {
+    return jsonError('corteUsd inválido', 400, request);
+  }
+  const flete = Number(fleteUsd ?? 0);
+  const corte = Number(corteUsd ?? 0);
   if (!cotizacionId) return jsonError('Falta cotizacionId', 400, request);
   if (!isValidUuid(cotizacionId)) return jsonError('cotizacionId inválido', 400, request);
 
@@ -56,6 +118,19 @@ export async function handleCrearDespacho(request, env) {
     if (!esSupervisorOp && !esPropietario) {
       return jsonError(`Solo puedes despachar tus propias cotizaciones (op:${operador.id} vs vend:${cot.vendedor_id})`, 403, request);
     }
+
+    const transportistaFinalId = transportistaId || cot.transportista_id || null
+    const destinoError = await validarDestinoFleteLocal({
+      env,
+      headers,
+      cuentaId: operador.cuenta_id,
+      transportistaId: transportistaFinalId,
+      clienteId: cot.cliente_id,
+      estadoDestino: direccionEnvioEstado,
+      flete,
+      request,
+    })
+    if (destinoError) return destinoError
 
     // 3. Si está enviada, aceptarla automáticamente
     if (cot.estado === 'enviada') {
@@ -112,11 +187,12 @@ export async function handleCrearDespacho(request, env) {
       method: 'POST',
       headers: { ...headers, Prefer: 'return=representation' },
       body: JSON.stringify({
+        cuenta_id: operador.cuenta_id,
         cotizacion_id: cotizacionId,
         cliente_id: cot.cliente_id,
         cliente_factura_id: (clienteFacturaId && isValidUuid(clienteFacturaId)) ? clienteFacturaId : null,
         vendedor_id: cot.vendedor_id,
-        transportista_id: transportistaId || cot.transportista_id,
+        transportista_id: transportistaFinalId,
         estado: 'pendiente',
         total_usd: totalConFleteCorte,
         flete_usd: flete,
@@ -132,7 +208,7 @@ export async function handleCrearDespacho(request, env) {
 
     if (!despRes.ok) {
       const err = await despRes.text();
-      return jsonError(`Error al crear despacho: ${err}`, 500, request);
+      return errorReglaFlete(err, request, `Error al crear despacho: ${err}`)
     }
     const [despacho] = await despRes.json();
 
@@ -198,17 +274,51 @@ export async function handleEditarPagoDespacho(request, env) {
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
 
   const { despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, clienteId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado } = body;
+  if (transportistaId !== undefined && transportistaId !== null && transportistaId !== '' && !isValidUuid(transportistaId)) {
+    return jsonError('transportistaId inválido', 400, request);
+  }
+  if (fleteUsd !== undefined && (!Number.isFinite(Number(fleteUsd)) || Number(fleteUsd) < 0)) {
+    return jsonError('fleteUsd inválido', 400, request);
+  }
+  if (corteUsd !== undefined && (!Number.isFinite(Number(corteUsd)) || Number(corteUsd) < 0)) {
+    return jsonError('corteUsd inválido', 400, request);
+  }
   if (!despachoId) return jsonError('Falta despachoId', 400, request);
+  if (!isValidUuid(operador.cuenta_id)) return jsonError('Cuenta del operador no disponible', 403, request);
 
-  const checkRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&select=id,estado,vendedor_id,flete_usd,corte_usd,total_usd,cotizacion_id,cliente_id`, { headers: h });
+  const checkRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&cuenta_id=eq.${operador.cuenta_id}&select=id,estado,vendedor_id,flete_usd,corte_usd,total_usd,cotizacion_id,cliente_id,transportista_id,direccion_envio_estado,flete_pagado`, { headers: h });
   if (!checkRes.ok) return jsonError('Error al verificar despacho', 500, request);
   const despachos = await checkRes.json();
   if (!despachos.length) return jsonError('Despacho no encontrado', 404, request);
   const despacho = despachos[0];
+
+  const camposFinancierosFlete = transportistaId !== undefined
+    || fleteUsd !== undefined
+    || direccionEnvioEstado !== undefined
+    || clienteId !== undefined;
+  if (despacho.flete_pagado && camposFinancierosFlete) {
+    return jsonError('El flete ya fue liquidado. Revierta el pago antes de modificar chofer, flete o destino.', 400, request);
+  }
   
   const esAdmin = ['supervisor', 'administracion', 'jefe', 'desarrollador', 'logistica'].includes(operador.rol);
   const esVendedorDueno = despacho.vendedor_id === operador.id;
   if (!esAdmin && !esVendedorDueno) return jsonError('No tienes permiso para editar este despacho', 403, request);
+
+  // Validar el destino efectivo antes de guardar: el trigger SQL es la última
+  // defensa, pero la API debe devolver un error claro y no depender de un 500.
+  if (transportistaId !== undefined || fleteUsd !== undefined || direccionEnvioEstado !== undefined || clienteId !== undefined) {
+    const destinoError = await validarDestinoFleteLocal({
+      env,
+      headers: h,
+      cuentaId: operador.cuenta_id,
+      transportistaId: transportistaId !== undefined ? (transportistaId || null) : (despacho.transportista_id || null),
+      clienteId: clienteId !== undefined ? (clienteId || null) : despacho.cliente_id,
+      estadoDestino: direccionEnvioEstado !== undefined ? direccionEnvioEstado : despacho.direccion_envio_estado,
+      flete: fleteUsd !== undefined ? Number(fleteUsd) : Number(despacho.flete_usd || 0),
+      request,
+    })
+    if (destinoError) return destinoError
+  }
 
   const cliToCheck = clienteId || despacho.cliente_id;
   let esVendedorSinComision = false;
@@ -323,12 +433,15 @@ export async function handleEditarPagoDespacho(request, env) {
 
   if (Object.keys(campos).length === 0) return jsonError('No hay campos para actualizar', 400, request);
 
-  const upRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}`, {
+  const upRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&cuenta_id=eq.${operador.cuenta_id}`, {
     method: 'PATCH',
     headers: { ...h, Prefer: 'return=minimal' },
     body: JSON.stringify(campos),
   });
-  if (!upRes.ok) return jsonError('Error al actualizar despacho', 500, request);
+  if (!upRes.ok) {
+    const err = await upRes.text().catch(() => '')
+    return errorReglaFlete(err, request, 'Error al actualizar despacho')
+  }
 
   // Recalcular comision si ya existe (porque pudo cambiar el total o forma de pago)
   const comRes = await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}&select=id`, { headers: h });
@@ -413,6 +526,17 @@ export async function handleActualizarEstadoDespacho(request, env) {
       || (desp.estado === 'entregada' && ['pendiente', 'despachada'].includes(nuevoEstado));
     if (!valid) {
       return jsonError(`No se puede pasar de "${desp.estado}" a "${nuevoEstado}"`, 400, request);
+    }
+
+    // Un pago de comisión externa no se revierte implícitamente al devolver o
+    // anular el despacho. Primero debe ejecutarse la reversa del pago para que
+    // el vínculo pago-despacho y el saldo vuelvan a quedar consistentes.
+    if (
+      desp.flete_pagado
+      && ['pendiente', 'anulada'].includes(nuevoEstado)
+      && ['despachada', 'entregada'].includes(desp.estado)
+    ) {
+      return jsonError('Revierte primero la liquidación del transportista antes de devolver o anular el despacho', 400, request);
     }
 
     // 2b. Aprobar (pendiente→despachada): solo administración y desarrollador
@@ -771,9 +895,11 @@ export async function handleActualizarEstadoDespacho(request, env) {
     if (nuevoEstado === 'pendiente' && (desp.estado === 'despachada' || desp.estado === 'entregada')) {
       updateData.motivo_devolucion = body.motivo_devolucion;
       updateData.entregada_en = null;
+      updateData.flete_pagado = false;
     }
     if (nuevoEstado === 'anulada' && (desp.estado === 'despachada' || desp.estado === 'entregada')) {
       updateData.motivo_anulacion = body.motivo_anulacion;
+      updateData.flete_pagado = false;
     }
     if (nuevoEstado === 'despachada' && desp.estado === 'entregada') {
       updateData.entregada_en = null;

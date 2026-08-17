@@ -4,7 +4,7 @@ import { useState, useMemo, useRef, useEffect } from 'react'
 import { Modal } from '../ui/Modal'
 import { Search, Plus, X, Package, ArrowDownToLine, ArrowUpFromLine, Loader2, AlertCircle } from 'lucide-react'
 import { useAplicarMovimientoLote } from '../../hooks/useMovimientosInventario'
-import { parseSearchTerms, smartMatchProducto } from '../../utils/smartSearch'
+import { smartSearchProductos } from '../../utils/smartSearch'
 import { MOTIVOS_TIPO_LIST, getMotivoChipClasses } from '../../utils/motivosTipo'
 
 export default function MovimientoLoteModal({ isOpen, onClose, productos = [] }) {
@@ -49,11 +49,10 @@ export default function MovimientoLoteModal({ isOpen, onClose, productos = [] })
   const filtrados = useMemo(() => {
     const q = busqueda.trim()
     if (!q) return []
-    const terms = parseSearchTerms(q)
-    return productos
-      .filter(p => p.activo !== false && !idsSeleccionados.has(p.id))
-      .filter(p => smartMatchProducto(p, terms, q))
-      .slice(0, 12)
+    return smartSearchProductos(
+      productos.filter(p => p.activo !== false && !idsSeleccionados.has(p.id)),
+      q
+    ).slice(0, 12)
   }, [busqueda, productos, idsSeleccionados])
 
   function agregarProducto(p) {

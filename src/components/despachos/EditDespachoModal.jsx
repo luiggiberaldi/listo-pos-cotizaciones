@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { X, Pencil, Loader2, Truck, ChevronDown, StickyNote, Plus, User, Clock, DollarSign } from 'lucide-react'
 import { useTransportistas, useCrearTransportista } from '../../hooks/useTransportistas'
+import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import { useEditarDespacho } from '../../hooks/useDespachos'
 import { useClientes } from '../../hooks/useClientes'
 import { useFormasPago } from '../../hooks/useFormasPago'
@@ -24,6 +25,7 @@ import { FORMAS_PAGO } from '../../constants/formasPago'
 
 export default function EditDespachoModal({ isOpen, onClose, despacho }) {
   const { data: transportistas = [] } = useTransportistas()
+  const { data: config = {} } = useConfigNegocio()
   const { data: clientes = [] } = useClientes()
   const editarDespacho = useEditarDespacho()
   const crearTransp = useCrearTransportista()
@@ -61,6 +63,23 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
       (selectedCliente.vendedor_id === perfil?.id && perfil?.rol === 'vendedor_sin_comision')
     )
   }, [selectedCliente, perfil])
+
+  const transportistaSeleccionado = transportistas.find(t => t.id === transportistaId)
+  const estadoDestinoFlete = direccionEnvioActiva
+    ? direccionEnvioEstado
+    : (selectedCliente?.estado || '')
+  const fleteLocalRequiereEstado = !!transportistaSeleccionado?.es_local && Number(fleteUsd) > 0
+  const destinoFleteValido = !fleteLocalRequiereEstado || !!estadoDestinoFlete
+  const estadoNormalizado = String(estadoDestinoFlete).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()
+  const esDestinoFueraCarabobo = !!estadoDestinoFlete && estadoNormalizado !== 'carabobo'
+  const tipoCalculoTransportista = config?.transp_tipo_calculo === 'fija' ? 'fija' : 'porcentaje'
+  const pctTransportista = Number(config?.transp_pct_comision) || 0
+  const tarifaTransportista = Number(config?.transp_tarifa_fija_usd) || 0
+  const netoTransportistaPreview = fleteLocalRequiereEstado && esDestinoFueraCarabobo
+    ? (tipoCalculoTransportista === 'fija'
+      ? Math.min(tarifaTransportista, Number(fleteUsd) || 0)
+      : Math.round((Number(fleteUsd) || 0) * pctTransportista / 100 * 100) / 100)
+    : 0
 
   // 1. Cálculos derivados (necesarios para el hook)
   const totalBase = Number(despacho?.total_usd || 0) - Number(despacho?.flete_usd || 0) - Number(despacho?.corte_usd || 0)
@@ -379,6 +398,18 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
                 <p className="text-xs text-indigo-500 font-medium">
                   + Flete: ${Number(fleteUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
+              )}
+              {fleteLocalRequiereEstado && (
+                <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-800">
+                  <span className="font-bold">Chofer local:</span>{' '}
+                  {!estadoDestinoFlete ? (
+                    <span className="text-red-700 font-semibold">falta el estado de destino; completa una dirección o el estado del cliente.</span>
+                  ) : esDestinoFueraCarabobo ? (
+                    <span>fuera de Carabobo → comisión estimada <strong>${netoTransportistaPreview.toFixed(2)}</strong>.</span>
+                  ) : (
+                    <span>Carabobo → nómina externa; no se liquida comisión aquí.</span>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -814,13 +845,16 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
             cargando ||
             !(esCod ? (montoCodRequerido > 0.015 && propuestaCodCuadrado) : pagoInmediatoCuadrado) ||
             !cxcVencimientoValido ||
-            (direccionEnvioActiva && (!direccionEnvioEstado || !direccionEnvioCiudad))
+            (direccionEnvioActiva && (!direccionEnvioEstado || !direccionEnvioCiudad)) ||
+            !destinoFleteValido
           }
             title={
               !cxcVencimientoValido
                 ? 'Días de vencimiento obligatorios para cuentas por cobrar'
                 : direccionEnvioActiva && (!direccionEnvioEstado || !direccionEnvioCiudad)
                 ? 'Debe seleccionar un Estado y una Ciudad para el envío'
+                : !destinoFleteValido
+                ? 'Debe indicar el estado de destino para el flete del chofer local'
                 : esCod
                 ? (!propuestaCodCuadrado ? 'La propuesta COD no está cuadrada' : undefined)
                 : (!pagoInmediatoCuadrado ? 'Los montos no cuadran con el total' : undefined)

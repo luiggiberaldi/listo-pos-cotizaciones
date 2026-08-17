@@ -1,5 +1,5 @@
 // src/services/pdf/transportistaResumenPDF.js
-// PDF del reporte de transportistas locales — saldo pagado / pendiente.
+// PDF del reporte de transportistas locales — comisión externa y nómina Carabobo.
 import { jsPDF } from 'jspdf'
 import { cargarLogo } from './pdfLogo'
 import { WATERMARK_LOGO } from './watermarkBase64'
@@ -17,7 +17,7 @@ function checkPage(doc, y, needed = 30) {
       doc.setGState(gState)
       doc.addImage(WATERMARK_LOGO, 'PNG', (PAGE_W - 140) / 2, (PAGE_H - 140) / 2, 140, 140)
       doc.setGState(new doc.GState({ opacity: 1 }))
-    } catch (_) {}
+    } catch (_) { /* la marca de agua/impresión es opcional */ }
     return MARGIN + 10
   }
   return y
@@ -28,7 +28,7 @@ function drawHeader(doc, logoData, config) {
     doc,
     logoData,
     config,
-    title: 'Liquidación de Transportistas',
+    title: 'Liquidación de Comisiones Externas',
     subtitle: `Generado: ${new Date().toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}`
   })
 }
@@ -62,18 +62,19 @@ export async function generarTransportistaResumenPDF({ items = [], config = {}, 
     doc.setGState(gState)
     doc.addImage(WATERMARK_LOGO, 'PNG', (PAGE_W - 140) / 2, (PAGE_H - 140) / 2, 140, 140)
     doc.setGState(new doc.GState({ opacity: 1 }))
-  } catch (_) {}
+  } catch (_) { /* la marca de agua/impresión es opcional */ }
 
   // KPIs agregados
   const totFlete  = items.reduce((s, t) => s + (Number(t.flete_total_usd) || 0), 0)
   const totNeto   = items.reduce((s, t) => s + (Number(t.neto_total_usd) || 0), 0)
   const totPagado = items.reduce((s, t) => s + (Number(t.pagado_usd) || 0), 0)
   const totSaldo  = items.reduce((s, t) => s + (Number(t.saldo_usd) || 0), 0)
+  const totNomina = items.reduce((s, t) => s + (Number(t.flete_nomina_usd) || 0), 0)
 
   const kpiBoxH = 14
   const colsKpi = 4
   const colW = CONTENT_W / colsKpi
-  const labels = ['Flete total', 'Neto choferes', 'Pagado', 'Saldo pendiente']
+  const labels = ['Flete total', 'Comisión externa', 'Liquidado', 'Saldo comisión']
   const values = [fmtUsd(totFlete), fmtUsd(totNeto), fmtUsd(totPagado), fmtUsd(totSaldo)]
   const colors = [C_PRIMARY, C_DARK, C_EMERALD, C_AMBER]
 
@@ -95,7 +96,12 @@ export async function generarTransportistaResumenPDF({ items = [], config = {}, 
     doc.text(values[i], MARGIN + i * colW + 3, y + 10)
   }
 
-  y += kpiBoxH + 6
+  y += kpiBoxH + 3
+  doc.setFont('helvetica', 'italic')
+  doc.setFontSize(6.5)
+  doc.setTextColor(...C_GRAY)
+  doc.text(`Flete en nómina externa de Carabobo (informativo): ${fmtUsd(totNomina)}`, MARGIN, y + 2)
+  y += 7
 
   // Tabla
   const tableCols = [
@@ -103,9 +109,9 @@ export async function generarTransportistaResumenPDF({ items = [], config = {}, 
     { label: 'RIF',               x: MARGIN + 38,   w: 22 },
     { label: 'DESP.',             x: MARGIN + 60,   w: 14 },
     { label: 'FLETE',             x: MARGIN + 74,   w: 28 },
-    { label: 'NETO',              x: MARGIN + 102,  w: 28 },
-    { label: 'PAGADO',            x: MARGIN + 130,  w: 28 },
-    { label: 'SALDO',             x: MARGIN + 158,  w: 30 },
+    { label: 'COM. EXT.',         x: MARGIN + 102,  w: 28 },
+    { label: 'LIQUIDADO',          x: MARGIN + 130,  w: 28 },
+    { label: 'SALDO COM.',         x: MARGIN + 158,  w: 30 },
   ]
 
   function drawTableHeaders(yPos) {
@@ -121,6 +127,12 @@ export async function generarTransportistaResumenPDF({ items = [], config = {}, 
   }
 
   y = drawTableHeaders(y)
+
+  doc.setFont('helvetica', 'italic')
+  doc.setFontSize(6)
+  doc.setTextColor(...C_GRAY)
+  doc.text('Los fletes con destino en Carabobo corresponden a nómina externa y no forman parte de esta liquidación.', MARGIN, y + 2)
+  y += 5
 
   items.forEach((t, idx) => {
     y = checkPage(doc, y, 7)
@@ -196,10 +208,10 @@ export async function generarTransportistaResumenPDF({ items = [], config = {}, 
         try {
           iframe.contentWindow.focus()
           iframe.contentWindow.print()
-        } catch (_) {}
+        } catch (_) { /* la marca de agua/impresión es opcional */ }
         setTimeout(() => {
-          try { document.body.removeChild(iframe) } catch (_) {}
-          try { URL.revokeObjectURL(blobUrl) } catch (_) {}
+          try { document.body.removeChild(iframe) } catch (_) { /* la marca de agua/impresión es opcional */ }
+          try { URL.revokeObjectURL(blobUrl) } catch (_) { /* la marca de agua/impresión es opcional */ }
         }, 10000)
       }
     }

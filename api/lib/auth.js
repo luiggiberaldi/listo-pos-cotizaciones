@@ -140,7 +140,17 @@ export async function validateOperator(request, env, { requireSupervisor = false
 
   // Desarrollador virtual — no existe en tabla usuarios
   if (user.operator_id === SUPER_ADMIN_UUID) {
-    const operador = { id: SUPER_ADMIN_UUID, nombre: 'Desarrollador', rol: 'desarrollador', color: '#8b5cf6' };
+    // El operador virtual debe conservar la cuenta autenticada para que las
+    // operaciones multi-tenant del desarrollador no queden sin contexto.
+    const operador = {
+      id: SUPER_ADMIN_UUID,
+      nombre: 'Desarrollador',
+      rol: 'desarrollador',
+      color: '#8b5cf6',
+      cuenta_id: user.id,
+      markup_pct: null,
+      es_externo: false,
+    };
     return { user, operador, headers: supaServiceHeaders(env), ip };
   }
 

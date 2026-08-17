@@ -170,6 +170,12 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
   }, [detalle])
   const totalSinFlete = Number(cotizacion?.total_usd || 0) - Number(cotizacion?.costo_envio_usd || 0) - Number(cotizacion?.corte_usd || 0)
   const totalConFlete = totalSinFlete + Number(fleteUsd || 0) + Number(corteUsd || 0)
+  const transportistaSeleccionado = transportistas.find(t => t.id === transportistaId)
+  const estadoDestinoFlete = direccionEnvioActiva
+    ? direccionEnvioEstado
+    : (cotizacion?.cliente?.estado || '')
+  const fleteLocalRequiereEstado = !!transportistaSeleccionado?.es_local && Number(fleteUsd) > 0
+  const destinoFleteValido = !fleteLocalRequiereEstado || !!estadoDestinoFlete
 
   const { data: saldoFavorOrigen } = useSaldoFavorOrigen(billingCliente?.id)
 
@@ -477,6 +483,15 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                   <Plus size={13} className="text-emerald-600" />
                 </button>
               </div>
+              {fleteLocalRequiereEstado && (
+                <p className={`text-[10px] ${destinoFleteValido ? 'text-amber-700' : 'text-red-600 font-semibold'}`}>
+                  {destinoFleteValido
+                    ? estadoDestinoFlete.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase() === 'carabobo'
+                      ? 'Chofer local: este flete se procesa por nómina externa (Carabobo).'
+                      : 'Chofer local: el flete fuera de Carabobo genera comisión.'
+                    : 'Chofer local: indica el estado del destino o completa el estado del cliente.'}
+                </p>
+              )}
             </div>
 
 
@@ -915,13 +930,16 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                 items.length === 0 ||
                 !(esCod ? (montoCodRequerido > 0.015 && propuestaCodCuadrado) : pagoInmediatoCuadrado) ||
                 !cxcVencimientoValido ||
-                (direccionEnvioActiva && (!direccionEnvioEstado || !direccionEnvioCiudad))
+                (direccionEnvioActiva && (!direccionEnvioEstado || !direccionEnvioCiudad)) ||
+                !destinoFleteValido
               }
               title={
                 !cxcVencimientoValido
                   ? 'Días de vencimiento obligatorios para cuentas por cobrar'
                   : direccionEnvioActiva && (!direccionEnvioEstado || !direccionEnvioCiudad)
                   ? 'Debe seleccionar un Estado y una Ciudad para el envío'
+                  : !destinoFleteValido
+                  ? 'Debe indicar el estado de destino para el flete del chofer local'
                   : esCod
                   ? (!propuestaCodCuadrado ? 'La propuesta COD no está cuadrada' : undefined)
                   : (!pagoInmediatoCuadrado ? 'Los montos no cuadran con el total' : undefined)

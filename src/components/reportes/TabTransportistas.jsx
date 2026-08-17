@@ -1,5 +1,5 @@
 // src/components/reportes/TabTransportistas.jsx
-// Pestaña del reporte de transportistas locales: saldo pendiente + pago FIFO al chofer.
+// Pestaña del reporte de transportistas locales: comisión externa pendiente + pago FIFO al chofer.
 import { useState, useMemo } from 'react'
 import { Truck, RefreshCw, FileText, Wallet, DollarSign, RotateCcw } from 'lucide-react'
 import {
@@ -41,10 +41,11 @@ export default function TabTransportistas() {
   }, [items, filtro])
 
   const totales = useMemo(() => ({
-    flete:  filtrados.reduce((s, t) => s + (t.flete_total_usd || 0), 0),
-    neto:   filtrados.reduce((s, t) => s + (t.neto_total_usd || 0), 0),
-    pagado: filtrados.reduce((s, t) => s + (t.pagado_usd || 0), 0),
-    saldo:  filtrados.reduce((s, t) => s + (t.saldo_usd || 0), 0),
+    flete:       filtrados.reduce((s, t) => s + (t.flete_total_usd || 0), 0),
+    comision:    filtrados.reduce((s, t) => s + (t.neto_total_usd || 0), 0),
+    pagado:      filtrados.reduce((s, t) => s + (t.pagado_usd || 0), 0),
+    saldo:       filtrados.reduce((s, t) => s + (t.saldo_usd || 0), 0),
+    fleteNomina: filtrados.reduce((s, t) => s + (t.flete_nomina_usd || 0), 0),
   }), [filtrados])
 
   async function exportarPDF() {
@@ -63,10 +64,10 @@ export default function TabTransportistas() {
     <div className="space-y-4">
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCard icon={Truck}      label="Choferes locales"  value={filtrados.length}                  color="indigo" />
-        <KpiCard icon={DollarSign} label="Flete cobrado"     value={`$${fmt(totales.flete)}`}          color="slate" />
-        <KpiCard icon={Wallet}     label="Pagado a choferes" value={`$${fmt(totales.pagado)}`}         color="green" />
-        <KpiCard icon={DollarSign} label="Saldo pendiente"   value={`$${fmt(totales.saldo)}`}          color="amber" />
+        <KpiCard icon={Truck}      label="Choferes locales"       value={filtrados.length}                 color="indigo" />
+        <KpiCard icon={DollarSign} label="Flete cobrado"          value={`$${fmt(totales.flete)}`}         color="slate" />
+        <KpiCard icon={Wallet}     label="Comisión externa pagada" value={`$${fmt(totales.pagado)}`}        color="green" />
+        <KpiCard icon={DollarSign} label="Saldo comisión externa"  value={`$${fmt(totales.saldo)}`}         color="amber" />
       </div>
 
       {/* Filtros + rango de fechas + acciones */}
@@ -124,9 +125,10 @@ export default function TabTransportistas() {
                 <th className="text-left px-3 py-2">Chofer</th>
                 <th className="text-right px-3 py-2">Despachos</th>
                 <th className="text-right px-3 py-2">Flete cobrado</th>
-                <th className="text-right px-3 py-2">Neto chofer</th>
+                <th className="text-right px-3 py-2">Comisión externa</th>
                 <th className="text-right px-3 py-2">Pagado</th>
-                <th className="text-right px-3 py-2">Saldo</th>
+                <th className="text-right px-3 py-2">Saldo comisión</th>
+                <th className="text-right px-3 py-2">Nómina Carabobo</th>
                 <th className="px-3 py-2"></th>
               </tr>
             </thead>
@@ -145,8 +147,8 @@ export default function TabTransportistas() {
                     {t.config && (
                       <span className="inline-block mt-0.5 text-[10px] text-slate-500 font-medium">
                         {t.config.tipo_calculo === 'porcentaje'
-                          ? `${t.config.pct_comision}% del flete`
-                          : `Tarifa fija $${Number(t.config.tarifa_fija_usd ?? 0).toFixed(0)}`}
+                          ? `${t.config.pct_comision}% del flete fuera de Carabobo`
+                          : `Tarifa fija $${Number(t.config.tarifa_fija_usd ?? 0).toFixed(0)} fuera de Carabobo`}
                       </span>
                     )}
                   </td>
@@ -155,8 +157,11 @@ export default function TabTransportistas() {
                   <td className="text-right px-3 py-2 font-semibold text-slate-800">${fmt(t.neto_total_usd)}</td>
                   <td className="text-right px-3 py-2 text-green-600">${fmt(t.pagado_usd)}</td>
                   <td className="text-right px-3 py-2 font-black text-amber-600">${fmt(t.saldo_usd)}</td>
+                  <td className="text-right px-3 py-2 text-slate-500">
+                    {t.despachos_nomina > 0 ? `${t.despachos_nomina} · $${fmt(t.flete_nomina_usd)}` : '—'}
+                  </td>
                   <td className="px-3 py-2 text-right">
-                    {t.saldo_usd > 0.001 && puedePagar && t.activo !== false && t.tipo_relacion !== 'empleado' && (
+                    {t.saldo_usd > 0.001 && puedePagar && t.activo !== false && (
                       <button onClick={() => setPagoModal(t)}
                         className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold">
                         Pagar
@@ -167,9 +172,9 @@ export default function TabTransportistas() {
                         Reactivar para pagar
                       </span>
                     )}
-                    {t.saldo_usd > 0.001 && t.tipo_relacion === 'empleado' && t.activo !== false && (
-                      <span className="text-[10px] text-slate-400" title="Los empleados se liquidan por nómina">
-                        Por nómina
+                    {t.despachos_nomina > 0 && (
+                      <span className="text-[10px] text-slate-400" title="El flete dentro de Carabobo se procesa por nómina externa">
+                        Nómina externa
                       </span>
                     )}
                   </td>

@@ -573,6 +573,11 @@ export default function VentaRapidaView() {
     if (d.fleteUsd) setFleteUsd(d.fleteUsd)
     if (d.corteUsd) setCorteUsd(d.corteUsd)
     if (d.notas) setNotas(d.notas)
+    if (d.direccionEnvioActiva !== undefined) setDireccionEnvioActiva(!!d.direccionEnvioActiva)
+    else if (d.direccionEnvioEstado || d.direccionEnvioCiudad || d.direccionEnvioDireccion) setDireccionEnvioActiva(true)
+    if (d.direccionEnvioEstado) setDireccionEnvioEstado(d.direccionEnvioEstado)
+    if (d.direccionEnvioCiudad) setDireccionEnvioCiudad(d.direccionEnvioCiudad)
+    if (d.direccionEnvioDireccion) setDireccionEnvioDireccion(d.direccionEnvioDireccion)
     if (d.step != null && d.step >= 0 && d.step <= 2) setStep(d.step)
     setShowDraftBanner(false)
     setBorradorInfo(null)
@@ -694,6 +699,7 @@ export default function VentaRapidaView() {
         const clienteObj = clientes.find(c => c.id === clienteId)
         saveDraft({
           step, clienteId, items, formasPago: formasPagoFinales, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, esCod,
+          direccionEnvioActiva, direccionEnvioEstado, direccionEnvioCiudad, direccionEnvioDireccion,
           _clienteNombre: clienteObj?.nombre || '',
           _totalUsd: totalUsd,
           _itemsCount: items.length,
@@ -701,7 +707,7 @@ export default function VentaRapidaView() {
       }
     }, 1500)
     return () => clearTimeout(timer)
-  }, [step, clienteId, items, formasPagoFinales, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, esCod, ventaRapida.isPending])
+  }, [step, clienteId, items, formasPagoFinales, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, esCod, direccionEnvioActiva, direccionEnvioEstado, direccionEnvioCiudad, direccionEnvioDireccion, ventaRapida.isPending])
 
   const idsAgregados = new Set(items.map(it => it.productoId))
 
@@ -716,6 +722,11 @@ export default function VentaRapidaView() {
   }, [productos])
   const totalItems = items.reduce((s, it) => s + it.cantidad, 0)
   const transportistaSeleccionado = transportistas.find(t => t.id === transportistaId)
+  const estadoDestinoFlete = direccionEnvioActiva
+    ? direccionEnvioEstado
+    : (clienteSeleccionado?.estado || '')
+  const fleteLocalRequiereEstado = !!transportistaSeleccionado?.es_local && flete > 0
+  const destinoFleteValido = !fleteLocalRequiereEstado || !!estadoDestinoFlete
 
   // Validaciones
   const step1Valid = !!clienteId && items.length > 0
@@ -734,7 +745,9 @@ export default function VentaRapidaView() {
 
   const step2Valid = (esPrestamoPuro || ((esCod
     ? (pagoInmediatoCuadrado || (montoCodRequerido > 0.015 && propuestaCodCuadrado))
-    : pagoInmediatoCuadrado) && cxcVencimientoValido)) && (!direccionEnvioActiva || (direccionEnvioEstado && direccionEnvioCiudad));
+    : pagoInmediatoCuadrado) && cxcVencimientoValido))
+    && (!direccionEnvioActiva || (direccionEnvioEstado && direccionEnvioCiudad))
+    && destinoFleteValido;
 
   // Close cliente dropdown on outside click
   useEffect(() => {
@@ -1397,14 +1410,18 @@ function Step1Productos({
     setShowExt(false)
   }
 
-  // Ordenar: productos con stock primero, luego sin stock
+  // Con búsqueda activa se conserva el ranking por relevancia.
+  // El stock solo desempata el catálogo sin búsqueda; no debe ocultar
+  // una coincidencia exacta detrás de una coincidencia parcial.
   const productosOrdenados = useMemo(() => {
+    if (productoBusqueda.trim()) return productosFiltrados
+
     return [...productosFiltrados].sort((a, b) => {
       const aStock = (Number(a.stock_actual) || 0) > 0 ? 0 : 1
       const bStock = (Number(b.stock_actual) || 0) > 0 ? 0 : 1
       return aStock - bStock
     })
-  }, [productosFiltrados])
+  }, [productosFiltrados, productoBusqueda])
 
   const productosVisibles = productosOrdenados.slice(0, 60)
 
@@ -2076,6 +2093,22 @@ function Step2Pago({
     (clienteSeleccionado?.vendedor_id === perfil?.id && perfil?.rol === 'vendedor_sin_comision');
 
   const totalConFlete = totalParaPago + Math.max(0, Number(fleteUsd) || 0)
+  const transportistaSeleccionado = transportistas.find(t => t.id === transportistaId)
+  const estadoDestinoFlete = direccionEnvioActiva
+    ? direccionEnvioEstado
+    : (clienteSeleccionado?.estado || '')
+  const esChoferLocalConFlete = !!transportistaSeleccionado?.es_local && Number(fleteUsd) > 0
+  const destinoFleteValido = !esChoferLocalConFlete || !!estadoDestinoFlete
+  const estadoNormalizado = String(estadoDestinoFlete).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()
+  const esDestinoFueraCarabobo = !!estadoDestinoFlete && estadoNormalizado !== 'carabobo'
+  const tipoCalculoTransportista = config?.transp_tipo_calculo === 'fija' ? 'fija' : 'porcentaje'
+  const pctTransportista = Number(config?.transp_pct_comision) || 0
+  const tarifaTransportista = Number(config?.transp_tarifa_fija_usd) || 0
+  const netoTransportistaPreview = esChoferLocalConFlete && esDestinoFueraCarabobo
+    ? (tipoCalculoTransportista === 'fija'
+      ? Math.min(tarifaTransportista, Number(fleteUsd) || 0)
+      : Math.round((Number(fleteUsd) || 0) * pctTransportista / 100 * 100) / 100)
+    : 0
 
   const handleTogglePagoInmediato = (metodo) => {
     if (metodo === 'Saldo a Favor') {
@@ -2171,6 +2204,19 @@ function Step2Pago({
           </div>
         )}
       </div>
+
+      {esChoferLocalConFlete && (
+        <div className="-mt-1 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-800">
+          <span className="font-bold">Chofer local:</span>{' '}
+          {!estadoDestinoFlete ? (
+            <span className="text-red-700 font-semibold">falta el estado de destino; si no hay dirección alternativa, completa el estado del cliente.</span>
+          ) : esDestinoFueraCarabobo ? (
+            <span>fuera de Carabobo → comisión estimada <strong>${netoTransportistaPreview.toFixed(2)}</strong> ({tipoCalculoTransportista === 'fija' ? `tarifa fija $${tarifaTransportista.toFixed(2)}` : `${pctTransportista}% del flete`}).</span>
+          ) : (
+            <span>Carabobo → el flete se procesa por nómina externa y no se liquida aquí.</span>
+          )}
+        </div>
+      )}
 
       {/* Modal crear transportista */}
       {showNuevoTransp && (

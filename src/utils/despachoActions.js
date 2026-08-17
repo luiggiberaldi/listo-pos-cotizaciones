@@ -10,7 +10,7 @@ export const ACCIONES = {
     supervisor: {
       label: 'Aprobar despacho',
       confirmTitle: '¿Aprobar este despacho?',
-      confirmMessage: 'Se calculará la comisión del vendedor.',
+      confirmMessage: 'La comisión del vendedor se registrará si corresponde; en CxC puede quedar retenida.',
       confirmDetails: 'El despacho pasará a estar listo para entrega.',
       confirmText: 'Sí, aprobar',
       variant: 'success',
@@ -18,7 +18,7 @@ export const ACCIONES = {
     jefe: {
       label: 'Aprobar despacho',
       confirmTitle: '¿Aprobar este despacho?',
-      confirmMessage: 'Se calculará la comisión del vendedor.',
+      confirmMessage: 'La comisión del vendedor se registrará si corresponde; en CxC puede quedar retenida.',
       confirmDetails: 'El despacho pasará a estar listo para entrega.',
       confirmText: 'Sí, aprobar',
       variant: 'success',
@@ -26,7 +26,7 @@ export const ACCIONES = {
     administracion: {
       label: 'Aprobar despacho',
       confirmTitle: '¿Aprobar este despacho?',
-      confirmMessage: 'Se calculará la comisión del vendedor.',
+      confirmMessage: 'La comisión del vendedor se registrará si corresponde; en CxC puede quedar retenida.',
       confirmDetails: 'El despacho pasará a estar listo para entrega.',
       confirmText: 'Sí, aprobar',
       variant: 'success',

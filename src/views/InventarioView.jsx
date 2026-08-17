@@ -20,7 +20,7 @@ import KardexModal from '../components/inventario/KardexModal'
 import ProductoDetalleModal from '../components/inventario/ProductoDetalleModal'
 import ListaPreciosModal from '../components/inventario/ListaPreciosModal'
 import BusquedaListaModal from '../components/inventario/BusquedaListaModal'
-import ModalBatchPrice from '../components/ModalBatchPrice'
+import ModalBatchPrice from '../components/inventario/ModalBatchPrice'
 import ModalTransformacion from '../components/inventario/ModalTransformacion'
 import IngresoLoteHubModal from '../components/inventario/IngresoLoteHubModal'
 import ImportadorModal from '../components/inventario/ImportadorModal'
@@ -146,7 +146,12 @@ export default function InventarioView() {
         return stock <= 0 || (min > 0 && stock <= min)
       })
     }
-    return list.sort((a, b) => {
+    // Con búsqueda activa se conserva el ranking de relevancia del motor.
+    // El stock solo ordena el catálogo sin búsqueda y no debe desplazar una
+    // coincidencia exacta detrás de una coincidencia parcial.
+    if (busqueda.trim()) return list
+
+    return [...list].sort((a, b) => {
       const aStock = Number(a.stock_actual) || 0
       const bStock = Number(b.stock_actual) || 0
       const aZero = aStock <= 0 ? 1 : 0
@@ -154,7 +159,7 @@ export default function InventarioView() {
       if (aZero !== bZero) return aZero - bZero
       return aStock - bStock
     })
-  }, [productos, stockBajo, stockNegativo])
+  }, [productos, busqueda, stockBajo, stockNegativo])
 
   // Paginación
   const totalPaginas = Math.max(1, Math.ceil(productosFiltrados.length / ITEMS_POR_PAGINA))

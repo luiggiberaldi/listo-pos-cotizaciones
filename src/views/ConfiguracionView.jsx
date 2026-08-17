@@ -2,7 +2,7 @@
 // Configuración del negocio — solo supervisor (rediseñado con tabs)
 import { useState, useRef, useEffect } from 'react'
 import {
-  Settings, Building2, Phone, Mail, MapPin, FileText, Save, CheckCircle,
+  Settings, Building2, Phone, Mail, MapPin, FileText, Save, CheckCircle, Truck,
   Eye, EyeOff, Accessibility, HardDrive, Download, Upload,
   AlertCircle, AlertTriangle, Percent, Users, Database, Copy, Check, DollarSign,
   HelpCircle, Info, Trash2, Plus,
@@ -143,6 +143,52 @@ function ComisionesTab({ campos, cambiar, isLoading, cargando }) {
 
   return (
     <div className="space-y-6">
+      {/* Regla de choferes locales */}
+      <div className="bg-amber-50/70 rounded-2xl border border-amber-200 p-5 space-y-4">
+        <SectionHeaderExt icon={Truck}>Choferes locales</SectionHeaderExt>
+        <p className="text-xs text-amber-800 -mt-2">
+          La regla es global por cuenta: en Carabobo el flete pertenece a la nómina externa; solo los destinos fuera de Carabobo generan comisión. El valor de fábrica es 20%.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide">Tipo de cálculo</label>
+            <CustomSelect
+              options={[
+                { value: 'porcentaje', label: 'Porcentaje del flete' },
+                { value: 'fija', label: 'Tarifa fija por despacho' },
+              ]}
+              value={campos.transp_tipo_calculo}
+              onChange={v => !disabled && cambiar('transp_tipo_calculo', v)}
+              disabled={disabled}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide">Porcentaje global</label>
+            <div className="flex items-center gap-2">
+              <input type="number" min="0" max="100" step="0.01"
+                value={campos.transp_pct_comision}
+                onFocus={e => e.target.select()}
+                onChange={e => cambiar('transp_pct_comision', Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
+                disabled={disabled || campos.transp_tipo_calculo !== 'porcentaje'}
+                className="w-full px-3 py-2.5 rounded-xl border border-amber-200 bg-white text-sm text-slate-800 text-right font-bold disabled:opacity-50" />
+              <span className="text-lg font-bold text-amber-600">%</span>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide">Tarifa fija global</label>
+            <div className="flex items-center gap-2">
+              <span className="text-lg font-bold text-amber-600">$</span>
+              <input type="number" min="0" step="0.0001"
+                value={campos.transp_tarifa_fija_usd}
+                onFocus={e => e.target.select()}
+                onChange={e => cambiar('transp_tarifa_fija_usd', Math.max(0, Number(e.target.value) || 0))}
+                disabled={disabled || campos.transp_tipo_calculo !== 'fija'}
+                className="w-full px-3 py-2.5 rounded-xl border border-amber-200 bg-white text-sm text-slate-800 text-right font-bold disabled:opacity-50" />
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Grid de Configuración de Comisiones - Lado a Lado */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
@@ -637,6 +683,9 @@ export default function ConfiguracionView() {
     comision_ext_pct_externos:    3,
     _comision_ext_extras:         [],
     descuento_personal_pct:       10.00,
+    transp_tipo_calculo:           'porcentaje',
+    transp_pct_comision:           20,
+    transp_tarifa_fija_usd:        50,
   })
   const [gatePassword, setGatePassword] = useState('')
 
@@ -665,6 +714,9 @@ export default function ConfiguracionView() {
         comision_ext_pct_externos:  config.comision_ext_pct_externos  ?? 3,
         _comision_ext_extras:       config._comision_ext_extras       ?? [],
         descuento_personal_pct:     config.descuento_personal_pct     ?? 10.00,
+        transp_tipo_calculo:         config.transp_tipo_calculo         ?? 'porcentaje',
+        transp_pct_comision:         config.transp_pct_comision         ?? 20,
+        transp_tarifa_fija_usd:      config.transp_tarifa_fija_usd      ?? 50,
       })
     }
   }, [config])

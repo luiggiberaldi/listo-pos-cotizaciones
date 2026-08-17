@@ -322,8 +322,10 @@ export default function IngresoLoteHubModal({ isOpen, onClose, productos = [], c
       // Si no, búsqueda difusa simple
       if (!match) {
         const matches = smartSearchProductos(productos, nombre)
-        // Reducimos el umbral de relevancia a 0.45 para tolerar pequeñas imprecisiones de lectura del OCR
-        if (matches.length > 0 && matches[0]._relevance > 0.45) {
+        // smartSearchProductos ya devuelve solo coincidencias válidas y
+        // conserva cobertura/score para ordenarlas; no usar _relevance porque
+        // esa propiedad no forma parte de su contrato.
+        if (matches.length > 0) {
           match = matches[0]
         }
       }

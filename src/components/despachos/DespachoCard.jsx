@@ -1006,6 +1006,21 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             <span className="truncate">{despacho.transportista.nombre}</span>
           </div>
         )}
+        {despacho.transportista?.es_local && Number(despacho.flete_usd || 0) > 0 && (
+          despacho.flete_regla_aplicada === 'nomina_carabobo' ? (
+            <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-medium">
+              <span className="text-amber-600">Nómina externa · Carabobo</span>
+            </div>
+          ) : despacho.flete_comisionable ? (
+            <div className="flex items-center gap-1.5 text-[10px] text-amber-700 font-semibold">
+              <span>Comisión externa: {fmtUsd(despacho.flete_neto_transportista_usd || 0)}</span>
+            </div>
+          ) : despacho.flete_regla_aplicada === 'destino_no_identificado' ? (
+            <div className="flex items-center gap-1.5 text-[10px] text-red-600 font-semibold">
+              <span>Falta estado de destino del flete</span>
+            </div>
+          ) : null
+        )}
         {isCtaPorCobrar && (
           <div className="flex items-center gap-1.5 text-[11px] text-amber-600 font-medium mt-0.5">
             <CreditCard size={11} className="shrink-0" />
@@ -1513,11 +1528,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
                       )}
                       <div className="flex items-start gap-2">
                         <DollarSign size={14} className="text-emerald-500 shrink-0 mt-0.5" />
-                        <p className="text-slate-600"><strong>Comisiones:</strong> La comisión del vendedor se consolidará para pago.</p>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <AlertTriangle size={14} className="text-red-500 shrink-0 mt-0.5" />
-                        <p className="text-slate-600"><strong>Irreversible:</strong> No se podrán hacer cambios después de {accionPendiente?.estado === 'despachada' ? 'aprobar' : 'entregar'}.</p>
+                        <p className="text-slate-600"><strong>Comisiones:</strong> Se registrará si corresponde; puede quedar retenida hasta cobrar la CxC.</p>
                       </div>
                     </div>
 

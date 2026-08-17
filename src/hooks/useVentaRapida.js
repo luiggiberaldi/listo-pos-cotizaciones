@@ -25,6 +25,7 @@ export function useVentaRapida() {
       clienteId, clienteNombre, transportistaId, fleteUsd, corteUsd,
       formaPago, formaPagoCliente, referenciaPago,
       notas, notasCliente, items, costoEnvioUsd, tasaBcv,
+      direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado,
     }) => {
       const payload = {
         clienteId, transportistaId: transportistaId || null,
@@ -36,6 +37,9 @@ export function useVentaRapida() {
         items, descuentoGlobalPct: 0,
         costoEnvioUsd: Number(costoEnvioUsd) || 0,
         tasaBcv,
+        direccionEnvioDireccion: direccionEnvioDireccion || null,
+        direccionEnvioCiudad: direccionEnvioCiudad || null,
+        direccionEnvioEstado: direccionEnvioEstado || null,
       }
 
       // ─── Intento online ────────────────────────────────────────────────────

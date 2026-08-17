@@ -39,6 +39,33 @@ export function getWeekRange(offset = 0) {
 }
 
 /**
+ * Corte semanal de comisiones: viernes a jueves.
+ * En viernes toma el último período completo (viernes anterior → jueves).
+ * @param {number} offset 0 = último corte completo, -1 = corte anterior
+ */
+export function getCorteSemanalRange(offset = 0) {
+    const now = new Date();
+    const day = now.getDay(); // 0=dom, 1=lun... 4=jue, 5=vie
+    const daysBackToThursday = day === 4 ? 7 : (day - 4 + 7) % 7;
+    const end = new Date(now);
+    end.setDate(now.getDate() - daysBackToThursday + offset * 7);
+    const start = new Date(end);
+    start.setDate(end.getDate() - 6);
+
+    const previousEnd = new Date(start);
+    previousEnd.setDate(start.getDate() - 1);
+    const previousStart = new Date(previousEnd);
+    previousStart.setDate(previousEnd.getDate() - 6);
+
+    return {
+        from: getLocalISODate(start),
+        to: getLocalISODate(end),
+        prevFrom: getLocalISODate(previousStart),
+        prevTo: getLocalISODate(previousEnd),
+    };
+}
+
+/**
  * Rango de mes completo
  * @param {number} offset 0 = este mes, -1 = mes pasado, etc.
  */

@@ -14,7 +14,8 @@ const STORAGEKEYMODE_BASE = 'construacero_tasa_modo_v2'
 const STORAGEKEYMANUAL_BASE = 'construacero_tasa_manual'
 const UPDATE_INTERVAL = 5 * 60 * 1000 // 5 minutos
 const MIN_REFRESH_INTERVAL = 60 * 1000 // no refrescar más de 1x/min al volver al foco
-const GOOGLE_BCV_SCRIPT_URL = (import.meta.env.VITE_BCV_GOOGLE_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycbzUmj0Tug-pa3Y6jLEMT8tijNFvYb4_CLWhBZ0vDW7YsuP-QXjAcelOH5r-Mip3FJ-_7A/exec?token=Lvbp1994').trim()
+// Endpoint opcional; si no se configura, se usan los endpoints públicos oficiales de respaldo.
+const GOOGLE_BCV_SCRIPT_URL = (import.meta.env.VITE_BCV_GOOGLE_SCRIPT_URL || '').trim()
 
 // ─── Singleton: deduplicar fetches entre múltiples instancias del hook ──────
 // Evita ERR_INSUFFICIENT_RESOURCES cuando varios componentes llaman useTasaCambio()
@@ -99,7 +100,7 @@ async function _fetchBcvRaw() {
   let bcvPrice = null
   let euroPrice = null
 
-  // 1. Google Script (Scraper directo bcv.org.ve — misma fuente que producción)
+  // 1. Google Script opcional (scraper directo de bcv.org.ve).
   if (GOOGLE_BCV_SCRIPT_URL) {
     try {
       const data = await fetchConTimeout(GOOGLE_BCV_SCRIPT_URL, 10000)
@@ -107,7 +108,7 @@ async function _fetchBcvRaw() {
         if (data.bcv?.price) bcvPrice = parseSafeFloat(data.bcv.price)
         if (data.euro?.price) euroPrice = parseSafeFloat(data.euro.price)
         if (bcvPrice > 0 && euroPrice > 0) {
-          return { usd: bcvPrice, eur: euroPrice, fuente: 'BCV Oficial' }
+          return { usd: bcvPrice, eur: euroPrice, fuente: 'BCV Oficial (Google Script)' }
         }
       }
     } catch { /* intenta siguiente fuente */ }
@@ -123,11 +124,11 @@ async function _fetchBcvRaw() {
     if (dataDolarOficial?.promedio) bcvPrice = parseSafeFloat(dataDolarOficial.promedio)
     if (dataEuroOficial?.promedio) euroPrice = parseSafeFloat(dataEuroOficial.promedio)
 
-    if (bcvPrice > 0) {
-      return { 
-        usd: bcvPrice, 
-        eur: euroPrice > 0 ? euroPrice : (bcvPrice * 1.15785), 
-        fuente: 'BCV Oficial' 
+    if (bcvPrice > 0 || euroPrice > 0) {
+      return {
+        usd: bcvPrice || 0,
+        eur: euroPrice || 0,
+        fuente: 'BCV Oficial'
       }
     }
   } catch { /* intenta siguiente fuente */ }
@@ -314,12 +315,12 @@ export function useTasaCambio() {
     if (STORAGEKEYMANUAL) localStorage.setItem(STORAGEKEYMANUAL, tasaManual)
   }, [tasaManual, STORAGEKEYMANUAL])
 
-  // Tasa efectiva según modo seleccionado
+  // Tasa efectiva según modo seleccionado. No cambiar silenciosamente a otra fuente.
   const tasaEfectiva = modoTasa === 'usdt'
-    ? (tasaUsdt.precio > 0 ? tasaUsdt.precio : tasaBcv.precio)
+    ? (Number(tasaUsdt.precio) > 0 ? Number(tasaUsdt.precio) : 0)
     : modoTasa === 'manual'
-      ? (parseFloat(tasaManual) > 0 ? parseFloat(tasaManual) : tasaBcv.precio)
-      : tasaBcv.precio
+      ? (parseFloat(tasaManual) > 0 ? parseFloat(tasaManual) : 0)
+      : (Number(tasaBcv.precio) > 0 ? Number(tasaBcv.precio) : 0)
 
   // Backward compat: modoAuto = true cuando NO es manual
   const modoAuto = modoTasa !== 'manual'
@@ -336,6 +337,11 @@ export function useTasaCambio() {
           fuente: bcvData.fuente,
           ultimaActualizacion: new Date().toISOString(),
         })
+      } else {
+        // No conservar una tasa BCV antigua cuando la fuente ya no la confirmó.
+        setTasaBcv(DEFAULT_RATE)
+        localStorage.removeItem(STORAGEKEY)
+        if (!esAutoUpdate) setError('No se pudo obtener la tasa BCV')
       }
 
       if (eurVal > 0) {
@@ -344,9 +350,20 @@ export function useTasaCambio() {
           fuente: bcvData.fuente,
           ultimaActualizacion: new Date().toISOString(),
         })
+      } else {
+        // No conservar una tasa Euro aproximada o antigua cuando la fuente no la confirmó.
+        setTasaEuro(DEFAULT_RATE)
+        localStorage.removeItem(STORAGEKEYEURO)
+        if (!esAutoUpdate) setError('No se pudo obtener la tasa Euro BCV')
       }
-    } else if (!esAutoUpdate && tasaRef.current?.precio <= 0) {
-      setError('No se pudo obtener la tasa BCV')
+    } else {
+      // Si la consulta completa falla, las tasas cacheadas dejan de ser utilizables
+      // para operaciones nuevas hasta que una fuente confirme su valor.
+      setTasaBcv(DEFAULT_RATE)
+      setTasaEuro(DEFAULT_RATE)
+      localStorage.removeItem(STORAGEKEY)
+      localStorage.removeItem(STORAGEKEYEURO)
+      if (!esAutoUpdate) setError('No se pudo obtener la tasa BCV/Euro')
     }
 
     if (usdtData && usdtData.precio > 0) {
@@ -355,6 +372,11 @@ export function useTasaCambio() {
         fuente: usdtData.fuente,
         ultimaActualizacion: new Date().toISOString(),
       })
+    } else {
+      // Evitar liquidar con un valor USDT que la fuente ya no confirmó.
+      setTasaUsdt(DEFAULT_RATE)
+      localStorage.removeItem(STORAGEKEYUSDT)
+      if (!esAutoUpdate) setError('No se pudo obtener la tasa USDT')
     }
   }, [])
 

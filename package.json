@@ -7,7 +7,7 @@
     "dev": "npx concurrently -n VITE,API -c cyan,yellow \"vite\" \"npm run dev:worker\"",
     "dev:vite": "vite",
     "dev:api": "npm run dev:worker",
-    "dev:worker": "npx wrangler dev --port 8787 --local",
+    "dev:worker": "npx wrangler dev --config wrangler.toml --port 8787 --local",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint .",

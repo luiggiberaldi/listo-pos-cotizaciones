@@ -26,6 +26,7 @@ import { handleGuardarCotizacion, handleReciclarCotizacion, handleReabrirCotizac
 import { handleCrearDespacho, handleActualizarEstadoDespacho, handleEditarItemsDespacho, handleReciclarDespacho, handleGuardarDescuentos, handleObtenerDescuentos, handleEditarPagoDespacho, handleDevolucionParcialDespacho } from './api/handlers/despachos.js'
 import { handleDevTools } from './api/handlers/dev.js'
 import { handleAdmin, handleBackup, handleRestore, handleSaveConfig, handleGetConfig, handleResetOperacional, handleTesterClearAll, handleTesterSeedDemo, handleTesterStressSeed, handleCrearTransportista, handleActualizarTransportista } from './api/handlers/admin.js'
+import { handleReporteTransportistas, handleDetalleTransportista, handlePagarTransportista, handleRevertirPagoTransportista } from './api/handlers/transportistas.js'
 import { handleGetSeguimiento, handleCrearSeguimiento, handleActualizarSeguimiento, handleBorrarSeguimiento, runPurgeTrackingImages } from './api/handlers/seguimiento.js'
 import {
   handleListarProveedores,
@@ -59,9 +60,17 @@ export default {
 
     // ── API: ping (verificación de conectividad real desde el frontend) ───
     if (url.pathname === '/api/ping') {
+      const projectRef = env.SUPABASE_URL
+        ? new URL(env.SUPABASE_URL).hostname.split('.')[0]
+        : ''
       return new Response('ok', {
         status: 200,
-        headers: { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store', ...corsHeaders(request) },
+        headers: {
+          'Content-Type': 'text/plain',
+          'Cache-Control': 'no-store',
+          ...(projectRef ? { 'X-Supabase-Project-Ref': projectRef } : {}),
+          ...corsHeaders(request),
+        },
       });
     }
 
@@ -289,6 +298,23 @@ export default {
     // ── API: actualizar transportista (bypass RLS) ────────────────────────────
     if (url.pathname === '/api/transportistas/actualizar' && request.method === 'POST') {
       return handleActualizarTransportista(request, env);
+    }
+
+    // ── API: reporte de transportistas locales y comisiones externas ────────
+    if (url.pathname === '/api/transportistas/reporte' && request.method === 'GET') {
+      return handleReporteTransportistas(request, env);
+    }
+
+    if (url.pathname === '/api/transportistas/detalle' && request.method === 'GET') {
+      return handleDetalleTransportista(request, env);
+    }
+
+    if (url.pathname === '/api/transportistas/pagar' && request.method === 'POST') {
+      return handlePagarTransportista(request, env);
+    }
+
+    if (url.pathname === '/api/transportistas/revertir-pago' && request.method === 'POST') {
+      return handleRevertirPagoTransportista(request, env);
     }
 
     // ── API: obtener lista de comisiones (bypass RLS) ──────────────────────

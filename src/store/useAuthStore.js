@@ -477,6 +477,14 @@ const useAuthStore = create((set, get) => ({
       })
     }
 
+    // Vite/Wrangler puede devolver una respuesta 500 vacía cuando el Worker
+    // local no está levantado; no asumir que toda respuesta es JSON.
+    const readResponseJson = async (response) => {
+      const text = await response.text()
+      if (!text) return {}
+      try { return JSON.parse(text) } catch { return {} }
+    }
+
     try {
       let token = await getAccessToken()
       if (!token) {
@@ -485,7 +493,7 @@ const useAuthStore = create((set, get) => ({
       }
 
       let res = await callWorker(token)
-      let result = await res.json()
+      let result = await readResponseJson(res)
 
       // Si el worker responde 401 "No autenticado" → sesión expirada
       // Intentar refrescar el token y reintentar una vez

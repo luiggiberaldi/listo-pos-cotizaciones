@@ -1,5 +1,7 @@
 // api/lib/transportistaUtils.js
-// Calcula el neto a pagar al chofer por un despacho.
+// Calcula el neto comisionable del chofer por un despacho.
+// La regla de alcance (fuera de Carabobo) se congela en la BD mediante la
+// migración 235; esta utilidad conserva el cálculo puro para previews y tests.
 // La config (tipo_calculo, pct, tarifa) es GLOBAL en configuracion_negocio,
 // no por transportista. En la ficha del chofer solo se marca es_local.
 
@@ -37,6 +39,16 @@ export async function fetchTransportistaConfig(env, headers, transportistaId, cu
         const tData = await tRes.json()
         if (!Array.isArray(tData) || tData.length === 0) throw new Error('TRANSPORTISTA_NO_ENCONTRADO')
         esLocal = !!tData[0].es_local
+        // Los transportistas no locales no generan comisión de flete y no
+        // deben depender de que la configuración de choferes ya exista.
+        if (!esLocal) {
+          return {
+            es_local: false,
+            tipo_calculo: 'porcentaje',
+            pct_comision: 0,
+            tarifa_fija_usd: 0,
+          }
+        }
       } else {
         throw new Error('TRANSPORTISTA_NO_DISPONIBLE')
       }
@@ -83,11 +95,12 @@ export async function fetchTransportistaConfig(env, headers, transportistaId, cu
 }
 
 /**
- * Calcula el neto a pagar al chofer.
+ * Calcula el neto comisionable antes de aplicar el destino.
  *  - es_local=false → 0
  *  - tipo='porcentaje' → flete * pct/100
  *  - tipo='fija' → MIN(tarifa_fija, flete)
  *  - Nunca excede al flete cobrado al cliente.
+ * La persistencia debe usar la regla SQL para excluir Carabobo y nómina.
  * @param {{es_local?: boolean, tipo_calculo?: string, pct_comision?: number, tarifa_fija_usd?: number} | null} config
  * @param {number} fleteUsd
  * @returns {{ neto: number, pct_aplicado: number|null }}

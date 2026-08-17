@@ -35,8 +35,6 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
     zona_cobertura:  inicial.zona_cobertura  ?? '',
     capacidad:       inicial.capacidad       ?? '',
     es_local:        inicial.es_local        ?? false,
-    tipo_relacion:   inicial.tipo_relacion   ?? 'proveedor',
-    emite_comprobante: inicial.emite_comprobante ?? false,
   })
   const [error, setError] = useState('')
 
@@ -132,25 +130,9 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
           <input value={campos.capacidad} onChange={e => cambiar('capacidad', e.target.value)}
             placeholder="Ej: 30 Toneladas, 350 Sacos" className={inputCls} disabled={cargando} />
         </div>
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Relación</label>
-          <select value={campos.tipo_relacion} onChange={e => cambiar('tipo_relacion', e.target.value)}
-            className={inputCls} disabled={cargando}>
-            <option value="empleado">Empleado</option>
-            <option value="contratista">Contratista</option>
-            <option value="proveedor">Proveedor</option>
-            <option value="propio">Propio de la empresa</option>
-          </select>
-        </div>
-        <label className="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
-          <input type="checkbox" checked={!!campos.emite_comprobante}
-            onChange={e => cambiar('emite_comprobante', e.target.checked)} disabled={cargando}
-            className="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary" />
-          Emite comprobante por el servicio
-        </label>
       </div>
 
-      {/* ── Transportista local (cobra % o tarifa del flete) ── */}
+      {/* ── Chofer local: comisión únicamente fuera de Carabobo ── */}
       <div className="space-y-3 border-t border-slate-100 pt-4">
         <label className="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer w-fit">
           <input
@@ -160,10 +142,10 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
             disabled={cargando}
             className="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary"
           />
-          Es transportista local (cobra del flete)
+          Es chofer local (comisión solo fuera de Carabobo)
         </label>
         <p className="text-[11px] text-slate-400">
-          El tipo de cálculo (% o tarifa fija) y el valor se configuran globalmente en Configuración → Transportistas.
+          En Carabobo se procesa por nómina externa; fuera de Carabobo se calcula la comisión configurada en el sistema.
         </p>
       </div>
 

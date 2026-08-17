@@ -14,7 +14,7 @@ import { useComisiones, useComisionesResumen, useMarcarComisionPagada } from '..
 import ConfirmModal from '../components/ui/ConfirmModal'
 import { useResumenCxC } from '../hooks/useCuentasCobrar'
 import { useProveedores } from '../hooks/useProveedores'
-import { getDayRange, getWeekRange, getMonthRange } from '../utils/dateHelpers'
+import { getDayRange, getCorteSemanalRange, getMonthRange } from '../utils/dateHelpers'
 import { fmtUsd, fmtBs, removeAccents } from '../utils/format'
 import useAuthStore from '../store/useAuthStore'
 import Skeleton from '../components/ui/Skeleton'
@@ -986,13 +986,14 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
   const { perfil } = useAuthStore()
   const { tasaEuro, tasaUsdt } = useTasaCambio()
   const [tipoTasaComision, setTipoTasaComision] = useState('euro') // 'euro' | 'usdt'
-  const tasaSeleccionada = tipoTasaComision === 'usdt' ? (tasaUsdt?.precio || 0) : (tasaEuro?.precio || 0)
+  const tasaSeleccionadaInfo = tipoTasaComision === 'usdt' ? tasaUsdt : tasaEuro
+  const tasaSeleccionada = tasaSeleccionadaInfo?.precio || 0
   const tipoTasaLabel = tipoTasaComision === 'usdt' ? 'USDT' : 'Euro BCV'
+  const tasaDisponible = Number(tasaSeleccionada) > 0
 
-  const esAdmin = perfil?.rol === 'administracion'
-  const esJefe = perfil?.rol === 'jefe'
   const esDev = perfil?.rol === 'desarrollador'
-  const puedePagarComisiones = esAdmin || esJefe || esDev
+  // Solo Desarrollo conserva los controles internos de pago.
+  const puedePagarComisiones = esDev
 
   const catPrincipal = configNeg?.comision_categoria_cabilla || 'Cabilla'
   const esExterno = !!vendedor?.es_externo || (vendedor?.markup_pct != null && Number(vendedor.markup_pct) > 0)
@@ -1094,64 +1095,35 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
   }, [totales, vendedor, ajustesManuales, formatoReporte, tasaSeleccionada])
 
   async function exportarPDF(action = 'download') {
+    if (!tasaDisponible) {
+      alert(`No hay una tasa ${tipoTasaLabel} disponible para generar el PDF.`)
+      return
+    }
     setExportando(true)
     try {
       const { generarComisionesPDF } = await import('../services/pdf/comisionesPDF')
 
-      let query = supabase
-        .from('comision_liberaciones')
-        .select(`
-          id,
-          comision_id,
-          despacho_id,
-          vendedor_id,
-          cuenta_id,
-          monto,
-          tipo,
-          cxc_id,
-          creado_en,
-          comisiones:comisiones!inner(
-            id,
-            totalcomision,
-            comisioncabilla,
-            comisionotros,
-            pctcabilla,
-            pctotros,
-            estado,
-            montopagado,
-            cotizacionid,
-            vendedor:usuarios(id, nombre, color, markup_pct, rol, es_externo),
-            despacho:notas_despacho(
-              id,
-              numero,
-              total_usd,
-              tasa_snapshot,
-              cliente:clientes!notas_despacho_cliente_id_fkey(id, nombre, tipo_cliente),
-              productos:notas_despacho_items(nombre_snap)
-            )
-          )
-        `)
-        .order('creado_en', { ascending: false })
+      // Usar el Worker, igual que el reporte general, para respetar el tenant
+      // y el rol de la sesión. La consulta directa desde el navegador queda
+      // sometida a RLS y puede ocultar eventos válidos en staging.
+      const params = new URLSearchParams()
+      params.set('vista', 'eventos')
+      params.set('page', '1')
+      params.set('pageSize', '500')
+      if (rango?.from) params.set('desde', rango.from)
+      if (rango?.to) params.set('hasta', rango.to)
+      if (vendedor?.id) params.set('vendedorId', vendedor.id)
 
-      if (rango?.from) {
-        query = query.gte('creado_en', `${rango.from}T00:00:00-04:00`)
+      const headers = await getAuthHeaders()
+      const res = await fetch(apiUrl(`/api/comisiones/lista?${params}`), { headers })
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(`HTTP ${res.status}: ${text}`)
       }
-      if (rango?.to) {
-        query = query.lte('creado_en', `${rango.to}T23:59:59-04:00`)
-      }
-      if (vendedor?.id) {
-        query = query.eq('vendedor_id', vendedor.id)
-      }
+      const resJson = await res.json()
+      const rawEvents = resJson.data || []
 
-      const { data: rawEvents, error: errEvents } = await query
-
-      if (errEvents) {
-        console.error('Error fetching events:', errEvents)
-        alert('❌ Error al obtener las liberaciones de comisión: ' + errEvents.message)
-        return
-      }
-
-      if (!rawEvents || rawEvents.length === 0) {
+      if (rawEvents.length === 0) {
         alert(`🔍 SIN DATOS: No hay liberaciones de comisiones para ${vendedor?.nombre || 'este vendedor'} en el periodo seleccionado.`)
         return
       }
@@ -1172,7 +1144,7 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
       const comisionesParaPDF = rawEvents.map(r => {
         const com = r.comisiones || {};
         const desp = com.despacho || {};
-        const cot = cotizacionesMap[com.cotizacionid];
+        const cot = cotizacionesMap[com.cotizacionid] || com.cotizacion;
         return {
           id: r.id,
           monto: Number(r.monto || 0),
@@ -1223,7 +1195,10 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
         tasaEuro: tasaSeleccionada,
         tasaAplicada: tasaSeleccionada,
         tipoTasa: tipoTasaLabel,
-        ajustesManuales
+        tasaFuente: tasaSeleccionadaInfo?.fuente,
+        tasaActualizadaEn: tasaSeleccionadaInfo?.ultimaActualizacion,
+        ajustesManuales,
+        modoCorteSemanal: true
       })
     } catch (e) {
       console.error('Error generando PDF individual:', e)
@@ -1261,7 +1236,7 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
           <div className="flex flex-wrap items-center gap-2.5">
             <button
               onClick={(e) => { e.stopPropagation(); exportarPDF('download'); }}
-              disabled={exportando}
+              disabled={exportando || !tasaDisponible}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white transition-all duration-200 border border-slate-700 shadow-md active:scale-95 disabled:opacity-50 group font-bold text-xs tracking-wide"
               title="Descargar Reporte PDF"
             >
@@ -1271,7 +1246,7 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
 
             <button
               onClick={(e) => { e.stopPropagation(); exportarPDF('print'); }}
-              disabled={exportando}
+              disabled={exportando || !tasaDisponible}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-900/10 hover:bg-blue-900/20 text-blue-900 transition-all duration-200 border border-blue-900/20 shadow-md active:scale-95 disabled:opacity-50 group font-bold text-xs tracking-wide"
               title="Imprimir Reporte PDF"
             >
@@ -1289,7 +1264,7 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
               >
                 <span className="w-4 h-4 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px] font-black shrink-0">€</span>
                 <span>Euro BCV:</span>
-                <b>{fmtBs(tasaEuro?.precio || 0)}</b>
+                <b>{tasaEuro?.precio > 0 ? fmtBs(tasaEuro.precio) : 'N/D'}</b>
               </button>
               <button
                 type="button"
@@ -1299,7 +1274,7 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
               >
                 <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-[10px] font-black shrink-0 font-mono">₮</span>
                 <span>USDT:</span>
-                <b>{fmtBs(tasaUsdt?.precio || 0)}</b>
+                <b>{tasaUsdt?.precio > 0 ? fmtBs(tasaUsdt.precio) : 'N/D'}</b>
               </button>
             </div>
 
@@ -1403,7 +1378,7 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
                     <th className="px-2 sm:px-4 py-2 font-semibold text-right">{labelCabillaHeader}</th>
                     <th className="px-2 sm:px-4 py-2 font-semibold text-right">Otros</th>
                     <th className="px-2 sm:px-4 py-2 font-semibold text-right">Com. ($)</th>
-                    <th className="px-2 sm:px-4 py-2 font-semibold text-right">Tasa Euro</th>
+                    <th className="px-2 sm:px-4 py-2 font-semibold text-right">Tasa {tipoTasaLabel}</th>
                     <th className="px-2 sm:px-4 py-2 font-semibold text-right">Com. (Bs)</th>
                     <th className="px-2 sm:px-4 py-2 font-semibold text-center">Estado</th>
                   </tr>
@@ -1561,16 +1536,17 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
 function TabComisiones({ configNeg }) {
   const { perfil } = useAuthStore()
   const esAdmin = perfil?.rol === 'administracion' || perfil?.rol === 'jefe' || perfil?.rol === 'desarrollador'
-  const esJefe = perfil?.rol === 'jefe'
   const esDev = perfil?.rol === 'desarrollador'
-  const puedePagarComisiones = esAdmin || esJefe || esDev
+  // Administración y Jefatura trabajan con el corte externo;
+  // solo Desarrollo conserva la herramienta para pruebas/contingencia.
+  const puedePagarComisiones = esDev
 
   const marcar = useMarcarComisionPagada()
   const [pagoMasivoData, setPagoMasivoData] = useState(null)
   const [pagandoMasivo, setPagandoMasivo] = useState(false)
 
   const [rango, setRango] = useState(() => {
-    const r = getWeekRange(0)
+    const r = getCorteSemanalRange(0)
     return { from: r.from, to: r.to }
   })
   const [filtroEstado, setFiltroEstado] = useState('pendiente') // Inicializado con 'pendiente'
@@ -1578,8 +1554,10 @@ function TabComisiones({ configNeg }) {
   const [formatoReporte, setFormatoReporte] = useState('detallado') // 'detallado', 'resumido'
   const { tasaEuro, tasaUsdt } = useTasaCambio()
   const [tipoTasaComision, setTipoTasaComision] = useState('euro') // 'euro' | 'usdt'
-  const tasaSeleccionada = tipoTasaComision === 'usdt' ? (tasaUsdt?.precio || 0) : (tasaEuro?.precio || 0)
+  const tasaSeleccionadaInfo = tipoTasaComision === 'usdt' ? tasaUsdt : tasaEuro
+  const tasaSeleccionada = tasaSeleccionadaInfo?.precio || 0
   const tipoTasaLabel = tipoTasaComision === 'usdt' ? 'USDT' : 'Euro BCV'
+  const tasaDisponible = Number(tasaSeleccionada) > 0
   const [exportando, setExportando] = useState(false)
   const [showPrintMenu, setShowPrintMenu] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
@@ -1685,7 +1663,7 @@ function TabComisiones({ configNeg }) {
     return Object.values(map)
       .filter(v => v.rol !== 'desarrollador' && v.rol !== 'administracion' && v.rol !== 'logistica')
       .sort((a, b) => b.totalUsd - a.totalUsd)
-  }, [comisiones])
+  }, [comisiones, tasaSeleccionada])
 
   // Obtener lista única de vendedores para el select (desde el dataset sin filtro de vendedor)
   const vendedoresDisponibles = useMemo(() => {
@@ -1704,6 +1682,10 @@ function TabComisiones({ configNeg }) {
   }, [comisionesParaDropdown, esAdmin])
 
   async function exportarPDF(tipoFiltro = 'todos', accion = 'descargar') {
+    if (!tasaDisponible) {
+      alert(`No hay una tasa ${tipoTasaLabel} disponible para generar el PDF.`)
+      return
+    }
     setExportando(true)
     try {
       const { generarComisionesPDF } = await import('../services/pdf/comisionesPDF')
@@ -1823,7 +1805,10 @@ function TabComisiones({ configNeg }) {
         tasaEuro: tasaSeleccionada,
         tasaAplicada: tasaSeleccionada,
         tipoTasa: tipoTasaLabel,
-        ajustesManuales
+        tasaFuente: tasaSeleccionadaInfo?.fuente,
+        tasaActualizadaEn: tasaSeleccionadaInfo?.ultimaActualizacion,
+        ajustesManuales,
+        modoCorteSemanal: true
       })
     } catch (e) {
       console.error('Error generando PDF general:', e)
@@ -1834,65 +1819,36 @@ function TabComisiones({ configNeg }) {
   }
 
   async function exportarIndividualPDF(vendedor) {
+    if (!tasaDisponible) {
+      alert(`No hay una tasa ${tipoTasaLabel} disponible para generar el PDF.`)
+      return
+    }
     setExportando(true)
     try {
       const { generarComisionesPDF } = await import('../services/pdf/comisionesPDF')
 
-      let query = supabase
-        .from('comision_liberaciones')
-        .select(`
-          id,
-          comision_id,
-          despacho_id,
-          vendedor_id,
-          cuenta_id,
-          monto,
-          tipo,
-          cxc_id,
-          creado_en,
-          comisiones:comisiones!inner(
-            id,
-            totalcomision,
-            comisioncabilla,
-            comisionotros,
-            pctcabilla,
-            pctotros,
-            estado,
-            montopagado,
-            cotizacionid,
-            vendedor:usuarios(id, nombre, color, markup_pct, rol, es_externo),
-            despacho:notas_despacho(
-              id,
-              numero,
-              total_usd,
-              tasa_snapshot,
-              cliente:clientes!notas_despacho_cliente_id_fkey(id, nombre, tipo_cliente),
-              productos:notas_despacho_items(nombre_snap)
-            )
-          )
-        `)
-        .order('creado_en', { ascending: false })
+      // Usar el Worker, igual que el reporte general, para respetar el tenant
+      // y el rol de la sesión. La consulta directa desde el navegador queda
+      // sometida a RLS y puede ocultar eventos válidos en staging.
+      const params = new URLSearchParams()
+      params.set('vista', 'eventos')
+      params.set('page', '1')
+      params.set('pageSize', '500')
+      if (rango?.from) params.set('desde', rango.from)
+      if (rango?.to) params.set('hasta', rango.to)
+      if (vendedor?.id) params.set('vendedorId', vendedor.id)
 
-      if (rango.from) {
-        query = query.gte('creado_en', `${rango.from}T00:00:00-04:00`)
+      const headers = await getAuthHeaders()
+      const res = await fetch(apiUrl(`/api/comisiones/lista?${params}`), { headers })
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(`HTTP ${res.status}: ${text}`)
       }
-      if (rango.to) {
-        query = query.lte('creado_en', `${rango.to}T23:59:59-04:00`)
-      }
-      if (vendedor.id) {
-        query = query.eq('vendedor_id', vendedor.id)
-      }
+      const resJson = await res.json()
+      const rawEvents = resJson.data || []
 
-      const { data: rawEvents, error: errEvents } = await query
-
-      if (errEvents) {
-        console.error('Error fetching events:', errEvents)
-        alert('❌ Error al obtener las liberaciones de comisión: ' + errEvents.message)
-        return
-      }
-
-      if (!rawEvents || rawEvents.length === 0) {
-        alert(`🔍 SIN DATOS: No hay registros para ${vendedor.nombre} en este rango.`)
+      if (rawEvents.length === 0) {
+        alert(`🔍 SIN DATOS: No hay liberaciones de comisiones para ${vendedor?.nombre || 'este vendedor'} en el periodo seleccionado.`)
         return
       }
 
@@ -1912,7 +1868,7 @@ function TabComisiones({ configNeg }) {
       const comisionesParaPDF = rawEvents.map(r => {
         const com = r.comisiones || {};
         const desp = com.despacho || {};
-        const cot = cotizacionesMap[com.cotizacionid];
+        const cot = cotizacionesMap[com.cotizacionid] || com.cotizacion;
         return {
           id: r.id,
           monto: Number(r.monto || 0),
@@ -1962,7 +1918,10 @@ function TabComisiones({ configNeg }) {
         tasaEuro: tasaSeleccionada,
         tasaAplicada: tasaSeleccionada,
         tipoTasa: tipoTasaLabel,
-        ajustesManuales
+        tasaFuente: tasaSeleccionadaInfo?.fuente,
+        tasaActualizadaEn: tasaSeleccionadaInfo?.ultimaActualizacion,
+        ajustesManuales,
+        modoCorteSemanal: true
       })
     } catch (e) {
       console.error('Error generating PDF individual:', e)
@@ -1977,6 +1936,12 @@ function TabComisiones({ configNeg }) {
 
   return (
     <div className="space-y-4">
+      {esDev && (
+        <div className="flex items-start gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2.5 text-[11px] text-violet-800">
+          <AlertTriangle size={14} className="mt-0.5 shrink-0 text-violet-600" />
+          <p><strong>Modo desarrollador:</strong> los controles internos de pago solo son visibles para este perfil. Administración y Jefatura trabajan con el corte PDF y no ven estas acciones.</p>
+        </div>
+      )}
       {/* Filtros */}
       <div className="bg-white px-4 py-3 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex flex-col gap-3.5">
@@ -2051,7 +2016,7 @@ function TabComisiones({ configNeg }) {
                 >
                   <span className="w-4 h-4 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px] font-black shrink-0">€</span>
                   <span>Euro BCV:</span>
-                  <b>{fmtBs(tasaEuro?.precio || 0)}</b>
+                  <b>{tasaEuro?.precio > 0 ? fmtBs(tasaEuro.precio) : 'N/D'}</b>
                 </button>
                 <button
                   type="button"
@@ -2061,7 +2026,7 @@ function TabComisiones({ configNeg }) {
                 >
                   <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-[10px] font-black shrink-0 font-mono">₮</span>
                   <span>USDT:</span>
-                  <b>{fmtBs(tasaUsdt?.precio || 0)}</b>
+                  <b>{tasaUsdt?.precio > 0 ? fmtBs(tasaUsdt.precio) : 'N/D'}</b>
                 </button>
               </div>
 
@@ -2071,7 +2036,7 @@ function TabComisiones({ configNeg }) {
                   {filtroVendedor ? (
                     <button
                       onClick={() => exportarPDF('todos', 'imprimir')}
-                      disabled={exportando || comisiones.length === 0}
+                      disabled={exportando || comisiones.length === 0 || !tasaDisponible}
                       className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm h-9"
                     >
                       <Printer size={12} className="text-slate-500" />
@@ -2081,7 +2046,7 @@ function TabComisiones({ configNeg }) {
                     <>
                       <button
                         onClick={() => setShowPrintMenu(!showPrintMenu)}
-                        disabled={exportando || comisiones.length === 0}
+                        disabled={exportando || comisiones.length === 0 || !tasaDisponible}
                         className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm h-9"
                       >
                         <Printer size={12} className="text-slate-500" />
@@ -2135,7 +2100,7 @@ function TabComisiones({ configNeg }) {
                   {filtroVendedor ? (
                     <button
                       onClick={() => exportarPDF('todos', 'descargar')}
-                      disabled={exportando || comisiones.length === 0}
+                      disabled={exportando || comisiones.length === 0 || !tasaDisponible}
                       className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md h-9"
                       style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
                     >
@@ -2146,7 +2111,7 @@ function TabComisiones({ configNeg }) {
                     <>
                       <button
                         onClick={() => setShowExportMenu(!showExportMenu)}
-                        disabled={exportando || comisiones.length === 0}
+                        disabled={exportando || comisiones.length === 0 || !tasaDisponible}
                         className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md h-9"
                         style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
                       >

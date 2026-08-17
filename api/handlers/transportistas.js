@@ -1,5 +1,5 @@
 // api/handlers/transportistas.js
-// Reporte de transportistas locales + liquidación de saldos (pago al chofer).
+// Reporte de choferes locales + liquidación de comisiones de fletes fuera de Carabobo.
 // Adicionalmente, el reporte y detalle son de solo lectura para admin/dev/logística.
 // El pago (FIFO) requiere admin/dev (igual que cxc/abono).
 import { json, jsonError, isValidUuid } from '../lib/utils.js'
@@ -114,13 +114,13 @@ export async function handleReporteTransportistas(request, env) {
   const dRes = await fetch(
     `${env.SUPABASE_URL}/rest/v1/notas_despacho` +
     `?${cuenta.filter}&transportista_id=not.is.null&estado=neq.anulada${fechaFiltro}` +
-    `&select=id,transportista_id,flete_usd,flete_neto_transportista_usd,flete_pagado,estado,creado_en&limit=5000`,
+    `&select=id,transportista_id,flete_usd,flete_neto_transportista_usd,flete_comisionable,flete_regla_aplicada,flete_pagado,estado,creado_en&limit=5000`,
     { headers }
   )
   if (!dRes.ok) {
     const detalle = await dRes.text().catch(() => '')
     console.error('[TRANSPORTISTAS][REPORTE] Error leyendo despachos:', detalle)
-    return jsonError('Error al leer despachos del reporte. Verifica que la migración de liquidación esté aplicada.', 500, request)
+    return jsonError('Error al leer despachos del reporte. Verifica que las migraciones 206, 221 y 235 estén aplicadas.', 500, request)
   }
   const despachos = await dRes.json()
 
@@ -137,7 +137,8 @@ export async function handleReporteTransportistas(request, env) {
         ? { tipo_calculo: 'porcentaje', pct_comision: pctComision }
         : { tipo_calculo: 'fija', tarifa_fija_usd: tarifaFija })
       : null,
-    despachos: 0, flete_total_usd: 0, neto_total_usd: 0,
+    despachos: 0, despachos_comisionables: 0, despachos_nomina: 0,
+    flete_total_usd: 0, flete_nomina_usd: 0, neto_total_usd: 0,
     pagado_usd: 0, saldo_usd: 0,
   }]))
 
@@ -147,19 +148,28 @@ export async function handleReporteTransportistas(request, env) {
     row.despachos += 1
     row.flete_total_usd += Number(d.flete_usd || 0)
     const neto = Number(d.flete_neto_transportista_usd || 0)
-    row.neto_total_usd += neto
-    if (d.flete_pagado) row.pagado_usd += neto
-    else row.saldo_usd += neto
+    if (d.flete_comisionable) {
+      row.despachos_comisionables += 1
+      row.neto_total_usd += neto
+      if (d.flete_pagado) row.pagado_usd += neto
+      else row.saldo_usd += neto
+    } else if (d.flete_regla_aplicada === 'nomina_carabobo') {
+      row.despachos_nomina += 1
+      row.flete_nomina_usd += Number(d.flete_usd || 0)
+    }
   }
 
   // Redondear y filtrar: solo transportistas locales (los demás no se liquidan aquí)
   const out = [...mapa.values()]
     .map(r => ({
       ...r,
-      flete_total_usd: r4(r.flete_total_usd),
-      neto_total_usd:  r4(r.neto_total_usd),
-      pagado_usd:      r4(r.pagado_usd),
-      saldo_usd:       r4(r.saldo_usd),
+      despachos_comisionables: r.despachos_comisionables,
+      despachos_nomina:        r.despachos_nomina,
+      flete_total_usd:         r4(r.flete_total_usd),
+      flete_nomina_usd:        r4(r.flete_nomina_usd),
+      neto_total_usd:          r4(r.neto_total_usd),
+      pagado_usd:              r4(r.pagado_usd),
+      saldo_usd:               r4(r.saldo_usd),
     }))
     .filter(r => r.es_local)
 
@@ -190,7 +200,7 @@ export async function handleDetalleTransportista(request, env) {
     `${env.SUPABASE_URL}/rest/v1/notas_despacho` +
     `?${cuenta.filter}&transportista_id=eq.${transportistaId}&estado=neq.anulada` +
     `&order=creado_en.asc` +
-    `&select=id,numero,creado_en,flete_usd,flete_neto_transportista_usd,flete_pagado,estado&limit=1000`,
+    `&select=id,numero,creado_en,flete_usd,flete_neto_transportista_usd,flete_comisionable,flete_estado_destino_snapshot,flete_regla_aplicada,flete_pagado,estado&limit=1000`,
     { headers }
   )
   if (!dRes.ok) return jsonError('Error al leer despachos', 500, request)
@@ -206,20 +216,32 @@ export async function handleDetalleTransportista(request, env) {
   const pagos = pagosRes.ok ? await pagosRes.json() : []
 
   const pendientes = despachos
-    .filter(d => !d.flete_pagado)
+    .filter(d => d.flete_comisionable && !d.flete_pagado && Number(d.flete_neto_transportista_usd || 0) > 0)
     .map(d => ({
       id: d.id,
       numero: d.numero,
       creado_en: d.creado_en,
-      flete_usd: Number(d.flete_usd || 0),
-      neto_usd:  Number(d.flete_neto_transportista_usd || 0),
-      estado:    d.estado,
+      flete_usd:      Number(d.flete_usd || 0),
+      neto_usd:       Number(d.flete_neto_transportista_usd || 0),
+      estado_destino: d.flete_estado_destino_snapshot || null,
+      regla:          d.flete_regla_aplicada || null,
+      estado:         d.estado,
     }))
   const saldoPendiente = pendientes.reduce((s, d) => s + d.neto_usd, 0)
 
   return json({
     despachos_pendientes: pendientes,
     saldo_pendiente_usd: r4(saldoPendiente),
+    despachos_nomina: despachos
+      .filter(d => d.flete_regla_aplicada === 'nomina_carabobo')
+      .map(d => ({
+        id: d.id,
+        numero: d.numero,
+        creado_en: d.creado_en,
+        flete_usd: Number(d.flete_usd || 0),
+        estado_destino: d.flete_estado_destino_snapshot || null,
+        estado: d.estado,
+      })),
     historico_pagos: (pagos || []).map(p => ({
       id:                   p.id,
       fecha:                p.fecha,
@@ -238,7 +260,7 @@ export async function handleDetalleTransportista(request, env) {
 
 // ── POST /api/transportistas/pagar ───────────────────────────────────────────
 // Body: { transportistaId, monto, referencia?, nota?, despachoIds? (opcional, FIFO si se omite) }
-// Marca despachos FIFO como flete_pagado=true hasta agotar el monto. Inserta en pagos_transportistas.
+// Marca FIFO solo sobre comisiones de fletes fuera de Carabobo. La nómina local no se registra aquí.
 // Se ejecuta con service_role para bypassar trigger de defensa en profundidad.
 export async function handlePagarTransportista(request, env) {
   const v = await validateOperator(request, env)
@@ -318,7 +340,6 @@ export async function handlePagarTransportista(request, env) {
   if (!transp) return jsonError('Transportista no encontrado', 404, request)
   if (!transp.es_local) return jsonError('Solo se puede liquidar a transportistas locales', 400, request)
   if (!transp.activo) return jsonError('El transportista está inactivo', 400, request)
-  if (transp.tipo_relacion === 'empleado') return jsonError('Los empleados deben liquidarse por nómina', 400, request)
 
   // 1. Traer despachos pendientes del transportista, ordenados FIFO.
   let idsFilter
@@ -331,7 +352,7 @@ export async function handlePagarTransportista(request, env) {
   }
   const r = await fetch(
     `${env.SUPABASE_URL}/rest/v1/notas_despacho?${idsFilter}` +
-    `&flete_pagado=eq.false&estado=neq.anulada` +
+    `&flete_pagado=eq.false&flete_comisionable=eq.true&estado=neq.anulada` +
     `&order=creado_en.asc` +
     `&select=id,flete_neto_transportista_usd`,
     { headers: svcHeaders }
@@ -521,6 +542,21 @@ export async function handleRevertirPagoTransportista(request, env) {
   )
   const joinRows = joinRes.ok ? await joinRes.json() : []
   const despachoIds = joinRows.map(r => r.despacho_id).filter(Boolean)
+
+  // Incluso el fallback legado debe respetar la misma frontera financiera:
+  // solo se pueden revertir vínculos de comisiones externas válidas.
+  if (despachoIds.length > 0) {
+    const linkedRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/notas_despacho?${cuenta.filter}&id=in.(${despachoIds.join(',')})` +
+      `&transportista_id=eq.${pago.transportista_id}&select=id,flete_comisionable,flete_neto_transportista_usd`,
+      { headers: svcHeaders }
+    )
+    if (!linkedRes.ok) return jsonError('Error al verificar despachos del pago', 500, request)
+    const linked = await linkedRes.json()
+    if (linked.length !== despachoIds.length || linked.some(d => d.flete_comisionable !== true || Number(d.flete_neto_transportista_usd || 0) <= 0)) {
+      return jsonError('El pago contiene un despacho que no corresponde a una comisión fuera de Carabobo', 400, request)
+    }
+  }
 
   // 3. Resetear flete_pagado en los despachos vinculados
   if (despachoIds.length > 0) {

@@ -47,22 +47,21 @@ function VendedorCard({ vendedor, comisiones, esSupervisor, onMarcarPagada, onPa
   // Cálculos locales para la tarjeta
   const totalGeneral = useMemo(() => comisiones.reduce((s, c) => s + Number(c.totalcomision || 0), 0), [comisiones])
   const pendientes = useMemo(() => comisiones.filter(c => ['pendiente', 'cta_cobrar'].includes(c.estado) && Math.max(0, Number(c.comision_liberada || 0) - Number(c.montopagado || 0)) > 0.01), [comisiones])
+  const seleccionadosActivos = useMemo(() => {
+    const pendienteIds = new Set(pendientes.map(p => p.id))
+    return seleccionados.filter(id => pendienteIds.has(id))
+  }, [pendientes, seleccionados])
   const montoPendiente = useMemo(() => pendientes.reduce((s, c) => s + Math.max(0, Number(c.comision_liberada || 0) - Number(c.montopagado || 0)), 0), [pendientes])
   // Total retenido (CxC) que admin puede liberar a mano
   const montoRetenido = useMemo(() => comisiones.reduce((s, c) => s + Number(c.comision_retenida || 0), 0), [comisiones])
   // La columna de acciones aparece si hay algo por pagar o algo retenido por liberar
   const accionesVisibles = esSupervisor && (montoPendiente > 0 || montoRetenido > 0.01)
 
-  // Limpiar seleccionados que ya no existen o ya no están pendientes
-  useEffect(() => {
-    setSeleccionados(prev => prev.filter(id => pendientes.some(p => p.id === id)))
-  }, [pendientes])
-
   const montoSeleccionado = useMemo(() => {
     return pendientes
-      .filter(p => seleccionados.includes(p.id))
+      .filter(p => seleccionadosActivos.includes(p.id))
       .reduce((s, c) => s + Math.max(0, Number(c.comision_liberada || 0) - Number(c.montopagado || 0)), 0);
-  }, [pendientes, seleccionados])
+  }, [pendientes, seleccionadosActivos])
 
   const montoPendienteRegular = useMemo(() => 
     pendientes.filter(c => c.estado !== 'cta_cobrar')
@@ -140,11 +139,11 @@ function VendedorCard({ vendedor, comisiones, esSupervisor, onMarcarPagada, onPa
           <p className="text-xs text-slate-400 font-medium">{comisiones.length} operaciones</p>
           {esSupervisor && pendientes.length > 0 && montoPendiente > 0 && (
             <div className="flex gap-1.5 flex-wrap mt-1">
-              {seleccionados.length > 0 ? (
+              {seleccionadosActivos.length > 0 ? (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    const selectedItems = pendientes.filter(p => seleccionados.includes(p.id));
+                    const selectedItems = pendientes.filter(p => seleccionadosActivos.includes(p.id));
                     onPagarTodo({
                       vendedor,
                       pendientes: selectedItems,
@@ -198,7 +197,7 @@ function VendedorCard({ vendedor, comisiones, esSupervisor, onMarcarPagada, onPa
                     <th className="w-8 px-1.5 py-2 text-center">
                       <input
                         type="checkbox"
-                        checked={pendientes.length > 0 && seleccionados.length === pendientes.length}
+                        checked={pendientes.length > 0 && seleccionadosActivos.length === pendientes.length}
                         onChange={(e) => {
                           if (e.target.checked) {
                             setSeleccionados(pendientes.map(p => p.id));
@@ -231,7 +230,7 @@ function VendedorCard({ vendedor, comisiones, esSupervisor, onMarcarPagada, onPa
                           {puedePagar && saldoPagar > 0.01 ? (
                             <input
                               type="checkbox"
-                              checked={seleccionados.includes(c.id)}
+                              checked={seleccionadosActivos.includes(c.id)}
                               onChange={(e) => {
                                 if (e.target.checked) {
                                   setSeleccionados(prev => [...prev, c.id]);
@@ -485,8 +484,10 @@ export default function ComisionesView() {
   const navigate = useNavigate()
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
   const switchOut = useAuthStore(s => s.switchOut)
+  const esDev = perfil?.rol === 'desarrollador'
   const puedeGestionarPagos = ['administracion', 'supervisor', 'jefe', 'desarrollador'].includes(perfil?.rol)
-  const puedePagarComisiones = ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)
+  // Solo Desarrollo conserva los controles internos de pago.
+  const puedePagarComisiones = esDev
 
   const [filtroEstado,   setFiltroEstado]   = useState('pendiente')
   const [filtroVendedor, setFiltroVendedor] = useState('')
@@ -496,8 +497,10 @@ export default function ComisionesView() {
   const [formatoReporte, setFormatoReporte] = useState('detallado') // 'detallado', 'resumido'
   const { tasaEuro, tasaUsdt } = useTasaCambio()
   const [tipoTasaComision, setTipoTasaComision] = useState('euro') // 'euro' | 'usdt'
-  const tasaSeleccionada = tipoTasaComision === 'usdt' ? (tasaUsdt?.precio || 0) : (tasaEuro?.precio || 0)
+  const tasaSeleccionadaInfo = tipoTasaComision === 'usdt' ? tasaUsdt : tasaEuro
+  const tasaSeleccionada = tasaSeleccionadaInfo?.precio || 0
   const tipoTasaLabel = tipoTasaComision === 'usdt' ? 'USDT' : 'Euro BCV'
+  const tasaDisponible = Number(tasaSeleccionada) > 0
   const pageSize = 48 // Agrupamos de a 48 para que la cuadrícula sea simétrica (3 col x 16 filas)
 
   const [comisionAPagar, setComisionAPagar] = useState(null)
@@ -580,6 +583,10 @@ export default function ComisionesView() {
   }, [comisionesPorVendedor])
 
   async function exportarPDF(vendedorFiltro = null, tipoVendedor = null) {
+    if (!tasaDisponible) {
+      alert(`No hay una tasa ${tipoTasaLabel} disponible para generar el PDF.`)
+      return
+    }
     setExportando(true)
     try {
       const activeVendedor = vendedorFiltro || (filtroVendedor ? vendedores.find(v => v.id === filtroVendedor) : null)
@@ -704,6 +711,8 @@ export default function ComisionesView() {
         tasaEuro: tasaSeleccionada,
         tasaAplicada: tasaSeleccionada,
         tipoTasa: tipoTasaLabel,
+        tasaFuente: tasaSeleccionadaInfo?.fuente,
+        tasaActualizadaEn: tasaSeleccionadaInfo?.ultimaActualizacion,
         ajustesManuales
       })
     } catch (e) { console.error('Error PDF:', e) }
@@ -717,6 +726,13 @@ export default function ComisionesView() {
         title="Comisiones"
         subtitle="Reporte financiero de ventas y liquidaciones"
       />
+
+      {esDev && (
+        <div className="flex items-start gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2.5 text-[11px] text-violet-800">
+          <CheckCircle size={14} className="mt-0.5 shrink-0 text-violet-600" />
+          <p><strong>Modo desarrollador:</strong> los controles internos de pago solo son visibles para este perfil. Administración y Jefatura trabajan con el corte PDF y no ven estas acciones.</p>
+        </div>
+      )}
 
       {/* KPIs (Fuente de verdad SQL) */}
       {resumenLoading ? (
@@ -828,7 +844,7 @@ export default function ComisionesView() {
             >
               <span className="w-4 h-4 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px] font-black shrink-0">€</span>
               <span>Euro BCV:</span>
-              <b>{fmtBs(tasaEuro?.precio || 0)}</b>
+              <b>{tasaEuro?.precio > 0 ? fmtBs(tasaEuro.precio) : 'N/D'}</b>
             </button>
             <button
               type="button"
@@ -838,7 +854,7 @@ export default function ComisionesView() {
             >
               <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-[10px] font-black shrink-0 font-mono">₮</span>
               <span>USDT:</span>
-              <b>{fmtBs(tasaUsdt?.precio || 0)}</b>
+              <b>{tasaUsdt?.precio > 0 ? fmtBs(tasaUsdt.precio) : 'N/D'}</b>
             </button>
           </div>
 
@@ -846,7 +862,7 @@ export default function ComisionesView() {
             <div className="relative ml-auto shrink-0">
               <button 
                 onClick={() => setMenuAbierto(!menuAbierto)} 
-                disabled={exportando} 
+                disabled={exportando || !tasaDisponible}
                 className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-slate-200 active:scale-95 transition-all disabled:opacity-50"
               >
                 <Download size={14} />

@@ -2,6 +2,59 @@ import { json, jsonError, corsHeaders, isValidUuid } from '../lib/utils.js'
 import { verifyAuth, validateOperator, getOperatorRole, verifySupervisor } from '../lib/auth.js'
 import { registrarAuditoria, logToSystem } from '../lib/audit.js'
 
+function errorReglaFlete(errorText, request, mensajeFallback) {
+  const text = String(errorText || '')
+  if (text.includes('DESTINO_ESTADO_REQUERIDO')) {
+    return jsonError('Debe indicar el estado de destino para calcular la comisión del chofer local.', 400, request)
+  }
+  if (text.includes('FLETE_YA_PAGADO')) {
+    return jsonError('El flete ya fue liquidado. Revierta el pago antes de modificar chofer, flete o destino.', 400, request)
+  }
+  if (text.includes('FLETE_NO_COMISIONABLE')) {
+    return jsonError('El flete de Carabobo pertenece a la nómina externa y no puede liquidarse aquí.', 400, request)
+  }
+  if (text.includes('CONFIG_TRANSPORTISTA_NO_DISPONIBLE')) {
+    return jsonError('Configure la comisión de choferes locales antes de registrar un flete fuera de Carabobo.', 400, request)
+  }
+  return jsonError(mensajeFallback, 500, request)
+}
+
+async function validarDestinoFleteLocal({ env, headers, cuentaId, transportistaId, clienteId, estadoDestino, flete, request }) {
+  if (!transportistaId || Number(flete) <= 0) return null
+  if (!isValidUuid(transportistaId)) return jsonError('transportistaId inválido', 400, request)
+  if (!isValidUuid(cuentaId)) return jsonError('Cuenta del operador no disponible', 403, request)
+
+  const cuentaFilter = `&cuenta_id=eq.${cuentaId}`
+  const transpRes = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/transportistas?id=eq.${transportistaId}${cuentaFilter}&select=es_local&limit=1`,
+    { headers }
+  )
+  if (!transpRes.ok) {
+    const detail = await transpRes.text().catch(() => '')
+    return errorReglaFlete(detail, request, 'No se pudo validar el transportista para el flete.')
+  }
+  const [transportista] = await transpRes.json()
+  if (!transportista) return jsonError('Transportista no encontrado en la cuenta del operador', 400, request)
+  if (!transportista.es_local) return null
+
+  let estado = String(estadoDestino || '').trim()
+  if (!estado && clienteId) {
+    const clienteRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteId}${cuentaFilter}&select=estado&limit=1`,
+      { headers }
+    )
+    if (clienteRes.ok) {
+      const [cliente] = await clienteRes.json()
+      estado = String(cliente?.estado || '').trim()
+    }
+  }
+
+  if (!estado) {
+    return jsonError('Debe indicar el estado de destino para calcular la comisión del chofer local.', 400, request)
+  }
+  return null
+}
+
 // ── Save cotización (service key bypasses RLS for cross-vendor clients) ────
 export async function handleGuardarCotizacion(request, env) {
   const user = await verifyAuth(request, env);
@@ -548,6 +601,18 @@ export async function handleVentaRapida(request, env) {
   const descPct = Math.max(0, Number(descuentoGlobalPct) || 0);
   const envio = Math.max(0, Number(costoEnvioUsd) || 0);
 
+  const destinoError = await validarDestinoFleteLocal({
+    env,
+    headers,
+    cuentaId: operador.cuenta_id,
+    transportistaId,
+    clienteId,
+    estadoDestino: direccionEnvioEstado,
+    flete,
+    request,
+  })
+  if (destinoError) return destinoError
+
   // Validate items
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
@@ -605,6 +670,7 @@ export async function handleVentaRapida(request, env) {
 
     // 3. Create cotización in estado 'aceptada'
     const cotBody = {
+      cuenta_id: operador.cuenta_id,
       cliente_id: clienteId,
       vendedor_id: user.operator_id,
       estado: 'aceptada',
@@ -658,6 +724,7 @@ export async function handleVentaRapida(request, env) {
       method: 'POST',
       headers: { ...headers, Prefer: 'return=representation' },
       body: JSON.stringify({
+        cuenta_id: operador.cuenta_id,
         cotizacion_id: cot.id,
         numero: cot.numero,
         cliente_id: clienteId,
@@ -680,7 +747,7 @@ export async function handleVentaRapida(request, env) {
     if (!despRes.ok) {
       const err = await despRes.text();
       console.error('[VR] Despacho error:', err);
-      return jsonError(`Error al crear despacho: ${err}`, 500, request);
+      return errorReglaFlete(err, request, `Error al crear despacho: ${err}`)
     }
     const [despacho] = await despRes.json();
     console.log('[VR] Despacho created:', despacho?.id, despacho?.numero);

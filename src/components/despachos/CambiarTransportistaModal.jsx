@@ -1,6 +1,6 @@
 // src/components/despachos/CambiarTransportistaModal.jsx
 import { useState, useEffect } from 'react'
-import { X, Truck, Plus, Loader2 } from 'lucide-react'
+import { X, Truck, Plus, Loader2, MapPin, Building } from 'lucide-react'
 import { useTransportistas, useCrearTransportista } from '../../hooks/useTransportistas'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import { useEditarDespacho } from '../../hooks/useDespachos'
@@ -8,6 +8,7 @@ import CustomSelect from '../ui/CustomSelect'
 import TransportistaFormCompact from '../transportistas/TransportistaFormCompact'
 import { Modal } from '../ui/Modal'
 import { showToast } from '../ui/Toast'
+import { ESTADOS, getCiudades } from '../../data/venezuelaGeo'
 
 export default function CambiarTransportistaModal({ isOpen, onClose, despacho }) {
   const { data: transportistas = [] } = useTransportistas()
@@ -17,6 +18,8 @@ export default function CambiarTransportistaModal({ isOpen, onClose, despacho })
 
   const [transportistaId, setTransportistaId] = useState('')
   const [fleteUsd, setFleteUsd] = useState('')
+  const [estadoDestino, setEstadoDestino] = useState('')
+  const [ciudadDestino, setCiudadDestino] = useState('')
   const [showNuevoTransp, setShowNuevoTransp] = useState(false)
   const [nuevoError, setNuevoError] = useState('')
 
@@ -27,25 +30,36 @@ export default function CambiarTransportistaModal({ isOpen, onClose, despacho })
     if (!despacho || !isOpen) return
     setTransportistaId(despacho.transportista_id || '')
     setFleteUsd(despacho.flete_usd !== null && despacho.flete_usd !== undefined ? String(despacho.flete_usd) : '')
+    setEstadoDestino(despacho.flete_estado_destino_snapshot || despacho.direccion_envio_estado || despacho.cliente?.estado || '')
+    setCiudadDestino(despacho.direccion_envio_ciudad || despacho.cliente?.ciudad || '')
     setShowNuevoTransp(false)
     setNuevoError('')
   }, [despacho, isOpen])
 
   const cargando = editarDespacho.isPending
 
-  // ── Preview del neto a pagar al chofer local (config global) ──
+  // ── Preview de comisión externa / nómina Carabobo (config global) ──
   const transportistaSel = transportistas.find(t => t.id === transportistaId)
   const esLocal = !!transportistaSel?.es_local
   const fleteNum = Number(fleteUsd) || 0
   const tipoCalculo = config.transp_tipo_calculo === 'fija' ? 'fija' : 'porcentaje'
   const pctComision = Number(config.transp_pct_comision) || 0
   const tarifaFija  = Number(config.transp_tarifa_fija_usd) || 0
+  const estadoNormalizado = String(estadoDestino).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()
+  const esFueraCarabobo = !!estadoDestino && estadoNormalizado !== 'carabobo'
   let netoPreview = 0
-  if (esLocal && fleteNum > 0) {
+  if (esLocal && esFueraCarabobo && fleteNum > 0) {
     netoPreview = tipoCalculo === 'fija'
       ? Math.min(tarifaFija, fleteNum)
       : Math.round(fleteNum * pctComision / 100 * 100) / 100
   }
+  const descripcionPreview = !estadoDestino
+    ? 'Debe indicar el estado de destino si hay flete.'
+    : esFueraCarabobo
+      ? (tipoCalculo === 'porcentaje'
+        ? `${pctComision}% del flete fuera de Carabobo`
+        : `Tarifa fija $${tarifaFija.toFixed(2)} fuera de Carabobo`)
+      : 'Destino en Carabobo: se procesa por nómina externa'
 
   async function handleGuardar(e) {
     if (e) e.preventDefault()
@@ -54,6 +68,8 @@ export default function CambiarTransportistaModal({ isOpen, onClose, despacho })
         despachoId: despacho.id,
         transportistaId: transportistaId || null,
         fleteUsd: fleteUsd !== '' ? Number(fleteUsd) : 0,
+        direccionEnvioEstado: estadoDestino || null,
+        direccionEnvioCiudad: ciudadDestino || null,
       })
       onClose()
     } catch {
@@ -119,16 +135,14 @@ export default function CambiarTransportistaModal({ isOpen, onClose, despacho })
               </button>
             </div>
 
-            {/* ── Preview del neto a pagar al chofer local ── */}
+            {/* ── Preview de comisión externa / nómina local ── */}
             {esLocal && (
               <div className="mt-2 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-800">
-                <span className="font-bold">Transportista local</span> ·{' '}
-                {tipoCalculo === 'porcentaje'
-                  ? `${pctComision}% del flete`
-                  : `Tarifa fija $${tarifaFija.toFixed(2)}`}
-                {fleteNum > 0 && (
+                <span className="font-bold">Chofer local</span> ·{' '}
+                <span className={!estadoDestino ? 'text-red-700 font-semibold' : ''}>{descripcionPreview}</span>
+                {esFueraCarabobo && fleteNum > 0 && (
                   <span className="block mt-0.5 text-amber-900 font-semibold">
-                    → Neto a pagar al chofer: <span className="font-black">${netoPreview.toFixed(2)}</span>
+                    → Comisión a pagar: <span className="font-black">${netoPreview.toFixed(2)}</span>
                   </span>
                 )}
               </div>
@@ -179,6 +193,37 @@ export default function CambiarTransportistaModal({ isOpen, onClose, despacho })
               className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
             />
           </div>
+
+          {esLocal && fleteNum > 0 && (
+            <div className="space-y-2 pt-2 border-t border-slate-100">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                <MapPin size={13} /> Estado de destino requerido
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <CustomSelect
+                  options={ESTADOS.map(e => ({ value: e, label: e }))}
+                  value={estadoDestino}
+                  onChange={value => { setEstadoDestino(value); setCiudadDestino('') }}
+                  placeholder="Elegir estado..."
+                  icon={MapPin}
+                  searchable
+                  disabled={cargando}
+                />
+                <CustomSelect
+                  options={(estadoDestino ? getCiudades(estadoDestino) : []).map(c => ({ value: c, label: c }))}
+                  value={ciudadDestino}
+                  onChange={setCiudadDestino}
+                  placeholder={estadoDestino ? 'Elegir ciudad...' : 'Falta estado'}
+                  icon={Building}
+                  searchable
+                  disabled={cargando || !estadoDestino}
+                />
+              </div>
+              <p className="text-[10px] text-slate-500">
+                Si no se indica una dirección alternativa, se usará el estado del cliente.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -194,7 +239,7 @@ export default function CambiarTransportistaModal({ isOpen, onClose, despacho })
           <button
             type="button"
             onClick={handleGuardar}
-            disabled={cargando}
+            disabled={cargando || (esLocal && fleteNum > 0 && !estadoDestino)}
             className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:scale-95 disabled:opacity-50 rounded-lg transition-all"
           >
             {cargando ? (
