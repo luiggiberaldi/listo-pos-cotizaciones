@@ -16,6 +16,7 @@ import Skeleton     from '../components/ui/Skeleton'
 import EmptyState   from '../components/ui/EmptyState'
 import PageHeader  from '../components/ui/PageHeader'
 import { colorTransportista } from '../utils/transportistaColors'
+import { rankEntities } from '../utils/entitySearch'
 
 import { PREFIJOS_RIF, parsearRif as parsearRifTransp, formatearRif as formatearRifTransp } from '../utils/rif'
 
@@ -337,10 +338,6 @@ function SkeletonTransportistas() {
   )
 }
 
-// ─── Motor de búsqueda optimizado ──────────────────────────────────────────
-const normalizar = (s) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-const purificar  = (s) => (s || '').replace(/[^a-z0-9]/gi, '').toLowerCase()
-
 export default function TransportistasView() {
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
   const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
@@ -400,26 +397,26 @@ export default function TransportistasView() {
     if (filtroTipo === 'locales')    arr = arr.filter(t => !!t.es_local)
     else if (filtroTipo === 'generales') arr = arr.filter(t => !t.es_local)
     if (!search.trim()) return arr
-    const q = normalizar(search)
-    const qP = purificar(search)
-    
-    return arr.filter(t => {
-      const n = normalizar(t.nombre)
-      const r = purificar(t.rif)
-      const pC = purificar(t.placa_chuto)
-      const pB = purificar(t.placa_batea)
-      const cB = normalizar(t.color_batea)
-      const v = normalizar(t.vehiculo)
-      const cob = normalizar(t.zona_cobertura)
-      const cap = normalizar(t.capacidad)
-      
-      // Coincidencia en nombre, rif, placas, vehículo, cobertura o capacidad
-      return n.includes(q) || r.includes(qP) || pC.includes(qP) || pB.includes(qP) || cB.includes(q) || v.includes(q) || cob.includes(q) || cap.includes(q)
-    })
+
+    return rankEntities(arr, search, [
+      { key: 'nombre', weight: 10 },
+      { key: 'rif', weight: 9 },
+      { key: 'placa_chuto', weight: 9 },
+      { key: 'placa_batea', weight: 9 },
+      { key: 'vehiculo', weight: 5 },
+      { key: 'color_batea', weight: 3 },
+      { key: 'zona_cobertura', weight: 3 },
+      { key: 'capacidad', weight: 3 },
+    ])
   }, [transportistas, search, filtroTipo])
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
   const transportistasPaginados = transportistasFiltrados
+  // `totalCount` refleja la búsqueda actual; `counts.todos` indica si el catálogo
+  // tiene registros. Usamos ambos para no ocultar los filtros cuando una búsqueda
+  // válida devuelve cero coincidencias.
+  const hayCatalogo = transportistasCounts.todos > 0 || totalCount > 0
+  const hayBusqueda = search.trim().length > 0
 
   // Reset page on search/filtro change
   useEffect(() => { setPage(1) }, [search, filtroTipo])

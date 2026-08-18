@@ -14,8 +14,15 @@ const STORAGEKEYMODE_BASE = 'construacero_tasa_modo_v2'
 const STORAGEKEYMANUAL_BASE = 'construacero_tasa_manual'
 const UPDATE_INTERVAL = 5 * 60 * 1000 // 5 minutos
 const MIN_REFRESH_INTERVAL = 60 * 1000 // no refrescar más de 1x/min al volver al foco
-// Endpoint opcional; si no se configura, se usan los endpoints públicos oficiales de respaldo.
-const GOOGLE_BCV_SCRIPT_URL = (import.meta.env.VITE_BCV_GOOGLE_SCRIPT_URL || '').trim()
+// El Worker consulta primero al BCV directo y al CDN diario; el Google Script
+// queda como respaldo opcional cuando la aplicación se ejecuta sin proxy.
+const LOCAL_RATES_URL = '/api/rates'
+const GOOGLE_BCV_SCRIPT_URL = (
+  import.meta.env.VITE_BCV_GOOGLE_SCRIPT_URL
+  || import.meta.env.VITE_GOOGLE_SCRIPT_RATES_URL
+  || import.meta.env.VITE_GOOGLE_SCRIPT_URL
+  || ''
+).trim()
 
 // ─── Singleton: deduplicar fetches entre múltiples instancias del hook ──────
 // Evita ERR_INSUFFICIENT_RESOURCES cuando varios componentes llaman useTasaCambio()
@@ -82,11 +89,11 @@ function parseSafeFloat(val) {
 
 // ─── Funciones de fetch a nivel de módulo (compartidas entre instancias) ─────
 
-async function fetchConTimeout(url, timeout = 8000) {
+async function fetchConTimeout(url, timeout = 8000, options = {}) {
   const controller = new AbortController()
   const id = setTimeout(() => controller.abort(), timeout)
   try {
-    const res = await fetch(url, { signal: controller.signal })
+    const res = await fetch(url, { ...options, signal: controller.signal })
     clearTimeout(id)
     if (!res.ok) return null
     return await res.json()
@@ -96,43 +103,40 @@ async function fetchConTimeout(url, timeout = 8000) {
   }
 }
 
-async function _fetchBcvRaw() {
-  let bcvPrice = null
-  let euroPrice = null
+async function _fetchBcvRaw(forceRefresh = false) {
+  // 1. Proxy same-origin: prioriza el HTML oficial del BCV y el CDN diario.
+  // El refresco manual evita tanto el cache del navegador como el del Worker.
+  const proxyUrl = forceRefresh ? `${LOCAL_RATES_URL}?refresh=1` : LOCAL_RATES_URL
+  const proxyData = await fetchConTimeout(proxyUrl, 10000, { cache: 'no-store' })
+  const proxyUsd = parseSafeFloat(proxyData?.bcv?.price)
+  const proxyEur = parseSafeFloat(proxyData?.euro?.price)
+  const proxyIsDolarApiFallback = /dolarapi/i.test(proxyData?.source || '')
+  if (!proxyData?.stale && !proxyIsDolarApiFallback && proxyUsd > 0 && proxyEur > 0) {
+    return {
+      usd: proxyUsd,
+      eur: proxyEur,
+      fuente: proxyData.source || proxyData.bcv?.source || 'BCV Oficial',
+      actualizadoEn: proxyData.lastUpdate || null,
+      stale: false,
+    }
+  }
 
-  // 1. Google Script opcional (scraper directo de bcv.org.ve).
+  // 2. Google Script opcional (scraper directo de bcv.org.ve).
   if (GOOGLE_BCV_SCRIPT_URL) {
     try {
       const data = await fetchConTimeout(GOOGLE_BCV_SCRIPT_URL, 10000)
-      if (data?.ok) {
-        if (data.bcv?.price) bcvPrice = parseSafeFloat(data.bcv.price)
-        if (data.euro?.price) euroPrice = parseSafeFloat(data.euro.price)
-        if (bcvPrice > 0 && euroPrice > 0) {
-          return { usd: bcvPrice, eur: euroPrice, fuente: 'BCV Oficial (Google Script)' }
-        }
+      const googleUsd = parseSafeFloat(data?.bcv?.price ?? data?.bcv ?? data?.usd?.price ?? data?.usd)
+      const googleEur = parseSafeFloat(data?.euro?.price ?? data?.euro ?? data?.eur?.price ?? data?.eur)
+      if (googleUsd > 0 && googleEur > 0) {
+        return { usd: googleUsd, eur: googleEur, fuente: 'BCV Oficial (Google Script)' }
       }
     } catch { /* intenta siguiente fuente */ }
   }
 
-  // 2. DolarAPI (Endpoints oficiales de respaldo)
-  try {
-    const [dataDolarOficial, dataEuroOficial] = await Promise.all([
-      fetchConTimeout('https://ve.dolarapi.com/v1/dolares/oficial', 8000),
-      fetchConTimeout('https://ve.dolarapi.com/v1/euros/oficial', 8000)
-    ])
-
-    if (dataDolarOficial?.promedio) bcvPrice = parseSafeFloat(dataDolarOficial.promedio)
-    if (dataEuroOficial?.promedio) euroPrice = parseSafeFloat(dataEuroOficial.promedio)
-
-    if (bcvPrice > 0 || euroPrice > 0) {
-      return {
-        usd: bcvPrice || 0,
-        eur: euroPrice || 0,
-        fuente: 'BCV Oficial'
-      }
-    }
-  } catch { /* intenta siguiente fuente */ }
-
+  // 3. No consultar DolarAPI desde el navegador: su publicación oficial
+  // puede quedar un día atrás respecto de la página vigente del BCV. Si el
+  // proxy no confirma una fuente BCV actual, se limpian las tasas en lugar de
+  // mostrar un valor antiguo como si fuera oficial.
   return null
 }
 
@@ -155,9 +159,9 @@ async function _fetchUsdtRaw() {
 }
 
 // Fetch deduplicado: reutiliza promesas en curso
-function fetchBcvDedup() {
+function fetchBcvDedup(forceRefresh = false) {
   if (_inflightBcv) return _inflightBcv
-  _inflightBcv = _fetchBcvRaw().finally(() => { _inflightBcv = null })
+  _inflightBcv = _fetchBcvRaw(forceRefresh).finally(() => { _inflightBcv = null })
   return _inflightBcv
 }
 
@@ -168,11 +172,11 @@ function fetchUsdtDedup() {
 }
 
 // Fetch combinado deduplicado — notifica a todos los suscriptores
-async function fetchTasaGlobal(esAutoUpdate = false) {
-  // Si ya se hizo un fetch hace poco, no repetir
-  if (Date.now() - _lastFetchTs < MIN_DEDUP_INTERVAL) return null
+async function fetchTasaGlobal(esAutoUpdate = false, forceRefresh = false) {
+  // Si ya se hizo un fetch hace poco, no repetir, excepto al pulsar refrescar.
+  if (!forceRefresh && Date.now() - _lastFetchTs < MIN_DEDUP_INTERVAL) return null
 
-  const [bcvData, usdtData] = await Promise.all([fetchBcvDedup(), fetchUsdtDedup()])
+  const [bcvData, usdtData] = await Promise.all([fetchBcvDedup(forceRefresh), fetchUsdtDedup()])
   _lastFetchTs = Date.now()
 
   // Notificar a todos los suscriptores
@@ -330,12 +334,13 @@ export function useTasaCambio() {
     if (bcvData) {
       const usdVal = bcvData.usd || bcvData.precio || 0
       const eurVal = bcvData.eur || 0
+      const actualizadaEn = bcvData.actualizadoEn || new Date().toISOString()
 
       if (usdVal > 0) {
         setTasaBcv({
           precio: usdVal,
           fuente: bcvData.fuente,
-          ultimaActualizacion: new Date().toISOString(),
+          ultimaActualizacion: actualizadaEn,
         })
       } else {
         // No conservar una tasa BCV antigua cuando la fuente ya no la confirmó.
@@ -348,7 +353,7 @@ export function useTasaCambio() {
         setTasaEuro({
           precio: eurVal,
           fuente: bcvData.fuente,
-          ultimaActualizacion: new Date().toISOString(),
+          ultimaActualizacion: actualizadaEn,
         })
       } else {
         // No conservar una tasa Euro aproximada o antigua cuando la fuente no la confirmó.
@@ -381,12 +386,12 @@ export function useTasaCambio() {
   }, [])
 
   // Fetch wrapper que usa el singleton global
-  const fetchTasa = useCallback(async (esAutoUpdate = false) => {
+  const fetchTasa = useCallback(async (esAutoUpdate = false, forceRefresh = false) => {
     if (!esAutoUpdate) setCargando(true)
     setError('')
 
     try {
-      const result = await fetchTasaGlobal(esAutoUpdate)
+      const result = await fetchTasaGlobal(esAutoUpdate, forceRefresh)
       // Si fetchTasaGlobal fue deduplicado (retornó null), los datos
       // llegarán vía el suscriptor; no hacer nada aquí
       if (result) handleFetchResult({ ...result, esAutoUpdate })
@@ -523,6 +528,6 @@ export function useTasaCambio() {
     setTasaManual: setTasaManualSync,
     cargando,
     error,
-    refrescar: () => fetchTasa(false),
+    refrescar: () => fetchTasa(false, true),
   }
 }

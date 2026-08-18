@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { Search, ChevronDown, X, Check, Plus } from 'lucide-react'
+import { rankEntities } from '../../utils/entitySearch'
 
 /** Normaliza texto: quita acentos y pasa a minúsculas */
 function normalizar(str) {
@@ -10,38 +11,6 @@ function normalizar(str) {
   return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 }
 
-/** Quita todo lo que no sea número o letra (útil para cédulas) */
-function purificar(str) {
-  if (!str) return ''
-  return str.replace(/[^a-z0-9]/gi, '').toLowerCase()
-}
-
-/** Búsqueda inteligente: soporta acentos, inicio de palabra, y typos básicos */
-function matchScore(texto, query) {
-  const t = normalizar(texto)
-  const q = normalizar(query)
-  const qPure = purificar(query)
-  const tPure = purificar(texto)
-
-  // 1. Coincidencia exacta o inicio de cédula purificada (Ej: query "123" match "V12.3...")
-  if (qPure.length >= 3 && tPure.includes(qPure)) return 4
-  
-  // 2. Coincidencia exacta al inicio → máxima prioridad
-  if (t.startsWith(q)) return 3
-  
-  // 3. Coincidencia al inicio de alguna palabra
-  if (t.split(/\s+/).some(w => w.startsWith(q))) return 2
-  
-  // 4. Contiene la query
-  if (t.includes(q)) return 1
-  
-  // 5. Coincidencia por iniciales (ej: "dc" → "Distrito Capital")
-  if (q.length >= 2) {
-    const iniciales = t.split(/\s+/).map(w => w[0]).join('')
-    if (iniciales.includes(q)) return 1
-  }
-  return 0
-}
 
 /**
  * @param {object} props
@@ -152,11 +121,10 @@ export default function CustomSelect({
     : (value && lastLabel ? lastLabel : (creatable && value ? value : null))
   const filtradas = useMemo(() => {
     if (!busqueda.trim()) return options
-    const q = busqueda.trim()
-    return options
-      .map(o => ({ ...o, _score: Math.max(matchScore(o.label, q), matchScore(o.sub ?? '', q)) }))
-      .filter(o => o._score > 0)
-      .sort((a, b) => b._score - a._score)
+    return rankEntities(options, busqueda, [
+      { get: option => option.label, weight: 2 },
+      { get: option => option.sub, weight: 1 },
+    ])
   }, [options, busqueda])
 
   // Mostrar opción "Crear" cuando hay texto que no coincide exactamente

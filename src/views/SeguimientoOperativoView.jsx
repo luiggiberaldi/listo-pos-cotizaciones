@@ -11,7 +11,7 @@ import useAuthStore from '../store/useAuthStore'
 import { useSeguimiento, useActualizarSeguimiento, useBorrarSeguimiento } from '../hooks/useSeguimiento'
 import supabase from '../services/supabase/client'
 import { showToast } from '../components/ui/Toast'
-import { removeAccents } from '../utils/format'
+import { rankEntities } from '../utils/entitySearch'
 
 // Modales Compartidos
 import FichaClienteModal from '../components/clientes/FichaClienteModal'
@@ -187,37 +187,26 @@ export default function SeguimientoOperativoView() {
 
   // ── Filtrado Local ────────────────────────────────────────────────
   const entradasFiltradas = useMemo(() => {
-    return entradas.filter(entry => {
-      // Búsqueda por texto
-      if (busqueda.trim()) {
-        const text = removeAccents(busqueda.toLowerCase())
-        const matchContenido = removeAccents(entry.contenido || '').toLowerCase().includes(text)
-        const matchTitulo = removeAccents(entry.titulo || '').toLowerCase().includes(text)
-        const matchUsuario = removeAccents(entry.usuario?.nombre || '').toLowerCase().includes(text)
-        const matchCliente = removeAccents(entry.cliente?.nombre || '').toLowerCase().includes(text)
-        const matchCotizacion = entry.cotizacion?.numero?.toString().includes(text)
-        const matchDespacho = entry.despacho?.numero?.toString().includes(text)
-
-        if (!matchContenido && !matchTitulo && !matchUsuario && !matchCliente && !matchCotizacion && !matchDespacho) {
-          return false
-        }
-      }
-
-      // Filtro de tipo
+    const porFiltros = entradas.filter(entry => {
       if (filtroTipo && entry.tipo !== filtroTipo) return false
-
-      // Filtro de prioridad
       if (filtroPrioridad && entry.prioridad !== filtroPrioridad) return false
-
-      // Filtro de origen
       if (filtroOrigen) {
         if (filtroOrigen === 'cliente' && !entry.cliente_id) return false
         if (filtroOrigen === 'cotizacion' && !entry.cotizacion_id) return false
         if (filtroOrigen === 'despacho' && !entry.despacho_id) return false
       }
-
       return true
     })
+
+    if (!busqueda.trim()) return porFiltros
+    return rankEntities(porFiltros, busqueda, [
+      { key: 'contenido', weight: 10 },
+      { key: 'titulo', weight: 9 },
+      { get: entry => entry.usuario?.nombre, weight: 7 },
+      { get: entry => entry.cliente?.nombre, weight: 7 },
+      { get: entry => entry.cotizacion?.numero, weight: 8 },
+      { get: entry => entry.despacho?.numero, weight: 8 },
+    ])
   }, [entradas, busqueda, filtroTipo, filtroPrioridad, filtroOrigen])
 
   const limpiarFiltros = () => {

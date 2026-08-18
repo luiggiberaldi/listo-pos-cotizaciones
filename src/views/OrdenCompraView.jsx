@@ -26,7 +26,7 @@ import EmptyState from '../components/ui/EmptyState'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import { Modal } from '../components/ui/Modal'
 import { fmtFecha, fmtPrecio } from '../services/pdf/pdfShared'
-import { removeAccents } from '../utils/format'
+import { rankEntities } from '../utils/entitySearch'
 import supabase from '../services/supabase/client'
 
 // ─── Helper compartido de badges de estado ──────────────────────────────────
@@ -548,12 +548,13 @@ export default function OrdenCompraView() {
   const clientesFiltrados = useMemo(() => {
     const activos = clientes.filter(c => c.activo !== false || c.id === clienteId)
     if (!clienteBusqueda.trim()) return activos.slice(0, 8)
-    const term = removeAccents(clienteBusqueda.toLowerCase())
-    return activos.filter(c =>
-      removeAccents(c.nombre || '').toLowerCase().includes(term) ||
-      removeAccents(c.rif_cedula || '').toLowerCase().includes(term) ||
-      (c.telefono || '').includes(term)
-    ).slice(0, 8)
+    return rankEntities(activos, clienteBusqueda, [
+      { key: 'nombre', weight: 10 },
+      { key: 'rif_cedula', weight: 9 },
+      { key: 'codigo_cliente', weight: 8 },
+      { key: 'telefono', weight: 7 },
+      { key: 'email', weight: 4 },
+    ], { limit: 8 })
   }, [clientes, clienteBusqueda, clienteId])
 
   // Detectar si la tabla no existe en BD (Migración no aplicada)
@@ -588,16 +589,15 @@ export default function OrdenCompraView() {
 
   // Filtrado de órdenes en el listado
   const ordenesFiltradas = useMemo(() => {
-    const q = removeAccents(busqueda.toLowerCase())
-    return ordenes.filter(o => {
-      const matchBusqueda =
-        removeAccents(o.proveedor_nombre || '').toLowerCase().includes(q) ||
-        removeAccents(o.proveedor_rif || '').toLowerCase().includes(q) ||
-        `oc-${String(o.numero).padStart(5, '0')}`.includes(q)
+    const porEstado = ordenes.filter(o => filtroEstado === 'todos' || o.estado === filtroEstado)
+    if (!busqueda.trim()) return porEstado
 
-      const matchEstado = filtroEstado === 'todos' || o.estado === filtroEstado
-      return matchBusqueda && matchEstado
-    })
+    return rankEntities(porEstado, busqueda, [
+      { get: o => o.proveedor_nombre, weight: 10 },
+      { get: o => o.proveedor_rif, weight: 9 },
+      { get: o => `oc-${String(o.numero).padStart(5, '0')} ${o.numero}`, weight: 8 },
+      { get: o => o.estado, weight: 2 },
+    ])
   }, [ordenes, busqueda, filtroEstado])
 
   // Cálculos de totales

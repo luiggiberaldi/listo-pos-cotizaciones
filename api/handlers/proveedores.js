@@ -1,5 +1,6 @@
 // api/handlers/proveedores.js
-import { json, jsonError, isValidUuid, removeAccents } from '../lib/utils.js'
+import { json, jsonError, isValidUuid } from '../lib/utils.js'
+import { rankSearch } from '../lib/entitySearch.js'
 import { verifyAuth, validateOperator } from '../lib/auth.js'
 import { registrarAuditoria } from '../lib/audit.js'
 
@@ -61,22 +62,14 @@ export async function handleListarProveedores(request, env) {
     let data = await res.json();
 
     if (busqueda.trim()) {
-      const raw = removeAccents(busqueda.trim().toLowerCase());
-      const norm = raw.replace(/[\.\-\(\)\s\/\\]/g, '');
-
-      data = data.filter(p => {
-        const nombre = removeAccents((p.nombre || '').toLowerCase());
-        const rif = removeAccents((p.rif_cedula || '').toLowerCase().replace(/[\.\-\(\)\s\/\\]/g, ''));
-        const tel = removeAccents((p.telefono || '').toLowerCase().replace(/[\.\-\(\)\s\/\\]/g, ''));
-        const email = removeAccents((p.email || '').toLowerCase());
-
-        return (
-          nombre.includes(raw) ||
-          rif.includes(norm) ||
-          tel.includes(norm) ||
-          email.includes(raw)
-        );
-      });
+      data = rankSearch(data, busqueda, [
+        { key: 'nombre', weight: 10 },
+        { key: 'rif_cedula', weight: 9 },
+        { key: 'telefono', weight: 7 },
+        { key: 'email', weight: 4 },
+        { key: 'ciudad', weight: 3 },
+        { key: 'estado', weight: 2 },
+      ]);
     }
 
     return json(data, 200, request);

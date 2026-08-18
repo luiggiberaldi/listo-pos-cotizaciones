@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom'
 import { Users, Plus, Search, RefreshCw, X, LayoutGrid, List, Filter, ChevronDown, Check, AlertCircle, Trash2, UserCheck, FileText, Printer, Handshake, DollarSign } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { useClientes, useVendedores, useBorrarCliente, useActivarCliente } from '../hooks/useClientes'
+import { buscarClientes } from '../utils/clienteSearch'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import ClienteCard       from '../components/clientes/ClienteCard'
 import ClienteRow        from '../components/clientes/ClienteRow'
@@ -183,8 +184,10 @@ export default function ClientesView() {
       return true
     })
 
-    // Ordenar: Clientes con deuda o préstamos activos primero, luego orden alfabético
-    return [...list].sort((a, b) => {
+    const listaConBusqueda = busqueda ? buscarClientes(list, busqueda) : list
+
+    // Ordenar: Clientes con deuda o préstamos activos primero, luego relevancia/nombre
+    return [...listaConBusqueda].sort((a, b) => {
       const deudaA = Number(a.saldo_pendiente || 0)
       const deudaB = Number(b.saldo_pendiente || 0)
       const prestamoA = !!a.tiene_prestamos_activos
@@ -208,7 +211,7 @@ export default function ClientesView() {
 
       return (a.nombre || '').localeCompare(b.nombre || '')
     })
-  }, [clientes, filtroTipo, filtroVendedor, filtroConDeuda, filtroConPrestamo, filtroSaldoFavor, filtroEstado, mostrarToggle, verTodos, perfil?.id])
+  }, [clientes, busqueda, filtroTipo, filtroVendedor, filtroConDeuda, filtroConPrestamo, filtroSaldoFavor, filtroEstado, mostrarToggle, verTodos, perfil?.id])
 
   const hayFiltros = filtroTipo || filtroVendedor || filtroConDeuda || filtroConPrestamo || filtroSaldoFavor || filtroEstado !== 'activos'
 

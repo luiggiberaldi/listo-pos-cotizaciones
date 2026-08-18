@@ -30,7 +30,8 @@ import { MapPin, Building } from 'lucide-react'
 import { apiUrl } from '../services/apiBase'
 import { round2, mulR } from '../utils/dinero'
 import { calcTotales } from '../utils/calcTotales'
-import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs, removeAccents } from '../utils/format'
+import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../utils/format'
+import { buscarClientes } from '../utils/clienteSearch'
 import { guardarProductoReciente, getProductosRecientes } from '../components/cotizaciones/ProductosRecientes'
 import { showToast } from '../components/ui/Toast'
 import PageHeader from '../components/ui/PageHeader'
@@ -778,12 +779,7 @@ export default function VentaRapidaView() {
     })
 
     if (!clienteBusqueda.trim()) return ordenados.slice(0, 8)
-    const q = removeAccents(clienteBusqueda.toLowerCase())
-    return ordenados.filter(c =>
-      removeAccents(c.nombre.toLowerCase()).includes(q) ||
-      removeAccents((c.rif_cedula ?? '').toLowerCase()).includes(q) ||
-      (c.telefono ?? '').includes(clienteBusqueda)
-    ).slice(0, 8)
+    return buscarClientes(ordenados, clienteBusqueda).slice(0, 8)
   }, [clientes, clienteBusqueda, clienteId, perfil?.id])
 
   // Filtrar productos con smart search (ranking por relevancia)

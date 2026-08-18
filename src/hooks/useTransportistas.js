@@ -6,6 +6,7 @@ import supabase from '../services/supabase/client'
 import useAuthStore from '../store/useAuthStore'
 import { apiUrl, getAuthHeaders } from '../services/apiBase'
 import { showToast } from '../components/ui/Toast'
+import { rankEntities } from '../utils/entitySearch'
 import {
   isMissingTransportistaColumnError,
   normalizeTransportistaSchema,
@@ -53,12 +54,9 @@ export function useTransportistas({ soloActivos = true, paginado = false, page =
         // es seguro; para "locales" devolvemos una lista vacía.
         if (plan.soportaClasificacion && tipo === 'locales') q = q.eq('es_local', true)
         if (plan.soportaClasificacion && tipo === 'generales') q = q.eq('es_local', false)
-        const term = String(search || '').trim().replace(/[(),]/g, ' ')
-        if (term) {
-          const pattern = `%${term}%`
-          q = q.or(plan.columnasBusqueda.map(columna => `${columna}.ilike.${pattern}`).join(','))
-        }
-        if (paginado) {
+        // Con búsqueda dejamos que el ranking local tolere acentos,
+        // separadores y typos. Sin búsqueda mantenemos la paginación SQL.
+        if (paginado && !String(search || '').trim()) {
           const from = Math.max(0, (page - 1) * pageSize)
           q = q.range(from, from + pageSize - 1)
         }
@@ -81,9 +79,28 @@ export function useTransportistas({ soloActivos = true, paginado = false, page =
       const { data, count, error } = result
       if (error) throw error
       const items = (data ?? []).map(normalizeTransportistaSchema)
-      return paginado
-        ? { items, total: count ?? 0, esquemaCompatibilidad }
+      const term = String(search || '').trim()
+      const ranked = term
+        ? rankEntities(items, term, [
+            { key: 'nombre', weight: 10 },
+            { key: 'rif', weight: 9 },
+            { key: 'placa_chuto', weight: 9 },
+            { key: 'placa_batea', weight: 9 },
+            { key: 'vehiculo', weight: 5 },
+            { key: 'zona_cobertura', weight: 3 },
+            { key: 'capacidad', weight: 3 },
+          ])
         : items
+
+      if (!paginado) return ranked
+      if (!term) return { items: ranked, total: count ?? 0, esquemaCompatibilidad }
+
+      const from = Math.max(0, (page - 1) * pageSize)
+      return {
+        items: ranked.slice(from, from + pageSize),
+        total: ranked.length,
+        esquemaCompatibilidad,
+      }
     },
     enabled: !!perfil,
     staleTime: 1000 * 60 * 10,

@@ -23,7 +23,7 @@ import PageHeader  from '../components/ui/PageHeader'
 import Pagination  from '../components/ui/Pagination'
 import { OnboardingSequence } from '../components/ui/OnboardingTooltip'
 import { showToast } from '../components/ui/Toast'
-import { removeAccents } from '../utils/format'
+import { rankEntities } from '../utils/entitySearch'
 
 function SkeletonDespachos() {
   return (
@@ -196,27 +196,14 @@ export default function DespachosView() {
     }
 
     if (busquedaGlobal) {
-      const q = removeAccents(busquedaGlobal.toLowerCase())
-      const qClean = q.replace(/[\.\-\s]/g, '')
-      lista = lista.filter(d => {
-        const numCotStr = d.cotizacion?.numero ? `cot-${String(d.cotizacion.numero).padStart(5, '0')}` : ''
-        const numDspStr = `dsp-${String(d.numero).padStart(5, '0')}`
-        const clienteNombre = removeAccents(d.cliente?.nombre || '').toLowerCase()
-        const clienteRif = removeAccents(d.cliente?.rif_cedula || '').toLowerCase()
-        const clienteRifClean = clienteRif.replace(/[\.\-\s]/g, '')
-        const clienteCodigo = removeAccents(d.cliente?.codigo_cliente || '').toLowerCase()
-        const totalStr = String(d.cotizacion?.total_usd || 0)
-        
-        return numCotStr.includes(q) ||
-               numDspStr.includes(q) ||
-               String(d.numero).includes(q) ||
-               String(d.cotizacion?.numero || '').includes(q) ||
-               clienteNombre.includes(q) || 
-               clienteRif.includes(q) ||
-               clienteCodigo.includes(q) ||
-               (qClean.length > 2 && clienteRifClean.includes(qClean)) ||
-               totalStr.includes(q)
-      })
+      lista = rankEntities(lista, busquedaGlobal, [
+        { get: d => `dsp-${String(d.numero).padStart(5, '0')} ${d.numero}`, weight: 10 },
+        { get: d => d.cotizacion?.numero ? `cot-${String(d.cotizacion.numero).padStart(5, '0')} ${d.cotizacion.numero}` : '', weight: 9 },
+        { get: d => d.cliente?.nombre, weight: 9 },
+        { get: d => d.cliente?.rif_cedula, weight: 9 },
+        { get: d => d.cliente?.codigo_cliente, weight: 8 },
+        { get: d => d.cotizacion?.total_usd, weight: 7 },
+      ])
     }
 
     const idsConDespachos = new Set(lista.map(d => d.vendedor_id).filter(Boolean))
@@ -276,27 +263,14 @@ export default function DespachosView() {
       }
     })
     if (busquedaGlobal) {
-      const q = removeAccents(busquedaGlobal.toLowerCase())
-      const qClean = q.replace(/[\.\-\s]/g, '')
-      lista = lista.filter(d => {
-        const numCotStr = d.cotizacion?.numero ? `cot-${String(d.cotizacion.numero).padStart(5, '0')}` : ''
-        const numDspStr = `dsp-${String(d.numero).padStart(5, '0')}`
-        const clienteNombre = removeAccents(d.cliente?.nombre || '').toLowerCase()
-        const clienteRif = removeAccents(d.cliente?.rif_cedula || '').toLowerCase()
-        const clienteRifClean = clienteRif.replace(/[\.\-\s]/g, '')
-        const clienteCodigo = removeAccents(d.cliente?.codigo_cliente || '').toLowerCase()
-        const totalStr = String(d.cotizacion?.total_usd || 0)
-        
-        return numCotStr.includes(q) ||
-               numDspStr.includes(q) ||
-               String(d.numero).includes(q) ||
-               String(d.cotizacion?.numero || '').includes(q) ||
-               clienteNombre.includes(q) || 
-               clienteRif.includes(q) ||
-               clienteCodigo.includes(q) ||
-               (qClean.length > 2 && clienteRifClean.includes(qClean)) ||
-               totalStr.includes(q)
-      })
+      lista = rankEntities(lista, busquedaGlobal, [
+        { get: d => `dsp-${String(d.numero).padStart(5, '0')} ${d.numero}`, weight: 10 },
+        { get: d => d.cotizacion?.numero ? `cot-${String(d.cotizacion.numero).padStart(5, '0')} ${d.cotizacion.numero}` : '', weight: 9 },
+        { get: d => d.cliente?.nombre, weight: 9 },
+        { get: d => d.cliente?.rif_cedula, weight: 9 },
+        { get: d => d.cliente?.codigo_cliente, weight: 8 },
+        { get: d => d.cotizacion?.total_usd, weight: 7 },
+      ])
     }
 
     return lista
@@ -313,7 +287,7 @@ export default function DespachosView() {
   const { data: stockCheck } = useStockCheckDespachos(despachosPaginados, { enabled: esPrivilegiado })
 
   // Reset página al cambiar filtro
-  useEffect(() => { setPagina(1) }, [estadoFiltro, vendedorFiltro, verTodos])
+  useEffect(() => { setPagina(1) }, [estadoFiltro, vendedorFiltro, verTodos, busquedaGlobal])
 
   // Subir al inicio al cambiar de página
   useEffect(() => {

@@ -18,7 +18,8 @@ import useAuthStore from '../../store/useAuthStore'
 import { usePrecioVendedor } from '../../hooks/usePrecioVendedor'
 import { round2, mulR } from '../../utils/dinero'
 import { calcTotales } from '../../utils/calcTotales'
-import { fmtUsdSimple as fmtUsd, fmtBs, removeAccents } from '../../utils/format'
+import { fmtUsdSimple as fmtUsd, fmtBs } from '../../utils/format'
+import { buscarClientes } from '../../utils/clienteSearch'
 import { guardarProductoReciente, getProductosRecientes } from './ProductosRecientes'
 import { showToast } from '../ui/Toast'
 
@@ -97,14 +98,8 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
   // Filtrar clientes (excluir inactivos, preservando el seleccionado)
   const clientesFiltrados = useMemo(() => {
     if (!clienteBusqueda.trim()) return []
-    const q = removeAccents(clienteBusqueda.toLowerCase())
-    return clientes.filter(c =>
-      (c.activo !== false || c.id === clienteId) && (
-        removeAccents(c.nombre.toLowerCase()).includes(q) ||
-        removeAccents((c.rif_cedula ?? '').toLowerCase()).includes(q) ||
-        (c.telefono ?? '').includes(clienteBusqueda)
-      )
-    ).slice(0, 8)
+    const activos = clientes.filter(c => c.activo !== false || c.id === clienteId)
+    return buscarClientes(activos, clienteBusqueda).slice(0, 8)
   }, [clientes, clienteBusqueda, clienteId])
 
   // Filtrar productos

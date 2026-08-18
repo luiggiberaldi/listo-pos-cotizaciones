@@ -1,5 +1,6 @@
 // api/handlers/clientes.js
-import { json, jsonError, corsHeaders, isRateLimited, sanitizeSearch, isValidUuid, removeAccents } from '../lib/utils.js'
+import { json, jsonError, corsHeaders, isRateLimited, sanitizeSearch, isValidUuid } from '../lib/utils.js'
+import { rankSearch } from '../lib/entitySearch.js'
 import { verifyAuth, validateOperator } from '../lib/auth.js'
 import { registrarAuditoria } from '../lib/audit.js'
 import { recalcularSaldoPendienteCliente } from '../lib/cxcUtils.js'
@@ -85,24 +86,16 @@ export async function handleListarClientes(request, env) {
   }));
 
   if (busqueda.trim()) {
-    const raw  = removeAccents(busqueda.trim().toLowerCase());
-    const norm = raw.replace(/[\.\-\(\)\s\/\\]/g, '');
-
-    data = data.filter(c => {
-      const nombre = removeAccents((c.nombre    || '').toLowerCase());
-      const codigo = (c.codigo_cliente || '').toLowerCase();
-      const rif    = (c.rif_cedula|| '').toLowerCase().replace(/[\.\-\(\)\s\/\\]/g, '');
-      const tel    = (c.telefono  || '').toLowerCase().replace(/[\.\-\(\)\s\/\\]/g, '');
-      const email  = (c.email     || '').toLowerCase();
-
-      return (
-        nombre.includes(raw)  ||
-        codigo.includes(raw)  ||
-        rif.includes(norm)    ||
-        tel.includes(norm)    ||
-        email.includes(raw)
-      );
-    });
+    data = rankSearch(data, busqueda, [
+      { key: 'nombre', weight: 10 },
+      { key: 'rif_cedula', weight: 9 },
+      { key: 'codigo_cliente', weight: 8 },
+      { key: 'telefono', weight: 7 },
+      { key: 'email', weight: 4 },
+      { key: 'ciudad', weight: 3 },
+      { key: 'estado', weight: 2 },
+      { key: 'categoria', weight: 2 },
+    ]);
   }
 
   return new Response(JSON.stringify(data), {

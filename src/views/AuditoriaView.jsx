@@ -13,7 +13,8 @@ import {
 import { useAuditoria }  from '../hooks/useAuditoria'
 import { useUsuarios }   from '../hooks/useUsuarios'
 import supabase from '../services/supabase/client'
-import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs, removeAccents } from '../utils/format'
+import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs } from '../utils/format'
+import { rankEntities } from '../utils/entitySearch'
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import CustomSelect from '../components/ui/CustomSelect'
 import Skeleton from '../components/ui/Skeleton'
@@ -1389,15 +1390,15 @@ export default function AuditoriaView() {
   const registrosFiltrados = useMemo(() => {
     let filtered = registros
 
-    // Filtro de búsqueda
+    // Filtro de búsqueda con ranking por usuario, acción, descripción y entidad.
     if (busqueda.trim()) {
-      const q = removeAccents(busqueda.toLowerCase())
-      filtered = filtered.filter(r => {
-        const usuario = removeAccents(r.usuario?.nombre ?? r.usuario_nombre ?? '').toLowerCase()
-        const accion = removeAccents(ACCION_LABEL[r.accion] ?? r.accion ?? '').toLowerCase()
-        const desc = removeAccents(r.descripcion ?? '').toLowerCase()
-        return usuario.includes(q) || accion.includes(q) || desc.includes(q)
-      })
+      filtered = rankEntities(filtered, busqueda, [
+        { get: r => r.usuario?.nombre ?? r.usuario_nombre, weight: 8 },
+        { get: r => ACCION_LABEL[r.accion] ?? r.accion, weight: 8 },
+        { key: 'descripcion', weight: 10 },
+        { key: 'entidad_tipo', weight: 4 },
+        { key: 'entidad_id', weight: 5 },
+      ])
     }
 
     // Filtro de fecha

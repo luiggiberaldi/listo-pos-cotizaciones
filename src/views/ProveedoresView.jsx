@@ -12,6 +12,7 @@ import Skeleton from '../components/ui/Skeleton'
 import Pagination from '../components/ui/Pagination'
 import PageHeader from '../components/ui/PageHeader'
 import { showToast } from '../components/ui/Toast'
+import { rankEntities } from '../utils/entitySearch'
 
 const ITEMS_POR_PAGINA = 12
 
@@ -636,14 +637,25 @@ export default function ProveedoresView() {
       return true
     })
 
+    const listaConBusqueda = busqueda
+      ? rankEntities(list, busqueda, [
+          { key: 'nombre', weight: 10 },
+          { key: 'rif_cedula', weight: 9 },
+          { key: 'telefono', weight: 7 },
+          { key: 'email', weight: 4 },
+          { key: 'ciudad', weight: 3 },
+          { key: 'estado', weight: 2 },
+        ])
+      : list
+
     // Ordenamiento: proveedores con deuda primero
-    return [...list].sort((a, b) => {
+    return [...listaConBusqueda].sort((a, b) => {
       const saldoA = Number(a.saldo_pendiente || 0)
       const saldoB = Number(b.saldo_pendiente || 0)
       if (saldoA !== saldoB) return saldoB - saldoA
       return (a.nombre || '').localeCompare(b.nombre || '')
     })
-  }, [proveedores, filtroTipo, filtroEstado])
+  }, [proveedores, busqueda, filtroTipo, filtroEstado])
 
   const totalPaginas = Math.max(1, Math.ceil(proveedoresFiltrados.length / ITEMS_POR_PAGINA))
   const proveedoresPaginados = useMemo(() => {

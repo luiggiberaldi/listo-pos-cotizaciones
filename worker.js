@@ -25,6 +25,7 @@ import { handleBuscarProductosHibrido, handleSyncEmbeddings, handleParseMaterial
 import { handleGuardarCotizacion, handleReciclarCotizacion, handleReabrirCotizacion, handleCrearVersion, handleEnviarCotizacion, handleVentaRapida, runCleanupCotizaciones } from './api/handlers/cotizaciones.js'
 import { handleCrearDespacho, handleActualizarEstadoDespacho, handleEditarItemsDespacho, handleReciclarDespacho, handleGuardarDescuentos, handleObtenerDescuentos, handleEditarPagoDespacho, handleDevolucionParcialDespacho } from './api/handlers/despachos.js'
 import { handleDevTools } from './api/handlers/dev.js'
+import { handleGetRates } from './api/handlers/rates.js'
 import { handleAdmin, handleBackup, handleRestore, handleSaveConfig, handleGetConfig, handleResetOperacional, handleTesterClearAll, handleTesterSeedDemo, handleTesterStressSeed, handleCrearTransportista, handleActualizarTransportista } from './api/handlers/admin.js'
 import { handleReporteTransportistas, handleDetalleTransportista, handlePagarTransportista, handleRevertirPagoTransportista } from './api/handlers/transportistas.js'
 import { handleGetSeguimiento, handleCrearSeguimiento, handleActualizarSeguimiento, handleBorrarSeguimiento, runPurgeTrackingImages } from './api/handlers/seguimiento.js'
@@ -72,6 +73,11 @@ export default {
           ...corsHeaders(request),
         },
       });
+    }
+
+    // ── API: tasas oficiales BCV (proxy same-origin) ─────────────────────
+    if (url.pathname === '/api/rates' && request.method === 'GET') {
+      return handleGetRates(request, env)
     }
 
     // ── API: leer configuración del negocio ─────────────────────────────

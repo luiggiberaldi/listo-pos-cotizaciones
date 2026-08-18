@@ -15,7 +15,8 @@ import ConfirmModal from '../components/ui/ConfirmModal'
 import { useResumenCxC } from '../hooks/useCuentasCobrar'
 import { useProveedores } from '../hooks/useProveedores'
 import { getDayRange, getCorteSemanalRange, getMonthRange } from '../utils/dateHelpers'
-import { fmtUsd, fmtBs, removeAccents } from '../utils/format'
+import { fmtUsd, fmtBs } from '../utils/format'
+import { rankEntities } from '../utils/entitySearch'
 import useAuthStore from '../store/useAuthStore'
 import Skeleton from '../components/ui/Skeleton'
 import { useTasaCambio } from '../hooks/useTasaCambio'
@@ -3103,19 +3104,16 @@ function TabArticulosExternos({ configNeg }) {
   }, [items])
 
   const itemsFiltrados = useMemo(() => {
-    return items.filter(item => {
-      const matchAsesor = !filtroAsesor || item.asesor_nombre === filtroAsesor
-      
-      const q = removeAccents(busqueda.toLowerCase().trim())
-      const matchBusqueda = !q ||
-        removeAccents(item.articulo_nombre || '').toLowerCase().includes(q) ||
-        removeAccents(item.articulo_codigo || '').toLowerCase().includes(q) ||
-        removeAccents(item.cliente_nombre || '').toLowerCase().includes(q) ||
-        removeAccents(item.cliente_rif || '').toLowerCase().includes(q) ||
-        String(item.despacho_numero || '').includes(q)
-      
-      return matchAsesor && matchBusqueda
-    })
+    const porAsesor = items.filter(item => !filtroAsesor || item.asesor_nombre === filtroAsesor)
+    if (!busqueda.trim()) return porAsesor
+
+    return rankEntities(porAsesor, busqueda, [
+      { key: 'articulo_nombre', weight: 10 },
+      { key: 'articulo_codigo', weight: 9 },
+      { key: 'cliente_nombre', weight: 8 },
+      { key: 'cliente_rif', weight: 8 },
+      { key: 'despacho_numero', weight: 7 },
+    ])
   }, [items, filtroAsesor, busqueda])
 
   const kpis = useMemo(() => {

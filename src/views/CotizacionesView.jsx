@@ -28,7 +28,8 @@ import { useSaldoFavorOrigen } from '../hooks/useCuentasCobrar'
 import { useTransportistas, useCrearTransportista } from '../hooks/useTransportistas'
 import VendedorFilterPill from '../components/ui/VendedorFilterPill'
 import ToggleVistaPersonal from '../components/ui/ToggleVistaPersonal'
-import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs, removeAccents } from '../utils/format'
+import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../utils/format'
+import { rankEntities } from '../utils/entitySearch'
 import { showToast } from '../components/ui/Toast'
 import { round2 } from '../utils/dinero'
 import { notifyFacturacionClienteAjeno } from '../services/notificationService'
@@ -1046,25 +1047,15 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
     }
 
     if (busquedaGlobal) {
-      const q = removeAccents(busquedaGlobal.toLowerCase())
-      const qClean = q.replace(/[\.\-\s]/g, '')
-      filtered = filtered.filter(c => {
-        const numStr = `cot-${String(c.numero).padStart(5, '0')}`
-        const clienteNombre = removeAccents(c.cliente?.nombre || '').toLowerCase()
-        const clienteRif = removeAccents(c.cliente?.rif_cedula || '').toLowerCase()
-        const clienteRifClean = clienteRif.replace(/[\.\-\s]/g, '')
-        const clienteCodigo = removeAccents(c.cliente?.codigo_cliente || '').toLowerCase()
-        const totalStr = String(c.total_usd)
-        
-        return numStr.includes(q) || 
-               String(c.numero).includes(q) ||
-               clienteNombre.includes(q) || 
-               clienteRif.includes(q) ||
-               clienteCodigo.includes(q) ||
-               (qClean.length > 2 && clienteRifClean.includes(qClean)) ||
-               totalStr.includes(q)
-      })
+      filtered = rankEntities(filtered, busquedaGlobal, [
+        { get: c => `cot-${String(c.numero).padStart(5, '0')} ${c.numero}`, weight: 10 },
+        { get: c => c.cliente?.nombre, weight: 9 },
+        { get: c => c.cliente?.rif_cedula, weight: 9 },
+        { get: c => c.cliente?.codigo_cliente, weight: 8 },
+        { get: c => c.total_usd, weight: 7 },
+      ])
     }
+
 
     // Ordenar siempre por fecha de actualización descendente (lo más nuevo arriba)
     filtered = [...filtered].sort((a, b) => {
@@ -1102,7 +1093,7 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
   }, [listaMostrada, pagina])
 
   // Reset página al cambiar filtro
-  useEffect(() => { setPagina(1) }, [estadoFiltro, vendedorFiltro, verTodos])
+  useEffect(() => { setPagina(1) }, [estadoFiltro, vendedorFiltro, verTodos, busquedaGlobal])
 
   // Subir al inicio al cambiar de página
   useEffect(() => {
