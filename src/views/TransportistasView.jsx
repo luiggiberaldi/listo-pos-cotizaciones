@@ -489,7 +489,7 @@ export default function TransportistasView() {
       />
 
       {/* Filtro por tipo: Todos / Locales / Generales */}
-      {!isLoading && !isError && totalCount > 0 && (
+      {!isLoading && !isError && hayCatalogo && (
         <div className="flex flex-wrap items-center gap-2">
           {[
             { id: 'todos',      label: 'Todos',      count: transportistasCounts.todos },
@@ -528,21 +528,37 @@ export default function TransportistasView() {
         <EmptyState
           icon={Truck}
           title={
-            totalCount === 0
+            !hayCatalogo
               ? 'No hay transportistas registrados'
-              : filtroTipo === 'locales'
-                ? 'No hay transportistas locales'
-                : filtroTipo === 'generales'
-                  ? 'No hay transportistas generales'
-                  : 'Sin resultados'
+              : hayBusqueda
+                ? 'Sin coincidencias'
+                : filtroTipo === 'locales'
+                  ? 'No hay transportistas locales'
+                  : filtroTipo === 'generales'
+                    ? 'No hay transportistas generales'
+                    : 'Sin resultados'
           }
           description={
-            totalCount === 0
+            !hayCatalogo
               ? (puedeCrear ? 'Agrega el primer transportista.' : 'Aún no se han registrado transportistas.')
-              : 'Prueba con otro filtro o término de búsqueda.'
+              : hayBusqueda
+                ? `No se encontraron transportistas con "${search}".`
+                : 'Prueba con otro filtro o término de búsqueda.'
           }
-          actionLabel={totalCount === 0 && puedeCrear ? 'Nuevo transportista' : undefined}
-          onAction={totalCount === 0 && puedeCrear ? abrirNuevo : undefined}
+          actionLabel={
+            !hayCatalogo && puedeCrear
+              ? 'Nuevo transportista'
+              : hayBusqueda
+                ? 'Limpiar búsqueda'
+                : undefined
+          }
+          onAction={
+            !hayCatalogo && puedeCrear
+              ? abrirNuevo
+              : hayBusqueda
+                ? () => setSearch('')
+                : undefined
+          }
         />
       ) : (
         <>
