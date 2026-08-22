@@ -397,7 +397,7 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
             cotizaciones: { borrador: 0, enviada: 0, aceptada: 0, rechazada: 0, anulada: 0, total: 0 },
             prevCotizaciones: { total: 0, enviada: 0 },
             tasaCierre: 0,
-            comisionTotal: 0, comisionPagada: 0, comisionPendiente: 0,
+            comisionTotal: 0, comisionGenerada: 0,
             comisionCabilla2: 0,
             comisionCabilla3: 0,
             clienteMap: {},
@@ -481,13 +481,8 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
         const v = getOrCreate(c.vendedorid)
         const monto = Number(c.totalcomision || 0)
         v.comisionTotal += monto
-        if (c.estado === 'pagada') {
-          v.comisionPagada += monto
-        } else if (c.estado === 'cta_cobrar') {
-          v.comisionPendiente += monto
-        } else {
-          v.comisionPendiente += monto
-        }
+        // Todas las comisiones son generadas; no hay ciclo pagada/pendiente
+        v.comisionGenerada += monto
 
         // Acumular comisiones de cabillas al 2% y 3%
         const pctCab = Math.round(Number(c.pctcabilla || 0))

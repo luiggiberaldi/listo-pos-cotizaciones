@@ -428,8 +428,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
       const numDespachos = despachos.length
       const ticketPromedio = numDespachos > 0 ? totalVentas / numDespachos : 0
       const totalComisiones = comisiones.reduce((s, c) => s + Number(c.totalcomision || 0), 0)
-      const comisionesPagadas = comisiones.filter(c => c.estado === 'pagada').reduce((s, c) => s + Number(c.totalcomision || 0), 0)
-      const comisionesPendientes = comisiones.filter(c => c.estado === 'pendiente').reduce((s, c) => s + Number(c.totalcomision || 0), 0)
+      const comisionesGeneradas = comisiones.reduce((s, c) => s + Number(c.totalcomision || 0), 0)
       const comisionCabilla2 = comisiones.filter(c => Math.round(Number(c.pctcabilla || 0)) === 2).reduce((s, c) => s + Number(c.comisioncabilla || 0), 0)
       const comisionCabilla3 = comisiones.filter(c => Math.round(Number(c.pctcabilla || 0)) === 3).reduce((s, c) => s + Number(c.comisioncabilla || 0), 0)
       const comisionOtros = comisiones.reduce((s, c) => s + Number(c.comisionotros || 0), 0)
@@ -703,7 +702,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
        return {
          kpis: {
            totalVentas, totalFlete, totalDescuentos, numDespachos, ticketPromedio, totalComisiones,
-           comisionesPagadas, comisionesPendientes, comisionCabilla2, comisionCabilla3, comisionOtros,
+           comisionesGeneradas, comisionCabilla2, comisionCabilla3, comisionOtros,
            prevTotalVentas, prevNumDespachos, prevTicketPromedio, prevTotalComisiones,
            totalDevoluciones, prevTotalDevoluciones
          },

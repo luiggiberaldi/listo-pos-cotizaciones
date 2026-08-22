@@ -708,37 +708,15 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 3. RESUMEN
+  // 3. RESUMEN (sin ciclo pagada/pendiente/cta_cobrar)
   // ══════════════════════════════════════════════════════════════════════════
-  const pends = comisionesNorm.filter(c => c.estado === 'pendiente')
-  const cxc = comisionesNorm.filter(c => c.estado === 'cta_cobrar')
-  const pagadas = comisionesNorm.filter(c => c.estado === 'pagada')
-  
-  // 1) "Saldo Pendiente": sum( max(totalcomision - montopagado, 0) ) para estados pendiente y cta_cobrar
-  const totalPendiente = comisionesNorm
-    .filter(c => ['pendiente', 'cta_cobrar'].includes(c.estado))
-    .reduce((s, c) => s + Math.max(c.totalcomision - (c.montopagado || 0), 0), 0)
-    
-  // Desglose de pendientes
-  const totalPendienteRegular = comisionesNorm
-    .filter(c => c.estado === 'pendiente')
-    .reduce((s, c) => s + Math.max(c.totalcomision - (c.montopagado || 0), 0), 0)
-
-  const totalPendienteCxc = comisionesNorm
-    .filter(c => c.estado === 'cta_cobrar')
-    .reduce((s, c) => s + Math.max(c.totalcomision - (c.montopagado || 0), 0), 0)
-    
-  // 2) "Total Pagado": sum(COALESCE(montopagado, 0)) de todas
-  const totalPagado = comisionesNorm.reduce((s, c) => s + (c.montopagado || 0), 0)
-  
-  // 3) "Generado Histórico": sum(totalcomision) de todas
   const totalGeneral = comisionesNorm.reduce((s, c) => s + c.totalcomision, 0)
 
   // Cuadro resumen premium
   const boxH = 18
   const boxW = CONTENT_W / 3
   const uniqueDocsCount = new Set(comisionesNorm.map(c => c.despachonumero)).size
-  const uniquePagadasCount = new Set(pagadas.map(c => c.despachonumero)).size
+  const uniqueCount = new Set(comisionesNorm.map(c => c.despachonumero)).size
   const uniquePendsCount = new Set(pends.map(c => c.despachonumero)).size
   const uniqueCxcCount = new Set(cxc.map(c => c.despachonumero)).size
 
@@ -1176,9 +1154,6 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
       doc.text(vNombre.toUpperCase(), MARGIN + 7, y + 4);
       y += 7;
 
-      const comisionesNormales = vItems.filter(c => c.estado !== 'cta_cobrar');
-      const cuentasCobrar = vItems.filter(c => c.estado === 'cta_cobrar');
-
       let totalCabillaUsd = 0;
       let totalOtrosUsd = 0;
       let totalTotalUsd = 0;
@@ -1471,7 +1446,6 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
   if (formato === 'resumido') {
     const resumenSellers = {}
     comisionesNorm.forEach(c => {
-      if (c.estado === 'cta_cobrar') return; // Excluir cuentas por cobrar (cxc) del resumido
       const vId = c.vendedor?.id || 'sin_asesor'
       const vName = c.vendedor?.nombre || 'Sin asesor'
       const esExterno = !!c.vendedor?.es_externo || (c.vendedor?.markup_pct != null && Number(c.vendedor.markup_pct) > 0)

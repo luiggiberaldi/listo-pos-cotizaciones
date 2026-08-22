@@ -44,11 +44,7 @@ function aplicarFiltrosComisiones(query, urlParams, user) {
     }
   }
   // 3. Filtro por Estado
-  // Cuando se filtra por 'pendiente', incluir también 'cta_cobrar' porque tienen
-  // montos liberados pendientes de pago que deben aparecer en la vista
-  if (estado === 'pendiente') {
-    query += `&estado=in.(pendiente,cta_cobrar)`
-  } else if (estado) {
+  if (estado) {
     query += `&estado=eq.${estado}`
   }
 
@@ -78,238 +74,6 @@ async function fetchByIds(env, headers, table, ids, select) {
 
   const rows = await res.json()
   return Object.fromEntries(rows.map(row => [row.id, row]))
-}
-
-export async function handleMarcarComisionPagada(request, env) {
-  const v = await validateOperator(request, env);
-  if (v.error) return v.error;
-  const { operador, headers, ip } = v;
-
-  const ROLES_PAGO = ['administracion', 'jefe', 'desarrollador'];
-  if (!ROLES_PAGO.includes(operador.rol)) {
-    return jsonError('Solo administración, jefe o desarrollador pueden registrar pagos de comisiones', 403, request);
-  }
-
-  let body;
-  try { body = await request.json(); } catch { return jsonError('Body invalido', 400, request); }
-  const comisionid = body.comisionid || body.comisionId;
-  if (!comisionid || !isValidUuid(comisionid)) return jsonError('comisionid invalido', 400, request);
-
-  try {
-    // 1. Obtener la comisión actual para validar montos
-    const actualRes = await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?id=eq.${comisionid}&select=totalcomision,comision_liberada,comision_retenida,montopagado`, { headers });
-    if (!actualRes.ok) {
-      const err = await actualRes.text();
-      return jsonError(`Error al leer comision: ${err}`, actualRes.status, request);
-    }
-    const [actual] = await actualRes.json();
-    if (!actual) return jsonError('Comision no encontrada', 404, request);
-
-    const comisionLiberada = Number(actual.comision_liberada || 0);
-    const totalComision = Number(actual.totalcomision || 0);
-    const comisionRetenida = Number(actual.comision_retenida || 0);
-    const montopagadoPrev = Number(actual.montopagado || 0);
-
-    let monto = Number(body.montopagado);
-    if (body.montopagado == null) {
-      // Si no se especifica monto, pagamos todo lo liberado hasta la fecha
-      monto = comisionLiberada;
-    }
-
-    if (!Number.isFinite(monto) || monto < 0) {
-      return jsonError('montopagado invalido', 400, request);
-    }
-
-    // Validar que el pago no supere lo liberado
-    if (monto > comisionLiberada + 0.01) {
-      return jsonError(`No se puede registrar un pago de ${monto} USD porque supera el monto liberado (${comisionLiberada} USD)`, 400, request);
-    }
-
-    if (monto < montopagadoPrev - 0.01) {
-      return jsonError(`El nuevo monto pagado (${monto} USD) no puede ser inferior al monto ya pagado anteriormente (${montopagadoPrev} USD)`, 400, request);
-    }
-
-    // Determinar el nuevo estado
-    let nuevoEstado = 'pendiente';
-    if (comisionRetenida > 0.01) {
-      nuevoEstado = 'cta_cobrar';
-    } else if (monto >= comisionLiberada - 0.01) {
-      nuevoEstado = 'pagada';
-    }
-
-    const res = await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?id=eq.${comisionid}&estado=in.(pendiente,cta_cobrar)&select=id,estado,montopagado`, {
-      method: 'PATCH',
-      headers: { ...headers, Prefer: 'return=representation' },
-      body: JSON.stringify({
-        estado: nuevoEstado,
-        montopagado: monto,
-        pagadaen: nuevoEstado === 'pagada' ? new Date().toISOString() : null,
-        pagadapor: nuevoEstado === 'pagada' ? operador.id : null,
-        actualizadoen: new Date().toISOString()
-      })
-    });
-
-    if (!res.ok) {
-      const err = await res.text();
-      return jsonError(`Error al registrar pago de comision: ${err}`, res.status, request);
-    }
-
-    const [comision] = await res.json();
-    if (!comision) return jsonError('Comision no encontrada o ya pagada en su totalidad', 404, request);
-
-    await registrarAuditoria(env, headers, {
-      usuarioId: operador.id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
-      categoria: 'COTIZACION', accion: 'PAGAR_COMISION',
-      entidadTipo: 'comision', entidadId: comisionid,
-      meta: { montopagado: monto, estado_nuevo: nuevoEstado }, ip,
-    });
-
-    return json({ ok: true, comisionid, montopagado: monto, estado: nuevoEstado }, 200, request);
-  } catch (e) {
-    return jsonError(`Error critico de pago: ${e.message}`, 500, request);
-  }
-}
-
-export async function handleLiberarComisionCxc(request, env) {
-  const v = await validateOperator(request, env);
-  if (v.error) return v.error;
-  const { operador, headers, ip } = v;
-
-  const ROLES_LIBERAR = ['administracion', 'jefe', 'desarrollador'];
-  if (!ROLES_LIBERAR.includes(operador.rol)) {
-    return jsonError('Solo administración, jefe o desarrollador pueden liberar comisiones CxC', 403, request);
-  }
-
-  let body;
-  try { body = await request.json(); } catch { return jsonError('Body invalido', 400, request); }
-  const comisionid = body.comisionid || body.comisionId;
-  if (!comisionid || !isValidUuid(comisionid)) return jsonError('comisionid invalido', 400, request);
-
-  try {
-    // 1. Obtener la comisión actual
-    const actualRes = await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?id=eq.${comisionid}&select=despachoid,vendedorid,cuentaid,totalcomision,comision_liberada,comision_retenida,montopagado,estado`, { headers });
-    if (!actualRes.ok) {
-      const err = await actualRes.text();
-      return jsonError(`Error al leer comision: ${err}`, actualRes.status, request);
-    }
-    const [actual] = await actualRes.json();
-    if (!actual) return jsonError('Comision no encontrada', 404, request);
-
-    const totalComision = Number(actual.totalcomision || 0);
-    const comisionRetenida = Number(actual.comision_retenida || 0);
-    const montopagado = Number(actual.montopagado || 0);
-
-    if (comisionRetenida <= 0.01) {
-      return jsonError('Esta comisión no tiene monto CxC retenido para liberar', 400, request);
-    }
-
-    // 2. Fecha de aprobación real del despacho (para fechar el evento en su período)
-    let fechaAprob = new Date().toISOString();
-    if (actual.despachoid) {
-      const despRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${actual.despachoid}&select=despachada_en,entregada_en,creado_en`, { headers });
-      if (despRes.ok) {
-        const [desp] = await despRes.json();
-        if (desp) fechaAprob = desp.despachada_en || desp.entregada_en || desp.creado_en || fechaAprob;
-      }
-    }
-
-    // 3. Liberar: todo lo retenido pasa a liberado
-    const nuevoEstado = montopagado >= totalComision - 0.01 ? 'pagada' : 'pendiente';
-    const patchRes = await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?id=eq.${comisionid}&estado=eq.cta_cobrar&select=id,estado`, {
-      method: 'PATCH',
-      headers: { ...headers, Prefer: 'return=representation' },
-      body: JSON.stringify({
-        comision_liberada: totalComision,
-        comision_retenida: 0,
-        estado: nuevoEstado,
-        pagadaen: nuevoEstado === 'pagada' ? new Date().toISOString() : null,
-        pagadapor: nuevoEstado === 'pagada' ? operador.id : null,
-        actualizadoen: new Date().toISOString()
-      })
-    });
-
-    if (!patchRes.ok) {
-      const err = await patchRes.text();
-      return jsonError(`Error al liberar comision CxC: ${err}`, patchRes.status, request);
-    }
-    const [comision] = await patchRes.json();
-    if (!comision) return jsonError('Comision no encontrada o ya liberada', 404, request);
-
-    // 4. Registrar el evento de liberación manual, fechado a la aprobación
-    await fetch(`${env.SUPABASE_URL}/rest/v1/comision_liberaciones`, {
-      method: 'POST',
-      headers: { ...headers, Prefer: 'return=minimal' },
-      body: JSON.stringify({
-        comision_id: comisionid,
-        despacho_id: actual.despachoid,
-        vendedor_id: actual.vendedorid,
-        cuenta_id: actual.cuentaid,
-        monto: comisionRetenida,
-        tipo: 'manual',
-        creado_en: fechaAprob
-      })
-    });
-
-    await registrarAuditoria(env, headers, {
-      usuarioId: operador.id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
-      categoria: 'COTIZACION', accion: 'LIBERAR_COMISION_CXC',
-      entidadTipo: 'comision', entidadId: comisionid,
-      meta: { monto_liberado: comisionRetenida, estado_nuevo: nuevoEstado }, ip,
-    });
-
-    return json({ ok: true, comisionid, monto_liberado: comisionRetenida, estado: nuevoEstado }, 200, request);
-  } catch (e) {
-    return jsonError(`Error critico al liberar comision CxC: ${e.message}`, 500, request);
-  }
-}
-
-export async function handleActualizarEstadoComision(request, env) {
-  const v = await validateOperator(request, env);
-  if (v.error) return v.error;
-  const { operador, headers, ip } = v;
-
-  const ROLES_ESTADO = ['administracion', 'jefe', 'desarrollador'];
-  if (!ROLES_ESTADO.includes(operador.rol)) {
-    return jsonError('Solo administración, jefe o desarrollador pueden cambiar el estado de comisiones', 403, request);
-  }
-
-  let body;
-  try { body = await request.json(); } catch { return jsonError('Body invalido', 400, request); }
-  const { comisionid, estado } = body;
-  if (!comisionid || !isValidUuid(comisionid)) return jsonError('comisionid invalido', 400, request);
-  if (!['pendiente', 'cta_cobrar'].includes(estado)) {
-    return jsonError('estado invalido', 400, request);
-  }
-
-  try {
-    const res = await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?id=eq.${comisionid}&select=id,estado`, {
-      method: 'PATCH',
-      headers: { ...headers, Prefer: 'return=representation' },
-      body: JSON.stringify({
-        estado,
-        actualizadoen: new Date().toISOString()
-      })
-    });
-
-    if (!res.ok) {
-      const err = await res.text();
-      return jsonError(`Error al actualizar estado de comision: ${err}`, res.status, request);
-    }
-
-    const [comision] = await res.json();
-    if (!comision) return jsonError('Comision no encontrada', 404, request);
-
-    await registrarAuditoria(env, headers, {
-      usuarioId: operador.id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
-      categoria: 'COTIZACION', accion: 'ACTUALIZAR_ESTADO_COMISION',
-      entidadTipo: 'comision', entidadId: comisionid,
-      meta: { estado_nuevo: estado }, ip,
-    });
-
-    return json({ ok: true, comisionid, estado }, 200, request);
-  } catch (e) {
-    return jsonError(`Error critico al actualizar estado de comision: ${e.message}`, 500, request);
-  }
 }
 
 export async function handleGetComisionesConfig(request, env) {
@@ -384,7 +148,7 @@ export async function handleGetComisiones(request, env) {
     const cotizacionIds = rows.map(r => r.comisiones?.cotizacionid).filter(Boolean);
     const cotizaciones = await fetchByIds(env, headers, 'cotizaciones', cotizacionIds, 'id,numero,tasa_bcv_snapshot,cliente_id,cliente:clientes(id,nombre)');
 
-    const data = rows.map(r => {
+  const data = rows.map(r => {
       const com = r.comisiones || {};
       const desp = com.despacho || {};
       const cot = cotizaciones[com.cotizacionid];
@@ -400,8 +164,7 @@ export async function handleGetComisiones(request, env) {
           comisionotros: Number(com.comisionotros || 0),
           pctcabilla: Number(com.pctcabilla || 0),
           pctotros: Number(com.pctotros || 0),
-          estado: com.estado,
-          montopagado: Number(com.montopagado || 0),
+          estado: com.estado || 'generada',
           despacho: desp ? {
             id: desp.id,
             numero: desp.numero,
@@ -434,7 +197,7 @@ export async function handleGetComisiones(request, env) {
   }
 
   // Se incluye despacho:notas_despacho!inner(creado_en) para poder filtrar por fecha del despacho
-  let baseUrl = `${env.SUPABASE_URL}/rest/v1/comisiones?select=id,despachoid,vendedorid,cotizacionid,cuentaid,totalcomision,comisioncabilla,comisionotros,pctcabilla,pctotros,montopagado,comision_liberada,comision_retenida,estado,pagadaen,pagadapor,creadoen,actualizadoen,despacho:notas_despacho!inner(creado_en)&order=creadoen.desc`
+  let baseUrl = `${env.SUPABASE_URL}/rest/v1/comisiones?select=id,despachoid,vendedorid,cotizacionid,cuentaid,totalcomision,comisioncabilla,comisionotros,pctcabilla,pctotros,estado,creadoen,actualizadoen,despacho:notas_despacho!inner(creado_en)&order=creadoen.desc`
   
   const userContext = { ...user, operator_rol: operador.rol, operator_id: operador.id };
   let query = aplicarFiltrosComisiones(baseUrl, url.searchParams, userContext)
@@ -471,12 +234,7 @@ export async function handleGetComisiones(request, env) {
       comisionotros: c.comisionotros,
       pctcabilla: c.pctcabilla,
       pctotros: c.pctotros,
-      montopagado: c.montopagado,
-      comision_liberada: c.comision_liberada,
-      comision_retenida: c.comision_retenida,
-      estado: c.estado,
-      pagadaen: c.pagadaen,
-      pagadapor: c.pagadapor,
+      estado: c.estado || 'generada',
       creadoen: c.creadoen,
       vendedor: vendedores[c.vendedorid] || { id: null, nombre: 'Sin vendedor asignado', color: '#94a3b8' },
       despacho: despacho ? { 
@@ -555,44 +313,9 @@ export async function handleGetComisionesResumen(request, env) {
     const rows = await res.json();
     const r = rows[0] || {};
 
-    // ── CONSULTA SECUNDARIA: desglose de saldo pendiente (Regular vs CxC) ─────
-    // Se incluye despacho:notas_despacho!inner(creado_en) para que el filtro de fecha use la fecha del despacho
-    let queryBreakdown = `${env.SUPABASE_URL}/rest/v1/comisiones?select=estado,totalcomision,comision_liberada,montopagado,despacho:notas_despacho!inner(creado_en)&estado=in.(pendiente,cta_cobrar)`;
-    const userContext = { ...user, operator_rol: operador.rol, operator_id: operador.id };
-    queryBreakdown = aplicarFiltrosComisiones(queryBreakdown, url.searchParams, userContext);
-
-    let pendienteRegular = 0;
-    let pendienteCxc = 0;
-
-    try {
-      const breakdownRes = await fetch(queryBreakdown, { headers });
-      if (breakdownRes.ok) {
-        const items = await breakdownRes.json();
-        for (const item of items) {
-          const m = item.estado === 'cta_cobrar' ? Number(item.comision_liberada || 0) : Number(item.totalcomision || 0);
-          const saldo = Math.max(0, m - Number(item.montopagado || 0));
-          if (item.estado === 'cta_cobrar') {
-            pendienteCxc += saldo;
-          } else {
-            pendienteRegular += saldo;
-          }
-        }
-      } else {
-        console.error('[ResumenComisiones] Error fetching breakdown:', await breakdownRes.text());
-      }
-    } catch (eBreakdown) {
-      console.error('[ResumenComisiones] Exception in breakdown:', eBreakdown);
-    }
-
     return json({
       totalAcumulado: Number(r.totalacumulado || 0),
-      pendientePago: Number(r.pendientepago || 0),
-      yaPagado: Number(r.yapagado || 0),
-      numPendientes: Number(r.numpendientes || 0),
-      numPagadas: Number(r.numpagadas || 0),
       total: Number(r.total || 0),
-      pendienteRegular,
-      pendienteCxc,
     }, 200, request);
 
   } catch (e) {

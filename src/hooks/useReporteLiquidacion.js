@@ -108,8 +108,7 @@ export function useReporteLiquidacion({ fechaInicio, fechaFin, vendedorId } = {}
             ventas: [],
             totalVentas: 0,
             totalComisiones: 0,
-            totalPagado: 0,
-            totalPendiente: 0,
+            totalGenerado: 0,
           }
         }
         const grupo = asesorMap[nombre]
@@ -118,8 +117,7 @@ export function useReporteLiquidacion({ fechaInicio, fechaFin, vendedorId } = {}
         if (r.comision) {
           const monto = Number(r.comision.totalcomision || 0)
           grupo.totalComisiones += monto
-          if (r.comision.estado === 'pagada')    grupo.totalPagado    += monto
-          else                                   grupo.totalPendiente += monto
+          grupo.totalGenerado += monto
         }
       })
 
@@ -129,11 +127,10 @@ export function useReporteLiquidacion({ fechaInicio, fechaFin, vendedorId } = {}
       // ── 7. KPIs globales ─────────────────────────────────────────────────────
       const totalVentas      = registros.reduce((s, r) => s + r.ventaNeta, 0)
       const totalComisiones  = comisiones.reduce((s, c) => s + Number(c.totalcomision || 0), 0)
-      const totalPagado      = comisiones.filter(c => c.estado === 'pagada').reduce((s, c) => s + Number(c.totalcomision || 0), 0)
-      const totalPendiente   = comisiones.filter(c => c.estado !== 'pagada').reduce((s, c) => s + Number(c.totalcomision || 0), 0)
+      const totalGenerado = comisiones.reduce((s, c) => s + Number(c.totalcomision || 0), 0)
 
       return {
-        kpis: { totalVentas, totalComisiones, totalPagado, totalPendiente },
+        kpis: { totalVentas, totalComisiones, totalGenerado },
         porAsesor,
         asesores,
         registros,

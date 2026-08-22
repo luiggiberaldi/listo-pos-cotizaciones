@@ -3098,3 +3098,85 @@ El flujo de cleanup del `TesterFlowView` vía Worker/RPC quedó verificado de ex
 ### Estado
 
 **No se ejecutó ninguna reconciliación.** Siguiente paso: revisión humana del CSV y enriquecimiento del campo `reason` con la causa real por brecha, antes de armar los lotes.
+
+## SESIÓN 22/08/2026 — Fix: PDF "Resumido" de comisiones no diferenciaba del detallado
+
+### Problema
+
+En `Reportes → Comisiones`, al elegir formato **Resumido** y descargar/imprimir, el PDF seguía saliendo igual que el **Detallado** (corte semanal por artículo), ignorando el toggle y los ajustes manuales de `Comisión CxC` y `Descuento Carro`.
+
+### Causa raíz
+
+`src/views/ReportesView.jsx` pasaba `modoCorteSemanal: true` de forma fija en las tres rutas de exportación (modal detalle vendedor, reporte general e individual). `generarComisionesPDF` entra en el bloque `if (modoCorteSemanal) { … return }`, que genera el corte detallado y retorna temprano, por lo que el branch `if (formato === 'resumido')` (que ya existía y renderiza `dibujarTablaResumida`) nunca se ejecutaba.
+
+### Fix
+
+Las tres llamadas ahora derivan el modo corte del formato:
+
+`modoCorteSemanal: formatoReporte === 'detallado'`
+
+- **Detallado** → conserva el PDF de corte semanal por artículo (comportamiento previo).
+- **Resumido** → entra al branch resumido y genera la tabla por vendedor con: Comisión del período, Comisión CxC, Descuento Carro, Total a pagar ($) y Total en Bs, aplicando `ajustesManuales`.
+
+### Validación
+
+- `npx eslint src/views/ReportesView.jsx`: 0 errores (49 warnings heredados).
+- `npm run build`: PASS.
+
+## SESIÓN 22/08/2026 — Plan: Eliminar flujo de pago de comisiones + Excluir CxC
+
+- Auditoría completa del flujo CxC en comisiones: `calcularcomisiondespacho` (migración 200), `handleMarcarComisionPagada`, `handleLiberarComisionCxc`, `handleActualizarEstadoComision`, hooks, UI y PDF.
+- El usuario confirmó que:
+  1. Las CxC nunca se incluyen en comisiones (se calculan manualmente).
+  2. La opción de pagar comisiones no se usará.
+  3. Alcance: solo comisiones (NO tocar despachos, seguimiento ni órdenes).
+- Se creó el plan detallado: `docs/plans/2026-08-22-quitar-pago-comisiones.md`.
+  - 7 fases, 15–20 archivos, ~400–500 LOC eliminados.
+  - DB: migración 238 (totalcomision sobre no-CxC, estado único 'generada').
+  - Columnas legacy (montopagado, pagadaen, pagadapor, comision_liberada, comision_retenida) se ignoran, no se dropean.
+
+## SESIÓN 22/08/2026 — Ejecución: Eliminar flujo de pago de comisiones + Excluir CxC
+
+### Cambios realizados (7 fases)
+
+**Fase 1 — BD (migración 238):**
+- `supabase/migrations/238_excluir_cxc_comision_estado_generada.sql`: nueva función `calcularcomisiondespacho` que calcula `totalcomision` solo sobre la porción no-CxC (`(total_usd - monto_cxc) / total_usd`). Estado único `'generada'`. `comision_liberada = totalcomision`, `comision_retenida = 0`. Sin inserción en `comision_liberaciones`.
+- `obtener_resumen_comisiones_v2` simplificado.
+- Agregado `'generada'` al CHECK constraint de `comisiones.estado`.
+- **No aplicado** — pendiente de ejecutar en BD.
+
+**Fase 2 — API (`api/handlers/comisiones.js`):**
+- Eliminados: `handleMarcarComisionPagada` (~83 LOC), `handleLiberarComisionCxc` (~96 LOC), `handleActualizarEstadoComision` (~43 LOC).
+- Simplificado `handleGetComisiones`: removido `montopagado`, `comision_liberada`, `comision_retenida`, `pagadaen`, `pagadapor` del select y mapeo.
+- Simplificado `handleGetComisionesResumen`: removido breakdown de pendienteRegular/pendienteCxc.
+- Simplificado `aplicarFiltrosComisiones`: removido filtro `pendiente → in.(pendiente,cta_cobrar)`.
+
+**Fase 3 — Worker (`worker.js`):**
+- Eliminadas rutas: `/api/comisiones/pagar`, `/api/comisiones/liberar-cxc`, `/api/comisiones/estado`.
+- Eliminados imports de los 3 handlers.
+
+**Fase 4 — Hooks:**
+- `useComisiones.js`: eliminado `useMarcarComisionPagada` y `useLiberarComisionCxc`. Simplificado mapeo y resumen.
+- `useReporteVentas.js`: `comisionesPagadas`/`comisionesPendientes` → `comisionesGeneradas`.
+- `useReporteVendedores.js`: `comisionPagada`/`comisionPendiente` → `comisionGenerada`.
+- `useReporteLiquidacion.js`: `totalPagado`/`totalPendiente` → `totalGenerado`.
+- `useDashboardMetrics.js`: `pendiente`/`pagado` → `generado`.
+
+**Fase 5 — UI:**
+- `ReportesView.jsx`: eliminado `useMarcarComisionPagada`, `ConfirmModal` de pago, estados `pagada`/`pendiente`/`cta_cobrar`, botones Pagar, checkboxes de selección, `handlePagarTodoVendedor`, `vendedoresAgrupados` simplificado.
+- `ComisionesView.jsx`: removidos imports de `useMarcarComisionPagada`, `useLiberarComisionCxc`, `ConfirmModal`. Props de pago removidas de `VendedorCard`.
+
+**Fase 6 — PDF (`comisionesPDF.js`):**
+- Simplificada sección de resumen: removidos filtros `pagada`/`pendiente`/`cta_cobrar`.
+- Removida separación `comisionesNormales`/`cuentasCobrar`.
+- Removido filtro `cta_cobrar` del resumido.
+
+**Fase 7 — Validación:**
+- `npm test`: **261/261 PASS** ✅
+- `npm run build`: **PASS** ✅
+- `node --check`: **PASS** ✅
+
+### Pendientes
+- Aplicar migración 238 en staging → validar → principal.
+- Smoke test post-migración.
+- Columnas legacy (`montopagado`, `pagadaen`, `pagadapor`, `comision_liberada`, `comision_retenida`) conservadas en BD; datos históricos intactos.

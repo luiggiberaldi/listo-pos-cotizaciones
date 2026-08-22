@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { DollarSign, CheckCircle, Clock, Filter, TrendingUp, FileText, Download, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, User, Briefcase } from 'lucide-react'
-import { useComisiones, useComisionesResumen, useMarcarComisionPagada, useLiberarComisionCxc } from '../hooks/useComisiones'
+import { useComisiones, useComisionesResumen } from '../hooks/useComisiones'
 import { useVendedores } from '../hooks/useClientes'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import useAuthStore from '../store/useAuthStore'
@@ -11,7 +11,7 @@ import { fmtUsd, fmtFecha, fmtBs } from '../utils/format'
 import PageHeader    from '../components/ui/PageHeader'
 import Skeleton      from '../components/ui/Skeleton'
 import EmptyState    from '../components/ui/EmptyState'
-import ConfirmModal  from '../components/ui/ConfirmModal'
+
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import supabase from '../services/supabase/client'
 import { apiUrl, getAuthHeaders } from '../services/apiBase'
@@ -40,7 +40,7 @@ function ResumenCard({ icon: Icon, label, value, sub, gradient, border }) {
 }
 
 // ─── Tarjeta agrupada por vendedor ──────────────────────────────────────────
-function VendedorCard({ vendedor, comisiones, esSupervisor, onMarcarPagada, onPagarTodo, onLiberarCxc, marcando, liberando, onExportarPDF, config }) {
+function VendedorCard({ vendedor, comisiones, esSupervisor, onExportarPDF, config }) {
   const [abierto, setAbierto] = useState(false)
   const [seleccionados, setSeleccionados] = useState([])
 
@@ -541,8 +541,7 @@ export default function ComisionesView() {
 
   const { data: vendedores = [] } = useVendedores()
   const { data: configNeg = {} } = useConfigNegocio()
-  const marcar = useMarcarComisionPagada()
-  const liberar = useLiberarComisionCxc()
+
   const [exportando, setExportando] = useState(false)
   const [menuAbierto, setMenuAbierto] = useState(false)
 

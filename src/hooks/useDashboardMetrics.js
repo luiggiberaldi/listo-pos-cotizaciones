@@ -147,8 +147,8 @@ export function useDashboardMetrics() {
           const monto = Number(c.totalcomision || 0)
           porVendedor[vid].total += monto
           porVendedor[vid].count++
-          if (c.estado === 'pendiente') porVendedor[vid].pendiente += monto
-          else porVendedor[vid].pagado += monto
+          // Sin ciclo pagada/pendiente — todo es generado
+          porVendedor[vid].generado += monto
           totalSemana += monto
         }
         result.comisionesSemana = {

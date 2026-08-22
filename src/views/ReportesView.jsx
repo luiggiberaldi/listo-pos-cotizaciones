@@ -10,8 +10,8 @@ import {
 import { useReporteVentas } from '../hooks/useReporteVentas'
 import { useReporteExternos } from '../hooks/useReporteExternos'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
-import { useComisiones, useComisionesResumen, useMarcarComisionPagada } from '../hooks/useComisiones'
-import ConfirmModal from '../components/ui/ConfirmModal'
+import { useComisiones, useComisionesResumen } from '../hooks/useComisiones'
+
 import { useResumenCxC } from '../hooks/useCuentasCobrar'
 import { useProveedores } from '../hooks/useProveedores'
 import { getDayRange, getCorteSemanalRange, getMonthRange } from '../utils/dateHelpers'
@@ -983,7 +983,6 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
   })
   const detalle = comisionesRes?.data ?? []
 
-  const marcar = useMarcarComisionPagada()
   const { perfil } = useAuthStore()
   const { tasaEuro, tasaUsdt } = useTasaCambio()
   const [tipoTasaComision, setTipoTasaComision] = useState('euro') // 'euro' | 'usdt'
@@ -993,85 +992,18 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
   const tasaDisponible = Number(tasaSeleccionada) > 0
 
   const esDev = perfil?.rol === 'desarrollador'
-  // Solo Desarrollo conserva los controles internos de pago.
-  const puedePagarComisiones = esDev
 
   const catPrincipal = configNeg?.comision_categoria_cabilla || 'Cabilla'
   const esExterno = !!vendedor?.es_externo || (vendedor?.markup_pct != null && Number(vendedor.markup_pct) > 0)
   const pctCabilla = esExterno ? (configNeg?.comision_ext_pct_cabilla || 2) : (configNeg?.comision_pct_cabilla || 2)
   const labelCabillaHeader = esExterno ? `Cemento (${pctCabilla}%)` : `${catPrincipal} (${pctCabilla}%)`
 
-  const [comisionAPagar, setComisionAPagar] = useState(null)
-  const [pagoMasivoData, setPagoMasivoData] = useState(null)
-  const [pagandoMasivo, setPagandoMasivo] = useState(false)
-  const [selectedIds, setSelectedIds] = useState(new Set())
-
-  const comisionesPendientes = useMemo(() => {
-    return detalle.filter(c => c.estado !== 'pagada')
-  }, [detalle])
-
-  const comisionesSoloPendientes = useMemo(() => {
-    return detalle.filter(c => {
-      if (c.estado === 'pendiente') return true
-      if (c.estado === 'cta_cobrar') {
-        const saldoLib = Number(c.comision_liberada || 0) - Number(c.montopagado || 0)
-        return saldoLib > 0.01
-      }
-      return false
-    })
-  }, [detalle])
-
-  const montoPendiente = useMemo(() => {
-    return comisionesPendientes.reduce((acc, c) => {
-      const m = c.estado === 'cta_cobrar' ? Number(c.comision_liberada || 0) : Number(c.totalcomision || 0)
-      return acc + Math.max(0, m - Number(c.montopagado || 0))
-    }, 0)
-  }, [comisionesPendientes])
-
-  const montoSoloPendiente = useMemo(() => {
-    return comisionesSoloPendientes.reduce((acc, c) => {
-      const m = c.estado === 'cta_cobrar' ? Number(c.comision_liberada || 0) : Number(c.totalcomision || 0)
-      return acc + Math.max(0, m - Number(c.montopagado || 0))
-    }, 0)
-  }, [comisionesSoloPendientes])
-
-  // Derived: selected pending commissions and their total
-  const selectedPendientes = useMemo(() => {
-    return comisionesPendientes.filter(c => selectedIds.has(c.id))
-  }, [comisionesPendientes, selectedIds])
-
-  const montoSeleccionado = useMemo(() => {
-    return selectedPendientes.reduce((acc, c) => {
-      const m = c.estado === 'cta_cobrar' ? Number(c.comision_liberada || 0) : Number(c.totalcomision || 0)
-      return acc + Math.max(0, m - Number(c.montopagado || 0))
-    }, 0)
-  }, [selectedPendientes])
-
-  const allPendienteIds = useMemo(() => comisionesPendientes.map(c => c.id), [comisionesPendientes])
-  const allSelected = allPendienteIds.length > 0 && allPendienteIds.every(id => selectedIds.has(id))
-  const someSelected = allPendienteIds.some(id => selectedIds.has(id))
-
-  const toggleId = (id) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
-  }
-
-  const toggleAll = () => {
-    if (allSelected) {
-      setSelectedIds(new Set())
-    } else {
-      setSelectedIds(new Set(allPendienteIds))
-    }
-  }
-
+  // Calcular totales del detalle (sin ciclo pagada/pendiente/cta_cobrar)
   const tasaComision = () => tasaSeleccionada || 0
 
-  // Calcular totales del detalle
+  // Calcular totales del detalle (sin ciclo pagada/pendiente/cta_cobrar)
   const totales = detalle.reduce((acc, item) => {
-    const total = item.estado === 'cta_cobrar' ? Number(item.comision_liberada || 0) : Number(item.totalcomision || 0)
+    const total = Number(item.totalcomision || 0)
     acc.totalUsd += total
     acc.comBs += total * tasaSeleccionada
     return acc
@@ -1199,7 +1131,7 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
         tasaFuente: tasaSeleccionadaInfo?.fuente,
         tasaActualizadaEn: tasaSeleccionadaInfo?.ultimaActualizacion,
         ajustesManuales,
-        modoCorteSemanal: true
+        modoCorteSemanal: formatoReporte === 'detallado'
       })
     } catch (e) {
       console.error('Error generando PDF individual:', e)
@@ -1292,87 +1224,17 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
               >Resumido</button>
             </div>
 
-            {/* Pagar seleccionadas (cuando hay selección) */}
-            {puedePagarComisiones && someSelected && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setPagoMasivoData({
-                    pendientes: selectedPendientes,
-                    montoPendiente: montoSeleccionado,
-                    vendedor,
-                    title: `Pagar ${selectedPendientes.length} comisión(es) seleccionada(s)`,
-                    desc: `${selectedPendientes.length} comisiones marcadas manualmente`
-                  });
-                }}
-                disabled={marcar.isPending || pagandoMasivo}
-                className="flex items-center gap-2.5 px-4 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-purple-700 hover:from-violet-500 hover:to-purple-600 text-white transition-all duration-200 shadow-md shadow-violet-600/15 border border-violet-500/20 active:scale-95 disabled:opacity-50 group"
-                title={`Pagar ${selectedPendientes.length} comisiones seleccionadas`}
-              >
-                <CheckCircle size={15} className="group-hover:scale-110 transition-transform text-violet-200 shrink-0" />
-                <div className="flex flex-col items-start leading-tight">
-                  <span className="font-black text-xs tracking-wide">{fmtUsd(montoSeleccionado)}</span>
-                  <span className="text-[10px] font-medium text-violet-200 whitespace-nowrap">{selectedPendientes.length} seleccionada{selectedPendientes.length !== 1 ? 's' : ''}</span>
-                </div>
-              </button>
-            )}
-
-            {/* Separador + botones globales cuando NO hay selección */}
-            {!someSelected && (
-              <>
-                {puedePagarComisiones && comisionesSoloPendientes.length > 0 && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setPagoMasivoData({
-                        pendientes: comisionesSoloPendientes,
-                        montoPendiente: montoSoloPendiente,
-                        vendedor,
-                        title: "Pagar Todo (Comisiones)",
-                        desc: "todas las comisiones pendientes, excluyendo cuentas por cobrar no liberadas"
-                      });
-                    }}
-                    disabled={marcar.isPending || pagandoMasivo}
-                    className="flex items-center gap-2.5 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white transition-all duration-200 shadow-md shadow-emerald-600/10 border border-emerald-500/20 active:scale-95 disabled:opacity-50 group"
-                    title="Pagar todas las comisiones pendientes (excluyendo CxC no liberadas) de este vendedor"
-                  >
-                    <CheckCircle size={15} className="group-hover:scale-110 transition-transform text-emerald-200 shrink-0" />
-                    <div className="flex flex-col items-start leading-tight">
-                      <span className="font-black text-xs tracking-wide">{fmtUsd(montoSoloPendiente)}</span>
-                      <span className="text-[10px] font-medium text-emerald-200 whitespace-nowrap">Pagar Todo</span>
-                    </div>
-                  </button>
-                )}
-              </>
-            )}
-          </div>
+            </div>
 
           <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 overflow-hidden">
             <div className="px-3 sm:px-4 py-2 sm:py-3 border-b border-slate-100 flex items-center gap-2">
               <FileText size={14} className="text-indigo-500 sm:w-4 sm:h-4" />
               <h3 className="text-xs sm:text-sm font-black text-slate-800 flex-1">Comisiones generadas</h3>
-              {puedePagarComisiones && someSelected && (
-                <span className="text-[10px] font-bold text-violet-600 bg-violet-50 border border-violet-200 px-2 py-0.5 rounded-full">
-                  {selectedIds.size} seleccionada{selectedIds.size !== 1 ? 's' : ''}
-                </span>
-              )}
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs sm:text-sm">
                 <thead>
                   <tr className="text-[10px] sm:text-xs text-slate-400 uppercase border-b border-slate-100">
-                    {puedePagarComisiones && (
-                      <th className="px-3 py-2 w-8">
-                        <input
-                          type="checkbox"
-                          checked={allSelected}
-                          ref={el => { if (el) el.indeterminate = someSelected && !allSelected }}
-                          onChange={toggleAll}
-                          className="w-3.5 h-3.5 rounded border-slate-300 text-violet-600 cursor-pointer accent-violet-600"
-                          title={allSelected ? 'Deseleccionar todas' : 'Seleccionar todas las pendientes'}
-                        />
-                      </th>
-                    )}
                     <th className="px-2 sm:px-4 py-2 font-semibold text-left">Fecha</th>
                     <th className="px-2 sm:px-4 py-2 font-semibold text-left">Correlativo</th>
                     <th className="px-2 sm:px-4 py-2 font-semibold text-right">Venta ($)</th>
@@ -1386,49 +1248,17 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
                 </thead>
                 <tbody>
                   {detalle.map((d, i) => {
-                    const total = d.estado === 'cta_cobrar' ? Number(d.comision_liberada || 0) : Number(d.totalcomision || 0)
+                    const total = Number(d.totalcomision || 0)
                     const tasa = tasaComision(d)
                     const comBs = total * tasa
                     const valCabilla = Number(d.comisioncabilla || 0)
                     const valOtros = Number(d.comisionotros || 0)
-                    const isPendiente = d.estado !== 'pagada'
-                    const isSelected = selectedIds.has(d.id)
-
-                    let badgeClass = 'bg-amber-50 text-amber-700 border border-amber-200'
-                    let label = d.estado
-                    if (d.estado === 'pagada') {
-                      badgeClass = 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                    } else if (d.estado === 'cta_cobrar') {
-                      badgeClass = 'bg-rose-50 text-rose-700 border border-rose-200'
-                      label = 'cta x cobrar'
-                    }
 
                     return (
                       <tr
                         key={d.id || i}
-                        className={`border-b border-slate-50 transition-colors duration-150 ${
-                          isSelected
-                            ? 'bg-violet-50/60 hover:bg-violet-50'
-                            : 'hover:bg-slate-50/50'
-                        }`}
-                        onClick={() => isPendiente && puedePagarComisiones && toggleId(d.id)}
-                        style={{ cursor: isPendiente && puedePagarComisiones ? 'pointer' : 'default' }}
+                        className="border-b border-slate-50 transition-colors duration-150 hover:bg-slate-50/50"
                       >
-                        {puedePagarComisiones && (
-                          <td className="px-3 py-2 w-8">
-                            {isPendiente ? (
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={() => toggleId(d.id)}
-                                onClick={e => e.stopPropagation()}
-                                className="w-3.5 h-3.5 rounded border-slate-300 cursor-pointer accent-violet-600"
-                              />
-                            ) : (
-                              <span className="block w-3.5 h-3.5" />
-                            )}
-                          </td>
-                        )}
                         <td className="px-2 sm:px-4 py-2 sm:py-2.5">
                           <span className="font-bold text-slate-700">{new Date(d.creadoen).toLocaleDateString('es-VE', { day: '2-digit', month: 'short' })}</span>
                         </td>
@@ -1451,21 +1281,7 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
                         <td className="px-2 sm:px-4 py-2 sm:py-2.5 text-right text-[11px] text-slate-500 font-semibold">{tasa > 0 ? `Bs ${tasa.toLocaleString('es-VE', { minimumFractionDigits: 2 })}` : '—'}</td>
                         <td className="px-2 sm:px-4 py-2 sm:py-2.5 text-right font-black text-indigo-600 bg-indigo-50/20">{fmtBs(comBs)}</td>
                         <td className="px-2 sm:px-4 py-2 sm:py-2.5 text-center">
-                          <div className="flex flex-col items-center gap-1.5 py-0.5">
-                            <div className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${badgeClass}`}>
-                              {d.estado === 'pagada' && <CheckCircle size={9} className="text-emerald-600" />}
-                              {label}
-                            </div>
-                            {puedePagarComisiones && d.estado !== 'pagada' && (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); setComisionAPagar(d); }}
-                                className="px-2 py-0.5 rounded-md text-[9.5px] font-extrabold text-emerald-700 bg-emerald-50 hover:bg-emerald-600 hover:text-white border border-emerald-200 hover:border-emerald-500 transition-all duration-200 active:scale-95 uppercase tracking-wider shadow-sm flex items-center justify-center gap-1 mx-auto"
-                              >
-                                <CreditCard size={9} />
-                                Pagar
-                              </button>
-                            )}
-                          </div>
+                          <span className="text-[9px] font-semibold text-slate-400">generada</span>
                         </td>
                       </tr>
                     )
@@ -1476,57 +1292,6 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
           </div>
         </div>
       )}
-
-      {/* Modales de Confirmación de Pago */}
-      <ConfirmModal
-        isOpen={!!comisionAPagar}
-        onConfirm={() => {
-          if (!comisionAPagar) return
-          const m = comisionAPagar.estado === 'cta_cobrar' ? Number(comisionAPagar.comision_liberada || 0) : Number(comisionAPagar.totalcomision || 0)
-          const saldo = Math.max(0, m - Number(comisionAPagar.montopagado || 0))
-          marcar.mutate({ comisionid: comisionAPagar.id, montopagado: saldo })
-          setComisionAPagar(null)
-        }}
-        onClose={() => setComisionAPagar(null)}
-        title="Registrar Pago de Comisión"
-        message={comisionAPagar ? (() => {
-          const m = comisionAPagar.estado === 'cta_cobrar' ? Number(comisionAPagar.comision_liberada || 0) : Number(comisionAPagar.totalcomision || 0)
-          return `Se registrará el pago de ${fmtUsd(Math.max(0, m - Number(comisionAPagar.montopagado || 0)))}. Esta acción es atómica y final.`
-        })() : ''}
-        confirmText="Confirmar Pago"
-        variant="success"
-      />
-
-      <ConfirmModal
-        isOpen={!!pagoMasivoData}
-        onConfirm={async () => {
-          if (!pagoMasivoData) return
-          setPagandoMasivo(true)
-          const { pendientes: items } = pagoMasivoData
-          for (const c of items) {
-            const m = c.estado === 'cta_cobrar' ? Number(c.comision_liberada || 0) : Number(c.totalcomision || 0)
-            const saldo = Math.max(0, m - Number(c.montopagado || 0))
-            if (saldo > 0) {
-              try {
-                await marcar.mutateAsync({ comisionid: c.id, montopagado: saldo })
-              } catch (e) {
-                console.error('Error pagando comisión', c.id, e)
-              }
-            }
-          }
-          setPagandoMasivo(false)
-          setPagoMasivoData(null)
-        }}
-        onClose={() => setPagoMasivoData(null)}
-        title={pagoMasivoData?.title || "Pagar Comisiones"}
-        message={
-          pagoMasivoData 
-            ? `Se registrará el pago de ${pagoMasivoData.pendientes.length} comisiones (${pagoMasivoData.desc}) de ${pagoMasivoData.vendedor?.nombre || 'este vendedor'} por un total de ${fmtUsd(pagoMasivoData.montoPendiente)}. Esta acción es secuencial y final.` 
-            : ''
-        }
-        confirmText="Confirmar Pago"
-        variant="success"
-      />
     </Modal>
   )
 }
@@ -1538,19 +1303,12 @@ function TabComisiones({ configNeg }) {
   const { perfil } = useAuthStore()
   const esAdmin = perfil?.rol === 'administracion' || perfil?.rol === 'jefe' || perfil?.rol === 'desarrollador'
   const esDev = perfil?.rol === 'desarrollador'
-  // Administración y Jefatura trabajan con el corte externo;
-  // solo Desarrollo conserva la herramienta para pruebas/contingencia.
-  const puedePagarComisiones = esDev
-
-  const marcar = useMarcarComisionPagada()
-  const [pagoMasivoData, setPagoMasivoData] = useState(null)
-  const [pagandoMasivo, setPagandoMasivo] = useState(false)
 
   const [rango, setRango] = useState(() => {
     const r = getCorteSemanalRange(0)
     return { from: r.from, to: r.to }
   })
-  const [filtroEstado, setFiltroEstado] = useState('pendiente') // Inicializado con 'pendiente'
+  const [filtroEstado, setFiltroEstado] = useState('')
   const [filtroVendedor, setFiltroVendedor] = useState('')
   const [formatoReporte, setFormatoReporte] = useState('detallado') // 'detallado', 'resumido'
   const { tasaEuro, tasaUsdt } = useTasaCambio()
@@ -1582,29 +1340,6 @@ function TabComisiones({ configNeg }) {
     pageSize: 1000
   })
   const comisiones = comisionesRes?.data ?? []
-
-  const handlePagarTodoVendedor = useCallback((v, conCxc = true) => {
-    const pendientes = comisiones.filter(c => {
-      const vId = c.vendedor?.id || '00000000-0000-0000-0000-000000000000'
-      if (vId !== v.id) return false
-      
-      const m = (c.estado === 'cta_cobrar' && !conCxc)
-        ? Number(c.comision_liberada || 0)
-        : Number(c.totalcomision || 0)
-      const saldo = Math.max(0, m - Number(c.montopagado || 0))
-      
-      const matchEstado = conCxc ? c.estado !== 'pagada' : ['pendiente', 'cta_cobrar'].includes(c.estado)
-      return matchEstado && saldo > 0.01
-    })
-    if (pendientes.length === 0) return
-    setPagoMasivoData({
-      pendientes,
-      montoPendiente: conCxc ? v.pendUsd : v.pendSoloComisUsd,
-      vendedor: v,
-      title: conCxc ? "Pagar Todo (Comisiones + CxC)" : "Pagar Solo Comisiones (Sin CxC)",
-      desc: conCxc ? "todas las comisiones pendientes, incluyendo cuentas por cobrar" : "solo comisiones pendientes, excluyendo cuentas por cobrar"
-    })
-  }, [comisiones])
 
   // Segunda llamada SIN filtro de vendedor, solo para construir el dropdown
   // de forma que siempre muestre los vendedores con comisiones en el rango
@@ -1638,28 +1373,17 @@ function TabComisiones({ configNeg }) {
           rol: c.vendedor?.rol,
           totalUsd: 0,
           totalBs: 0,
-          pendUsd: 0,
-          pendSoloComisUsd: 0,
-          pagUsd: 0,
           cantidad: 0
         }
       }
-      // Para CxC usar solo la porción liberada, para el resto usar totalcomision
-      const m = c.estado === 'cta_cobrar'
-        ? Number(c.comision_liberada || 0)
-        : Number(c.totalcomision || 0)
+      // Sin ciclo pagada/pendiente/cta_cobrar — totalcomision directo
+      const m = Number(c.totalcomision || 0)
       const tasa = Number(tasaSeleccionada || 0)
       const mBs = m * tasa
 
       map[vId].totalUsd += m
       map[vId].totalBs += mBs
       map[vId].cantidad++
-      if (['pendiente', 'cta_cobrar'].includes(c.estado)) {
-        map[vId].pendSoloComisUsd += m
-        map[vId].pendUsd += Number(c.totalcomision || 0)
-      } else {
-        map[vId].pagUsd += m
-      }
     })
     return Object.values(map)
       .filter(v => v.rol !== 'desarrollador' && v.rol !== 'administracion' && v.rol !== 'logistica')
@@ -1809,7 +1533,7 @@ function TabComisiones({ configNeg }) {
         tasaFuente: tasaSeleccionadaInfo?.fuente,
         tasaActualizadaEn: tasaSeleccionadaInfo?.ultimaActualizacion,
         ajustesManuales,
-        modoCorteSemanal: true
+        modoCorteSemanal: formatoReporte === 'detallado'
       })
     } catch (e) {
       console.error('Error generando PDF general:', e)
@@ -1922,7 +1646,7 @@ function TabComisiones({ configNeg }) {
         tasaFuente: tasaSeleccionadaInfo?.fuente,
         tasaActualizadaEn: tasaSeleccionadaInfo?.ultimaActualizacion,
         ajustesManuales,
-        modoCorteSemanal: true
+        modoCorteSemanal: formatoReporte === 'detallado'
       })
     } catch (e) {
       console.error('Error generating PDF individual:', e)
@@ -2306,7 +2030,7 @@ function TabComisiones({ configNeg }) {
                             </div>
                             <div className="bg-amber-50/50 rounded-xl p-2.5 text-center border border-amber-100/50">
                               <p className="text-[10px] text-amber-600/70 font-bold uppercase mb-0.5">Pendiente</p>
-                              <p className="font-bold text-amber-600">{fmtUsd(v.pendSoloComisUsd)}</p>
+                              <p className="font-bold text-slate-900">{fmtUsd(v.totalUsd)}</p>
                             </div>
                           </div>
 
@@ -2315,17 +2039,17 @@ function TabComisiones({ configNeg }) {
                             <span className="text-xs font-bold text-indigo-600">{fmtBs(v.totalBs)}</span>
                           </div>
 
-                          {puedePagarComisiones && v.pendSoloComisUsd > 0.01 && (
+
                             <div className="flex flex-col gap-2 mt-3">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handlePagarTodoVendedor(v, false);
+    
                                 }}
                                 className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all duration-300 shadow-md hover:shadow-emerald-600/20 active:scale-[0.98] border border-emerald-500/20"
                               >
                                 <CheckCircle size={14} className="text-white" />
-                                <span>Pagar Todo ({fmtUsd(v.pendSoloComisUsd)})</span>
+                                <span>Pagar Todo ({fmtUsd(0)})</span>
                               </button>
                             </div>
                           )}
@@ -2378,7 +2102,7 @@ function TabComisiones({ configNeg }) {
                             </div>
                             <div className="bg-amber-50/50 rounded-xl p-2.5 text-center border border-amber-100/50">
                               <p className="text-[10px] text-amber-600/70 font-bold uppercase mb-0.5">Pendiente</p>
-                              <p className="font-bold text-amber-600">{fmtUsd(v.pendSoloComisUsd)}</p>
+                              <p className="font-bold text-slate-900">{fmtUsd(v.totalUsd)}</p>
                             </div>
                           </div>
 
@@ -2387,17 +2111,17 @@ function TabComisiones({ configNeg }) {
                             <span className="text-xs font-bold text-indigo-600">{fmtBs(v.totalBs)}</span>
                           </div>
 
-                          {puedePagarComisiones && v.pendSoloComisUsd > 0.01 && (
+
                             <div className="flex flex-col gap-2 mt-3">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handlePagarTodoVendedor(v, false);
+    
                                 }}
                                 className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all duration-300 shadow-md hover:shadow-emerald-600/20 active:scale-[0.98] border border-emerald-500/20"
                               >
                                 <CheckCircle size={14} className="text-white" />
-                                <span>Pagar Todo ({fmtUsd(v.pendSoloComisUsd)})</span>
+                                <span>Pagar Todo ({fmtUsd(0)})</span>
                               </button>
                             </div>
                           )}

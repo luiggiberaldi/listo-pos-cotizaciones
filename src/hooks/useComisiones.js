@@ -81,12 +81,7 @@ export function useComisiones({
             comisionotros: Number(c.comisionotros || 0),
             pctcabilla: Number(c.pctcabilla || 0),
             pctotros: Number(c.pctotros || 0),
-            montopagado: Number(c.montopagado || 0),
-            comision_liberada: Number(c.comision_liberada || 0),
-            comision_retenida: Number(c.comision_retenida || 0),
-            estado: c.estado,
-            pagadaen: c.pagadaen,
-            pagadapor: c.pagadapor,
+            estado: c.estado || 'generada',
             creadoen: c.creadoen,
             vendedor: c.vendedor,
             despacho: c.despacho,
@@ -142,23 +137,8 @@ export function useComisionesResumen({ vendedorId = '', desde = '', hasta = '', 
         
         const data = JSON.parse(text)
         return {
-          // Claves alineadas con ReportesView.jsx y TabLiquidacion.jsx
-          total:          Number(data.totalAcumulado || 0),
-          pendiente:      Number(data.pendientePago  || 0),
-          pagado:         Number(data.yaPagado       || 0),
-          retenida:       0, // v2 no tiene campo retenida separado
-          countPendiente: Number(data.numPendientes  || 0),
-          countPagado:    Number(data.numPagadas     || 0),
-          // Campos originales también disponibles por compatibilidad
           totalAcumulado: Number(data.totalAcumulado || 0),
-          pendientePago:  Number(data.pendientePago  || 0),
-          yaPagado:       Number(data.yaPagado       || 0),
-          numPendientes:  Number(data.numPendientes  || 0),
-          numPagadas:     Number(data.numPagadas     || 0),
-          totalRegistros: Number(data.total          || 0),
-          // Desglose de pendientes
-          pendienteRegular: Number(data.pendienteRegular || 0),
-          pendienteCxc:     Number(data.pendienteCxc || 0),
+          totalRegistros: Number(data.total || 0),
         }
       } catch (e) {
         console.error('Error useComisionesResumen:', e.message)
@@ -169,66 +149,6 @@ export function useComisionesResumen({ vendedorId = '', desde = '', hasta = '', 
     retry: 1,
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 15,
-  })
-}
-
-/**
- * Mutación para pagar comisiones (Atómica vía RPC)
- */
-export function useMarcarComisionPagada() {
-  const qc = useQueryClient()
-
-  return useMutation({
-    mutationFn: async ({ comisionid, montopagado }) => {
-      const headers = await getAuthHeaders()
-      const res = await fetch(apiUrl('/api/comisiones/pagar'), {
-        method: 'POST',
-        headers: {
-          ...headers,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ comisionid, montopagado }),
-      })
-      const result = await res.json()
-      if (!res.ok) throw new Error(result.error || result.message || 'Error al procesar pago')
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: COMISIONES_KEY })
-      broadcastEntidad('comisiones')
-      showToast('Comisión procesada correctamente', 'success')
-    },
-  })
-}
-
-/**
- * Mutación para liberar manualmente la porción CxC retenida de una comisión
- */
-export function useLiberarComisionCxc() {
-  const qc = useQueryClient()
-
-  return useMutation({
-    mutationFn: async ({ comisionid }) => {
-      const headers = await getAuthHeaders()
-      const res = await fetch(apiUrl('/api/comisiones/liberar-cxc'), {
-        method: 'POST',
-        headers: {
-          ...headers,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ comisionid }),
-      })
-      const result = await res.json()
-      if (!res.ok) throw new Error(result.error || result.message || 'Error al liberar comisión CxC')
-      return result
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: COMISIONES_KEY })
-      broadcastEntidad('comisiones')
-      showToast('Comisión CxC liberada correctamente', 'success')
-    },
-    onError: (e) => {
-      showToast(e.message || 'Error al liberar comisión CxC', 'error')
-    },
   })
 }
 
